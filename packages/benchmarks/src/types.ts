@@ -8,6 +8,53 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 // Canonical quality taxonomy now lives in @reactive-agents/core (2026-06-25 unification).
 export type { QualityDimension, DimensionScore };
 
+// ── Score measurement state (scoring-integrity wave, 2026-07-11) ──────────────
+//
+// A score that could not be MEASURED must never masquerade as a measured 0 (or
+// as a stub's 0.95). Before this existed, a judge-server outage scored every
+// llm-judge cell 0.0 — indistinguishable from model failure — and a stub judge
+// (JUDGE_LAYER != live) scored 0.95 on everything, and both entered means,
+// lift math, and pass^k as if they were real observations.
+
+/**
+ * Whether a dimension's score is a real observation or a placeholder for one
+ * that could not be taken. Only `"measured"` scores may enter aggregates
+ * (means, lift, solve/pass^k); `"inconclusive"` scores are excluded AND
+ * counted visibly. Absent (legacy data) ⇒ measured.
+ */
+export type ScoreState = "measured" | "inconclusive";
+
+/**
+ * Why a score is inconclusive. Grows only with a live emitter + consumer
+ * (anti-scaffold, North-Star §9):
+ *  - `"judge-outage"` — judge RPC unreachable / non-2xx / timed out (judge.ts).
+ *  - `"judge-error"`  — judge responded but its verdict is a malfunction
+ *    (layer `judge_parse_failure`: the 0.5 fallback is not a measurement).
+ *  - `"stub-judge"`   — verdict produced by the stub layer (JUDGE_LAYER != live).
+ *    The stub stays for unit tests, but its 0.95 is scenery, not signal.
+ */
+export type InconclusiveReason = "judge-outage" | "judge-error" | "stub-judge";
+
+/**
+ * A DimensionScore extended with bench-local scoring metadata. Structurally a
+ * DimensionScore (every added field optional), so it flows through
+ * `RunScore.dimensions` and persisted reports untouched; consumers narrow via
+ * the report-format helpers.
+ *
+ * `judgeScored` + `solvedThreshold` carry the pass^k solve bar for llm-judge
+ * accuracy (see the DECLARED METRIC CHANGE at `isSolved` in report-format.ts):
+ * a judge-scored accuracy counts as a SOLVE only when the task explicitly
+ * declared `solvedThreshold` and the measured score clears it.
+ */
+export interface BenchDimensionScore extends DimensionScore {
+  readonly scoreState?: ScoreState;
+  readonly inconclusiveReason?: InconclusiveReason;
+  /** True when this score came from the LLM judge (graded rubric, not a check). */
+  readonly judgeScored?: boolean;
+  /** The task-declared solve bar for judge-scored accuracy (absent = never solved). */
+  readonly solvedThreshold?: number;
+}
+
 /** Complexity tier for benchmark tasks. */
 export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert" | "real-world";
 
@@ -481,11 +528,28 @@ export interface TaskFixture {
   readonly content: string;
 }
 
+// NOTE: the `schema` criterion variant was DELETED 2026-07-11 (scoring-integrity
+// wave). Zero tasks ever declared it, and its scorer validated JSON.parse only —
+// a scorer that cannot fail measures nothing. If shape validation is ever
+// needed, it lands as a new variant in the same commit as a real per-field
+// grader AND a task that uses it (never a bare union member).
 export type SuccessCriteria =
   | { readonly type: "regex"; readonly pattern: string }
   | { readonly type: "verifiable"; readonly command: string; readonly partialCredit?: boolean }
-  | { readonly type: "llm-judge"; readonly rubric: string; readonly passThreshold?: number }
-  | { readonly type: "schema"; readonly schema: Record<string, unknown> }
+  | {
+      readonly type: "llm-judge";
+      readonly rubric: string;
+      readonly passThreshold?: number;
+      /**
+       * The pass^k SOLVE bar for this judge-graded task (DECLARED METRIC
+       * CHANGE — see `isSolved` in report-format.ts). Absent ⇒ a judge-scored
+       * run is NEVER a "solve" for pass^k: honest starvation beats fake solves
+       * built on judge noise. Distinct from the (currently unconsumed)
+       * `passThreshold`, whose semantics were never ratified — silently
+       * reusing it would flip 7 existing tasks into pass^k solves at 0.6.
+       */
+      readonly solvedThreshold?: number;
+    }
 
 export interface TaskRunResult {
   readonly output: string;

@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process"
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import type { BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
+import type { BenchDimensionScore, BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
+import { measuredRuns } from "./report-format.js"
 import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
 
 // ── Deliverable collection (grading-channel fix) ─────────────────────────────
@@ -122,8 +123,12 @@ export function scoreAbstention(i: {
 /**
  * Reliability = 1 - 2*stddev of accuracy scores across runs.
  * 1.0 = perfectly consistent, 0.0 = completely random.
+ *
+ * Computed over MEASURED runs only: an inconclusive accuracy (judge outage /
+ * stub) is not an observation, so it can neither create nor destroy variance.
  */
-export function computeReliability(runs: ReadonlyArray<RunScore>): number {
+export function computeReliability(allRuns: ReadonlyArray<RunScore>): number {
+  const runs = measuredRuns(allRuns)
   if (runs.length < 2) return 1
   const scores = runs.map(r => r.dimensions.find(d => d.dimension === "accuracy")?.score ?? 0)
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length
@@ -203,9 +208,16 @@ export async function scoreVerifiable(
 // ── LLM-as-judge — routed through judge-server RPC (Task 8) ──────────────────
 
 /**
+ * Wall-clock cap on a single judge RPC. A black-holed judge host must become
+ * an explicit `judge-outage` inconclusive, not a hung bench run.
+ */
+const JUDGE_RPC_TIMEOUT_MS = 120_000
+
+/**
  * POST a JudgeRequest to the judge-server and return the parsed JudgeResponse.
- * Throws on non-2xx — callers (`scoreWithJudge`) trap and convert to a
- * score-0 DimensionScore so a single judge outage cannot crash a bench run.
+ * Throws on non-2xx and on timeout — callers (`scoreWithJudge`) trap and
+ * convert to an INCONCLUSIVE (`judge-outage`) score so a judge outage can
+ * neither crash a bench run nor masquerade as a model failure.
  */
 async function callJudge(
   req: JudgeRequest,
@@ -216,6 +228,7 @@ async function callJudge(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
+    signal: AbortSignal.timeout(JUDGE_RPC_TIMEOUT_MS),
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => "(no body)")
@@ -231,7 +244,7 @@ async function scoreWithJudge(
   dimension: QualityDimension,
   rubric: string,
   opts?: JudgeRpcOptions,
-): Promise<DimensionScore> {
+): Promise<BenchDimensionScore> {
   // Build a JudgeRequest. Bench harness does not yet thread `sutModel` /
   // `runId` down to per-dimension scoring — Task 10 owns that. For now we
   // synthesise a runId so the contract validates and the request is still
@@ -250,13 +263,44 @@ async function scoreWithJudge(
   }
   try {
     const verdict = await callJudge(req, opts)
+
+    // Stub layer (JUDGE_LAYER != live): its flat 0.95 is a fixture, not a
+    // measurement. It stays available for unit tests, but it must never enter
+    // aggregates as a measured score — before this lane existed, a bench run
+    // without a live judge silently scored 0.95 on every judge dimension and
+    // nothing downstream flagged it.
+    if (verdict.layerResults.some((l) => l.layerName === "stub")) {
+      return {
+        dimension, score: 0,
+        scoreState: "inconclusive", inconclusiveReason: "stub-judge", judgeScored: true,
+        evidence: `stub judge verdict (overallScore=${verdict.overallScore}) — JUDGE_LAYER is not "live"; not a measurement`,
+      }
+    }
+
+    // Judge responded but malfunctioned: the handler's parse-failure fallback
+    // fabricates overallScore 0.5. That is a judge error, not an observation.
+    if (verdict.layerResults.some((l) => l.layerName === "judge_parse_failure")) {
+      return {
+        dimension, score: 0,
+        scoreState: "inconclusive", inconclusiveReason: "judge-error", judgeScored: true,
+        evidence: `judge parse failure (fallback verdict discarded): ${verdict.layerResults.find((l) => l.details)?.details ?? "(no details)"}`,
+      }
+    }
+
     const score = Math.max(0, Math.min(1, Number(verdict.overallScore) || 0))
     const evidence =
       verdict.layerResults.find(l => l.details)?.details
       ?? `recommendation=${verdict.recommendation} passed=${verdict.passed}`
-    return { dimension, score, evidence }
+    return { dimension, score, evidence, scoreState: "measured", judgeScored: true }
   } catch (e) {
-    return { dimension, score: 0, evidence: `Judge error: ${e instanceof Error ? e.message : String(e)}` }
+    // Outage / non-2xx / timeout: the score was never taken. Emitting 0.0 here
+    // is the disease this lane fixes — a down judge scored identically to a
+    // failing model and poisoned means and lift math.
+    return {
+      dimension, score: 0,
+      scoreState: "inconclusive", inconclusiveReason: "judge-outage", judgeScored: true,
+      evidence: `Judge unreachable: ${e instanceof Error ? e.message : String(e)} — score not measured`,
+    }
   }
 }
 
@@ -300,8 +344,8 @@ export async function scoreTask(
   _runIterations: number,
   opts?: JudgeRpcOptions,
   terminatedBy?: string,
-): Promise<ReadonlyArray<DimensionScore>> {
-  const scores: DimensionScore[] = []
+): Promise<ReadonlyArray<BenchDimensionScore>> {
+  const scores: BenchDimensionScore[] = []
 
   // Hidden reference fixtures FIRST: written post-run/pre-scoring so every
   // scoring branch below (verifiable accuracy, abstention answerCorrect,
@@ -371,21 +415,20 @@ export async function scoreTask(
           task.successCriteria.partialCredit,
         ))
         break
-      case "llm-judge":
-        scores.push(await scoreWithJudge(
+      case "llm-judge": {
+        // Stamp the task-declared pass^k solve bar onto the accuracy score so
+        // `isSolved` (report-format.ts) can apply it without task context.
+        // Absent threshold ⇒ judge-scored runs are never pass^k solves.
+        const judged = await scoreWithJudge(
           task.id, task.prompt, judgeDeliverable, "accuracy", task.successCriteria.rubric, opts,
-        ))
+        )
+        const threshold = task.successCriteria.solvedThreshold
+        scores.push(threshold !== undefined ? { ...judged, solvedThreshold: threshold } : judged)
         break
-      case "schema":
-        // Validates JSON parseability only — shape validation against task.successCriteria.schema
-        // is not yet implemented and will always score 1.0 for any valid JSON output.
-        try {
-          JSON.parse(output)
-          scores.push({ dimension: "accuracy", score: 1.0 })
-        } catch {
-          scores.push({ dimension: "accuracy", score: 0.0, evidence: "Output is not valid JSON" })
-        }
-        break
+      }
+      // `schema` branch DELETED 2026-07-11: zero tasks used it and it returned
+      // 1.0 for ANY parseable JSON — a scorer that cannot fail measures
+      // nothing. The `SuccessCriteria` union member was removed with it.
     }
   } else if (task.expected) {
     // Legacy regex from existing tasks

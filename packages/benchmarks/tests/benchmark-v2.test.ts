@@ -43,12 +43,13 @@ test("QualityDimension covers all 10 dimensions", () => {
   expect(dims).toHaveLength(10)
 })
 
-test("SuccessCriteria discriminated union has 4 variants", () => {
+test("SuccessCriteria discriminated union has 3 variants (schema DELETED 2026-07-11)", () => {
+  // `schema` was removed: zero tasks ever declared it and its scorer returned
+  // 1.0 for ANY parseable JSON — a scorer that cannot fail measures nothing.
   const a: SuccessCriteria = { type: "regex", pattern: "foo" }
   const b: SuccessCriteria = { type: "verifiable", command: "bun check output.ts" }
-  const c: SuccessCriteria = { type: "llm-judge", rubric: "Is it correct?" }
-  const d: SuccessCriteria = { type: "schema", schema: {} }
-  expect([a, b, c, d]).toHaveLength(4)
+  const c: SuccessCriteria = { type: "llm-judge", rubric: "Is it correct?", solvedThreshold: 0.8 }
+  expect([a, b, c]).toHaveLength(3)
 })
 
 test("HarnessVariant discriminated union works", () => {

@@ -1,5 +1,11 @@
 // File: src/gate/gate.ts
-import { isSolved, passKEstimate } from "../report-format.js";
+import {
+  asBenchDimension,
+  isCellInconclusive,
+  isSolved,
+  measuredRuns,
+  passKEstimate,
+} from "../report-format.js";
 import type { SessionReport, TaskVariantReport } from "../types.js";
 import {
   DEFAULT_LIFT_POLICY,
@@ -44,7 +50,7 @@ function maxOf(xs: readonly number[]): number {
  * construction. It also converges toward the observed rate as n grows.
  */
 function cellSpread(r: TaskVariantReport, metric: string): number {
-  const n = r.runs?.length ?? 0;
+  const n = measuredCountOf(r);
   const p = metricScore(r, metric) ?? 0;
   const pTilde = (p * n + 1) / (n + 2);
   return Math.sqrt(pTilde * (1 - pTilde));
@@ -52,12 +58,49 @@ function cellSpread(r: TaskVariantReport, metric: string): number {
 
 /** Standard error of one cell's mean: sd/√n. `n=0` (no runs) → treat as n=1. */
 function cellStdErr(r: TaskVariantReport, metric: string): number {
-  const n = Math.max(1, r.runs?.length ?? 0);
+  const n = Math.max(1, measuredCountOf(r));
   return cellSpread(r, metric) / Math.sqrt(n);
 }
 
+/** Runs whose accuracy was actually MEASURED — the only ones evidence may count. */
+function measuredCountOf(r: TaskVariantReport): number {
+  return measuredRuns(r.runs ?? []).length;
+}
+
+/**
+ * The cell's mean on `metric`, over MEASURED runs only.
+ *
+ * A metric ABSENT from `meanScores` stays `undefined` → tier inconclusive
+ * (pre-existing contract: a cell that never declared the metric cannot feed a
+ * comparison). When the metric IS declared, the stored mean is not trusted as
+ * a value: the runner computes it over ALL runs, so a judge-outage run's
+ * placeholder 0 would drag it down and turn an infrastructure failure into
+ * fake model failure. The value is recomputed from the per-run scores — a run
+ * with no entry contributes the legacy 0 (byte-identical to the stored mean on
+ * fully-measured reports); a run whose entry is INCONCLUSIVE leaves numerator
+ * and denominator entirely; every entry inconclusive → `undefined` (there is
+ * NO measured value, and the stored polluted mean must not resurrect the fake
+ * 0). Aggregate-only dimensions (`reliability`) and `runs: []` cells keep the
+ * stored mean.
+ */
 function metricScore(r: TaskVariantReport, metric: string): number | undefined {
-  return r.meanScores.find((s) => s.dimension === metric)?.score;
+  const stored = r.meanScores.find((s) => s.dimension === metric)?.score;
+  if (stored === undefined) return undefined;
+
+  const contributions: number[] = [];
+  let sawDimension = false;
+  for (const run of r.runs ?? []) {
+    const d = run.dimensions.find((x) => x.dimension === metric);
+    if (d === undefined) {
+      contributions.push(0); // legacy zero-fill for a run missing the dimension
+      continue;
+    }
+    sawDimension = true;
+    if (asBenchDimension(d).scoreState === "inconclusive") continue;
+    contributions.push(d.score);
+  }
+  if (!sawDimension) return stored; // no per-run data for this dimension
+  return contributions.length > 0 ? mean(contributions) : undefined;
 }
 
 /** Set of task IDs classified `long-horizon` from the supplied descriptors. */
@@ -88,7 +131,11 @@ function longHorizonIds(options: LiftGateOptions | undefined): ReadonlySet<strin
 function cellPass8(r: TaskVariantReport): number | undefined {
   const fromReport = r.passK?.find((e) => e.k === 8)?.estimate;
   if (fromReport !== undefined) return fromReport;
-  const runs = r.runs ?? [];
+  // MEASURED runs only — an inconclusive run is not a draw from the solve
+  // distribution (same rule as `passKOf`). An inconclusive CELL never yields
+  // an estimate at all.
+  if (isCellInconclusive(r)) return undefined;
+  const runs = measuredRuns(r.runs ?? []);
   return passKEstimate(runs.length, runs.filter(isSolved).length, 8);
 }
 
@@ -130,9 +177,12 @@ function computeEvidence(
 
   // Zero pairs = the arms share no task at all: there is nothing to compare,
   // and fabricating a lift from disjoint task sets is exactly the disease.
+  // `isCellInconclusive` also flips any cell with > 20% inconclusive RUNS
+  // (judge outage / stub judge) — a mostly-unmeasured cell may not feed a
+  // verdict, and its inconclusive runs may never be silently dropped.
   const inconclusive =
     pairs.length === 0 ||
-    pairedCells.some((r) => r.inconclusive !== undefined) ||
+    pairedCells.some((r) => isCellInconclusive(r)) ||
     pairedCells.some((r) => metricScore(r, policy.metric) === undefined);
 
   // Per task t: d_t = p̂_cand,t − p̂_base,t, se_t² = se_base,t² + se_cand,t².
@@ -182,7 +232,7 @@ function computeEvidence(
   const minRunsObserved =
     pairedCells.length === 0
       ? 0
-      : Math.min(...pairedCells.map((r) => r.runs?.length ?? 0));
+      : Math.min(...pairedCells.map((r) => measuredCountOf(r)));
   const underpowered = minRunsObserved < policy.minRuns;
 
   // Runs/arm to resolve `minLiftPp` at the observed spread (equal-n, z=K).

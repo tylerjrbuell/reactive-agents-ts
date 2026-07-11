@@ -22,13 +22,15 @@
 import { evaluateLiftGate } from "./gate.js";
 import { formatGateReceipt } from "./receipt.js";
 import { DEFAULT_LIFT_POLICY, type LiftGateOptions, type LiftPolicy } from "./types.js";
+import { measuredRuns } from "../report-format.js";
 import type { SessionReport } from "../types.js";
 
-/** Fewest runs observed across every cell of the report. */
+/** Fewest MEASURED runs observed across every cell of the report — an
+ * inconclusive run (judge outage / stub) adds no statistical power. */
 export function minRunsInReport(report: SessionReport): number {
   const rows = report.taskReports ?? [];
   if (rows.length === 0) return 0;
-  return Math.min(...rows.map((r) => r.runs?.length ?? 0));
+  return Math.min(...rows.map((r) => measuredRuns(r.runs ?? []).length));
 }
 
 /** Distinct variant ids present in the report. */

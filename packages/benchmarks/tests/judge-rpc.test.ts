@@ -52,14 +52,20 @@ describe("bench scoreTask over RPC (Task 8)", () => {
       { judgeUrl },
     );
 
-    // Stub layer always returns passed:true overallScore:0.95.
+    // The RPC round-trip works (that is what this test pins), but the STUB
+    // layer's flat 0.95 is scenery, not a measurement — since 2026-07-11 it
+    // surfaces as INCONCLUSIVE (reason "stub-judge") so it can never enter
+    // aggregates as a measured score.
     expect(dimensions.length).toBeGreaterThan(0);
     const accuracy = dimensions.find(d => d.dimension === "accuracy");
     expect(accuracy).toBeDefined();
-    expect(accuracy!.score).toBeCloseTo(0.95, 2);
+    expect(accuracy!.scoreState).toBe("inconclusive");
+    expect(accuracy!.inconclusiveReason).toBe("stub-judge");
+    expect(accuracy!.score).toBe(0);
+    expect(accuracy!.evidence).toContain("0.95"); // the stub verdict is still visible as evidence
   }, 15000);
 
-  it("propagates judge HTTP failures as score 0 with evidence (no throw)", async () => {
+  it("surfaces judge outage as INCONCLUSIVE, not a fake 0.0 (no throw)", async () => {
     // Point at a closed port so fetch fails fast.
     const { scoreTask } = await import("../src/judge.js");
 
@@ -87,7 +93,12 @@ describe("bench scoreTask over RPC (Task 8)", () => {
 
     const accuracy = dimensions.find(d => d.dimension === "accuracy");
     expect(accuracy).toBeDefined();
+    // A down judge is an infrastructure event, not a model failure: the score
+    // placeholder is 0 but the state is INCONCLUSIVE, so aggregation excludes
+    // it instead of reading it as "the model scored zero".
     expect(accuracy!.score).toBe(0);
+    expect(accuracy!.scoreState).toBe("inconclusive");
+    expect(accuracy!.inconclusiveReason).toBe("judge-outage");
     expect(accuracy!.evidence).toMatch(/judge/i);
   }, 15000);
 });

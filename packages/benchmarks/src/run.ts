@@ -24,6 +24,7 @@ import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompe
 import { featureCoverageSession } from "./sessions/feature-coverage.js"
 import { longHorizonArmSession } from "./sessions/long-horizon-arm.js"
 import { t0DeterministicSession } from "./sessions/t0-deterministic.js"
+import { reliabilitySession } from "./sessions/reliability.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold, baselineCells, assertBaselineCells } from "./ci.js"
 import { resolveTasks, assertNonEmptySelection } from "./session.js"
 import { ALL_TASKS } from "./runner.js"
@@ -145,6 +146,7 @@ function printSessionSummary(report: SessionReport): void {
 
 const SESSIONS: Record<string, BenchmarkSession> = {
   "t0-deterministic":      t0DeterministicSession,
+  "reliability":           reliabilitySession,
   "feature-coverage":      featureCoverageSession,
   "long-horizon-arm":      longHorizonArmSession,
   "regression-gate":       regressionGateSession,
