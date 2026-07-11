@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
-      "executions": 129,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 130,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -11,8 +11,8 @@
       "targetedWeakness": "W11/IC-17"
     },
     "cf-10-error-swallowed-event-emitted": {
-      "executions": 126,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 127,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -20,8 +20,8 @@
       "targetedWeakness": "S0.2"
     },
     "cf-11-redactor-strips-secrets": {
-      "executions": 126,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 127,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -29,8 +29,8 @@
       "targetedWeakness": "S0.3"
     },
     "cf-13-no-advisory-only-dispatches": {
-      "executions": 129,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 130,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -38,8 +38,8 @@
       "targetedWeakness": "Principle-11"
     },
     "cf-14-w4-maxiterations-honored": {
-      "executions": 115,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 116,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -47,8 +47,8 @@
       "targetedWeakness": "W4"
     },
     "cf-15-num-ctx-from-capability": {
-      "executions": 115,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 116,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 6,
       "lastRegressionAt": "2026-06-02T18:18:00.020Z",
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -56,8 +56,8 @@
       "targetedWeakness": "G-1"
     },
     "cf-16-capability-cache-roundtrip": {
-      "executions": 115,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 116,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 6,
       "lastRegressionAt": "2026-06-02T18:18:00.020Z",
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -65,8 +65,8 @@
       "targetedWeakness": "G-1"
     },
     "cf-17-tier-derived-from-capability": {
-      "executions": 111,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 112,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -74,8 +74,8 @@
       "targetedWeakness": "G-2"
     },
     "cf-18-meta-tools-trusted": {
-      "executions": 109,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 110,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -83,8 +83,8 @@
       "targetedWeakness": "Q5/S2.3"
     },
     "cf-21-failure-detected-from-controller-signal": {
-      "executions": 96,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 97,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -92,8 +92,8 @@
       "targetedWeakness": "corpus-false-positive/CHANGE-A"
     },
     "cf-22-kernel-internal-structure": {
-      "executions": 83,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 84,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 4,
       "lastRegressionAt": "2026-06-02T18:17:04.655Z",
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -101,8 +101,8 @@
       "targetedWeakness": "G-5/Sprint-3.1"
     },
     "cf-23-verifier-runs-after-effector": {
-      "executions": 81,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 82,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 2,
       "lastRegressionAt": "2026-04-30T18:36:35.035Z",
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -110,8 +110,8 @@
       "targetedWeakness": "Verify-capability/Sprint-3.2"
     },
     "cf-24-all-termination-flows-through-arbitrator": {
-      "executions": 72,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 73,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 2,
       "lastRegressionAt": "2026-05-26T14:04:22.982Z",
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
@@ -119,8 +119,8 @@
       "targetedWeakness": "G-5/Sprint-3.3"
     },
     "cf-25-capability-registry-violations-bounded": {
-      "executions": 14,
-      "lastExecutedAt": "2026-06-16T23:59:26.753Z",
+      "executions": 15,
+      "lastExecutedAt": "2026-07-11T12:48:15.290Z",
       "regressionsCaught": 0,
       "lastRegressionAt": null,
       "baselineUpdatedAt": "2026-06-16T23:59:20.725Z",
