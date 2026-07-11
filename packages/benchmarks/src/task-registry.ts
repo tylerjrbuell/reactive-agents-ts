@@ -12,6 +12,39 @@
  * - **τ-bench** (Sierra AI) — Tool-agent-user benchmark patterns
  */
 import type { BenchmarkTask } from "./types.js";
+import {
+  generateS1HiddenCheck,
+  generateS2HiddenCheck,
+  generateM1HiddenCheck,
+  generateM4HiddenCheck,
+  generateC3HiddenCheck,
+  generateC3ParseDateFixture,
+} from "./tasks/registry-checks.js";
+
+// ── 2026-07-11 keyword→graded conversion (mission W-K / task #50) ──────────────
+//
+// 5 of these tasks moved off binary `expected:` regex scoring (Bernoulli, sd
+// 0.50, the 3pp lift rule unmeasurable) onto `verifiable` graded hidden-checks
+// with ≥4 counted assertions on REAL correctness — see tasks/registry-checks.ts.
+// Code tasks import and RUN the agent's function; analysis tasks grade the
+// actual correct facts. `expected` is removed from a converted task so the
+// ratchet in tests/registry-keyword-ratchet.test.ts genuinely decreases.
+// (m2/m3/e1 also have graded generators but stay keyword-scored — they belong
+// to no-tool gate sessions whose isolation file-write would break; Warden
+// 2026-07-11.)
+//
+// The remaining `expected:` tasks are honest remainder (pinned by that ratchet):
+//   - Single-fact recall/knowledge (t1 typeof, t2 2^10, t3 laws, t4 csv-header,
+//     s3 Big-O, s4 pattern-name): one correct value — no ≥4 independent
+//     correctness properties exist; the keyword IS the fact.
+//   - Tool-pipeline output strings (m5 Paris, c5 "Project A is completed",
+//     c6 gold boiling point, e5 "Hello Tool World"): correctness is a single
+//     end-to-end string with no partial-credit surface.
+//   - Guardrail/refusal (e6): binary honesty, no graded correctness surface.
+//   - Open-ended design/analysis (c1 queue, c2 auth-list, c4 db-decomp,
+//     e2 incident, e3 fallacy, e4 CRDT): the only deterministic grader is
+//     concept-keyword presence — the keyword-synonym theatre this wave forbids.
+//     These belong to the LLM judge, not a deterministic hidden-check.
 
 export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
   // ─── Trivial (baseline capability checks) ────────────────────────────────────
@@ -55,17 +88,27 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "s1-fibonacci",
     tier: "simple",
     name: "Function implementation (HumanEval Easy)",
-    prompt: "Implement a TypeScript function `fibonacci(n: number): number` that returns the nth Fibonacci number (0-indexed: fibonacci(0) = 0, fibonacci(1) = 1). Return only the function implementation.",
-    expected: "function|const fibonacci|fibonacci",
+    prompt: "Implement a TypeScript function `fibonacci(n: number): number` that returns the nth Fibonacci number (0-indexed: fibonacci(0) = 0, fibonacci(1) = 1). Save your solution to solution.ts in your working directory as a named export `fibonacci`.",
     benchmark: "HumanEval",
+    // 2026-07-11 keyword→graded: was "function|const fibonacci|fibonacci"
+    // (matched any file mentioning the name). Now the export is imported and run.
+    requiresTools: true,
+    tools: [{ kind: "available", name: "file-write" }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateS1HiddenCheck() }],
+    successCriteria: { type: "verifiable", command: "bun hidden-check.ts", partialCredit: true },
   },
   {
     id: "s2-palindrome-bug",
     tier: "simple",
     name: "Case-insensitive palindrome bug (SWE-bench lite)",
-    prompt: "This TypeScript palindrome checker fails on 'A man a plan a canal Panama'. Find the bug and show the fixed function:\n\nfunction isPalindrome(s: string): boolean {\n  return s === s.split('').reverse().join('');\n}",
-    expected: "toLowerCase|toUpperCase|replace|normalize|toLowerCase|filter|lower",
+    prompt: "This TypeScript palindrome checker fails on 'A man a plan a canal Panama'. Find the bug and save the fixed function to solution.ts in your working directory as a named export `isPalindrome`:\n\nfunction isPalindrome(s: string): boolean {\n  return s === s.split('').reverse().join('');\n}",
     benchmark: "SWE-bench",
+    // 2026-07-11 keyword→graded: was a keyword regex over fix mechanisms. Now the
+    // corrected function is run — including the exact string the bug fails on.
+    requiresTools: true,
+    tools: [{ kind: "available", name: "file-write" }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateS2HiddenCheck() }],
+    successCriteria: { type: "verifiable", command: "bun hidden-check.ts", partialCredit: true },
   },
   {
     id: "s3-bigO",
@@ -90,16 +133,26 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "m1-merge-intervals",
     tier: "moderate",
     name: "Merge intervals algorithm (HumanEval Medium)",
-    prompt: "Implement a TypeScript function `mergeIntervals(intervals: [number, number][]): [number, number][]` that merges all overlapping intervals.\n\nExample: mergeIntervals([[1,3],[2,6],[8,10],[15,18]]) → [[1,6],[8,10],[15,18]]\n\nReturn only the function implementation.",
-    expected: "sort|merge|overlap|push|result",
+    prompt: "Implement a TypeScript function `mergeIntervals(intervals: [number, number][]): [number, number][]` that merges all overlapping intervals.\n\nExample: mergeIntervals([[1,3],[2,6],[8,10],[15,18]]) → [[1,6],[8,10],[15,18]]\n\nSave your solution to solution.ts in your working directory as a named export `mergeIntervals`.",
     strategy: "react",
     benchmark: "HumanEval",
+    // 2026-07-11 keyword→graded: was "sort|merge|overlap|push|result". Now the
+    // function is imported and run against merge cases (incl. touching + unsorted).
+    requiresTools: true,
+    tools: [{ kind: "available", name: "file-write" }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateM1HiddenCheck() }],
+    successCriteria: { type: "verifiable", command: "bun hidden-check.ts", partialCredit: true },
   },
   {
     id: "m2-word-problem",
     tier: "moderate",
     name: "Multi-step word problem (BIG-Bench Hard)",
     prompt: "A farmer has chickens and cows. There are 50 heads and 140 legs in total. How many chickens and how many cows are there? Show your work step by step.",
+    // Kept keyword-scored ON PURPOSE (Warden 2026-07-11): a graded conversion
+    // exists but requires file-write, and m2 is a cluster-a-gate / cross-tier-
+    // stress task that is no-tool BY DESIGN (thinking-budget truncation = wrong
+    // answer). Adding tools moves it off the very path those gates measure. See
+    // registry-keyword-ratchet.test.ts remainder note.
     expected: "30.*chicken|chicken.*30|20.*cow|cow.*20",
     strategy: "react",
     benchmark: "BIG-Bench Hard",
@@ -109,6 +162,8 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     tier: "moderate",
     name: "SQL injection fix (SWE-bench / CWE-89)",
     prompt: "Identify the security vulnerability and provide a fixed version of this Express.js code:\n\napp.get('/user', async (req, res) => {\n  const user = await db.query(`SELECT * FROM users WHERE id = ${req.query.id}`);\n  res.json(user);\n});",
+    // Kept keyword-scored ON PURPOSE (Warden 2026-07-11): graded conversion needs
+    // file-write, and m3 is a no-tool cluster-a-gate task (see m2 note).
     expected: "parameteriz|prepared|placeholder|\\$1|\\?|injection|sanitiz",
     strategy: "react",
     benchmark: "SWE-bench",
@@ -117,10 +172,16 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "m4-remove-duplicates",
     tier: "moderate",
     name: "Deduplicate preserving order (HumanEval #26 adapted)",
-    prompt: "Implement a TypeScript function `removeDuplicates(numbers: number[]): number[]` that removes elements that appear MORE THAN ONCE, keeping only elements that appear exactly once. Preserve original order.\n\nExample: removeDuplicates([1,2,3,2,4]) → [1,3,4]",
-    expected: "filter|Map|count|frequency|once|appear",
+    prompt: "Implement a TypeScript function `removeDuplicates(numbers: number[]): number[]` that removes elements that appear MORE THAN ONCE, keeping only elements that appear exactly once. Preserve original order.\n\nExample: removeDuplicates([1,2,3,2,4]) → [1,3,4]\n\nSave your solution to solution.ts in your working directory as a named export `removeDuplicates`.",
     strategy: "react",
     benchmark: "HumanEval",
+    // 2026-07-11 keyword→graded: was "filter|Map|count|...". Now the function is
+    // run — case 1 discriminates the naive "dedupe" reading ([1,2,3,4]) from the
+    // required "keep exactly-once" reading ([1,3,4]).
+    requiresTools: true,
+    tools: [{ kind: "available", name: "file-write" }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateM4HiddenCheck() }],
+    successCriteria: { type: "verifiable", command: "bun hidden-check.ts", partialCredit: true },
   },
   {
     id: "m5-tool-search",
@@ -158,10 +219,20 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     id: "c3-test-suite",
     tier: "complex",
     name: "Comprehensive test suite generation (TestEval)",
-    prompt: "Write a complete test suite (minimum 6 tests) using Bun test runner for this function. Cover: valid dates, invalid inputs, null returns, ISO strings, timezone edge cases, and Unix timestamps:\n\nfunction parseDate(input: string): Date | null {\n  try {\n    const d = new Date(input);\n    return isNaN(d.getTime()) ? null : d;\n  } catch {\n    return null;\n  }\n}",
-    expected: "test|expect|null|isNaN|Invalid|invalid|Date|describe|it\\(",
+    prompt: "The function under test is in parseDate.ts in your working directory. Write a complete test suite (minimum 6 tests) using the Bun test runner, importing `parseDate` from './parseDate.ts'. Cover: valid dates, invalid inputs, null returns, ISO strings, timezone edge cases, and Unix timestamps. Save the suite to parseDate.test.ts in your working directory.",
     strategy: "plan-execute",
     benchmark: "HumanEval",
+    // 2026-07-11 keyword→graded: was "test|expect|null|..." (any file with "test").
+    // Now graded on ≥6 real test blocks, edge-case coverage, and — load-bearing —
+    // the suite actually PASSING when executed against the reference parseDate.
+    requiresTools: true,
+    tools: [
+      { kind: "available", name: "file-read" },
+      { kind: "available", name: "file-write" },
+    ],
+    fixtures: [{ path: "parseDate.ts", content: generateC3ParseDateFixture() }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateC3HiddenCheck() }],
+    successCriteria: { type: "verifiable", command: "bun hidden-check.ts", partialCredit: true },
   },
   {
     id: "c4-db-decomposition",
@@ -205,6 +276,9 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     tier: "expert",
     name: "O(n²)→O(n log n) algorithm optimization (BIG-Bench Hard)",
     prompt: "Optimize the Longest Increasing Subsequence (LIS) algorithm below from O(n²) to O(n log n). Show the optimized implementation, explain the key insight (patience sorting / binary search), and prove the time complexity:\n\nfunction lis(arr: number[]): number {\n  let maxLen = 1;\n  for (let i = 1; i < arr.length; i++) {\n    for (let j = 0; j < i; j++) {\n      // compare and track\n    }\n  }\n  return maxLen;\n}",
+    // Kept keyword-scored ON PURPOSE (Warden 2026-07-11): this is the G2 timeout
+    // regression test on the complete()/no-tool tree-of-thought path. A graded
+    // conversion needs file-write, which moves it off that exact path. See m2 note.
     expected: "O\\(n log n\\)|O(n log n)|binary.?search|patience|tails|bisect|log n",
     strategy: "tree-of-thought",
     benchmark: "BIG-Bench Hard",
