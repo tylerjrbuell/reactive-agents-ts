@@ -71,17 +71,36 @@ export const applyWithBudget = (
   builder: ReactiveAgentBuilder,
   limits: BudgetLimits,
 ): void => {
-  if (limits.tokenLimit === undefined && limits.costLimit === undefined) {
+  const s = asBuilderState(builder);
+  const hasSpendCap =
+    limits.tokenLimit !== undefined || limits.costLimit !== undefined;
+  const hasExecCap =
+    limits.maxIterations !== undefined ||
+    limits.minIterations !== undefined ||
+    limits.timeout !== undefined ||
+    limits.llmTimeout !== undefined;
+  if (!hasSpendCap && !hasExecCap) {
     throw new Error(
-      "withBudget() requires at least one of `tokenLimit` or `costLimit`.",
+      "withBudget() requires at least one of `tokenLimit`, `costLimit`, " +
+        "`maxIterations`, `minIterations`, `timeout`, or `llmTimeout`.",
     );
   }
-  asBuilderState(builder)._budgetLimits = {
-    ...(limits.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
-    ...(limits.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
-    ...(limits.warningRatio !== undefined
-      ? { warningRatio: limits.warningRatio }
-      : {}),
-  };
+  // Spend caps — only set the budget-limits slot when a spend cap is present, so
+  // an execution-only budget call does not create an empty (no-cap) limits object.
+  if (hasSpendCap) {
+    s._budgetLimits = {
+      ...(limits.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
+      ...(limits.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
+      ...(limits.warningRatio !== undefined
+        ? { warningRatio: limits.warningRatio }
+        : {}),
+    };
+  }
+  // Execution-cap folds (audit #9) — route to the SAME slots the standalone
+  // withers set, so both spellings serialize identically.
+  if (limits.maxIterations !== undefined) s._maxIterations = limits.maxIterations;
+  if (limits.minIterations !== undefined) s._minIterations = limits.minIterations;
+  if (limits.timeout !== undefined) s._executionTimeoutMs = limits.timeout;
+  if (limits.llmTimeout !== undefined) s._ollamaTimeoutMs = limits.llmTimeout;
 };
 

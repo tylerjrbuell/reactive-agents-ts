@@ -51,6 +51,108 @@ const agent = await ReactiveAgents.create()
 | [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose` |
 | [Result Reference](#agentresult) | `AgentResult`, `AgentDebrief`, stream event types |
 
+## Method ↔ config correspondence
+
+Every builder method and the `AgentConfig` key(s) it sets. `config` methods are
+expressible declaratively via [`createAgent(config)`](/reference/configuration/);
+`overlay` methods are code-only (functions/secrets/registries) with the reason
+recorded. This table is **generated** from the single source
+(`AgentConfigSchema` + the builder prototype) — see the [Configuration
+reference](/reference/configuration/) for the declarative field list.
+
+<!-- BEGIN GENERATED: builder-method-reference (via `bun run docs:gen:api` — DO NOT EDIT BY HAND) -->
+
+| Method | Config key(s) | Kind | Description |
+| --- | --- | --- | --- |
+| `withA2A` | _overlay — multi-agent transport topology primitive (not data)_ | overlay | Agent-to-Agent server. |
+| `withAdaptiveHarness` | `adaptiveHarness` | config | Adaptive harness / policy compiler. |
+| `withAgentId` | `agentId` | config | Stable agent identifier. |
+| `withAgentTool` | _overlay — code-only sub-agent registry_ | overlay | Register a sub-agent as a tool. |
+| `withApprovalPolicy` | _overlay — carries an approval predicate (HITL durability rail)_ | overlay | Human-in-the-loop tool approval gate. |
+| `withAudit` | `features.audit` | config | Per-tool-call rationale auditing. |
+| `withBehavioralContracts` | _overlay — behavioral-contract overlay (folds into withContract)_ | overlay | Behavioral contracts. |
+| `withBudget` | `budget` | config | Declarative token/cost budget caps. |
+| `withCacheTimeout` | `execution.cacheTimeoutMs` | config | Tool-result cache TTL (ms). |
+| `withCalibration` | _overlay — runtime-probed calibration (not static data)_ | overlay | Model calibration mode. |
+| `withChannels` | _overlay — messaging transport wiring (not data)_ | overlay | Messaging channels. |
+| `withCircuitBreaker` | `circuitBreaker` | config | Circuit-breaker thresholds (false disables). |
+| `withContextProfile` | _overlay — cross-field side-effect profile (not orthogonal data)_ | overlay | Context window profile. |
+| `withContract` | _overlay — behavioral-contract overlay (not JSON data)_ | overlay | Behavioral contract. |
+| `withCortex` | _overlay — Cortex desk integration — observability alias (see withObservability({cortex}))_ | overlay | Emit events to a Cortex desk. |
+| `withCostTracking` | `costTracking`, `features.costTracking` | config | Cost budget caps. |
+| `withCustomTermination` | _overlay — carries a termination predicate (folds into withReasoning)_ | overlay | Custom termination predicate. |
+| `withDocuments` | _overlay — ingestion side-effect (folds into withTools({documents}))_ | overlay | RAG document ingestion. |
+| `withDurableRuns` | `durableRuns` | config | Crash-resume durable execution. |
+| `withDynamicPricing` | _overlay — pricing overlay (folds into withCostTracking)_ | overlay | Dynamic pricing overlay. |
+| `withDynamicSubAgents` | _overlay — code-only dynamic sub-agent registry_ | overlay | Dynamic sub-agent spawning. |
+| `withEnvironment` | _overlay — carries secrets/env (never serialized)_ | overlay | Environment secrets. |
+| `withErrorHandler` | _overlay — carries an error-handler function (not JSON)_ | overlay | Custom error handler. |
+| `withEvents` | _overlay — carries an event stream/callback (folds into withObservability)_ | overlay | Event stream sink. |
+| `withExperienceLearning` | `memory.experienceLearning` | config | Learn from prior-run experience summaries. |
+| `withFabricationGuard` | `fabricationGuard` | config | Fabrication-guard mode (off/warn/block). |
+| `withFallbacks` | `fallbacks` | config | Provider/model fallbacks. |
+| `withGateway` | `gateway` | config | Gateway (cron/webhook/access-control) config. |
+| `withGrounding` | `grounding` | config | Opt-in numeric evidence grounding. |
+| `withGuardrails` | `guardrails`, `features.guardrails` | config | Injection/PII/toxicity guardrails. |
+| `withHarness` | _overlay — compose-power-tier harness injection (not data)_ | overlay | Inject a composed harness. |
+| `withHealthCheck` | `features.healthCheck` | config | Enable agent.health() probes. |
+| `withHook` | _overlay — carries a lifecycle callback function (not JSON)_ | overlay | Lifecycle hook. |
+| `withIdentity` | `features.identity` | config | Enable identity feature. |
+| `withInteraction` | `features.interaction` | config | Enable durable interaction. |
+| `withKillSwitch` | `features.killSwitch` | config | Emergency stop / terminate control. |
+| `withLayers` | _overlay — Effect Layer DI escape hatch (not data)_ | overlay | Provide custom Effect layers. |
+| `withLazyValidation` | _overlay — no schema field (folds into withVerification timing)_ | overlay | Lazy output validation. |
+| `withLeanHarness` | _overlay — cross-field profile patch — use withProfile(lean())_ | overlay | Lean-harness mode. |
+| `withLearning` | `memory`, `skillPersistence` | config | Compounding-intelligence bundle (memory + skill persistence). |
+| `withLlmTimeout` | _overlay — sets _ollamaTimeoutMs; no schema field (G3, folds into withBudget)_ | overlay | LLM request timeout (ms). |
+| `withLogging` | `logging` | config | Structured logging config. |
+| `withLongHorizon` | `horizonProfile` | config | Long-horizon guard profile. |
+| `withMCP` | `mcpServers` | config | Connect MCP servers. |
+| `withMaxIterations` | `execution.maxIterations` | config | Iteration cap. |
+| `withMemory` | `memory`, `features.memory` | config | Enable memory layers + tier/dbPath/capacity/experienceLearning/consolidation. |
+| `withMemoryConsolidation` | `memory.memoryConsolidation` | config | Background memory consolidation/decay/prune. |
+| `withMetaTools` | _overlay — code-only meta-tool registry_ | overlay | Conductor's-suite meta-tools. |
+| `withMinIterations` | `execution.minIterations` | config | Minimum iterations before termination. |
+| `withModel` | `model`, `thinking`, `temperature`, `maxTokens`, `numCtx` | config | Model id + params (thinking/temperature/maxTokens/numCtx). |
+| `withModelPricing` | `pricingRegistry` | config | Custom model pricing registry. |
+| `withModelRouting` | _overlay — cost-aware routing capability with no config representation (G4)_ | overlay | Cost-aware model routing. |
+| `withName` | `name` | config | Agent name. |
+| `withObservability` | `observability`, `features.observability` | config | Observability umbrella (verbosity/live/cortex/tracing/logging/costs/…). |
+| `withOrchestration` | `features.orchestration` | config | Enable orchestration topology. |
+| `withOutputSchema` | `outputSchemaOptions` | config | Typed structured output (schema object is code-only; options serialize). |
+| `withOutputValidator` | _overlay — carries a validator function (folds into withVerification)_ | overlay | Custom output validator. |
+| `withPersona` | `persona` | config | Role/tone/instructions persona. |
+| `withProfile` | `profile` | config | Preset baseline capability profile. |
+| `withProgressCheckpoint` | _overlay — carries a checkpoint cadence/function (folds into withReasoning)_ | overlay | Progress checkpoint cadence. |
+| `withPrompts` | `features.prompts` | config | Register custom prompt templates. |
+| `withProvider` | `provider` | config | LLM provider. |
+| `withRateLimiting` | `rateLimiting` | config | Outbound LLM rate limiting. |
+| `withReactiveIntelligence` | `reactiveIntelligence`, `features.reactiveIntelligence` | config | Reactive intelligence posture. |
+| `withReasoning` | `reasoning`, `features.reasoning` | config | Reasoning strategy + options. |
+| `withReceiptSigning` | _overlay — carries a private signing key (secret, never serialized)_ | overlay | Ed25519 receipt signing. |
+| `withRemoteAgent` | _overlay — code-only remote-agent registry_ | overlay | Register a remote agent. |
+| `withReplayLLM` | _overlay — deterministic replay test rig (not data)_ | overlay | Replay recorded LLM responses. |
+| `withRequiredTools` | `requiredTools` | config | Tools that must be called before success. |
+| `withRetryPolicy` | `execution.retryPolicy` | config | LLM retry policy (maxRetries/backoff). |
+| `withSelfImprovement` | `features.selfImprovement` | config | Enable self-improvement loop. |
+| `withSkillPersistence` | `skillPersistence` | config | Persist evolved skills across runs. |
+| `withSkills` | _overlay — code-only SKILL.md directory registry_ | overlay | Living SKILL.md directories. |
+| `withStallPolicy` | `stallPolicy` | config | Stall/no-progress escalation policy. |
+| `withStreaming` | `features.streaming` | config | Enable event streaming. |
+| `withStrictValidation` | `execution.strictValidation` | config | Strict output validation. |
+| `withSystemPrompt` | `systemPrompt` | config | System prompt. |
+| `withTaskContext` | `taskContext` | config | Background key/value facts for reasoning. |
+| `withTestScenario` | _overlay — test-scenario rig (not data)_ | overlay | Load a test scenario. |
+| `withThinking` | `thinking` | config | Extended thinking / reasoning effort. |
+| `withTimeout` | `execution.timeoutMs` | config | Run timeout (ms). |
+| `withTools` | `tools`, `features.tools` | config | Tools layer + allowed/focused/adaptive/terminal/required options. |
+| `withTracing` | _overlay — trace persistence — observability alias (see withObservability({tracing}))_ | overlay | JSONL trace persistence. |
+| `withUserInteraction` | _overlay — durable ask overlay (folds into withInteraction)_ | overlay | Durable user interaction. |
+| `withVerification` | `verification`, `features.verification` | config | Verification package (entropy/nli/thresholds/useLLMTier/onReject). |
+| `withVerificationStep` | _overlay — carries a verification-step function (folds into withVerification)_ | overlay | Single post-answer reflect pass. |
+
+<!-- END GENERATED: builder-method-reference -->
+
 ## `ReactiveAgents` factory
 
 | API                                 | Description                                                                      |

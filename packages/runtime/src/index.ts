@@ -81,6 +81,9 @@ export {
 } from "./builder.js";
 export { ReactiveAgent } from "./reactive-agent.js";
 
+// ─── Declarative front door (dual API — spec 2026-07-11) ───
+export { createAgent } from "./create-agent.js";
+
 // ─── Build validation (fail-fast config errors) ───
 export {
   BuildValidationError,

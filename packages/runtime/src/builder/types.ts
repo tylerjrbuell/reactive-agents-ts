@@ -16,7 +16,16 @@ import type {
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { OutputFormat, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
+import type { FabricationGuardMode, StallPolicy } from '@reactive-agents/reasoning'
 import type { AgentDebrief } from '../debrief.js'
+import type {
+    ToolsConfig,
+    MemoryConfig,
+    VerificationConfig,
+    ObservabilityConfig,
+    CostTrackingConfig,
+    GuardrailsConfig,
+} from '../agent-config.js'
 
 // ─── DeepPartial ─────────────────────────────────────────────────────────────
 
@@ -315,6 +324,17 @@ export interface MemoryOptions {
     readonly retainDays?: number
     /** Importance threshold for semantic memory inclusion. Default: 0.7 */
     readonly importanceThreshold?: number
+    /**
+     * Learn from prior-run experience summaries (consolidation fold — equivalent
+     * to `.withExperienceLearning()`; both write the same state). Default: off.
+     */
+    readonly experienceLearning?: boolean
+    /**
+     * Background memory consolidation/decay/prune (consolidation fold —
+     * equivalent to `.withMemoryConsolidation()`; both write the same state).
+     * Default: off.
+     */
+    readonly memoryConsolidation?: boolean
 }
 
 /**
@@ -397,6 +417,20 @@ export interface GroundingOptions {
     readonly tolerance?: number;
     /** `block` mode: corrective retries before degrading to warn. Default 1. */
     readonly maxRetries?: number;
+    /**
+     * Honesty-rails umbrella fold (audit #18, Q3): configure the always-on
+     * fabrication guard alongside grounding. Equivalent to
+     * `.withFabricationGuard(mode)`; both write the same state slot. Absent =
+     * unchanged (guard stays at its always-on `block` default — this fold does
+     * NOT alter grounding's opt-in defaults).
+     */
+    readonly fabricationGuard?: FabricationGuardMode;
+    /**
+     * Honesty-rails umbrella fold (audit #18, Q3): tune the stall/no-progress
+     * policy. Equivalent to `.withStallPolicy(policy)`; same state slot. Absent =
+     * unchanged (defaults apply).
+     */
+    readonly stallPolicy?: StallPolicy;
 }
 
 /**
@@ -540,6 +574,19 @@ export interface VerificationOptions {
      * `.withVerification()` an enforcement point instead of pure telemetry.
      */
     readonly onReject?: "block" | "annotate" | "proceed"
+
+    // ── Validation-timing folds (audit #10): route to the SAME slots the
+    // standalone withers set. Absent = unchanged.
+    /**
+     * Promote missing-API-key / unknown-model checks to hard build errors.
+     * Equivalent to `.withStrictValidation()`. Default: off.
+     */
+    readonly strictValidation?: boolean
+    /**
+     * Keep those checks as warnings even under strict validation. Equivalent to
+     * `.withLazyValidation()`. Default: off.
+     */
+    readonly lazyValidation?: boolean
 }
 
 /**
@@ -650,6 +697,8 @@ export interface ObservabilityOptions {
     readonly audit?: boolean
     /** Cost tracking. `true` enables; an options object also sets budget caps. Equivalent to `.withCostTracking(options?)`. */
     readonly costs?: boolean | CostTrackingOptions
+    /** Event streaming. `true` streams at token density. Equivalent to `.withStreaming()` (routes to the same `features.streaming` slot). */
+    readonly streaming?: boolean
 }
 
 /**
@@ -1005,3 +1054,32 @@ export interface AgentResult {
         readonly schema: unknown;
     };
 }
+
+// ─── Keystone (spec §6.5 G13): schema is the sole author of option shapes ──────
+//
+// The `AgentConfig` sub-schemas (agent-config.ts) are UPSTREAM of these option
+// interfaces. Each option interface must COVER its schema — every JSON-safe
+// schema field present with a compatible type — so a dropped or renamed schema
+// field can no longer silently fail to serialize; it becomes a COMPILE ERROR
+// here instead. Code-only fields (functions/streams/secrets) and widened union
+// forms are the deliberate SUPERSET the option interface adds on top.
+//
+// `Covers<XConfig, XOptions>` is `true` iff (1) EVERY schema key exists on the
+// option type (structural extra-property tolerance can't hide a dropped field),
+// AND (2) each shared field's schema type is assignable to the option type. If
+// either fails, `Assert<false>` fails `extends true` and this file will not
+// compile — naming exactly which cluster drifted.
+type Assert<T extends true> = T
+type Covers<Schema_, Options_> = keyof Schema_ extends keyof Options_
+    ? Schema_ extends Pick<Options_, keyof Schema_ & keyof Options_>
+        ? true
+        : false
+    : false
+type _KeystoneTools = Assert<Covers<ToolsConfig, ToolsOptions>>
+type _KeystoneMemory = Assert<Covers<MemoryConfig, MemoryOptions>>
+type _KeystoneVerification = Assert<Covers<VerificationConfig, VerificationOptions>>
+type _KeystoneObservability = Assert<
+    Covers<ObservabilityConfig, ObservabilityOptions>
+>
+type _KeystoneCostTracking = Assert<Covers<CostTrackingConfig, CostTrackingOptions>>
+type _KeystoneGuardrails = Assert<Covers<GuardrailsConfig, GuardrailsOptions>>

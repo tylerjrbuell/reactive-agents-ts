@@ -102,6 +102,16 @@ export const applyMemoryOptions = (
     state._memoryTier = tierOrOptions.tier === "enhanced" ? "2" : "1";
   }
   state._memoryOptions = tierOrOptions;
+  // Consolidation folds (audit #5): the sub-options route to the SAME state
+  // slots as the standalone `.withExperienceLearning()` /
+  // `.withMemoryConsolidation()` withers — one state slot, one serialization
+  // path. Only set when explicitly provided (last-call-wins; absent = unchanged).
+  if (tierOrOptions.experienceLearning !== undefined) {
+    state._enableExperienceLearning = tierOrOptions.experienceLearning;
+  }
+  if (tierOrOptions.memoryConsolidation !== undefined) {
+    state._enableMemoryConsolidation = tierOrOptions.memoryConsolidation;
+  }
 };
 
 /**

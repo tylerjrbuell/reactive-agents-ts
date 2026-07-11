@@ -348,6 +348,15 @@ export const DurableRunsConfigSchema = Schema.Struct({
 export const AgentConfigSchema = Schema.Struct({
   /** Agent display name. Required. */
   name: Schema.String,
+  /**
+   * Preset baseline capability profile (Q6). Applied FIRST, before any other
+   * key, so explicit sibling keys override it — `{ profile: "lean", memory: {
+   * tier: "enhanced" } }` = lean baseline with memory re-enabled. Maps to
+   * `.withProfile(HarnessProfile[profile]())`. Absent = a bare builder (today's
+   * production defaults; no profile patch). Cross-field patch, not a serialized
+   * leaf — `toConfig()` re-emits the fields it mutated, not `profile` itself.
+   */
+  profile: Schema.optional(Schema.Literal("lean", "balanced", "intelligent")),
   /** Stable agent identifier (used for durable-run db paths, identity). */
   agentId: Schema.optional(Schema.String),
   /** LLM provider. Required. */
@@ -464,6 +473,21 @@ export const AgentConfigSchema = Schema.Struct({
 
 export type AgentConfig = Schema.Schema.Type<typeof AgentConfigSchema>;
 
+// ─── Keystone: sub-schema-derived option types (spec §6.5 G13) ──────────────────
+// The schema is the SOLE author of each JSON-safe option shape. The builder's
+// `XOptions` interfaces must COVER these (every schema field present, compatible
+// type) — enforced by compile-time assertions in `builder/types.ts`, so a
+// dropped/renamed schema field becomes a COMPILE ERROR, not a silent serialize
+// drop. Code-only option fields (functions/streams/secrets) are appended to the
+// `XOptions` interface and descriptor-marked `overlay`.
+export type ToolsConfig = Schema.Schema.Type<typeof ToolsConfigSchema>;
+export type MemoryConfig = Schema.Schema.Type<typeof MemoryConfigSchema>;
+export type VerificationConfig = Schema.Schema.Type<typeof VerificationConfigSchema>;
+export type ObservabilityConfig = Schema.Schema.Type<typeof ObservabilityConfigSchema>;
+export type BudgetConfig = Schema.Schema.Type<typeof BudgetConfigSchema>;
+export type CostTrackingConfig = Schema.Schema.Type<typeof CostTrackingConfigSchema>;
+export type GuardrailsConfig = Schema.Schema.Type<typeof GuardrailsConfigSchema>;
+
 // ─── Serialization ────────────────────────────────────────────────────────────
 
 /**
@@ -509,10 +533,19 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Use lazy import() to avoid circular dependency — builder.ts imports types from
   // this file at the top level, so we defer the runtime import.
   const { ReactiveAgents } = await import("./builder.js");
+  const { HarnessProfile } = await import("./capabilities/profile.js");
 
   let builder = ReactiveAgents.create()
     .withName(config.name)
     .withProvider(config.provider);
+
+  // Profile baseline (Q6): apply FIRST so every explicit key below overrides it.
+  // `.withProfile()` is a cross-field patch (memory/RI/verifier/strategy-switching/
+  // skill-persistence toggles); the subsequent field application wins on conflict,
+  // mirroring `profile.ts` "later calls override earlier patches".
+  if (config.profile) {
+    builder = builder.withProfile(HarnessProfile[config.profile]());
+  }
 
   if (config.agentId) {
     builder = builder.withAgentId(config.agentId);

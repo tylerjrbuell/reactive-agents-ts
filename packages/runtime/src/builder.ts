@@ -163,7 +163,33 @@ export interface BudgetLimits {
      * be wider.
      */
     readonly warningRatio?: number
+
+    // ── Execution-cap folds (audit #9): the budget domain opener also carries
+    // the iteration/timeout caps. Each routes to the SAME state slot as its
+    // standalone wither (one slot, one serialization path). Absent = unchanged.
+    /** Iteration cap — equivalent to `.withMaxIterations(n)`. */
+    readonly maxIterations?: number
+    /** Minimum iterations before termination — equivalent to `.withMinIterations(n)`. */
+    readonly minIterations?: number
+    /** Whole-run timeout in ms — equivalent to `.withTimeout(ms)`. */
+    readonly timeout?: number
+    /** Per-LLM-call timeout in ms (local providers) — equivalent to `.withLlmTimeout(ms)`. */
+    readonly llmTimeout?: number
 }
+
+// Keystone (spec §6.5 G13) — budget cluster. BudgetLimits lives here (not
+// builder/types.ts), so its schema-coverage assertion lives here too: every
+// BudgetConfigSchema field must be present on BudgetLimits with a compatible
+// type, else this fails to compile.
+type _AssertTrue<T extends true> = T
+type _BudgetCovers<S, O> = keyof S extends keyof O
+    ? S extends Pick<O, keyof S & keyof O>
+        ? true
+        : false
+    : false
+type _KeystoneBudget = _AssertTrue<
+    _BudgetCovers<import('./agent-config.js').BudgetConfig, BudgetLimits>
+>
 
 // ReactiveAgent class moved to ./reactive-agent.ts (W25-E T15).
 // Re-export here so consumer imports continue to work unchanged
@@ -977,7 +1003,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withVerification(options?: VerificationOptions): this {
         this._enableVerification = true
-        if (options) this._verificationOptions = options
+        if (options) {
+            const { strictValidation, lazyValidation, ...verification } = options
+            this._verificationOptions = verification
+            // Validation-timing folds (audit #10): same slots the standalone
+            // withers set. Only when explicitly provided.
+            if (strictValidation !== undefined) this._strictValidation = strictValidation
+            if (lazyValidation !== undefined) this._lazyValidation = lazyValidation
+        }
         return this
     }
 
@@ -993,7 +1026,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @returns `this` for chaining
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
-        this._groundingConfig = options
+        const { fabricationGuard, stallPolicy, ...grounding } = options
+        this._groundingConfig = grounding
+        // Honesty-rails umbrella folds (audit #18, Q3): route to the SAME slots
+        // the standalone withers set. Only when explicitly provided — grounding's
+        // opt-in defaults and the guard's always-on default are untouched.
+        if (fabricationGuard !== undefined) this._fabricationGuard = fabricationGuard
+        if (stallPolicy !== undefined) this._stallPolicy = stallPolicy
         return this
     }
 
@@ -1505,6 +1544,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 this._enableCostTracking = true
                 if (typeof options.costs === 'object') this._costTrackingOptions = options.costs
             }
+            // Streaming fold (audit #8): route to the same `_streamDensity` slot
+            // `.withStreaming()` sets (serializes under `features.streaming`).
+            if (options.streaming) this._streamDensity = 'tokens'
         }
         return this
     }

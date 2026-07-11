@@ -44,6 +44,11 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
   "outputSchemaOptions.mode",
   "outputSchemaOptions.onParseFail",
   "outputSchemaOptions.abstainBelow",
+  // `profile` (Q6) is a cross-field baseline patch, not orthogonal data: it
+  // mutates memory/RI/verifier/strategy-switching/skill-persistence toggles via
+  // `.withProfile()`. `toConfig()` re-emits the fields it changed, never
+  // `profile` itself — so it round-trips as its effects, not as a literal key.
+  "profile",
 ]);
 
 // Builder methods deliberately NOT represented as data, and why. Documented so
@@ -133,6 +138,7 @@ function getPath(obj: unknown, path: string): unknown {
 //     if a schema field is missing here.
 const MAXIMAL_CONFIG: AgentConfig = {
   name: "drift-guard-agent",
+  profile: "balanced",
   agentId: "drift-guard-stable-id",
   provider: "anthropic",
   model: "claude-opus-4-8",
