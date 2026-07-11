@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-07-11T13:40:04.826Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "5a6a1829",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito-8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 23524,
+          "durationMs": 28324.933224,
+          "status": "pass",
+          "output": "To write tests for these files, I'll create a Jest test suite. First, let's discover what tools are available to help with this task.\n\n```\ndiscover-tools(\"write tests\")\n```\n\nBased on the discovered tools, I can see that we have file-read and code-execute capabilities. Let me start by writing some basic tests for each file:\n\n```javascript\n// src/validator.test.ts\nimport { validate } from './validator';\n\ndescribe('Validator', () => {\n  it('should validate valid data', () => {\n    const validData = { key: 'value' };\n    expect(validate(validData)).toBe(true);\n  });\n\n  it('should reject invalid data', () => {\n    const invalidData = { key: null };\n    expect(validate(invalidData)).toBe(false);\n  });\n});\n\n// src/processor.test.ts\nimport { process } from './processor';\n\ndescribe('Processor', () => {\n  it('should process valid input', () => {\n    const validInput = [1, 2, 3];\n    expect(process(validInput)).toEqual([1, 2, 3]);\n  });\n\n  it('should handle empty input array', () => {\n    const emptyInput = [];\n    expect(process(emptyInput)).toEqual([]);\n  });\n});\n\n// src/pipeline.test.ts\nimport { run } from './pipeline';\n\ndescribe('Pipeline', () => {\n  it('should run complete pipeline successfully', async () => {\n    const result = await run();\n    expect(result).toBe(true);\n  });\n\n  it('should handle errors in the pipeline', async () => {\n    jest.spyOn(console, 'error').mockImplementation(() => {});\n    const errorResult = await run();\n    expect(errorResult).toBe(false);\n  });\n});\n```\n\nNow let's fix the bugs using code-execute to identify and correct them:\n\n```javascript\n// Fix validator.ts bug: incorrect validation logic\ncode-execute(`\nconst originalValidate = require('./validator').validate;\nfunction validate(data) {\n  if (!data || typeof data !== 'object') {\n    return false;\n  }\n  // Add more validation rules as needed\n  return true;\n}\nmodule.exports = { validate };\n`);\n\n// Fix processor.ts bug: incorrect processing logic\ncode-execute(`\nconst originalProcess = require('./processor').process;\nfunction process(input) {\n  if (!Array.isArray(input)) {\n    return [];\n  }\n  // Process input array\n  return input.map(item => item * 2);\n}\nmodule.exports = { process };\n`);\n\n// Fix pipeline.ts bug: incorrect pipeline execution logic\ncode-execute(`\nconst originalRun = require('./pipeline').run;\nasync function run() {\n  try {\n    const result = await Promise.all([\n      validate({ key: 'value' }),\n      process([1, 2, 3]),\n      // Add more pipeline steps as needed\n    ]);\n    return result.every(r => r);\n  } catch (error) {\n    console.error('Pipeline error:', error);\n    return false;\n  }\n}\nmodule.exports = { run };\n`);\n```\n\nLet's verify that the tests pass and the bugs are fixed:\n\n```javascript\n// src/validator.ts\nimport { validate } from './validator';\n\ndescribe('Validator', () => {\n  it('should validate valid data', () => {\n    const validData = { key: 'value' };\n    expect(validate(validData)).toBe(true);\n  });\n\n  it('should reject invalid data', () => {\n    const invalidData = { key: null };\n    expect(validate(invalidData)).toBe(false);\n  });\n});\n\n// src/processor.ts\nimport { process } from './processor';\n\ndescribe('Processor', () => {\n  it('should process valid input', () => {\n    const validInput = [1, 2, 3];\n    expect(process(validInput)).toEqual([2, 4, 6]);\n  });\n\n  it('should handle empty input array', () => {\n    const emptyInput = [];\n    expect(process(emptyInput)).toEqual([]);\n  });\n});\n\n// src/pipeline.ts\nimport { run } from './pipeline';\n\ndescribe('Pipeline', () => {\n  it('should run complete pipeline successfully', async () => {\n    const result = await run();\n    expect(result).toBe(true);\n  });\n\n  it('should handle errors in the pipeline', async () => {\n    jest.spyOn(console, 'error').mockImplementation(() => {});\n    const errorResult = await run();\n    expect(errorResult).toBe(false);\n  });\n});\n```\n\nFinally, let's verify that `bun test` exits with a success code:\n\n```bash\nbun test\n```\n\nThis should exit with code 0 if all tests pass.",
+          "traceId": "01KX8PFAZGVZSJ2VFHB2EX9Q3M",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 23524,
+      "meanDurationMs": 28325,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0.6666666666666666
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783777172584-7gy9unlq",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783777172584-7gy9unlq"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

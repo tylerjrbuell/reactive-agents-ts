@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-07-11T13:39:23.057Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "5a6a1829",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito-8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 22919,
+          "durationMs": 38138.68174,
+          "status": "pass",
+          "output": "Tests passed! validator.ts, processor.ts, and pipeline.ts are fixed.",
+          "traceId": "01KX8PDRKEDF1E1AQ1H1X79H6X",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 22919,
+      "meanDurationMs": 38139,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0.6666666666666666
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783777120658-ty9e1tix",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783777120658-ty9e1tix"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

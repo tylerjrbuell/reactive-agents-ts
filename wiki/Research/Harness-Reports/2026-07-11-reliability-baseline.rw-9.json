@@ -1,0 +1,450 @@
+{
+  "generatedAt": "2026-07-11T13:25:42.274Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "2292e1b2",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "cogito-8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.45454545454545453,
+              "evidence": "exit 1: 5 pass\n6 fail\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: current price is reported\nFAIL: ETH: 24h change is reported\nFAIL: SOL: current price is reported\nFAIL: S"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 12168,
+          "durationMs": 16057.756857,
+          "status": "pass",
+          "output": "Let me break this down step by step:\n\n1. First, I'll try to fetch the latest cryptocurrency prices from the price API at http://localhost:34757.\n\n2. If the API is unavailable or returns an error, I'll check for a fallback-prices.json file in the specified working directory.\n\n3. Based on the results, I'll either:\n   - Write a summary of current prices to prices.md if successful\n   - Or use the fallback data from fallback-prices.json if available\n\nHere are the tool calls needed:\n\n```bash\nfile-read(path: \".bench-run-G1PSL5/fallback-prices.json\", encoding: \"utf-8\")\nfile-write(path: \"./prices.md\", content: \"BTC price: {price}\\nETH price: {price}\\nSOL price: {price}\\n24h change: {change}\\nMarket cap: {marketCap}\", encoding: \"utf-8\")\n```\n\nLet me execute these commands in parallel:\n\n1. Fetching the latest prices from the API:\n   - Call to `file-read` will attempt to fetch current prices\n\n2. Checking for fallback data:\n   - If API call fails, `file-read` will check for existing fallback-prices.json file\n\n3. Writing summary to prices.md:\n   - Once we have valid price data, write it to prices.md in the specified format\n\n4. Error handling:\n   - If both API and fallback data are unavailable, consider this an error condition\n   - In that case, you might want to implement a retry mechanism or log the issue",
+          "traceId": "01KX8NJ2R5ZBHYR3924TQ6K633",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "verifier accept/reject reasons: no verifier-verdict events this run (conditional emitter)"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 6718,
+          "durationMs": 15539.469414000003,
+          "status": "pass",
+          "output": "## Current Cryptocurrency Prices (as of Saturday, July 11, 2026)\n\n### Bitcoin (BTC)\n- **Current Price:** $68450.21\n- **24h Change:** +2.34%\n- **Market Cap:** $1,347,000,000,000\n\n### Ethereum (ETH)\n- **Current Price:** $3,512.88\n- **24h Change:** -0.87%\n- **Market Cap:** $422,000,000,000\n\n### Solana (SOL)\n- **Current Price:** $172.44\n- **24h Change:** +4.12%\n- **Market Cap:** $79,000,000,000",
+          "traceId": "01KX8NJJDTAR69DN3X9NWVVHNA",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 9464,
+          "durationMs": 16394.854129,
+          "status": "pass",
+          "output": "# Cryptocurrency Prices\n\n## Bitcoin (BTC)\n- Current Price: $68,450.21\n- 24h Change: +2.34%\n- Market Cap: $1,347,000,000,000\n\n## Ethereum (ETH)\n- Current Price: $3,512.88\n- 24h Change: -0.87%\n- Market Cap: $422,000,000,000\n\n## Solana (SOL)\n- Current Price: $172.44\n- 24h Change: +4.12%\n- Market Cap: $79,000,000,000\n\n*Note: This is a static fallback snapshot from March 11, 2025.*",
+          "traceId": "01KX8NK1M4DT2K2GNPD17NPB05",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.09090909090909091,
+              "evidence": "exit 1: 1 pass\n10 fail\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: asset is named\nFAIL: ETH: current price is"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 7454,
+          "durationMs": 11706.020224,
+          "status": "pass",
+          "output": "# Cryptocurrency Prices\n\n## Current Market Data (Fallback)\n\n| Crypto | Price (USD) | 24h Change (%) | Market Cap (USD) |\n|--------|------------|---------------|------------------|\n| Bitcoin | $68,450.21 | +2.34% | $1.35T |\n| Ethereum | $3,512.88 | -0.87% | $422B |\n| Solana | $172.44 | +4.12% | $79B |\n\n## Notes:\n- This is a static snapshot from March 11, 2025.\n- Live API unavailable at time of fetch.\n- Fallback data used for reference.",
+          "traceId": "01KX8NKHP4GZ832T74QJRC81WQ",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 4774,
+          "durationMs": 17588.654101,
+          "status": "pass",
+          "output": "The task is complete. I've written the cryptocurrency price summary to prices.md using the static fallback data since the API was unavailable. The file includes current prices for BTC, ETH, and SOL along with their 24-hour changes and market caps.\n\nIf you need any further information or if there's anything else I can help with, please let me know!",
+          "traceId": "01KX8NKX57H9MK0QTXRM5GRQS9",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 7998,
+          "durationMs": 17152.761423000004,
+          "status": "pass",
+          "output": "# Cryptocurrency Prices\n\n## Bitcoin (BTC)\n- Price: $68,450.21\n- 24h Change: +2.34%\n- Market Cap: $1.35T\n\n## Ethereum (ETH)\n- Price: $3,512.88\n- 24h Change: -0.87%\n- Market Cap: $422B\n\n## Solana (SOL)\n- Price: $172.44\n- 24h Change: +4.12%\n- Market Cap: $79B",
+          "traceId": "01KX8NMEC253TX1SNJQRYXC648",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 6,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 6408,
+          "durationMs": 16623.686168,
+          "status": "pass",
+          "output": "# Cryptocurrency Prices\n\n## Fallback Prices (2025-03-11)\n\n### Bitcoin (BTC)\n* Current Price: $68,450.21\n* 24h Change: +2.34%\n* Market Cap: $1.35T\n\n### Ethereum (ETH)\n* Current Price: $3,512.88\n* 24h Change: -0.87%\n* Market Cap: $422B\n\n### Solana (SOL)\n* Current Price: $172.44\n* 24h Change: +4.12%\n* Market Cap: $790B\n\nNote: This is a static snapshot from March 2025 — for real-time data, please check the live API at http://localhost:38675",
+          "traceId": "01KX8NMZ4Z5CPCX46F3EQGGFJR",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 7,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 6865,
+          "durationMs": 13163.35655299999,
+          "status": "pass",
+          "output": "Cryptocurrency prices have been fetched and saved to the file 'prices.md' in the working directory. If the live API was unavailable, a fallback snapshot from March 2025 was used for BTC, ETH, and SOL price data.\n\nThe prices are as follows:\n- Bitcoin (BTC): $68,450.21 with a +2.34% change over the last 24 hours and a market cap of $1.35 trillion\n- Ethereum (ETH): $3,512.88 with a -0.87% change over the last 24 hours and a market cap of $422 billion\n- Solana (SOL): $172.44 with a +4.12% change over the last 24 hours and a market cap of $790 billion",
+          "traceId": "01KX8NNFDCS25Z7M75PSYPXCFW",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.8181818181818181
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 0.3444452226429111
+        }
+      ],
+      "variance": 0.32777738867854445,
+      "meanTokens": 7731,
+      "meanDurationMs": 15528,
+      "passRate": 1,
+      "solveRate": 0.75,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0.75
+        },
+        {
+          "k": 2,
+          "estimate": 0.5357142857142857
+        },
+        {
+          "k": 4,
+          "estimate": 0.21428571428571425
+        },
+        {
+          "k": 8,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0.8181818181818181
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0.3444452226429111
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783776214885-4f2db6oo",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783776214885-4f2db6oo"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0.75
+        },
+        {
+          "k": 2,
+          "estimate": 0.5357142857142857
+        },
+        {
+          "k": 4,
+          "estimate": 0.21428571428571425
+        },
+        {
+          "k": 8,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}
