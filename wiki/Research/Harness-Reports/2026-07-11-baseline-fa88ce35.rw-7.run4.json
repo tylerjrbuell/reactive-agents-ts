@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-07-11T14:00:52.133Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "fa88ce35",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 16931,
+          "durationMs": 34557.332566,
+          "status": "pass",
+          "output": "To begin addressing this task, I'll need to read the source files where the bugs exist:\n\n```typescript\nfile-read(path: \"/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-nRTNW9/src/validator.ts\")\nfile-read(path: \"/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-nRTNW9/src/processor.ts\")\nfile-read(path: \"/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-nRTNW9/src/pipeline.ts\")\n```\n\nOnce I have the content of these files, I can analyze them for bugs and develop appropriate tests. After that, I'll fix any issues found in place while ensuring the exported function signatures remain unchanged.\n\nNote: The working directory is set to /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.bench-run-nRTNW9",
+          "traceId": "01KX8QN70A8JNVHND4KN3RPES7",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "verifier accept/reject reasons: no verifier-verdict events this run (conditional emitter)"
+            ]
+          },
+          "trust": "honest-failure"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 16931,
+      "meanDurationMs": 34557,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783778414323-zlgnwr5l",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783778414323-zlgnwr5l"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

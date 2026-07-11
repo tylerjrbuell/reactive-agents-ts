@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-07-11T14:02:49.661Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "fa88ce35",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 14770,
+          "durationMs": 111611.496937,
+          "status": "pass",
+          "output": "Let me analyze each file and write corresponding tests:\n\n1. For processor.ts:\n```typescript\n// filterLargeList.ts\ndescribe('filterLargeList', () => {\n  it('should return items when length is greater than or equal to 10', () => {\n    const items = Array(11).fill(0);\n    const predicate = jest.fn().mockReturnValue(true);\n    expect(filterLargeList(items, predicate)).toEqual(items.filter(predicate));\n  });\n\n  it('should return original items when length is less than 10', () => {\n    const items = [1, 2, 3];\n    const predicate = jest.fn().mockReturnValue(false);\n    expect(filterLargeList(items, predicate)).toEqual([1, 2, 3]);\n  });\n});\n\n// normalizeScores.ts\ndescribe('normalizeScores', () => {\n  it('should return normalized scores when max is not zero', () => {\n    const scores = [10, 20, 30];\n    const expected = [1, 2, 3];\n    expect(normalizeScores(scores)).toEqual(expected);\n  });\n\n  it('should return all zeros when max is zero', () => {\n    const scores = [0, 0, 0];\n    expect(normalizeScores(scores)).toEqual([0, 0, 0]);\n  });\n});\n```\n\n2. For pipeline.ts:\n```typescript\n// processFirst.ts\ndescribe('processFirst', () => {\n  it('should increment state.count by 1 and return correct result', async () => {\n    const state: PipelineState = { count: 0, results: [] };\n    const result = await processFirst(state);\n    expect(result).toBe(`first-${1}`);\n    expect(state.count).toBe(1);\n  });\n});\n\n// processSecond.ts\ndescribe('processSecond', () => {\n  it('should read updated state.count after processFirst completes', async () => {\n    const state: PipelineState = { count: 0, results: [] };\n    const result = await processSecond(state);\n    expect(result).toBe(`second-${1}`);\n  });\n});\n\n// runPipeline.ts\ndescribe('runPipeline', () => {\n  it('should return correct results when both processes complete', async () => {\n    const state: PipelineState = { count: 0, results: [] };\n    const [r1, r2] = await runPipeline(state);\n    expect(r1).toBe(`first-${1}`);\n    expect(r2).toBe(`second-${1}`);\n    expect(state.count).toBe(1);\n  });\n});\n```\n\nNow I need to write these tests into the actual files. Let me do that:\n\n```typescript\n// processor.ts\nimport { jest } from '@jest/globals';\n\ndescribe('Processor', () => {\n  describe('filterLargeList', () => {\n    it('should return items when length is greater than or equal to 10', () => {\n      const items = Array(11).fill(0);\n      const predicate = jest.fn().mockReturnValue(true);\n      expect(filterLargeList(items, predicate)).toEqual(items.filter(predicate));\n    });\n\n    it('should return original items when length is less than 10', () => {\n      const items = [1, 2, 3];\n      const predicate = jest.fn().mockReturnValue(false);\n      expect(filterLargeList(items, predicate)).toEqual([1, 2, 3]);\n    });\n  });\n\n  describe('normalizeScores', () => {\n    it('should return normalized scores when max is not zero', () => {\n      const scores = [10, 20, 30];\n      const expected = [1, 2, 3];\n      expect(normalizeScores(scores)).toEqual(expected);\n    });\n\n    it('should return all zeros when max is zero', () => {\n      const scores = [0, 0, 0];\n      expect(normalizeScores(scores)).toEqual([0, 0, 0]);\n    });\n  });\n});\n\n// pipeline.ts\ndescribe('Pipeline', () => {\n  describe('processFirst', () => {\n    it('should increment state.count by 1 and return correct result', async () => {\n      const state: PipelineState = { count: 0, results: [] };\n      const result = await processFirst(state);\n      expect(result).toBe(`first-${1}`);\n      expect(state.count).toBe(1);\n    });\n  });\n\n  describe('processSecond', () => {\n    it('should read updated state.count after processFirst completes', async () => {\n      const state: PipelineState = { count: 0, results: [] };\n      const result = await processSecond(state);\n      expect(result).toBe(`second-${1}`);\n    });\n  });\n\n  describe('runPipeline', () => {\n    it('should return correct results when both processes complete', async () => {\n      const state: PipelineState = { count: 0, results: [] };\n      const [r1, r2] = await runPipeline(state);\n      expect(r1).toBe(`first-${1}`);\n      expect(r2).toBe(`second-${1}`);\n      expect(state.count).toBe(1);\n    });\n  });\n});\n```\n\nNow I need to call file-write with these tests written into the files.",
+          "traceId": "01KX8QPEFBSW7DC8XG26F3CM3F",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)",
+              "verifier accept/reject reasons: no verifier-verdict events this run (conditional emitter)"
+            ]
+          },
+          "trust": "honest-failure"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 14770,
+      "meanDurationMs": 111611,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783778454357-jhogr3aa",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783778454357-jhogr3aa"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

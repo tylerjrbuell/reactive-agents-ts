@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-07-11T14:03:41.059Z",
+  "runs": [],
+  "sessionId": "reliability",
+  "sessionVersion": "1.0.0",
+  "gitSha": "fa88ce35",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "scoreState": "inconclusive",
+              "inconclusiveReason": "judge-outage",
+              "judgeScored": true,
+              "evidence": "Judge unreachable: Unable to connect. Is the computer able to access the url? — score not measured"
+            }
+          ],
+          "tokensUsed": 32290,
+          "durationMs": 44938.890161,
+          "status": "pass",
+          "output": "I'll start by discovering the available tools to ensure we have everything needed for this task.\n\n1. First, I need to discover all available tools:\n\n```javascript\ndiscover-tools(\"read file\")\n```\n\nThis will show us what tools are available for reading files.\n\n2. Once I know which tools are available, I can proceed with writing tests and fixing bugs in the specified TypeScript files.\n\n3. For each of the three files (/validator.ts, /processor.ts, and /pipeline.ts), I'll need to:\n   - Read their current contents\n   - Identify potential bugs based on best practices\n   - Write test cases that cover both valid and invalid scenarios\n   - Fix any identified bugs in place\n\n4. After fixing all bugs, we should verify that the tests pass by executing them with `bun test`.\n\nLet's get started! Here are the tools I'll need to use:\n\n- file-read: To read the contents of each source file\n- code-execute: To run our tests and verify they pass\n- file-write: To save any updated files\n\nI'm ready to proceed with this task. Please let me know which tool to call first, or if you'd like me to continue with the next step in the process.\n\nFor now, I'll focus on discovering all available tools:\n\n```javascript\ndiscover-tools(\"read file\")\n```\n\nThis will help us ensure we have everything needed for reading files and other operations required for this task.",
+          "traceId": "01KX8QT1RT1SH6CCZ0SJHPYSA5",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "verifier accept/reject reasons: no verifier-verdict events this run (conditional emitter)"
+            ]
+          },
+          "trust": "honest-failure"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 32290,
+      "meanDurationMs": 44939,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1783778571879-i8v20z1c",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session reliability --run-id run-1783778571879-i8v20z1c"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

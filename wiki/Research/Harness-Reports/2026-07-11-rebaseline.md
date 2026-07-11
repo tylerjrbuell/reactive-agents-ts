@@ -76,3 +76,29 @@ Anomaly, reported as-is: the killed 8-run rw-7 invocation ran ≥590s while the 
 - `wiki/Research/Harness-Reports/2026-07-11-reliability-baseline.rw-9.json`, `.rw-4.json`, `.rw-7.run{1..8}.json` — runner-produced cell reports
 - `wiki/Research/Harness-Reports/2026-07-11-rw7-recut.json` — comparability cell
 - Traces: `packages/benchmarks/benchmark-traces/reliability/`
+
+---
+
+## CANONICAL clean baseline — single HEAD `fa88ce35` (2026-07-11, Warden recut)
+
+The shakedown above ran while the harness-under-test drifted across concurrent
+commits (validity caveat noted there). This recut ran at ONE clean HEAD
+(`fa88ce35`, tree clean — includes CompletionEnvelope `88a8356a`), same model
+(cogito:8b), same instrument. **These are the numbers lift gates compare against.**
+
+| Task | n | Per-run graded acc (%) | Mean | Solved | pass^1 | pass^8 |
+|---|---|---|---|---|---|---|
+| rw-9 | 8 | 100,0,0,0,100,100,100,100 | 62.5 | 5/8 | 62.5% | **0%** |
+| rw-4 | 8 | 0×8 | 0.0 | 0/8 | 0% | **0%** |
+| rw-7 | 8×1 | 0,67,33,0,0,0,0,67 | 20.9 | 0/8 | 0% | **0%** (manual) |
+
+Files: `2026-07-11-baseline-fa88ce35.rw-9.json`, `.rw-4.json`, `.rw-7.run{1..8}.json`.
+rw-7 chunked 8×runs-of-1 per the 590s-cap ritual. Judge not run: judge-scored
+dimensions inconclusive by design (`judge-outage`), zero accuracy dimensions
+inconclusive.
+
+Reading: pass^8 = 0 across the board — reliability, not capability, is the
+axis to move; rw-4 scores 0/8 at n=8 (was invisible under keyword scoring);
+rw-9's bimodal 100-or-0 pattern makes it the cleanest reliability probe in the
+set. Envelope semantics (`88a8356a`) are IN this baseline, so honest-partial
+degradation is already priced in.
