@@ -75,6 +75,12 @@ import {
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { executeStep } from "./plan-execute/step-executor.js";
+import {
+  capStatusToEnvelope,
+  honestEnvelopeMetadata,
+  joinEnvelopes,
+  type CompletionEnvelope,
+} from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
 
 interface PlanExecuteInput {
@@ -137,6 +143,13 @@ interface PlanExecuteInput {
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   /** Pre-resolved model calibration — drives steering channel selection. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  /**
+   * #40: long-horizon guard profile — threaded to every composite step's
+   * sub-kernel (via StepExecutorInput) so the A2 pace bands, and therefore the
+   * budget-terminal honest partial, can arm inside plan-execute exactly like
+   * reactive / tree-of-thought (7b6e1ad1).
+   */
+  readonly horizonProfile?: "long";
 }
 
 export const executePlanExecute = (
@@ -175,6 +188,14 @@ export const executePlanExecute = (
     // chain reactive uses. Direct-dispatch and analysis steps do not produce
     // a raw reason, so this stays `undefined` for pure tool/analysis plans.
     let lastRawTerminatedBy: string | undefined;
+    // #40 / spec §1b: completion envelopes of every CONTRIBUTING step — steps
+    // whose output was accepted into the plan (result.success). Joined
+    // worst-of at the result boundary (kernel/state/completion-envelope.ts is
+    // the single home of the join rule) so a sub-kernel's unverified-ship
+    // markers (harnessAuthoredOutput / budgetTerminalPartial) can cap the
+    // strategy's own "output present ⇒ completed" authority. Failed attempts
+    // that were patched/replaced do not join — their replacement does.
+    const contributingEnvelopes: CompletionEnvelope[] = [];
 
     // W3 FIX-23: per-strategy RI budget. Accumulates across refinement
     // iterations so dispatcher suppression gates (maxFiresPerRun,
@@ -519,6 +540,10 @@ export const executePlanExecute = (
         strategy: "plan-execute-reflect",
         steps,
         output: scOutput,
+        // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
+        // LLM call + quality gate), so there is no envelope to join — the
+        // status derives from this path's own deterministic evidence (output
+        // presence through the gate) and no kernel markers are fabricated.
         status: scOutput ? "completed" : "partial",
         start,
         totalTokens,
@@ -680,6 +705,9 @@ export const executePlanExecute = (
                   ...(exit.value.rawTerminatedBy !== undefined
                     ? { rawTerminatedBy: exit.value.rawTerminatedBy }
                     : {}),
+                  // #40: the step's completion envelope rides the wave result
+                  // so the apply loop can join it into the aggregate.
+                  envelope: exit.value.envelope,
                 };
               }
               const squashed = Cause.squash(exit.cause);
@@ -708,6 +736,14 @@ export const executePlanExecute = (
             .rawTerminatedBy;
           if (stepRawTerminatedBy !== undefined) {
             lastRawTerminatedBy = stepRawTerminatedBy;
+          }
+
+          // #40: accepted step ⇒ its envelope contributes to the aggregate
+          // (worst-of join at the result boundary). Failure results carry no
+          // envelope and are handled by the patch/refine machinery.
+          const stepEnvelope = (result as { envelope?: CompletionEnvelope }).envelope;
+          if (result.success && stepEnvelope !== undefined) {
+            contributingEnvelopes.push(stepEnvelope);
           }
 
           if (result.success) {
@@ -1235,26 +1271,40 @@ export const executePlanExecute = (
       timestamp: new Date(),
     });
 
+    // #40 / spec §1b: join the contributing sub-kernel envelopes (worst-of —
+    // single home: kernel/state/completion-envelope.ts) and let the aggregate
+    // CAP plan-execute's own "output present ⇒ completed" authority. Own
+    // authority may still downgrade (grounded abstention, missing output);
+    // it may never upgrade past the envelope.
+    const subKernelEnvelope = joinEnvelopes(contributingEnvelopes);
+
     return buildStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
       output: finalOutput,
       // Grounded abstention is an honest non-success: the output explains what
       // could not be verified, and the status must not read as completed.
-      status: groundedAbstained ? "partial" : finalOutput ? "completed" : "partial",
+      status: groundedAbstained
+        ? "partial"
+        : finalOutput
+          ? capStatusToEnvelope("completed", subKernelEnvelope)
+          : "partial",
       start,
       totalTokens,
       totalCost,
-      ...((groundedAbstained ? "abstained" : lastRawTerminatedBy) !== undefined
-        ? {
-            extraMetadata: {
+      extraMetadata: {
+        // H5/#40: the sub-kernel honesty fields cross the result boundary —
+        // empty on a clean run, mirroring reactive's honestPartialMetadata.
+        ...honestEnvelopeMetadata(subKernelEnvelope),
+        ...((groundedAbstained ? "abstained" : lastRawTerminatedBy) !== undefined
+          ? {
               // Parallel open-string channel mirroring reactive strategy.
               // Drops through to AgentCompleted.terminationReason via
               // execution-engine ctx.metadata.rawTerminatedBy.
               rawTerminatedBy: groundedAbstained ? "abstained" : lastRawTerminatedBy,
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     });
   });
 

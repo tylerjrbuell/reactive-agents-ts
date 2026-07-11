@@ -34,6 +34,7 @@ import {
 } from "../../kernel/state/kernel-state.js";
 import { handleThinking } from "../../kernel/capabilities/reason/think.js";
 import { handleActing } from "../../kernel/capabilities/act/act.js";
+import { envelopeFromKernelState } from "../../kernel/state/completion-envelope.js";
 
 // ── Public input / output types ──────────────────────────────────────────────
 
@@ -238,6 +239,9 @@ export const executeReActKernel = (
       taskDescription: input.task,
       temperature: input.temperature,
       exitOnAllToolsCalled: input.exitOnAllToolsCalled,
+      // #40: arm the A2 long-horizon pace bands inside wrapped sub-kernels —
+      // without this the budget-terminal honest partial cannot form here.
+      ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
 
     // Determine terminatedBy from state — map oracle reasons to canonical types.
@@ -265,6 +269,10 @@ export const executeReActKernel = (
       finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
       ...(state.meta.abstention !== undefined ? { abstention: state.meta.abstention } : {}),
       llmCalls: state.llmCalls ?? 0,
+      // #40 / spec §1b: the completion authority's verdict crosses the boundary
+      // WITH the output. Consumers join it via capStatusToEnvelope — their own
+      // authority may downgrade, never upgrade past this.
+      envelope: envelopeFromKernelState(state),
     };
   });
 

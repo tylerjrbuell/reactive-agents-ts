@@ -33,6 +33,7 @@ import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
 import type { ToolSummary } from "../planning/plan-prompts.js";
 import { executeReActKernel } from "../../kernel/loop/react-kernel.js";
+import type { CompletionEnvelope } from "../../kernel/state/completion-envelope.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import type { KernelStateLike } from "@reactive-agents/core";
@@ -72,6 +73,16 @@ export interface StepExecResult {
    * AgentCompleted.terminationReason.
    */
   rawTerminatedBy?: string;
+  /**
+   * #40 / spec §1b — the completion authority's verdict for this step, joined
+   * worst-of by the outer orchestrator into plan-execute's aggregate envelope.
+   * Composite steps carry their sub-kernel's envelope verbatim (this is the
+   * boundary the honesty markers previously died at). tool_call and analysis
+   * steps have NO sub-kernel — their envelope is derived from the path's own
+   * deterministic evidence (dispatch success / non-empty output), with no
+   * kernel markers fabricated.
+   */
+  envelope: CompletionEnvelope;
 }
 
 /**
@@ -100,6 +111,9 @@ export interface StepExecutorInput {
   readonly budgetLimits?: import("../../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   readonly auditRationale?: boolean;
+  /** #40: long-horizon guard profile — forwarded to each composite sub-kernel so
+   *  the A2 pace bands (and thus the budget-terminal honest partial) can arm. */
+  readonly horizonProfile?: "long";
 }
 
 /** File tools whose relative paths the healing pipeline resolves (mirrors act.ts). */
@@ -228,6 +242,12 @@ export function executeStep(
         tokens: 0,
         cost: 0,
         success: observe.success,
+        // No sub-kernel on this path (direct tool dispatch): the envelope is
+        // derived from the dispatch's own deterministic evidence. No kernel
+        // markers exist here, so none are fabricated (#40 rule 5).
+        envelope: {
+          completionStatus: observe.success ? "completed" : "failed",
+        },
       } satisfies StepExecResult;
     });
   }
@@ -298,6 +318,11 @@ export function executeStep(
             tokens: response.usage.totalTokens,
             cost: response.usage.estimatedCost,
             success: true,
+            // No sub-kernel on this path (single tool-less LLM call): empty
+            // output already failed the Effect above, so the surviving path's
+            // deterministic evidence is a non-empty model-authored answer.
+            // No kernel markers exist here, so none are fabricated (#40 rule 5).
+            envelope: { completionStatus: "completed" } satisfies CompletionEnvelope,
           });
         }),
         Effect.mapError(
@@ -348,6 +373,8 @@ export function executeStep(
     budgetLimits: input.budgetLimits,
     calibration: input.calibration,
     auditRationale: input.auditRationale,
+    // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
+    ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
@@ -357,6 +384,10 @@ export function executeStep(
       ...(kernelResult.rawTerminatedBy !== undefined
         ? { rawTerminatedBy: kernelResult.rawTerminatedBy }
         : {}),
+      // #40 / spec §1b: the sub-kernel's completion envelope crosses the step
+      // boundary VERBATIM — this is exactly where harnessAuthoredOutput /
+      // budgetTerminalPartial / verificationWarning previously died.
+      envelope: kernelResult.envelope,
     })),
     Effect.mapError(
       (err) =>

@@ -52,6 +52,13 @@ import {
   decideSynthesisInput,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
+import {
+  capStatusToEnvelope,
+  envelopeFromKernelState,
+  honestEnvelopeMetadata,
+  joinEnvelopes,
+  type CompletionEnvelope,
+} from "../kernel/state/completion-envelope.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -110,6 +117,13 @@ interface ReflexionInput {
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   /** Opt-in per-tool-call rationale auditing. */
   readonly auditRationale?: boolean;
+  /**
+   * #40: long-horizon guard profile — threaded to the generate + improve
+   * kernel passes so the A2 pace bands, and therefore the budget-terminal
+   * honest partial, can arm inside reflexion exactly like reactive /
+   * tree-of-thought (7b6e1ad1).
+   */
+  readonly horizonProfile?: "long";
 }
 
 /**
@@ -202,6 +216,8 @@ export const executeReflexion = (
       modelId: input.modelId,
       taskDescription: input.taskDescription,
       temperature: 0.7,
+      // #40: arm the A2 long-horizon pace bands in the generate sub-kernel.
+      ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
 
     let initialResponse = genPass.output ?? "";
@@ -291,6 +307,14 @@ export const executeReflexion = (
       readonly previousCritiques: readonly string[];
       readonly totalTokens: number;
       readonly totalCost: number;
+      /**
+       * #40 / spec §1b: worst-of join of every kernel pass run so far
+       * (generate + improves — all contribute output and/or side-effect
+       * evidence to the shipped response). Caps the SATISFIED verdict at the
+       * result boundary: the critique judges text quality and cannot see that
+       * a pass shipped a harness-authored or budget-terminal partial.
+       */
+      readonly envelope: CompletionEnvelope;
     }
 
     const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError, LLMService>({
@@ -302,6 +326,7 @@ export const executeReflexion = (
         previousCritiques: seedCritiques,
         totalTokens: genPass.tokens + backfillTokens,
         totalCost: genPass.cost + backfillCost,
+        envelope: envelopeFromKernelState(genPass.state),
       },
       maxIters: maxRetries,
       step: (s, attempt) =>
@@ -517,6 +542,8 @@ export const executeReflexion = (
             modelId: input.modelId,
             taskDescription: input.taskDescription,
             temperature: 0.6,
+            // #40: arm the A2 long-horizon pace bands in improve sub-kernels.
+            ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
           });
 
           const newResponse = improvePass.output || s.response;
@@ -548,6 +575,12 @@ export const executeReflexion = (
             previousCritiques: updatedCritiques,
             totalTokens: tokensAfterImprove,
             totalCost: costAfterImprove,
+            // #40: the improve sub-kernel's envelope joins the running
+            // aggregate (worst-of — see completion-envelope.ts).
+            envelope: joinEnvelopes([
+              s.envelope,
+              envelopeFromKernelState(improvePass.state),
+            ]),
           });
         }),
     });
@@ -590,11 +623,16 @@ export const executeReflexion = (
     }
     // stagnant path already emitted its own warning inside the step body.
 
-    const status = reason.kind === "satisfied" ? "completed" : "partial";
-    const confidence =
+    // #40 / spec §1b: the critique's SATISFIED verdict is reflexion's own
+    // authority — it may downgrade (max-iters / stagnant → partial) but never
+    // upgrade past the joined sub-kernel envelope. A generate/improve pass that
+    // shipped a harness-authored or budget-terminal partial caps the run at
+    // `partial` no matter what the critique thought of the prose.
+    const status =
       reason.kind === "satisfied"
-        ? Math.max(0.6, 1 - (iters / 3) * 0.3)
-        : 0.4;
+        ? capStatusToEnvelope("completed", final.envelope)
+        : "partial";
+    const confidence = status === "completed" ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4;
 
     return buildStrategyResult({
       strategy: "reflexion",
@@ -604,7 +642,13 @@ export const executeReflexion = (
       start,
       totalTokens: finalTokens,
       totalCost: finalCost,
-      extraMetadata: { confidence, reflexionCritiques: final.previousCritiques },
+      extraMetadata: {
+        confidence,
+        reflexionCritiques: final.previousCritiques,
+        // H5/#40: sub-kernel honesty fields cross the result boundary — empty
+        // on a clean run, mirroring reactive's honestPartialMetadata.
+        ...honestEnvelopeMetadata(final.envelope),
+      },
     });
   });
 

@@ -490,6 +490,19 @@ export const executeBlueprint = (
     // output is NOT the final answer. Honour the plan: run SOLVE so the declared
     // synthesis actually happens, instead of shipping raw tool JSON.
     let finalOutput: string | null = null;
+    // #40 rule 5 — blueprint runs NO sub-kernel (the EXECUTE worker is 0-LLM
+    // tool dispatch + inline analysis calls; the degrade paths return
+    // executeReactive's result verbatim, which is already envelope-honest).
+    // Its completion envelope is therefore derived per-path from the
+    // strategy's own DETERMINISTIC evidence:
+    //   - normal path: worker step statuses (allSucceeded) — unchanged;
+    //   - budget-capped path (flag below): the token budget forced SOLVE to be
+    //     skipped and the HARNESS joined the raw worker results — the model
+    //     never authored the deliverable and the run terminated by budget, not
+    //     by evidence. That is precisely the budgetTerminalPartial /
+    //     harnessAuthoredOutput class, backed by this code path itself (no
+    //     kernel markers are fabricated — the evidence IS the branch taken).
+    let budgetCappedJoin = false;
 
     const overBudget =
       tokenLimit !== undefined && totalTokens >= tokenLimit;
@@ -538,6 +551,7 @@ export const executeBlueprint = (
     } else if (stepResultTexts.length > 0) {
       // Over budget — no solver call; join the raw worker results.
       finalOutput = stepResultTexts.join("\n\n");
+      budgetCappedJoin = true;
       steps.push(makeStep("thought", `[SOLVE] budget-capped — joined worker results`));
     }
 
@@ -572,13 +586,31 @@ export const executeBlueprint = (
       strategy: STRATEGY,
       steps,
       output: finalOutput,
+      // #40: an unverified ship never reads as completed. The budget-capped
+      // join is a partial regardless of worker success (see envelope comment
+      // above); otherwise the worker's deterministic step evidence governs.
       status: finalOutput
-        ? workerResult.allSucceeded
-          ? "completed"
-          : "partial"
+        ? budgetCappedJoin
+          ? "partial"
+          : workerResult.allSucceeded
+            ? "completed"
+            : "partial"
         : "partial",
       start,
       totalTokens,
       totalCost,
+      ...(budgetCappedJoin
+        ? {
+            extraMetadata: {
+              // H5/#40 honesty markers for the budget-capped harness join —
+              // same fields reactive's honestPartialMetadata ships, derived
+              // here from blueprint's own deterministic branch evidence.
+              budgetTerminalPartial: true,
+              harnessAuthoredOutput: true,
+              verificationWarning:
+                "Token budget exhausted before SOLVE: output is the harness-joined worker step results, not a model-synthesized answer.",
+            },
+          }
+        : {}),
     });
   });

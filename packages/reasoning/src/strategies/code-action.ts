@@ -142,6 +142,15 @@ export const executeCodeAction = (
     let lastResult: unknown = undefined;
     let done = false;
     let iteration = 0;
+    // #40 rule 5 — code-action runs NO sub-kernel (sandbox Worker + verifier
+    // gate), so its completion envelope derives from this path's own
+    // DETERMINISTIC evidence: the final verifier verdict. Terminating on the
+    // iteration cap with a FAILING verdict is a partial, not a completion —
+    // before #40 this strategy hardcoded status:"completed" even then. The
+    // default noopVerifier always passes, so default behavior is unchanged;
+    // no kernel markers are fabricated.
+    let lastVerdict: VerifierVerdict = "PASS";
+    let lastVerifySummary = "";
 
     while (!done) {
       iteration++;
@@ -226,6 +235,8 @@ export const executeCodeAction = (
       });
 
       const verdict: VerifierVerdict = verifyResult.verified ? "PASS" : "FAIL";
+      lastVerdict = verdict;
+      lastVerifySummary = verifyResult.summary;
 
       if (shouldTerminate({ verdict, iteration, maxIterations })) {
         done = true;
@@ -275,7 +286,11 @@ export const executeCodeAction = (
       strategy: "code-action",
       steps,
       output: resultString,
-      status: "completed",
+      // #40: the verifier verdict is the deterministic completion evidence on
+      // this kernel-less path — a FAIL-verdict termination (iteration cap
+      // exhausted) ships the work honestly labeled `partial`, never
+      // `completed`. PASS (incl. the default noopVerifier) is unchanged.
+      status: lastVerdict === "PASS" ? "completed" : "partial",
       start,
       totalTokens,
       totalCost,
@@ -283,6 +298,12 @@ export const executeCodeAction = (
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
         codeLength: generatedCode.length,
+        // H5/#40: name what stayed unmet — same channel reactive ships.
+        ...(lastVerdict === "FAIL"
+          ? {
+              verificationWarning: `code-action terminated with a failing verifier verdict after ${iteration} iteration(s): ${lastVerifySummary}`,
+            }
+          : {}),
       },
     });
   });

@@ -897,6 +897,16 @@ export interface KernelInput {
   readonly kernelPass?: string;
   /** Exit kernel loop when all scoped tools have been called successfully */
   readonly exitOnAllToolsCalled?: boolean;
+  /**
+   * Opt-in "long horizon" guard profile — forwarded verbatim to
+   * {@link KernelRunOptions.horizonProfile} by `executeReActKernel`, so
+   * strategies that run sub-kernels through the wrapper (plan-execute composite
+   * steps) arm the A2 pace bands exactly like strategies that call
+   * `runKernel`/`runPass` directly (reactive, ToT — 7b6e1ad1). Without this
+   * thread the budget-terminal honest partial could never even FORM inside a
+   * wrapped sub-kernel (task #40 / spec §1b).
+   */
+  readonly horizonProfile?: "long";
   /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
   readonly toolCallResolver?: ToolCallResolver;
   /**
@@ -1337,6 +1347,18 @@ export interface ReActKernelResult {
   finalAnswerCapture?: FinalAnswerCapture;
   /** O3: present when terminatedBy === "abstained" — model's honest decline. */
   abstention?: { readonly reason: string; readonly missing: readonly string[] };
+  /**
+   * The signal-boundary primitive (north-star spec 2026-07-11 §1b, task #40):
+   * the completion authority's verdict for this sub-run, derived at the
+   * return site via `envelopeFromKernelState`. REQUIRED — before this field,
+   * the wrapper dropped `meta.harnessAuthoredOutput` / `budgetTerminalPartial`
+   * / `verificationWarning`, so consuming strategies (plan-execute, reflexion,
+   * blueprint, code-action) re-derived "completed" from output presence and
+   * the honesty markers died at this boundary. Consumers must JOIN this into
+   * their own status via `capStatusToEnvelope` (downgrade allowed, upgrade
+   * never — see kernel/state/completion-envelope.ts).
+   */
+  envelope: import("./completion-envelope.js").CompletionEnvelope;
 }
 
 // ─── Phase Pipeline Types ─────────────────────────────────────────────────────
