@@ -1,7 +1,8 @@
 ---
 tags: [architecture, design-spec, dx, api, builder, agent-config, codegen, dual-api, self-maintaining]
 date: 2026-07-11
-status: proposed
+status: ratified
+ratified: "2026-07-11 (owner: yes to all Q1-Q8). Q1 withCortex/withTracing keep standalone + as observability aliases (one state slot). Q2 withCostTracking folds into withObservability({costs}) as canonical home. Q3 fold withFabricationGuard/withStallPolicy into withGrounding without changing its opt-in defaults. Q5 ship inferred AgentConfig type. Q6 add profile to AgentConfigSchema. Q7 wave-1 folds = memory/budget/verification/observability. Q8 docs generated into apps/docs from deriveCorrespondence, CI fails on hand-edit drift."
 builds-on:
   - "[[2026-07-11-harness-north-star-architecture]] §5 (profiles-first + wither ratchet, RATIFIED 2026-07-11)"
   - "wiki/Research/Audit-Reports-2026-07-11/wither-surface-consolidation.md (11-cluster map + 20-row fold table)"
@@ -532,6 +533,13 @@ code-only escape hatch that cannot be data (functions, secrets, registries, test
 other wither is a config OPTION on a domain-opener, reachable additively — the standalone
 method keeps working until an explicit owner removal.*
 
+*Why this rule is developer-first:* a domain-opener is exactly what **DP3** wants —
+`config.tools.` autocompletes the whole tools menu; a dev never hunts for `withRequiredTools`
+vs `withTerminalTools` vs `withDocuments` because they are all `tools.{required,terminal,
+documents}`. **DP5** (progressive disclosure): the domain object's common fields are shallow
+(`tools.allowedTools`), advanced ones nested (`tools.required.maxRetries`). **DP7**: the same
+`tools` object is what both `createAgent({tools})` and `.withTools(tools)` take.
+
 Applied to §2:
 - **DOMAIN openers (keep):** ~24 — the 11 domain headings of §5.2 plus topology primitives
   (`withA2A`, `withAgentTool`, `withDynamicSubAgents`, `withRemoteAgent`), posture flags
@@ -665,6 +673,11 @@ upstream of the option type, never a parallel copy.
 - **Q8 — docs-gen toolchain host.** `deriveCorrespondence()` + `deriveConfigFields()` emit
   markdown into `apps/docs`? Confirm the docs build consumes generated tables (CI must fail if
   a hand-edited table drifts from the generated one — same wire-and-pin law).
+- **Q9 — output-schema entry in the declarative API** (§5.6, G14). Schema objects are not JSON
+  (agent-config.ts:206), so `outputSchema` can't be a data key. Options: (a)
+  `createAgent(config, { schema })` second-arg overload; (b) declarative stays schema-less and
+  typed output is fluent-only via `.withOutputSchema<T>()`. Recommendation: (a) — keeps DP7
+  symmetry (both forms can express typed output) and DP4 inference through the second arg.
 
 ---
 
@@ -685,6 +698,7 @@ upstream of the option type, never a parallel copy.
 | G11 | Observability fan-out serializes | `cortex/tracing/health/audit/logging/costs` (types.ts:632-652) absent from `ObservabilityConfigSchema` (agent-config.ts:77) | Extend schema (P3) | Roundtrip: `withObservability({cortex,tracing})` → toConfig() → back, no drop |
 | G12 | Gateway field-level validation | `gateway` applied `as any` (agent-config.ts:613); `accessControl` (types.ts:733) not in schema | Add accessControl struct; drop `as any` (P4) | Drift test removes `gateway` from PASSTHROUGH_SUBTREES; field-level roundtrip holds |
 | G13 | Option interfaces upstream of schema | `XOptions` interfaces hand-maintained parallel to `XConfigSchema`; drift silent (P1–P4) | Keystone: `XOptions extends Schema.Type<XConfigSchema>` + appended overlay fields | Compile error when an option field has no schema home (except explicit overlay list) |
+| G14 | Output-schema type infers to result (DP4) | `AgentResult.object` typed `unknown` (builder/types.ts:973) — dev must cast | Thread schema generic: `createAgent<T>`/`.withOutputSchema<T>()` flow `T` → `result.object` | Type test: `.withOutputSchema(Z).run()` → `result.object` typed as `Z`'s type, no cast |
 
 ---
 
@@ -693,6 +707,13 @@ upstream of the option type, never a parallel copy.
 The dual API is **already half-built and already drift-tested** — the spec's contribution is
 to name the third projection and close the correspondence loop.
 
+0. **Developer-first is the evaluation lens (§0, owner steering).** Every shape is judged
+   "would a dev guess this right without docs, and typecheck?" Seven principles (DP1–DP7) are
+   the tie-breaker: 5-line first-run, ecosystem-familiar names, autocomplete-as-menu,
+   zero-ceremony inference, progressive disclosure, errors that name the fix, and
+   declarative≡fluent symmetry. The single-source architecture is what makes DP7 mechanical;
+   the drift-gate keeps it true. One live DP4 friction flagged: `result.object` is `unknown`
+   (G14) — thread the schema generic.
 1. **Single source is real, not aspirational.** `AgentConfigSchema` (agent-config.ts:265) is
    the canonical shape; the builder round-trips through it today via `toConfig()`
    (builder.ts:2244 → to-config.ts:116) and `fromConfig` (builder.ts:275 → agent-config.ts:425).
