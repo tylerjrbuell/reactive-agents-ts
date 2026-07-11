@@ -45,6 +45,8 @@ At build time: capability table + calibration + task class → compiled harness 
 
 **Current:** builder flags are static and user-chosen; capability table informs budgets (B2/P1) and tool-calling driver, but composition itself is model-blind.
 
+> [Status 2026-07-11: compiled-plan fields `scaffoldingLevel`/`maxIterations`/`memoryPosture`/`toolSurface` currently have zero live readers — only `horizonProfile` is wired (wire-or-delete pending, north-star spec §7). The "durable moat" claim stands as DIRECTION, not current behavior.]
+
 ### 7. Verification woven in, graded by cost
 Verifier hierarchy chosen by policy: deterministic checks when the environment offers them (schema validation, re-execution, tests) → independent different-model checker (P6b) → self-critique. Same verifier interfaces run offline as the bench judge — eval and live share one verification vocabulary, so bench lift transfers directly.
 

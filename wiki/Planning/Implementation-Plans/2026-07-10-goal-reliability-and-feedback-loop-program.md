@@ -67,9 +67,12 @@ pass^1 = 0. Both diseases in one cell.
   (verifier.ts:26 self-describes). The one semantic requirement ("answer",
   run-contract.ts:279) has no condition and its only judge (P6b checker,
   terminal-gate.ts:280) has zero callers.
-- B2 `arbitrationContextFromState` (arbitrator.ts:1580-1614) never threads
+- B2 ~~`arbitrationContextFromState` (arbitrator.ts:1580-1614) never threads
   `runContract` → requirement-aware coverage silently degrades to tool-name diff;
-  multi-file deliverable protection inert. → W3 wires.
+  multi-file deliverable protection inert. → W3 wires.~~
+  **CLOSED/DISPROVEN 2026-07-11** — W3 (`8f6ec822`, see Closed section above)
+  disproved both claims: runContract DOES reach the gate and multi-file protection
+  DOES fire; pinned M1/M2. Real residue → task #44. Entry kept for history.
 - B3 P6b checkerVerdict never supplied — needs a checker implementation (deferred;
   design with per-entity requirements #39).
 - B4 `showOutstanding=false` default (standing-frame.ts:79) — model never sees "what

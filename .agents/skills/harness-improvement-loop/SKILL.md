@@ -62,7 +62,7 @@ Session evidence: one un-aimed fix-verify cycle was costing GPU-hours. These fou
 3. **Trust the clock again — timeouts hard-kill.** Cell timeouts abort the agent fiber via AbortSignal (runner.ts, 2026-07-07); zombie-fiber GPU contention no longer degrades later cells. If successful-cell durations climb monotonically across a session, that regression has returned — investigate before trusting aggregates.
 4. **Judge recipe (memorize):** `JUDGE_LAYER=live JUDGE_PROVIDER=openai JUDGE_MODEL=gpt-4o-mini bun run packages/judge-server/src/index.ts` — **without JUDGE_LAYER=live a silent STUB scores 0.95 on everything.** Health-check with a REAL `/judge` POST (`/version` stays up when the LLM backend is dead). Error/timeout cells are never judged (`scoreErrorCell`) — evidence says the true cause.
 
-**Ledger is not optional.** Every fix that touches harness behavior records weakness → hypothesis → verdict:
+**Ledger discipline (opt-in today — pass it anyway).** The ledger only writes when you pass `--ledger`, and `improvement-ledger.json` is gitignored; nothing enforces it yet (enforcement tracked: task #53 / north-star spec §4). Every fix that touches harness behavior SHOULD record weakness → hypothesis → verdict on the gate run:
 ```bash
 rax eval gate --report after.json --baseline bare-llm --candidate ra-full \
   --ledger wiki/Research/Harness-Reports/improvement-ledger.json \

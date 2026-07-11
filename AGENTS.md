@@ -18,7 +18,7 @@ Foundation (no reactive-agents deps)
 │
 ├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
 │
-├── @reactive-agents/reasoning     — 7 registered strategies (reactive, reflexion, plan-execute-reflect, tree-of-thought, adaptive, direct, code-action; `direct` is internal, `code-action` @experimental → stable public surface = 5, see docs reference/stability.md) + ThoughtKernel, KernelRunner, Structured Plan Engine
+├── @reactive-agents/reasoning     — 8 registered strategy implementations (core: reactive, direct; router: adaptive; promote-candidate: code-action; maintained: plan-execute-reflect, reflexion, tree-of-thought, blueprint; aliases react→reactive, rewoo→blueprint — labels per north-star spec §7, see docs reference/stability.md) + ThoughtKernel, KernelRunner, Structured Plan Engine
 │   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
 ├── @reactive-agents/tools         — ToolService, ToolRegistry, 11 built-in tools, MCP client, sandbox
