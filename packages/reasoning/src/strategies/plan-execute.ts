@@ -705,6 +705,11 @@ export const executePlanExecute = (
                   ...(exit.value.rawTerminatedBy !== undefined
                     ? { rawTerminatedBy: exit.value.rawTerminatedBy }
                     : {}),
+                  // Canonical tool-evidence pair (tool_call steps only) — the
+                  // apply loop ships it into result.steps for deliverable truth.
+                  ...(exit.value.ledgerSteps !== undefined
+                    ? { ledgerSteps: exit.value.ledgerSteps }
+                    : {}),
                   // #40: the step's completion envelope rides the wave result
                   // so the apply loop can join it into the aggregate.
                   envelope: exit.value.envelope,
@@ -820,12 +825,35 @@ export const executePlanExecute = (
             completedSteps.push(step);
           }
 
-          steps.push(
-            makeStep(
-              result.success ? "observation" : "thought",
-              `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
-            ),
-          );
+          // Dispatched tool steps land as their canonical ledger pair (action
+          // step with metadata.toolCall + observation with toolCallId /
+          // observationResult) — the ONLY shape isArtifactProduced's linkage
+          // scan can verify, so deliverable receipts tell the truth for
+          // plan-execute runs. The observation keeps the legacy
+          // "[EXEC sN] ✓ <output>" prose (log greppability + the shell-unwrap
+          // pins) — only its metadata is new. Prose-only summaries remain for
+          // analysis/composite steps and never-dispatched failures.
+          const stepLedger = (result as { ledgerSteps?: readonly ReasoningStep[] })
+            .ledgerSteps;
+          if (stepLedger && stepLedger.length > 0) {
+            steps.push(
+              ...stepLedger.map((ls) =>
+                ls.type === "observation"
+                  ? {
+                      ...ls,
+                      content: `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
+                    }
+                  : ls,
+              ),
+            );
+          } else {
+            steps.push(
+              makeStep(
+                result.success ? "observation" : "thought",
+                `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
+              ),
+            );
+          }
 
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",

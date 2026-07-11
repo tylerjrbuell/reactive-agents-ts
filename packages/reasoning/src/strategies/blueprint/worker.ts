@@ -37,6 +37,8 @@ import {
   resolveStepReferences,
 } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
+import type { ReasoningStep } from "../../types/index.js";
+import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { isParallelBatchSafeTool } from "../../kernel/capabilities/decide/tool-gating.js";
@@ -91,6 +93,17 @@ export interface BlueprintWorkerResult {
   readonly steps: PlanStep[];
   /** True iff every tool_call step completed successfully. */
   readonly allSucceeded: boolean;
+  /**
+   * Canonical ledger entries per dispatched tool_call step (keyed by plan-step
+   * id): the action step carrying `metadata.toolCall` {id, name, arguments}
+   * plus the observation step `executeToolAndObserve` built (toolCallId +
+   * observationResult). The strategy MUST push these into `result.steps` —
+   * `isArtifactProduced`'s toolCallId linkage (deliverable receipts, terminal
+   * gates) can only see writes recorded this way. Prose-only step summaries
+   * made every blueprint run deliverable-blind (`produced:false` beside a
+   * successful file-write — 2026-07-11 run 01KX998PS2X3NW7JTAKBJMWPGN).
+   */
+  readonly ledger: ReadonlyMap<string, readonly ReasoningStep[]>;
 }
 
 /**
@@ -127,6 +140,7 @@ function executeBlueprintStep(
   ctx: BlueprintWorkerContext,
   services: StrategyServices,
   totalSteps: number,
+  ledgerById: Map<string, readonly ReasoningStep[]>,
 ): Effect.Effect<PlanStep, never, LLMService> {
   const startedAt = new Date().toISOString();
   const { toolService } = services;
@@ -254,6 +268,19 @@ function executeBlueprintStep(
         // verifier / memoryService / LLM-facts omitted — parity-cheap opt-out.
       },
     );
+
+    // Record the canonical ledger pair for this dispatch: the action step
+    // (structured toolCall — id must equal the callId executeToolAndObserve
+    // stamped on obsStep.metadata.toolCallId) + the primitive's own obsStep.
+    // Arguments are the RESOLVED pre-heal args (the plan's declared intent);
+    // isArtifactProduced reconciles relative-vs-absolute at match time.
+    const callId = `${plan.id}_${step.id}`;
+    ledgerById.set(step.id, [
+      makeStep("action", `[DISPATCH ${step.id}] ${toolName}`, {
+        toolCall: { id: callId, name: toolName, arguments: resolvedArgs },
+      }),
+      observe.obsStep,
+    ]);
 
     return {
       ...step,
@@ -402,6 +429,10 @@ export function executeBlueprintWorker(
     // the dependency walk).
     byId.clear();
     const ordered: PlanStep[] = [];
+    // Canonical ledger pairs per dispatched tool step (see BlueprintWorkerResult.ledger).
+    // Keyed writes from parallel fibers are race-free (single JS thread; one
+    // set() per step id).
+    const ledgerById = new Map<string, readonly ReasoningStep[]>();
 
     // Idempotency: steps that arrive already completed (with a result) are
     // pre-seeded, NOT re-executed. This makes a worker re-run after a patch
@@ -453,7 +484,7 @@ export function executeBlueprintWorker(
 
       const mkExec = (step: PlanStep) =>
         step.type === "tool_call"
-          ? executeBlueprintStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length)
+          ? executeBlueprintStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length, ledgerById)
           : executeAnalysisStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length);
 
       // Split this wave: parallel-safe tools fan out; everything else
@@ -494,6 +525,6 @@ export function executeBlueprintWorker(
     const allSucceeded =
       steps.length > 0 && steps.every((s) => s.status === "completed");
 
-    return { steps, allSucceeded } satisfies BlueprintWorkerResult;
+    return { steps, allSucceeded, ledger: ledgerById } satisfies BlueprintWorkerResult;
   });
 }

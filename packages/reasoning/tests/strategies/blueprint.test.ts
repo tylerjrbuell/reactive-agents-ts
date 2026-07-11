@@ -23,6 +23,8 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import { executeBlueprint } from "../../src/strategies/blueprint.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { ToolSchema } from "../../src/kernel/capabilities/attend/tool-formatting.js";
+import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
+import { computeDeliverableReport } from "../../src/kernel/contract/deliverable-report.js";
 
 // ── Counting LLM layer ───────────────────────────────────────────────────────
 //
@@ -428,5 +430,71 @@ describe("blueprint — execution-failure patch retry", () => {
     // After bounded patch-retry produced nothing usable, degrade to reactive.
     expect(result.strategy).toBe("reactive");
     expect(result.output).toContain("reactive recovered");
+  });
+});
+
+// ── (f) canonical tool ledger — deliverable truth ─────────────────────────────
+//
+// Empirical origin (2026-07-11 scratch run 01KX998PS2X3NW7JTAKBJMWPGN): blueprint
+// wrote ./show.md via file-write (tool ok), yet the receipt reported
+// `deliverables[0].produced: false`. blueprint.ts flattened worker results into
+// prose-only steps, discarding the canonical obsStep (toolCallId +
+// observationResult) that executeToolAndObserve returns and never recording an
+// action step with metadata.toolCall — so isArtifactProduced's toolCallId
+// linkage could never match on any blueprint run.
+
+describe("blueprint — canonical tool ledger (deliverable truth)", () => {
+  it("carries action+observation metadata so an artifact deliverable verifies produced", async () => {
+    const { layer: toolLayer } = makeRecordingToolService();
+    const { layer: llmLayer } = countingLLMLayer([
+      planTurn([
+        {
+          title: "write summary",
+          type: "tool_call",
+          toolName: "file-write",
+          toolArgs: { path: "./out.md", content: "hello" },
+        },
+      ]),
+      { text: "done" },
+    ]);
+
+    const task = "Write a summary and save it to local file ./out.md";
+    const fileWriteSchema: ToolSchema = {
+      name: "file-write",
+      description: "write a file",
+      parameters: [
+        { name: "path", type: "string", description: "target path", required: true },
+        { name: "content", type: "string", description: "file content", required: true },
+      ],
+    };
+    const result = await Effect.runPromise(
+      executeBlueprint(
+        baseInput({
+          taskDescription: task,
+          availableTools: ["file-write"],
+          availableToolSchemas: [fileWriteSchema],
+        }),
+      ).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
+    );
+
+    // The ledger pair: an action step carrying the structured toolCall…
+    const action = result.steps.find(
+      (s) => s.type === "action" && s.metadata?.toolCall?.name === "file-write",
+    );
+    expect(action).toBeDefined();
+    // …and a successful observation linked back via toolCallId.
+    const obs = result.steps.find(
+      (s) =>
+        s.type === "observation" &&
+        s.metadata?.toolCallId === action?.metadata?.toolCall?.id &&
+        s.metadata?.observationResult?.success === true,
+    );
+    expect(obs).toBeDefined();
+
+    // End-to-end: the receipt-facing deliverable report sees the write.
+    const contract = compileRunContract(task, {});
+    const report = computeDeliverableReport(contract, result.steps, String(result.output ?? ""));
+    expect(report.length).toBe(1);
+    expect(report[0]?.produced).toBe(true);
   });
 });

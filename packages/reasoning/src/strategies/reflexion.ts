@@ -634,6 +634,22 @@ export const executeReflexion = (
         : "partial";
     const confidence = status === "completed" ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4;
 
+    // Canonical tool evidence crosses the strategy boundary. The sub-kernels'
+    // action/observation steps (metadata.toolCall ←→ toolCallId +
+    // observationResult) are the ONLY shape isArtifactProduced's linkage scan
+    // can verify — reflexion's own steps[] is the ATTEMPT/CRITIQUE narrative.
+    // allSideEffectSteps already accumulates every generate/improve pass's
+    // kernel steps for the veto machinery; without merging the tool-evidence
+    // subset here, every reflexion run was deliverable-blind (`produced:false`
+    // beside a successful file-write — 2026-07-11 run 01KX99T53WSFS1TW08KAHR89SR).
+    steps.push(
+      ...final.allSideEffectSteps.filter(
+        (st) =>
+          st.metadata?.toolCall !== undefined ||
+          st.metadata?.observationResult !== undefined,
+      ),
+    );
+
     return buildStrategyResult({
       strategy: "reflexion",
       steps,

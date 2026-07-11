@@ -363,6 +363,12 @@ export const executeBlueprint = (
       { concurrency },
     );
 
+    // Canonical ledger pairs, merged across the patch retry below: a retry
+    // worker never re-dispatches preserved completed steps, so their ledger
+    // entries only exist in the FIRST worker's map — losing them would make a
+    // pre-retry file-write invisible to the deliverable receipt again.
+    const toolLedger = new Map(workerResult.ledger);
+
     // ── PATCH RETRY (bounded, on execution failure) ───────────────────────────
     // A structurally-valid plan can still fail at EXECUTE when the tool ARGS are
     // wrong (the tool errors, not the plan shape — VERIFY can't catch that). Feed
@@ -421,17 +427,41 @@ export const executeBlueprint = (
             workerCtx,
             { concurrency },
           );
+          for (const [id, entries] of workerResult.ledger) {
+            toolLedger.set(id, entries);
+          }
         }
       }
     }
 
     for (const s of workerResult.steps) {
-      steps.push(
-        makeStep(
-          s.status === "completed" ? "observation" : "thought",
-          `[EXEC ${s.id}] ${s.status === "completed" ? "✓" : "✗"} ${s.result ?? s.error ?? ""}`,
-        ),
-      );
+      // Dispatched tool steps land as their canonical ledger pair (action step
+      // with metadata.toolCall + the primitive's observation step with
+      // toolCallId/observationResult) — the ONLY shape isArtifactProduced's
+      // linkage scan can verify, so deliverable receipts tell the truth for
+      // blueprint runs. The observation keeps the legacy "[EXEC sN] ✓ <output>"
+      // prose (log greppability) — only its metadata is new. Prose-only
+      // summaries remain for analysis steps and never-dispatched failures.
+      const ledgerEntries = toolLedger.get(s.id);
+      if (ledgerEntries && ledgerEntries.length > 0) {
+        steps.push(
+          ...ledgerEntries.map((ls) =>
+            ls.type === "observation"
+              ? {
+                  ...ls,
+                  content: `[EXEC ${s.id}] ${s.status === "completed" ? "✓" : "✗"} ${s.result ?? s.error ?? ""}`,
+                }
+              : ls,
+          ),
+        );
+      } else {
+        steps.push(
+          makeStep(
+            s.status === "completed" ? "observation" : "thought",
+            `[EXEC ${s.id}] ${s.status === "completed" ? "✓" : "✗"} ${s.result ?? s.error ?? ""}`,
+          ),
+        );
+      }
     }
 
     yield* publishReasoningStep(eventBus, {

@@ -37,6 +37,8 @@ import type { CompletionEnvelope } from "../../kernel/state/completion-envelope.
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import type { KernelStateLike } from "@reactive-agents/core";
+import type { ReasoningStep } from "../../types/index.js";
+import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
@@ -83,6 +85,16 @@ export interface StepExecResult {
    * kernel markers fabricated.
    */
   envelope: CompletionEnvelope;
+  /**
+   * Canonical ledger pair for a dispatched tool_call step: the action step
+   * carrying `metadata.toolCall` {id, name, arguments} plus the observation
+   * step executeToolAndObserve built (toolCallId + observationResult). The
+   * orchestrator MUST push these into result.steps — isArtifactProduced's
+   * toolCallId linkage (deliverable receipts, terminal gates) can only verify
+   * writes recorded this way; prose "[EXEC …]" summaries made plan-execute
+   * runs deliverable-blind. Undefined for analysis/composite steps.
+   */
+  ledgerSteps?: readonly ReasoningStep[];
 }
 
 /**
@@ -248,6 +260,21 @@ export function executeStep(
         envelope: {
           completionStatus: observe.success ? "completed" : "failed",
         },
+        // Canonical ledger pair (see StepExecResult.ledgerSteps). The action's
+        // toolCall.id must equal the callId executeToolAndObserve stamped on
+        // obsStep.metadata.toolCallId. Arguments are the RESOLVED pre-heal args
+        // (the plan's declared intent); isArtifactProduced reconciles
+        // relative-vs-absolute at match time.
+        ledgerSteps: [
+          makeStep("action", `[DISPATCH ${step.id}] ${step.toolName}`, {
+            toolCall: {
+              id: `${plan.id}_${step.id}`,
+              name: step.toolName!,
+              arguments: resolvedArgs,
+            },
+          }),
+          observe.obsStep,
+        ],
       } satisfies StepExecResult;
     });
   }
