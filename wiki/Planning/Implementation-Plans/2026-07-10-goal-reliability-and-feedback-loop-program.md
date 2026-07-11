@@ -119,7 +119,7 @@ Directly actionable, mapped to our gaps:
    cheap verifiers first.
 
 ## Sequence
-1. W3/W5/W6 land + verify (this session).
+1. W3/W5/W6 land + verify (this session). DONE — `8f6ec822`, `269996fb`, `7b6e1ad1`.
 2. Bare-default-surface bench task (instrument gap from postmortem).
 3. Bench P2 conversions (keyword→graded, judge→end-state) — unlocks 3pp rule.
 4. B4 outstanding recitation: implement behind flag; A/B on rw-7/lh-1; owner decision.
@@ -127,3 +127,22 @@ Directly actionable, mapped to our gaps:
    acceptance criteria, per-entity gating, stop-gate re-check).
 6. #38 thought continuity ablation; #40 signal unification; #36 adaptive re-cut on the
    new instrument.
+
+## Wave 3 (2026-07-11) — bench-truth team, 4 parallel wardens
+
+Replay keystone landed prior session (`ef3cc3d6`: `.withReplayLLM` seam, sequential
+table, makeReplayAgent, golden test — `.withLayers` can NOT override LLMService,
+captured at construction). This wave makes the bench truthful enough to gate fixes,
+then fixes proceed lift-gated.
+
+| Mission | Task | Scope (disjoint files) | Delivers |
+|---------|------|------------------------|----------|
+| W-A graded-everywhere | #46 | tasks/* only | rw-1/2/3/6 + cs-dishonest-bait keyword→graded hidden-checks (rw-7/lh-1 pattern); discrimination proofs |
+| W-B scoring integrity | #47 | judge.ts, report-format.ts, types.ts, sessions/, gate/ | inconclusive lane (judge outage/stub ≠ 0.0/0.95), schema scorer implement-or-delete, pass^k solve bar (declared metric change), runs≥8 reliability session |
+| W-C replay CI lane | #45 | replay-agent.ts, golden/, trace run-completed emit | committed goldens, `bench:replay` keyless CI lane, trace output field fix, toolsUsed adapter, record-side assertions |
+| W-D north-star spec | #48 | wiki write only | 2026-07-11-harness-north-star-architecture.md — 8 positions ([RATIFY]/[BUILD]) |
+
+Warden verifies every upward report: rerun tests, review diffs, spot-check mutants.
+After wave: re-baseline (declared metric change), THEN lift-gated fixes resume order:
+#44 spine unification, #40 signal boundary (unblocks B5 remainder: plan-execute/
+reflexion/blueprint/code-action), B4 recitation ablation, #36 adaptive re-cut, #38.
