@@ -4,6 +4,21 @@ import type { Redactor } from "../redaction/index.js";
 
 export type LiveLogWriter = (entry: LogEntry) => void;
 
+/**
+ * Correlation stamped onto every entry this logger writes.
+ *
+ * `LogEntrySchema` has declared these fields since it was written, and nothing
+ * ever populated them — so `getLogs({ agentId })` filtered on a value that was
+ * always `undefined` and silently matched nothing. Supplying a context provider
+ * makes that filter real, and makes a log line joinable to its span and its run.
+ */
+export interface LogContext {
+  readonly agentId?: string;
+  readonly sessionId?: string;
+  readonly traceId?: string;
+  readonly spanId?: string;
+}
+
 export interface StructuredLogger {
   readonly log: (level: LogLevel, message: string, metadata?: Record<string, unknown>) => Effect.Effect<void, never>;
   readonly debug: (message: string, metadata?: Record<string, unknown>) => Effect.Effect<void, never>;
@@ -72,18 +87,25 @@ export const makeStructuredLogger = (options?: {
    * users can extend via `withObservability({ redactors: [...] })`.
    */
   redactors?: readonly Redactor[];
+  /**
+   * Resolved once per log call, so a moving trace context (a log inside a span)
+   * is stamped with the span that was actually active at write time.
+   */
+  context?: Effect.Effect<LogContext, never>;
 }) =>
   Effect.gen(function* () {
     const logsRef = yield* Ref.make<LogEntry[]>([]);
     const liveWriter = options?.liveWriter;
     const redactors = options?.redactors ?? [];
+    const context = options?.context;
 
     const log = (
       level: LogLevel,
       message: string,
       metadata?: Record<string, unknown>,
     ): Effect.Effect<void, never> =>
-      Effect.suspend(() => {
+      Effect.gen(function* () {
+        const ctx: LogContext = context ? yield* context : {};
         const redactedMessage =
           redactors.length > 0 ? redactString(message, redactors) : message;
         const redactedMetadata = redactMetadata(metadata, redactors);
@@ -92,11 +114,15 @@ export const makeStructuredLogger = (options?: {
           level,
           message: redactedMessage,
           metadata: redactedMetadata,
+          ...(ctx.agentId !== undefined ? { agentId: ctx.agentId } : {}),
+          ...(ctx.sessionId !== undefined ? { sessionId: ctx.sessionId } : {}),
+          ...(ctx.traceId !== undefined ? { traceId: ctx.traceId } : {}),
+          ...(ctx.spanId !== undefined ? { spanId: ctx.spanId } : {}),
         };
         if (liveWriter) {
           liveWriter(entry);
         }
-        return Ref.update(logsRef, (logs) => [...logs, entry]);
+        yield* Ref.update(logsRef, (logs) => [...logs, entry]);
       });
 
     const debug = (msg: string, meta?: Record<string, unknown>) => log("debug", msg, meta);

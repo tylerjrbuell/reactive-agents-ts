@@ -26,7 +26,7 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
+import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -1383,20 +1383,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.ensuring(Effect.sync(() => { renderer?.stop(); })),
             );
 
-            // Effect built-in logger: silenced unconditionally because
-            // ObservableLogger owns the structured-output channel. Internal
-            // code paths should NEVER call Effect.log* directly — every event
-            // goes through ObservableLogger.info/.error/.emit so consumers
-            // (TTY renderer, OTLP exporter, JSONL trace) see a single ordered
-            // stream. Silencing only in TTY produced CI/terminal divergence.
+            // Effect's built-in logger is REPLACED (not silenced) by a bridge
+            // into ObservableLogger, which owns the structured-output channel.
+            // Consumers (TTY renderer, OTLP exporter, JSONL trace) still see a
+            // single ordered stream, and stdout stays quiet because an
+            // ObservableLogger only prints when `live`.
             //
-            // Tradeoff (audit FIX-27): direct Effect.log* calls in our code
-            // disappear here, which can mask bugs. The deeper fix is to wrap
-            // ObservableLogger as a custom Effect Logger so Effect.log* events
-            // become structured ObservableLogger events instead of being
-            // silenced. Out of scope for W8; tracked in audit §11 #27.
+            // This closes audit §11 #27 (was FIX-27). The previous
+            // `Logger.replace(Logger.defaultLogger, Logger.none)` bought that
+            // quiet by DISCARDING every Effect.log* call in the framework —
+            // including the kernel's own diagnostics, and including the
+            // divergence warning ObservabilityService emits when the metrics
+            // collector is misconfigured. core/src/errors tells authors to
+            // prefer Effect.logWarning over console.*; that advice pointed into
+            // a black hole. The records now survive.
             const executeCoreQuiet = executeCoreRaw.pipe(
-              Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
+              Effect.provide(
+                effectLoggerBridgeLayer(logger, config.logging?.minLevel ?? "debug"),
+              ),
             );
 
             // In status mode: additionally pipe think-stream chunks into the

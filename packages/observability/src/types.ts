@@ -225,6 +225,27 @@ export const NoticeSchema = Schema.Struct({
 });
 export type Notice = typeof NoticeSchema.Type;
 
+/**
+ * A plain log line, carrying its own level.
+ *
+ * This is what Effect's own logging (`Effect.log` / `logDebug` / `logWarning` /
+ * `logError`) becomes when it crosses `makeEffectLoggerBridge`. Before that
+ * bridge existed the engine provided `Logger.replace(Logger.defaultLogger,
+ * Logger.none)` and every such call was discarded — including the framework's
+ * own diagnostics, which `core/src/errors` tells authors to write this way.
+ *
+ * `source` distinguishes a bridged Effect log from a first-party emit.
+ */
+export const LogLineSchema = Schema.Struct({
+  _tag: Schema.Literal("log"),
+  level: LogLevel,
+  message: Schema.String,
+  fields: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  source: Schema.optional(Schema.Literal("effect", "framework")),
+  timestamp: Schema.DateFromSelf,
+});
+export type LogLine = typeof LogLineSchema.Type;
+
 export const LogEventSchema = Schema.Union(
   PhaseStartedSchema,
   PhaseCompleteSchema,
@@ -236,6 +257,7 @@ export const LogEventSchema = Schema.Union(
   IterationSchema,
   CompletionSchema,
   NoticeSchema,
+  LogLineSchema,
 );
 export type LogEvent = typeof LogEventSchema.Type;
 

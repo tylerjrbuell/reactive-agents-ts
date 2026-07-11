@@ -67,5 +67,12 @@ export function formatEvent(event: LogEvent): string {
       const link = event.docsLink ? ` (${event.docsLink})` : "";
       return `${icon} ${event.title} — ${event.message}${link}`;
     }
+
+    case "log": {
+      const fields = event.fields && Object.keys(event.fields).length > 0
+        ? ` ${Object.entries(event.fields).map(([k, v]) => `[${k}:${String(v)}]`).join(" ")}`
+        : "";
+      return `[${event.level}] ${event.message}${fields}`;
+    }
   }
 }

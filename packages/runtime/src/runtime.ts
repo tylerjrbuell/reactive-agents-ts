@@ -836,6 +836,9 @@ export const createRuntime = (options: RuntimeOptions) => {
           ...(options.observabilityOptions?.redactors !== undefined
             ? { redactors: options.observabilityOptions.redactors }
             : {}),
+          // Without this, every LogEntry.agentId is undefined and
+          // getLogs({ agentId }) silently matches nothing.
+          ...(options.agentId !== undefined ? { agentId: options.agentId } : {}),
         };
         // Provide the shared metricsCollectorLayer so ObservabilityService uses the same instance
         // as ExecutionEngine, ensuring metrics flow through properly

@@ -33,7 +33,8 @@ export type { Tracer } from "./tracing/tracer.js";
 
 // ─── Logging ───
 export { makeStructuredLogger } from "./logging/structured-logger.js";
-export type { StructuredLogger, LiveLogWriter } from "./logging/structured-logger.js";
+export type { StructuredLogger, LiveLogWriter, LogContext } from "./logging/structured-logger.js";
+export { makeEffectLoggerBridge, effectLoggerBridgeLayer } from "./logging/effect-logger-bridge.js";
 export { createProgressLogger, ProgressLogger } from "./logging/progress-logger.js";
 export type { IterationProgress } from "./logging/progress-logger.js";
 export { makeLoggerService } from "./logging/logger-service.js";

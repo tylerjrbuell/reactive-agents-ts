@@ -46,6 +46,16 @@ export type VerbosityLevel =
  */
 export type ExporterConfig = {
   /**
+   * Identity stamped onto every log entry this service writes, alongside the
+   * live trace/span ids. `LogEntry` has declared `agentId`/`sessionId` since it
+   * was written and nothing populated them, so `getLogs({ agentId })` filtered
+   * on a permanently-undefined field and matched nothing. Supplying these makes
+   * that filter real and makes each log line joinable to its span.
+   */
+  readonly agentId?: string;
+  readonly sessionId?: string;
+
+  /**
    * Console exporter options for pretty-printing to stdout.
    * Set to `false` to disable console output.
    *
@@ -469,9 +479,21 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         ...defaultRedactors,
         ...(exporterConfig.redactors ?? []),
       ];
+      // Resolved on every log call, so an entry written inside a span carries
+      // the span that was actually active at write time.
+      const logContext = tracer.getTraceContext().pipe(
+        Effect.map((tc) => ({
+          traceId: tc.traceId,
+          spanId: tc.spanId,
+          ...(exporterConfig.agentId !== undefined ? { agentId: exporterConfig.agentId } : {}),
+          ...(exporterConfig.sessionId !== undefined ? { sessionId: exporterConfig.sessionId } : {}),
+        })),
+      );
+
       const logger = yield* makeStructuredLogger({
         ...(liveWriter ? { liveWriter } : {}),
         redactors,
+        context: logContext,
       });
       // Use provided MetricsCollectorTag if available, otherwise create a new one.
       // Sharing the collector across ExecutionEngine and ObservabilityService

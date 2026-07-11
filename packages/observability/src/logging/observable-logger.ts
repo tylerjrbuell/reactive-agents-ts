@@ -85,6 +85,8 @@ function eventLevel(event: LogEvent): LogLevel {
       return "warn";
     case "error":
       return "error";
+    case "log":
+      return event.level;
     default:
       return "info";
   }
