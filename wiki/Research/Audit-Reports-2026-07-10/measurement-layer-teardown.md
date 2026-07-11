@@ -87,7 +87,20 @@ makes worth doing.
 
 ## Redesign — ranked by leverage, keystone first
 
-### K. Wire the deterministic replay rail into measurement (unlocks the empty quadrant)
+### K. Wire the deterministic replay rail into measurement (unlocks the empty quadrant) — **STARTED `ef3cc3d6`**
+LANDED: diagnosed why the complete `packages/replay` engine was unwired — `.withLayers()`
+overrides ToolService (late-bound) but NOT LLMService (captured via `Layer.provide` at
+construction), confirmed by a live spike where `.withLayers(replayLLM)` was ignored and the
+run hit the real gpt-4o. Added `.withReplayLLM()` (swaps the base LLMService upstream of every
+capture), `buildSequentialLLMTable` (Nth-call→Nth-response, immune to date/schema prompt
+drift), `makeReplayAgent`, and `replay-golden.test.ts` — records a real harness run, rebuilds
+the WHOLE agent against it, reproduces the deliverable EXACTLY with no keys (mutation-proven).
+REMAINING (task #45): a live golden record script + `bench:replay` CI lane; the trace
+recorder leaves `run-completed.output` undefined so `diffTraces` is output-blind; run real
+graded scoring on the replayed deliverable to make it an accuracy (not just reproduction)
+signal. Original plan below.
+
+
 `replay()` exists; make it a first-class lane:
 - `scripts/record-golden.ts`: archive K cross-tier trace runs (llm-exchange + tool events) +
   a manifest into `packages/benchmarks/golden/`.
