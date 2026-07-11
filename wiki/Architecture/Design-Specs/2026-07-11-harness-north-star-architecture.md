@@ -1,7 +1,8 @@
 ---
 tags: [harness, architecture, north-star, dx, termination, measurement, design-spec]
 date: 2026-07-11
-status: proposed
+status: ratified
+ratified: "2026-07-11 (owner decision, session 5d3f034a)"
 builds-on:
   - "[[08-AGENTIC-OS-NORTH-STAR]] (v6.0, ratified 2026-07-05 — program direction, unchanged)"
   - "[[2026-07-07-ideal-harness-architecture]] (9-pillar centralization, ratified)"
@@ -161,6 +162,16 @@ methods; the bench could toggle 10; **38 capability features are bench-invisible
 Meta-lesson from `c4e964e8`: the bare-default tool surface had ZERO eval coverage — which
 is exactly why the regression shipped invisible.
 
+*(Evidence recheck at ratification 2026-07-11: ceiling still 38, feature-matrix.ts:154.
+Three instrument fixes landed after this spec was drafted and move the disease, not the
+position: `51e6182e` converted the 5 worst binary-scored tasks — rw-1/2/3/6 binary
+llm-judge rubrics + cs-dishonest-bait — to graded hidden-checks; `031e5d26` deleted the
+always-1.0 `schema` scorer and added the inconclusive scoring lane + `solvedThreshold`
+pass^k bar; `170d9926` landed the `bench:replay` keyless CI lane with committed goldens —
+the §4-BUILD "started `ef3cc3d6`" status is now LANDED. The teardown's 25/45
+`expected`-regex keyword lane is UNCHANGED: all 25 task-registry.ts tasks still score by
+keyword presence via judge.ts.)*
+
 **Position [RATIFY] — no capability ships without all three:**
 1. **T0 behavior gate** — deterministic, offline, CI-able (`bench:t0` lane, `269996fb`),
    proving the wiring fires and that cutting it fails a test (the wire-and-pin law).
@@ -185,9 +196,10 @@ stats + pass^k (`269996fb`), never on the eyeball diff.
 
 ## 5. DX — profiles first, withers as escape hatch, receipts as the debugging surface
 
-**Disease (verified):** `packages/runtime/src/builder.ts` is 2,669 lines with ~90-92
-`with*` signatures (feature-matrix audit 2026-07-09 counts 90 incl. `without*`; grep today
-shows 92 with-prefixed). This is sprawl by any measure: 38 of them bench-invisible (§4),
+**Disease (verified):** `packages/runtime/src/builder.ts` is 2,669 lines with ~90-94
+`with*` signatures (feature-matrix audit 2026-07-09 counts 90 incl. `without*`; grep at
+ratification 2026-07-11 shows 94 `with*`/`without*` method signatures — the count moved
++2 since draft, which is the ratchet's argument making itself). This is sprawl by any measure: 38 of them bench-invisible (§4),
 and the builder has shipped *silent no-ops* (North Star §5.2b: unknown options swallowed;
 `.withDurableRuns()` inert on the default path).
 
@@ -347,8 +359,8 @@ is bench-covered (§4).
 | 2a | Criteria uneditable, termination = exhaustion | run-contract.ts:279 requirement has no condition; terminal-gate.ts:280 checker zero callers (B1/B3) | Contract compiler + checker impl + per-entity reqs (#39) | Graded task where model claims done with 1 criterion unmet → redirect or abstain, never `completed` |
 | 2b | Stop-gates re-check ORIGINAL criteria | Self-stops validated against model restatement (research item 3 class) | Frozen-contract recheck at every self-stop | Bench task with bait restatement; DeployBench-style self-stop rate |
 | 3 | Heuristics never override model-grade signals | `c4e964e8` fixed 3 sites; rule not codified — next heuristic can still block | Authority-class field on every control actor; lexical actors annotate-only | T0: classifier-required tool + adversarial heuristic → tool stays; receipt shows advisory note |
-| 4 | No capability ships without T0+graded+matrix | 38 uncovered capability features (feature-matrix.ts ceiling); 25/45 tasks keyword-scored (teardown) | Ratchet to 0 over waves; P2 conversions; weakness→task loop | `UNCOVERED_CAPABILITY_CEILING` monotone ↓; suite sd 0.50→≤0.30; CI replay lane green keyless |
-| 5a | Profiles primary, wither ratchet | ~90-92 `with*` on 2,669-line builder.ts; profiles exist (capabilities/profile.ts) but withers are the documented front door | Docs/templates lead with profiles; freeze count | Wither-count ratchet test (mirror feature-matrix DRIFT test); 5-line quickstart compiles in docs CI |
+| 4 | No capability ships without T0+graded+matrix | 38 uncovered capability features (feature-matrix.ts:154, re-verified at ratification 2026-07-11); 25/45 tasks keyword-scored (`expected` regex, task-registry.ts — still 25/45 at ratification; `51e6182e` converted 5 binary llm-judge tasks in the graded lane, `031e5d26` deleted the schema scorer + added the inconclusive lane) | Ratchet to 0 over waves; P2 conversions (keyword lane untouched — next offenders); weakness→task loop | `UNCOVERED_CAPABILITY_CEILING` monotone ↓; suite sd 0.50→≤0.30; CI replay lane green keyless (landed `170d9926`) |
+| 5a | Profiles primary, wither ratchet | 94 `with*`/`without*` on 2,669-line builder.ts (updated at ratification 2026-07-11; was ~90-92 at draft); profiles exist (capabilities/profile.ts) but withers are the documented front door | Docs/templates lead with profiles; freeze count at 94 | Wither-count ratchet test (mirror feature-matrix DRIFT test); 5-line quickstart compiles in docs CI |
 | 5b | Receipt lists interventions | Interventions invisible (postmortem required jsonl archaeology); analyzeWire per-run report exists (root-cause-closure #8) | `receipt.interventions[]` typed + emitted at every control action | T0: run with forced nudge+switch → both present with authority class; cutting emitter fails test |
 | 5c | Builder never lies | Unknown options swallowed; `.withDurableRuns()` inert on default path (North Star §5.2b, live-probed 07-05) | Loud rejection + inert-combination detection at build() | Unit: unknown option → error; durable-without-kernel → actionable error |
 | 6a | Recitation default-on (contract runs) | standing-frame.ts:79 `showOutstanding: false` | Flip for contract runs after B4 A/B | Lift gate on rw-7/lh-1: ≥3pp ∧ ≤15% tokens, or owner decision recorded |
@@ -382,3 +394,61 @@ is bench-covered (§4).
 executable under existing ratified direction and the standing discipline: root cause named,
 non-test consumer reads it, behavior changes, a mutation goes red, defaults gated by
 ablation or recorded owner decision.*
+
+---
+
+## Ratification record — 2026-07-11
+
+**Owner decision:** YES — ratified 2026-07-11 (session 5d3f034a). Every [RATIFY] position
+was adversarially re-verified against repo state at ratification time (the repo moved
+after drafting: `51e6182e` graded conversions, `031e5d26` scoring integrity, `170d9926`
+bench:replay golden lane). No position was blocked.
+
+**Ratified as-is (evidence recheck clean):**
+- §1 completion authority + retired exits — arbitrator.ts:313-314 (content-stability
+  exit) and :372-376 (`final_answer_regex`) both live at the exact cited lines;
+  react-kernel.ts return block still drops `harnessAuthoredOutput` /
+  `budgetTerminalPartial` / `verificationWarning` (0 occurrences in file);
+  `resolveCompletionStatus` wired only in reactive/direct/tree-of-thought/runner;
+  plan-execute `status: scOutput ? "completed" : "partial"` (~:522) and
+  `success: !!finalOutput` (~:1233), reflexion `success: true` (~:570) all live.
+- §2 contract as termination oracle — run-contract.ts:279 question-answered requirement
+  still `acceptance: "self-critique"` (no machine condition); terminal-gate.ts:280 P6b
+  checker slot still has zero `checkerVerdict` writers anywhere outside terminal-gate.ts.
+- §3 authority rule — historical evidence (`c4e964e8`, `8b97ad9a`) unchanged.
+- §4 measurement contract — ceiling still 38 (feature-matrix.ts:154).
+- §5 profiles-first, wither ratchet, defaults philosophy — builder.ts still 2,669 lines;
+  profile.ts exists at cited path.
+- §6 recitation default + mask-don't-remove — standing-frame.ts:79 `DEFAULT_PROFILE`
+  still `showOutstanding: false` (the long-horizon PHASE_PROFILES recite `true`, but the
+  default path — the B4 claim — is unchanged).
+- §7 portfolio — 8 strategy implementations confirmed; adaptive compiled-plan fields
+  `scaffoldingLevel`/`memoryPosture` still have zero readers outside harness-plan.ts.
+
+**Corrected-then-ratified (evidence updated in place, positions unweakened):**
+- §4 / gap row 4 — evidence current-ized: the 5 conversions in `51e6182e` were binary
+  llm-judge tasks (rw-1/2/3/6 + cs-dishonest-bait), NOT the keyword lane; the 25/45
+  `expected`-regex count is verified UNCHANGED at ratification (25 `expected:` fields in
+  task-registry.ts, 45 tasks total). Schema scorer deleted + inconclusive lane landed
+  (`031e5d26`); replay lane landed keyless (`170d9926`).
+- §5 / gap row 5a — wither count 92 → 94 at ratification (grep of `with*`/`without*`
+  method signatures on builder.ts). The ratchet freezes at 94.
+
+**Blocked:** none.
+
+**§10 contradictions — all four re-verified still OPEN at ratification** (not fixed by
+this pass; they live in other docs):
+1. AGENTS.md:21 still declares "7 registered strategies… stable public surface = 5" and
+   omits `blueprint`; strategies/ has 8 implementations.
+2. Goal-reliability plan still lists B2 in the issue map (line ~70) while its Closed
+   section (line ~50) records `8f6ec822` W3 disproving the adjacent claim; B2 live status
+   remains [UNVERIFIED].
+3. harness-improvement-loop SKILL.md:65 "Ledger is not optional" vs .gitignore'd
+   `improvement-ledger.json`.
+4. Adaptive compiled plan remains a behavioral no-op beyond `horizonProfile` — pillar-6
+   marketing must not outrun the wiring.
+
+**Standing rule:** all [BUILD] items in this spec are now executable program work under
+the ratified direction — no further sign-off needed per item; the standing discipline in
+the footer above applies (root cause named, non-test consumer reads it, behavior changes,
+a mutation goes red, defaults gated by ablation or recorded owner decision).
