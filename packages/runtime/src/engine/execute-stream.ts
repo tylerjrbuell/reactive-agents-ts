@@ -20,6 +20,7 @@ import {
   emitErrorSwallowed,
   errorTag,
   computeTrustReceipt,
+  deriveInterventionsFromSteps,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
@@ -434,6 +435,13 @@ export const makeExecuteStream =
             : computeTrustReceipt({
                 toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
                 ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
+                // Spec §5b — harness interventions recorded on reasoning steps.
+                ...((): { interventions?: readonly import('@reactive-agents/core').InterventionReceipt[] } => {
+                  const iv = deriveInterventionsFromSteps(
+                    (receiptSource.metadata as { reasoningSteps?: readonly ReasoningStep[] }).reasoningSteps,
+                  )
+                  return iv.length > 0 ? { interventions: iv } : {}
+                })(),
                 ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
                 goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
                 abstained: receiptSource.terminatedBy === "abstained",

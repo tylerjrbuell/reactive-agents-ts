@@ -61,8 +61,17 @@ export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";
 export type { TaskResult, ResultMetadata, ReasoningStep } from "./types/result.js";
 export type { Message } from "./types/message.js";
 export type { Rationale } from "./types/rationale.js";
-export type { TrustReceipt, DeliverableReceipt } from "./types/receipt.js";
-export { computeTrustReceipt } from "./types/receipt.js";
+export type {
+  TrustReceipt,
+  DeliverableReceipt,
+  InterventionReceipt,
+  InterventionStepLike,
+} from "./types/receipt.js";
+export {
+  computeTrustReceipt,
+  deriveInterventionsFromSteps,
+  formatInterventions,
+} from "./types/receipt.js";
 export type {
   RuntimeConfig,
   TelemetryConfig,

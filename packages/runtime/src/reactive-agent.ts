@@ -35,7 +35,7 @@ import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './err
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, computeTrustReceipt, type TrustReceipt } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, computeTrustReceipt, deriveInterventionsFromSteps, type TrustReceipt } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
@@ -1522,6 +1522,14 @@ export class ReactiveAgent<TOut = unknown> {
                               },
                           ),
                           ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
+                          // Spec §5b — harness interventions recorded on the
+                          // reasoning steps become a receipt surface.
+                          ...((): { interventions?: readonly import('@reactive-agents/core').InterventionReceipt[] } => {
+                              const iv = deriveInterventionsFromSteps(
+                                  (rawMetadata as { reasoningSteps?: readonly ReasoningStep[] }).reasoningSteps,
+                              )
+                              return iv.length > 0 ? { interventions: iv } : {}
+                          })(),
                           ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
                           goalAchieved,
                           abstained: r.terminatedBy === 'abstained',

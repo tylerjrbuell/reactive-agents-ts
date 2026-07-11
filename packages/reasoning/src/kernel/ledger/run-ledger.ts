@@ -128,6 +128,17 @@ export interface VerdictEntry extends LedgerEntryBase {
   readonly terminatedBy?: string;
   /** Unmet post-conditions (deterministic side), when known. */
   readonly unmet?: readonly PostCondition[];
+  /**
+   * Spec §3 — the AuthorityClass of the actor that produced this verdict
+   * (deterministic | model-grade | lexical). Present on terminal verdicts so
+   * the receipt can name the terminating authority.
+   */
+  readonly authorityClass?: "deterministic" | "model-grade" | "lexical";
+  /**
+   * Spec §1a — `"none"` when a lexical actor terminated a contractless run with
+   * no goal evidence. Absent on grounded / contract terminals.
+   */
+  readonly evidence?: "none";
 }
 
 /** A harness-injected control signal (guard, redirect, terminal-gate decision). */

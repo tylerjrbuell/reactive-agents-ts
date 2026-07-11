@@ -297,6 +297,47 @@ export const reactiveControllerEarlyStopEvaluator: TerminationSignalEvaluator = 
   },
 };
 
+/**
+ * Piece-1 (spec §1a) — the lexical-proposal gate. A lexical terminator
+ * (content-stability, final-answer regex) is NOT a completion authority: on a
+ * CONTRACT-BEARING run its candidate answer must pass the terminal gate
+ * (contract coverage vs the ORIGINAL, frozen criteria) before it may exit.
+ *
+ * Returns redirect GUIDANCE when the gate rejects the candidate — the run then
+ * continues with the outstanding list via think.ts's existing redirect
+ * machinery. Returns `null` when the candidate is clear to exit: either the
+ * contract's requirements are satisfied, OR the run is contractless. A
+ * contractless lexical exit is permitted but the terminal marks it
+ * `evidence: none` (see applyTermination), so byte-identical to the pre-piece-1
+ * path for contractless runs (null → the evaluator exits exactly as before).
+ *
+ * Mirrors llmEndTurnEvaluator's contract path (same gate call, same coverage
+ * wording) so all three exit proposals judge the frozen contract identically.
+ */
+function contractCoverageProposal(
+  ctx: TerminationContext,
+  candidate: string,
+): string | null {
+  if (ctx.runContract === undefined) return null;
+  const gate = evaluateTerminalGate({
+    terminatedBy: "end_turn",
+    requiredTools: ctx.requiredTools,
+    coveredTools: ctx.toolsUsed,
+    // Grounding (F1) is owned by applyGroundedTerminalGate on the arbitrate
+    // path; the lexical proposal is gated on contract COVERAGE only.
+    hasSubstantiveGrounding: true,
+    redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
+    ...(ctx.redirectBudget !== undefined ? { redirectBudget: ctx.redirectBudget } : {}),
+    coverageExhaustionPolicy: "accept",
+    contract: ctx.runContract,
+    evidence: { steps: ctx.steps, output: candidate },
+    buildGroundingGuidance: () => "",
+    buildCoverageGuidance: (missing) =>
+      `outstanding requirements not yet satisfied: ${missing.join("; ")} — address them, or state explicitly why they are unnecessary and give your final answer`,
+  });
+  return gate.decision === "redirect" ? gate.guidance : null;
+}
+
 export const contentStabilityEvaluator: TerminationSignalEvaluator = {
   name: "ContentStability",
   evaluate: (ctx) => {
@@ -305,16 +346,28 @@ export const contentStabilityEvaluator: TerminationSignalEvaluator = {
     const prior = ctx.priorThought.trim();
     if (current.length === 0 || prior.length === 0) return null;
 
-    if (current === prior) {
-      return { action: "exit", confidence: "high", reason: "content_stable", output: current };
-    }
+    const exact = current === prior;
     // Fuzzy match only for substantive content (>= 100 chars) to avoid
     // false positives on short incrementing outputs like "Step 1..." / "Step 2..."
     const stabilityThreshold = CONTENT_STABILITY_THRESHOLDS[ctx.tier ?? "mid"] ?? 0.85;
-    if (current.length >= 100 && normalizedLevenshtein(current, prior) > stabilityThreshold) {
-      return { action: "exit", confidence: "medium", reason: "content_stable", output: current };
+    const fuzzy =
+      current.length >= 100 && normalizedLevenshtein(current, prior) > stabilityThreshold;
+    if (!exact && !fuzzy) return null;
+
+    // Piece 1 (spec §1a): content-stability is a LEXICAL proposal, not a
+    // terminator. On a contract-bearing run the candidate must clear the
+    // terminal gate — else it becomes a redirect and the run continues with the
+    // outstanding list. Contractless runs exit exactly as before (helper → null).
+    const redirect = contractCoverageProposal(ctx, current);
+    if (redirect !== null) {
+      return { action: "redirect", confidence: "medium", reason: redirect };
     }
-    return null;
+    return {
+      action: "exit",
+      confidence: exact ? "high" : "medium",
+      reason: "content_stable",
+      output: current,
+    };
   },
 };
 
@@ -373,7 +426,14 @@ export const finalAnswerRegexEvaluator: TerminationSignalEvaluator = {
 
     const extracted = extractFinalAnswer(thought) || extractFinalAnswer(thinking);
     if (!extracted || extracted.trim().length === 0) return null;
-    return { action: "exit", confidence: "medium", reason: "final_answer_regex", output: extracted.trim() };
+    const candidate = extracted.trim();
+    // Piece 1 (spec §1a): the final-answer regex is a LEXICAL proposal, not a
+    // terminator — gate the candidate against the contract before exit.
+    const redirect = contractCoverageProposal(ctx, candidate);
+    if (redirect !== null) {
+      return { action: "redirect", confidence: "medium", reason: redirect };
+    }
+    return { action: "exit", confidence: "medium", reason: "final_answer_regex", output: candidate };
   },
 };
 
@@ -896,6 +956,7 @@ import {
   buildGroundingRedirectGuidance,
 } from "../../loop/runner-helpers/grounded-terminal.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
+import { authorityOf } from "./authority.js";
 import {
   resolveHorizonProfile,
   windowDecisions,
@@ -1331,11 +1392,36 @@ export function applyTermination(
       // C1 — persist the terminal verdict + the answer's evidence claims that
       // both gates used to compute and DISCARD (audit 01 / 01-F2). Threaded via
       // patch.ledger so transitionState carries them (no new step is added).
+      // §3 / §1a — surface the terminating actor's authority class (threaded
+      // via extraMeta.evaluator from the oracle) and mark evidence:none for a
+      // LEXICAL exit on a CONTRACTLESS run: it exited on "the model thinks it's
+      // done" with no goal evidence. On a contract run a lexical proposal cannot
+      // reach here without first clearing the terminal gate (piece 1).
+      const terminatingActor =
+        typeof extraMeta?.["evaluator"] === "string"
+          ? (extraMeta["evaluator"] as string)
+          : undefined;
+      const terminalAuthorityClass = terminatingActor
+        ? authorityOf(terminatingActor)
+        : undefined;
+      // "Contract-bearing" for authority purposes = the compiled contract has a
+      // non-empty deterministic floor (postConditions). The runner ALWAYS
+      // compiles a RunContract (even for a free-form goal, whose contract holds
+      // only the base self-critique requirement with no checkable condition), so
+      // presence alone is not evidence — an enforceable floor is.
+      const contract = state.meta.runContract;
+      const contractEnforceable =
+        contract !== undefined && contract.postConditions.length > 0;
+      const terminalEvidence: "none" | undefined =
+        terminalAuthorityClass === "lexical" && !contractEnforceable ? "none" : undefined;
+
       const successLedger = recordEvidenceClaims(
         recordTerminalVerdict(state.ledger, {
           verified: true,
           terminatedBy: verdict.terminatedBy,
           iteration: state.iteration,
+          ...(terminalAuthorityClass ? { authorityClass: terminalAuthorityClass } : {}),
+          ...(terminalEvidence ? { evidence: terminalEvidence } : {}),
         }),
         verdict.output,
         state.steps,
@@ -1348,6 +1434,8 @@ export function applyTermination(
         meta: {
           ...state.meta,
           terminatedBy: verdict.terminatedBy,
+          ...(terminalAuthorityClass ? { terminalAuthorityClass } : {}),
+          ...(terminalEvidence ? { terminalEvidence } : {}),
           ...(extraMeta ?? {}),
         },
       });
@@ -1407,7 +1495,20 @@ export function applyTermination(
       // gate never fires twice. Status stays "thinking" → loop re-enters.
       if (verdict.nextStrategy === GROUNDING_REDIRECT) {
         return transitionState(state, {
-          steps: [...state.steps, makeStep("harness_signal", `⚠️ ${verdict.reason}`)],
+          steps: [
+            ...state.steps,
+            makeStep("harness_signal", `⚠️ ${verdict.reason}`, {
+              // Spec §5b — the grounding redirect is a receipt-visible
+              // deterministic intervention (F1: ungrounded terminal rejected).
+              intervention: {
+                actor: "grounding-redirect",
+                authorityClass: authorityOf("grounding-redirect"),
+                evidence: verdict.reason.slice(0, 200),
+                whatChanged: "grounding-redirect: ungrounded terminal rejected once",
+                iter: state.iteration,
+              },
+            }),
+          ],
           pendingGuidance: {
             ...(state.pendingGuidance ?? {}),
             errorRecovery: verdict.reason,

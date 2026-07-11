@@ -23,6 +23,10 @@ export interface TerminalVerdictFact {
   readonly terminatedBy?: string;
   readonly reason?: string;
   readonly iteration: number;
+  /** Spec §3 — authority class of the terminating actor. */
+  readonly authorityClass?: "deterministic" | "model-grade" | "lexical";
+  /** Spec §1a — `"none"` for a contractless lexical exit (no goal evidence). */
+  readonly evidence?: "none";
 }
 
 /**
@@ -41,6 +45,8 @@ export function recordTerminalVerdict(
     verified: fact.verified,
     ...(fact.terminatedBy !== undefined ? { terminatedBy: fact.terminatedBy } : {}),
     ...(fact.reason !== undefined ? { reason: fact.reason } : {}),
+    ...(fact.authorityClass !== undefined ? { authorityClass: fact.authorityClass } : {}),
+    ...(fact.evidence !== undefined ? { evidence: fact.evidence } : {}),
   });
 }
 

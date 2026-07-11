@@ -80,6 +80,27 @@ export const StepMetadataSchema = Schema.Struct({
    * user-facing-eligible.
    */
   frameworkInstrumentation: Schema.optional(Schema.String),
+  /**
+   * Spec §5b — a harness intervention recorded on the step that carried it
+   * (gate redirect, recovery nudge, guard fire, strategy switch, the piece-1
+   * lexical-proposal rejection). Aggregated onto `result.receipt.interventions[]`
+   * so callers can see WHAT the harness did to the run and under WHICH authority
+   * class. Absence implies the step is not a control-plane intervention.
+   */
+  intervention: Schema.optional(
+    Schema.Struct({
+      /** Actor that produced the intervention (evaluator/gate/guard name). */
+      actor: Schema.String,
+      /** Authority class of the actor (spec §3). */
+      authorityClass: Schema.Literal("deterministic", "model-grade", "lexical"),
+      /** Short evidence string naming the concrete signal. */
+      evidence: Schema.String,
+      /** What the intervention changed about the run. */
+      whatChanged: Schema.String,
+      /** Run iteration at which it fired. */
+      iter: Schema.Number,
+    }),
+  ),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

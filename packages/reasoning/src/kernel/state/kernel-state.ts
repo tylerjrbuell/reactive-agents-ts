@@ -455,6 +455,23 @@ export interface KernelMeta {
    */
   readonly budgetTerminalPartial?: boolean;
   /**
+   * Piece-1b / spec §1a — the terminal's evidence provenance. `"none"` marks a
+   * termination decided by a LEXICAL actor (content-stability / final-answer
+   * regex) on a CONTRACTLESS run: the run exited on "the model thinks it's done"
+   * with no goal evidence to check against. Contract-bearing lexical exits never
+   * reach here as `"none"` — piece 1 forces them through the terminal gate first
+   * (contract coverage), so their evidence IS the satisfied contract. Absent on
+   * grounded / contract / model-grade terminals (byte-identical default shape).
+   */
+  readonly terminalEvidence?: "none";
+  /**
+   * Spec §3 — the AuthorityClass of the actor that produced the terminal verdict
+   * (resolved from the termination evaluator's name via `authorityOf`). Advisory
+   * provenance for the receipt; a `"lexical"` value implies a contractless exit
+   * (a lexical terminal on a contract run is structurally prevented by piece 1).
+   */
+  readonly terminalAuthorityClass?: import("../capabilities/decide/authority.js").AuthorityClass;
+  /**
    * Advisory verification warning surfaced ALONGSIDE a preserved answer (never a
    * hard failure). Set by the block-mode grounding degrade, the H5 harness-
    * authorship path, and the E3 `budget_terminal` partial synthesis. Previously

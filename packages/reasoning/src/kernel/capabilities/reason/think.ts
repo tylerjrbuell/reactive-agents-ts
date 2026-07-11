@@ -74,6 +74,7 @@ import {
   arbitrationContextFromState,
   type TerminationContext,
 } from "../decide/arbitrator.js";
+import { authorityOf } from "../decide/authority.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
@@ -1604,6 +1605,16 @@ export function handleThinking(
         const gapMsg = `\u26A0\uFE0F Not done yet — ${decision.reason}.\nComplete remaining actions before finishing.`;
         const gapStep = makeStep("observation", gapMsg, {
           observationResult: makeObservationResult("completion-guard", false, gapMsg),
+          // Spec §5b — the piece-1 proposal rejection is a receipt-visible
+          // intervention: an exit PROPOSAL (from `decision.evaluator`) was
+          // redirected because the terminal gate found outstanding criteria.
+          intervention: {
+            actor: decision.evaluator,
+            authorityClass: authorityOf(decision.evaluator),
+            evidence: decision.reason.slice(0, 200),
+            whatChanged: "gate-redirect: run continued with outstanding criteria",
+            iter: state.iteration,
+          },
         });
         yield* hooks.onObservation(state, gapMsg, false);
         return transitionState(state, {
