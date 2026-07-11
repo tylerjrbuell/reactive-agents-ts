@@ -15,6 +15,10 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "../kernel/loop/runner.js";
+import {
+  resolveCompletionStatus,
+  honestPartialMetadata,
+} from "../kernel/state/completion-status.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
@@ -122,6 +126,14 @@ interface TreeOfThoughtInput {
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   /** Opt-in per-tool-call rationale auditing. */
   readonly auditRationale?: boolean;
+  /**
+   * Long-horizon guard profile (A2), forwarded from `.withLongHorizon()` via
+   * the engine strategy input. Without this thread ToT's branch kernels ran on
+   * the DEFAULT profile regardless of the run's horizon — so A2's budget
+   * discipline (and the budget-terminal honest-partial it produces) never
+   * applied to any ToT run. Mirrors reactive.ts:268.
+   */
+  readonly horizonProfile?: "long";
 }
 
 interface ThoughtNode {
@@ -236,6 +248,7 @@ export const executeTreeOfThought = (
         modelId: input.modelId,
         taskDescription: input.taskDescription,
         temperature: 0.7,
+        ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
       });
 
       totalTokens += skipExecState.tokens;
@@ -248,9 +261,17 @@ export const executeTreeOfThought = (
           .pop()?.content ??
         null;
 
+      // H5: an output present but shipped unverified (harness-authored, or a
+      // budget-terminal partial) degrades done→partial — same honest rule
+      // reactive/direct use. The output-presence guard is kept: no output is
+      // partial regardless of kernel status.
+      const skipStatus = skipFinalOutput
+        ? resolveCompletionStatus(skipExecState)
+        : "partial";
+
       yield* emitLog({
         _tag: "completion",
-        success: !!skipFinalOutput,
+        success: skipStatus === "completed",
         summary: skipFinalOutput
           ? "Tree-of-thought completed via cost-gated skip (trivial task)"
           : "Tree-of-thought failed via cost-gated skip path",
@@ -261,11 +282,12 @@ export const executeTreeOfThought = (
         strategy: "tree-of-thought",
         steps,
         output: skipFinalOutput || null,
-        status: skipFinalOutput ? "completed" : "partial",
+        status: skipStatus,
         start,
         totalTokens,
         totalCost,
         extraMetadata: {
+          ...honestPartialMetadata(skipExecState.meta),
           bfsSkipped: true,
           bfsSkipReason: complexityVerdict.reason,
           bfsSkipConfidence: complexityVerdict.confidence,
@@ -698,6 +720,7 @@ export const executeTreeOfThought = (
       modelId: input.modelId,
       taskDescription: input.taskDescription,
       temperature: 0.7,
+      ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
 
     totalTokens += execState.tokens;
@@ -709,9 +732,14 @@ export const executeTreeOfThought = (
 
     yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:execute", startedAt: start });
 
+    // H5: same honest degrade as the skip path — an unverified ship is partial.
+    const execStatus = finalOutput
+      ? resolveCompletionStatus(execState)
+      : "partial";
+
     yield* emitLog({
       _tag: "completion",
-      success: !!finalOutput,
+      success: execStatus === "completed",
       summary: finalOutput ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
       timestamp: new Date(),
     });
@@ -720,10 +748,13 @@ export const executeTreeOfThought = (
       strategy: "tree-of-thought",
       steps,
       output: finalOutput || null,
-      status: finalOutput ? "completed" : "partial",
+      status: execStatus,
       start,
       totalTokens,
       totalCost,
+      extraMetadata: {
+        ...honestPartialMetadata(execState.meta),
+      },
     });
   });
 
