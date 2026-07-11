@@ -54,4 +54,46 @@ describe("computeTrustReceipt", () => {
       "produce the file ./sources.md",
     ]);
   });
+
+  // ── Deliverable truth feeds the verdict (2026-07-11) ──
+  //
+  // Empirical origin: gemma4 reflexion run 01KX99T53WSFS1TW08KAHR89SR — the
+  // declared ./show.md was reported `produced:false` while the receipt said
+  // `tool-grounded` @0.8 beside `success:true`. `deliverables` was attached to
+  // the receipt but never read by the verdict — computed-never-read, inside
+  // the artifact whose whole job is honesty.
+  test("missing declared deliverable caps the verdict at partially-grounded", () => {
+    const r = computeTrustReceipt({
+      ...base, // goalAchieved: true — an explicit claim does NOT outrank a missing artifact
+      toolCalls: [{ name: "file-write", ok: true }],
+      deliverables: [{ spec: "produce the file ./show.md", produced: false }],
+    });
+    expect(r.verdict).toBe("partially-grounded");
+    expect(r.confidence).toBe(0.6);
+  });
+  test("all deliverables produced leaves tool-grounded untouched", () => {
+    const r = computeTrustReceipt({
+      ...base,
+      toolCalls: [{ name: "file-write", ok: true }],
+      deliverables: [{ spec: "produce the file ./show.md", produced: true }],
+    });
+    expect(r.verdict).toBe("tool-grounded");
+  });
+  test("abstained and failed still outrank the deliverable cap", () => {
+    const missing = [{ spec: "produce the file ./x.md", produced: false }];
+    const a = computeTrustReceipt({
+      ...base,
+      abstained: true,
+      toolCalls: [],
+      deliverables: missing,
+    });
+    expect(a.verdict).toBe("abstained");
+    const f = computeTrustReceipt({
+      ...base,
+      success: false,
+      toolCalls: [],
+      deliverables: missing,
+    });
+    expect(f.verdict).toBe("failed");
+  });
 });

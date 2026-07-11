@@ -111,13 +111,16 @@ export interface TrustReceipt {
  *   1. `abstained` → `"abstained"` (confidence 0.95) — wins over everything,
  *      including any tool calls made before the agent declined.
  *   2. `!success` → `"failed"` (confidence 0.95).
- *   3. a tool call failed against a target it never afterwards succeeded on,
+ *   3. any DECLARED deliverable with `produced: false` → `"partially-grounded"`
+ *      (confidence 0.6) — a missing promised artifact is an objective hole in
+ *      the evidence trail; an explicit `goalAchieved: true` does not outrank it.
+ *   4. a tool call failed against a target it never afterwards succeeded on,
  *      AND the run never claimed a final answer (`goalAchieved !== true`)
  *      → `"partially-grounded"` (confidence 0.6).
- *   4. ≥1 ok tool call AND `goalAchieved !== false` → `"tool-grounded"`
+ *   5. ≥1 ok tool call AND `goalAchieved !== false` → `"tool-grounded"`
  *      (confidence 0.8; 0.9 when `verifierVerdict === "pass"`).
- *   5. ≥1 tool call but none ok → `"partially-grounded"` (confidence 0.6).
- *   6. zero tool calls → `"ungrounded"` (confidence 0.8) — the model answered
+ *   6. ≥1 tool call but none ok → `"partially-grounded"` (confidence 0.6).
+ *   7. zero tool calls → `"ungrounded"` (confidence 0.8) — the model answered
  *      from itself; fine for pure-knowledge tasks, and now VISIBLE.
  *
  * Rule 3 exists because rule 4 asked only "did ANY tool succeed", which is a
@@ -227,6 +230,17 @@ export function computeTrustReceipt(input: {
   const verdict = ((): TrustReceipt["verdict"] => {
     if (input.abstained) return "abstained";
     if (!input.success) return "failed";
+    // A DECLARED deliverable the ledger scan could not verify is an objective
+    // hole in the evidence trail — the run cannot be "tool-grounded" while a
+    // promised artifact is missing, no matter what the model claimed
+    // (goalAchieved: true does not outrank a missing file). Deterministic
+    // authority: the flag comes from the RunContract × step-ledger scan
+    // (computeDeliverableReport), not from any model judgment. Measured
+    // 2026-07-11 (gemma4 reflexion 01KX99T53WSFS1TW08KAHR89SR): ./show.md
+    // reported produced:false while this function certified `tool-grounded`
+    // @0.8 beside success:true — deliverables was attached to the receipt one
+    // field away from a verdict that never read it.
+    if (input.deliverables?.some((d) => !d.produced)) return "partially-grounded";
     // An open tool failure AND no claim of completion. Either alone is
     // ordinary; together they are the fabrication signature (see JSDoc).
     if (unresolvedFailures > 0 && input.goalAchieved !== true) return "partially-grounded";
