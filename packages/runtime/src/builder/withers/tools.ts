@@ -7,16 +7,58 @@
  */
 import type { ReactiveAgentBuilder } from "../../builder.js";
 import type { ToolsOptions } from "../../builder.js";
+import type { RequiredToolsOptions } from "../types.js";
 import type { MCPServerConfig } from "../../runtime.js";
 import type { ShellExecuteConfig } from "@reactive-agents/tools";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { MetaToolsConfig } from "../../types.js";
-import { asBuilderState } from "./_state.js";
+import { asBuilderState, type BuilderState } from "./_state.js";
+
+/**
+ * Merge a required-tools config fragment into `_requiredToolsConfig` — the
+ * SINGLE state slot behind both `.withRequiredTools()` and
+ * `.withTools({ required })` (wither-surface consolidation, 2026-07-11).
+ *
+ * Conflict rule (documented on both public entry points):
+ * - `tools` lists are UNIONED (deduped, first-seen order) across calls.
+ * - Scalar fields (`adaptive`, `maxRetries`) are last-call-wins.
+ */
+const mergeRequiredToolsConfig = (
+  s: BuilderState,
+  incoming: RequiredToolsOptions,
+): void => {
+  const previous = s._requiredToolsConfig;
+  const unionTools = [
+    ...new Set([...(previous?.tools ?? []), ...(incoming.tools ?? [])]),
+  ];
+  s._requiredToolsConfig = {
+    ...previous,
+    ...(incoming.adaptive !== undefined ? { adaptive: incoming.adaptive } : {}),
+    ...(incoming.maxRetries !== undefined
+      ? { maxRetries: incoming.maxRetries }
+      : {}),
+    ...(unionTools.length > 0 || previous?.tools || incoming.tools
+      ? { tools: unionTools }
+      : {}),
+  };
+};
+
+/** Normalize the `required` shorthand (`string[]` ≡ `{ tools: [...] }`). */
+const normalizeRequired = (
+  required: readonly string[] | RequiredToolsOptions,
+): RequiredToolsOptions =>
+  Array.isArray(required)
+    ? { tools: required as readonly string[] }
+    : (required as RequiredToolsOptions);
 
 /**
  * Apply `.withTools(options)` — enable the tools layer, merge custom tool
  * definitions with previous registrations, and surface `resultCompression`
  * to the dedicated runtime field.
+ *
+ * The `required` option is routed to the same `_requiredToolsConfig` state
+ * as `.withRequiredTools()` (NOT stored in `_toolsOptions` — one state slot,
+ * one serialization path via `toConfig().requiredTools`).
  */
 export const applyWithTools = (
   builder: ReactiveAgentBuilder,
@@ -25,14 +67,18 @@ export const applyWithTools = (
   const s = asBuilderState(builder);
   s._enableTools = true;
   if (options) {
+    const { required, ...rest } = options;
     const previous = s._toolsOptions;
     s._toolsOptions = {
       ...previous,
-      ...options,
-      tools: options.tools
-        ? [...(previous?.tools ?? []), ...options.tools]
+      ...rest,
+      tools: rest.tools
+        ? [...(previous?.tools ?? []), ...rest.tools]
         : previous?.tools,
     };
+    if (required !== undefined) {
+      mergeRequiredToolsConfig(s, normalizeRequired(required));
+    }
   }
   if (options?.resultCompression) {
     s._resultCompression = options.resultCompression;
@@ -69,8 +115,11 @@ export const applyWithDocuments = (
 };
 
 /**
- * Apply `.withRequiredTools(config)` — set the required-tools enforcement
+ * Apply `.withRequiredTools(config)` — merge the required-tools enforcement
  * configuration consulted by the arbitrator's pre-termination guard.
+ *
+ * Delegates to the same merge as `.withTools({ required })`: tool lists
+ * union across calls; `adaptive` / `maxRetries` are last-call-wins.
  */
 export const applyWithRequiredTools = (
   builder: ReactiveAgentBuilder,
@@ -80,7 +129,7 @@ export const applyWithRequiredTools = (
     maxRetries?: number;
   },
 ): void => {
-  asBuilderState(builder)._requiredToolsConfig = config;
+  mergeRequiredToolsConfig(asBuilderState(builder), config);
 };
 
 /**

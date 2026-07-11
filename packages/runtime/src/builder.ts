@@ -103,6 +103,7 @@ import type {
     ProviderName,
     AgentPersona,
     ToolsOptions,
+    RequiredToolsOptions,
     PromptsOptions,
     MemoryOptions,
     CostTrackingOptions,
@@ -122,6 +123,7 @@ export type {
     ProviderName,
     AgentPersona,
     ToolsOptions,
+    RequiredToolsOptions,
     PromptsOptions,
     MemoryOptions,
     CostTrackingOptions,
@@ -1385,6 +1387,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Built-in tools include: file-write, file-read, web-search, http-get, code-execute.
      * Additional tools can be provided via the options or via MCP servers.
      *
+     * The `required` option is the config-shaped spelling of
+     * `.withRequiredTools()` — both write the same underlying state.
+     * When both are used, tool lists union; `adaptive`/`maxRetries` are
+     * last-call-wins (see {@link ToolsOptions.required}).
+     *
      * @param options - Custom tool definitions and handlers
      * @returns `this` for chaining
      */
@@ -1437,6 +1444,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * If the agent attempts to end without using all required tools, the kernel
      * redirects it back to "thinking" with feedback. After `maxRetries` redirects
      * (default: 2), the task fails with a descriptive error.
+     *
+     * A non-empty static `tools` list also suppresses the adaptive tool
+     * classifier — the caller stated their requirements, so no LLM
+     * relevance-inference round-trip runs.
+     *
+     * Composable equivalent: `.withTools({ required: config })` — both
+     * spellings write the same underlying state. Across calls (either
+     * spelling), `tools` lists are UNIONED (deduped, first-seen order);
+     * `adaptive` / `maxRetries` are last-call-wins.
      *
      * @param config - Required tools configuration
      * @returns `this` for chaining

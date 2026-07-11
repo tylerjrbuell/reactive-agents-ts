@@ -216,6 +216,56 @@ export interface ToolsOptions {
      * Default: false (shell-execute not available)
      */
     readonly terminal?: boolean | ShellExecuteConfig
+    /**
+     * Tools the agent MUST call before it can declare success (consolidation
+     * fold — `.withRequiredTools()` expressed as a tools-config option, per
+     * north-star §5 "one concept, one entry point"; both spellings remain
+     * first-class and write the same underlying state).
+     *
+     * Shorthand: a bare `readonly string[]` is equivalent to
+     * `{ tools: [...] }` (mirrors the `builtins` / `terminal` union
+     * convention in this interface).
+     *
+     * Semantics (identical to `.withRequiredTools()` — same config path):
+     * - A non-empty static `tools` list SUPPRESSES the adaptive tool
+     *   classifier: the caller stated their requirements, so no LLM
+     *   relevance-inference round-trip runs (see
+     *   `engine/phases/agent-loop/setup/classifier.ts` —
+     *   `hasStaticRequiredList`).
+     * - Enforcement: if the agent attempts to end without calling every
+     *   required tool, the kernel redirects it back to "thinking" with
+     *   feedback; after `maxRetries` redirects (default: 2) the task fails.
+     *
+     * Conflict rule when combined with `.withRequiredTools()` (or repeated
+     * calls of either spelling): `tools` lists are UNIONED (deduped,
+     * first-seen order); scalar fields (`adaptive`, `maxRetries`) are
+     * last-call-wins.
+     *
+     * @example
+     * ```typescript
+     * agent.withTools({ required: ["web-search"] })
+     * agent.withTools({ required: { tools: ["web-search"], maxRetries: 3 } })
+     * agent.withTools({ required: { adaptive: false } }) // opt out of classifier
+     * ```
+     *
+     * Default: undefined (no static required tools; adaptive classification
+     * follows the reasoning-enabled default).
+     */
+    readonly required?: readonly string[] | RequiredToolsOptions
+}
+
+/**
+ * Object form of {@link ToolsOptions.required} — matches the
+ * `.withRequiredTools()` parameter shape exactly so the two spellings are
+ * interchangeable.
+ */
+export interface RequiredToolsOptions {
+    /** Tool names that must be called during execution */
+    readonly tools?: readonly string[]
+    /** Enable adaptive LLM inference of required tools */
+    readonly adaptive?: boolean
+    /** Max redirect attempts before failing (default: 2) */
+    readonly maxRetries?: number
 }
 
 /**
