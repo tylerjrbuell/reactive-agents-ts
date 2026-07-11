@@ -85,6 +85,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withMinIterations: { featureClass: "capability", gapReason: "iteration floor unmeasured" },
   withModelRouting: { featureClass: "capability", gapReason: "structurally inert: bench runs ONE resident model per cell, so there is no pool to route across" },
   withOrchestration: { featureClass: "capability", gapReason: "multi-agent orchestration; no task exercises it" },
+  withOutputSchema: { featureClass: "capability", gapReason: "typed structured output; no schema task in the bench corpus" },
   withOutputValidator: { featureClass: "capability", gapReason: "structured-output repair; no schema task" },
   withoutMemory: { featureClass: "capability", gapReason: "negative wither; memory is default-off, so this is a no-op arm" },
   withProgressCheckpoint: { featureClass: "capability", gapReason: "checkpoint cadence unmeasured" },
@@ -151,8 +152,16 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
  * 2026-07-11: 38 → 37. `withTerminalTools` (an uncovered capability) was
  * removed from the builder and folded into `withTools({ terminal })`; deleting
  * an uncovered feature legitimately lowers the ceiling.
+ *
+ * 2026-07-11 (W-M): 37 → 38. DRIFT CORRECTION, not a regression. `withOutputSchema`
+ * always existed as an uncovered capability but escaped the source-regex gate
+ * because it is generic (`withOutputSchema<A>(`); the regex required `(` to
+ * immediately follow the name. The gate is fixed (feature-coverage.test.ts) and
+ * the method is now classified, which surfaces the pre-existing gap. This is the
+ * one sanctioned upward move: it reflects a capability the bench never saw, now
+ * made visible — the exact blindness this ratchet exists to prevent.
  */
-export const UNCOVERED_CAPABILITY_CEILING = 37;
+export const UNCOVERED_CAPABILITY_CEILING = 38;
 
 /** Capability features that must have a `builder.<name>(` call in runner.ts. */
 export function coveredCapabilityFeatures(): readonly string[] {

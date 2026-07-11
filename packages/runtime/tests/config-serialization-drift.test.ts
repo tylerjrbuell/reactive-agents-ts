@@ -29,6 +29,7 @@ import {
   AgentConfigSchema,
   agentConfigToBuilder,
   agentConfigToJSON,
+  agentConfigFromJSON,
   type AgentConfig,
 } from "../src/agent-config.js";
 
@@ -70,13 +71,22 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 //     single leaf and the roundtrip checks them by deep object equality.
 const PASSTHROUGH_SUBTREES = new Set<string>([
   "persona",
-  "gateway",
+  // gateway is NO LONGER a passthrough (P4/G12): accessControl is now in the
+  // schema, so gateway is walked field-by-field for drift protection.
   "logging",
   "fallbacks",
   "mcpServers",
   "pricingRegistry",
   "taskContext",
   "reactiveIntelligence",
+  // Observability fan-out (P3/G8/G11): the serializer emits these as opaque
+  // objects copied verbatim from the raw ObservabilityOptions, so field drift
+  // inside them is impossible by construction — check by deep object equality.
+  "observability.cortex",
+  "observability.tracing",
+  "observability.telemetry",
+  "observability.logging",
+  "observability.costs",
 ]);
 
 // ─── AST helpers ───────────────────────────────────────────────────────────
@@ -169,6 +179,20 @@ const MAXIMAL_CONFIG: AgentConfig = {
     live: true,
     file: "/tmp/drift-guard.log",
     logModelIO: true,
+    cortex: { url: "http://localhost:4321" },
+    telemetry: true,
+    logging: {
+      level: "debug",
+      format: "json",
+      output: "file",
+      filePath: "/tmp/drift-obs.log",
+      maxFileSizeBytes: 1_048_576,
+      maxFiles: 3,
+    },
+    tracing: { dir: "/tmp/drift-traces" },
+    health: true,
+    audit: true,
+    costs: true,
   },
   costTracking: {
     perRequest: 0.5,
@@ -186,9 +210,32 @@ const MAXIMAL_CONFIG: AgentConfig = {
   },
   gateway: {
     timezone: "UTC",
+    heartbeat: {
+      intervalMs: 1_800_000,
+      policy: "adaptive",
+      instruction: "check in",
+      maxConsecutiveSkips: 3,
+    },
     crons: [{ schedule: "0 9 * * *", instruction: "daily check" }],
+    webhooks: [{ path: "/hook", adapter: "generic" }],
+    policies: {
+      dailyTokenBudget: 50_000,
+      maxActionsPerHour: 20,
+      heartbeatPolicy: "adaptive",
+      mergeWindowMs: 1_000,
+      requireApprovalFor: ["deploy"],
+    },
     persistMemoryAcrossRuns: true,
     port: 8787,
+    accessControl: {
+      accessPolicy: "allowlist",
+      allowedSenders: ["+15550001111"],
+      blockedSenders: ["+15559998888"],
+      unknownSenderAction: "skip",
+      replyToUnknown: "Sorry, I can't help with that.",
+      mode: "chat",
+      sessionTtlDays: 30,
+    },
   },
   mcpServers: [
     { name: "fs", transport: "stdio", command: "mcp-fs", args: ["--root", "/"] },
@@ -210,6 +257,8 @@ const MAXIMAL_CONFIG: AgentConfig = {
     hallucinationThreshold: 0.8,
     passThreshold: 0.9,
     riskThreshold: 0.3,
+    useLLMTier: false,
+    onReject: "annotate",
   },
   grounding: { mode: "warn", tolerance: 0.05, maxRetries: 2 },
   fabricationGuard: "warn",
@@ -280,4 +329,67 @@ describe("config serialization drift guard", () => {
     }
     expect(dropped).toEqual([]);
   }, 15000);
+});
+
+// ─── Focused round-trip pins (Mission W-M) ───────────────────────────────────
+// Each pin was RED before its schema fix: the field was set on the builder and
+// EMITTED by serializeBuilder (or would be), but the schema lacked the key, so
+// `agentConfigToBuilder` dropped it on the config->builder leg (and, for P2,
+// re-decoding toConfig() output threw). Each is now green.
+describe("dual-API schema-completeness round-trip pins", () => {
+  it("P2/G10: verification.useLLMTier + onReject round-trip AND toConfig() re-decodes", async () => {
+    const cfg: AgentConfig = {
+      name: "vpin",
+      provider: "anthropic",
+      verification: { useLLMTier: true, onReject: "block" },
+    };
+    const builder = await agentConfigToBuilder(cfg);
+    const out = builder.toConfig();
+    expect(out.verification?.useLLMTier).toBe(true);
+    expect(out.verification?.onReject).toBe("block");
+    // Live bug (G10): toConfig() output must survive re-decode. Before the fix
+    // the emitted `useLLMTier` was an unknown key and this threw.
+    expect(() => agentConfigToJSON(out)).not.toThrow();
+  });
+
+  it("P3/G8/G11: withObservability({cortex,tracing,costs}) round-trips through config", async () => {
+    const cfg: AgentConfig = {
+      name: "opin",
+      provider: "anthropic",
+      observability: {
+        cortex: { url: "http://cortex.local:4321" },
+        tracing: { dir: "/tmp/pin-traces" },
+        costs: true,
+      },
+    };
+    const builder = await agentConfigToBuilder(cfg);
+    const out = builder.toConfig();
+    expect(out.observability?.cortex).toEqual({ url: "http://cortex.local:4321" });
+    expect(out.observability?.tracing).toEqual({ dir: "/tmp/pin-traces" });
+    expect(out.observability?.costs).toBe(true);
+    expect(() => agentConfigToJSON(out)).not.toThrow();
+  });
+
+  it("P4/G12: gateway.accessControl survives JSON decode AND builder round-trip", () => {
+    const accessControl = {
+      accessPolicy: "allowlist" as const,
+      allowedSenders: ["+15550001111"],
+      mode: "task" as const,
+    };
+    // RED before the fix: the schema lacked `accessControl`, so Effect's
+    // excess-property stripping silently DROPPED it on decode — a user's config
+    // was quietly lost. Post-fix the schema carries it, so it survives.
+    const decoded = agentConfigFromJSON(
+      JSON.stringify({ name: "gpin", provider: "anthropic", gateway: { accessControl } }),
+    );
+    expect(decoded.gateway?.accessControl).toEqual(accessControl);
+    // And it survives a full config -> builder -> toConfig round-trip.
+    const cfg: AgentConfig = { name: "gpin", provider: "anthropic", gateway: { accessControl } };
+    return agentConfigToBuilder(cfg).then((builder) => {
+      const out = builder.toConfig();
+      expect(out.gateway?.accessControl).toEqual(accessControl);
+      expect(() => agentConfigToJSON(out)).not.toThrow();
+    });
+  });
+
 });

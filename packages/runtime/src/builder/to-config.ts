@@ -192,6 +192,15 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (oo?.live !== undefined) o["live"] = oo.live;
     if (oo?.file) o["file"] = oo.file;
     if (oo?.logModelIO !== undefined) o["logModelIO"] = oo.logModelIO;
+    // Fan-out sub-options (P3/G8/G11) — emitted from the raw options object so
+    // `withObservability({ cortex, tracing, ... })` round-trips through config.
+    if (oo?.cortex !== undefined) o["cortex"] = oo.cortex;
+    if (oo?.telemetry !== undefined) o["telemetry"] = oo.telemetry;
+    if (oo?.logging !== undefined) o["logging"] = oo.logging;
+    if (oo?.tracing !== undefined) o["tracing"] = oo.tracing;
+    if (oo?.health !== undefined) o["health"] = oo.health;
+    if (oo?.audit !== undefined) o["audit"] = oo.audit;
+    if (oo?.costs !== undefined) o["costs"] = oo.costs;
     config["observability"] = o;
   }
 
@@ -220,6 +229,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (vo?.passThreshold !== undefined) v["passThreshold"] = vo.passThreshold;
     if (vo?.riskThreshold !== undefined) v["riskThreshold"] = vo.riskThreshold;
     if (vo?.useLLMTier !== undefined) v["useLLMTier"] = vo.useLLMTier;
+    if (vo?.onReject !== undefined) v["onReject"] = vo.onReject;
     config["verification"] = v;
   }
 

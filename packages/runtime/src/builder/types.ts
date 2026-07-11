@@ -734,9 +734,9 @@ export interface GatewayOptions {
         /** Access control policy: "allowlist" (default), "blocklist", or "open". */
         readonly accessPolicy?: 'allowlist' | 'blocklist' | 'open'
         /** Phone numbers / user IDs allowed to message (for allowlist mode). */
-        readonly allowedSenders?: string[]
+        readonly allowedSenders?: readonly string[]
         /** Phone numbers / user IDs blocked (for blocklist mode). */
-        readonly blockedSenders?: string[]
+        readonly blockedSenders?: readonly string[]
         /** Action for unknown senders: "skip" (default) or "escalate". */
         readonly unknownSenderAction?: 'skip' | 'escalate'
         /** Optional auto-reply message for unknown senders. */

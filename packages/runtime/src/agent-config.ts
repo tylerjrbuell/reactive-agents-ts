@@ -54,6 +54,14 @@ export const ToolsConfigSchema = Schema.Struct({
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
+  // NOTE (P9, deferred): detectors default to `true` when guardrails are enabled
+  // (mirrors `GuardrailsOptions`, builder/types.ts). Encoding that default via
+  // `Schema.optionalWith(..., { default })` would make serialized config
+  // self-documenting, BUT it promotes these fields to REQUIRED in the inferred
+  // `AgentConfig` type — a breaking change to the public declarative contract
+  // (a `{ guardrails: { injection: true } }` literal would no longer typecheck).
+  // The task gates P9 on "only if it doesn't change behavior", so it stays as
+  // plain optional; the default is applied at runtime by the guardrails layer.
   injection: Schema.optional(Schema.Boolean),
   pii: Schema.optional(Schema.Boolean),
   toxicity: Schema.optional(Schema.Boolean),
@@ -72,15 +80,6 @@ export const MemoryConfigSchema = Schema.Struct({
   importanceThreshold: Schema.optional(Schema.Number),
   experienceLearning: Schema.optional(Schema.Boolean),
   memoryConsolidation: Schema.optional(Schema.Boolean),
-});
-
-export const ObservabilityConfigSchema = Schema.Struct({
-  verbosity: Schema.optional(
-    Schema.Literal("minimal", "normal", "verbose", "debug"),
-  ),
-  live: Schema.optional(Schema.Boolean),
-  file: Schema.optional(Schema.String),
-  logModelIO: Schema.optional(Schema.Boolean),
 });
 
 export const CostTrackingConfigSchema = Schema.Struct({
@@ -149,6 +148,24 @@ export const GatewayConfigSchema = Schema.Struct({
   ),
   persistMemoryAcrossRuns: Schema.optional(Schema.Boolean),
   port: Schema.optional(Schema.Number),
+  /**
+   * Channel access control (messaging platforms). Mirrors
+   * `GatewayOptions.accessControl` (builder/types.ts) so gateway config gets
+   * field-level validation instead of `as any` passthrough (P4/G12).
+   */
+  accessControl: Schema.optional(
+    Schema.Struct({
+      accessPolicy: Schema.optional(
+        Schema.Literal("allowlist", "blocklist", "open"),
+      ),
+      allowedSenders: Schema.optional(Schema.Array(Schema.String)),
+      blockedSenders: Schema.optional(Schema.Array(Schema.String)),
+      unknownSenderAction: Schema.optional(Schema.Literal("skip", "escalate")),
+      replyToUnknown: Schema.optional(Schema.String),
+      mode: Schema.optional(Schema.Literal("chat", "task")),
+      sessionTtlDays: Schema.optional(Schema.Number),
+    }),
+  ),
 });
 
 export const MCPServerConfigSchema = Schema.Struct({
@@ -177,6 +194,59 @@ export const LoggingConfigSchema = Schema.Struct({
   maxFiles: Schema.optional(Schema.Number),
 });
 
+/**
+ * Anonymous telemetry (differential privacy) config — the JSON-safe subset of
+ * `TelemetryConfig` (@reactive-agents/observability). Mirrors the
+ * `withObservability({ telemetry })` fan-out (builder/types.ts).
+ */
+export const TelemetryConfigSchema = Schema.Struct({
+  mode: Schema.optional(
+    Schema.Literal("contribute", "consume", "both", "isolated"),
+  ),
+  privacy: Schema.optional(
+    Schema.Struct({
+      epsilon: Schema.optional(Schema.Number),
+      sensitivity: Schema.optional(Schema.Number),
+      minClamp: Schema.optional(Schema.Number),
+    }),
+  ),
+});
+
+/**
+ * Observability config. Beyond the display knobs (`verbosity`/`live`/`file`/
+ * `logModelIO`), the fan-out sub-options mirror `ObservabilityOptions`
+ * (builder/types.ts) so `withObservability({ cortex, tracing, health, audit,
+ * logging, costs, telemetry })` round-trips through config (P3/G8/G11). The
+ * code-only overlays (`logPrefix`, `redactors`, and a live `WritableStream`
+ * logging output) stay out of the schema by design.
+ */
+export const ObservabilityConfigSchema = Schema.Struct({
+  verbosity: Schema.optional(
+    Schema.Literal("minimal", "normal", "verbose", "debug"),
+  ),
+  live: Schema.optional(Schema.Boolean),
+  file: Schema.optional(Schema.String),
+  logModelIO: Schema.optional(Schema.Boolean),
+  /** Cortex event reporting. `true` resolves the URL from env/default; `{ url }` sets it. */
+  cortex: Schema.optional(
+    Schema.Union(Schema.Boolean, Schema.Struct({ url: Schema.optional(Schema.String) })),
+  ),
+  /** Anonymous telemetry (differential privacy). */
+  telemetry: Schema.optional(Schema.Union(Schema.Boolean, TelemetryConfigSchema)),
+  /** Structured logging (JSON-safe subset; a live `WritableStream` output is code-only). */
+  logging: Schema.optional(LoggingConfigSchema),
+  /** JSONL trace persistence. `{ dir }` enables; `false` disables. */
+  tracing: Schema.optional(
+    Schema.Union(Schema.Boolean, Schema.Struct({ dir: Schema.optional(Schema.String) })),
+  ),
+  /** Health checks. */
+  health: Schema.optional(Schema.Boolean),
+  /** Per-tool-call rationale auditing. */
+  audit: Schema.optional(Schema.Boolean),
+  /** Cost tracking. `true` enables; an object also sets budget caps. */
+  costs: Schema.optional(Schema.Union(Schema.Boolean, CostTrackingConfigSchema)),
+});
+
 export const FallbackConfigSchema = Schema.Struct({
   providers: Schema.optional(Schema.Array(Schema.String)),
   models: Schema.optional(Schema.Array(Schema.String)),
@@ -193,6 +263,19 @@ export const VerificationConfigSchema = Schema.Struct({
   hallucinationThreshold: Schema.optional(Schema.Number),
   passThreshold: Schema.optional(Schema.Number),
   riskThreshold: Schema.optional(Schema.Number),
+  /**
+   * When true (default), verification uses the runtime `LLMService` for
+   * LLM-backed layers; false runs tier-1 heuristics only. Matches
+   * `VerificationOptions.useLLMTier` (builder/types.ts). `serializeBuilder`
+   * emits this, so it must live in the schema or `toConfig()` output would
+   * fail re-decode (P2/G10).
+   */
+  useLLMTier: Schema.optional(Schema.Boolean),
+  /**
+   * What to do when verification still rejects after retries. Absent = "proceed".
+   * Matches `VerificationOptions.onReject` (builder/types.ts) (P2/G10).
+   */
+  onReject: Schema.optional(Schema.Literal("block", "annotate", "proceed")),
 });
 
 export const GroundingConfigSchema = Schema.Struct({
@@ -530,6 +613,13 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(obs?.live !== undefined ? { live: obs.live } : {}),
       ...(obs?.file ? { file: obs.file } : {}),
       ...(obs?.logModelIO !== undefined ? { logModelIO: obs.logModelIO } : {}),
+      ...(obs?.cortex !== undefined ? { cortex: obs.cortex } : {}),
+      ...(obs?.telemetry !== undefined ? { telemetry: obs.telemetry } : {}),
+      ...(obs?.logging !== undefined ? { logging: obs.logging } : {}),
+      ...(obs?.tracing !== undefined ? { tracing: obs.tracing } : {}),
+      ...(obs?.health !== undefined ? { health: obs.health } : {}),
+      ...(obs?.audit !== undefined ? { audit: obs.audit } : {}),
+      ...(obs?.costs !== undefined ? { costs: obs.costs } : {}),
     };
     builder = builder.withObservability(Object.keys(opts).length > 0 ? opts : undefined);
   }
@@ -559,6 +649,8 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(v?.hallucinationThreshold !== undefined ? { hallucinationThreshold: v.hallucinationThreshold } : {}),
       ...(v?.passThreshold !== undefined ? { passThreshold: v.passThreshold } : {}),
       ...(v?.riskThreshold !== undefined ? { riskThreshold: v.riskThreshold } : {}),
+      ...(v?.useLLMTier !== undefined ? { useLLMTier: v.useLLMTier } : {}),
+      ...(v?.onReject !== undefined ? { onReject: v.onReject } : {}),
     };
     builder = builder.withVerification(Object.keys(opts).length > 0 ? opts : undefined);
   }
@@ -610,7 +702,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
 
   // Gateway
   if (config.gateway) {
-    builder = builder.withGateway(config.gateway as any);
+    builder = builder.withGateway(config.gateway);
   }
 
   // MCP servers

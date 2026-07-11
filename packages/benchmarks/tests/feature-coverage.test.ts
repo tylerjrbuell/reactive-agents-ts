@@ -34,11 +34,19 @@ const REPO = join(import.meta.dir, "..", "..", "..");
 const BUILDER_SRC = join(REPO, "packages", "runtime", "src", "builder.ts");
 const RUNNER_SRC = join(REPO, "packages", "benchmarks", "src", "runner.ts");
 
-/** Every `with*`/`without*` method DECLARED on the builder (4-space class indent). */
+/**
+ * Every `with*`/`without*` method DECLARED on the builder (4-space class indent).
+ *
+ * The optional `<...>` clause matches generic methods (e.g.
+ * `withOutputSchema<A>(`). Without it the regex silently skipped every generic
+ * method, so `withOutputSchema` escaped classification entirely (G2 drift-test
+ * hole). The prototype-reflection guard (`builder-methods.test.ts`) saw it, but
+ * this source-regex gate did not.
+ */
 function declaredBuilderMethods(): readonly string[] {
   const src = readFileSync(BUILDER_SRC, "utf8");
   const found = new Set<string>();
-  for (const m of src.matchAll(/^ {4}(with(?:out)?[A-Za-z0-9]+)\(/gm)) {
+  for (const m of src.matchAll(/^ {4}(with(?:out)?[A-Za-z0-9]+)(?:<[^>]*>)?\(/gm)) {
     found.add(m[1]!);
   }
   return [...found].sort();
