@@ -95,7 +95,7 @@ describe("withContract — forbidden tool absence", () => {
     const builder = ReactiveAgents.create()
       .withProvider("test")
       .withStrictValidation()
-      .withTerminalTools()
+      .withTools({ terminal: true })
       .withContract(contract);
     await expect(builder.build()).rejects.toThrow(/shell-execute/);
   });

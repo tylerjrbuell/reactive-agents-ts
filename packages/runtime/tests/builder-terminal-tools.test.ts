@@ -24,10 +24,10 @@ async function toolPresent(
 }
 
 describe("builder terminal tools integration", () => {
-  it("should enable shell-execute tool when .withTerminalTools() is called", async () => {
+  it("should enable shell-execute tool when .withTools({ terminal: true }) is called", async () => {
     const agent = await ReactiveAgents.create()
       .withProvider("test")
-      .withTerminalTools()
+      .withTools({ terminal: true })
       .build();
 
     // shell-execute must be registered in the resolved tool registry.
@@ -103,7 +103,7 @@ describe("builder terminal tools integration", () => {
     }
   }, 15000);
 
-  it("should pass additionalCommands when using withTools(allowedTools) then withTerminalTools (Cortex wiring)", async () => {
+  it("should pass additionalCommands when using withTools(allowedTools) then withTools({ terminal }) (Cortex wiring)", async () => {
     const agent = await ReactiveAgents.create()
       .withProvider("test")
       .withReasoning({ defaultStrategy: "reactive" })
@@ -112,7 +112,7 @@ describe("builder terminal tools integration", () => {
         { text: "done" },
       ])
       .withTools({ allowedTools: ["shell-execute", "web-search"] })
-      .withTerminalTools({ additionalCommands: ["env"] })
+      .withTools({ terminal: { additionalCommands: ["env"] } })
       .build();
 
     try {

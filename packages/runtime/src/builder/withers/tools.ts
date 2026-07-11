@@ -2,14 +2,13 @@
  * Tools wither-body extractions (WS-6 Phase 1 — tools bucket).
  *
  * Hosts mutation bodies for the tools-layer wither family:
- * `.withTools()`, `.withTerminalTools()`, `.withDocuments()`,
- * `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
+ * `.withTools()` (terminal access is `.withTools({ terminal })`),
+ * `.withDocuments()`, `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
 import type { ReactiveAgentBuilder } from "../../builder.js";
 import type { ToolsOptions } from "../../builder.js";
 import type { RequiredToolsOptions } from "../types.js";
 import type { MCPServerConfig } from "../../runtime.js";
-import type { ShellExecuteConfig } from "@reactive-agents/tools";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { MetaToolsConfig } from "../../types.js";
 import { asBuilderState, type BuilderState } from "./_state.js";
@@ -83,22 +82,6 @@ export const applyWithTools = (
   if (options?.resultCompression) {
     s._resultCompression = options.resultCompression;
   }
-};
-
-/**
- * Apply `.withTerminalTools(options)` — enable tools + register the
- * shell-execute tool (allowlisted CLI commands with sandbox + timeout).
- */
-export const applyWithTerminalTools = (
-  builder: ReactiveAgentBuilder,
-  options?: ShellExecuteConfig,
-): void => {
-  const s = asBuilderState(builder);
-  s._enableTools = true;
-  s._toolsOptions = {
-    ...s._toolsOptions,
-    terminal: options ?? true,
-  };
 };
 
 /**

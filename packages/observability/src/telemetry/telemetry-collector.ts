@@ -33,7 +33,7 @@ interface TaskAccumulator {
 /** Telemetry participation mode. */
 export type TelemetryMode = "contribute" | "consume" | "both" | "isolated";
 
-/** Configuration for `.withTelemetry()`. */
+/** Configuration for `.withObservability({ telemetry })`. */
 export interface TelemetryConfig {
   /** Participation mode. @default "isolated" */
   readonly mode?: TelemetryMode;

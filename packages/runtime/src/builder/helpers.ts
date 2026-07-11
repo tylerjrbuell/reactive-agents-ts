@@ -42,7 +42,7 @@ export const yieldService = <I, S>(
  * Resolve the default tracing config (Sprint 3.6).
  *
  * Tracing is **on by default** so `rax diagnose <runId>` always has a JSONL
- * file to inspect. Users disable explicitly via `.withoutTracing()` on the
+ * file to inspect. Users disable explicitly via `.withObservability({ tracing: false })` on the
  * builder or `REACTIVE_AGENTS_TRACE=off` in the env (the env switch covers
  * CI, container, or one-off scripted runs that shouldn't write to disk).
  *

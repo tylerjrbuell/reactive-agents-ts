@@ -44,7 +44,6 @@ import {
 } from './builder/withers/model-budget.js'
 import {
     applyWithTools,
-    applyWithTerminalTools,
     applyWithDocuments,
     applyWithRequiredTools,
     applyWithMCP,
@@ -77,10 +76,7 @@ import { unwrapError } from './errors.js'
 import type { ContextProfile } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
-import type {
-    ResultCompressionConfig,
-    ShellExecuteConfig,
-} from '@reactive-agents/tools'
+import type { ResultCompressionConfig } from '@reactive-agents/tools'
 import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { StreamDensity } from './stream-types.js'
@@ -360,7 +356,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _llmOverrideLayer?: Layer.Layer<any, any, any>
     // Tracing is on by default (Sprint 3.6) so `rax diagnose <runId>` always
     // has data to inspect — a productized DX win. Disable explicitly with
-    // .withoutTracing() or by setting REACTIVE_AGENTS_TRACE=off in the env.
+    // .withObservability({ tracing: false }) or REACTIVE_AGENTS_TRACE=off.
     // Resolved lazily in defaultTracingConfig() so env changes apply per build.
     private _tracingConfig: { dir: string } | null = defaultTracingConfig()
     private _mcpServers: MCPServerConfig[] = []
@@ -1401,26 +1397,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Enable/configure the shell-execute tool for safe terminal command execution.
-     *
-     * Registers the shell-execute tool which allows controlled CLI command execution with:
-     * - Allowlisted safe commands (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq)
-     * - Blocklist patterns for dangerous operations (rm -rf, chmod 777, sudo, eval, etc.)
-     * - Working directory constraint to project root or sandbox
-     * - 30s timeout and 4000 char output truncation per command
-     *
-     * Equivalent to calling `.withTools({ terminal: options ?? true })`.
-     *
-     * @returns `this` for chaining
-     * Composable equivalent: `.withTools({ terminal: options ?? true })` —
-     *   terminal access is also a `ToolsOptions` field.
-     */
-    withTerminalTools(options?: ShellExecuteConfig): this {
-        applyWithTerminalTools(this, options)
-        return this
-    }
-
-    /**
      * Pre-load documents into the agent's RAG memory store at build time.
      *
      * Documents are chunked and indexed so the agent can retrieve them via the
@@ -1429,8 +1405,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * @param docs - Array of document specifications to ingest
      * @returns `this` for chaining
-     * Composable equivalent: `.withTools({ rag: { documents: docs } })` —
-     *   RAG ingestion is also reachable as a tool-layer concern.
+     *
+     * This is the sole entry point for RAG ingestion (there is no
+     * `withTools({ rag })` option; a fold candidate — see
+     * wither-surface-consolidation.md).
      */
     withDocuments(docs: DocumentSpec[]): this {
         applyWithDocuments(this, docs)
@@ -1536,7 +1514,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * Use for CI, scripted smoke tests, or hosts that should not print the
      * metrics dashboard on completion. Tracing remains governed separately by
-     * `.withTracing()` / `.withoutTracing()` and `REACTIVE_AGENTS_TRACE`.
+     * `.withTracing()` / `.withObservability({ tracing: false })` and
+     * `REACTIVE_AGENTS_TRACE`.
      */
     withoutObservability(): this {
         this._enableObservability = false
@@ -1571,23 +1550,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withStreaming(options?: { density?: StreamDensity }): this {
         this._streamDensity = options?.density ?? 'tokens'
-        return this
-    }
-
-    /**
-     * Enable opt-in anonymous telemetry for collective intelligence.
-     *
-     * Captures anonymized per-run metrics (strategy, model tier, token counts, latency,
-     * cost) with differential privacy (Laplacian noise). No raw prompts, API keys, or
-     * PII ever leave the local process.
-     *
-     * @param config - Telemetry mode and privacy settings
-     * @returns `this` for chaining
-     * Composable equivalent: `.withObservability({ telemetry: ... })` —
-     *   telemetry is also a verbosity tier on the observability stack.
-     */
-    withTelemetry(config?: TelemetryConfig): this {
-        this._telemetryConfig = config ?? { mode: 'isolated' }
         return this
     }
 
@@ -2265,19 +2227,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withTracing(opts: { dir?: string } = {}): this {
         this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
-        return this
-    }
-
-    /**
-     * Disable JSONL trace persistence (Sprint 3.6).
-     *
-     * Tracing is on by default at `~/.reactive-agents/traces`. Use this when
-     * you don't want disk writes (CI, ephemeral containers, sensitive runs
-     * where you'd rather rely on in-memory observability only). For a
-     * process-wide off switch, set `REACTIVE_AGENTS_TRACE=off` in the env.
-     */
-    withoutTracing(): this {
-        this._tracingConfig = null
         return this
     }
 

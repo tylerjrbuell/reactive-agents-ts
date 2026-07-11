@@ -98,7 +98,6 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withStrictValidation: { featureClass: "capability", gapReason: "validation strictness unmeasured" },
   withSystemPrompt: { featureClass: "capability", gapReason: "prompt override would confound the harness comparison" },
   withTaskContext: { featureClass: "capability", gapReason: "task-context injection unmeasured" },
-  withTerminalTools: { featureClass: "capability", gapReason: "terminal-tool subset unmeasured" },
   withTestScenario: { featureClass: "capability", gapReason: "deterministic test provider; not a live-model capability" },
   withUserInteraction: { featureClass: "capability", gapReason: "bench has no user" },
   withVerificationStep: { featureClass: "capability", gapReason: "explicit verify step; unmeasured" },
@@ -132,13 +131,11 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withObservability: { featureClass: "plumbing" },
   withoutCircuitBreaker: { featureClass: "plumbing" },
   withoutObservability: { featureClass: "plumbing" },
-  withoutTracing: { featureClass: "plumbing" },
   withPersona: { featureClass: "plumbing" },
   withProfile: { featureClass: "plumbing" },
   withProvider: { featureClass: "plumbing" },
   withRateLimiting: { featureClass: "plumbing" },
   withReceiptSigning: { featureClass: "plumbing" },
-  withTelemetry: { featureClass: "plumbing" },
   withTimeout: { featureClass: "plumbing" },
   withTracing: { featureClass: "plumbing" },
 };
@@ -150,8 +147,12 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
  * Raising it means the framework grew a capability the bench cannot see — which
  * is exactly the blindness this file exists to prevent. Wire the feature, or
  * reclassify it as plumbing with a justification in review.
+ *
+ * 2026-07-11: 38 → 37. `withTerminalTools` (an uncovered capability) was
+ * removed from the builder and folded into `withTools({ terminal })`; deleting
+ * an uncovered feature legitimately lowers the ceiling.
  */
-export const UNCOVERED_CAPABILITY_CEILING = 38;
+export const UNCOVERED_CAPABILITY_CEILING = 37;
 
 /** Capability features that must have a `builder.<name>(` call in runner.ts. */
 export function coveredCapabilityFeatures(): readonly string[] {

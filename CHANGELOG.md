@@ -1,3 +1,21 @@
+## [Unreleased]
+
+### Breaking — builder surface consolidation (v0.14)
+
+Three redundant builder methods removed; each was already folded into a
+config option on a broader method (verified equivalent, back-compat kept for
+the rest of the observability/tools families). Migrate:
+
+- `.withTerminalTools(cfg?)` → `.withTools({ terminal: cfg ?? true })`
+- `.withTelemetry(cfg?)` → `.withObservability({ telemetry: cfg ?? true })`
+- `.withoutTracing()` → `.withObservability({ tracing: false })`
+
+The builder `with*`/`without*` surface drops 92 → 89 unique methods and is now
+guarded by a monotone-decreasing ratchet test (`builder-wither-ratchet.test.ts`)
+per the ratified north-star architecture §5: new capability arrives as a config
+option or profile field, never a new top-level method. Also fixed the
+`withDocuments` JSDoc, which advertised a non-existent `withTools({ rag })`.
+
 ## [0.13.6] — 2026-07-06
 
 Declare `@reactive-agents/runtime-shim` as a dependency of the CLI and mark it

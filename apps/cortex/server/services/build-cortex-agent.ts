@@ -281,7 +281,7 @@ export async function buildCortexAgent(
     params.metaTools?.enabled === true ||
     shellRequested;
   if (needsToolLayer) {
-    // Register allowedTools first; apply shell **only** via `withTerminalTools()` so
+    // Register allowedTools first; apply shell **only** via `withTools({ terminal })` so
     // `ShellExecuteConfig` (additionalCommands / allowedCommands) is merged on
     // `_toolsOptions.terminal` reliably. Passing a config object through a second
     // `withTools({ terminal: {...} })` merge can lose nested config in some chains.
@@ -290,12 +290,14 @@ export async function buildCortexAgent(
       const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
       const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
       if (allowOnly.length === 0 && addl.length === 0) {
-        b = b.withTerminalTools();
+        b = b.withTools({ terminal: true });
       } else {
-        b = b.withTerminalTools({
-          ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
-          ...(addl.length > 0 ? { additionalCommands: addl } : {}),
-        } as ShellExecuteConfig);
+        b = b.withTools({
+          terminal: {
+            ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
+            ...(addl.length > 0 ? { additionalCommands: addl } : {}),
+          } as ShellExecuteConfig,
+        });
       }
     }
   } else if (shellRequested) {
@@ -303,11 +305,13 @@ export async function buildCortexAgent(
     const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
     b =
       allowOnly.length === 0 && addl.length === 0
-        ? b.withTerminalTools()
-        : b.withTerminalTools({
-            ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
-            ...(addl.length > 0 ? { additionalCommands: addl } : {}),
-          } as ShellExecuteConfig);
+        ? b.withTools({ terminal: true })
+        : b.withTools({
+            terminal: {
+              ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
+              ...(addl.length > 0 ? { additionalCommands: addl } : {}),
+            } as ShellExecuteConfig,
+          });
   }
 
   const tc = params.taskContext;

@@ -61,7 +61,6 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withBudget: { kind: "overlay", description: "Token/cost budget caps." },
   withSkills: { kind: "overlay", description: "Living SKILL.md directories + evolution." },
   withMetaTools: { kind: "overlay", description: "Conductor's-suite meta-tools." },
-  withTerminalTools: { kind: "overlay", description: "Host shell-execute tool." },
   withMCP: { kind: "overlay", description: "Connect MCP servers." },
   withAgentTool: { kind: "overlay", description: "Register a sub-agent as a tool." },
   withDynamicSubAgents: { kind: "overlay", description: "Dynamic sub-agent spawning." },

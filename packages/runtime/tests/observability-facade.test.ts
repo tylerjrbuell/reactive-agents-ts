@@ -34,7 +34,9 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
 
     const chained = ReactiveAgents.create()
       .withCortex("http://localhost:9999")
-      .withTelemetry({ mode: "isolated" })
+      // telemetry has no dedicated wither (removed v0.14 — folded into
+      // withObservability); the facade is now its only entry point.
+      .withObservability({ telemetry: { mode: "isolated" } })
       .withLogging({ level: "debug" })
       .withTracing({ dir: "/tmp/facade-traces" })
       .withHealthCheck()

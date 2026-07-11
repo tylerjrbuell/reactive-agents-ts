@@ -631,7 +631,7 @@ export interface ObservabilityOptions {
 
     /** Cortex event reporting. `true` resolves the URL from CORTEX_URL / default; `{ url }` sets it explicitly. Equivalent to `.withCortex(url?)`. */
     readonly cortex?: boolean | { readonly url?: string }
-    /** Anonymous telemetry (differential privacy). Equivalent to `.withTelemetry(config?)`. */
+    /** Anonymous telemetry (differential privacy). The only entry point (the dedicated `.withTelemetry()` was removed v0.14). */
     readonly telemetry?: boolean | TelemetryConfig
     /** Structured logging. Equivalent to `.withLogging(config)`. */
     readonly logging?: {
@@ -642,7 +642,7 @@ export interface ObservabilityOptions {
         readonly maxFileSizeBytes?: number
         readonly maxFiles?: number
     }
-    /** JSONL trace persistence. `{ dir }` enables (default dir when omitted); `false` disables. Equivalent to `.withTracing()` / `.withoutTracing()`. */
+    /** JSONL trace persistence. `{ dir }` enables (default dir when omitted); `false` disables (replaces the removed `.withoutTracing()`). Equivalent to `.withTracing()` for the enable path. */
     readonly tracing?: boolean | { readonly dir?: string }
     /** Health checks. Equivalent to `.withHealthCheck()`. */
     readonly health?: boolean
