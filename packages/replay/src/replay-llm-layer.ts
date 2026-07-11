@@ -123,8 +123,16 @@ export function makeReplayLLMLayer(table: LLMTable): Layer.Layer<LLMService> {
         embed: () => Effect.die(new Error("replay: embed not supported during replay")),
         countTokens: () => Effect.succeed(0),
         getModelConfig: () => Effect.die(new Error("replay: getModelConfig not supported during replay")),
+        // Same hot-path rationale as capabilities() below: the kernel probes
+        // this on tool-using runs, and a `die` there is an uncatchable defect.
+        // Values mirror the test provider the goldens are recorded on.
         getStructuredOutputCapabilities: () =>
-            Effect.die(new Error("replay: getStructuredOutputCapabilities not supported during replay")),
+            Effect.succeed({
+                nativeJsonMode: true,
+                jsonSchemaEnforcement: false,
+                prefillSupport: false,
+                grammarConstraints: false,
+            }),
         // Recorded responses carry structured tool calls (native-FC shape), so
         // the replayed run must take the native-FC path — same capabilities the
         // test provider reports. Returned (not `die`d): the kernel reads this on

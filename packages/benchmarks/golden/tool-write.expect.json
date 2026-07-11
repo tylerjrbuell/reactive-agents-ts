@@ -1,0 +1,20 @@
+{
+  "name": "tool-write",
+  "task": "Write a short note to ./note.md and report done.",
+  "strategy": "reactive",
+  "builtins": [
+    "file-write"
+  ],
+  "requiredTools": [
+    "file-write"
+  ],
+  "maxIterations": 4,
+  "toolMode": "live",
+  "fileRoot": "/tmp/ra-bench-replay-fixroot",
+  "expectOutputIncludes": [
+    "done"
+  ],
+  "expectToolsUsed": [
+    "file-write"
+  ]
+}

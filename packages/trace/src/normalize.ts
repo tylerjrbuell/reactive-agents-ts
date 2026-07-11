@@ -60,6 +60,11 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         seq,
         status: raw.success ? "success" : "failure",
         error: raw.error,
+        // Final deliverable (replay-rail W-C): the publisher caps at 64KB and
+        // sets outputTruncated. Without this mapping, run-completed carried no
+        // output and replay's diffTraces().outputDiff was structurally blind.
+        ...(raw.output !== undefined ? { output: raw.output } : {}),
+        ...(raw.outputTruncated === true ? { outputTruncated: true } : {}),
         totalTokens: raw.totalTokens,
         totalCostUsd: 0,
         durationMs: raw.durationMs,

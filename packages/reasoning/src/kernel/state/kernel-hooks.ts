@@ -116,6 +116,13 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
       // (completion-guard redirects, nudges) have no preceding action step and
       // must not emit a ToolCallCompleted event or they show as "unknown" in metrics.
       const resolvedToolName = lastStep?.metadata?.toolUsed as string | undefined;
+      // Replay parity: the recorded ToolCallCompleted must carry the SAME args
+      // the model produced, or the replay diff hashes `undefined` against the
+      // real arguments and every tool-using golden reads as divergent. Args are
+      // model-generated (already paid for in context), so no truncation here —
+      // trace size is governed by the retention caps, not per-field clipping.
+      const resolvedArgs = (lastStep?.metadata?.toolCall as { arguments?: unknown } | undefined)
+        ?.arguments;
       const effects: Effect.Effect<void, never>[] = [
         publishReasoningStep(eventBus, {
           _tag: "ReasoningStepCompleted",
@@ -137,6 +144,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
             durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
             success,
             kernelPass: getKernelPass(state),
+            ...(resolvedArgs !== undefined ? { args: resolvedArgs } : {}),
             ...(success ? { result } : { error: result }),
           }),
         );

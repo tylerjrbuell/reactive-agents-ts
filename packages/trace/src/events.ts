@@ -62,7 +62,10 @@ export interface RunStartedEvent extends TraceEventBase {
 export interface RunCompletedEvent extends TraceEventBase {
   readonly kind: "run-completed"
   readonly status: "success" | "failure" | "cancelled"
+  /** Final deliverable output (capped at 64KB by the publisher; see `outputTruncated`). */
   readonly output?: string
+  /** True iff `output` was clipped to the publisher's 64KB cap. */
+  readonly outputTruncated?: boolean
   readonly error?: string
   readonly totalTokens: number
   readonly totalCostUsd: number

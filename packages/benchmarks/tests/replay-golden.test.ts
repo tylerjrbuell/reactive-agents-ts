@@ -18,6 +18,7 @@ import { loadRecordedRun, replay } from "@reactive-agents/replay";
 import { makeReplayAgent } from "../src/replay-agent.js";
 
 const TRACE_DIR = mkdtempSync(join(tmpdir(), "ra-replay-golden-"));
+const REPLAY_ROOT = mkdtempSync(join(tmpdir(), "ra-replay-golden-root-"));
 const PRIOR = process.env.REACTIVE_AGENTS_TRACE_DIR;
 const TASK = "Write a short note to ./note.md and report done.";
 
@@ -28,6 +29,7 @@ afterAll(() => {
   if (PRIOR === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR;
   else process.env.REACTIVE_AGENTS_TRACE_DIR = PRIOR;
   rmSync(TRACE_DIR, { recursive: true, force: true });
+  rmSync(REPLAY_ROOT, { recursive: true, force: true });
 });
 
 describe("replay rail — record a harness run, replay it deterministically", () => {
@@ -42,6 +44,11 @@ describe("replay rail — record a harness run, replay it deterministically", ()
         { text: "FINAL ANSWER: wrote the note and it is done." },
       ])
       .withTools({ builtins: ["file-write"] })
+      // Static required list: suppresses the tool-relevance classifier (whose
+      // prompt embeds the task text and would consume the match-guarded
+      // toolCall turn — the scenario would then never reach the kernel) and
+      // forces the tool to fire, so this golden exercises the REAL tool rail.
+      .withRequiredTools({ tools: ["file-write"] })
       .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(4)
       .build();
@@ -64,7 +71,19 @@ describe("replay rail — record a harness run, replay it deterministically", ()
     // model stream; the replay dispenses from it with no live provider.
     expect(run.llmTable.size).toBeGreaterThan(0);
 
-    const result = await replay(run, () => makeReplayAgent(run, { traceDir: null }));
+    const result = await replay(run, () =>
+      makeReplayAgent(run, {
+        traceDir: null,
+        builtins: ["file-write"],
+        requiredTools: ["file-write"],
+        // "recorded" tool mode erases the tool SURFACE (its listTools is []),
+        // which with required tools force-abstains before the first model
+        // call — see the module header of replay-agent.ts. Tool-using goldens
+        // replay in "live" mode inside a confined fileRoot, same as the lane.
+        toolMode: "live",
+        fileRoot: REPLAY_ROOT,
+      }),
+    );
 
     // THE KEYSTONE ASSERTION: the whole harness, re-run against the recorded
     // model stream with no live provider, reproduces the recorded deliverable
@@ -72,10 +91,13 @@ describe("replay rail — record a harness run, replay it deterministically", ()
     // instead) breaks this — the run no longer follows the recording.
     expect(result.replay.output).toBe(recorded.output);
 
-    // NOTE: `result.diff.outputDiff.equal` is intentionally NOT asserted. The
-    // diff compares against the RECORDED TRACE's run-completed.output, which the
-    // recorder leaves undefined (trace-completeness gap, tracked separately) —
-    // so the trace-side output is blind. The record-side AgentResult above is
-    // the faithful oracle.
+    // The trace now carries the deliverable (run-completed.output, W-C fix in
+    // run-finalize → event-bus → trace normalize), so the trace-side diff is
+    // no longer blind: assert it agrees with the record-side oracle above.
+    expect(result.diff.outputDiff.equal).toBe(true);
+
+    // And the golden exercised the REAL tool rail: the recording carries the
+    // file-write call (args included — kernel-hooks now threads them through).
+    expect(run.toolTable.size).toBeGreaterThan(0);
   });
 });

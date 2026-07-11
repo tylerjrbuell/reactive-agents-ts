@@ -49,6 +49,15 @@ export const finalizeRun = (
       ).metadata;
       const terminationReason = ctxMeta?.rawTerminatedBy ?? ctxMeta?.terminatedBy;
 
+      // Final deliverable onto the completion event (replay-rail W-C). The
+      // trace bridge maps this to `run-completed.output`, which is what
+      // replay's diffTraces() compares against — without it the recorded
+      // trace's output side was structurally blind. Capped at 64KB so a
+      // pathological deliverable cannot bloat the event bus or trace file.
+      const RUN_OUTPUT_CAP = 64 * 1024;
+      const finalOutput = typeof result.output === "string" ? result.output : undefined;
+      const outputTruncated = finalOutput !== undefined && finalOutput.length > RUN_OUTPUT_CAP;
+
       yield* eb.publish({
         _tag: "AgentCompleted",
         taskId: ctx.taskId,
@@ -59,6 +68,12 @@ export const finalizeRun = (
         durationMs: Date.now() - executionStartMs,
         ...(!executionSucceeded && result.error ? { error: result.error } : {}),
         ...(terminationReason ? { terminationReason } : {}),
+        ...(finalOutput !== undefined
+          ? {
+              output: outputTruncated ? finalOutput.slice(0, RUN_OUTPUT_CAP) : finalOutput,
+              ...(outputTruncated ? { outputTruncated: true } : {}),
+            }
+          : {}),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:agent-completed-event", tag: errorTag(err) })));
       yield* eb.publish({
         _tag: "TaskCompleted",

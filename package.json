@@ -30,6 +30,8 @@
     "probe:ollama-fc:replay": "PROBE_SCENARIOS=replay-failing-thread-shape PROBE_REPEATS=3 bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-context-probe.ts",
     "probe:ollama-fc:gate": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts",
     "bench:t0": "bun test packages/benchmarks/tests/t0-deterministic.test.ts",
+    "bench:replay": "bun run packages/benchmarks/src/replay-lane-cli.ts",
+    "bench:replay:record": "bun run packages/benchmarks/src/replay-record.ts",
     "gate:check": "bun test packages/testing/tests/gate/north-star-gate.test.ts --timeout 60000",
     "gate:update": "bun scripts/gate-update.ts",
     "gate:explain": "bun scripts/gate-explain.ts",

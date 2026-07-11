@@ -1,0 +1,11 @@
+{
+  "name": "answer-only",
+  "task": "State the capital of France and stop.",
+  "strategy": "reactive",
+  "maxIterations": 3,
+  "toolMode": "recorded",
+  "expectOutputIncludes": [
+    "Paris"
+  ],
+  "expectToolsUsed": []
+}

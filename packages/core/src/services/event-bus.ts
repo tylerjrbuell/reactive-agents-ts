@@ -417,6 +417,17 @@ export type AgentEvent =
       /** Error message when `success` is false. */
       readonly error?: string;
       /**
+       * Final deliverable output of the run (replay-rail W-C, 2026-07-11).
+       * Capped at 64KB by the publisher (run-finalize.ts) with
+       * `outputTruncated: true` when clipped. Optional so older publishers
+       * and hand-rolled test events stay valid. Consumed by the trace bridge
+       * so `run-completed` trace events carry the deliverable — without it,
+       * replay `diffTraces().outputDiff` was structurally blind.
+       */
+      readonly output?: string;
+      /** True iff `output` was clipped to the 64KB cap. */
+      readonly outputTruncated?: boolean;
+      /**
        * Raw termination reason from `state.meta.terminatedBy`. Carries the
        * full dynamic reason string for killswitch aborts (e.g.
        * `"budget-limit:tokens:1000/512"`, `"max-iterations:5"`,

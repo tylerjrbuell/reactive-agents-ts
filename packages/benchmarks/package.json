@@ -11,6 +11,8 @@
     "test": "bun test --reporter=dots",
     "bench": "bun run src/run.ts",
     "bench:t0": "bun test tests/t0-deterministic.test.ts",
+    "bench:replay": "bun run src/replay-lane-cli.ts",
+    "bench:replay:record": "bun run src/replay-record.ts",
     "bench:baseline": "bun run src/run.ts --session real-world-full --provider ollama --model cogito:8b --task rw-4,rw-8,rw-9 --variant manual-react,ra-full --runs 3 --save-baseline",
     "bench:drift": "bun run src/run.ts --session real-world-full --provider ollama --model cogito:8b --task rw-4,rw-8,rw-9 --variant manual-react,ra-full --runs 3 --ci"
   },
