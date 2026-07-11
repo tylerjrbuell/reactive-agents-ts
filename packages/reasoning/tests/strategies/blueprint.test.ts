@@ -170,8 +170,49 @@ describe("blueprint — happy path", () => {
     expect(counts.completeStructured).toBe(1);
     expect(counts.complete).toBe(1);
 
+    // Honest accounting (2026-07-11): metadata reports the SAME call count the
+    // strategy actually made — run 01KX998PS2X3NW7JTAKBJMWPGN shipped
+    // llmCalls:0 beside 5 real calls in the trace.
+    expect(result.metadata.llmCalls).toBe(2);
+
     // Both tool steps actually dispatched by the 0-LLM worker.
     expect(calls.map((c) => c.toolName).sort()).toEqual(["web-fetch", "web-search"]);
+  });
+
+  it("counts worker inline-analysis LLM calls and their real usage in metadata", async () => {
+    const { layer: toolLayer, calls } = makeRecordingToolService();
+    const { layer: llmLayer, counts } = countingLLMLayer([
+      // planner: analysis step s1 feeds a downstream tool via {{from_step:s1}}
+      // → the worker MUST execute s1 inline (1 extra LLM call).
+      planTurn([
+        { title: "compose query", type: "analysis" },
+        {
+          title: "search",
+          type: "tool_call",
+          toolName: "web-search",
+          toolArgs: { query: "{{from_step:s1}}" },
+          dependsOn: ["s1"],
+        },
+      ]),
+      { text: "the composed query" }, // inline analysis
+      { text: "Synthesized answer." }, // solver
+    ]);
+
+    const result = await Effect.runPromise(
+      executeBlueprint(baseInput()).pipe(
+        Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
+      ),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(calls.map((c) => c.toolName)).toEqual(["web-search"]);
+    // plan (structured) + inline analysis (complete) + solve (complete).
+    expect(counts.completeStructured).toBe(1);
+    expect(counts.complete).toBe(2);
+    // The worker's analysis call is COUNTED — before 2026-07-11 it vanished
+    // from both llmCalls and tokensUsed.
+    expect(result.metadata.llmCalls).toBe(3);
+    expect(result.metadata.tokensUsed).toBeGreaterThan(0);
   });
 
   it("runs the solver to synthesize when the plan declares an analysis step (no short-circuit)", async () => {

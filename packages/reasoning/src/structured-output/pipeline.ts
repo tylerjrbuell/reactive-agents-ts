@@ -51,6 +51,21 @@ export type StructuredOutputConfig<T> =
   | (StructuredOutputBase<T> & { readonly schema: Schema.Schema<T>; readonly contract?: never })
   | (StructuredOutputBase<T> & { readonly contract: SchemaContract<T>; readonly schema?: never });
 
+/** Real provider usage summed across every attempt the pipeline made. */
+export interface StructuredOutputUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly totalTokens: number;
+  readonly estimatedCost: number;
+}
+
+const ZERO_USAGE: StructuredOutputUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  estimatedCost: 0,
+};
+
 export interface StructuredOutputResult<T> {
   readonly data: T;
   readonly raw: string;
@@ -58,6 +73,16 @@ export interface StructuredOutputResult<T> {
   readonly repaired: boolean;
   /** Whether the result came from native provider structured output */
   readonly nativeMode: boolean;
+  /**
+   * Real provider usage summed over ALL attempts (including failed ones —
+   * they consumed tokens too). Zero on the native `completeStructured()` path,
+   * which returns parsed data with no usage (documented gap; callers that need
+   * accounting should treat totalTokens===0 && nativeMode as "unknown" and
+   * fall back to an estimate). Before 2026-07-11 the pipeline DISCARDED
+   * response.usage on every attempt, so blueprint reported 6,370 tokens for an
+   * 18,448-token run (trace 01KX998PS2X3NW7JTAKBJMWPGN).
+   */
+  readonly usage: StructuredOutputUsage;
 }
 
 /**
@@ -90,6 +115,7 @@ const tryNativeStructuredOutput = <T>(
         attempts: 1,
         repaired: false,
         nativeMode: true,
+        usage: ZERO_USAGE,
       })),
       // Catch both typed errors (Fail) and defects (Die/sync throws)
       Effect.sandbox,
@@ -195,6 +221,10 @@ export const extractStructuredOutput = <T>(
     let effectiveMaxTokens = maxTokens;
     let budgetEscalated = false;
 
+    // Real usage summed over every attempt — failed attempts consumed tokens
+    // too, and hiding them is how the 6,370-vs-18,448 lie happened.
+    const usageAcc = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Build prompt
       // Explicit annotation: lastError now derives from response.stopReason
@@ -218,6 +248,15 @@ export const extractStructuredOutput = <T>(
       }).pipe(
         Effect.mapError((e) => new Error(`LLM call failed: ${e instanceof Error ? e.message : String(e)}`)),
       );
+
+      // Defensive: the LLMResponse type declares usage required, but
+      // hand-rolled test doubles (and defensive provider paths) omit it —
+      // accounting must never crash the extraction it accounts for.
+      const attemptUsage: Partial<typeof response.usage> | undefined = response.usage;
+      usageAcc.inputTokens += attemptUsage?.inputTokens ?? 0;
+      usageAcc.outputTokens += attemptUsage?.outputTokens ?? 0;
+      usageAcc.totalTokens += attemptUsage?.totalTokens ?? 0;
+      usageAcc.estimatedCost += attemptUsage?.estimatedCost ?? 0;
 
       // Emit model IO event for logModelIO observability
       if (eb) {
@@ -277,7 +316,7 @@ export const extractStructuredOutput = <T>(
       try {
         const parsed = JSON.parse(jsonText);
         const data = validateFinal(parsed);
-        return { data, raw, attempts: attempt + 1, repaired, nativeMode: false };
+        return { data, raw, attempts: attempt + 1, repaired, nativeMode: false, usage: { ...usageAcc } };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
         if (attempt === maxRetries) {

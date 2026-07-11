@@ -104,6 +104,13 @@ export interface BlueprintWorkerResult {
    * successful file-write — 2026-07-11 run 01KX998PS2X3NW7JTAKBJMWPGN).
    */
   readonly ledger: ReadonlyMap<string, readonly ReasoningStep[]>;
+  /**
+   * Real LLM usage the worker itself incurred — inline analysis steps make one
+   * `gatewayComplete` call each. Before 2026-07-11 these calls vanished from
+   * BOTH `llmCalls` and `tokensUsed` (the "0-LLM worker" claim held only for
+   * tool_call steps). The strategy MUST fold these into its accounting.
+   */
+  readonly llmUsage: { readonly calls: number; readonly tokens: number; readonly cost: number };
 }
 
 /**
@@ -310,6 +317,7 @@ function executeAnalysisStep(
   ctx: BlueprintWorkerContext,
   services: StrategyServices,
   totalSteps: number,
+  llmUsageAcc: { calls: number; tokens: number; cost: number },
 ): Effect.Effect<PlanStep, never, LLMService> {
   const startedAt = new Date().toISOString();
 
@@ -350,6 +358,13 @@ function executeAnalysisStep(
       // An LLM failure fails the step (not the whole worker) — downstream
       // dependents then pre-fail on the unmet dependency, same as a tool error.
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+    if (response) {
+      // Defensive on usage: hand-rolled LLM doubles omit it (see pipeline.ts).
+      llmUsageAcc.calls += 1;
+      llmUsageAcc.tokens += response.usage?.totalTokens ?? 0;
+      llmUsageAcc.cost += response.usage?.estimatedCost ?? 0;
+    }
 
     const completedAt = new Date().toISOString();
     const output = response
@@ -433,6 +448,8 @@ export function executeBlueprintWorker(
     // Keyed writes from parallel fibers are race-free (single JS thread; one
     // set() per step id).
     const ledgerById = new Map<string, readonly ReasoningStep[]>();
+    // Real usage of the worker's own LLM calls (inline analysis steps).
+    const llmUsageAcc = { calls: 0, tokens: 0, cost: 0 };
 
     // Idempotency: steps that arrive already completed (with a result) are
     // pre-seeded, NOT re-executed. This makes a worker re-run after a patch
@@ -485,7 +502,7 @@ export function executeBlueprintWorker(
       const mkExec = (step: PlanStep) =>
         step.type === "tool_call"
           ? executeBlueprintStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length, ledgerById)
-          : executeAnalysisStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length);
+          : executeAnalysisStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length, llmUsageAcc);
 
       // Split this wave: parallel-safe tools fan out; everything else
       // (parallel-unsafe tools + analysis LLM calls) runs sequentially. A
@@ -525,6 +542,6 @@ export function executeBlueprintWorker(
     const allSucceeded =
       steps.length > 0 && steps.every((s) => s.status === "completed");
 
-    return { steps, allSucceeded, ledger: ledgerById } satisfies BlueprintWorkerResult;
+    return { steps, allSucceeded, ledger: ledgerById, llmUsage: llmUsageAcc } satisfies BlueprintWorkerResult;
   });
 }

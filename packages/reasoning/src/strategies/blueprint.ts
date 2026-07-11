@@ -232,8 +232,18 @@ export const executeBlueprint = (
       ),
     );
     llmCalls += 1;
-    totalTokens +=
-      Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4);
+    // Real provider usage when the prompt-mode pipeline ran (summed over ALL
+    // its attempts — run 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and
+    // the len/4 estimate hid two of them, reporting 6,370 of 18,448 real
+    // tokens). The native completeStructured path returns no usage (documented
+    // pipeline gap) — only there does the estimate remain.
+    if (planResult.usage.totalTokens > 0) {
+      totalTokens += planResult.usage.totalTokens;
+      totalCost += planResult.usage.estimatedCost;
+    } else {
+      totalTokens +=
+        Math.ceil(planResult.raw.length / 4) + Math.ceil(planPrompt.length / 4);
+    }
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId,
@@ -369,6 +379,12 @@ export const executeBlueprint = (
     // pre-retry file-write invisible to the deliverable receipt again.
     const toolLedger = new Map(workerResult.ledger);
 
+    // The worker's own LLM calls (inline analysis) join the accounting — the
+    // "~2 LLM calls" claim describes the tool_call fast path, not every plan.
+    llmCalls += workerResult.llmUsage.calls;
+    totalTokens += workerResult.llmUsage.tokens;
+    totalCost += workerResult.llmUsage.cost;
+
     // ── PATCH RETRY (bounded, on execution failure) ───────────────────────────
     // A structurally-valid plan can still fail at EXECUTE when the tool ARGS are
     // wrong (the tool errors, not the plan shape — VERIFY can't catch that). Feed
@@ -430,6 +446,9 @@ export const executeBlueprint = (
           for (const [id, entries] of workerResult.ledger) {
             toolLedger.set(id, entries);
           }
+          llmCalls += workerResult.llmUsage.calls;
+          totalTokens += workerResult.llmUsage.tokens;
+          totalCost += workerResult.llmUsage.cost;
         }
       }
     }
@@ -629,9 +648,14 @@ export const executeBlueprint = (
       start,
       totalTokens,
       totalCost,
-      ...(budgetCappedJoin
-        ? {
-            extraMetadata: {
+      extraMetadata: {
+        // Honest accounting (2026-07-11): the runtime reads
+        // result.metadata.llmCalls (execution-engine.ts:1188) — blueprint
+        // counted its calls and never shipped the count, so receipts said
+        // llmCalls:0 beside 5 real calls in the trace.
+        llmCalls,
+        ...(budgetCappedJoin
+          ? {
               // H5/#40 honesty markers for the budget-capped harness join —
               // same fields reactive's honestPartialMetadata ships, derived
               // here from blueprint's own deterministic branch evidence.
@@ -639,8 +663,8 @@ export const executeBlueprint = (
               harnessAuthoredOutput: true,
               verificationWarning:
                 "Token budget exhausted before SOLVE: output is the harness-joined worker step results, not a model-synthesized answer.",
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     });
   });

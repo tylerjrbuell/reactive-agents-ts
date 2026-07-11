@@ -193,6 +193,51 @@ describe("extractStructuredOutput", () => {
     expect(result.data.name).toBe("prompt-mode");
   });
 
+  // ── Real provider usage crosses the pipeline boundary (2026-07-11) ──
+  //
+  // Empirical origin: blueprint run 01KX998PS2X3NW7JTAKBJMWPGN reported
+  // tokensUsed 6,370 while the trace held 18,448 real tokens — the pipeline
+  // discarded response.usage on every attempt, so callers could only estimate.
+  it("accumulates real provider usage across prompt-mode attempts", async () => {
+    // forcePromptMode skips the native completeStructured turn, so exactly two
+    // turns are consumed: attempt 1 (wrong shape) + attempt 2 (valid).
+    const layer = TestLLMServiceLayer([
+      { text: '{"wrong": "shape"}' },
+      { text: '{"name": "usage", "count": 1}' },
+    ]);
+
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 1,
+        forcePromptMode: true,
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result.attempts).toBe(2);
+    // Both attempts' provider usage summed — not zero, not an estimate.
+    expect(result.usage.totalTokens).toBeGreaterThan(0);
+    expect(result.usage.totalTokens).toBe(
+      result.usage.inputTokens + result.usage.outputTokens,
+    );
+  });
+
+  it("native path reports zero usage (documented completeStructured gap)", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Extract", text: '{"name": "native", "count": 1}' },
+    ]);
+    const result = await Effect.runPromise(
+      extractStructuredOutput({
+        schema: TestSchema,
+        prompt: "Extract the data",
+        maxRetries: 0,
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(result.nativeMode).toBe(true);
+    expect(result.usage.totalTokens).toBe(0);
+  });
+
   it("falls back to prompt mode when native structured output fails", async () => {
     // Give a response that completeStructured will fail on (markdown fences),
     // but prompt-mode extraction can repair
