@@ -121,8 +121,15 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
       // real arguments and every tool-using golden reads as divergent. Args are
       // model-generated (already paid for in context), so no truncation here —
       // trace size is governed by the retention caps, not per-field clipping.
-      const resolvedArgs = (lastStep?.metadata?.toolCall as { arguments?: unknown } | undefined)
-        ?.arguments;
+      const resolvedToolCall = lastStep?.metadata?.toolCall as
+        | { id?: string; arguments?: unknown }
+        | undefined;
+      const resolvedArgs = resolvedToolCall?.arguments;
+      // Pair with the callId `onAction` published (act.ts passes `tc.id`, which
+      // the action step stores at metadata.toolCall.id). Emitting the step's own
+      // ULID here instead made ToolCallStarted/ToolCallCompleted unjoinable — a
+      // stream consumer could not match a completion to its start.
+      const resolvedCallId = resolvedToolCall?.id ?? lastStep?.id ?? "";
       const effects: Effect.Effect<void, never>[] = [
         publishReasoningStep(eventBus, {
           _tag: "ReasoningStepCompleted",
@@ -140,7 +147,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
             _tag: "ToolCallCompleted",
             taskId: state.taskId,
             toolName: resolvedToolName,
-            callId: lastStep?.id ?? "",
+            callId: resolvedCallId,
             durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
             success,
             kernelPass: getKernelPass(state),
@@ -152,14 +159,19 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         // System-injected observation (e.g. completion-guard redirect, gate block).
         // No ToolCallCompleted emitted — kept out of metrics — but logged at debug
         // so it remains visible during troubleshooting.
+        // logDebug is variadic over MESSAGES, not (msg, meta) — a second object
+        // arg was rendered with String() and reached the console as the literal
+        // "[object Object]", discarding every field we meant to troubleshoot with.
         effects.push(
-          Effect.logDebug("[kernel-hooks] system observation — no ToolCallCompleted emitted", {
-            taskId: state.taskId,
-            lastStepType: lastStep?.type ?? "none",
-            lastStepId: lastStep?.id ?? "none",
-            kernelPass: getKernelPass(state),
-            observationSnippet: result.slice(0, 120),
-          }),
+          Effect.logDebug("[kernel-hooks] system observation — no ToolCallCompleted emitted").pipe(
+            Effect.annotateLogs({
+              taskId: state.taskId,
+              lastStepType: lastStep?.type ?? "none",
+              lastStepId: lastStep?.id ?? "none",
+              kernelPass: getKernelPass(state),
+              observationSnippet: result.slice(0, 120),
+            }),
+          ),
         );
       }
       return Effect.all(effects).pipe(Effect.asVoid);

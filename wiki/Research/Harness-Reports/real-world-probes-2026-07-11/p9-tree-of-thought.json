@@ -1,14 +1,14 @@
 {
   "probe": "p9-tree-of-thought",
-  "taskId": "01KX9VJSBRZK7KNC5892ZJ3VHP",
+  "taskId": "01KXB871AN25E23P4VE6CDH5NE",
   "success": true,
   "terminatedBy": "end_turn",
-  "goalAchieved": null,
-  "verdict": "partially-grounded",
+  "goalAchieved": true,
+  "verdict": "tool-grounded",
   "strategyUsed": "tree-of-thought",
-  "tokensUsed": 32234,
-  "llmCalls": 19,
-  "durationMs": 122213,
+  "tokensUsed": 28484,
+  "llmCalls": 18,
+  "durationMs": 117512,
   "checks": [
     {
       "name": "correct-sum-on-disk",
@@ -23,22 +23,22 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=141"
+      "detail": "success=true outputLen=68"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=32234"
+      "detail": "tokensUsed=28484"
     },
     {
       "name": "coherence:llmCalls-reported",
       "pass": true,
-      "detail": "llmCalls=19"
+      "detail": "llmCalls=18"
     },
     {
       "name": "coherence:verdict-present",
       "pass": true,
-      "detail": "verdict=partially-grounded"
+      "detail": "verdict=tool-grounded"
     },
     {
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p9/tree-of-thought.txt]",
@@ -47,5 +47,5 @@
     }
   ],
   "failCount": 0,
-  "outputPreview": "The sum of the numbers in the \"values\" array (17 + 25 + 58 = 100) was calculated and written to ./qa-out/p9/tree-of-thought.txt as requested."
+  "outputPreview": "The integer 100 has been written to ./qa-out/p9/tree-of-thought.txt."
 }

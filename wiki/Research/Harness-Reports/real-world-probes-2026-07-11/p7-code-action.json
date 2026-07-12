@@ -1,14 +1,14 @@
 {
   "probe": "p7-code-action",
-  "taskId": "01KX9V77YFRDNC051D4X6T450J",
+  "taskId": "01KXB84RPZRS8ZHXCW4HATD226",
   "success": true,
   "terminatedBy": "end_turn",
-  "goalAchieved": null,
+  "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "code-action",
-  "tokensUsed": 1460,
+  "tokensUsed": 1516,
   "llmCalls": 1,
-  "durationMs": 7763,
+  "durationMs": 8427,
   "checks": [
     {
       "name": "exact-answer-on-disk-or-output",
@@ -28,12 +28,12 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=81"
+      "detail": "success=true outputLen=57"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=1460"
+      "detail": "tokensUsed=1516"
     },
     {
       "name": "coherence:llmCalls-reported",
@@ -52,5 +52,5 @@
     }
   ],
   "failCount": 0,
-  "outputPreview": "{\"success\":true,\"message\":\"Successfully wrote 5239625 to ./qa-out/p7-answer.txt\"}"
+  "outputPreview": "{\"success\":true,\"message\":\"Answer written successfully.\"}"
 }

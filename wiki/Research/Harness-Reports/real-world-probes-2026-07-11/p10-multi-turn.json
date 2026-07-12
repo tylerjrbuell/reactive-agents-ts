@@ -1,7 +1,7 @@
 {
   "probe": "p10-multi-turn",
-  "taskId": "01KX9TPDK8BH67QY10ZP1N8EQD",
-  "durationMs": 4580,
+  "taskId": "01KXB85MVT9JGSP75ZX4ZJXYFH",
+  "durationMs": 4491,
   "checks": [
     {
       "name": "first-run-success",
@@ -24,17 +24,17 @@
     {
       "name": "distinct-taskIds",
       "pass": true,
-      "detail": "01KX9TPB5FXFKHR8E2WXA69TQM vs 01KX9TPDK8BH67QY10ZP1N8EQD"
+      "detail": "01KXB85JZKXBJQPT8NA7SG6J47 vs 01KXB85MVT9JGSP75ZX4ZJXYFH"
     },
     {
       "name": "second-coherence:success-implies-output",
-      "pass": false,
-      "detail": "success=true outputLen=0"
+      "pass": true,
+      "detail": "success=true outputLen=61"
     },
     {
       "name": "second-coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=4975"
+      "detail": "tokensUsed=924"
     },
     {
       "name": "second-coherence:llmCalls-reported",
@@ -52,5 +52,5 @@
       "detail": "receipt.produced=true diskExists=true"
     }
   ],
-  "failCount": 1
+  "failCount": 0
 }

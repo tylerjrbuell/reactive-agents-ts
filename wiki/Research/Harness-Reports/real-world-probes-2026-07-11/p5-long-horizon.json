@@ -1,24 +1,24 @@
 {
   "probe": "p5-long-horizon",
-  "taskId": "01KX9VZ9J83BWXY0K5QSJC2JT6",
+  "taskId": "01KXB83FRWNPGVTZDATK62W9DQ",
   "success": true,
   "terminatedBy": "end_turn",
-  "goalAchieved": false,
-  "verdict": "partially-grounded",
+  "goalAchieved": true,
+  "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 14080,
-  "llmCalls": 3,
-  "durationMs": 23721,
+  "tokensUsed": 43088,
+  "llmCalls": 7,
+  "durationMs": 18194,
   "checks": [
     {
       "name": "deliverable-on-disk",
-      "pass": false,
-      "detail": "MISSING: /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p5-notes.md"
+      "pass": true,
+      "detail": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p5-notes.md"
     },
     {
       "name": "goalAchieved-not-null-under-longHorizon",
       "pass": true,
-      "detail": "goalAchieved=false"
+      "detail": "goalAchieved=true"
     },
     {
       "name": "run-success",
@@ -27,30 +27,30 @@
     },
     {
       "name": "coherence:success-implies-output",
-      "pass": false,
-      "detail": "success=true outputLen=0"
+      "pass": true,
+      "detail": "success=true outputLen=139"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=14080"
+      "detail": "tokensUsed=43088"
     },
     {
       "name": "coherence:llmCalls-reported",
       "pass": true,
-      "detail": "llmCalls=3"
+      "detail": "llmCalls=7"
     },
     {
       "name": "coherence:verdict-present",
       "pass": true,
-      "detail": "verdict=partially-grounded"
+      "detail": "verdict=tool-grounded"
     },
     {
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p5-notes.md]",
       "pass": true,
-      "detail": "receipt.produced=false diskExists=false"
+      "detail": "receipt.produced=true diskExists=true"
     }
   ],
-  "failCount": 2,
-  "outputPreview": ""
+  "failCount": 0,
+  "outputPreview": "The research is complete, and the file `./qa-out/p5-notes.md` has been successfully created with details on Ganymede, Europa, and Callisto."
 }

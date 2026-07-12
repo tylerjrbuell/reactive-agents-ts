@@ -114,6 +114,56 @@ export function coherenceChecks(result: AgentResultLike): CheckResult[] {
   return out;
 }
 
+/**
+ * Runtime-hygiene capture. The fleet graded only the returned AgentResult, so a
+ * run could print "Fiber terminated with an unhandled error" to the console and
+ * still report ALL CHECKS PASS (2026-07-12: it did, on p4 and p6). A framework
+ * that screams during a "successful" run is not successful — these signals are
+ * graded like any other.
+ */
+interface HygieneCapture {
+  readonly lines: string[];
+  restore(): void;
+}
+
+const HYGIENE_PATTERNS: readonly { readonly name: string; readonly re: RegExp }[] = [
+  // An Effect DEFECT escaped into a forked fiber and nobody observed it.
+  { name: "hygiene:no-unhandled-fiber-defect", re: /Fiber terminated with an unhandled error/i },
+  // A log site interpolated an object into a string — the payload is lost.
+  { name: "hygiene:no-object-Object-in-logs", re: /\[object Object\]/ },
+  // The kernel telling us its own invariant broke.
+  { name: "hygiene:no-missing-toolcall-observation", re: /no ToolCallCompleted emitted/i },
+];
+
+function captureConsole(): HygieneCapture {
+  const lines: string[] = [];
+  const originals = { log: console.log, error: console.error, warn: console.warn };
+  const tap =
+    (original: (...a: unknown[]) => void) =>
+    (...a: unknown[]) => {
+      lines.push(a.map((x) => (typeof x === "string" ? x : String(x))).join(" "));
+      original(...a);
+    };
+  console.log = tap(originals.log);
+  console.error = tap(originals.error);
+  console.warn = tap(originals.warn);
+  return {
+    lines,
+    restore() {
+      console.log = originals.log;
+      console.error = originals.error;
+      console.warn = originals.warn;
+    },
+  };
+}
+
+function hygieneChecks(lines: readonly string[]): CheckResult[] {
+  return HYGIENE_PATTERNS.map(({ name, re }) => {
+    const hit = lines.find((l) => re.test(l));
+    return check(name, hit === undefined, hit ? `saw: ${hit.trim().slice(0, 140)}` : "clean");
+  });
+}
+
 export interface ProbeReport {
   readonly probe: string;
   readonly taskId?: string;
@@ -156,12 +206,18 @@ export async function runProbe(args: {
   mkdirSync(QA_DIR, { recursive: true });
   const started = Date.now();
   let agent: Awaited<ReturnType<typeof args.build>> | null = null;
+  const hygiene = captureConsole();
   try {
     agent = await args.build();
     const result = await agent.run(args.task);
+    // Forked fibers (debrief, telemetry, trace writes) log AFTER run() resolves.
+    // Yield the loop so their output lands in the capture before we grade it.
+    await new Promise((r) => setTimeout(r, 250));
+    hygiene.restore();
     const checks = [
       ...(await args.grade(result)),
       ...(args.skipCoherence ? [] : coherenceChecks(result)),
+      ...hygieneChecks(hygiene.lines),
     ];
     const outputText = typeof result.output === "string" ? result.output : JSON.stringify(result.output ?? "");
     saveReport({
@@ -180,14 +236,20 @@ export async function runProbe(args: {
       outputPreview: outputText.slice(0, 400),
     });
   } catch (error) {
+    hygiene.restore();
+    const checks = [
+      check("no-crash", false, String(error).slice(0, 300)),
+      ...hygieneChecks(hygiene.lines),
+    ];
     saveReport({
       probe: args.name,
       durationMs: Date.now() - started,
       crashed: error instanceof Error ? `${error.message}\n${error.stack?.split("\n").slice(0, 6).join("\n")}` : String(error),
-      checks: [check("no-crash", false, String(error).slice(0, 300))],
-      failCount: 1,
+      checks,
+      failCount: checks.filter((c) => !c.pass).length,
     });
   } finally {
+    hygiene.restore();
     if (agent) {
       try {
         await agent.dispose();

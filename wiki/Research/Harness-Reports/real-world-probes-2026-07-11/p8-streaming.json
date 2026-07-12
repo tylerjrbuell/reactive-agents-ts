@@ -1,11 +1,11 @@
 {
   "probe": "p8-streaming",
-  "durationMs": 4469,
+  "durationMs": 4451,
   "checks": [
     {
       "name": "stream-emitted-events",
       "pass": true,
-      "detail": "[[\"TextDelta\",52],[\"TrustEvent\",1],[\"StreamCompleted\",1]]"
+      "detail": "[[\"ToolCallStarted\",2],[\"ToolCallCompleted\",2],[\"TextDelta\",51],[\"TrustEvent\",1],[\"StreamCompleted\",1]]"
     },
     {
       "name": "completed-event-present",
@@ -14,19 +14,34 @@
     {
       "name": "completed-has-output",
       "pass": true,
-      "detail": "outputLen=170"
+      "detail": "outputLen=174"
     },
     {
       "name": "completed-has-receipt",
       "pass": true,
-      "detail": "verdict=partially-grounded"
+      "detail": "verdict=tool-grounded"
     },
     {
       "name": "file-deliverable-on-disk",
       "pass": true,
       "detail": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p8-haiku.md"
+    },
+    {
+      "name": "stream-emits-tool-events",
+      "pass": true,
+      "detail": "started=2 completed=2"
+    },
+    {
+      "name": "stream-tool-events-pair",
+      "pass": true,
+      "detail": "startIds=[\"ollama-tc-1783864372232-0\",\"ollama-tc-1783864372834-0\"] doneIds=[\"ollama-tc-1783864372232-0\",\"ollama-tc-1783864372834-0\"]"
+    },
+    {
+      "name": "stream-tools-agree-with-receipt",
+      "pass": true,
+      "detail": "stream=[\"file-read\",\"file-write\"] receipt=[\"file-read\",\"file-write\"]"
     }
   ],
   "failCount": 0,
-  "outputPreview": "The haiku has been written to `./qa-out/p8-haiku.md`.\n\nHere is the content I wrote:\n```\nFlowing waters glide,\nCarving paths through ancient earth,\nTo the waiting sea.\n```"
+  "outputPreview": "The haiku about rivers has been written to `./qa-out/p8-haiku.md`.\n\nHere is what I wrote:\n```markdown\nClear waters flow by\nOver smooth and mossy stones\nJourney to the sea\n```"
 }

@@ -1,14 +1,14 @@
 {
   "probe": "p1-research-writer",
-  "taskId": "01KX9STTJ88QS3SGFJ7MYSQH73",
+  "taskId": "01KXB8172AVYX9R1QTWSW918R5",
   "success": true,
   "terminatedBy": "end_turn",
-  "goalAchieved": null,
-  "verdict": "partially-grounded",
+  "goalAchieved": true,
+  "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 15711,
-  "llmCalls": 4,
-  "durationMs": 13556,
+  "tokensUsed": 10543,
+  "llmCalls": 3,
+  "durationMs": 15687,
   "checks": [
     {
       "name": "deliverable-on-disk",
@@ -18,7 +18,7 @@
     {
       "name": "deliverable-nonempty",
       "pass": true,
-      "detail": "1295 chars"
+      "detail": "1010 chars"
     },
     {
       "name": "run-success",
@@ -28,29 +28,29 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=121"
+      "detail": "success=true outputLen=48"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=15711"
+      "detail": "tokensUsed=10543"
     },
     {
       "name": "coherence:llmCalls-reported",
       "pass": true,
-      "detail": "llmCalls=4"
+      "detail": "llmCalls=3"
     },
     {
       "name": "coherence:verdict-present",
       "pass": true,
-      "detail": "verdict=partially-grounded"
+      "detail": "verdict=tool-grounded"
     },
     {
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p1-show.md]",
-      "pass": false,
-      "detail": "receipt.produced=false diskExists=true"
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
     }
   ],
-  "failCount": 1,
-  "outputPreview": "The summary of *I Shouldn't Be Alive* Season 1 has been successfully created and saved to the file `./qa-out/p1-show.md`."
+  "failCount": 0,
+  "outputPreview": "Completed: produce the file ./qa-out/p1-show.md."
 }

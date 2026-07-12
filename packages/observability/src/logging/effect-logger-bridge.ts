@@ -1,4 +1,4 @@
-import { Effect, HashMap, Layer, Logger, LogLevel as EffectLogLevel } from "effect";
+import { Cause, Effect, HashMap, Layer, Logger, LogLevel as EffectLogLevel } from "effect";
 import type { LogLevel } from "../types.js";
 import type { ObservableLoggerService } from "./observable-logger.js";
 
@@ -54,7 +54,7 @@ const annotationsToFields = (
 export const makeEffectLoggerBridge = (
   logger: ObservableLoggerService,
 ): Logger.Logger<unknown, void> =>
-  Logger.make(({ logLevel, message, annotations }) => {
+  Logger.make(({ logLevel, message, annotations, cause }) => {
     // Effect passes `message` as unknown (and as an array for multi-arg logs).
     const text = Array.isArray(message)
       ? message.map((m) => (typeof m === "string" ? m : String(m))).join(" ")
@@ -64,12 +64,22 @@ export const makeEffectLoggerBridge = (
 
     const fields = annotationsToFields(annotations);
 
+    // Effect reports a fiber's failure by putting it in `cause`, NOT in the
+    // message — its runtime logs "Fiber terminated with an unhandled error"
+    // with the actual error attached there. Dropping it printed that line bare,
+    // which is exactly the shape of an alarming, unactionable log: the one field
+    // that says WHAT failed was the one we threw away.
+    const causeText =
+      cause !== undefined && !Cause.isEmpty(cause) ? Cause.pretty(cause) : undefined;
+
     Effect.runFork(
       logger.emit({
         _tag: "log",
         level: toLevel(logLevel),
-        message: text,
-        ...(fields ? { fields } : {}),
+        message: causeText ? `${text} — ${causeText}` : text,
+        ...(fields || causeText
+          ? { fields: { ...(fields ?? {}), ...(causeText ? { cause: causeText } : {}) } }
+          : {}),
         source: "effect",
         timestamp: new Date(),
       }),

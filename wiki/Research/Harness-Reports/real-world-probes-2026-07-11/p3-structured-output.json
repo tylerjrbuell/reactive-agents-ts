@@ -1,6 +1,6 @@
 {
   "probe": "p3-structured-output",
-  "taskId": "01KX9SJ9DN717421H2149TBX2Z",
+  "taskId": "01KXB829C4RNA12WAVQD21T97V",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": null,
@@ -8,7 +8,7 @@
   "strategyUsed": "reactive",
   "tokensUsed": 254,
   "llmCalls": 1,
-  "durationMs": 1046,
+  "durationMs": 1088,
   "checks": [
     {
       "name": "object-present",

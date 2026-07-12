@@ -1,14 +1,14 @@
 {
   "probe": "p2-multi-file",
-  "taskId": "01KX9TPV6HK20A6KR2MXKC1SNV",
+  "taskId": "01KXB81T93BM6Z61KNPZT0G88R",
   "success": true,
   "terminatedBy": "end_turn",
-  "goalAchieved": null,
+  "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 8418,
+  "tokensUsed": 8738,
   "llmCalls": 3,
-  "durationMs": 6522,
+  "durationMs": 8129,
   "checks": [
     {
       "name": "report-on-disk",
@@ -33,12 +33,12 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=100"
+      "detail": "success=true outputLen=220"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=8418"
+      "detail": "tokensUsed=8738"
     },
     {
       "name": "coherence:llmCalls-reported",
@@ -62,5 +62,5 @@
     }
   ],
   "failCount": 0,
-  "outputPreview": "The two files have been created successfully at `./qa-out/p2-report.md` and `./qa-out/p2-data.json`."
+  "outputPreview": "I have successfully created both files:\n\n1.  **Markdown Report:** A comparison report has been written to `./qa-out/p2-report.md`.\n2.  **JSON Data:** The structured JSON array has been written to `./qa-out/p2-data.json`."
 }

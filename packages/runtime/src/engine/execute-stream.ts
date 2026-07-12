@@ -235,6 +235,90 @@ export const makeExecuteStream =
           );
       }
 
+      // Tool lifecycle. Both loops already publish these on the bus (kernel:
+      // kernel-hooks.ts onAction/onObservation; minimal: inline-act.ts), and
+      // execution-engine subscribes to build the receipt — but nothing ever
+      // projected them onto the public stream, so `ToolCallStarted` /
+      // `ToolCallCompleted` were declared in AgentStreamEvent with zero writers.
+      // A consumer saw a run go tool-grounded while observing no tool activity
+      // at all (2026-07-12 probe fleet, p8). The receipt read the bus; the
+      // stream didn't.
+      if (eb && density === "full") {
+        yield* eb
+          .on("ToolCallStarted", (event) =>
+            Effect.gen(function* () {
+              const e = event as {
+                taskId?: string;
+                toolName?: string;
+                callId?: string;
+                rationale?: import("@reactive-agents/core").Rationale;
+              };
+              if (String(e.taskId ?? "") !== String(task.id)) {
+                return;
+              }
+              yield* Queue.offer(queue, {
+                _tag: "ToolCallStarted",
+                toolName: String(e.toolName ?? "unknown"),
+                callId: String(e.callId ?? ""),
+                ...(e.rationale ? { rationale: e.rationale } : {}),
+              } as AgentStreamEvent).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:ToolCallStarted-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:ToolCallStarted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+
+        yield* eb
+          .on("ToolCallCompleted", (event) =>
+            Effect.gen(function* () {
+              const e = event as {
+                taskId?: string;
+                toolName?: string;
+                callId?: string;
+                durationMs?: number;
+                success?: boolean;
+              };
+              if (String(e.taskId ?? "") !== String(task.id)) {
+                return;
+              }
+              yield* Queue.offer(queue, {
+                _tag: "ToolCallCompleted",
+                toolName: String(e.toolName ?? "unknown"),
+                callId: String(e.callId ?? ""),
+                durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
+                success: e.success !== false,
+              } as AgentStreamEvent).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:ToolCallCompleted-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:ToolCallCompleted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+      }
+
       // Bind the streaming callback + run-controller as FiberRef values for the
       // reasoning kernel. We use `Effect.locally` *wrapping execute(task)* (not a
       // bare FiberRef.set) so the values are scoped to this run and RESTORED when
