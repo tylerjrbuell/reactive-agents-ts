@@ -92,16 +92,22 @@ describe("runStream() public handle — TrustEvent integration", () => {
             expect(completedIdx).toBeGreaterThan(trustIdx);
 
             // Deterministic content on this scenario: one successful substantive
-            // tool call + a final answer → tool-grounded at 0.8 (no verifier
-            // "pass" is currently forwarded to the receipt sites — see the
-            // Task 8 report's verifier-gap note; bump if that plumbing lands).
+            // tool call + a final answer → tool-grounded. The plumbing this
+            // comment anticipated LANDED on 2026-07-12: result-boundary
+            // verification runs the terminal verifier on every path and
+            // forwards its verdict to the receipt sites, so a clean answer
+            // carries verifierVerdict="pass" → confidence 0.9 (receipt.ts
+            // rule: pass raises confidence; reject/escalate caps the verdict).
             expect(trust?.verdict).toBe("tool-grounded");
-            expect(trust?.confidence).toBe(0.8);
+            expect(trust?.confidence).toBe(0.9);
 
             // Invariant 3 (Task 8 closure): the FULL receipt rides on
             // StreamCompleted — streamed runs are runs; "receipt on every run"
             // includes this path, not just the TrustEvent summary.
             expect(completed?.receipt?.verdict).toBe("tool-grounded");
+            // The verifier verdict reached the STREAM receipt too (the summary
+            // TrustEvent carries only verdict+confidence by design).
+            expect(completed?.receipt?.verifierVerdict).toBe("pass");
             expect(completed?.receipt?.toolsUsed).toEqual(["echo-tool"]);
             // Unsigned by default — no key configured on this agent.
             expect(completed?.receipt?.signature).toBeUndefined();

@@ -1534,6 +1534,12 @@ export class ReactiveAgent<TOut = unknown> {
                               return iv.length > 0 ? { interventions: iv } : {}
                           })(),
                           ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+                          // Result-boundary verification (2026-07-12) — the
+                          // verifier now reaches EVERY path, so this field has
+                          // a writer outside the react kernel for the first time.
+                          ...((rawMetadata as { verifierVerdict?: string }).verifierVerdict !== undefined
+                              ? { verifierVerdict: (rawMetadata as { verifierVerdict?: string }).verifierVerdict }
+                              : {}),
                           goalAchieved,
                           abstained: r.terminatedBy === 'abstained',
                           success: r.success,

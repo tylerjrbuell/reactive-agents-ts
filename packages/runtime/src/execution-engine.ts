@@ -73,6 +73,7 @@ import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postproce
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
+import { verifyResultBoundary } from "./engine/finalize/result-verification.js";
 import { deriveReceiptDeliverables } from "./builder/helpers.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
@@ -1202,6 +1203,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx.metadata as Record<string, unknown>,
                 );
 
+                // ── Result-boundary verification (2026-07-12) ──
+                // The ONE place every path passes through. Strategy paths and
+                // the inline loop shipped answers UNVERIFIED (rax:diagnose: "0
+                // verifier verdicts" on every strategy trace). Pure + cheap;
+                // authority-bounded — it never upgrades, it stamps the receipt
+                // and (on reject/escalate) names itself in verificationWarning.
+                // See engine/finalize/result-verification.ts.
+                const boundaryVerification = yield* verifyResultBoundary({
+                  config,
+                  taskId: String(task.id),
+                  task: extractTaskText(task.input),
+                  output: String(verificationOutcome.output ?? ""),
+                  success: verificationOutcome.success,
+                  steps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
+                  toolsUsed: new Set(toolCallLog.filter((t) => t.success).map((t) => t.toolName)),
+                  ...(ctx.metadata.rawTerminatedBy !== undefined
+                    ? { terminatedBy: String(ctx.metadata.rawTerminatedBy) }
+                    : {}),
+                  iteration: ctx.iteration,
+                });
+                if (boundaryVerification?.warning !== undefined) {
+                  ctx.metadata.verificationWarning = boundaryVerification.warning;
+                }
+
                 const result: TaskResult & {
                   format?: string;
                   terminatedBy?: string;
@@ -1279,6 +1304,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // harness-authored, not model prose — say so on the result.
                     ...(ctx.metadata.harnessAuthoredOutput === true
                       ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
+                      : {}),
+                    // Result-boundary verification: the verdict rides to the
+                    // receipt sites (run() + stream) via metadata, so BOTH
+                    // paths stamp receipt.verifierVerdict from one source.
+                    ...(boundaryVerification !== undefined
+                      ? ({ verifierVerdict: boundaryVerification.verdict } as Record<string, unknown>)
+                      : {}),
+                    ...(boundaryVerification?.warning !== undefined
+                      ? ({ verificationWarning: boundaryVerification.warning } as Record<string, unknown>)
                       : {}),
                   },
                   completedAt: new Date(),

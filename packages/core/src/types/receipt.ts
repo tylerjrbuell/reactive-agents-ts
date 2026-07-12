@@ -114,6 +114,9 @@ export interface TrustReceipt {
  *   3. any DECLARED deliverable with `produced: false` → `"partially-grounded"`
  *      (confidence 0.6) — a missing promised artifact is an objective hole in
  *      the evidence trail; an explicit `goalAchieved: true` does not outrank it.
+ *   3b. `verifierVerdict` of `reject`/`escalate` → `"partially-grounded"` — the
+ *      terminal verifier judged the shipped answer invalid (scaffold leak,
+ *      harness parrot, mid-thought continuation, fabricated measurement).
  *   4. a tool call failed against a target it never afterwards succeeded on,
  *      AND the run never claimed a final answer (`goalAchieved !== true`)
  *      → `"partially-grounded"` (confidence 0.6).
@@ -241,6 +244,16 @@ export function computeTrustReceipt(input: {
     // @0.8 beside success:true — deliverables was attached to the receipt one
     // field away from a verdict that never read it.
     if (input.deliverables?.some((d) => !d.produced)) return "partially-grounded";
+    // The terminal verifier REJECTED the shipped answer (scaffold leak,
+    // harness parrot, mid-thought continuation, fabricated measurement, a
+    // failed grounding check the user opted into). Since 2026-07-12 the
+    // verifier runs at the result boundary for EVERY path, so this field has
+    // a writer outside the react kernel. A rejected answer is never
+    // "tool-grounded" no matter how many tools ran. Cap only — the verdict
+    // moves DOWN, and `pass` still raises confidence below.
+    if (input.verifierVerdict === "reject" || input.verifierVerdict === "escalate") {
+      return "partially-grounded";
+    }
     // An open tool failure AND no claim of completion. Either alone is
     // ordinary; together they are the fabrication signature (see JSDoc).
     if (unresolvedFailures > 0 && input.goalAchieved !== true) return "partially-grounded";

@@ -334,6 +334,10 @@ export {
   resolveResultSeverity,
 } from "./kernel/capabilities/verify/verifier.js";
 export { noopVerifier } from "./kernel/capabilities/verify/noop-verifier.js";
+// The runtime's result-boundary verification (2026-07-12) publishes the same
+// VerifierVerdictEmitted event the kernel does — one trace vocabulary, so
+// `rax:diagnose` sees verdicts on strategy + inline paths too.
+export { emitVerifierVerdict } from "./kernel/utils/diagnostics.js";
 export type {
   Verifier,
   VerificationContext,

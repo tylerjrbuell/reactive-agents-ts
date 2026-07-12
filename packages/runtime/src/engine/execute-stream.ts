@@ -443,6 +443,10 @@ export const makeExecuteStream =
                   return iv.length > 0 ? { interventions: iv } : {}
                 })(),
                 ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
+                // Result-boundary verification — same source as run().
+                ...((receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict !== undefined
+                  ? { verifierVerdict: (receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict }
+                  : {}),
                 // Deterministic upgrade over the terminatedBy heuristic — the
                 // declared-deliverable evidence resolves end_turn's "maybe"
                 // (resolveGoalAchieved JSDoc; single shared rule with run()).
