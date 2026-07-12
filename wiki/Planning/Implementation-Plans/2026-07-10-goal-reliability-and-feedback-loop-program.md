@@ -50,9 +50,11 @@ That is why this shipped invisible. T0 must include a bare-default-surface task.
 - `8f6ec822` contract→gate pins: W3 DISPROVED the audit's "runContract never reaches gate" / "multi-file protection never fires" claims (both live); pinned M1/M2. Real residue → task #44.
 - `7b6e1ad1` ToT H5 + long-horizon: both ToT returns route through resolveCompletionStatus; ToT now threads horizonProfile into branch kernels (was dropped — A2 budget discipline never applied to ToT). Consumer-boundary pin, 2 mutants red.
 
-### B5 status (H5 into all strategies)
+### B5 status (H5 into all strategies) — updated 2026-07-12
 DONE: reactive, direct (pre-existing), ToT (`7b6e1ad1`), adaptive (inherits from sub-result).
-BLOCKED (→ task #40): plan-execute, reflexion, blueprint, code-action — `ReactKernelResult` (react-kernel.ts:258) drops `meta.harnessAuthoredOutput`/`budgetTerminalPartial`/`verificationWarning`, and these strategies derive completion from a different authority (quality gate / worker success / code-exec), so no kernel honesty marker reaches their return. Needs the sub-kernel signal-boundary primitive (project shippedUnverified into the result), NOT a mechanical edit. Adding a field with no honest reader would violate wire-and-pin.
+PARTIALLY UNBLOCKED by CompletionEnvelope (`88a8356a`, 2026-07-11): plan-execute + reflexion now consume `ReActKernelResult.envelope`.
+REMAINDER (2026-07-12 state audit): **blueprint + code-action** still have zero envelope references — completion still derives from worker-success/code-exec authority and can upgrade harness-authored/budget-terminal partials to `completed`. Wire the envelope into both or record an owner deferral.
+(Original analysis, kept for context: `ReactKernelResult` (react-kernel.ts:258) dropped `meta.harnessAuthoredOutput`/`budgetTerminalPartial`/`verificationWarning`; these strategies derive completion from a different authority, so no kernel honesty marker reached their return.)
 
 ### Empirical baseline for "inconsistent + never finishes"
 

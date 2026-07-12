@@ -60,8 +60,11 @@ schema 7,472 → **4,024 chars/request**, still solves (184). n=1, directional.
    scaffoldingLevel→guard aggressiveness, or shrink the plan to `horizonProfile`.
 7. **`check-control-plane.sh` GRANDFATHERED list** (4 forcing sites) has never shrunk;
    its own comment mandates it. One site per wave.
-8. **H5 completion-status** wired into `reactive` + `direct` only — the other six
-   strategies still map `done→completed` unguarded.
+8. **H5 completion-status** — PARTIALLY CLOSED 2026-07-11 by CompletionEnvelope
+   (`88a8356a`): plan-execute + reflexion now consume the envelope. REMAINDER
+   (2026-07-12 audit): **blueprint + code-action** have zero envelope references —
+   the two strategies named in completion-envelope.ts's own DISEASE comment can
+   still upgrade partials to `completed`.
 
 ### Tier 3: context & tools polish
 

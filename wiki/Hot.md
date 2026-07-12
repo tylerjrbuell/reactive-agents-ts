@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-07-01
+updated: 2026-07-12
 ---
 
 # Hot (Recent Context Cache)
@@ -10,47 +10,51 @@ updated: 2026-07-01
 
 ---
 
-## Latest Session (2026-07-01) — comprehensive framework review + v0.13 lift plan
+## Latest Session (2026-07-12) — state-of-the-framework audit + doc-truth restoration
 
-**v0.12.0 "Durable & Honest" is RELEASED** — all 35 pkgs on npm since 2026-06-17, GH release live. Durable execution A–D + durable HITL + **durable Phase E (Cortex UI) all SHIPPED and live-verified end-to-end** (pause → `listPendingApprovals` → approve → resume → clear; `.withDurableRuns`/`.withApprovalPolicy` wired in Cortex on both saved-agent and inline paths). Memory default-OFF, Effect-free hooks, and typed structured output (`.withOutputSchema`→`result.object`, `.streamObject()`) all shipped. External channels package (`@reactive-agents/channels`) merged to `main`.
+**Version: v0.13.6** (released 2026-07-06). Local `main` is **~226 commits ahead of origin/main** — push at next release/tag. CHANGELOG has an Unreleased v0.14 breaking section.
 
-**This session's work — 2026-07-01 comprehensive review:**
-- 4 parallel read-only audits (arch health, docs accuracy, DX/simplification, plans triage) + **5 live "first-touch" probe agents** built and run against real providers (claude-haiku-4-5 cloud, qwen3:14b + gemma4:e4b local Ollama) by an agent that had never used the framework. Full report: [`wiki/Research/Audit-Reports-2026-07-01/comprehensive-framework-review-and-v13-north-star.md`](wiki/Research/Audit-Reports-2026-07-01/comprehensive-framework-review-and-v13-north-star.md).
-- **Headline: the cross-tier promise is real** — a cold external tester reproduced the README core claim (identical correct typed `.withOutputSchema` object on a 4B local model, gemma4:e4b) without help. That is the launch asset. First-10-minutes DX papercuts catalogued.
-- v0.13 execution plan authored: [`wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md`](wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md) — subagent-parallel, package-isolated bundles; **DX wave ships _before_ Show-HN**. North star holds: harness = product, receipts = proof, first-touch DX = funnel.
+**Canonical snapshot (read this before any July plan/audit doc):**
+[`wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`](Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md) — full map of shipped vs open programs, the live built-never-wired register, the 226-commit process-failure analysis, corrective doctrine, and the deduped open-work list.
 
-**🚀 v0.13.0 RELEASED 2026-07-02** — publish.yml green 10m12s, 35 pkgs on npm, GH Release live, CI sync-back `020c6360` pulled. Pre-tag work: gpt-5.x `max_completion_tokens` blocker fixed (`be0875cd`); 0.13.0 notes moved to changeset (`bce57a96` — release.ts only reads `.changeset/*.md`, hand-drafted CHANGELOG section was dead); docs gaps closed (`46e6c28a`: withLlmTimeout/.quick()/defineTool-v2/abstention + counts 6,854/851); pre-flight green (build 38/38, typecheck 69/69, keyless test 6854/0). Remaining launch line: competitive bench + cold first-touch probe vs published tarball → Show-HN.
+**July program status (detail + hashes in the snapshot):**
+- ✅ SHIPPED: Arc 1 (`3c9c15fa`); adaptive-harness overhaul (Phase-6 gate unmet, ablation INCONCLUSIVE); meta-loop Waves A–G **in full** (07-08); strategy ledger/receipt truth; stream tool events + guard reachability; dual API (spec `a0eb5755`).
+- ◐ PARTIAL: capability measurement (llm-judge→graded remainder); goal-reliability (open: #44 spine, #39 per-entity, #38 thought-continuity); root-cause closure (Tier 1–3 open list = canonical backlog); probe fleet QA (residue: success+empty-output, ToT cost floor, reflexion budget collision).
+- ⬜ DRAFT: subagents-and-logging plan (07-11, awaiting RATIFY) — detached-dispatch boundary still broken (`spawn-handlers.ts:140,163`).
 
----
-
-## Prior Sessions (compact pointers)
-
-- **2026-06-16** — v0.12 pre-release reconcile: PR #194 closed (its commits already in local `main`; branch went stale), v0.12 issue triage (slipped #188/#47/#35 → v0.13, #43 → v0.14), #195 closed (code-action field-drop matrix — `observation.tool-result` per sandbox tool call), ROADMAP v0.12 table refreshed. Durable A–D + HITL confirmed landed on `main`.
-- **2026-06-10** — v0.11.2 RELEASED to npm (35 pkgs lockstep); roadmap realigned + ratified (v0.12 "Durable & Honest" → v0.13 "Receipts" **launch** → v0.14 "Compounding" → v1.0, `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md`); v0.12.0 leverage audit; durable-execution Phase A shipped (`onCheckpoint` seam + versioned `kernel-codec.ts`).
-- **2026-06-08** — model-support refresh (#193) + cortex parameterized-runs Phase 1 (both now released in 0.11.2).
-- **2026-06-02→05** — canonical sprint2 (PRs #180-#183 merged), observability sprint (6 levers falsified — see memory, do not resurface), heavy-strategy parity finding (reflexion fix `660c4856`), backlog honesty cluster (PRs #185-#192).
-- **2026-05-23→25** — Harness Convergence Phase 0 (5 P0s), 22 GH issues #104-#125, execute-backlog bundles. Full detail in git history of this file (`git log -- wiki/Hot.md`).
+**New H-risk findings (2026-07-12 audit):** 3/7 provider-adapter hooks orphaned by APC deletion `279b61fb` (`taskFraming`/`toolGuidance`/`systemPromptPatch`, calibration writes nothing reads); CompletionEnvelope not consumed by blueprint + code-action; RA_RECITE ablation arms byte-identical (measures noise).
 
 ## What's Next
 
-1. ~~Cut v0.13.0~~ ✅ RELEASED 2026-07-02.
-2. **Competitive bench** (plan 2.2 Receipts deliverable, still missing) — RA vs Mastra vs LangGraph.js vs raw AI SDK, pinned models/seeds, published traces, run vs published 0.13 tarball. Current published bench = internal ablation only (+13pp).
-3. **Cold first-touch re-verify** — re-run the 6 audit probes from OUTSIDE the repo against npm 0.13.0 (fail-fast build() now opt-in `.withStrictValidation()` — check missing-key DX) → Show-HN.
-4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
+1. **v0.14 launch line** — cut v0.14, publish bench receipts (Arc 1 launch-gate item 5), Show-HN, push main. Overdue since Wave A/B boundary (07-08).
+2. **Wire-or-delete sweep** — adapter hooks, CompletionEnvelope (blueprint/code-action), RA_RECITE session, ledger dead kinds, verifierTier, adaptive-plan fields.
+3. **#39 per-entity requirements**, **#44 kernel→engine signal unification**, **#38 thought-continuity ablation** (Ollama `thinking` capture prereq).
+4. RATIFY-or-reject subagents-and-logging DRAFT.
+5. Bench P2 remainder (7 llm-judge → graded, re-baseline) + P3 `horizon:long` tasks; then #36 adaptive re-cut.
+6. Small: `metrics-cache.json` 7190→7671 write-back (else next `metrics:sync-readme` regresses README); `.agents/MEMORY.md` 407KB archive split.
+
+## Prior Sessions (compact pointers)
+
+- **2026-07-05→12** — the harness root-cause fortnight: Arc 1, meta-loop, measurement rebuild, wiring audits ×4, probe fleet, receipt truth. Full map: the 07-12 snapshot above. Process lesson recorded there (§4): ~14% same-week rework, whack-a-mole before class-level prevention.
+- **2026-07-02** — v0.13.0 RELEASED (35 pkgs); v0.13.5 + v0.13.6 followed 2026-07-05/06 (Groq+xAI, ui-core).
+- **2026-07-01** — comprehensive framework review + v13 lift plan (superseded by 09-UNIFIED-PROGRAM).
+- **Earlier** — see `git log -- wiki/Hot.md` and MEMORY-ARCHIVE.
 
 ## Authoritative Document Hierarchy
 
-| Order | Doc | What it tells you |
+| Order | Doc | Role |
 |---|---|---|
-| 1 | `wiki/Research/Audit-Reports-2026-07-01/comprehensive-framework-review-and-v13-north-star.md` | Current framework review + v0.13 north star |
-| 2 | `wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md` | Active v0.13 execution plan |
-| 3 | `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v5.0 | Architecture target |
-| 4 | `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | 12 rules for harness changes |
-| 5 | `.agents/MEMORY.md` | Cross-agent session memory |
+| 1 | `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` | Program sequencing + convergence rulings (CANONICAL) |
+| 2 | `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` v6.0 | Product-arc content, exit gates, honest-claims law |
+| 3 | `wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED 07-11) |
+| 4 | `wiki/Planning/Implementation-Plans/2026-07-10-harness-root-cause-closure-program.md` | Ranked open backlog (active) |
+| 5 | `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` | Current empirical state |
+
+`04-PROJECT-STATE.md` is deprecated as the empirical-state read (banner added 07-12). Conflict rule: lower defers upward; changing a higher doc is a ratification event.
 
 ## How to Update This Note
 
 At session end: replace "Latest Session" with new date + key updates, demote prior to one-line pointers, update "What's Next." Keep under 120 lines.
 
-**Last Updated:** 2026-07-01
-**Current Phase:** v0.13 "Receipts" — DX wave + public local-model bench (launch line)
+**Last Updated:** 2026-07-12
+**Current Phase:** v0.14 launch line + wire-or-delete sweep (post root-cause fortnight)

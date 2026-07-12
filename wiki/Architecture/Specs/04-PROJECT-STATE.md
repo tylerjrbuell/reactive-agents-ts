@@ -1,6 +1,14 @@
 # Project State — Read This First
 
-> **Status:** Authoritative landing document, written 2026-04-27.  
+> ⚠️ **DEPRECATED AS THE EMPIRICAL-STATE READ (2026-07-12).** This document is a
+> 2026-04-27 snapshot and is ~2.5 months stale (it predates v0.10.6→v0.13.6, the
+> July meta-loop overhaul, receipts, and the probe fleet). For current state read,
+> in order: `wiki/Hot.md` →
+> `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` →
+> `09-UNIFIED-PROGRAM.md` (canonical sequencing) → `08-AGENTIC-OS-NORTH-STAR.md` v6.0.
+> Kept for historical traceability only.
+
+> **Status:** ~~Authoritative landing document~~ HISTORICAL SNAPSHOT, written 2026-04-27.  
 > **Purpose:** Single page to understand WHERE WE ARE on the project — empirically, methodologically, and operationally — without reading 30+ scattered docs.  
 > **Audience:** Tyler, Claude, future contributors, future agent sessions starting cold.
 

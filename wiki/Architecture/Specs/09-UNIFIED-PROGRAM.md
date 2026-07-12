@@ -81,16 +81,16 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 - The meta-loop DAG is one-directional; control re-enters as ledger entries only.
 - Falsified levers stay dead (no LATS/GoT, no resurfaced levers); non-goals in 08 §9 carried.
 
-## 7. Status board (2026-07-08)
+## 7. Status board (updated 2026-07-12)
 
 | Item | State |
 |---|---|
 | K: Phases 1–3 + 3.6 (gateway, tool surface, terminal gate, H1–H6) | ✅ shipped, live-verified |
-| K: Wave A (3.5 instrument) | READY TO DISPATCH |
-| K: Waves B–G | specified in execution plan |
-| P: Arc 1 | ✅ merged (`3c9c15fa`), launch-gate items 1–4 done |
-| P: Arc 2–4 | specified in 08, sequenced by §4 |
-| T: bench validity (rw-7/rw-4/rw-8) | ✅ `a9727e8c` |
-| T: lh-1 + horizon lift rule | Wave A |
-| T: v0.14 + bench receipts + Show-HN | opens at Wave A/B boundary (C7) |
+| K: Waves A–G + Phase 7 | ✅ ALL SHIPPED 2026-07-08 (`36f66dee`, `6db0bf71`, `c7a836da`, `14351866`, `5c5fb778`, `a33409d5`, `99527ed8`, `66c5d1b3`); G ablation INCONCLUSIVE → adaptive stays opt-in (re-cut = task #36) |
+| K: wiring residue | ◐ tracked in root-cause closure program Tiers 1–3 + 2026-07-12 state audit (adapter hooks orphaned, CompletionEnvelope coverage, ledger dead kinds, subagent boundary) |
+| P: Arc 1 | ✅ merged (`3c9c15fa`), launch-gate items 1–4 done; **item 5 (published bench receipts) OPEN** |
+| P: Arc 2–4 | specified in 08, sequenced by §4; Arc 2 code untouched |
+| T: bench validity (rw-7/rw-4/rw-8) | ✅ `a9727e8c`; instrument rebuilt graded/deterministic (`51e6182e`, `031e5d26`, `170d9926`); canonical baseline `fc1713b2` |
+| T: v0.14 + bench receipts + Show-HN | ⚠️ **OVERDUE** — Wave A/B boundary passed 2026-07-08; v0.14 uncut; main ~226 commits unpushed |
 | Sweep debt closed | traceability matrix total: every 07-07 + 07-08 audit finding → shipped ✅ / task ID / named deferral |
+| Current empirical state | `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` |

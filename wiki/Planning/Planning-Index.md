@@ -39,10 +39,23 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
-| 2026-07-01 | [[Implementation-Plans/2026-07-01-v13-lift-execution\|v0.13 Lift — Systematic Execution (subagent-parallel)]] | 🔄 Active | Claude Code |
-| 2026-05-05 | [[Implementation-Plans/2026-05-05-documentation-audit-consolidation\|Documentation Audit & Consolidation]] | 🔄 In Progress | Claude Code |
+| 2026-07-11 | [[Implementation-Plans/2026-07-11-subagents-and-logging\|Subagents + Unified Logging]] | ⬜ DRAFT — awaiting RATIFY | Claude Code |
+| 2026-07-10 | [[Implementation-Plans/2026-07-10-harness-root-cause-closure-program\|Harness Root-Cause Closure Program]] | 🔄 Active (Tier 1–3 open list = canonical backlog) | Claude Code |
+| 2026-07-10 | [[Implementation-Plans/2026-07-10-goal-reliability-and-feedback-loop-program\|Goal-Reliability + Feedback-Loop Program]] | 🔄 Active (open: #44 spine, #39 per-entity, #38 ablation, B4) | Claude Code |
 
 ## Completed Plans (2026)
+
+### July 2026 (harness root-cause fortnight — see `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` for the full scoreboard)
+- 2026-07-09 — [[Implementation-Plans/2026-07-09-capability-measurement-wave|Capability measurement wave]] — ◐ partial, superseded-in-part by root-cause program
+- 2026-07-08 — [[Implementation-Plans/2026-07-08-meta-loop-execution-plan|Meta-loop execution plan (Waves A–G)]] — ✅ fully executed 2026-07-08
+- 2026-07-07 — [[Implementation-Plans/2026-07-07-adaptive-harness-overhaul|Adaptive harness overhaul (9-pillar)]] — ✅ all phases shipped; Phase-6 exit gate unmet (ablation INCONCLUSIVE)
+- 2026-07-05 — [[Implementation-Plans/2026-07-05-agentic-os-arc1-log-process-receipt|Agentic OS Arc 1 (Log/Process/Receipt)]] — ✅ merged `3c9c15fa`; launch-gate item 5 (bench receipts) open
+- 2026-07-05 — [[Implementation-Plans/2026-07-05-agentic-ui-kit-p1-uicore-controllers|Agentic UI Kit P1 — ui-core controllers]] — ✅ (v0.13.5)
+- 2026-07-05 — [[Implementation-Plans/2026-07-05-groq-xai-providers|Groq + xAI providers]] — ✅ (v0.13.5)
+- 2026-07-03 — [[Implementation-Plans/2026-07-03-agentic-ui-kit-p3-react|Agentic UI Kit P3 — React]] · [[Implementation-Plans/2026-07-03-agentic-ui-kit-svelte-cortex|Svelte + Cortex]] — ✅
+- 2026-07-02 — [[Implementation-Plans/2026-07-02-agentic-ui-kit|Agentic UI Kit]] · [[Implementation-Plans/2026-07-02-cortex-dynamic-sync-parity-run-control|Cortex dynamic sync]] · [[Implementation-Plans/2026-07-02-security-hardening-wave|Security hardening wave]] · [[Implementation-Plans/2026-07-02-agentic-ui-kit-cortex-showcase|Cortex showcase]] — ✅
+- 2026-07-01 — [[Implementation-Plans/2026-07-01-v13-lift-execution|v0.13 lift execution]] — ✅ shipped in v0.13.x; superseded as direction by 09-UNIFIED-PROGRAM
+- 2026-07-01 — [[Implementation-Plans/2026-07-01-cross-tier-thinking|Cross-tier thinking]] · [[Implementation-Plans/2026-07-01-docs-revamp|Docs revamp]] — ✅
 
 ### May 2026
 - 2026-05-05 — Documentation audit & consolidation (this consolidation pass)

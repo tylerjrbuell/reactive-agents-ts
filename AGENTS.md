@@ -14,14 +14,14 @@
 Foundation (no reactive-agents deps)
 ├── @reactive-agents/core          — EventBus, AgentService, TaskService, all shared types
 │
-├── @reactive-agents/llm-provider  — LLMService, 6 provider adapters, streaming, tool calling
+├── @reactive-agents/llm-provider  — LLMService, 8 provider adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Groq, xAI, test), streaming, tool calling
 │
 ├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
 │
 ├── @reactive-agents/reasoning     — 8 registered strategy implementations (core: reactive, direct; router: adaptive; promote-candidate: code-action; maintained: plan-execute-reflect, reflexion, tree-of-thought, blueprint; aliases react→reactive, rewoo→blueprint — labels per north-star spec §7, see docs reference/stability.md) + ThoughtKernel, KernelRunner, Structured Plan Engine
 │   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
-├── @reactive-agents/tools         — ToolService, ToolRegistry, 11 built-in tools, MCP client, sandbox
+├── @reactive-agents/tools         — ToolService, ToolRegistry, built-in tools (9 capability + 9 meta; shell-execute gated), MCP client, sandbox
 │   └── depends on: core, llm-provider
 │
 ├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, KillSwitch, BehavioralContracts
@@ -179,19 +179,21 @@ Quick reference for tracing issues to specific kernel phases/services:
 
 | Order | Doc | Purpose |
 |---|---|---|
-| **1st** | `wiki/Architecture/Specs/04-PROJECT-STATE.md` | Current empirical state (test count, packages, shipped capabilities) |
-| **2nd** | `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` | Phase sequencing authority (v0.10.0 → v1.0, validation gates) + integrated architecture |
-| **If v0.10.0 work** | `wiki/Architecture/Specs/06-AUDIT-v0.10.0.md` | Release quality gate (28 packages, 13 mechanisms, 44-item FIX backlog) |
-| **Reference** | `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` | Architecture target for Phase 2+ conformance |
+| **1st** | `wiki/Hot.md` | Current session state + latest state snapshot pointer |
+| **2nd** | `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md` | Current empirical state (programs shipped/open, unwired register, backlog) |
+| **3rd** | `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` | **CANONICAL sequencing + convergence authority** (K/P/T strands, release slicing) |
+| **Reference** | `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` v6.0 | Product-arc content, exit gates, honest-claims law |
+| **Reference** | `wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED) |
 | **Reference** | `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules for any harness change) |
 | **Reference** | `wiki/Architecture/Specs/02-FAILURE-MODES.md` | Living failure-mode catalog (FM-A1, FM-B2, etc.) |
 
 **Authority Hierarchy** (if docs conflict):
 
-- `07-ROADMAP-v1.0.md` > `06-AUDIT-v0.10.0.md` > `04-PROJECT-STATE.md` > `01-RESEARCH-DISCIPLINE.md`
-- Amend lower-authority doc, never silent drift
+- `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md` > `2026-07-11-harness-north-star-architecture.md` > active plans > evidence
+- Amend lower-authority doc, never silent drift; changing a higher doc is a ratification event
+- Historical (do not read for current state): `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated), `07-ROADMAP-v1.0.md`, `06-AUDIT-v0.10.0.md`
 
-**All 6 canonical docs live in `wiki/Architecture/Specs/`** (uniform `NN-NAME.md` numbering). See `wiki/Architecture/Specs/DOCUMENT_INDEX.md` for full index.
+See `wiki/Architecture/Specs/DOCUMENT_INDEX.md` for the full index.
 
 ---
 
@@ -538,15 +540,15 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 
 ---
 
-## Release Workflow (Changesets)
+## Release Workflow (Tag-Driven)
 
-**Every PR touching user-facing behavior:** `bun run changeset` → creates `.changeset/<name>.md` → commit with code
+**Every PR touching user-facing behavior:** `bun run changeset` → creates `.changeset/<name>.md` → commit with code. Changeset `.md` files feed release notes only — `scripts/release.ts` reads them at tag time.
 
-**Release cycle:** changesets/action auto-creates "chore: version packages" PR → merge → publishes to npm
+**Release cycle:** `bun run release:dry <version>` (sole drift gate — changesets/check:versions removed May 2026) → `git tag vX.Y.Z` → push tag → `publish.yml` builds, verifies, and publishes to npm. **Never `npm publish` manually.** See the `prepare-release` skill.
 
 **Bump types:** `patch` (fixes), `minor` (features), `major` (breaking)
 
-**All 22 packages move together** (fixed group in `.changeset/config.json`). `@reactive-agents/benchmarks` is private (never published).
+**All 36 packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
 
 ---
 
@@ -565,11 +567,11 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 | **Harness reports**  | `wiki/Research/Harness-Reports/` — phase validations, baselines, regressions, improvement loop artifacts (REPORTS_DIR in gate runner)   |
 | **Spike prototypes** | `wiki/Research/Prototypes/` — pNN spike scripts + RESULTS-pNN.md + RESEARCH_LOG.md (Research Discipline Rule 5)                          |
 | **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia server + SvelteKit UI; read before changing                                                        |
-| Skills               | `.agents/skills/` (24 contributor skills), `.claude/skills/` (optional), `apps/docs/skills/` (consumer-facing)                          |
+| Skills               | `.agents/skills/` (28 contributor skills), `.claude/skills/` (optional), `apps/docs/skills/` (consumer-facing)                          |
 | Packages             | `packages/{core,llm-provider,memory,...}/` — see NAVIGATION.md §Package Map                                                             |
 | CLI                  | `apps/cli/`                                                                                                                              |
 | Public docs          | `apps/docs/src/content/docs/` — Astro/Starlight site (docs.reactiveagents.dev)                                                          |
-| Examples             | `apps/examples/` (34 usage patterns)                                                                                                     |
+| Examples             | `apps/examples/` (61 usage patterns under src)                                                                                           |
 
 > **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
 >
@@ -608,7 +610,9 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Architecture Debt
 
-> **▶ Latest audit: 2026-06-02 — `wiki/Research/Audit-Reports-2026-06-02/architecture-health-audit.md`.** Verdict: foundation strong (clean layers, acyclic kernel/0 cycles, single arbitrator, canonical `project()` data-flow); typed-guarantee layer mid-migration ON-PLAN (3/5 contracts as types); ONE earned enforcement gap = **I4 single capability resolver** (5 entry points, caused the qwen3.5→fallback bug); real vision-gap = **Pillar 8 capability axis parked** (convergence Phase 2 recitation + experience-reuse = 0 matches). Structural hygiene near-done; don't polish cleanliness (A−) while capability axis (D) is where the vision lives.
+> **▶ Latest audit: 2026-07-12 — `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`** (state-of-the-framework synthesis: program scoreboard, live built-never-wired register, 226-commit process analysis). Top live debt from it: subagent detached-runtime boundary (`spawn-handlers.ts:140,163`); 3/7 provider-adapter hooks orphaned by APC deletion `279b61fb` (taskFraming/toolGuidance/systemPromptPatch — calibration writes nothing reads); CompletionEnvelope not consumed by blueprint + code-action; runtime pkg 67 `as any`.
+>
+> Prior: 2026-06-02 — `wiki/Research/Audit-Reports-2026-06-02/architecture-health-audit.md`. Verdict: foundation strong (clean layers, acyclic kernel/0 cycles, single arbitrator, canonical `project()` data-flow); typed-guarantee layer mid-migration ON-PLAN (3/5 contracts as types); ONE earned enforcement gap = **I4 single capability resolver** (5 entry points, caused the qwen3.5→fallback bug); real vision-gap = **Pillar 8 capability axis parked** (convergence Phase 2 recitation + experience-reuse = 0 matches). Structural hygiene near-done; don't polish cleanliness (A−) while capability axis (D) is where the vision lives.
 
 > Last audited: 2026-06-01 (agentic-core scope: `packages/reasoning`). Status column reflects current code reality.
 >
@@ -672,17 +676,18 @@ Canonical project skills live in `.agents/skills/`:
 5. **ReasoningService.execute** takes single params object, not positional args
 6. **Starlight / Astro 6 content config** must be `src/content.config.ts` (Content Layer API); `src/content/config.ts` is legacy and fails the build
 7. **`workspace:*` is fine for internal deps** — `changeset publish` resolves these correctly. Do not manually replace them with pinned versions.
-8. **Never manually bump versions** — `bun run changeset` + the "chore: version packages" PR handles all version bumps and CHANGELOG entries. Manual edits will conflict with changesets.
+8. **Never manually bump versions or `npm publish`** — the tag-driven flow (`bun run release:dry` → `git tag vX.Y.Z` → publish.yml) stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design.
 9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 
 ---
 
-## Current Framework Snapshot (v0.12.0)
+## Current Framework Snapshot (v0.13.6, 2026-07-12)
 
 - Monorepo scale: **36 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz)
 - Verified quality: **7,671 pass / 7,698 tests across 974 files** (2026-07-09) — run `bun test` for the authoritative count before release
+- Current empirical state: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`
 
-> **Meta-loop overhaul on `main` (UNRELEASED — `main` is ahead of the v0.13.5 tag).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
+> **Meta-loop overhaul on `main` (UNRELEASED — `main` is ~226 commits ahead of the v0.13.6 tag; v0.14 launch line pending).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
 >
 > - **Default-on + verified** (in every reasoning run now): append-only evidence ledger (rides crash-resume), deliverable-truth (typed contract + contract-driven terminal gate + `result.receipt.deliverables[]`), honest compaction (dropped refs enumerated), recall round-trip (one reference grammar), per-iteration run `assessment` trace event, and the Phase 3.6 reliability fixes (prior context renders across strategy switches, generous final-synthesis budget, structured-output retry-once, verifier-aware stall guard, non-amputating early-stop).
 > - **Opt-in + experimental** (NOT default, NOT "better"): `.withLongHorizon()` (scales guards to `maxIterations`; verified to finish long runs but not lift-gated for default-on) and `.withAdaptiveHarness()` (run-start policy compiler + mid-run recompile; cross-tier ablation **INCONCLUSIVE** — n=1 dev-box noise — so it stays opt-in under the lift-gate veto). `.withContract()` pre-existed but is now load-bearing.

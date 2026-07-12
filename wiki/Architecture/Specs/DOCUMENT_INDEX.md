@@ -1,9 +1,9 @@
 # Document Index — `wiki/Architecture/Specs/`
 
-> **Last updated:** 2026-05-04 (consolidated naming + archival cleanup; refactor/overhaul).
+> **Last updated:** 2026-07-12 (authority hierarchy rewritten; 08/09 indexed; 04 deprecated as state read).
 > **Purpose:** Map every document in this directory to its purpose. Ranked from "read first" to "reference when needed."
 >
-> **Authority:** Uniform numbering `NN-NAME.md` (00–07). Single source of truth for agent guidance per AGENTS.md.
+> **Authority:** Uniform numbering `NN-NAME.md` (00–09). Single source of truth for agent guidance per AGENTS.md.
 
 ---
 
@@ -11,20 +11,22 @@
 
 | # | File | Purpose |
 |---|---|---|
-| 0 | `00-VISION.md` | What we're building toward — 4 pillars (Reliability, Control, Security, Performance). Stable anchor. |
-| 1 | `START_HERE_AI_AGENTS.md` | Agent session-start entry point — points at `04-PROJECT-STATE.md` |
-| 2 | `04-PROJECT-STATE.md` | **READ FIRST.** Current empirical state of the project; updated per session start |
-| 3 | `07-ROADMAP-v1.0.md` | **SEQUENCING AUTHORITY** — v0.10.0 → v1.0, 8 phases, validation gates, integrated architecture |
-| 4 | `06-AUDIT-v0.10.0.md` | v0.10.0 release quality gate — 28 packages + 13 mechanisms + 44-item FIX backlog (v0.10.0 only) |
-| 5 | `05-DESIGN-NORTH-STAR.md` | v3.0 architecture reference — 10 capabilities + cognitive kernel + ports (Phase 2+ target) |
-| 6 | `01-RESEARCH-DISCIPLINE.md` | 12 rules for every harness change; methodology contract |
-| 7 | `02-FAILURE-MODES.md` | Living catalog of harness failure modes (FM-A1, FM-B2, etc.) |
-| 8 | `03-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
+| 0 | `wiki/Hot.md` (not in this dir) | Session-start current state; points at the latest state snapshot |
+| 1 | `09-UNIFIED-PROGRAM.md` | **CANONICAL sequencing + convergence authority** (2026-07-08) — K/P/T strands, Waves A–G, release slicing |
+| 2 | `08-AGENTIC-OS-NORTH-STAR.md` | v6.0 (ratified 2026-07-05) — product-arc content, exit gates, honest-claims law, non-goals |
+| 3 | `../Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED 2026-07-11) |
+| 4 | `05-DESIGN-NORTH-STAR.md` | v5.0 architecture reference (superseded for forward sequencing by 08/09) |
+| 5 | `01-RESEARCH-DISCIPLINE.md` | 12 rules for every harness change; methodology contract |
+| 6 | `02-FAILURE-MODES.md` | Living catalog of harness failure modes (FM-A1, FM-B2, etc.) |
+| 7 | `03-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
+| 8 | `00-VISION.md` | What we're building toward. Stable anchor. |
 
-**Authority Hierarchy:**
+**Historical (do not treat as current):** `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated banner added 07-12), `07-ROADMAP-v1.0.md` + `06-AUDIT-v0.10.0.md` (v0.10-era; superseded by root `ROADMAP.md` + 08/09), `START_HERE_AI_AGENTS.md` (points at deprecated 04 — prefer `wiki/Hot.md`).
 
-- `07-ROADMAP-v1.0.md` > `06-AUDIT-v0.10.0.md` > `04-PROJECT-STATE.md` > `01-RESEARCH-DISCIPLINE.md`
-- If docs conflict: amend lower-authority doc, never silent drift.
+**Authority Hierarchy (2026-07-12):**
+
+- `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 > `2026-07-11-harness-north-star-architecture.md` > active plans > evidence (bench reports/ledger).
+- If docs conflict: amend lower-authority doc, never silent drift. Changing a higher doc is a ratification event (decision doc).
 
 **That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical).
 

@@ -4,7 +4,7 @@
 
 **Authority:** [[../../Decisions/2026-07-08-harness-meta-loop-ratified|meta-loop ratification]] + [[../../Architecture/Design-Specs/2026-07-08-harness-meta-loop-missing-pieces|spec]] + [[2026-07-07-adaptive-harness-overhaul|amended overhaul plan]].
 **Evidence:** [[../../Research/Audit-Reports-2026-07-08/00-SYNTHESIS-deliverables-longhorizon-sweep|2026-07-08 sweep]] (audits 01–06) + 2026-07-07 sweep.
-**Status ledger:** Phases 1–3 SHIPPED (`60b805fc`/`e0d7ce61`/`c102489a`/`3e2d3876`) · bench validity SHIPPED (`a9727e8c`) · Phase 3.6 hotfixes H1–H6 SHIPPED (`7bb5afdb`) · everything below is OPEN.
+**Status ledger (updated 2026-07-12):** PLAN FULLY EXECUTED 2026-07-08. Phases 1–3 (`60b805fc`/`e0d7ce61`/`c102489a`/`3e2d3876`) · bench validity (`a9727e8c`) · Phase 3.6 H1–H6 (`7bb5afdb`) · Wave A `36f66dee` · Wave B RunContract `6db0bf71` · Wave C RunLedger `c7a836da` · Wave D Projector `14351866` · Wave E Assessment `5c5fb778` · Wave F Control Plane `a33409d5` · Wave G Policy Compiler `99527ed8`+`bab0758b` · Phase 7 `66c5d1b3` · review fixes `6b0647f3`/`451ec96d`. G ablation INCONCLUSIVE (n=1) — adaptive stays opt-in; re-cut = task #36. Wiring residue tracked in [[2026-07-10-harness-root-cause-closure-program]] + `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`.
 
 This document is the dispatch source: each task is a self-contained brief a subagent can execute. Tasks name their scope, spec source, TDD expectations, acceptance checks, and dependencies. The traceability matrix at the bottom proves every audit finding lands in a task (or is explicitly closed/deferred).
 

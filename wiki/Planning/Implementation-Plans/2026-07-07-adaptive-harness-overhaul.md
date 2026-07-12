@@ -177,19 +177,21 @@ Only after 1–6 hollow the strategies: plan-execute first (most duplication: 2 
 
 ## Effort sketch (sessions, not calendar)
 
+> **2026-07-12 status update: ALL PHASES SHIPPED** (via the meta-loop execution plan, 2026-07-08): 3.6 `7bb5afdb` · 3.5/Wave A `36f66dee` · 4a `6db0bf71` · 4b `c7a836da` · 4c `14351866` · 5a `5c5fb778` · 5b `a33409d5` · 6 `99527ed8` · 7 `66c5d1b3`. **Phase 6 exit gate ("adaptive dominates or ties on both models") UNMET** — cross-tier ablation INCONCLUSIVE (n=1); adaptive stays opt-in; re-cut = task #36.
+
 | Phase | Size | Parallelizable |
 |---|---|---|
 | 1 Gateway | M (mechanical after design) | with 2 — **SHIPPED** |
 | 2 Tool Surface | M | with 1 — **SHIPPED** |
 | 3 Terminal Authority | M | after 1 — **SHIPPED** |
-| 3.6 LH hotfix wave [LH-AMEND] | S (6 fixes, 0.5-class) | after 3 |
-| 3.5 LH instrument [LH-AMEND] | S (lh-1 + guard profile + lift-rule) | with 3.6 |
-| 4a RunContract [META-LOOP] | S–M | after 3.5 gate exists |
-| 4b RunLedger (amended) | L (the big one) | after 4a |
-| 4c Projector [META-LOOP] | M | after 4b |
-| 5a RunAssessment [META-LOOP] | M | after 4b (contract+ledger inputs) |
-| 5b Control Plane (amended) | S–M | after 5a |
-| 6 Policy Compiler (amended) | M + ablation time | after 4a-c, 5a |
-| 7 Strategy→Policy | L (amortized per strategy) | last |
+| 3.6 LH hotfix wave [LH-AMEND] | S (6 fixes, 0.5-class) | after 3 — **SHIPPED** |
+| 3.5 LH instrument [LH-AMEND] | S (lh-1 + guard profile + lift-rule) | with 3.6 — **SHIPPED** |
+| 4a RunContract [META-LOOP] | S–M | after 3.5 gate exists — **SHIPPED** |
+| 4b RunLedger (amended) | L (the big one) | after 4a — **SHIPPED** |
+| 4c Projector [META-LOOP] | M | after 4b — **SHIPPED** |
+| 5a RunAssessment [META-LOOP] | M | after 4b (contract+ledger inputs) — **SHIPPED** |
+| 5b Control Plane (amended) | S–M | after 5a — **SHIPPED** |
+| 6 Policy Compiler (amended) | M + ablation time | after 4a-c, 5a — **SHIPPED (exit gate unmet)** |
+| 7 Strategy→Policy | L (amortized per strategy) | last — **SHIPPED** |
 
 **[LH-AMEND] Durability rule:** every remaining phase ships its grep-able enforcement script (check-tool-surface, check-ledger-writes, check-control-plane, check-policy-compiler, check-single-loop, check-deliverable-truth). A phase without its invariant script is not done.
