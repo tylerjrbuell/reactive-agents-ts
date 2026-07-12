@@ -1,14 +1,14 @@
 {
   "probe": "p2-multi-file",
-  "taskId": "01KXB81T93BM6Z61KNPZT0G88R",
+  "taskId": "01KXBA0V798WWPZA639QPFHWKV",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 8738,
+  "tokensUsed": 8685,
   "llmCalls": 3,
-  "durationMs": 8129,
+  "durationMs": 7499,
   "checks": [
     {
       "name": "report-on-disk",
@@ -33,12 +33,12 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=220"
+      "detail": "success=true outputLen=228"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=8738"
+      "detail": "tokensUsed=8685"
     },
     {
       "name": "coherence:llmCalls-reported",
@@ -59,8 +59,23 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p2-data.json]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,
-  "outputPreview": "I have successfully created both files:\n\n1.  **Markdown Report:** A comparison report has been written to `./qa-out/p2-report.md`.\n2.  **JSON Data:** The structured JSON array has been written to `./qa-out/p2-data.json`."
+  "outputPreview": "I have successfully produced both files:\n\n1.  **`./qa-out/p2-report.md`**: Contains the markdown comparison report.\n2.  **`./qa-out/p2-data.json`**: Contains the raw JSON array with the moon counts for Jupiter, Saturn, and Mars."
 }

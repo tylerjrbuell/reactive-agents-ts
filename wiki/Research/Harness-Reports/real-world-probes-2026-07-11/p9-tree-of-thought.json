@@ -1,14 +1,14 @@
 {
   "probe": "p9-tree-of-thought",
-  "taskId": "01KXB871AN25E23P4VE6CDH5NE",
+  "taskId": "01KXBAHDEKYF6C9248P231WFQ4",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "tree-of-thought",
-  "tokensUsed": 28484,
-  "llmCalls": 18,
-  "durationMs": 117512,
+  "tokensUsed": 17919,
+  "llmCalls": 11,
+  "durationMs": 55409,
   "checks": [
     {
       "name": "correct-sum-on-disk",
@@ -23,17 +23,17 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=68"
+      "detail": "success=true outputLen=136"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=28484"
+      "detail": "tokensUsed=17919"
     },
     {
       "name": "coherence:llmCalls-reported",
       "pass": true,
-      "detail": "llmCalls=18"
+      "detail": "llmCalls=11"
     },
     {
       "name": "coherence:verdict-present",
@@ -44,8 +44,23 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p9/tree-of-thought.txt]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,
-  "outputPreview": "The integer 100 has been written to ./qa-out/p9/tree-of-thought.txt."
+  "outputPreview": "The integer 100 was calculated by summing the values in the \"values\" array of input.json and written to ./qa-out/p9/tree-of-thought.txt."
 }

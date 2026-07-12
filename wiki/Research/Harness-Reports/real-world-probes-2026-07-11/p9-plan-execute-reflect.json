@@ -1,14 +1,14 @@
 {
   "probe": "p9-plan-execute-reflect",
-  "taskId": "01KXB86HV0FAS1C383E3MRGNNB",
+  "taskId": "01KXBAGYJ2HJ3T0DYCPGR227WV",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "plan-execute-reflect",
-  "tokensUsed": 3855,
+  "tokensUsed": 3814,
   "llmCalls": 3,
-  "durationMs": 15855,
+  "durationMs": 15251,
   "checks": [
     {
       "name": "correct-sum-on-disk",
@@ -28,7 +28,7 @@
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=3855"
+      "detail": "tokensUsed=3814"
     },
     {
       "name": "coherence:llmCalls-reported",
@@ -44,6 +44,21 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p9/plan-execute-reflect.txt]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,

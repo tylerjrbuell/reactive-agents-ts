@@ -50,11 +50,29 @@ export interface ToTTierLimit {
   readonly stagnationWindow: number;
 }
 
+/**
+ * `stagnationWindow` is the number of consecutive BFS depths whose best score
+ * must sit inside a 0.05 band before exploration gives up early.
+ *
+ * It must be strictly LESS than the effective depth or the guard is dead: one
+ * score is recorded per depth, the check runs at the END of depth d, and
+ * effectiveDepth = min(config.depth, maxBfsDepth) — so a window of 3 against the
+ * default config.depth of 3 could only ever be satisfied on the FINAL depth,
+ * where `break` saves nothing. At window 3 this early exit could not save a
+ * single LLM call at ANY tier (local never even reached 3 depths). That is why
+ * a tree-of-thought run spent 18 calls / 28k tokens / 117s summing three
+ * integers (2026-07-12 probe fleet, p9).
+ *
+ * A plateau needs at least 2 points to observe, so `local` (maxBfsDepth 2)
+ * inherently cannot exit early — 2 depths must both be paid for before a plateau
+ * is visible. Cost control at that tier comes from breadth and the trivial-skip
+ * gate, not from here.
+ */
 export const TOT_TIER_LIMITS: Record<"local" | "mid" | "large" | "frontier", ToTTierLimit> = {
-  local:    { maxBfsDepth: 2, maxPhase2Iterations: 6,  stagnationWindow: 3 },
-  mid:      { maxBfsDepth: 3, maxPhase2Iterations: 8,  stagnationWindow: 3 },
-  large:    { maxBfsDepth: 4, maxPhase2Iterations: 10, stagnationWindow: 3 },
-  frontier: { maxBfsDepth: 5, maxPhase2Iterations: 12, stagnationWindow: 3 },
+  local:    { maxBfsDepth: 2, maxPhase2Iterations: 6,  stagnationWindow: 2 },
+  mid:      { maxBfsDepth: 3, maxPhase2Iterations: 8,  stagnationWindow: 2 },
+  large:    { maxBfsDepth: 4, maxPhase2Iterations: 10, stagnationWindow: 2 },
+  frontier: { maxBfsDepth: 5, maxPhase2Iterations: 12, stagnationWindow: 2 },
 };
 
 /** Get the effective BFS depth, capped by tier limits. */

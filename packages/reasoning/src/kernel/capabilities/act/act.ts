@@ -375,6 +375,7 @@ export function handleActing(
           const blockedMsg = `[Tool "${tc.name}" is not in allowedTools — blocked. Allowed: ${effectiveAllowedTools.join(", ")}]`;
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            toolUsed: tc.name,
           });
           const blockedObsStep = makeStep("observation", blockedMsg, {
             toolCallId: tc.id,
@@ -401,6 +402,7 @@ export function handleActing(
           const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            toolUsed: tc.name,
           });
           const obsStep = makeStep("observation", content, {
             toolCallId: tc.id,
@@ -461,6 +463,7 @@ export function handleActing(
             const finalObsContent = `\u2713 final-answer accepted: ${capture.output}`;
             const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
               toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+              toolUsed: tc.name,
             });
             const finalObsStep = makeStep("observation", finalObsContent, {
               toolCallId: tc.id,
@@ -511,6 +514,7 @@ export function handleActing(
             : "final-answer rejected: conditions not yet met.";
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            toolUsed: tc.name,
           });
           const rejectObs = `\u26A0\uFE0F ${rejectionMsg}`;
           const rejectObsStep = makeStep("observation", rejectObs, {
@@ -555,6 +559,7 @@ export function handleActing(
               const guardFailed = isGuardHardFailure(guardOutcome.observation);
               const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
                 toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+                toolUsed: batchCall.name,
               });
               const blockedObsStep = makeStep("observation", guardOutcome.observation, {
                 toolCallId: batchCall.id,
@@ -799,6 +804,7 @@ export function handleActing(
           const guardFailed = isGuardHardFailure(guardOutcome.observation);
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+            toolUsed: tc.name,
           });
           const guardObsStep = makeStep("observation", guardOutcome.observation, {
             toolCallId: tc.id,

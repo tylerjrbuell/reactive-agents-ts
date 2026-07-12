@@ -1,11 +1,11 @@
 {
   "probe": "p8-streaming",
-  "durationMs": 4451,
+  "durationMs": 4952,
   "checks": [
     {
       "name": "stream-emitted-events",
       "pass": true,
-      "detail": "[[\"ToolCallStarted\",2],[\"ToolCallCompleted\",2],[\"TextDelta\",51],[\"TrustEvent\",1],[\"StreamCompleted\",1]]"
+      "detail": "[[\"ToolCallStarted\",2],[\"ToolCallCompleted\",2],[\"TextDelta\",76],[\"TrustEvent\",1],[\"StreamCompleted\",1]]"
     },
     {
       "name": "completed-event-present",
@@ -14,7 +14,7 @@
     {
       "name": "completed-has-output",
       "pass": true,
-      "detail": "outputLen=174"
+      "detail": "outputLen=127"
     },
     {
       "name": "completed-has-receipt",
@@ -34,7 +34,7 @@
     {
       "name": "stream-tool-events-pair",
       "pass": true,
-      "detail": "startIds=[\"ollama-tc-1783864372232-0\",\"ollama-tc-1783864372834-0\"] doneIds=[\"ollama-tc-1783864372232-0\",\"ollama-tc-1783864372834-0\"]"
+      "detail": "startIds=[\"ollama-tc-1783864851465-0\",\"ollama-tc-1783864852340-0\"] doneIds=[\"ollama-tc-1783864851465-0\",\"ollama-tc-1783864852340-0\"]"
     },
     {
       "name": "stream-tools-agree-with-receipt",
@@ -43,5 +43,5 @@
     }
   ],
   "failCount": 0,
-  "outputPreview": "The haiku about rivers has been written to `./qa-out/p8-haiku.md`.\n\nHere is what I wrote:\n```markdown\nClear waters flow by\nOver smooth and mossy stones\nJourney to the sea\n```"
+  "outputPreview": "The content of `./qa-out/p8-haiku.md` is:\n```\nFlowing waters move,\nCarving paths through ancient stone,\nTo the waiting sea.\n```"
 }

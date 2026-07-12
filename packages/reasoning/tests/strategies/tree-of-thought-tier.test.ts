@@ -36,10 +36,20 @@ describe("TOT_TIER_LIMITS", () => {
     }
   });
 
-  it("stagnation window is 3 for all tiers (universal convergence check)", () => {
+  // Was: "stagnation window is 3 for all tiers". That test pinned the constant
+  // that made the guard unreachable — one score is recorded per BFS depth and
+  // effectiveDepth = min(config.depth=3, maxBfsDepth), so a window of 3 could
+  // only be satisfied on the final depth, where breaking saves nothing. The
+  // property that actually matters is uniformity, not the number; reachability
+  // per tier is pinned in tot-cost-guard-reachable.test.ts.
+  it("stagnation window is uniform across tiers and observable (>= 2)", () => {
     const tiers = ["local", "mid", "large", "frontier"] as const;
     for (const tier of tiers) {
-      expect(TOT_TIER_LIMITS[tier].stagnationWindow).toBe(3);
+      // A plateau needs at least two observed depths to exist.
+      expect(TOT_TIER_LIMITS[tier].stagnationWindow).toBeGreaterThanOrEqual(2);
+      expect(TOT_TIER_LIMITS[tier].stagnationWindow).toBe(
+        TOT_TIER_LIMITS.local.stagnationWindow,
+      );
     }
   });
 });
@@ -97,14 +107,25 @@ describe("ToT BFS convergence check", () => {
   });
 
   it("does NOT exit when scores keep improving each depth", async () => {
-    // Scores improve each round: 0.4 → 0.6 → 0.8
-    let callCount = 0;
+    // This fixture used to hand back a CONSTANT "0.7" for every scoring call
+    // while its comment claimed the scores improved. Because turns are consumed
+    // in order and the last turn repeats once nothing matches ahead
+    // (testing.ts:104), the single scoring turn was consumed at depth 1 and every
+    // later scoring call fell through to the final-answer turn, which parses to
+    // no score at all — the strategy's 0.5 fallback. Best-per-depth was therefore
+    // 0.50, 0.50: a plateau. The test only passed because the stagnation guard
+    // was dead code; it never exercised its own name.
+    //
+    // Now the scores genuinely climb (0.4 → 0.7 → 0.95, deltas well outside the
+    // 0.05 stagnation band), so a firing guard that still declines to exit is
+    // real evidence.
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Good approach\n2. Better approach" },
-      {
-        match: "Rate each",
-        text: "0.7",
-      },
+      { match: "Rate each", text: "0.4" },
+      { match: "Generate exactly", text: "1. Sharper approach\n2. Sharper still" },
+      { match: "Rate each", text: "0.7" },
+      { match: "Generate exactly", text: "1. Best approach\n2. Best still" },
+      { match: "Rate each", text: "0.95" },
       { match: "Selected Approach", text: "FINAL ANSWER: Full depth answer." },
     ]);
 

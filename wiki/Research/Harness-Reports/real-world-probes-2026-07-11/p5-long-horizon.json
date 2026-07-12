@@ -1,14 +1,14 @@
 {
   "probe": "p5-long-horizon",
-  "taskId": "01KXB83FRWNPGVTZDATK62W9DQ",
+  "taskId": "01KXBA1CS00T0DV4R0VXQ9WM08",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 43088,
-  "llmCalls": 7,
-  "durationMs": 18194,
+  "tokensUsed": 18736,
+  "llmCalls": 3,
+  "durationMs": 28103,
   "checks": [
     {
       "name": "deliverable-on-disk",
@@ -28,17 +28,17 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=139"
+      "detail": "success=true outputLen=759"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=43088"
+      "detail": "tokensUsed=18736"
     },
     {
       "name": "coherence:llmCalls-reported",
       "pass": true,
-      "detail": "llmCalls=7"
+      "detail": "llmCalls=3"
     },
     {
       "name": "coherence:verdict-present",
@@ -49,8 +49,23 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p5-notes.md]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,
-  "outputPreview": "The research is complete, and the file `./qa-out/p5-notes.md` has been successfully created with details on Ganymede, Europa, and Callisto."
+  "outputPreview": "I have researched the three largest moons of Jupiter—Ganymede, Callisto, and Io—and created the requested markdown file.\n\nThe file **`./qa-out/p5-notes.md`** has been successfully created with the following content:\n\n***\n# Jupiter's Largest Moons\n\n## Ganymede\n*   **Diameter:** ~3,273 miles (or 5,268 km)\n*   **Notable Fact:** It is the only moon in the solar system to possess its own magnetosphere."
 }

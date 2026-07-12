@@ -127,12 +127,20 @@ interface HygieneCapture {
 }
 
 const HYGIENE_PATTERNS: readonly { readonly name: string; readonly re: RegExp }[] = [
-  // An Effect DEFECT escaped into a forked fiber and nobody observed it.
+  // A forked fiber's failure went unobserved and the runtime reported it.
   { name: "hygiene:no-unhandled-fiber-defect", re: /Fiber terminated with an unhandled error/i },
-  // A log site interpolated an object into a string — the payload is lost.
+  // A log site passed an object where a message was expected — payload lost.
   { name: "hygiene:no-object-Object-in-logs", re: /\[object Object\]/ },
-  // The kernel telling us its own invariant broke.
-  { name: "hygiene:no-missing-toolcall-observation", re: /no ToolCallCompleted emitted/i },
+  // An ACTION step produced an observation with no tool attached — i.e.
+  // metadata.toolUsed was dropped upstream, so the tool is missing from the
+  // receipt's metrics. The same log line fires benignly for system-injected
+  // observations (completion-guard redirects, final-answer acceptance), which
+  // have no action behind them by design — `lastStepType` is the discriminator,
+  // so match on it rather than crying wolf on every nudge.
+  {
+    name: "hygiene:no-dropped-tool-on-action-step",
+    re: /no ToolCallCompleted emitted(?=[\s\S]*lastStepType:action)/i,
+  },
 ];
 
 function captureConsole(): HygieneCapture {

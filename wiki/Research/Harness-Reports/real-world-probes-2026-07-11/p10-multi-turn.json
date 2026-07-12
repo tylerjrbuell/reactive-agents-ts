@@ -1,7 +1,7 @@
 {
   "probe": "p10-multi-turn",
-  "taskId": "01KXB85MVT9JGSP75ZX4ZJXYFH",
-  "durationMs": 4491,
+  "taskId": "01KXBA6Q58JWRQ8EZ3KJG5FV0A",
+  "durationMs": 5534,
   "checks": [
     {
       "name": "first-run-success",
@@ -24,17 +24,17 @@
     {
       "name": "distinct-taskIds",
       "pass": true,
-      "detail": "01KXB85JZKXBJQPT8NA7SG6J47 vs 01KXB85MVT9JGSP75ZX4ZJXYFH"
+      "detail": "01KXBA6MFKWA5TDAP5BW8BSX26 vs 01KXBA6Q58JWRQ8EZ3KJG5FV0A"
     },
     {
       "name": "second-coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=61"
+      "detail": "success=true outputLen=84"
     },
     {
       "name": "second-coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=924"
+      "detail": "tokensUsed=955"
     },
     {
       "name": "second-coherence:llmCalls-reported",

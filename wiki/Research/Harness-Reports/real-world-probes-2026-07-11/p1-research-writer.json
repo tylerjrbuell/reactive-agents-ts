@@ -1,14 +1,14 @@
 {
   "probe": "p1-research-writer",
-  "taskId": "01KXB8172AVYX9R1QTWSW918R5",
+  "taskId": "01KXB9Z4P8T1F0HZJ4ETM48H3Z",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
   "verdict": "tool-grounded",
   "strategyUsed": "reactive",
-  "tokensUsed": 10543,
+  "tokensUsed": 11137,
   "llmCalls": 3,
-  "durationMs": 15687,
+  "durationMs": 13502,
   "checks": [
     {
       "name": "deliverable-on-disk",
@@ -18,7 +18,7 @@
     {
       "name": "deliverable-nonempty",
       "pass": true,
-      "detail": "1010 chars"
+      "detail": "1447 chars"
     },
     {
       "name": "run-success",
@@ -28,12 +28,12 @@
     {
       "name": "coherence:success-implies-output",
       "pass": true,
-      "detail": "success=true outputLen=48"
+      "detail": "success=true outputLen=1676"
     },
     {
       "name": "coherence:tokens-reported",
       "pass": true,
-      "detail": "tokensUsed=10543"
+      "detail": "tokensUsed=11137"
     },
     {
       "name": "coherence:llmCalls-reported",
@@ -49,8 +49,23 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p1-show.md]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,
-  "outputPreview": "Completed: produce the file ./qa-out/p1-show.md."
+  "outputPreview": "The research on \"I Shouldn't Be Alive\" season 1 has been completed, and a bullet-point summary of the key survival incidents featured in the season has been saved to `./qa-out/p1-show.md`.\n\nHere is the content that was written:\n\n# I Shouldn't Be Alive - Season 1 Summary\n\nSeason 1 of \"I Shouldn't Be Alive\" is a compilation of terrifying and true stories focusing on human endurance in extreme surviv"
 }

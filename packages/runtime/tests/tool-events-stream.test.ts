@@ -98,6 +98,50 @@ describe("runStream() public handle — tool lifecycle events", () => {
         }, 30000);
     }
 
+    /**
+     * Drives act.ts's final-answer accept path for real (kernel-hooks alone
+     * cannot: it reads `toolUsed` off whatever step act.ts minted, so a unit
+     * test that hand-builds the step passes no matter what act.ts does).
+     *
+     * Six act.ts sites minted their action step WITHOUT `toolUsed` — including
+     * this one — so onAction published a START and onObservation silently
+     * dropped the COMPLETE. On the stream that is a tool that never resolves.
+     * final-answer is a META tool and stays out of the receipt's grounding
+     * metrics by design; the leak here is the unbalanced lifecycle, not the
+     * verdict.
+     */
+    test("kernel loop: final-answer's tool call is COMPLETED, not left hanging", async () => {
+        const agent = await ReactiveAgents.create()
+            .withName("tool-events-final-answer")
+            .withTestScenario([
+                { toolCall: { name: "final-answer", args: { answer: "done" } } },
+                { text: "FINAL ANSWER: done" },
+            ])
+            .withReasoning({ defaultStrategy: "reactive" })
+            .withRequiredTools({ adaptive: false })
+            .withMaxIterations(4)
+            .build();
+        try {
+            const events: AgentStreamEvent[] = [];
+            for await (const event of agent.runStream("answer me", { density: "full" })) {
+                events.push(event);
+            }
+            const started = events.filter(
+                (e) => e._tag === "ToolCallStarted" && e.toolName === "final-answer",
+            ) as Extract<AgentStreamEvent, { _tag: "ToolCallStarted" }>[];
+            const completed = events.filter(
+                (e) => e._tag === "ToolCallCompleted" && e.toolName === "final-answer",
+            ) as Extract<AgentStreamEvent, { _tag: "ToolCallCompleted" }>[];
+
+            expect(started.length).toBeGreaterThanOrEqual(1);
+            // Was 0: the completion was dropped for want of `toolUsed`.
+            expect(completed.length).toBe(started.length);
+            expect(completed[0]!.callId).toBe(started[0]!.callId);
+        } finally {
+            await agent.dispose();
+        }
+    }, 30000);
+
     test("default density does NOT emit tool events (they are opt-in via density:'full')", async () => {
         const agent = await buildAgent("tool-events-default-density", "kernel");
         try {

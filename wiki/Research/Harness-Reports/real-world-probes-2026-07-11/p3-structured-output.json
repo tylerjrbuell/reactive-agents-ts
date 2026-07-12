@@ -1,6 +1,6 @@
 {
   "probe": "p3-structured-output",
-  "taskId": "01KXB829C4RNA12WAVQD21T97V",
+  "taskId": "01KXB9ZRDTR1YHM64371HMBXRT",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": null,
@@ -8,7 +8,7 @@
   "strategyUsed": "reactive",
   "tokensUsed": 254,
   "llmCalls": 1,
-  "durationMs": 1088,
+  "durationMs": 1317,
   "checks": [
     {
       "name": "object-present",
@@ -49,6 +49,21 @@
       "name": "coherence:verdict-present",
       "pass": true,
       "detail": "verdict=ungrounded"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,

@@ -1,6 +1,6 @@
 {
   "probe": "p7-code-action",
-  "taskId": "01KXB84RPZRS8ZHXCW4HATD226",
+  "taskId": "01KXBA2JW5FMQ49257Y0ZSA7D1",
   "success": true,
   "terminatedBy": "end_turn",
   "goalAchieved": true,
@@ -8,7 +8,7 @@
   "strategyUsed": "code-action",
   "tokensUsed": 1516,
   "llmCalls": 1,
-  "durationMs": 8427,
+  "durationMs": 8790,
   "checks": [
     {
       "name": "exact-answer-on-disk-or-output",
@@ -49,6 +49,21 @@
       "name": "coherence:deliverable-claim-matches-disk[qa-out/p7-answer.txt]",
       "pass": true,
       "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "hygiene:no-unhandled-fiber-defect",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-object-Object-in-logs",
+      "pass": true,
+      "detail": "clean"
+    },
+    {
+      "name": "hygiene:no-dropped-tool-on-action-step",
+      "pass": true,
+      "detail": "clean"
     }
   ],
   "failCount": 0,
