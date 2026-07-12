@@ -16,7 +16,7 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
-import { makeStep, makeObservationResult, type ReasoningStep } from "@reactive-agents/reasoning";
+import { makeStep, makeObservationResult, getRecoveryHint, type ReasoningStep } from "@reactive-agents/reasoning";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
@@ -37,6 +37,11 @@ export interface InlineActDeps {
   readonly obs: ObsLike | null;
   readonly isNormal: boolean;
   readonly progressLogger: ProgressLoggerLike;
+  /**
+   * Tool names the model can actually call (the EXPOSED schema, not the
+   * registry) — gates getRecoveryHint so it never names an absent tool.
+   */
+  readonly exposedToolNames?: ReadonlySet<string>;
 }
 
 export const runInlineAct = (
@@ -165,16 +170,23 @@ export const runInlineAct = (
                 success: true,
                 args,
               })),
-              Effect.catchAll((e) =>
-                Effect.succeed({
+              Effect.catchAll((e) => {
+                // Recovery hint on the error observation — the tool_result
+                // channel is one of only three channels that reach the model;
+                // a bare errno wastes it (2026-07-11 probe p4: hint-less
+                // ENOENT → fabricated exchange rate). Exposure-gated so an
+                // absent tool is never named.
+                const msg = e instanceof Error ? e.message : String(e);
+                const hint = getRecoveryHint(toolName, msg, deps.exposedToolNames);
+                return Effect.succeed({
                   toolCallId: callId,
                   toolName,
-                  result: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
+                  result: `[Tool error: ${msg}${hint}]`,
                   durationMs: Date.now() - startMs,
                   success: false,
                   args,
-                }),
-              ),
+                });
+              }),
             );
 
           // Log tool execution for progress visibility

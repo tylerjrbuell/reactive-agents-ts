@@ -162,6 +162,7 @@ export { computeDeliverableReport } from "./kernel/contract/deliverable-report.j
 // receipts verify on the engine path too (2026-07-11 inline-loop fix).
 export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
 export { makeObservationResult } from "./kernel/utils/observation-helpers.js";
+export { getRecoveryHint } from "./kernel/capabilities/act/tool-execution.js";
 export type {
   RunContract,
   TaskRequirement,

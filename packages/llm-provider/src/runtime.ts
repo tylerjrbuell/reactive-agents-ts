@@ -70,7 +70,11 @@ export const createLLMProviderLayer = (
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(
-      TestLLMServiceLayer(testScenario ?? [{ text: "" }]),
+      // Scenario-less default is NON-EMPTY: a healthy real provider never
+      // returns an empty completion, and the engine's empty-output invariant
+      // (2026-07-11) honestly fails runs that ship nothing — a bare
+      // `.withProvider("test")` smoke run should model the healthy case.
+      TestLLMServiceLayer(testScenario ?? [{ text: "Test response." }]),
       PromptManagerLive,
     );
   }

@@ -191,7 +191,13 @@ const LIST_DIRECTORY_TOOL = "list-directory";
  * Map common tool error patterns to actionable recovery hints.
  * Helps the LLM understand what went wrong and how to fix it.
  */
-function getRecoveryHint(
+/**
+ * Exported for the runtime's inline agent loop (2026-07-11): the inline path
+ * executes tools outside the kernel act phase and returned bare errnos —
+ * probe p4 showed a model hardcoding an exchange rate after a hint-less
+ * ENOENT while list-directory sat exposed and unnamed.
+ */
+export function getRecoveryHint(
   toolName: string,
   errorMsg: string,
   /** Names the model may actually call — the EXPOSED schema, not the registry. */

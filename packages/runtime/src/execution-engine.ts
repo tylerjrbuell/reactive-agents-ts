@@ -73,6 +73,7 @@ import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postproce
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
+import { deriveReceiptDeliverables } from "./builder/helpers.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
@@ -770,7 +771,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   };
 
                   // Get tools in function-calling format for LLM requests
-                  const functionCallingTools = yield* Effect.serviceOption(
+                  const rawFunctionCallingTools = yield* Effect.serviceOption(
                     ToolService,
                   ).pipe(
                     Effect.flatMap((opt) =>
@@ -779,6 +780,53 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         : Effect.succeed([] as readonly any[]),
                     ),
                     Effect.catchAll(() => Effect.succeed([] as readonly any[])),
+                  );
+
+                  // ── Tool-surface policy on the INLINE path (2026-07-11) ──
+                  // This branch exposed the RAW registry to the model: the
+                  // builtins opt-in, allowedTools/focusedTools, adaptive
+                  // filtering AND the TaskContract forbidden list ("MUST NOT
+                  // be visible to the LLM", task-contract.ts:33) were only
+                  // enforced on the reasoning path. Same transform, same
+                  // inputs — one policy, both paths.
+                  const inlinePrepared = yield* prepareReasoningToolSchemas({
+                    // Builtins opt-in nuance: on the REASONING path the
+                    // relevance classifier rescues task-relevant builtins, so
+                    // "hidden unless opted in" stays livable. The inline path
+                    // has NO classifier — filtering an un-opted `.withTools()`
+                    // here would strip EVERY builtin and leave the agent
+                    // toolless (live regression caught by probe p2: the model
+                    // printed the file contents as prose). Bare `.withTools()`
+                    // on this path therefore exposes builtins; explicit
+                    // subsets, allowedTools, and forbidden lists are enforced
+                    // exactly as declared.
+                    config: config.builtins === undefined ? { ...config, builtins: true } : config,
+                    task,
+                    availableToolSchemas: ((cachedToolDefs ?? []) as readonly any[]).map((t: any) => ({
+                      name: t.name as string,
+                      description: t.description as string,
+                      // Custom tools may declare JSON-Schema-object parameters
+                      // instead of the array shape — policy filtering only
+                      // needs names, so degrade to [] rather than throw.
+                      parameters: (Array.isArray(t.parameters) ? t.parameters : []).map((p: any) => ({
+                        name: p.name as string,
+                        type: p.type as string,
+                        description: p.description as string,
+                        required: Boolean(p.required),
+                      })),
+                    })),
+                    availableToolNames: ((cachedToolDefs ?? []) as readonly any[]).map((t: any) => t.name as string),
+                    effectiveAllowedTools,
+                    effectiveFocusedTools,
+                    effectiveRequiredTools,
+                    classifiedRelevantTools,
+                    resolvedCalibration,
+                    obs,
+                    isNormal,
+                  });
+                  const inlineExposedNames = new Set(inlinePrepared.availableToolNames);
+                  const functionCallingTools = rawFunctionCallingTools.filter((t: any) =>
+                    inlineExposedNames.has(t.name as string),
                   );
 
                   // Collect available tool names for hook context enrichment (Phase 1.4)
@@ -862,6 +910,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           obs,
                           isNormal,
                           progressLogger,
+                          // Exposure-gated recovery hints: only tools the
+                          // model can actually call may be named.
+                          exposedToolNames: new Set(availableToolNames),
                         }),
                       );
 
@@ -1060,13 +1111,47 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Reactive strategy often reports partial + max_iterations whenever the kernel did not
                 // reach state "done", even if the last LLM turn produced a usable string. Treat
                 // completed, or partial with non-empty output, as success; empty partial as failure.
-                const executionSucceeded =
+                let executionSucceeded =
                   rr !== undefined && typeof rr.status === "string"
                     ? rr.status === "failed" || rr.status === "error"
                       ? false
                       : rr.status === "completed" ||
                         (rr.status === "partial" && hasSubstantiveOutput)
                     : Boolean(ctx.metadata.isComplete);
+
+                // ── Engine-boundary output/success invariant (M7's engine
+                // mirror, 2026-07-11 probe fleet). The inline path derived
+                // success from isComplete alone, shipping success:true with
+                // EMPTY output (p10 second run, p5 rerun). Empty-output
+                // success is honest ONLY when every DECLARED deliverable
+                // verifiably landed — the artifacts are the answer, and a
+                // deterministic completion note (marked harness-authored, #40
+                // channel) replaces the silence. Otherwise it is a failure
+                // with a real cause. Deliverable flags come from the
+                // RunContract × step-ledger scan — no model judgment.
+                let emptyOutputCompletionNote: string | undefined;
+                if (executionSucceeded && !hasSubstantiveOutput) {
+                  const emptyOutputDeliverables = deriveReceiptDeliverables({
+                    task: String((task.input as { question?: unknown })?.question ?? task.id),
+                    ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
+                    ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+                    reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
+                    output: "",
+                  });
+                  if (
+                    emptyOutputDeliverables !== undefined &&
+                    emptyOutputDeliverables.length > 0 &&
+                    emptyOutputDeliverables.every((d) => d.produced)
+                  ) {
+                    emptyOutputCompletionNote = `Completed: ${emptyOutputDeliverables
+                      .map((d) => d.spec)
+                      .join("; ")}.`;
+                    ctx.metadata.harnessAuthoredOutput = true;
+                  } else {
+                    executionSucceeded = false;
+                    ctx.metadata.emptyOutputFailure = true;
+                  }
+                }
 
                 // ── Debrief: cheap signals inline, rich LLM synthesis FORKED ──
                 // (2026-06-12 debrief-off-critical-path). prepareDebrief computes
@@ -1110,7 +1195,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // flagged a still-rejected response for "block", the answer is
                 // withheld and the run fails; "annotate" prepends a warning.
                 const verificationOutcome = applyVerificationOutcome(
-                  sanitizedOutput,
+                  // Empty-output success with verified deliverables ships the
+                  // deterministic completion note (see invariant above).
+                  emptyOutputCompletionNote ?? sanitizedOutput,
                   executionSucceeded,
                   ctx.metadata as Record<string, unknown>,
                 );
@@ -1128,7 +1215,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ? {
                         error:
                           verificationOutcome.error ??
-                          (outputForSuccess.length > 0
+                          (ctx.metadata.emptyOutputFailure
+                            ? "Run ended with no output and no verified deliverable — nothing to ship."
+                            : outputForSuccess.length > 0
                             ? outputForSuccess
                             : rr?.status === "failed"
                               // Prefer the real kernel failure detail (provider
@@ -1186,6 +1275,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       terminatedByRaw,
                     ),
                     llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
+                    // #40 honesty channel: the empty-output completion note is
+                    // harness-authored, not model prose — say so on the result.
+                    ...(ctx.metadata.harnessAuthoredOutput === true
+                      ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
+                      : {}),
                   },
                   completedAt: new Date(),
                   format: "text",

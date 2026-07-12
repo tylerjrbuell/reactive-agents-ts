@@ -9,10 +9,14 @@ describe("withReasoning({ maxIterations }) wiring", () => {
     // below the guard threshold. With the bug, the kernel defaults to 10
     // iterations and the stepsCount would be 3 (guard fires first).
     //
-    // Uses the default test scenario ([{ text: "" }]) — empty responses avoid
-    // the fast-path exit (length ≤ 20), so only maxIterations controls termination.
+    // Uses an EXPLICIT empty scenario — empty responses avoid the fast-path
+    // exit (length ≤ 20), so only maxIterations controls termination. (The
+    // scenario-less test-provider default became non-empty on 2026-07-11 when
+    // the engine's empty-output invariant landed; this test needs the empty
+    // turns to exercise iteration control, so it declares them.)
     const agent = await ReactiveAgents.create()
       .withProvider("test")
+      .withTestScenario([{ text: "" }])
       .withReasoning({ maxIterations: 1, defaultStrategy: "reactive" })
       .build();
 
@@ -26,8 +30,10 @@ describe("withReasoning({ maxIterations }) wiring", () => {
   it("produces more steps when maxIterations is not constrained to 1", async () => {
     // Confirms the default (10) runs more iterations than the 1-iter cap above.
     // Token-delta guard fires at 3 iterations, so stepsCount will be 3.
+    // Explicit empty scenario for the same reason as the test above.
     const agent = await ReactiveAgents.create()
       .withProvider("test")
+      .withTestScenario([{ text: "" }])
       .withReasoning({ defaultStrategy: "reactive" })
       .build();
 
