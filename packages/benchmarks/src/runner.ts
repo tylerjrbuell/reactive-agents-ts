@@ -856,7 +856,13 @@ async function runInternal(
         clearTimeout(killTimer)
         if (abort.signal.aborted) {
           // Belt-and-braces: ensure the fiber is gone before the next cell.
-          try { (agent as { terminate?: () => Promise<void> }).terminate?.() } catch { /* disposed below */ }
+          // terminate() is async, so a sync try/catch cannot contain it — a
+          // rejection here escaped as an UNHANDLED rejection and killed the whole
+          // run (it did: the manual-react arm crashed to a 0-byte report, because
+          // that variant builds without .withKillSwitch()). Swallow on the promise.
+          void (agent as { terminate?: () => Promise<void> })
+            .terminate?.()
+            ?.catch(() => { /* no kill switch on this variant; disposed below */ })
         }
       }
     } finally {

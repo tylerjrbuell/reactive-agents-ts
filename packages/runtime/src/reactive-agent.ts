@@ -2395,13 +2395,49 @@ export class ReactiveAgent<TOut = unknown> {
      * await agent.resume();
      * ```
      */
-    async pause(): Promise<void> {
+    /**
+     * Run a control action against the KillSwitchService.
+     *
+     * The service is only in the layer when `.withKillSwitch()` was called — it
+     * is `Layer.empty` otherwise (see acquireRunSignal, which already resolves it
+     * with `serviceOption` for exactly this reason). Requesting the tag directly
+     * makes a missing service a *defect*, and a defect is not catchable by
+     * `catchAll` — so pause/resume/stop/terminate, four DOCUMENTED public methods,
+     * each crashed the caller with "Service not found: KillSwitchService" on any
+     * agent that had not opted in (the default). A caller's try/catch around the
+     * un-awaited promise cannot save them either; it surfaces as an unhandled
+     * rejection and takes the process down.
+     *
+     * Now: a clear, catchable error that names the remedy.
+     */
+    private async killSwitchAction(
+        method: string,
+        run: (ks: Context.Tag.Service<typeof KillSwitchService>) => Effect.Effect<void, unknown>,
+    ): Promise<void> {
         return this.runtime.runPromise(
-            KillSwitchService.pipe(
-                Effect.flatMap((ks) => ks.pause(this.agentId)),
-                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5105", tag: errorTag(err) }))
-            ) as Effect.Effect<void>
+            Effect.serviceOption(KillSwitchService).pipe(
+                Effect.flatMap((opt) =>
+                    opt._tag === "Some"
+                        ? run(opt.value).pipe(
+                              Effect.catchAll((err) =>
+                                  emitErrorSwallowed({
+                                      site: `runtime/src/reactive-agent.ts:${method}`,
+                                      tag: errorTag(err),
+                                  }),
+                              ),
+                          )
+                        : Effect.die(
+                              new Error(
+                                  `agent.${method}() requires the kill switch. Build the agent with .withKillSwitch() (or features.killSwitch in a config) to enable pause/resume/stop/terminate.`,
+                              ),
+                          ),
+                ),
+            ) as Effect.Effect<void>,
         )
+    }
+
+    async pause(): Promise<void> {
+        return this.killSwitchAction("pause", (ks) => ks.pause(this.agentId))
     }
 
     /**
@@ -2420,12 +2456,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async resume(): Promise<void> {
-        return this.runtime.runPromise(
-            KillSwitchService.pipe(
-                Effect.flatMap((ks) => ks.resume(this.agentId)),
-                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5129", tag: errorTag(err) }))
-            ) as Effect.Effect<void>
-        )
+        return this.killSwitchAction("resume", (ks) => ks.resume(this.agentId))
     }
 
     /**
@@ -2443,12 +2474,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async stop(reason = 'stop() called'): Promise<void> {
-        return this.runtime.runPromise(
-            KillSwitchService.pipe(
-                Effect.flatMap((ks) => ks.stop(this.agentId, reason)),
-                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5152", tag: errorTag(err) }))
-            ) as Effect.Effect<void>
-        )
+        return this.killSwitchAction("stop", (ks) => ks.stop(this.agentId, reason))
     }
 
     /**
@@ -2466,12 +2492,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async terminate(reason = 'terminate() called'): Promise<void> {
-        return this.runtime.runPromise(
-            KillSwitchService.pipe(
-                Effect.flatMap((ks) => ks.terminate(this.agentId, reason)),
-                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5175", tag: errorTag(err) }))
-            ) as Effect.Effect<void>
-        )
+        return this.killSwitchAction("terminate", (ks) => ks.terminate(this.agentId, reason))
     }
 
     /**
