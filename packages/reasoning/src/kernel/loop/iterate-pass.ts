@@ -86,6 +86,7 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
+import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { serializeKernelState } from "../state/kernel-codec.js";
 import {
   transitionState,
@@ -585,7 +586,21 @@ export function runIterationPass(
                   },
                 });
                 state = transitionState(state, {
-                  steps: [...state.steps, makeStep("harness_signal", `⚠️ ${steer}`)],
+                  steps: [
+                    ...state.steps,
+                    makeStep("harness_signal", `⚠️ ${steer}`, {
+                      // Spec §5b (W-Q) — pace-triage steer is a receipt-visible
+                      // intervention. Lexical: the burn-ratio band is a
+                      // statistical pace heuristic (advisory).
+                      intervention: {
+                        actor: "pace-triage",
+                        authorityClass: authorityOf("pace-triage"),
+                        evidence: `burnRatio=${assessment.pace.burnRatio.toFixed(2)} band=${assessment.pace.band}; outstanding=${assessment.requirements.outstanding.length}`,
+                        whatChanged: "pace-triage: steered model to outstanding requirements",
+                        iter: state.iteration,
+                      },
+                    }),
+                  ],
                   // Merge — never clobber guidance a prior pass queued for this think.
                   pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer },
                   meta: { ...state.meta, lastTriageSignature: signature },
@@ -1071,7 +1086,21 @@ export function runIterationPass(
             });
             state = transitionState(state, {
               status: "thinking",
-              steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+              steps: [
+                ...state.steps,
+                makeStep("harness_signal", `⚠️ ${guidance}`, {
+                  // Spec §5b (W-Q) — the F3 immediate redirect is a
+                  // receipt-visible intervention. Deterministic: an exact
+                  // (tool, errorClass) repeat is an evidence-driven fact.
+                  intervention: {
+                    actor: "repeated-identical-failure",
+                    authorityClass: authorityOf("repeated-identical-failure"),
+                    evidence: `${repeated.toolName} failed ${repeated.streak}× with errorClass=${repeated.errorClass}`,
+                    whatChanged: "repeated-identical-failure: injected recovery steering",
+                    iter: state.iteration,
+                  },
+                }),
+              ],
               pendingGuidance: {
                 ...(state.pendingGuidance ?? {}),
                 errorRecovery: guidance,

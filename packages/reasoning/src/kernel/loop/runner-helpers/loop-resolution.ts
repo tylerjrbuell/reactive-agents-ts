@@ -31,6 +31,7 @@
 import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
+import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
 import {
   transitionState,
@@ -128,7 +129,20 @@ export function resolveDetectedLoop(
       });
       state = transitionState(state, {
         status: "thinking",
-        steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+        steps: [
+          ...state.steps,
+          makeStep("harness_signal", `⚠️ ${guidance}`, {
+            // Spec §5b (W-Q) — loop recovery redirect. Deterministic: an
+            // unresolved tool failure the run must resolve (evidence-driven).
+            intervention: {
+              actor: "recovery-steering",
+              authorityClass: authorityOf("recovery-steering"),
+              evidence: `unresolved tool failure(s): ${recovery.failedUnresolved.join(", ")}; redirect #${failureRecoveryRedirects}`,
+              whatChanged: "recovery-steering: injected failure-recovery steering (loop)",
+              iter: state.iteration,
+            },
+          }),
+        ],
         pendingGuidance: { errorRecovery: guidance },
         error: null,
       });
@@ -170,7 +184,20 @@ export function resolveDetectedLoop(
         });
         state = transitionState(state, {
           status: "thinking",
-          steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+          steps: [
+            ...state.steps,
+            makeStep("harness_signal", `⚠️ ${guidance}`, {
+              // Spec §5b (W-Q) — loop-with-missing-required-tools nudge.
+              // Deterministic: a loop AND a still-missing required tool (facts).
+              intervention: {
+                actor: "loop-missing-tools",
+                authorityClass: authorityOf("loop-missing-tools"),
+                evidence: `loop detected; missing required tool(s): ${missingRequiredByCount.join(", ")}`,
+                whatChanged: "loop-missing-tools: steered model to call missing required tool(s)",
+                iter: state.iteration,
+              },
+            }),
+          ],
           pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
           error: null,
         });

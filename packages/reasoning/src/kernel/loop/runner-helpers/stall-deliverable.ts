@@ -30,6 +30,7 @@
 import { Effect } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
+import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { terminate } from "../terminate.js";
 import {
   transitionState,
@@ -262,7 +263,20 @@ export function runStallDeliverableStep(
       });
       state = transitionState(state, {
         status: "thinking",
-        steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+        steps: [
+          ...state.steps,
+          makeStep("harness_signal", `⚠️ ${guidance}`, {
+            // Spec §5b (W-Q) — StallPolicy required-tool nudge. Deterministic:
+            // a contract-required tool was not called (a RunContract fact).
+            intervention: {
+              actor: "required-tool-nudge",
+              authorityClass: authorityOf("required-tool-nudge"),
+              evidence: `missing required tool(s): ${missingRequiredByCount.join(", ")}; nudge #${requiredToolNudgeCount}`,
+              whatChanged: "required-tool-nudge: steered model to call missing required tool(s)",
+              iter: state.iteration,
+            },
+          }),
+        ],
         pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
         meta: {
           ...state.meta,
@@ -301,7 +315,20 @@ export function runStallDeliverableStep(
       });
       state = transitionState(state, {
         status: "thinking",
-        steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+        steps: [
+          ...state.steps,
+          makeStep("harness_signal", `⚠️ ${guidance}`, {
+            // Spec §5b (W-Q) — stall recovery redirect. Deterministic: an
+            // unresolved tool failure the run must resolve (evidence-driven).
+            intervention: {
+              actor: "recovery-steering",
+              authorityClass: authorityOf("recovery-steering"),
+              evidence: `unresolved tool failure(s): ${recovery.failedUnresolved.join(", ")}; redirect #${failureRecoveryRedirects}`,
+              whatChanged: "recovery-steering: injected failure-recovery steering (stall)",
+              iter: state.iteration,
+            },
+          }),
+        ],
         pendingGuidance: { errorRecovery: guidance },
         meta: {
           ...state.meta,

@@ -38,6 +38,7 @@ import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js"
 import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
+import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
@@ -1266,6 +1267,38 @@ export function runKernel(
               verifierRejected: true,
               verifierVerdict: verdict.summary,
             } as KernelState["meta"],
+          });
+        }
+
+        // Spec §5b (W-Q / task #54) — when the ALWAYS-ON fabricated-measurement
+        // guard is the (or a) failing check, record it as a receipt-visible
+        // intervention on a dedicated step. Deterministic: the guard rejects
+        // ONLY perf measurements no tool observation produced (evidence-driven).
+        // The verdict summary already lands on `receipt.verifierVerdict`; this
+        // additionally names the guard in `interventions[]` so the debugging
+        // spine shows WHICH control actor fired. Stamped after the branch chain
+        // so it rides whichever meta transition applied (reject/escalate/warn).
+        const fabCheck = verdict.checks.find(
+          (c) => c.name === "output-not-fabricated-measurement" && !c.passed,
+        );
+        if (fabCheck !== undefined) {
+          state = transitionState(state, {
+            steps: [
+              ...state.steps,
+              makeStep(
+                "harness_signal",
+                `⚠️ fabrication guard: ${fabCheck.reason ?? "fabricated measurement rejected"}`,
+                {
+                  intervention: {
+                    actor: "fabrication-guard",
+                    authorityClass: authorityOf("fabrication-guard"),
+                    evidence: (fabCheck.reason ?? "fabricated measurement with no tool evidence").slice(0, 200),
+                    whatChanged: "fabrication-guard: terminal output rejected (fabricated measurement)",
+                    iter: state.iteration,
+                  },
+                },
+              ),
+            ],
           });
         }
       }

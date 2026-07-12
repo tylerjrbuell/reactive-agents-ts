@@ -311,6 +311,11 @@ export function handleThinking(
     const discovered = yield* Ref.get(discoveredToolsStoreRef);
     const gateBlockedTools =
       (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
+    // The contract's declared deny-list — the read path for
+    // `constraints.forbidden-tool`. Empty without a contract, so the default
+    // surface is unchanged. Captured once so the W-Q tool-surface intervention
+    // (below) can report which tools the deny-list actually removed.
+    const deniedToolNames = forbiddenTools(state.meta.runContract);
     const toolSurface = resolveToolSurface({
       augmented: augmentedToolSchemas,
       finalAnswerSchema: {
@@ -324,10 +329,7 @@ export function handleThinking(
       requiredTools: classifiedRequired,
       relevantTools: classifiedRelevant,
       allowedTools: input.allowedTools ?? [],
-      // The contract's declared deny-list — the read path for
-      // `constraints.forbidden-tool`. Empty without a contract, so the default
-      // surface is unchanged.
-      forbiddenTools: forbiddenTools(state.meta.runContract),
+      forbiddenTools: deniedToolNames,
       toolsUsed: state.toolsUsed,
       discovered,
       // The FULL catalog discover-tools lists from (tool-capabilities.ts
@@ -345,6 +347,21 @@ export function handleThinking(
       pruneMinTools: PRUNE_MIN_TOOLS,
     });
     const promptSchemas = toolSurface.visible;
+
+    // ── Tool-surface narrowing intervention (Spec §5b — W-Q / task #54) ──────
+    // The c4e964e8 postmortem cost: NO site could say WHY a tool was hidden.
+    // resolveToolSurface is a per-iteration PURE resolver (no dedicated step),
+    // so the two HARD, deterministic narrowings that change what the model can
+    // CALL are stamped on this iteration's thought step (dedup: once per run per
+    // actor). The soft lazy/classification disclosure is deliberately NOT
+    // stamped — it prunes every iteration and tools stay reachable via
+    // discover-tools, so it is steady-state operation, not a control action.
+    const surfaceDeniedTool =
+      deniedToolNames.length > 0 &&
+      augmentedToolSchemas.some((t) => deniedToolNames.includes(t.name));
+    // Stage-3 gate narrowing: the required-tools gate cut the FC-callable set
+    // below what is visible while required tools are still pending.
+    const surfaceGateNarrowed = toolSurface.callable.length < toolSurface.visible.length;
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
@@ -957,7 +974,41 @@ export function handleThinking(
     );
     thought = stripRationaleBlocks(thought);
 
-    const thoughtStep = makeStep("thought", thought, thinking ? { thinking } : undefined);
+    // W-Q tool-surface intervention — stamp the highest-authority not-yet-seen
+    // hard narrowing onto this thought step (dedup: once per run per actor).
+    // Only ONE intervention rides a step; deny (constant) takes priority over
+    // the transient gate-narrow, which then lands on a later iteration's step.
+    const priorSurfaceActors = new Set(
+      state.steps
+        .map((s) => s.metadata?.intervention?.actor)
+        .filter((a): a is string => a !== undefined),
+    );
+    const surfaceIntervention =
+      surfaceDeniedTool && !priorSurfaceActors.has("tool-surface:forbidden-deny")
+        ? {
+            actor: "tool-surface:forbidden-deny",
+            authorityClass: authorityOf("tool-surface:forbidden-deny"),
+            evidence: `contract deny-list removed: ${deniedToolNames.join(", ")}`,
+            whatChanged: "tool-surface: forbidden-by-contract tool(s) hidden from the surface",
+            iter: state.iteration,
+          }
+        : surfaceGateNarrowed && !priorSurfaceActors.has("tool-surface:gate-narrow")
+          ? {
+              actor: "tool-surface:gate-narrow",
+              authorityClass: authorityOf("tool-surface:gate-narrow"),
+              evidence: `required-tools gate narrowed FC surface (${toolSurface.visible.length}→${toolSurface.callable.length}); pending: ${missingRequiredForPressure.join(", ")}`,
+              whatChanged: "tool-surface: gate narrowed callable tools while required tools pending",
+              iter: state.iteration,
+            }
+          : undefined;
+    const thoughtMeta =
+      thinking || surfaceIntervention !== undefined
+        ? {
+            ...(thinking ? { thinking } : {}),
+            ...(surfaceIntervention !== undefined ? { intervention: surfaceIntervention } : {}),
+          }
+        : undefined;
+    const thoughtStep = makeStep("thought", thought, thoughtMeta);
     const newSteps = [...state.steps, thoughtStep];
 
     // Strip fabricated action/observation pairs — small models often "simulate"

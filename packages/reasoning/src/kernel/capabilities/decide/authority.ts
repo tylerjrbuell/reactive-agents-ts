@@ -35,6 +35,11 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   EntropyConvergence: "lexical", // entropy-derivative statistical proxy
   "content-stability": "lexical",
   "final-answer-regex": "lexical",
+  // W-Q intervention actors (task #54). Classified by the EVIDENCE that drives
+  // each signal, matching the grounding-redirect convention (a deterministic
+  // FACT is deterministic even when delivered as advisory steering).
+  "pace-triage": "lexical", // burn-ratio statistical band → advisory steer
+  "stall-deliverable": "lexical", // consecutive-stall statistical counter → guard fire
 
   // ── Model-grade judgments (may override equal-or-weaker) ───────────────────
   LLMEndTurn: "model-grade", // the model chose to stop
@@ -51,6 +56,14 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "post-condition-steer": "deterministic",
   "grounding-redirect": "deterministic",
   "budget-exceeded": "deterministic",
+  // W-Q intervention actors (task #54) — each keyed on a deterministic fact.
+  "repeated-identical-failure": "deterministic", // exact (tool,errorClass) repeat
+  "recovery-steering": "deterministic", // unresolved tool failure the run must resolve
+  "required-tool-nudge": "deterministic", // a contract-required tool was not called
+  "loop-missing-tools": "deterministic", // loop detected with required tools still missing
+  "tool-surface:forbidden-deny": "deterministic", // contract deny-list removed a tool
+  "tool-surface:gate-narrow": "deterministic", // required-tools gate narrowed the FC surface
+  "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output
 };
 
 /** Resolve an actor's authority class (default `model-grade` — see above). */

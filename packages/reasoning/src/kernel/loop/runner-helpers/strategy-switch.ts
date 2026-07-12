@@ -30,6 +30,7 @@
 
 import { Effect } from "effect";
 import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
+import { authorityOf } from "../../../kernel/capabilities/decide/authority.js";
 import { buildHandoff } from "../../../kernel/capabilities/reflect/strategy-evaluator.js";
 import {
   initialKernelState,
@@ -194,6 +195,30 @@ export function applyStrategySwitch(
       );
       state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
     }
+
+    // Spec §5b (W-Q / task #54) — the strategy switch is a receipt-visible
+    // intervention: an arbitration decision (model-grade) reinitialized the
+    // kernel for a different strategy. Stamped on the NEW state (the prior
+    // state's steps are discarded by the reinit, except carriedObservations),
+    // so `deriveInterventionsFromSteps` picks it up from the run's final steps.
+    state = transitionState(state, {
+      steps: [
+        ...state.steps,
+        makeStep(
+          "harness_signal",
+          `⚠️ Strategy switched: ${fromStrategy} → ${toStrategy} (${failureReason})`,
+          {
+            intervention: {
+              actor: "strategy-switch",
+              authorityClass: authorityOf("strategy-switch"),
+              evidence: `${fromStrategy}→${toStrategy}: ${failureReason.slice(0, 180)}`,
+              whatChanged: `strategy-switch: reinitialized kernel as "${toStrategy}"`,
+              iter: priorState.iteration,
+            },
+          },
+        ),
+      ],
+    });
 
     // Build updated input with handoff context. Also drop permanently-failed
     // tools from requiredTools — the lane controller uses this list to decide
