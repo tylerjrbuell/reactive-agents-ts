@@ -76,6 +76,11 @@ describe("inline loop — deliverable truth", () => {
       expect(result.receipt?.deliverables).toEqual([
         { spec: "produce the file ./qa-test-inline/out.txt", produced: true },
       ]);
+
+      // goalAchieved upgrades from the deliverable evidence (2026-07-11):
+      // end_turn used to leave it null forever even when every declared
+      // deliverable verifiably landed.
+      expect(result.goalAchieved).toBe(true);
     } finally {
       await agent.dispose();
     }

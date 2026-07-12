@@ -33,7 +33,7 @@ import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
-import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from "../builder/helpers.js";
+import { resolveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from "../builder/helpers.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import type { ReasoningStep } from "@reactive-agents/reasoning";
@@ -443,7 +443,10 @@ export const makeExecuteStream =
                   return iv.length > 0 ? { interventions: iv } : {}
                 })(),
                 ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
-                goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
+                // Deterministic upgrade over the terminatedBy heuristic — the
+                // declared-deliverable evidence resolves end_turn's "maybe"
+                // (resolveGoalAchieved JSDoc; single shared rule with run()).
+                goalAchieved: resolveGoalAchieved(receiptSource.terminatedBy, receiptDeliverables),
                 abstained: receiptSource.terminatedBy === "abstained",
                 success: receiptSource.success ?? true,
                 // Single shared source with the non-streaming site — see

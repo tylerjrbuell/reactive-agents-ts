@@ -19,7 +19,7 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from './builder/helpers.js'
+import { resolveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from './builder/helpers.js'
 import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
 import {
     CapabilityRegistry,
@@ -1480,7 +1480,6 @@ export class ReactiveAgent<TOut = unknown> {
                 // attaches the fiber here. debriefRich() awaits it lazily; the
                 // fiber is tracked so dispose() joins it (no dropped persist).
                 const debriefFiber = (r as { _debriefFiber?: Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never> })._debriefFiber
-                const goalAchieved = deriveGoalAchieved(r.terminatedBy)
                 // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
                 // answer was produced, computed from in-memory run data (works
                 // without tracing). See @reactive-agents/core's TrustReceipt
@@ -1512,6 +1511,10 @@ export class ReactiveAgent<TOut = unknown> {
                           }).reasoningSteps,
                           output: String(r.output ?? ''),
                       })
+                // Deterministic upgrade over the terminatedBy heuristic: the
+                // declared-deliverable evidence resolves end_turn's "maybe"
+                // (see resolveGoalAchieved's JSDoc, builder/helpers.ts).
+                const goalAchieved = resolveGoalAchieved(r.terminatedBy, receiptDeliverables)
                 const receipt: TrustReceipt | undefined = isPausedRun
                     ? undefined
                     : computeTrustReceipt({

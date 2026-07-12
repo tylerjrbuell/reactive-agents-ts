@@ -78,6 +78,33 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
 }
 
 /**
+ * Resolve `goalAchieved` from the terminatedBy heuristic PLUS the declared-
+ * deliverable evidence (2026-07-11): before this, an `end_turn` run stayed
+ * `null` forever — even when every declared deliverable verifiably landed
+ * (probe p5: success:true, file produced, goalAchieved:null) — while the
+ * deterministic answer sat one field away on the receipt.
+ *
+ * Rules (deterministic authority — the deliverable flags come from the
+ * RunContract × step-ledger scan, not any model claim):
+ *   1. Any DECLARED deliverable missing → false. A model's explicit
+ *      final-answer claim does not outrank a missing artifact (mirrors the
+ *      receipt's verdict cap, e247e6b8).
+ *   2. All declared deliverables produced → upgrade null → true; an explicit
+ *      false (max_iterations / llm_error / abstained) is NOT upgraded — the
+ *      files landing doesn't un-fail a capped or errored run.
+ *   3. No declared deliverables (pure Q&A) → the heuristic verbatim.
+ */
+export function resolveGoalAchieved(
+    terminatedBy: TerminatedBy | undefined,
+    deliverables: readonly DeliverableReceipt[] | undefined,
+): boolean | null {
+    const base = deriveGoalAchieved(terminatedBy)
+    if (!deliverables || deliverables.length === 0) return base
+    if (deliverables.some((d) => !d.produced)) return false
+    return base === false ? false : true
+}
+
+/**
  * Whether a tool name counts as SUBSTANTIVE grounding evidence for the trust
  * receipt (Arc 1 Task 8). Excluded, per the kernel's own "not real work"
  * classification (live-smoke defect fix 2026-07-06):
