@@ -56,6 +56,7 @@ Cards are served at `GET /.well-known/agent.json` (standard) and `GET /agent/car
 
 Convert existing tool definitions to skills:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const skills = toolsToSkills([
   { name: "calculator", description: "Perform math", parameters: [{ name: "expression" }] },
@@ -165,6 +166,7 @@ const result = await Effect.gen(function* () {
 
 ### Authentication
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const layer = createA2AClient({
   baseUrl: "https://agent.example.com",
@@ -188,6 +190,7 @@ const layer2 = createA2AClient({
 
 Find the best agent for a task based on skills and capabilities:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { matchCapabilities, findBestAgent } from "@reactive-agents/a2a";
 
@@ -246,6 +249,7 @@ const agent = await ReactiveAgents.create()
 
 For real-time task updates, use Server-Sent Events:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createSSEStream, formatSSEEvent } from "@reactive-agents/a2a";
 
@@ -275,6 +279,7 @@ When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents su
 | `websocket` | WebSocket — low-latency bidirectional connection |
 | `streamable-http` | Streaming HTTP — persistent connection with multiplexed streams |
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // stdio (subprocess)
 .withMCP({ name: "local-tools", transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem"] })

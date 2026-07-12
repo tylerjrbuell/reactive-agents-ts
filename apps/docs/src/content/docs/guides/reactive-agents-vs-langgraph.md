@@ -57,6 +57,7 @@ This is a genuine LangGraph strength. [LangSmith](https://www.langchain.com/lang
 
 **Reactive Agents**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -73,6 +74,7 @@ console.log(result.output);
 
 **LangGraph.js** (prebuilt ReAct agent)
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MemorySaver } from "@langchain/langgraph";

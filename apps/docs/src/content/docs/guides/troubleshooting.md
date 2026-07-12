@@ -14,6 +14,7 @@ Use this page as a symptom → cause → fix reference when agents fail, hang, o
 1. Reproduce with a minimal script using `runOnce()`.
 2. Enable observability:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withObservability({ verbosity: "debug", live: true })
 .withEvents()
@@ -40,6 +41,7 @@ ollama pull qwen3.5
 
 Use an explicit model in builder config:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withProvider("ollama")
 .withModel("qwen3.5")
@@ -81,6 +83,7 @@ Use an explicit model in builder config:
 - Open MCP stdio subprocesses (or other long-lived transports) still active.
 
 **Fix**
+<!-- docs-skip-typecheck -->
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withMCP({ name: "filesystem", transport: "stdio", command: "bunx", args: ["-y", "@modelcontextprotocol/server-filesystem", "."] })
@@ -155,6 +158,7 @@ ollama pull cogito:14b
 
 Then reference the exact tag in your builder chain:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withProvider("ollama")
 .withModel("cogito:14b")
@@ -173,6 +177,7 @@ If the tag still fails after pulling, run `ollama list` again to confirm the reg
 **Fix**
 Remove the explicit `.withObservability()` call — the default configuration is already active:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // ❌ Causes duplicate output
 const agent = await ReactiveAgents.create()

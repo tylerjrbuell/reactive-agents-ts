@@ -82,6 +82,7 @@ Detects fabricated claims by comparing agent output against source context. Avai
 
 **LLM mode**: Uses structured prompts for claim extraction and per-claim verification against source context. Falls back to heuristic mode on failure.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import {
   checkHallucination,
@@ -122,6 +123,7 @@ const agent = await ReactiveAgents.create()
 
 Each verification returns a `VerificationResult`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 {
   overallScore: 0.82,        // 0.0 to 1.0

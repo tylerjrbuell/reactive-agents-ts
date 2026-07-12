@@ -13,6 +13,7 @@ Tools give agents the ability to take real-world actions — fetch data, run cod
 
 The fluent `ToolBuilder` catches misconfiguration at build time:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ToolBuilder } from "@reactive-agents/tools";
 
@@ -33,6 +34,7 @@ const searchTool = new ToolBuilder("web-search")
 
 Register it on the agent:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -42,6 +44,7 @@ const agent = await ReactiveAgents.create()
 
 ## Parameter Types
 
+<!-- docs-skip-typecheck -->
 ```typescript
 new ToolBuilder("file-processor")
   .description("Process a file")
@@ -58,6 +61,7 @@ new ToolBuilder("file-processor")
 
 ## Risk Levels and Approval Gates
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const deleteFileTool = new ToolBuilder("delete-file")
   .description("Permanently delete a file from disk")
@@ -74,6 +78,7 @@ To have the **framework** pause a run on a gated call and resume it on approval,
 
 The flag is visible in `listTools()` output and on the definition returned by `build()`, so you can check it in a custom execution pipeline:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Example: check the flag before passing a tool to ToolService
 const { definition, handler } = new ToolBuilder("delete-file")
@@ -94,6 +99,7 @@ if (definition.requiresApproval) {
 
 Categories help the agent reason about which tools to use:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 new ToolBuilder("send-email")
   .description("Send an email message")
@@ -131,6 +137,7 @@ const calculator: ToolDefinition = {
 
 For tools that modify state, use `riskLevel("high")` and return structured results so the agent can reason about success/failure:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const writeFileTool = new ToolBuilder("write-file")
   .description("Write content to a file, creating it if it doesn't exist")
@@ -165,6 +172,7 @@ const agent = await ReactiveAgents.create()
 
 Large tool outputs (e.g., full file contents, long API responses) are automatically compressed to fit the context window. Configure the compression behavior:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")

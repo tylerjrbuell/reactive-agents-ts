@@ -9,7 +9,11 @@ sidebar:
 
 import { Badge, Aside } from '@astrojs/starlight/components';
 
-The 80% of the API you'll use, all on one page. For full signatures and option types, see the [Builder API reference](/reference/builder-api/).
+The 80% of the API you'll use, all on one page. For full signatures and option types, see the generated [Builder API reference](/reference/builder-api/) and [Configuration reference](/reference/configuration/) (both emitted from the schema — the single source of truth).
+
+<Aside type="note" title="Two syntaxes, one API">
+`createAgent(config)` (declarative) and `ReactiveAgents.create().withX()` (fluent) are the **same API**: same names, same nesting — `createAgent({ tools: { allowedTools } })` ≡ `.withTools({ allowedTools })`. Use the config object for static definitions (the 90% case); reach for the builder when construction is conditional/imperative or needs a code-only escape hatch (hooks, layers, compose).
+</Aside>
 
 <Aside type="tip" title="Reading guide">
 Method tables below use these markers:
@@ -21,18 +25,31 @@ Method tables below use these markers:
 
 ## Minimum viable agent
 
-```typescript
-import { ReactiveAgents } from "reactive-agents";
+The front door — a declarative config object:
 
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .build();
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "assistant",
+  provider: "anthropic",
+});
 
 const result = await agent.run("What's 2 + 2?");
 console.log(result.output);
 ```
 
-That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
+That's it. Provider key from `.env`, model auto-picked, direct LLM loop. The
+same agent via the fluent builder:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("assistant")
+  .withProvider("anthropic")
+  .build();
+```
 
 ---
 
@@ -109,6 +126,7 @@ That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
 |--------|--------------|
 | `.withHook({ phase, timing, handler })` | Intercept any of the 12 phases |
 
+{/* docs-skip-typecheck */}
 ```typescript
 .withHook({
   phase: "act",
@@ -142,6 +160,7 @@ Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `thin
 
 `AgentResult` shape:
 
+{/* docs-skip-typecheck */}
 ```typescript
 {
   output: string,
@@ -202,6 +221,7 @@ Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
 
 ## Functional composition
 
+{/* docs-skip-typecheck */}
 ```typescript
 import { agentFn, pipe, parallel, race } from "reactive-agents";
 

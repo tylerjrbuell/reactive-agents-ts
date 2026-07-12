@@ -13,6 +13,7 @@ Reactive Agents supports multiple agents working together through the orchestrat
 
 Three specialized agents work sequentially — each builds on the previous agent's output:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { OrchestrationService } from "@reactive-agents/orchestration";
@@ -65,6 +66,7 @@ const program = Effect.gen(function* () {
 
 Multiple agents research different angles simultaneously:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "multi-source-research",
@@ -84,6 +86,7 @@ const workflow = yield* orch.executeWorkflow(
 
 Split a large task across workers, then aggregate results:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Split a large dataset into chunks
 const chunks = splitData(largeDataset, 5);
@@ -115,6 +118,7 @@ const workflow = yield* orch.executeWorkflow(
 
 A central orchestrator dispatches tasks and delegates specific permissions:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { IdentityService } from "@reactive-agents/identity";
 
@@ -154,6 +158,7 @@ const program = Effect.gen(function* () {
 
 For long-running workflows, use checkpoints to survive crashes:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Start a workflow
 const workflow = yield* orch.executeWorkflow("long-task", "sequential", steps, executeStep);
@@ -212,6 +217,7 @@ const seniorAgent = await ReactiveAgents.create()
 
 Use the EventBus to coordinate agents through events:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { EventBus } from "@reactive-agents/core";
 
@@ -289,6 +295,7 @@ Sub-agent persona can be specified via the `spawn-agent` tool parameters:
 
 Agents can communicate across process boundaries using the A2A protocol:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { discoverAgent, findBestAgent } from "@reactive-agents/a2a";

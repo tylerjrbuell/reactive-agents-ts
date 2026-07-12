@@ -246,6 +246,7 @@ This is an **audit feature, not a performance one** — the per-call rationale b
 
 ## Enabling Reasoning
 
+{/* docs-skip-typecheck */}
 ```typescript
 // Default strategy (ReAct)
 const agent = await ReactiveAgents.create()
@@ -264,6 +265,7 @@ const agent = await ReactiveAgents.create()
 
 Register custom reasoning strategies using the `StrategyRegistry`:
 
+{/* docs-skip-typecheck */}
 ```typescript
 import { StrategyRegistry } from "@reactive-agents/reasoning";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -387,6 +389,7 @@ interface PlanStep {
 
 **`Plan`** — the top-level plan container:
 
+{/* docs-skip-typecheck */}
 ```typescript
 interface Plan {
   id: string;
@@ -410,6 +413,7 @@ The LLM is asked to produce an `LLMPlanOutput` — an array of `LLMPlanStep` obj
 
 Steps can reference outputs from earlier steps using `{{from_step:sN}}` interpolation inside `toolArgs` values. A variant with `:summary` truncates to the first 500 characters:
 
+{/* docs-skip-typecheck */}
 ```typescript
 // Plan step s1: fetch recent commits from GitHub
 {

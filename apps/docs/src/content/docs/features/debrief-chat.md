@@ -149,6 +149,7 @@ Debriefs are persisted to the memory SQLite DB in the `agent_debriefs` table alo
 
 `AgentResult` gains optional fields that are backward compatible (existing code reading only `result.output` and `result.success` is unaffected):
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface AgentResult {
   // Existing — unchanged

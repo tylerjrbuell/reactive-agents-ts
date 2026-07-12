@@ -31,6 +31,7 @@ For a first end-to-end walkthrough, see [Quickstart](/guides/quickstart/) and [Y
 
 Single-shot Q&A; no tools, no multi-step loop. Smallest surface area.
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -48,6 +49,7 @@ console.log(result.output);
 
 Enables the reasoning kernel and the default tool registry (file I/O, web search when keys exist, etc.). With `.withTools()`, **Conductor meta-tools** (`brief`, `find`, `pulse`, `recall`) default **on** unless you pass `.withMetaTools(false)` — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/#metatoolsconfig).
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -67,6 +69,7 @@ console.log(result.output);
 
 `.withMemory()` uses the **standard** tier by default (SQLite + FTS5; no embedding API required). Use **`{ tier: "enhanced" }`** when you want vector similarity (embedding provider + env). Debrief-style artifacts are tied to memory + reasoning — details in [Debrief & chat](/features/debrief-chat/) and [Memory](/guides/memory/).
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -87,6 +90,7 @@ if (result.debrief) console.log(result.debrief.summary);
 
 Guardrails toggle **injection / PII / toxicity** detectors (all default **on** when guardrails are enabled). Observability drives the **metrics dashboard** at `normal+` verbosity. Cost tracking enforces **USD** budgets when you pass limits.
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -108,6 +112,7 @@ await agent.run("Draft a short status update for the team.");
 
 `.withStreaming()` sets the default density for **`agent.runStream()`** (`tokens` vs `full`). You can override per call. See [Streaming](/features/streaming/) and [Streaming responses](/cookbook/streaming-responses/).
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -128,6 +133,7 @@ for await (const event of agent.runStream("Write a haiku about TypeScript.")) {
 
 `toConfig()` captures the builder state as **`AgentConfig`**. Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** (from `reactive-agents`) for strings. Some runtime-only fields (e.g. custom ICS functions) are not round-tripped — see [Builder API — Agent as Data](/reference/builder-api/#agent-as-data-toconfig--serialization).
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import {
   ReactiveAgents,
@@ -152,6 +158,7 @@ await agent.run("Ping.");
 
 If **`defaultStrategy` is `"adaptive"`**, you must set **`adaptive: { enabled: true }`** — [Reasoning](/guides/reasoning/), [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions).
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 

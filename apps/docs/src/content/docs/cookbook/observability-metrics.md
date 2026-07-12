@@ -116,6 +116,7 @@ The debrief is also persisted to SQLite (`agent_debriefs` table) if memory is en
 
 For custom monitoring integrations, subscribe to the typed EventBus directly:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -171,6 +172,7 @@ await agent.dispose();
 
 ### Sending Metrics to Prometheus / Datadog
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -196,6 +198,7 @@ agent.subscribe("AgentCompleted", (event) => {
 
 Use `withLogging()` independently of the full observability stack:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -220,6 +223,7 @@ Each JSON log entry includes `timestamp`, `level`, `message`, `agentId`, `sessio
 
 `withHealthCheck()` adds a `agent.health()` method that tests every wired service:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")

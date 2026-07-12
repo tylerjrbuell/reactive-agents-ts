@@ -53,6 +53,9 @@ export {
   agentConfigFromJSON,
   agentConfigToBuilder,
 
+  // Declarative front door (dual API) — createAgent(config)
+  createAgent,
+
   // Composition API
   agentFn,
   pipe,

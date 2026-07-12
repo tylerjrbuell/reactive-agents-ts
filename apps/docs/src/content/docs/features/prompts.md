@@ -65,6 +65,7 @@ Provide your findings in {{format}} format.`,
 
 Compile a template by interpolating variables:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const compiled = yield* prompts.compile("research-task", {
   role: "senior analyst",
@@ -84,6 +85,7 @@ console.log(compiled.tokenEstimate);
 
 Set a max token budget — the template engine truncates if the compiled prompt exceeds it:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const compiled = yield* prompts.compile("research-task", variables, {
   maxTokens: 1000,  // Truncate to fit within 1000 tokens
@@ -94,6 +96,7 @@ const compiled = yield* prompts.compile("research-task", variables, {
 
 Combine multiple compiled prompts into one:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const systemPrompt = yield* prompts.compile("system-context", { agent: "researcher" });
 const taskPrompt = yield* prompts.compile("research-task", { topic: "CRISPR" });
@@ -112,6 +115,7 @@ console.log(combined.tokenEstimate); // Total token estimate
 
 Templates are automatically versioned. Register a new version by using the same `id`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Version 1
 yield* prompts.register({
@@ -157,6 +161,7 @@ These are used internally by the reasoning and verification layers — you don't
 
 Run statistically-tracked prompt experiments to find the best-performing template variant for a task:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ExperimentService } from "@reactive-agents/prompts";
 import { Effect } from "effect";
@@ -209,6 +214,7 @@ const program = Effect.gen(function* () {
 
 ### Enable with Builder
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")

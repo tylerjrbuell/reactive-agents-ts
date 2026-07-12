@@ -25,6 +25,7 @@ This guide maps LangChain.js concepts to their Reactive Agents equivalents and s
 
 **LangChain.js**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
 import { AgentExecutor, createOpenAIFunctionsAgent } from "langchain/agents";
@@ -78,6 +79,7 @@ const weatherTool = new DynamicStructuredTool({
 
 **Reactive Agents**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import type { AgentTool } from "@reactive-agents/tools";
 
@@ -120,6 +122,7 @@ The 12 phases in order: `bootstrap`, `guardrail`, `cost-route`, `strategy-select
 
 **LangChain.js**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { AgentExecutor } from "langchain/agents";
 
@@ -141,6 +144,7 @@ const executor = new AgentExecutor({
 
 **Reactive Agents**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import { ReactiveAgents } from "reactive-agents";
@@ -175,6 +179,7 @@ Hooks receive a typed `ExecutionContext` and must return `Effect.succeed(ctx)` (
 
 **LangChain.js**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { BufferMemory } from "langchain/memory";
 import { ConversationChain } from "langchain/chains";

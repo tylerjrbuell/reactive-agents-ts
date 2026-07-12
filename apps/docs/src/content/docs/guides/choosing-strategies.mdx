@@ -193,6 +193,7 @@ By default, an **LLM evaluator** is called with the current task, the last few s
 
 If you want deterministic switching without an extra LLM call, set `fallbackStrategy` directly:
 
+{/* docs-skip-typecheck */}
 ```typescript
 .withReasoning({
   enableStrategySwitching: true,
@@ -276,6 +277,7 @@ All strategies work at their best. Tree-of-Thought and Plan-Execute-Reflect are 
 
 ## Configuration Examples
 
+{/* docs-skip-typecheck */}
 ```typescript
 // Default: ReAct
 const agent = await ReactiveAgents.create()

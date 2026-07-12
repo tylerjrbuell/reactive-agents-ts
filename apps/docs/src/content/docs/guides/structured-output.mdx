@@ -308,6 +308,7 @@ Choose between two failure modes via the `onParseFail` option:
 | `"degrade"` (default) | `object` is `undefined`, `objectError` is set. Never throws. |
 | `"throw"` | Throws `StructuredOutputError` (carries `.rawText` + `.issues`). |
 
+{/* docs-skip-typecheck */}
 ```typescript
 import { StructuredOutputError } from "reactive-agents";
 
@@ -342,6 +343,7 @@ The grounded engine:
 3. Scores per-field confidence (0–1).
 4. Surgically re-extracts missing required fields if they were omitted.
 
+{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withSystemPrompt("You extract financial data from SEC filings.")
@@ -368,6 +370,7 @@ if (result.object) {
 Set `abstainBelow` to have the grounded engine omit non-required fields whose
 confidence falls below a threshold, rather than emitting a low-confidence guess:
 
+{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withOutputSchema(InvoiceSchema, {
@@ -409,6 +412,7 @@ console.log(result.abstained);
 Use `streamObject()` to receive a `DeepPartial<A>` as tokens arrive, finishing
 with the complete validated object:
 
+{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withOutputSchema(InvoiceSchema)

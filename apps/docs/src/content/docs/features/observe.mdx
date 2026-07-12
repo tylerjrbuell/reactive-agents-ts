@@ -97,6 +97,7 @@ All child spans share the workflow trace ID, so backends show the full call grap
 
 `OpenInferenceTracerLayer` is an Effect `Layer` that subscribes to the `EventBus`. Provide it alongside your other layers:
 
+{/* docs-skip-typecheck */}
 ```typescript
 import { Effect, Layer } from "effect"
 import { EventBusLive } from "@reactive-agents/core"

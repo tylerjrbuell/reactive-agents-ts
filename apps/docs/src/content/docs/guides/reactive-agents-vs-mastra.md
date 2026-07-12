@@ -84,6 +84,7 @@ console.log(result.output);
 
 Add a typed output contract, and the result is typed and validated:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { z } from "zod";
 
@@ -100,6 +101,7 @@ result.object.risk;    // "low" | "high"
 
 **Mastra**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Agent } from "@mastra/core/agent";
 

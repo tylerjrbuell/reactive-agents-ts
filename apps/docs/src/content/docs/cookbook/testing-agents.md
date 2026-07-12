@@ -42,6 +42,7 @@ The test scenario matches the longest `match` substring found in the input. This
 
 Test tool execution without real external calls:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 
@@ -76,6 +77,7 @@ test("agent uses tools", async () => {
 
 For testing at the Effect layer level, compose test layers directly:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect, Layer } from "effect";
 import { ExecutionEngine } from "@reactive-agents/runtime";
@@ -107,6 +109,7 @@ test("execution engine accumulates tokens", async () => {
 
 Verify that hooks fire at the right times:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import { ReactiveAgents } from "reactive-agents";
@@ -155,6 +158,7 @@ test("hooks fire in order", async () => {
 
 Verify that unsafe inputs are blocked:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 test("guardrails block injection attacks", async () => {
   const agent = await ReactiveAgents.create()
@@ -199,6 +203,7 @@ const agent = await ReactiveAgents.create()
 
 Capture and compare agent outputs across test runs:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 test("output matches snapshot", async () => {
   const agent = await ReactiveAgents.create()
@@ -219,6 +224,7 @@ For lower-level testing, the dedicated testing package provides mock services an
 
 ### Mock LLM
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createMockLLM, createMockLLMFromMap } from "@reactive-agents/testing";
 
@@ -256,6 +262,7 @@ console.log(tools.calls);
 
 ### Mock EventBus
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createMockEventBus } from "@reactive-agents/testing";
 
@@ -289,6 +296,7 @@ assertCostUnder(result, 0.01);
 
 Use `expectStream()` for fluent assertions on streaming agents:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { expectStream } from "@reactive-agents/testing";
 
@@ -319,6 +327,7 @@ test("stream can be cancelled", async () => {
 
 Pre-built scenarios for testing edge cases without writing full mocks:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import {
   createGuardrailBlockScenario,

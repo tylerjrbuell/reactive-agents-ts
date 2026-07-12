@@ -16,6 +16,7 @@ Runnable end-to-end demo: [`apps/examples/src/advanced/process-model-demo.ts`](h
 
 `agent.runStream()` returns a `RunHandle` — an async iterator of stream events that is also the run's control plane:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("ollama").withModel("qwen3:4b")
@@ -37,6 +38,7 @@ handle.inspect();  // live kernel-state snapshot (below)
 
 `handle.inspect()` projects the most recent iteration-boundary checkpoint into a small, stable shape — while the run is still going:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const snap = handle.inspect();
 // {

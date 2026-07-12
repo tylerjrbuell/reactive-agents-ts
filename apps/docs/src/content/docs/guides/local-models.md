@@ -78,6 +78,7 @@ const agent = await ReactiveAgents.create()
 
 Always set the context profile to match your model:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Small models (<=8B params)
 .withContextProfile({ tier: "local" })
@@ -143,7 +144,7 @@ For multi-step local runs, ICS classifies task phase and injects a short synthes
 
 ### 1. Model hallucinates tool calls
 **Symptom:** Agent calls tools that don't exist or uses wrong parameter names.
-**Fix:** Use `.withContextProfile({ tier: "local" })` and keep tool count low (3-5 tools max). Use `.withTools({ include: [...] })` to limit visible tools.
+**Fix:** Use `.withContextProfile({ tier: "local" })` and keep tool count low (3-5 tools max). Use `.withTools({ allowedTools: [...] })` to limit visible tools.
 
 ### 2. Agent loops without making progress
 **Symptom:** Agent repeats the same action or thought.
@@ -180,7 +181,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("qwen3:14b")
   .withReasoning({ defaultStrategy: "reactive" })
-  .withTools({ include: ["web-search", "file-read", "file-write"] })
+  .withTools({ allowedTools: ["web-search", "file-read", "file-write"] })
   .withContextProfile({ tier: "local" })
   .withMaxIterations(8)
   .withMemory()

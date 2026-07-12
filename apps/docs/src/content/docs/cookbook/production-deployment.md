@@ -183,6 +183,7 @@ const agent = await ReactiveAgents.create()
 
 Handle errors at the application level:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 try {
   const result = await agent.run(userInput);
@@ -226,6 +227,7 @@ For production, memory is stored in SQLite (bun:sqlite):
 
 Simplest deployment — one agent per process:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -242,6 +244,7 @@ app.post("/agent", async (req, res) => {
 
 Multiple specialized agents in one process:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agents = {
   classifier: await ReactiveAgents.create()
@@ -275,6 +278,7 @@ app.post("/agent/:type", async (req, res) => {
 
 Long-running agent that responds to heartbeats, crons, and webhooks:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("ops-agent")
@@ -331,6 +335,7 @@ Key production practices for autonomous agents:
 
 Multi-agent workflows with checkpoints:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import { OrchestrationService } from "@reactive-agents/orchestration";

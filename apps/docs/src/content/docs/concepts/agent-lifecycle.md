@@ -191,6 +191,7 @@ All events carry the correct `taskId` for cross-event correlation. The `LLMReque
 
 For direct EventBus access in Effect programs, the `TypedEventHandler<T>` helper lets you define handlers outside of inline callbacks:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import type { TypedEventHandler } from "@reactive-agents/core";

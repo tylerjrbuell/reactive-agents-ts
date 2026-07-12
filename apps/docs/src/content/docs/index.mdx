@@ -105,20 +105,21 @@ bun add reactive-agents
 ```
 
 ```typescript
-import { ReactiveAgents } from 'reactive-agents'
+import { createAgent } from 'reactive-agents'
 
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withReasoning() // ReAct loop: Think → Act → Observe
-    .withTools() // Built-in: web-search, file-read, code-execute
-    .withObservability()
-    .build()
+const agent = await createAgent({
+  name: 'researcher',
+  provider: 'anthropic',
+  reasoning: {},          // ReAct loop: Think → Act → Observe
+  tools: {},              // Built-in: web-search, file-read, code-execute
+  observability: {},
+})
 
 const result = await agent.run('Find the top 3 TypeScript testing frameworks')
 console.log(result.output)
 ```
 
-One package. Composable layers. Enable exactly what you need — skip everything you don't.
+One declarative config object — the front door you already know from the Vercel AI SDK. Enable exactly what you need as config keys; `createAgent` and the fluent `ReactiveAgents.create().withX()` builder are the [same API in two syntaxes](/reference/builder-api/).
 
 <TerminalReplay />
 

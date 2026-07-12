@@ -23,6 +23,7 @@ sidebar:
 
 Top-level fields apply to every strategy unless overridden:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReasoning({
   synthesis: "auto",
@@ -34,6 +35,7 @@ Top-level fields apply to every strategy unless overridden:
 
 Per-strategy overrides apply only when that strategy is the **effective** execution strategy (after tier routing). Keys match the internal bundles: `reactive`, `planExecute`, `treeOfThought`, `reflexion`. The **adaptive** meta-strategy does not have its own bundle — only the global/top-level ICS fields apply until a concrete strategy runs (each inner run then uses its own resolved config).
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReasoning({
   synthesis: "fast",

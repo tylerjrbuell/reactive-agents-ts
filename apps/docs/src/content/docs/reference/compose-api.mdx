@@ -11,6 +11,10 @@ import { Tabs, TabItem, Code } from '@astrojs/starlight/components';
 
 The Compose API lets you intercept and reshape any signal the agent kernel emits — from system prompts to tool results to nudges — using a declarative composition model.
 
+:::note[The power tier]
+Reactive Agents has three tiers, in ascending order of control: `createAgent(config)` (the declarative front door, 90% of cases) → the fluent `ReactiveAgents.create().withX()` builder (conditional/imperative construction) → **`.compose(...)`** (this page — harness-level phase transforms and killswitches for library authors and precise chokepoints). Each is a strict superset of the last; reach for compose only when config keys and withers can't express what you need.
+:::
+
 ## Quick start
 
 ```ts
@@ -44,6 +48,7 @@ Registers a composition block. Multiple `.compose()` calls accumulate in registr
 Intercept and replace an emission's payload.
 
 **Signature:**
+{/* docs-skip-typecheck */}
 ```ts
 harness.on(
   pattern: TagPattern | TagPattern[],
@@ -87,6 +92,7 @@ harness.on('prompt.system', (text, ctx) => `[locale: fr]\n${text}`)
 Observe an emission without changing it. Runs after all transforms.
 
 **Signature:**
+{/* docs-skip-typecheck */}
 ```ts
 harness.tap(
   pattern: TagPattern | TagPattern[],
@@ -97,6 +103,7 @@ harness.tap(
 Taps run in registration order, after transforms are finalized. A tap that throws is a bug — they run unconditionally with the final value.
 
 **Example — telemetry:**
+{/* docs-skip-typecheck */}
 ```ts
 harness.tap('**', (payload, ctx) => {
   otel.record(ctx.phase, ctx.iteration, payload);
@@ -108,6 +115,7 @@ harness.tap('**', (payload, ctx) => {
 Run before a kernel phase. Can abort or skip the iteration.
 
 **Signature:**
+{/* docs-skip-typecheck */}
 ```ts
 harness.before(
   phase: Phase,
@@ -144,6 +152,7 @@ Run after a kernel phase completes. Same signature as `.before()` but fires afte
 Run when a phase throws. Can optionally recover by returning a replacement state.
 
 **Signature:**
+{/* docs-skip-typecheck */}
 ```ts
 harness.onError(
   phase: Phase | '*',
@@ -164,6 +173,7 @@ Inject a payload directly at build time. Use for initial seeding.
 
 Nest a composition block. Useful for reusable plugin patterns.
 
+{/* docs-skip-typecheck */}
 ```ts
 harness.use((h) => {
   h.tap('observation.tool-result', logFn);
@@ -184,6 +194,7 @@ Phase hooks fire in this order per iteration. `bootstrap` and `complete` fire on
 
 All hook/transform callbacks receive a `ctx` with at minimum:
 
+{/* docs-skip-typecheck */}
 ```ts
 {
   iteration: number;   // 0-indexed

@@ -25,6 +25,7 @@ Strategy (policy: when to run, how many times, what config)
 
 A `ThoughtKernel` is the contract for a single reasoning step:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 type ThoughtKernel = (
   state: KernelState,
@@ -38,6 +39,7 @@ The kernel receives immutable state and a frozen context, performs one reasoning
 
 ### KernelState
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface KernelState {
   // Identity
@@ -74,6 +76,7 @@ The concrete TypeScript type also carries an internal `ReadonlyMap` used to sync
 
 Use the provided factory functions — never mutate state directly:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Create initial state
 const state = initialKernelState({
@@ -95,6 +98,7 @@ const nextState = transitionState(state, {
 
 `KernelState` uses `ReadonlySet` and `ReadonlyMap` which are not JSON-safe. Use the provided helpers for persistence:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // KernelState → JSON-safe object (Set → sorted array, Map → plain object)
 const serialized: SerializedKernelState = serializeKernelState(state);
@@ -107,6 +111,7 @@ const restored: KernelState = deserializeKernelState(serialized);
 
 The context is assembled once by `runKernel()` and passed unchanged to every kernel step:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface KernelContext {
   readonly input: KernelInput;              // frozen task inputs
@@ -121,6 +126,7 @@ interface KernelContext {
 
 `runKernel()` is the universal execution loop. Every reasoning strategy delegates to this function instead of implementing its own while-loop.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 function runKernel(
   kernel: ThoughtKernel,
@@ -158,6 +164,7 @@ The runner handles nine steps internally:
 
 The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all strategies:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { runKernel } from "./kernel/loop/runner.js";
 import { reactKernel } from "./kernel/loop/react-kernel.js";
@@ -179,6 +186,7 @@ const finalState = yield* runKernel(
 
 For backwards compatibility, a wrapped form is also available:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { executeReActKernel } from "./kernel/loop/react-kernel.js";
 
@@ -197,6 +205,7 @@ const result: ReActKernelResult = yield* executeReActKernel({
 
 `KernelHooks` is the **single source of truth** for kernel lifecycle events. It is the only place `ToolCallCompleted` is published, which prevents the double-counting in `MetricsCollector` that occurred before this architecture.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface KernelHooks {
   readonly onThought:     (state: KernelState, thought: string) => Effect.Effect<void, never>;
@@ -221,6 +230,7 @@ When no EventBus is present, `buildKernelHooks()` returns hooks that silently no
 
 For tests and simple runs, `noopHooks` is exported from `kernel-state.ts`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { noopHooks } from "./kernel/state/kernel-state.js";
 // All five hook methods are Effect.void — safe, no EventBus required
@@ -232,6 +242,7 @@ import { noopHooks } from "./kernel/state/kernel-state.js";
 
 ### StrategyRegistry kernel API
 
+<!-- docs-skip-typecheck -->
 ```typescript
 class StrategyRegistry extends Context.Tag("StrategyRegistry")<
   StrategyRegistry,
@@ -259,6 +270,7 @@ The built-in kernel `"react"` is pre-registered in `StrategyRegistryLive`. Custo
 
 ### Writing and registering a custom kernel
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import type { ThoughtKernel, KernelState, KernelContext } from "@reactive-agents/reasoning";
 import { transitionState } from "@reactive-agents/reasoning";

@@ -22,6 +22,7 @@ Every model has different context capacity, latency characteristics, and instruc
 
 ### Using Context Profiles
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Use the tier auto-detection (inferred from model name)
 const agent = await ReactiveAgents.create()
@@ -89,6 +90,7 @@ Older steps are compacted to one-line summaries automatically.
 
 ### Using the ContextEngine Directly
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { buildContext } from "@reactive-agents/reasoning";
 import { CONTEXT_PROFILES } from "@reactive-agents/reasoning";
@@ -123,6 +125,7 @@ As agents work through multi-step tasks, context grows. Reactive Agents uses a f
 
 The budget system allocates tokens across context sections and adapts as iterations progress:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { allocateBudget, estimateTokens } from "@reactive-agents/reasoning";
 

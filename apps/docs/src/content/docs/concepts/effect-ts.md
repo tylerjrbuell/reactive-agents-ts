@@ -71,6 +71,7 @@ An `Effect` is a description of a computation that:
 - **Fails** with error `E`
 - **Requires** services `R`
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 
@@ -114,6 +115,7 @@ const MyServiceLive = Layer.succeed(MyService, {
 
 Tags identify services in the Effect dependency injection system:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 class AgentService extends Context.Tag("AgentService")<
   AgentService,
@@ -144,6 +146,7 @@ type AgentConfig = typeof AgentConfig.Type;
 
 Typed, pattern-matchable errors:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Data, Effect } from "effect";
 
@@ -161,6 +164,7 @@ const handle = Effect.catchTag("AgentNotFoundError", (e) =>
 
 Mutable state in a pure, concurrent-safe way:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Ref } from "effect";
 

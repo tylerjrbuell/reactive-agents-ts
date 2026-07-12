@@ -27,6 +27,7 @@ bun add reactive-agents
 
 The fastest way to define a tool is `ToolBuilder`. You give it a name, a description (the model reads this to decide when to call it), typed parameters, and a `handler` that returns an Effect. Pass the finished tool to `.withTools({ tools: [...] })`.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
@@ -103,6 +104,7 @@ The Model Context Protocol is a standard for exposing tools to AI agents, with t
 
 `stdio` launches a server as a child process and talks JSON-RPC over stdin/stdout. This is the right transport for npm packages, Docker images, and local scripts. Here is the official filesystem server scoped to the current directory:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // `await using` auto-disposes the agent (and shuts the subprocess down) on scope exit
 await using agent = await ReactiveAgents.create()
@@ -150,6 +152,7 @@ You can pass an **array** to `.withMCP([...])`, or chain `.withMCP()` multiple t
 
 Not every model speaks the same function-calling dialect. Frontier APIs (Anthropic, OpenAI, Gemini) expose native structured `tool_use`/`tool_calls`; many local models only produce tool calls as text. Reactive Agents probes the active model's dialect and routes to either a native function-calling driver or a text-parsing driver (XML / JSON / pseudo-code) — so the *exact same agent code* runs against a frontier API or a 4B+ Ollama model with no changes:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const localAgent = await ReactiveAgents.create()
   .withProvider("ollama")

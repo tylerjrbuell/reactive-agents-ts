@@ -41,6 +41,7 @@ console.log(result.output);
 
 Pass `logging: { mode: "status" }` to force the TUI on regardless of TTY, or `mode: "stream"` to force plain streaming output even in an interactive terminal.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents, defaultReactiveAgentsConfig } from "reactive-agents";
 import { createReactiveAgentsRuntime } from "@reactive-agents/runtime";

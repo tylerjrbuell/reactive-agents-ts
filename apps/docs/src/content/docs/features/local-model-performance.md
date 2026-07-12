@@ -40,6 +40,7 @@ Calibration accumulates automatically during normal agent use. Each entropy scor
 
 To persist calibration across runs, provide a database path:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   calibrationDbPath: "./data/calibration.sqlite",
@@ -86,6 +87,7 @@ When entropy trajectory is flat (no improvement), the controller may recommend s
 
 ### Reduce Token Waste
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   controller: {

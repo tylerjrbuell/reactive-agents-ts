@@ -67,6 +67,7 @@ All of this is built on **Effect-TS**, so boundaries are schema-validated, error
 
 **Reactive Agents**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { z } from "zod";
@@ -88,6 +89,7 @@ console.log(result.output);
 
 **Vercel AI SDK** (agent loop primitive, AI SDK 5/6)
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ToolLoopAgent, tool } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";

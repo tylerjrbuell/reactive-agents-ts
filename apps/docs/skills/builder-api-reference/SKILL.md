@@ -20,6 +20,25 @@ Produce a complete, correctly-ordered builder chain with the right `.withX()` ca
 - When unsure which methods are available or what their params are
 - When upgrading from an older API version
 
+## Two syntaxes, one API
+
+The declarative `createAgent(config)` front door and this fluent builder are the
+same API — same key names, same nesting (`createAgent({ tools: { allowedTools } })`
+≡ `.withTools({ allowedTools })`). Use `createAgent` for static definitions; the
+builder for conditional/imperative construction or code-only escape hatches
+(`.withHook`, `.withLayers`, `.compose`). This reference lists the fluent methods;
+each maps to an `AgentConfig` key of the same name.
+
+```ts
+import { createAgent } from "@reactive-agents/runtime";
+
+const agent = await createAgent({
+  name: "assistant",
+  provider: "anthropic",
+  reasoning: { defaultStrategy: "adaptive", maxIterations: 10 },
+});
+```
+
 ## Implementation baseline
 
 ```ts

@@ -11,6 +11,7 @@ Reactive Agents records not just *what* the agent did but *why*. Every tool sele
 
 ## The Rationale shape
 
+<!-- docs-skip-typecheck -->
 ```ts
 import type { Rationale } from "@reactive-agents/core";
 
@@ -126,6 +127,7 @@ AssumptionRecordedEvent {
 
 The `terminate()` helper accepts an optional `rationale` that surfaces on `KernelStateSnapshotEvent.terminationRationale`:
 
+<!-- docs-skip-typecheck -->
 ```ts
 terminate(state, {
   reason: "quality_threshold",
@@ -171,6 +173,7 @@ Unlike `rax-diagnose replay`, which is event-centric and shows every event in th
 
 For custom dashboards or LLM-as-judge debriefing, build the structured shape directly:
 
+<!-- docs-skip-typecheck -->
 ```ts
 import { buildDebrief } from "@reactive-agents/diagnose";
 

@@ -30,6 +30,7 @@ const agent = await ReactiveAgents.create()
 
 With controller features enabled:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   controller: {
@@ -133,6 +134,7 @@ When 3+ different decision types have been tried and entropy remains high, the c
 
 All controller decisions can be intercepted and overridden:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   onControllerDecision: (decision, ctx) => {
@@ -182,6 +184,7 @@ Each report contains:
 
 ### Opting Out
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({ telemetry: false })
 ```

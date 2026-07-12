@@ -23,7 +23,7 @@ Every public surface falls into one of three tiers. Tier is declared by JSDoc ta
 
 The following surfaces are tier-1 stable. We will not break these without a major bump.
 
-- **Builder entry point** — `ReactiveAgents.create()` and the `.with*()` chain syntax
+- **Entry points** — `createAgent(config)` (declarative front door) and `ReactiveAgents.create()` + the `.with*()` chain syntax. Both are the same API in two syntaxes, generated from and validated against `AgentConfigSchema` (the single source of truth); anything expressible in one is expressible in the other.
 - **Provider selection** — `.withProvider("anthropic" | "openai" | "google" | "groq" | "xai" | "ollama" | "litellm" | "local")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
 - **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the five canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback.
 - **Tool surface** — `.withTools()`, `defineTool()` / `tool()`, MCP attachment via `.withMCP()`, and the `Tool` interface

@@ -180,6 +180,7 @@ const result = await agent.run('Say hello')
 
 Every field resolves from an environment variable, then a sensible default, so `quick()` with no arguments works out of the box:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface QuickOptions {
     provider?: ProviderName // Default: REACTIVE_AGENTS_PROVIDER, else the first of anthropic/openai/gemini/groq/xai whose key is present, else "ollama"
@@ -232,6 +233,7 @@ interface ModelParams {
 }
 ```
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // String form — simple model selection
 .withModel("claude-opus-4-8")
@@ -267,6 +269,7 @@ interface ThinkingOptions {
 }
 ```
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Boolean form — enable / disable
 .withThinking()            // enable
@@ -318,6 +321,7 @@ interface ThinkingOptions {
 | `compactionLevel`          | `"full" \| "summary" \| "grouped" \| "dropped"` | How aggressively to compact older steps          |
 | `maxStepsBeforeCompaction` | `number`                                        | Steps to keep in full detail before compacting   |
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Lean context for local small models
 .withContextProfile({ tier: "local" })
@@ -418,6 +422,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
 #### ReasoningOptions
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface ReasoningOptions {
     /**
@@ -505,6 +510,7 @@ At runtime, `ReasoningOptions` may also include a non-JSON `synthesisStrategy` f
 
 **Examples:**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Default: ReAct with no options
 .withReasoning()
@@ -550,6 +556,7 @@ interface RequiredToolsConfig {
 
 **Examples:**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Static required tools — agent must call web-search before answering
 .withRequiredTools({ tools: ["web-search"] })
@@ -593,6 +600,7 @@ When `adaptive: true`, the framework calls the LLM with the task description and
 
 **Examples:**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // stdio: npm package via bunx
 { name: "filesystem", transport: "stdio", command: "bunx",
@@ -648,6 +656,7 @@ See [Testing agents](/cookbook/testing-agents/) and [Configuration](/reference/c
 
 ### `build()`
 
+<!-- docs-skip-typecheck -->
 ```typescript
 async build(): Promise<ReactiveAgent>
 ```
@@ -656,6 +665,7 @@ Creates the agent, resolving the full Layer stack. Returns a `ReactiveAgent` ins
 
 ### `buildEffect()`
 
+<!-- docs-skip-typecheck -->
 ```typescript
 buildEffect(): Effect.Effect<ReactiveAgent, Error>
 ```
@@ -688,6 +698,7 @@ Agents that use MCP servers (stdio transport) or other subprocess-based resource
 
 Uses the [Explicit Resource Management](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html) protocol introduced in TypeScript 5.2. The agent is disposed automatically when the enclosing block exits, whether normally or via an exception.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -862,6 +873,7 @@ const history = session.history() // ChatMessage[]
 await session.end() // Clears history (and DB record if persisted)
 ```
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface SessionOptions {
     persist?: boolean // Persist history to SQLite via SessionStoreService
@@ -947,6 +959,7 @@ unsub2()
 
 TypeScript signatures:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Tag-filtered — event type is automatically narrowed
 subscribe<T extends AgentEventTag>(
@@ -960,6 +973,7 @@ subscribe(handler: (event: AgentEvent) => void): Promise<() => void>;
 
 The `AgentEventTag` and `TypedEventHandler<T>` helpers are exported from `@reactive-agents/core` for use in your own service code:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from 'effect'
 import type { AgentEventTag, TypedEventHandler } from '@reactive-agents/core'
@@ -1019,6 +1033,7 @@ yield * eventBus.on('ReasoningStepCompleted', onStepComplete)
 
 ## AgentResult
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface AgentResult {
     output: string // The agent's response
@@ -1140,6 +1155,7 @@ console.log(rich?.markdown)
 
 ## Full Example
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";

@@ -51,6 +51,7 @@ Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the 
 
 ### Options
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withModelRouting({
   minTier: "sonnet",                        // never route below this tier
@@ -65,6 +66,7 @@ Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the 
 
 Set spending limits at multiple levels:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createCostLayer } from "@reactive-agents/cost";
 
@@ -109,6 +111,7 @@ If the dynamic fetch fails, the builder warns but gracefully falls back to the s
 
 Cache responses to avoid paying for identical queries:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Automatically checked during execution
 // If a semantically similar query was recently answered, the cached response is used
@@ -121,6 +124,7 @@ await costService.cacheResponse(query, response, model, 3600_000); // 1 hour TTL
 
 The cost layer uses `makeSemanticCache()` internally to provide cosine similarity-based prompt deduplication:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { makeSemanticCache } from "@reactive-agents/cost";
 
@@ -190,6 +194,7 @@ Cost tracking integrates with three phases of the execution lifecycle:
 
 Reduce token usage by compressing prompts before sending to the LLM:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const { compressed, savedTokens } = yield* cost.compressPrompt(longPrompt, 2000);
 console.log(`Saved ${savedTokens} tokens`);
@@ -199,6 +204,7 @@ console.log(`Saved ${savedTokens} tokens`);
 
 `makePromptCompressor()` uses a two-pass approach to reduce token count:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { makePromptCompressor } from "@reactive-agents/cost";
 

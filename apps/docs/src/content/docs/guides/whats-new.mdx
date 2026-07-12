@@ -143,6 +143,7 @@ The v0.12 line makes runs **survive crashes**, makes outputs **typed and grounde
 
 Turn any agent into a typed extractor. Attach a schema at build time and read a fully-typed value off the result — no prompt engineering, no manual JSON parsing.
 
+{/* docs-skip-typecheck */}
 ```ts
 import { z } from "zod";
 
@@ -169,6 +170,7 @@ Verified live across Anthropic, OpenAI, Gemini, and local Ollama (qwen3.5, gemma
 
 Opt a run into a durable store and resume it from its last checkpoint after a crash, restart, or graceful pause.
 
+{/* docs-skip-typecheck */}
 ```ts
 const agent = await ReactiveAgents.create()
   .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
@@ -188,6 +190,7 @@ Name the tool calls that require sign-off. A gated call **pauses** the run — o
 action, and returns `pendingApproval` so the process can exit. A human approves or
 denies from **any** process; the run resumes from its checkpoint to completion.
 
+{/* docs-skip-typecheck */}
 ```ts
 const agent = await ReactiveAgents.create()
   .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })

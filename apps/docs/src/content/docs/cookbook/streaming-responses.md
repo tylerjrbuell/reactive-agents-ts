@@ -107,6 +107,7 @@ console.log(output); // full text after completion
 
 Send a stream over HTTP with `AgentStream.toSSE()`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { AgentStream } from "reactive-agents";
 import { Hono } from "hono";

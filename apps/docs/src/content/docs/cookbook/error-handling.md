@@ -31,6 +31,7 @@ import type { RuntimeErrors } from "@reactive-agents/runtime";
 
 Use **`try/catch`** (or `runEffect()` + `Effect` operators) for failures:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import {
   MaxIterationsError,
@@ -101,6 +102,7 @@ const agent = await ReactiveAgents.create()
 
 Prevent runaway agents with a hard wall-clock timeout:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -150,6 +152,7 @@ Without `withStrictValidation()`, misconfiguration typically surfaces at runtime
 
 Use the circuit breaker to automatically open (stop sending requests) after repeated failures and close again after a recovery window:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -165,6 +168,7 @@ const agent = await ReactiveAgents.create()
 
 A production-grade resilient agent:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("prod-agent")

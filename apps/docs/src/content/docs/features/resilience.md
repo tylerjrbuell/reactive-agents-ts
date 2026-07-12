@@ -137,6 +137,7 @@ const agent = await ReactiveAgents.create()
 
 Instead of a static tool list, let the LLM determine which tools are required per-task:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withRequiredTools({ adaptive: true })
 ```
@@ -147,6 +148,7 @@ The framework calls the LLM with the task description and available tool schemas
 
 Use both a static baseline and adaptive inference:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withRequiredTools({
   tools: ["web-search"],  // Always required

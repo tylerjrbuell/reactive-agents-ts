@@ -74,6 +74,7 @@ Approval gates let a human pause agent execution at critical decision points and
 
 Calling `approvalGate()` suspends the currently running agent and waits for a human response:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { InteractionManager } from "@reactive-agents/interaction";
 import { Effect } from "effect";
@@ -94,6 +95,7 @@ const program = Effect.gen(function* () {
 
 **Resuming from an approval gate:**
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Approve — execution continues
 await interaction.resolveApproval(taskId, true);
@@ -123,6 +125,7 @@ const workflow = {
 
 Resolve workflow step gates via `OrchestrationService`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { OrchestrationService } from "@reactive-agents/orchestration";
 

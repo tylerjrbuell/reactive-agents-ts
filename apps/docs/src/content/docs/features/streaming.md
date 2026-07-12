@@ -35,6 +35,7 @@ await agent.dispose();
 
 Every event carries a `_tag` discriminant. Narrow with `switch` or `if` — TypeScript infers the payload automatically.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 type AgentStreamEvent =
   | { _tag: "TextDelta"; text: string }
@@ -198,6 +199,7 @@ Bun.serve({
 
 Client-side:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const source = new EventSource("/stream");
 source.onmessage = (e) => {
@@ -211,6 +213,7 @@ source.onmessage = (e) => {
 
 `AgentStream.toReadableStream(stream)` returns a `ReadableStream<AgentStreamEvent>` compatible with the Web Streams API.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const readable = AgentStream.toReadableStream(effectStream);
 const reader = readable.getReader();
@@ -226,6 +229,7 @@ while (true) {
 
 `AgentStream.toAsyncIterable(stream)` converts the Effect stream into a standard `AsyncIterable<AgentStreamEvent>` for `for await...of` consumption. Works in Node 18+, Bun, and browsers.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 for await (const event of AgentStream.toAsyncIterable(effectStream)) {
   if (event._tag === "TextDelta") process.stdout.write(event.text);
@@ -236,6 +240,7 @@ for await (const event of AgentStream.toAsyncIterable(effectStream)) {
 
 `AgentStream.collect(stream)` accumulates the entire stream into a single `AgentResult` — equivalent to calling `agent.run()`. Useful when you need to pass a stream to both a UI and a final-result handler.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const result = await AgentStream.collect(effectStream);
 console.log(result.output);   // Full response text

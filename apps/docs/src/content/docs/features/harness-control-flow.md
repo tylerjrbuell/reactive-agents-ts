@@ -38,6 +38,7 @@ The controller's decision quality depends on accurate thresholds. Without calibr
 3. If calibration data exists (≥20 samples), the stored conformal thresholds are used. Otherwise, uncalibrated defaults are returned.
 4. The controller evaluators use these thresholds for their decisions.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Automatic — no user code needed
 // The observer loads calibration before every controller evaluation:
@@ -49,6 +50,7 @@ const calibration = await sensor.getCalibration(modelId);
 
 By default, the calibration store uses an in-memory SQLite database. To persist calibration across runs:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   calibrationDbPath: "./data/calibration.sqlite",
@@ -101,6 +103,7 @@ The termination oracle checks for `early-stop` decisions and signals the kernel 
 
 ## Configuration
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   entropy: {

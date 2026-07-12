@@ -69,6 +69,7 @@ Trace: abc-123
 
 Wrap any Effect in a trace span:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ObservabilityService } from "@reactive-agents/observability";
 import { Effect } from "effect";
@@ -102,6 +103,7 @@ Three metric types are available:
 
 Track cumulative values that only go up:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* obs.incrementCounter("requests.total", 1, { agent: "agent-1" });
 yield* obs.incrementCounter("tokens.used", 1500, { model: "claude-sonnet" });
@@ -112,6 +114,7 @@ yield* obs.incrementCounter("tools.executed", 1, { tool: "web_search" });
 
 Track distributions of values (latency, token counts, etc.):
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* obs.recordHistogram("llm.latency_ms", 1200, { provider: "anthropic" });
 yield* obs.recordHistogram("phase.duration_ms", 450, { phase: "think" });
@@ -121,6 +124,7 @@ yield* obs.recordHistogram("phase.duration_ms", 450, { phase: "think" });
 
 Track point-in-time values:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* obs.setGauge("active_sessions", 5);
 yield* obs.setGauge("context_window_usage", 0.73, { agent: "agent-1" });
@@ -128,6 +132,7 @@ yield* obs.setGauge("context_window_usage", 0.73, { agent: "agent-1" });
 
 ### Querying Metrics
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const metrics = yield* obs.getMetrics({
   name: "llm.latency_ms",
@@ -144,6 +149,7 @@ for (const m of metrics) {
 
 All log entries include structured context for filtering and correlation:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* obs.debug("Starting reasoning loop", { strategy: "react", iteration: 1 });
 yield* obs.info("Tool executed successfully", { tool: "web_search", latencyMs: 450 });
@@ -173,6 +179,7 @@ Every log entry automatically includes:
 
 Capture the full state of an agent at a point in time for debugging:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const snapshot = yield* obs.captureSnapshot("agent-1", {
   workingMemory: ["current task context", "recent tool result"],
@@ -236,6 +243,7 @@ Telemetry data is aggregated by:
 - **Model** (which LLM provider and model)
 - **Custom labels** (agent name, environment, etc.)
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -263,6 +271,7 @@ console.log(telemetry);
 
 By default, telemetry is enabled when observability is enabled. To disable:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -272,6 +281,7 @@ const agent = await ReactiveAgents.create()
 
 To customize what's collected:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withObservability({
   verbosity: "normal",
@@ -291,6 +301,7 @@ To customize what's collected:
 
 To export aggregated telemetry for analysis:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const exported = yield* obs.exportTelemetry({
   format: "json",  // or "csv"
@@ -311,6 +322,7 @@ For applications that want structured logging independently of full observabilit
 
 ### Builder Integration
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -332,6 +344,7 @@ When `output: "console"`, logs are written to stdout with level-based filtering.
 
 For direct use in Effect programs:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { makeLoggerService } from "@reactive-agents/observability";
 import { Effect } from "effect";
@@ -383,6 +396,7 @@ Each step in the chain has `{ step, thought?, action?, observation?, strategy }`
 
 Call `flush()` to ensure all buffered metrics and logs are exported:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* obs.flush();
 ```

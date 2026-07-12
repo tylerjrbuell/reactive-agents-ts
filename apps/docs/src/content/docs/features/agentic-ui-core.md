@@ -65,6 +65,7 @@ for await (const event of connectRunStream({ endpoint: "/api/agent", body: { pro
 
 Streams survive a page reload, tab close, or server restart. `connectRunStream` tracks the highest sequence number seen; in `attach` mode a mid-stream drop reconnects from `cursor = lastSeq` with exponential backoff up to `maxRetries` — no event lost or duplicated.
 
+<!-- docs-skip-typecheck -->
 ```ts
 for await (const event of connectRunStream({
   endpoint: "/api/agent",
@@ -129,6 +130,7 @@ const runs = await fetchInbox({ endpoint: "/api/inbox" }); // InboxRun[] — thr
 
 Record a real run's event stream once, then replay the exact SSE bytes for any request — no provider, no network, no flake — in Vitest/Playwright/Storybook.
 
+<!-- docs-skip-typecheck -->
 ```ts
 import { recordRunFixture, mockAgentEndpoint } from "@reactive-agents/ui-core/testing";
 

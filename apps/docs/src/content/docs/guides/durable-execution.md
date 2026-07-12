@@ -113,6 +113,7 @@ An unknown run id (or a run with no checkpoint) fails with
 The guarantee end to end: a run captured in one OS process is reconstructed and
 finished in a **different** process, purely from the on-disk checkpoint.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Process A — does work, then is hard-killed (SIGKILL, crash, reboot).
 const a = await buildAgent();          // .withDurableRuns({ dir })

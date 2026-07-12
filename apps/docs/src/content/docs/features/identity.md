@@ -42,6 +42,7 @@ const program = Effect.gen(function* () {
 
 ### Certificate Fields
 
+<!-- docs-skip-typecheck -->
 ```typescript
 {
   serialNumber: "unique-id",
@@ -68,6 +69,7 @@ Assign roles to control what agents can do:
 | `agent-privileged` | All | All | All | Yes |
 | `orchestrator` | All | All | All | Yes + Delegation |
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const program = Effect.gen(function* () {
   const identity = yield* IdentityService;
@@ -97,6 +99,7 @@ const program = Effect.gen(function* () {
 
 Define roles with fine-grained permissions using glob patterns:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* identity.assignRole("agent-1", {
   name: "data-analyst",
@@ -114,6 +117,7 @@ yield* identity.assignRole("agent-1", {
 
 Temporarily delegate permissions from one agent to another:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const program = Effect.gen(function* () {
   const identity = yield* IdentityService;
@@ -138,6 +142,7 @@ Delegations automatically expire after the specified duration. All delegation ev
 
 Every security-relevant action is logged:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const program = Effect.gen(function* () {
   const identity = yield* IdentityService;
@@ -177,6 +182,7 @@ const program = Effect.gen(function* () {
 
 Get the complete identity record for an agent:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const identity = yield* identityService.getIdentity("agent-1");
 // { agentId, name, roles, certificates, metadata, ... }

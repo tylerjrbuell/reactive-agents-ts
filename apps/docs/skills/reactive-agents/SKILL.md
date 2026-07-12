@@ -20,24 +20,48 @@ Reactive Agents is an Effect-TS layered runtime for building autonomous AI agent
 
 Six LLM providers are supported: `anthropic`, `openai`, `gemini`, `ollama`, `litellm`, and `test`.
 
-## Canonical builder pattern
+## Two syntaxes, one API
+
+`createAgent(config)` (declarative) and `ReactiveAgents.create().withX()` (fluent)
+are the **same API** — same key names, same nesting, validated against the same
+`AgentConfigSchema`. Prefer `createAgent` for static definitions (the 90% case);
+reach for the builder when construction is conditional/imperative or needs a
+code-only escape hatch (`.withHook`, `.withLayers`, `.compose`).
+
+### Canonical pattern — `createAgent(config)` (front door)
+
+```ts
+import { createAgent } from "@reactive-agents/runtime";
+
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",              // required
+  model: "claude-sonnet-4-6",         // optional — provider default if omitted
+  reasoning: { defaultStrategy: "adaptive", maxIterations: 10 },
+  tools: {},                          // enables built-in tools
+  memory: { tier: "enhanced", dbPath: "./agent.db" },
+  observability: { verbosity: "normal", live: true },
+});
+
+const result = await agent.run("Your task here");
+console.log(result.output);
+console.log(result.metadata.stepsCount, result.metadata.strategyUsed);
+```
+
+### Same agent — fluent builder
 
 ```ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
-  .withProvider("anthropic")          // required
-  .withModel("claude-sonnet-4-6")     // optional — uses provider default if omitted
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 10 })
-  .withTools()                        // enables all built-in tools
+  .withTools()
   .withMemory({ tier: "enhanced", dbPath: "./agent.db" })
   .withObservability({ verbosity: "normal", live: true })
   .build();                           // always await — returns Promise<ReactiveAgent>
-
-const result = await agent.run("Your task here");
-console.log(result.output);
-console.log(result.metadata.stepsCount, result.metadata.strategyUsed);
 ```
 
 ## Skill routing — select by what you're building
@@ -73,8 +97,9 @@ Load a recipe skill for a full working example:
 ## Builder factory methods
 
 ```ts
+createAgent(config)                          // declarative front door — validate + build in one call
 ReactiveAgents.create()                      // blank builder
-ReactiveAgents.fromConfig(config)            // from AgentConfig object
+ReactiveAgents.fromConfig(config)            // from AgentConfig object → builder
 ReactiveAgents.fromJSON(json)                // from JSON string
 ReactiveAgents.runOnce("task", builder)      // build + run + dispose in one call
 builder.buildEffect()                        // returns Effect<ReactiveAgent> for Effect runtimes

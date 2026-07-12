@@ -177,14 +177,18 @@ npm install reactive-agents
 
 > **Note:** `effect` is included as a dependency of `reactive-agents` and installed automatically. If you import from `effect` directly in your own code (e.g. `import { Effect } from "effect"`), add it to your project explicitly: `bun add effect` (or `npm install effect`).
 
-```typescript
-import { ReactiveAgents } from 'reactive-agents'
+`createAgent(config)` is the front door — one declarative config object, the
+shape you already know from the Vercel AI SDK and OpenAI SDK. This is the 90%
+case:
 
-const agent = await ReactiveAgents.create()
-    .withName('assistant')
-    .withProvider('anthropic')
-    .withModel('claude-sonnet-4-6')
-    .build()
+```typescript
+import { createAgent } from 'reactive-agents'
+
+const agent = await createAgent({
+  name: 'assistant',
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-6',
+})
 
 const result = await agent.run('Explain quantum entanglement')
 console.log(result.output)
@@ -193,52 +197,66 @@ console.log(result.metadata) // { duration, cost, tokensUsed, stepsCount }
 
 ### Add Capabilities
 
-The canonical composition path is a `HarnessProfile` preset — `lean()`,
-`balanced()`, or `intelligent()`. Presets compose the registry's
-default-on capability set in one line:
+Add capabilities as config keys — grouped by domain, so autocomplete reads like
+a menu. Start from a `profile` preset (`"lean"`, `"balanced"`, `"intelligent"`)
+and override individual keys:
+
+```typescript
+import { createAgent } from 'reactive-agents'
+
+const agent = await createAgent({
+  name: 'research-agent',
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-6',
+  profile: 'balanced',                        // memory + RI + verifier + strategy switching
+  tools: { allowedTools: ['web-search', 'file-write'] },
+  budget: { tokenLimit: 100_000 },            // canonical budget killswitch
+})
+```
+
+Pick the profile that matches the workload:
+
+- **`"lean"`** — model + nothing else. Latency- and cost-sensitive paths;
+  benchmark ablations.
+- **`"balanced"`** — today's production defaults (memory + reactive
+  intelligence + verifier + strategy switching).
+- **`"intelligent"`** — balanced + skill persistence for cross-session
+  compounding learning.
+
+### Advanced: the fluent builder
+
+`createAgent(config)` and the fluent builder are the **same API in two
+syntaxes** — same names, same nesting. Reach for the builder when construction
+is *conditional or imperative* (branch on runtime state, inject code-only
+escape hatches like hooks/layers, or compose a precise chokepoint) — things
+that read awkwardly as static data:
 
 ```typescript
 import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
 
-const agent = await ReactiveAgents.create()
-    .withName('research-agent')
-    .withProvider('anthropic')
-    .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
-    .withTools()                              // built-in tools + MCP
-    .withMaxIterations(15)
-    .withBudget({ tokenLimit: 100_000 })      // canonical budget killswitch
-    .build()
-```
-
-Pick the preset that matches the workload:
-
-- **`HarnessProfile.lean()`** — model + nothing else. Latency- and
-  cost-sensitive paths; benchmark ablations.
-- **`HarnessProfile.balanced()`** — today's production defaults
-  (memory + reactive intelligence + verifier + strategy switching).
-- **`HarnessProfile.intelligent()`** — balanced + skill persistence
-  for cross-session compounding learning.
-
-Override specific capabilities after the preset — order matters; later
-calls win. The individual `.withX()` methods are fully supported and
-compose cleanly with presets; reach for a preset when you want the whole
-default-on set in one line, or `.compose(...)` for a precise chokepoint.
-
-```typescript
-const agent = await ReactiveAgents.create()
+let builder = ReactiveAgents.create()
     .withName('research-agent')
     .withProvider('anthropic')
     .withProfile(HarnessProfile.intelligent())  // cross-session skills
     .withMemory({ tier: 'enhanced' })           // upgrade memory to vector embeddings
     .withTools()
-    .withGateway({                              // persistent autonomous harness
+
+if (process.env.AUTONOMOUS) {
+    builder = builder.withGateway({             // persistent autonomous harness
         heartbeat: { intervalMs: 1_800_000, policy: 'adaptive' },
         crons: [{ schedule: '0 9 * * MON', instruction: 'Weekly review' }],
         policies: { dailyTokenBudget: 50_000 },
     })
-    .compose((h) => h.before('act', logFn))     // canonical chokepoint composition
+}
+
+const agent = await builder
+    .compose((h) => h.before('act', (ctx) => { console.log(ctx.phase) }))  // precise chokepoint
     .build()
 ```
+
+The full builder / config reference is generated from the schema (the single
+source of truth): [builder-api](https://docs.reactiveagents.dev/reference/builder-api/)
+· [configuration](https://docs.reactiveagents.dev/reference/configuration/).
 
 ### Conversational Chat
 
@@ -647,6 +665,7 @@ Tool Execution (2 called)
 
 Enable with:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withObservability({ verbosity: "normal", live: true })
 ```
@@ -691,6 +710,7 @@ const agent = await ReactiveAgents.create()
 
 Or the `ToolBuilder` fluent API to define tools without raw schema objects:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ToolBuilder } from '@reactive-agents/tools'
 import { Effect } from 'effect'
@@ -740,6 +760,7 @@ const agent = await ReactiveAgents.create()
 
 Add or remove tools from a running agent at runtime:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from 'effect'
 
@@ -850,6 +871,7 @@ const result = await agent.run('What is the capital of France?')
 
 The `@reactive-agents/testing` package includes streaming assertions and pre-built scenario fixtures:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import {
     expectStream,

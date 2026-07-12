@@ -26,6 +26,7 @@ Five execution patterns for different coordination needs:
 
 Steps execute one after another. Output from each step is available to the next.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { OrchestrationService } from "@reactive-agents/orchestration";
 import { Effect } from "effect";
@@ -50,6 +51,7 @@ const program = Effect.gen(function* () {
 
 All steps run concurrently. Best for independent subtasks.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "multi-source-research",
@@ -67,6 +69,7 @@ const workflow = yield* orch.executeWorkflow(
 
 Output of step N becomes the input of step N+1. Data flows through the chain.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "data-pipeline",
@@ -84,6 +87,7 @@ const workflow = yield* orch.executeWorkflow(
 
 Map phase runs in parallel, reduce phase aggregates results sequentially.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "distributed-analysis",
@@ -104,6 +108,7 @@ const workflow = yield* orch.executeWorkflow(
 
 A central orchestrator dispatches work to a pool of worker agents.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "managed-research",
@@ -122,6 +127,7 @@ const workflow = yield* orch.executeWorkflow(
 
 Workflows automatically checkpoint on completion. You can also create manual checkpoints:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Manual checkpoint
 const checkpoint = yield* orch.checkpoint(workflow.id);
@@ -136,6 +142,7 @@ const resumed = yield* orch.resumeWorkflow(
 
 ### Pause and Resume
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Pause a running workflow
 yield* orch.pauseWorkflow(workflow.id, "Waiting for human review");
@@ -148,6 +155,7 @@ const resumed = yield* orch.resumeWorkflow(workflow.id, executeStep);
 
 Spawn specialized worker agents:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const worker = yield* orch.spawnWorker("data-processing");
 // { agentId, specialty, status: "idle", completedTasks: 0, ... }
@@ -166,6 +174,7 @@ Workers track their performance:
 
 Every workflow action is event-sourced for full auditability:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const events = yield* orch.getEventLog(workflow.id);
 
@@ -212,6 +221,7 @@ pending → running → completed
 
 Steps can be retried on failure:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const workflow = yield* orch.executeWorkflow(
   "resilient-pipeline",
@@ -226,6 +236,7 @@ Each step tracks its `retryCount` — you can inspect how many attempts were nee
 
 ## Listing and Querying
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // All running workflows
 const running = yield* orch.listWorkflows({ state: "running" });

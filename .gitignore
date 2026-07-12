@@ -90,3 +90,6 @@ demo-haiku.txt
 apps/examples/src/demos/*.gif
 apps/examples/src/demos/*.mp4
 qa-out/
+
+# docs:examples:check transient typecheck workspace
+.doc-examples-tmp-*/

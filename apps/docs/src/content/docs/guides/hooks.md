@@ -66,6 +66,7 @@ Each phase supports three timing points:
 
 ## Hook Handler Signature
 
+<!-- docs-skip-typecheck -->
 ```typescript
 handler: (ctx: ExecutionContext) =>
   | ExecutionContext | void
@@ -92,6 +93,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Progress Logging
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // …then chain on your builder:
 .withHook({
@@ -108,6 +110,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Cost Alert
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withHook({
   phase: "complete",
@@ -123,6 +126,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Audit Trail
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withHook({
   phase: "act",
@@ -138,6 +142,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Error Handling
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withHook({
   phase: "think",

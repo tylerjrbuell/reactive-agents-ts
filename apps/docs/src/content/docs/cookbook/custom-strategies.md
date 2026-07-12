@@ -13,6 +13,7 @@ While the 5 built-in strategies cover most use cases, you can register custom re
 
 Every strategy is a function that takes an input and returns a `ReasoningResult` as an Effect:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -38,6 +39,7 @@ The strategy function has access to `LLMService` (and optionally `ToolService`) 
 
 A strategy that generates a response, extracts claims, verifies each one, and revises:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -129,6 +131,7 @@ const executeChainOfVerification = (input) =>
 
 Register your strategy at runtime using the `StrategyRegistry`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { StrategyRegistry } from "@reactive-agents/reasoning";
 import { Effect } from "effect";
@@ -141,6 +144,7 @@ const registerStrategy = Effect.gen(function* () {
 
 To use it with the builder, register it as a lifecycle hook at bootstrap time, then reference the strategy name:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -158,6 +162,7 @@ const agent = await ReactiveAgents.create()
 
 Your strategy can optionally use ToolService for tool execution:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ToolService } from "@reactive-agents/tools";
 
@@ -192,6 +197,7 @@ When the agent is built with `.withTools()`, ToolService is automatically provid
 
 ## Listing Available Strategies
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const program = Effect.gen(function* () {
   const registry = yield* StrategyRegistry;

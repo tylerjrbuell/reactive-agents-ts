@@ -9,9 +9,30 @@ import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
 This guide walks through building a research assistant agent with memory, reasoning, and guardrails.
 
-## The Builder Pattern
+## The front door: `createAgent(config)`
 
-Every agent starts with `ReactiveAgents.create()`:
+Every agent starts from a declarative config object — the shape you know from the
+Vercel AI SDK and OpenAI SDK:
+
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-assistant",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+});
+```
+
+This creates a minimal agent with:
+- LLM provider (Anthropic, Claude Sonnet 4)
+- Direct LLM loop (no reasoning strategy, no memory, no tools)
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` and the fluent `ReactiveAgents.create().withX()` builder are
+the same API — same names, same nesting. This guide uses the config object; the
+[Builder API reference](/reference/builder-api/) covers the fluent equivalents.
+Reach for the builder when construction is conditional or imperative.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -22,22 +43,21 @@ const agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-6")
   .build();
 ```
-
-This creates a minimal agent with:
-- LLM provider (Anthropic, Claude Sonnet 4)
-- Direct LLM loop (no reasoning strategy, no memory, no tools)
+</Aside>
 
 ## Adding Memory
 
 Memory persists context across conversations:
 
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withName("research-assistant")
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")
-  .withMemory()                          // tier: "standard" (default)
-  .build();
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-assistant",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  memory: { tier: "standard" },          // 4-layer memory (default tier)
+});
 ```
 
 The 4-layer memory system has two tiers:
@@ -47,8 +67,9 @@ The 4-layer memory system has two tiers:
 | `"standard"` | Working + Episodic + FTS5 keyword search           | Conversational agents, default for most apps |
 | `"enhanced"` | All 4 layers + vector embeddings (semantic recall) | Research agents, long-running tasks needing semantic similarity |
 
+{/* docs-skip-typecheck */}
 ```typescript
-.withMemory({ tier: "enhanced", dbPath: "./data/memory.db" })   // Full 4-layer
+memory: { tier: "enhanced", dbPath: "./data/memory.db" }   // Full 4-layer
 ```
 
 `"enhanced"` requires an embedding provider — set `EMBEDDING_PROVIDER=openai` or `EMBEDDING_PROVIDER=ollama` in `.env`.
@@ -58,13 +79,13 @@ The 4-layer memory system has two tiers:
 The reasoning layer gives your agent structured thinking:
 
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withName("research-assistant")
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")
-  .withMemory()
-  .withReasoning()  // ReAct loop: Think -> Act -> Observe
-  .build();
+const agent = await createAgent({
+  name: "research-assistant",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  memory: { tier: "standard" },
+  reasoning: {},  // ReAct loop: Think -> Act -> Observe (pass { defaultStrategy } to switch)
+});
 ```
 
 With reasoning enabled, the agent uses a ReAct loop instead of a simple LLM call. It can:
@@ -77,15 +98,15 @@ With reasoning enabled, the agent uses a ReAct loop instead of a simple LLM call
 Guardrails protect against prompt injection, PII leakage, and toxic content:
 
 ```typescript
-const agent = await ReactiveAgents.create()
-  .withName("research-assistant")
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")
-  .withMemory()
-  .withReasoning()
-  .withGuardrails()       // Input/output safety
-  .withCostTracking()     // Budget controls
-  .build();
+const agent = await createAgent({
+  name: "research-assistant",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  memory: { tier: "standard" },
+  reasoning: {},
+  guardrails: {},         // Input/output safety
+  costTracking: {},       // Budget controls
+});
 ```
 
 ## Running the Agent
@@ -146,6 +167,7 @@ Each phase supports `before`, `after`, and `on-error` timing.
 
 Use `withTestScenario()` for deterministic tests:
 
+{/* docs-skip-typecheck */}
 ```typescript title="src/agent.test.ts"
 const agent = await ReactiveAgents.create()
   .withName("test-agent")

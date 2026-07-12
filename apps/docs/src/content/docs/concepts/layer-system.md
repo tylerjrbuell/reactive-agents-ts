@@ -23,6 +23,7 @@ Layers compose through two operations:
 
 When you call `createRuntime()`, it composes layers based on your configuration:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const runtime = createRuntime({
   agentId: "my-agent",
@@ -96,6 +97,7 @@ const agent = await ReactiveAgents.create()
 
 Replace any layer with a test implementation:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 

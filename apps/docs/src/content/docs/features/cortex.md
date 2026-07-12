@@ -332,6 +332,7 @@ The live WebSocket at `/ws/live/:agentId` supports **replay**: on connection, th
 
 Because Cortex dogfoods `@reactive-agents/svelte`, you can use the same primitives in your own Svelte app:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createCortexAgentRun } from '@reactive-agents/svelte'
 

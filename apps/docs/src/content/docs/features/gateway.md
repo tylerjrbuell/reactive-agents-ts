@@ -98,6 +98,7 @@ interface GatewayEvent {
 
 Periodic ticks that give agents "thinking turns" — time to check memory, review pending items, and take proactive action.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 heartbeat: {
   intervalMs: 1_800_000,       // Every 30 minutes
@@ -172,6 +173,7 @@ webhooks: [
 
 Implement the `WebhookAdapter` interface for any source:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import type { WebhookAdapter } from "@reactive-agents/gateway";
 import { Effect } from "effect";
@@ -244,6 +246,7 @@ const businessHoursOnly: SchedulingPolicy = {
 
 Register custom policies via the `PolicyEngine` service:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { PolicyEngine } from "@reactive-agents/gateway";
 import { Effect } from "effect";
@@ -299,6 +302,7 @@ Hard limits prevent runaway execution:
 
 Agents declare their autonomous capabilities upfront. No hidden behaviors.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 policies: {
   dailyTokenBudget: 50_000,       // User sets the ceiling
@@ -360,6 +364,7 @@ The gateway enhances — and is enhanced by — every existing layer:
 
 ### `GatewayConfig`
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface GatewayConfig {
   heartbeat?: HeartbeatConfig;
@@ -434,6 +439,7 @@ See the [Messaging Channels guide](/guides/messaging-channels/) for setup instru
 
 ### Channel Access Control
 
+<!-- docs-skip-typecheck -->
 ```typescript
 accessControl: {
   accessPolicy: "allowlist",           // "allowlist" | "blocklist" | "open"
@@ -447,6 +453,7 @@ accessControl: {
 
 By default (`accessControl.mode: "chat"`), each incoming channel message starts a **stateful per-sender conversation** — not a one-shot task. The agent receives the full conversation history, recent episodic context, and a directive to respond via the channel tool.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 accessControl: {
   accessPolicy: "allowlist",
@@ -467,6 +474,7 @@ accessControl: {
 
 **Task mode** skips all of the above and sends a direct one-shot instruction per message:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 accessControl: {
   mode: "task",   // stateless — no history, no session persistence
@@ -477,6 +485,7 @@ Use `task` mode when each message is an independent command and you don't want c
 
 **Memory requirements:** Chat mode requires `.withMemory()` to be configured — session persistence is backed by `SessionStoreService`, and episodic context injection uses `EpisodicMemoryService`. Without a memory layer, sessions are in-memory only (lost on restart) and episodic context is empty.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("signal-agent")

@@ -38,6 +38,7 @@
     "gate:health": "bun scripts/gate-health.ts",
     "gate:propose": "bun scripts/gate-propose.ts",
     "docs:gen:api": "bun packages/runtime/scripts/gen-api-docs.ts",
+    "docs:examples:check": "bun scripts/check-doc-examples.ts",
     "docs:dev": "cd apps/docs && bun x astro dev",
     "docs:build": "cd apps/docs && bun x astro build",
     "docs:preview": "cd apps/docs && bun x astro preview",

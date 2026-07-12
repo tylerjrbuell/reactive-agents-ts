@@ -82,6 +82,7 @@ const agent = await ReactiveAgents.create()
 - **Fallback**: Ollama for cost spikes
 - **Use case**: Small teams, MVP products, non-critical automation
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("openai")
@@ -95,6 +96,7 @@ const agent = await ReactiveAgents.create()
 - **Primary**: Claude Sonnet 4 or GPT-4o
 - **Use case**: Production SaaS, high-reliability automations, complex reasoning
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -110,6 +112,7 @@ const agent = await ReactiveAgents.create()
 - **Observability**: Full event tracing and metrics
 - **Use case**: Enterprise agents, research platforms, autonomous systems
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -128,6 +131,7 @@ Use these builder methods to enforce budgets and reduce token usage:
 
 ### Budget Enforcement
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -161,6 +165,7 @@ const agent = await ReactiveAgents.create()
 
 ### Iteration Limits
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withReasoning({ maxIterations: 5 })
 // Fewer iterations = fewer LLM calls = lower cost
@@ -171,6 +176,7 @@ const agent = await ReactiveAgents.create()
 
 ### Tool Result Compression
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withTools({
   compression: {
@@ -191,6 +197,7 @@ For an automatic, builder-level path — fall back to a cheaper or alternate mod
 
 `.withModelRouting()` wires complexity-based routing directly into the agent builder. Define ordered tiers: each tier with a `maxComplexity` threshold is tried in order; the final tier (no `maxComplexity`) is the fallback. The agent scores each task at runtime and picks the cheapest model that meets the complexity threshold.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
 
@@ -217,6 +224,7 @@ Tasks scored below `0.4` (on a 0–1 scale) run against `claude-haiku-4-5`; anyt
 
 Optimize prompt verbosity for model size:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Small models: lean prompts, early compaction
 .withContextProfile({ tier: "local" })
@@ -274,7 +282,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("qwen3:14b")
   .withReasoning({ defaultStrategy: "reactive" })
-  .withTools({ include: ["web-search", "file-read"] })
+  .withTools({ allowedTools: ["web-search", "file-read"] })
   .withContextProfile({ tier: "local" })
   .withMaxIterations(6)
   .build();

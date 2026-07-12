@@ -55,6 +55,7 @@ const agent = await ReactiveAgents.create()
 
 The `input` field accepts an Effect `Schema.Struct` (canonical — full parameter metadata is extracted from the AST) or **any Standard Schema** — Zod, Valibot, ArkType, or `Schema.standardSchemaV1(...)`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { z } from "zod";
 
@@ -74,6 +75,7 @@ Raw arguments are validated against the schema at runtime before the handler run
 
 For Effect-native authors, the handler may return an `Effect` instead of a `Promise` — both are normalised at runtime:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect, Schema } from "effect";
 
@@ -173,7 +175,7 @@ Prices are cached for 60 seconds — rapid repeated calls within a session retur
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ include: ["crypto-price"] })
+  .withTools({ allowedTools: ["crypto-price"] })
   .withReasoning()
   .build();
 
@@ -199,7 +201,7 @@ The tool uses `execFile` (no shell expansion), so shell operators like `|` and `
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ include: ["git-cli"] })
+  .withTools({ allowedTools: ["git-cli"] })
   .withReasoning()
   .build();
 
@@ -221,7 +223,7 @@ Adding `--json <fields>` to the command returns machine-readable JSON, which the
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ include: ["gh-cli"] })
+  .withTools({ allowedTools: ["gh-cli"] })
   .withReasoning()
   .build();
 
@@ -243,7 +245,7 @@ If `gws` is not installed, the tool returns a clear error immediately — the mo
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ include: ["gws-cli"] })
+  .withTools({ allowedTools: ["gws-cli"] })
   .withReasoning()
   .build();
 
@@ -336,6 +338,7 @@ Invalid inputs are rejected before the tool handler runs.
 
 The `ToolBuilder` provides a fluent, type-safe API for defining tools without raw schema objects. It eliminates the boilerplate of `definition` + `handler` pairs.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
@@ -388,6 +391,7 @@ const agent = await ReactiveAgents.create()
 
 Convert plain functions into tool definitions:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { adaptFunction } from "@reactive-agents/tools";
 
@@ -429,6 +433,7 @@ Four transports are supported, covering every MCP server deployment pattern:
 
 Launches a subprocess and communicates via JSON-RPC over stdin/stdout. The subprocess inherits the parent process environment by default.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -446,6 +451,7 @@ await using agent = await ReactiveAgents.create()
 
 Use `env` to inject secrets without relying on the global environment. These are **merged on top** of the parent process environment — only specify what differs:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withMCP({
   name: "github",
@@ -462,6 +468,7 @@ Use `env` to inject secrets without relying on the global environment. These are
 
 Set `cwd` to control where the subprocess starts. Useful when the MCP server reads relative paths:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withMCP({
   name: "project-tools",
@@ -476,6 +483,7 @@ Set `cwd` to control where the subprocess starts. Useful when the MCP server rea
 
 `command` accepts any executable — `docker` works directly. Docker networking flags go in `args`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withMCP({
   name: "my-server",
@@ -499,6 +507,7 @@ Set `cwd` to control where the subprocess starts. Useful when the MCP server rea
 
 The standard transport for modern remote and cloud-hosted MCP servers (MCP spec 2025-03-26). Uses a single POST endpoint — the server responds with either a plain JSON object or an SSE stream depending on the operation.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withMCP({
   name: "stripe",
@@ -514,6 +523,7 @@ Session management is handled automatically: the session ID returned in the `Mcp
 
 Pass `headers` to send authentication credentials on every request. Use for Bearer tokens (OAuth, JWT, PAT), API keys, or any per-server auth:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Bearer token (OAuth, PAT, JWT)
 headers: { Authorization: "Bearer ghp_..." }
@@ -536,6 +546,7 @@ The `headers` field accepts a pre-obtained Bearer token. If your server requires
 
 Pass an array to connect multiple servers at build time:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -568,6 +579,7 @@ await using agent = await ReactiveAgents.create()
 
 MCP stdio servers run as subprocesses — the process will hang if they aren't shut down. Always dispose the agent when done. See [Resource Management](../../reference/builder-api/#resource-management) for full patterns.
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Option A: await using (recommended) — auto-disposes on scope exit
 await using agent = await ReactiveAgents.create()
@@ -631,6 +643,7 @@ See the [A2A Protocol](/features/a2a-protocol/) docs for full details.
 
 The framework automatically converts between the tools package format and the LLM provider's native format using `toFunctionCallingFormat()`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // Internal: tools package format
 { name: "search", description: "...", parameters: [...] }
@@ -690,6 +703,7 @@ The expression is evaluated in-process with `result` bound to the parsed tool ou
 
 Tune compression behavior via `.withTools()`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 .withTools({
   resultCompression: {

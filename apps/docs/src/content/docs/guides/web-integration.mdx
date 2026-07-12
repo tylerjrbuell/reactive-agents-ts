@@ -238,6 +238,7 @@ const { text, status, error, run, cancel } = useAgentStream("/api/agent");
 
 All return values are Vue `readonly` refs — use them directly in templates or `watch` them:
 
+{/* docs-skip-typecheck */}
 ```typescript
 const { text, status, output } = useAgentStream("/api/agent");
 
@@ -302,6 +303,7 @@ Returns a Svelte writable store — subscribe with `$` prefix in templates:
 
 **Store state shape:**
 
+{/* docs-skip-typecheck */}
 ```typescript
 interface AgentStreamState {
   text: string;        // Accumulated output

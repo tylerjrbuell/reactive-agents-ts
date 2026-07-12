@@ -24,6 +24,7 @@ across process and machine boundaries.
 `.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`
 (the default once `.withDurableRuns()` is set) makes a gated call pause durably.
 
+<!-- docs-skip-typecheck -->
 ```ts
 import { ReactiveAgents } from "reactive-agents";
 
@@ -40,6 +41,7 @@ const agent = await ReactiveAgents.create()
 
 You can also gate by predicate instead of (or in addition to) a name list:
 
+<!-- docs-skip-typecheck -->
 ```ts
 .withApprovalPolicy({
   requireFor: ({ toolName, iteration }) => toolName.startsWith("delete-") || iteration > 10,

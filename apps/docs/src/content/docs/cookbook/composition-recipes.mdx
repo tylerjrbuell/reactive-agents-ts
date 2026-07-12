@@ -13,6 +13,7 @@ Each recipe is a complete, runnable `.compose()` block. Copy-paste and adapt.
 
 Scrub sensitive data from tool results before the LLM sees them. Log everything to an audit trail.
 
+{/* docs-skip-typecheck */}
 ```ts
 import { ReactiveAgents } from 'reactive-agents';
 import { redact } from './your-pii-redactor';
@@ -38,6 +39,7 @@ const agent = await ReactiveAgents.create()
 
 Translate nudges and system prompts for non-English deployments.
 
+{/* docs-skip-typecheck */}
 ```ts
 .compose((harness) => {
   harness.on('nudge.*', async (msg) => await translate(msg, 'fr'));
@@ -51,6 +53,7 @@ Translate nudges and system prompts for non-English deployments.
 
 Inject tenant-specific headers into every system prompt.
 
+{/* docs-skip-typecheck */}
 ```ts
 .compose((harness) => {
   harness.on('prompt.system', (text, ctx) =>
@@ -65,6 +68,7 @@ Inject tenant-specific headers into every system prompt.
 
 Route 50% of runs to a prompt variant for controlled research.
 
+{/* docs-skip-typecheck */}
 ```ts
 let variant = 'control';
 
@@ -81,6 +85,7 @@ let variant = 'control';
 
 Disable every harness signal. Returns to pure ReAct baseline — useful for benchmarking harness overhead.
 
+{/* docs-skip-typecheck */}
 ```ts
 // This single line is the framework's own ablation mode
 .compose((harness) => harness.on('nudge.*', () => null))
@@ -94,6 +99,7 @@ All nudges return `null` (suppressed). System prompts, tool results, and lifecyc
 
 Replace the default termination predicate with domain-specific criteria.
 
+{/* docs-skip-typecheck */}
 ```ts
 .compose((harness) => {
   harness.before('complete', (ctx) => {
@@ -112,6 +118,7 @@ Replace the default termination predicate with domain-specific criteria.
 
 Surface auto-healing events to users and annotate healed results.
 
+{/* docs-skip-typecheck */}
 ```ts
 .compose((harness) => {
   harness.tap('nudge.healing-failure', (msg, ctx) => {
@@ -133,6 +140,7 @@ Surface auto-healing events to users and annotate healed results.
 
 Track cumulative token spend and trigger budget alerts.
 
+{/* docs-skip-typecheck */}
 ```ts
 import { budgetLimit } from 'reactive-agents/compose/killswitches';
 
@@ -153,6 +161,7 @@ const agent = await ReactiveAgents.create()
 
 Single line: every internal agent signal forwarded to OTel.
 
+{/* docs-skip-typecheck */}
 ```ts
 import { trace } from '@opentelemetry/api';
 
@@ -178,6 +187,7 @@ Pattern #9 is the manual form of the shipped [`@reactive-agents/observe`](/featu
 
 Killswitches compose cleanly. First trigger wins, each records its source:
 
+{/* docs-skip-typecheck */}
 ```ts
 const agent = await ReactiveAgents.create()
   .withProvider('anthropic')

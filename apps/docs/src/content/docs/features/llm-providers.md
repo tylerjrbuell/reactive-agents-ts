@@ -28,6 +28,7 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 
 Set your API key in `.env` and specify the provider:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -123,6 +124,7 @@ Serper proxies Google Search results and is a good option when Tavily quota is e
 SERPER_API_KEY=your-serper-api-key
 ```
 
+<!-- docs-skip-typecheck -->
 ```typescript
 // No code changes needed — set the env var and web-search uses Serper automatically
 const agent = await ReactiveAgents.create()

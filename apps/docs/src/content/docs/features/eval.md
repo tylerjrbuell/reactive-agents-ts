@@ -14,6 +14,7 @@ The `@reactive-agents/eval` package provides a structured framework for measurin
 
 Define a suite, run it against an agent, and read results:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { EvalService, createEvalLayer } from "@reactive-agents/eval";
 import { Effect } from "effect";
@@ -100,6 +101,7 @@ The generic judge asks the LLM to score the custom dimension on a 0.0–1.0 scal
 
 Use `runCase` to score a single case with an actual agent output you provide:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const result = yield* evalService.runCase(
   evalCase,           // EvalCase
@@ -143,6 +145,7 @@ type EvalCase = {
 
 ## EvalSuite Schema
 
+<!-- docs-skip-typecheck -->
 ```typescript
 type EvalSuite = {
   id: string;
@@ -208,6 +211,7 @@ type DimensionScore = {
 
 By default, `EvalServiceLive` stores history in memory. Use `makeEvalServicePersistentLive` (backed by `bun:sqlite`) for durable history across runs:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { makeEvalServicePersistentLive } from "@reactive-agents/eval";
 import { Effect } from "effect";
@@ -234,6 +238,7 @@ await Effect.runPromise(
 
 The underlying store exposes four operations:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 interface EvalStore {
   saveRun(run: EvalRun): Effect.Effect<void>;
@@ -260,6 +265,7 @@ const layer = makeEvalServiceLive(store);
 
 Compare two runs to detect quality regressions between agent versions:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 const program = Effect.gen(function* () {
   const evalService = yield* EvalService;
@@ -300,6 +306,7 @@ type EvalConfig = {
 
 Pass config overrides as the third argument to `runSuite`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 yield* evalService.runSuite(suite, "agent-v2", {
   passThreshold: 0.8,
@@ -312,6 +319,7 @@ yield* evalService.runSuite(suite, "agent-v2", {
 
 The typical pattern is to run your agent, capture the output and metrics, then score it with `runCase`:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { EvalService, makeEvalServicePersistentLive } from "@reactive-agents/eval";
@@ -363,6 +371,7 @@ await Effect.runPromise(
 
 `createEvalLayer` provides both `EvalService` and `DatasetService`. It requires `LLMService` from `@reactive-agents/llm-provider` to be in scope:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { createEvalLayer } from "@reactive-agents/eval";
 
