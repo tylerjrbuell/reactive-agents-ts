@@ -77,7 +77,8 @@ export const codeExecuteTool: ToolDefinition = {
     "Dynamic import() is also supported. No browser APIs (DOMParser, fetch). " +
     "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
     "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
-    "Use return <value> to return a result, or console.log() to produce output. " +
+    "RESULT CONTRACT: you MUST end with `return <value>` — the returned value arrives in the `result` field. " +
+    "A bare final expression (no return) yields result:null; console.log() text arrives ONLY in the `output` string. " +
     "Returns { executed: true, result, output, exitCode } on success.",
   parameters: [
     {
@@ -85,9 +86,9 @@ export const codeExecuteTool: ToolDefinition = {
       type: "string",
       description:
         "JavaScript code to execute in a subprocess. " +
-        "Use console.log() to produce output. " +
-        "Examples: 'console.log(2 + 2)' → output: '4', " +
-        "'console.log(JSON.stringify([3,1,2].sort()))' → output: '[1,2,3]'.",
+        "End with `return <value>` — that value becomes the `result` field (a bare expression yields result:null). " +
+        "Examples: 'return 2 + 2' → result: 4, " +
+        "'return [3,1,2].sort()' → result: [1,2,3].",
       required: true,
     },
     {

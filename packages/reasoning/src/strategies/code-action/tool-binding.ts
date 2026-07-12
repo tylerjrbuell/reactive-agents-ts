@@ -24,6 +24,38 @@ export interface ToolSpec {
   parameters: ToolParameters;
 }
 
+// ── Identifier sanitization ───────────────────────────────────────────────────
+//
+// Every REAL builtin tool name is hyphenated (file-write, code-execute,
+// web-search) — syntactically INVALID as a JS identifier. The prompt used to
+// declare `async function file-write(...)` and the sandbox passed the raw name
+// as a `new Function` parameter, so code-action hard-failed with
+// "Unexpected token '-'" the moment a real builtin was involved (2026-07-11
+// probe p7). One sanitizer, used by BOTH the prompt bindings and the sandbox
+// parameter list, keeps the two sides in lockstep; dispatch stays keyed by the
+// ORIGINAL tool name.
+
+/** Sanitize one tool name into a valid JS identifier (no collision handling). */
+export function toJsIdentifier(name: string): string {
+  const cleaned = name.replace(/[^A-Za-z0-9_$]/g, "_");
+  return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
+}
+
+/**
+ * Sanitize a tool-name list into UNIQUE JS identifiers, index-aligned with the
+ * input. Collisions (e.g. `a-b` vs `a_b`) dedupe deterministically by
+ * first-come-keeps-the-name; later colliders get `_` suffixes.
+ */
+export function buildToolParamNames(names: readonly string[]): string[] {
+  const used = new Set<string>();
+  return names.map((n) => {
+    let id = toJsIdentifier(n);
+    while (used.has(id)) id = `${id}_`;
+    used.add(id);
+    return id;
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toTsType(jsonType: string, enumValues?: string[]): string {
@@ -47,7 +79,7 @@ function toTsType(jsonType: string, enumValues?: string[]): string {
   }
 }
 
-function generateFunctionSignature(tool: ToolSpec): string {
+function generateFunctionSignature(tool: ToolSpec, fnName: string): string {
   const { name, description, parameters } = tool;
   const required = new Set(parameters.required ?? []);
   const params = Object.entries(parameters.properties)
@@ -58,9 +90,12 @@ function generateFunctionSignature(tool: ToolSpec): string {
     })
     .join("; ");
 
+  // Name the underlying tool when the identifier differs, so the mapping is
+  // visible to the model (and to anyone reading the prompt).
+  const doc = fnName === name ? description : `${description} (tool: ${name})`;
   return [
-    `/** ${description} */`,
-    `declare async function ${name}(params: { ${params} }): Promise<unknown>;`,
+    `/** ${doc} */`,
+    `declare async function ${fnName}(params: { ${params} }): Promise<unknown>;`,
   ].join("\n");
 }
 
@@ -75,5 +110,6 @@ function generateFunctionSignature(tool: ToolSpec): string {
  */
 export function generateToolBindings(tools: ToolSpec[]): string {
   if (tools.length === 0) return "";
-  return tools.map(generateFunctionSignature).join("\n\n");
+  const fnNames = buildToolParamNames(tools.map((t) => t.name));
+  return tools.map((t, i) => generateFunctionSignature(t, fnNames[i]!)).join("\n\n");
 }

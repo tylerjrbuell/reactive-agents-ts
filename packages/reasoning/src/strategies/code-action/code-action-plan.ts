@@ -11,13 +11,15 @@ Write a single self-contained async IIFE (immediately invoked function expressio
 calls these functions to complete the user task. Your response MUST be a single fenced
 code block with no explanation:
 
-\`\`\`typescript
+\`\`\`javascript
 (async () => {
   // your code here
   return result;
 })()
 \`\`\`
 
+Write plain JavaScript — NO TypeScript type annotations (no \`: string\`, \`: number\`,
+interfaces, generics, or \`as\` casts): the code is executed directly as JavaScript.
 Do NOT include import statements, require() calls, or any code outside the IIFE.
 Do NOT use top-level await — wrap everything inside the IIFE.`;
 

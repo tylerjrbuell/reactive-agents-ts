@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { buildToolParamNames } from "./tool-binding.js";
 
 export interface ToolCallRecord {
   name: string;
@@ -88,10 +89,16 @@ export async function runInSandbox(
       reject(err);
     });
 
+    const toolNames = Array.from(toolHandlers.keys());
     worker.postMessage({
       type: "init",
       code,
-      toolNames: Array.from(toolHandlers.keys()),
+      toolNames,
+      // Sanitized JS identifiers, index-aligned with toolNames — the worker
+      // binds these as the Function parameter names (hyphenated tool names are
+      // invalid JS identifiers) while dispatching under the ORIGINAL names.
+      // Computed host-side so the worker needs no imports.
+      paramNames: buildToolParamNames(toolNames),
     });
   });
 }

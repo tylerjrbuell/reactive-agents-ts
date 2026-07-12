@@ -152,31 +152,123 @@ export const executeCodeAction = (
     let lastVerdict: VerifierVerdict = "PASS";
     let lastVerifySummary = "";
 
+    let llmCalls = 1; // the plan call above
+    let lastSandboxError: string | null = null;
+
     while (!done) {
       iteration++;
 
       // ── Execute phase — run in Worker sandbox ─────────────────────────────
-      const sandboxResult = yield* Effect.mapError(
+      // A sandbox failure (generated code doesn't parse, throws, times out) is
+      // an OBSERVATION, not a strategy-fatal error: the retry loop below
+      // already exists to regenerate code from feedback, and hard-failing here
+      // threw away both the recovery chance AND the tokens already spent
+      // (probe p7 2026-07-11: one syntax error ⇒ run failed with
+      // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
+      const sandboxExit = yield* Effect.either(
         Effect.tryPromise({
           try: () => runInSandbox(generatedCode, toolHandlers),
-          catch: (e) => e,
+          catch: (e) => (e instanceof Error ? e : new Error(String(e))),
         }),
-        (cause) =>
-          new ExecutionError({
-            strategy: "code-action",
-            message: `code-action sandbox execution failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-            cause,
-          }),
       );
+
+      if (sandboxExit._tag === "Left") {
+        lastSandboxError = sandboxExit.left.message;
+        steps.push(
+          makeStep(
+            "observation",
+            `[CODE-ACTION] Sandbox execution failed: ${lastSandboxError}`,
+            {
+              observationResult: makeObservationResult(
+                "code-execute",
+                false,
+                lastSandboxError,
+              ),
+            },
+          ),
+        );
+        lastVerdict = "FAIL";
+        lastVerifySummary = `sandbox execution failed: ${lastSandboxError}`;
+        if (iteration >= maxIterations) {
+          done = true;
+          steps.push(
+            makeStep("thought", `[CODE-ACTION] Terminating: sandbox failed on final iteration ${iteration}`),
+          );
+          break;
+        }
+        // Regenerate with the real failure as feedback (same shape as the
+        // verifier-feedback retry below).
+        const repairUser = [
+          `The previous code FAILED to execute. Error: ${lastSandboxError}`,
+          `Previous code:\n\`\`\`typescript\n${generatedCode}\n\`\`\``,
+          `\nFix the code and try again. Task: ${input.taskDescription}`,
+        ].join("\n\n");
+        const repairResponse = yield* Effect.mapError(
+          gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
+            messages: [
+              { role: "user", content: user },
+              { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },
+              { role: "user", content: repairUser },
+            ],
+            systemPrompt: withEnvContext(system),
+            temperature: 0.1 * iteration,
+          }),
+          (cause) =>
+            new ExecutionError({
+              strategy: "code-action",
+              message: "code-action repair LLM call failed",
+              cause,
+            }),
+        );
+        generatedCode = extractCodeBlock(repairResponse.content);
+        totalTokens += repairResponse.usage.totalTokens;
+        totalCost += repairResponse.usage.estimatedCost ?? 0;
+        llmCalls += 1;
+        continue;
+      }
+
+      const sandboxResult = sandboxExit.right;
+      lastSandboxError = null;
 
       lastToolCalls = sandboxResult.toolCalls;
       lastResult = sandboxResult.finalResult;
 
+      // Canonical ledger pairs — the SAME action/observation shape the kernel
+      // act phase writes. The sandbox executed real tools with name+args+result
+      // in hand; without these steps, isArtifactProduced's toolCallId-linkage
+      // scan starves and a file the sandbox wrote reports `produced:false` on
+      // the receipt (probe p7 2026-07-11 — 4th site of the same disease).
+      // A rejected sandbox is handled above, so every recorded call succeeded.
+      const iterationLedger: { obsStep: ReasoningStep; tc: ToolCallRecord; callId: string }[] = [];
+      {
+        let callIdx = 0;
+        for (const tc of sandboxResult.toolCalls) {
+          const callId = `code-action-${iteration}-${callIdx++}`;
+          const resultText =
+            typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result) ?? "";
+          const obsContent = `[${tc.name} result]\n${resultText}`;
+          steps.push(
+            makeStep("action", `[CODE-ACTION] ${tc.name}`, {
+              toolCall: {
+                id: callId,
+                name: tc.name,
+                arguments: (tc.args ?? {}) as Record<string, unknown>,
+              },
+            }),
+          );
+          const obsStep = makeStep("observation", obsContent, {
+            toolCallId: callId,
+            observationResult: makeObservationResult(tc.name, true, obsContent),
+          });
+          steps.push(obsStep);
+          iterationLedger.push({ obsStep, tc, callId });
+        }
+      }
+
       // FM-I (#195) — emit the canonical observation.tool-result Compose tag for
       // each tool the sandbox actually executed, so `.on()/.tap()` observers,
       // killswitches, and calibration see code-action tool calls like every other
-      // strategy. A rejected sandbox throws before this point, so every recorded
-      // call succeeded (healed:false — code-action has no healing pipeline).
+      // strategy (healed:false — code-action has no healing pipeline).
       if (input.harnessPipeline) {
         const stateLike = {
           taskId: input.taskId ?? "code-action",
@@ -191,21 +283,14 @@ export const executeCodeAction = (
           error: null,
           meta: {},
         };
-        let callIdx = 0;
-        for (const tc of sandboxResult.toolCalls) {
-          const resultText =
-            typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result) ?? "";
-          const obsContent = `[${tc.name} result]\n${resultText}`;
-          const obsStep = makeStep("observation", obsContent, {
-            observationResult: makeObservationResult(tc.name, true, obsContent),
-          });
+        for (const { obsStep, tc, callId } of iterationLedger) {
           yield* emitToCompose(input.harnessPipeline, "observation.tool-result", obsStep, {
             iteration,
             phase: "act",
             state: stateLike,
             strategy: "code-action",
             toolName: tc.name,
-            callId: `code-action-${iteration}-${callIdx++}`,
+            callId,
             healed: false,
             durationMs: 0,
           });
@@ -275,6 +360,7 @@ export const executeCodeAction = (
       generatedCode = extractCodeBlock(retryResponse.content);
       totalTokens += retryResponse.usage.totalTokens;
       totalCost += retryResponse.usage.estimatedCost ?? 0;
+      llmCalls += 1;
     }
 
     const resultString =
@@ -294,9 +380,16 @@ export const executeCodeAction = (
       start,
       totalTokens,
       totalCost,
+      // Surface the real failure cause when the run died on sandbox errors —
+      // buildStrategyResult's M7 invariant will force `failed` on the empty
+      // output, and this is the message the user sees instead of nothing.
+      ...(lastSandboxError !== null
+        ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
+        : {}),
       extraMetadata: {
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
+        llmCalls,
         codeLength: generatedCode.length,
         // H5/#40: name what stayed unmet — same channel reactive ships.
         ...(lastVerdict === "FAIL"

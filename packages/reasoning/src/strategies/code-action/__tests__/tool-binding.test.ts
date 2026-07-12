@@ -36,6 +36,27 @@ describe("generateToolBindings", () => {
     expect(bindings).toContain("async function read_file");
   });
 
+  // 2026-07-11 probe p7: every REAL builtin is hyphenated. Declaring
+  // `async function file-write(...)` teaches the model syntactically invalid
+  // JS — the sandbox then can't parse the calls it was told to make.
+  it("declares hyphenated tool names under sanitized JS identifiers", () => {
+    const bindings = generateToolBindings([
+      {
+        name: "file-write",
+        description: "Write a file",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string" }, content: { type: "string" } },
+          required: ["path", "content"],
+        },
+      },
+    ]);
+    expect(bindings).toContain("async function file_write");
+    expect(bindings).not.toContain("function file-write");
+    // The doc line names the underlying tool so the mapping stays visible.
+    expect(bindings).toContain("file-write");
+  });
+
   it("includes required params without ?", () => {
     const bindings = generateToolBindings(mockTools);
     expect(bindings).toContain("query: string");

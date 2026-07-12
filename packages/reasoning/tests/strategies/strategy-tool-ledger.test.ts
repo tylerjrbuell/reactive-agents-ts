@@ -116,6 +116,33 @@ describe("strategy tool ledger — deliverable truth", () => {
     expectLedgerTruth(result);
   }, 20000);
 
+  it("code-action: sandbox tool calls reach result.steps as canonical pairs and verify produced", async () => {
+    const { executeCodeAction } = await import("../../src/strategies/code-action.js");
+    const code = [
+      "```javascript",
+      '(async () => { await file_write({ path: "./out.md", content: "the summary" }); return "done"; })()',
+      "```",
+    ].join("\n");
+    const result = await Effect.runPromise(
+      executeCodeAction({
+        taskDescription: TASK,
+        taskType: "general",
+        memoryContext: "",
+        availableTools: ["file-write"],
+        availableToolSchemas: [FILE_WRITE_SCHEMA],
+        config: defaultReasoningConfig,
+      } as never).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.succeed(LLMService, LLMService.of(TestLLMService([{ text: code }]))),
+            makeToolLayer(),
+          ),
+        ),
+      ),
+    ) as ReasoningResult;
+    expectLedgerTruth(result);
+  }, 20000);
+
   it("plan-execute: dispatched file-write evidence reaches result.steps and verifies produced", async () => {
     const result = await Effect.runPromise(
       executePlanExecute({
