@@ -95,6 +95,12 @@ export interface StepExecResult {
    * runs deliverable-blind. Undefined for analysis/composite steps.
    */
   ledgerSteps?: readonly ReasoningStep[];
+  /**
+   * LLM calls this step made (honest accounting, 2026-07-11): analysis = 1
+   * direct call; composite = the sub-kernel's own state.llmCalls; tool_call =
+   * 0 (undefined). Summed by the orchestrator into metadata.llmCalls.
+   */
+  llmCalls?: number;
 }
 
 /**
@@ -345,6 +351,7 @@ export function executeStep(
             tokens: response.usage.totalTokens,
             cost: response.usage.estimatedCost,
             success: true,
+            llmCalls: 1,
             // No sub-kernel on this path (single tool-less LLM call): empty
             // output already failed the Effect above, so the surviving path's
             // deterministic evidence is a non-empty model-authored answer.
@@ -408,6 +415,7 @@ export function executeStep(
       tokens: kernelResult.totalTokens,
       cost: kernelResult.totalCost,
       success: true,
+      llmCalls: kernelResult.llmCalls,
       ...(kernelResult.rawTerminatedBy !== undefined
         ? { rawTerminatedBy: kernelResult.rawTerminatedBy }
         : {}),

@@ -99,6 +99,12 @@ function expectLedgerTruth(result: ReasoningResult) {
   const report = computeDeliverableReport(contract, result.steps, String(result.output ?? ""));
   expect(report.length).toBeGreaterThanOrEqual(1);
   expect(report.every((r) => r.produced)).toBe(true);
+
+  // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every
+  // strategy path) — every strategy made ≥1 real LLM call here.
+  expect(
+    (result.metadata as { llmCalls?: number }).llmCalls ?? 0,
+  ).toBeGreaterThan(0);
 }
 
 describe("strategy tool ledger — deliverable truth", () => {

@@ -223,6 +223,11 @@ export const executeReflexion = (
     let initialResponse = genPass.output ?? "";
     let backfillTokens = 0;
     let backfillCost = 0;
+    // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every
+    // reflexion run) — the kernel counts its own calls (state.llmCalls,
+    // think.ts); direct gatewayComplete/critique calls add 1 each. Mutated by
+    // the iterate closure below, same as `steps`.
+    let llmCalls = genPass.state.llmCalls ?? 0;
 
     // ── Empty-generate backfill (gpt-4o-mini bug, trace 01KTAV0MVG) ──
     // The generate sub-pass can terminate with NO model-authored answer: when the
@@ -272,6 +277,7 @@ export const executeReflexion = (
       initialResponse = synthText;
       backfillTokens = synthResponse.usage.totalTokens;
       backfillCost = synthResponse.usage.estimatedCost;
+      llmCalls += 1;
       yield* emitLog({
         _tag: "warning",
         message: "Generate pass produced empty output — used synthesis fallback to seed the reflect loop",
@@ -385,6 +391,7 @@ export const executeReflexion = (
           });
 
           const critique = critiqueResult.content || critiqueResult.thinking || "";
+          llmCalls += 1; // critique = one direct LLM call
           const tokensAfterCritique = s.totalTokens + critiqueResult.tokens;
           const costAfterCritique = s.totalCost + critiqueResult.cost;
 
@@ -550,6 +557,7 @@ export const executeReflexion = (
           // Only replace critique evidence if improvement actually called tools.
           const newLastKernelSteps = improvePass.hadToolCalls ? improvePass.steps : s.lastKernelSteps;
           const newAllSideEffectSteps = [...s.allSideEffectSteps, ...improvePass.steps];
+          llmCalls += improvePass.state.llmCalls ?? 0;
           const tokensAfterImprove = tokensAfterCritique + improvePass.tokens;
           const costAfterImprove = costAfterCritique + improvePass.cost;
 
@@ -660,6 +668,7 @@ export const executeReflexion = (
       totalCost: finalCost,
       extraMetadata: {
         confidence,
+        llmCalls,
         reflexionCritiques: final.previousCritiques,
         // H5/#40: sub-kernel honesty fields cross the result boundary — empty
         // on a clean run, mirroring reactive's honestPartialMetadata.

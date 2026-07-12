@@ -180,6 +180,11 @@ export const executePlanExecute = (
     const steps: ReasoningStep[] = [];
     const start = Date.now();
     let totalTokens = 0;
+    // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every
+    // plan-execute run) — planner/patch/augment/reflect/synthesis are direct
+    // or nominal-1 calls; per-step counts ride StepExecResult.llmCalls
+    // (analysis=1, composite=sub-kernel state.llmCalls, tool dispatch=0).
+    let llmCallsTotal = 1; // the initial plan generation
     let totalCost = 0;
     // Most recent sub-kernel raw termination reason. Sub-kernels (composite
     // steps) carry `rawTerminatedBy` on their result; aggregating the last
@@ -548,6 +553,7 @@ export const executePlanExecute = (
         start,
         totalTokens,
         totalCost,
+        extraMetadata: { llmCalls: llmCallsTotal },
       });
     }
 
@@ -730,6 +736,7 @@ export const executePlanExecute = (
         for (const result of waveResults) {
           const { step, stepIndex } = result;
           totalTokens += result.tokens;
+          llmCallsTotal += (result as { llmCalls?: number }).llmCalls ?? 0;
           totalCost += result.cost;
           // Track the most recent composite sub-kernel termination reason —
           // surfaced on the strategy result so runtime can propagate it to
@@ -802,6 +809,8 @@ export const executePlanExecute = (
 
             if (patchResult) {
               totalTokens += patchResult.tokens;
+          llmCallsTotal += 1;
+              llmCallsTotal += 1;
               const patchedSteps = patchResult.steps;
               plan.steps.splice(
                 stepIndex + 1,
@@ -935,6 +944,7 @@ export const executePlanExecute = (
       });
 
       totalTokens += reflectResult.tokens;
+      llmCallsTotal += 1; // critique = one direct LLM call
       totalCost += reflectResult.cost;
 
       const reflectionContent = reflectResult.content;
@@ -1176,6 +1186,7 @@ export const executePlanExecute = (
 
         totalTokens += synthLlmResponse.usage.totalTokens;
         totalCost += synthLlmResponse.usage.estimatedCost;
+        llmCallsTotal += 1;
         // Strict upgrade vs bare stripThinking: rescues synthesized answers
         // trapped inside <think> blocks (would have silently returned empty).
         finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
@@ -1241,6 +1252,7 @@ export const executePlanExecute = (
 
         if (augmentResult && augmentResult.steps.length > 0) {
           totalTokens += augmentResult.tokens;
+          llmCallsTotal += 1;
           plan.steps.push(...augmentResult.steps);
 
           const augDetail = augmentResult.steps.map((s) => `${s.id}: ${s.title}`).join(", ");
@@ -1321,6 +1333,7 @@ export const executePlanExecute = (
       totalTokens,
       totalCost,
       extraMetadata: {
+        llmCalls: llmCallsTotal,
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(subKernelEnvelope),

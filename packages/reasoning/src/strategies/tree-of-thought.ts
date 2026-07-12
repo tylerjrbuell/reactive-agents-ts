@@ -194,6 +194,10 @@ export const executeTreeOfThought = (
     const exploreBudgetMs = Number(process.env.RA_TOT_EXPLORE_BUDGET_MS ?? 120_000);
     let totalTokens = 0;
     let totalCost = 0;
+    // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every ToT
+    // run) — expansion/scoring are direct calls (+1 each); kernel passes
+    // carry their own state.llmCalls.
+    let llmCalls = 0;
 
     // ── HS-110 / M3 cost gate (sweep-2026-05-23) ──
     //
@@ -252,6 +256,7 @@ export const executeTreeOfThought = (
       });
 
       totalTokens += skipExecState.tokens;
+      llmCalls += skipExecState.llmCalls ?? 0;
       totalCost += skipExecState.cost;
       steps.push(...skipExecState.steps);
       const skipFinalOutput =
@@ -287,6 +292,7 @@ export const executeTreeOfThought = (
         totalTokens,
         totalCost,
         extraMetadata: {
+          llmCalls,
           ...honestPartialMetadata(skipExecState.meta),
           bfsSkipped: true,
           bfsSkipReason: complexityVerdict.reason,
@@ -408,6 +414,7 @@ export const executeTreeOfThought = (
           );
 
         totalTokens += expansionResponse.usage.totalTokens;
+        llmCalls += 1;
         totalCost += expansionResponse.usage.estimatedCost;
 
         // Thinking-safe extraction: rescues candidates trapped inside <think>
@@ -463,6 +470,7 @@ export const executeTreeOfThought = (
             );
 
           totalTokens += scoreResponse.usage.totalTokens;
+          llmCalls += 1;
           totalCost += scoreResponse.usage.estimatedCost;
 
           const batchRaw = extractThinkingSafeContent(scoreResponse).content;
@@ -495,6 +503,7 @@ export const executeTreeOfThought = (
                   ),
                 );
               totalTokens += single.usage.totalTokens;
+              llmCalls += 1;
               totalCost += single.usage.estimatedCost;
               scores[ci] = parseScore(extractThinkingSafeContent(single).content);
             }
@@ -688,6 +697,7 @@ export const executeTreeOfThought = (
         start,
         totalTokens,
         totalCost,
+        extraMetadata: { llmCalls },
       });
     }
 
@@ -724,6 +734,7 @@ export const executeTreeOfThought = (
     });
 
     totalTokens += execState.tokens;
+    llmCalls += execState.llmCalls ?? 0;
     totalCost += execState.cost;
     steps.push(...execState.steps);
     const finalOutput = execState.output
@@ -753,6 +764,7 @@ export const executeTreeOfThought = (
       totalTokens,
       totalCost,
       extraMetadata: {
+        llmCalls,
         ...honestPartialMetadata(execState.meta),
       },
     });
