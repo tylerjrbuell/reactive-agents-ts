@@ -1,0 +1,32 @@
+{
+  "probe": "p8-streaming",
+  "durationMs": 4469,
+  "checks": [
+    {
+      "name": "stream-emitted-events",
+      "pass": true,
+      "detail": "[[\"TextDelta\",52],[\"TrustEvent\",1],[\"StreamCompleted\",1]]"
+    },
+    {
+      "name": "completed-event-present",
+      "pass": true
+    },
+    {
+      "name": "completed-has-output",
+      "pass": true,
+      "detail": "outputLen=170"
+    },
+    {
+      "name": "completed-has-receipt",
+      "pass": true,
+      "detail": "verdict=partially-grounded"
+    },
+    {
+      "name": "file-deliverable-on-disk",
+      "pass": true,
+      "detail": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p8-haiku.md"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "The haiku has been written to `./qa-out/p8-haiku.md`.\n\nHere is the content I wrote:\n```\nFlowing waters glide,\nCarving paths through ancient earth,\nTo the waiting sea.\n```"
+}

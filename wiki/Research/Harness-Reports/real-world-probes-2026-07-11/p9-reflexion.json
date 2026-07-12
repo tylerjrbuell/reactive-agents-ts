@@ -1,0 +1,51 @@
+{
+  "probe": "p9-reflexion",
+  "taskId": "01KX9VHEXSYJFN35KAGY6Z9MZV",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": null,
+  "verdict": "tool-grounded",
+  "strategyUsed": "reflexion",
+  "tokensUsed": 12386,
+  "llmCalls": 8,
+  "durationMs": 26459,
+  "checks": [
+    {
+      "name": "correct-sum-on-disk",
+      "pass": true,
+      "detail": "file=\"100\""
+    },
+    {
+      "name": "strategy-honored",
+      "pass": true,
+      "detail": "requested=reflexion used=reflexion"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": true,
+      "detail": "success=true outputLen=164"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=12386"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=8"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=tool-grounded"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p9/reflexion.txt]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "The required actions have been completed. The sum of the values from `./qa-out/p9/input.json` was calculated and written exclusively to `./qa-out/p9/reflexion.txt`."
+}

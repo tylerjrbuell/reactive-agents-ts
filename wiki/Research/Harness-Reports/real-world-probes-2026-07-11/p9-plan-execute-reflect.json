@@ -1,0 +1,51 @@
+{
+  "probe": "p9-plan-execute-reflect",
+  "taskId": "01KX9VJ8QATWDNCH3AFEQE2ZNK",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": null,
+  "verdict": "partially-grounded",
+  "strategyUsed": "plan-execute-reflect",
+  "tokensUsed": 4064,
+  "llmCalls": 3,
+  "durationMs": 17037,
+  "checks": [
+    {
+      "name": "correct-sum-on-disk",
+      "pass": true,
+      "detail": "file=\"100\""
+    },
+    {
+      "name": "strategy-honored",
+      "pass": true,
+      "detail": "requested=plan-execute-reflect used=plan-execute-reflect"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": true,
+      "detail": "success=true outputLen=3"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=4064"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=3"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=partially-grounded"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p9/plan-execute-reflect.txt]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "100"
+}

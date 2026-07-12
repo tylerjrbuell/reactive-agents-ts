@@ -89,3 +89,4 @@ wiki/Research/Harness-Reports/task-quality-gate-*.json
 demo-haiku.txt
 apps/examples/src/demos/*.gif
 apps/examples/src/demos/*.mp4
+qa-out/

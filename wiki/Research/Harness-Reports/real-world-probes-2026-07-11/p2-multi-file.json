@@ -1,0 +1,66 @@
+{
+  "probe": "p2-multi-file",
+  "taskId": "01KX9TPV6HK20A6KR2MXKC1SNV",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": null,
+  "verdict": "tool-grounded",
+  "strategyUsed": "reactive",
+  "tokensUsed": 8418,
+  "llmCalls": 3,
+  "durationMs": 6522,
+  "checks": [
+    {
+      "name": "report-on-disk",
+      "pass": true,
+      "detail": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p2-report.md"
+    },
+    {
+      "name": "data-on-disk",
+      "pass": true,
+      "detail": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p2-data.json"
+    },
+    {
+      "name": "data-json-valid",
+      "pass": true,
+      "detail": "array=true len=3"
+    },
+    {
+      "name": "both-deliverables-declared",
+      "pass": true,
+      "detail": "deliverables=[{\"spec\":\"produce the file ./qa-out/p2-report.md\",\"produced\":true},{\"spec\":\"produce the file ./qa-out/p2-data.json\",\"produced\":true}]"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": true,
+      "detail": "success=true outputLen=100"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=8418"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=3"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=tool-grounded"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p2-report.md]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p2-data.json]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "The two files have been created successfully at `./qa-out/p2-report.md` and `./qa-out/p2-data.json`."
+}

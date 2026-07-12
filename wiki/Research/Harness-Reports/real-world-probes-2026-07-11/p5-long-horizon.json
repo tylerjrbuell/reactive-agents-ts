@@ -1,0 +1,56 @@
+{
+  "probe": "p5-long-horizon",
+  "taskId": "01KX9VZ9J83BWXY0K5QSJC2JT6",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": false,
+  "verdict": "partially-grounded",
+  "strategyUsed": "reactive",
+  "tokensUsed": 14080,
+  "llmCalls": 3,
+  "durationMs": 23721,
+  "checks": [
+    {
+      "name": "deliverable-on-disk",
+      "pass": false,
+      "detail": "MISSING: /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/qa-out/p5-notes.md"
+    },
+    {
+      "name": "goalAchieved-not-null-under-longHorizon",
+      "pass": true,
+      "detail": "goalAchieved=false"
+    },
+    {
+      "name": "run-success",
+      "pass": true,
+      "detail": "success=true"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": false,
+      "detail": "success=true outputLen=0"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=14080"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=3"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=partially-grounded"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p5-notes.md]",
+      "pass": true,
+      "detail": "receipt.produced=false diskExists=false"
+    }
+  ],
+  "failCount": 2,
+  "outputPreview": ""
+}

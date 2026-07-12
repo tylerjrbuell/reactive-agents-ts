@@ -1,0 +1,56 @@
+{
+  "probe": "p3-structured-output",
+  "taskId": "01KX9SJ9DN717421H2149TBX2Z",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": null,
+  "verdict": "ungrounded",
+  "strategyUsed": "reactive",
+  "tokensUsed": 254,
+  "llmCalls": 1,
+  "durationMs": 1046,
+  "checks": [
+    {
+      "name": "object-present",
+      "pass": true,
+      "detail": "object=[{\"city\":\"Tokyo\",\"country\":\"Japan\"},{\"city\":\"Delhi\",\"country\":\"India\"},{\"city\":\"Shanghai\",\"country\":\"China\"}]"
+    },
+    {
+      "name": "object-matches-schema",
+      "pass": true,
+      "detail": "3 items"
+    },
+    {
+      "name": "object-has-3-items",
+      "pass": true,
+      "detail": "len=3"
+    },
+    {
+      "name": "run-success",
+      "pass": true,
+      "detail": "success=true"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": true,
+      "detail": "success=true outputLen=164"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=254"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=1"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=ungrounded"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "[\n  {\n    \"city\": \"Tokyo\",\n    \"country\": \"Japan\"\n  },\n  {\n    \"city\": \"Delhi\",\n    \"country\": \"India\"\n  },\n  {\n    \"city\": \"Shanghai\",\n    \"country\": \"China\"\n  }\n]"
+}

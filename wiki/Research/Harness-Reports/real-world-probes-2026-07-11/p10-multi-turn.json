@@ -1,0 +1,56 @@
+{
+  "probe": "p10-multi-turn",
+  "taskId": "01KX9TPDK8BH67QY10ZP1N8EQD",
+  "durationMs": 4580,
+  "checks": [
+    {
+      "name": "first-run-success",
+      "pass": true,
+      "detail": "success=true"
+    },
+    {
+      "name": "second-run-success",
+      "pass": true,
+      "detail": "success=true"
+    },
+    {
+      "name": "first-file",
+      "pass": true
+    },
+    {
+      "name": "second-file",
+      "pass": true
+    },
+    {
+      "name": "distinct-taskIds",
+      "pass": true,
+      "detail": "01KX9TPB5FXFKHR8E2WXA69TQM vs 01KX9TPDK8BH67QY10ZP1N8EQD"
+    },
+    {
+      "name": "second-coherence:success-implies-output",
+      "pass": false,
+      "detail": "success=true outputLen=0"
+    },
+    {
+      "name": "second-coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=4975"
+    },
+    {
+      "name": "second-coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=2"
+    },
+    {
+      "name": "second-coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=tool-grounded"
+    },
+    {
+      "name": "second-coherence:deliverable-claim-matches-disk[qa-out/p10-second.txt]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    }
+  ],
+  "failCount": 1
+}

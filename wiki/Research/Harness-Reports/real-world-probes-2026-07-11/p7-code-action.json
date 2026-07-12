@@ -1,0 +1,56 @@
+{
+  "probe": "p7-code-action",
+  "taskId": "01KX9V77YFRDNC051D4X6T450J",
+  "success": true,
+  "terminatedBy": "end_turn",
+  "goalAchieved": null,
+  "verdict": "tool-grounded",
+  "strategyUsed": "code-action",
+  "tokensUsed": 1460,
+  "llmCalls": 1,
+  "durationMs": 7763,
+  "checks": [
+    {
+      "name": "exact-answer-on-disk-or-output",
+      "pass": true,
+      "detail": "file=\"5239625\""
+    },
+    {
+      "name": "run-success",
+      "pass": true,
+      "detail": "success=true"
+    },
+    {
+      "name": "strategy-was-code-action",
+      "pass": true,
+      "detail": "strategyUsed=code-action"
+    },
+    {
+      "name": "coherence:success-implies-output",
+      "pass": true,
+      "detail": "success=true outputLen=81"
+    },
+    {
+      "name": "coherence:tokens-reported",
+      "pass": true,
+      "detail": "tokensUsed=1460"
+    },
+    {
+      "name": "coherence:llmCalls-reported",
+      "pass": true,
+      "detail": "llmCalls=1"
+    },
+    {
+      "name": "coherence:verdict-present",
+      "pass": true,
+      "detail": "verdict=tool-grounded"
+    },
+    {
+      "name": "coherence:deliverable-claim-matches-disk[qa-out/p7-answer.txt]",
+      "pass": true,
+      "detail": "receipt.produced=true diskExists=true"
+    }
+  ],
+  "failCount": 0,
+  "outputPreview": "{\"success\":true,\"message\":\"Successfully wrote 5239625 to ./qa-out/p7-answer.txt\"}"
+}
