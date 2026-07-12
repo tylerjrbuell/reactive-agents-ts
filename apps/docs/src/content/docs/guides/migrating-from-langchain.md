@@ -81,9 +81,9 @@ const weatherTool = new DynamicStructuredTool({
 
 <!-- docs-skip-typecheck -->
 ```typescript
-import type { AgentTool } from "@reactive-agents/tools";
+import type { ToolDefinition } from "@reactive-agents/tools";
 
-const weatherTool: AgentTool = {
+const weatherTool: { definition: ToolDefinition; handler: (params: Record<string, unknown>) => Promise<string> } = {
   definition: {
     name: "get_weather",
     description: "Get current weather for a location",
@@ -144,7 +144,6 @@ const executor = new AgentExecutor({
 
 **Reactive Agents**
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
 import { ReactiveAgents } from "reactive-agents";
@@ -164,7 +163,7 @@ const agent = await ReactiveAgents.create()
     phase: "act",
     timing: "after",
     handler: (ctx) => {
-      console.log("Tool finished:", ctx.lastToolResult);
+      console.log("Tool finished:", ctx.toolResults);
       return Effect.succeed(ctx);
     },
   })

@@ -236,7 +236,7 @@ export function errorContext(error: unknown): ErrorContext {
         const budgetType = e.budgetType as string;
         const limit = e.limit as number;
         return {
-          suggestion: `Budget limit exceeded: ${budgetType}=${limit} (current: ${e.current}). Increase via .withCostTracking({ budget: { ${budgetType}: ${limit * 2} } })`,
+          suggestion: `Budget limit exceeded: ${budgetType}=${limit} (current: ${e.current}). Increase via .withCostTracking({ ${budgetType}: ${limit * 2} })`,
           taskId: e.taskId as string,
           details: { budgetType, limit, current: e.current },
         };
@@ -244,7 +244,7 @@ export function errorContext(error: unknown): ErrorContext {
       case "GuardrailViolationError": {
         const violation = e.violation as string;
         return {
-          suggestion: `Input blocked by ${violation} guardrail. Options: (1) rephrase input to avoid trigger, (2) adjust thresholds via .withGuardrailThresholds({ ${violation}: <score> })`,
+          suggestion: `Input blocked by ${violation} guardrail. Options: (1) rephrase input to avoid trigger, (2) disable this detector via .withGuardrails({ ${violation}: false })`,
           taskId: e.taskId as string,
           phase: "guardrail",
           details: { violation },

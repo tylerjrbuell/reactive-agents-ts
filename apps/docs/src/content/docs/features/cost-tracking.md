@@ -66,17 +66,14 @@ Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the 
 
 Set spending limits at multiple levels:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { createCostLayer } from "@reactive-agents/cost";
 
 const costLayer = createCostLayer({
-  budgetLimits: {
-    perRequest: 1.00,    // Max $1 per individual request
-    perSession: 5.00,    // Max $5 per session
-    daily: 25.00,        // Max $25 per day
-    monthly: 200.00,     // Max $200 per month
-  },
+  perRequest: 1.00,    // Max $1 per individual request
+  perSession: 5.00,    // Max $5 per session
+  daily: 25.00,        // Max $25 per day
+  monthly: 200.00,     // Max $200 per month
 });
 ```
 

@@ -214,11 +214,10 @@ const program = Effect.gen(function* () {
 
 ### Enable with Builder
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withPrompts({ experiments: true })
+  .withPrompts()   // enables the prompt template service + A/B experiments
   .build();
 ```
 

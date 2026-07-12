@@ -82,12 +82,11 @@ const agent = await ReactiveAgents.create()
 - **Fallback**: Ollama for cost spikes
 - **Use case**: Small teams, MVP products, non-critical automation
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("openai")
   .withModel("gpt-4o-mini")
-  .withCostTracking({ budget: { daily: 1.0 } })
+  .withCostTracking({ daily: 1.0 })
   .withReasoning({ defaultStrategy: "reactive" })
   .build();
 ```
@@ -96,12 +95,11 @@ const agent = await ReactiveAgents.create()
 - **Primary**: Claude Sonnet 4 or GPT-4o
 - **Use case**: Production SaaS, high-reliability automations, complex reasoning
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withCostTracking({ budget: { daily: 5.0 } })
+  .withCostTracking({ daily: 5.0 })
   .withReasoning({ defaultStrategy: "adaptive" })
   .withVerification()
   .build();
@@ -112,12 +110,11 @@ const agent = await ReactiveAgents.create()
 - **Observability**: Full event tracing and metrics
 - **Use case**: Enterprise agents, research platforms, autonomous systems
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withCostTracking({ budget: { daily: 20.0 } })
+  .withCostTracking({ daily: 20.0 })
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 20 })
   .withMemory({ tier: "enhanced" })
   .withVerification()
@@ -131,16 +128,13 @@ Use these builder methods to enforce budgets and reduce token usage:
 
 ### Budget Enforcement
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCostTracking({
-    budget: {
-      perRequest: 0.10,    // Max $0.10 per single run
-      daily: 5.0,          // Max $5.00 per day
-      monthly: 100.0       // Max $100.00 per month
-    }
+    perRequest: 0.10,    // Max $0.10 per single run
+    daily: 5.0,          // Max $5.00 per day
+    monthly: 100.0       // Max $100.00 per month
   })
   .build();
 
@@ -179,8 +173,8 @@ const agent = await ReactiveAgents.create()
 <!-- docs-skip-typecheck -->
 ```typescript
 .withTools({
-  compression: {
-    maxLength: 2000      // Truncate large tool outputs
+  resultCompression: {
+    budget: 2000       // Chars before large tool outputs are compressed
   }
 })
 ```
@@ -195,9 +189,8 @@ For an automatic, builder-level path — fall back to a cheaper or alternate mod
 
 ### Cost-Aware Model Routing (New in v0.13)
 
-`.withModelRouting()` wires complexity-based routing directly into the agent builder. Define ordered tiers: each tier with a `maxComplexity` threshold is tried in order; the final tier (no `maxComplexity`) is the fallback. The agent scores each task at runtime and picks the cheapest model that meets the complexity threshold.
+`.withModelRouting()` wires complexity-based routing directly into the agent builder. The router scores each task at runtime and picks the cheapest capable tier at or above `minTier`. Use `tierModels` to pin the specific model used for each tier.
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
 
@@ -205,16 +198,17 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
   .withModelRouting({
-    // Route cheap/simple tasks to haiku, complex to sonnet
-    tiers: [
-      { maxComplexity: 0.4, model: "claude-haiku-4-5" },
-      { model: "claude-sonnet-4-6" },
-    ],
+    // Never route below the haiku tier; pin the model for each tier.
+    minTier: "haiku",
+    tierModels: {
+      haiku: "claude-haiku-4-5",
+      sonnet: "claude-sonnet-4-6",
+    },
   })
   .build()
 ```
 
-Tasks scored below `0.4` (on a 0–1 scale) run against `claude-haiku-4-5`; anything harder escalates to `claude-sonnet-4-6`. You can add as many tiers as you need — the router picks the first tier whose `maxComplexity` exceeds the task score.
+Simple tasks run against the cheapest capable tier (`claude-haiku-4-5`); anything harder escalates toward `claude-sonnet-4-6`. Set `minTier` to establish a floor the router will never route below.
 
 **When to use:** Mixed workloads where most requests are simple (Q&A, classification, summarization) but occasional tasks need frontier reasoning. Typical savings: 40–70% vs. routing everything to the frontier model.
 

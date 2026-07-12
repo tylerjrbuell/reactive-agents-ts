@@ -171,17 +171,11 @@ Unlike `rax-diagnose replay`, which is event-centric and shows every event in th
 
 ## Programmatic access
 
-For custom dashboards or LLM-as-judge debriefing, build the structured shape directly:
-
-<!-- docs-skip-typecheck -->
-```ts
-import { buildDebrief } from "@reactive-agents/diagnose";
-
-const debrief = await buildDebrief("/path/to/trace.jsonl");
-console.log(debrief.path);            // [{ iter, action, rationale? }, ...]
-console.log(debrief.termination);     // { by, rationale? }
-console.log(debrief.assumptions);     // [{ iter, assumption, rationale }, ...]
-```
+For custom dashboards or LLM-as-judge debriefing, read the structured shape
+straight off the run result — no trace file required. `result.debrief` carries
+the decision path, termination, and assumptions (see the next section). For a
+saved `.jsonl` trace, the `rax-diagnose debrief <trace>` CLI renders the same
+decision-centric view.
 
 ## Reading rationale from `AgentResult.debrief`
 

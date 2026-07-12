@@ -22,7 +22,6 @@ Every model has different context capacity, latency characteristics, and instruc
 
 ### Using Context Profiles
 
-<!-- docs-skip-typecheck -->
 ```typescript
 // Use the tier auto-detection (inferred from model name)
 const agent = await ReactiveAgents.create()
@@ -34,13 +33,13 @@ const agent = await ReactiveAgents.create()
   .build();
 
 // Override specific thresholds
-const agent = await ReactiveAgents.create()
+const agent2 = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-haiku-4-5-20251001")
   .withContextProfile({
     tier: "mid",
-    toolResultMaxChars: 1000,   // Override default 800
-    compactAfterSteps: 8,        // Start compacting later
+    toolResultMaxChars: 1000,   // Override the tier default
+    toolResultPreviewItems: 5,  // Array items shown before overflow
   })
   .build();
 ```
@@ -50,11 +49,10 @@ const agent = await ReactiveAgents.create()
 | Property | Description |
 |----------|-------------|
 | `tier` | `"local" \| "mid" \| "large" \| "frontier"` |
-| `compactAfterSteps` | Steps before older history is compacted |
-| `fullDetailSteps` | Steps kept at full detail during compaction |
-| `toolResultMaxChars` | Max chars for tool result in context |
-| `rulesComplexity` | `"simplified" \| "standard" \| "detailed"` |
-| `promptVerbosity` | `"minimal" \| "standard" \| "full"` |
+| `toolResultMaxChars` | Max chars per tool result before compression |
+| `toolResultPreviewItems` | Array items shown in a compressed tool result |
+| `maxTokens` | Context-window ceiling used by the pressure gates |
+| `maxIterations` | Maximum kernel iterations before failing |
 | `toolSchemaDetail` | `"names-only" \| "names-and-types" \| "full"` |
 
 ## ContextEngine — Per-Iteration Scoring
@@ -88,25 +86,22 @@ The number of steps kept at full detail scales with the model tier:
 
 Older steps are compacted to one-line summaries automatically.
 
-### Using the ContextEngine Directly
+### Inspecting the tier profiles
 
-<!-- docs-skip-typecheck -->
+Prompt assembly happens inside the ReAct kernel — there is no public
+`buildContext` entry point to call directly. What you *can* import are the
+per-tier defaults the kernel uses, so you can inspect or extend them:
+
 ```typescript
-import { buildContext } from "@reactive-agents/reasoning";
 import { CONTEXT_PROFILES } from "@reactive-agents/reasoning";
 
-const prompt = buildContext({
-  task: "Write a report on TypeScript performance",
-  iteration: 4,
-  maxIterations: 10,
-  steps: previousSteps,
-  memoryItems: semanticMemory,
-  toolSchemas: "web-search(query), file-write(path, content)",
-  profile: CONTEXT_PROFILES["mid"],
-});
+const mid = CONTEXT_PROFILES["mid"];
+console.log(mid.toolResultMaxChars, mid.toolResultPreviewItems);
 ```
 
-The `buildContext` function is the same one the ReAct kernel uses internally — you can call it to assemble prompts for custom kernels or test harnesses.
+To change how context is assembled for a run, override the profile on the
+builder with `.withContextProfile({ ... })` (shown above) rather than calling
+the internal assembler yourself.
 
 ## Progressive Context Compaction
 
@@ -123,23 +118,11 @@ As agents work through multi-step tasks, context grows. Reactive Agents uses a f
 
 ## Context Budget
 
-The budget system allocates tokens across context sections and adapts as iterations progress:
-
-<!-- docs-skip-typecheck -->
-```typescript
-import { allocateBudget, estimateTokens } from "@reactive-agents/reasoning";
-
-const budget = allocateBudget(
-  128_000,    // total model context tokens
-  profile,    // ContextProfile
-  3,          // current iteration
-  10,         // max iterations
-);
-
-// budget.allocated.stepHistory  → tokens reserved for history
-// budget.allocated.toolSchemas  → tokens for tool definitions
-// budget.remaining              → tokens still available
-```
+The kernel allocates the model's context window across sections — step history,
+tool schemas, memory, and the current task — and adapts the split as iterations
+progress. This budgeting runs automatically inside the loop; it is driven by the
+`maxTokens` and `toolResultMaxChars` fields of the active `ContextProfile`, so you
+tune it through `.withContextProfile({ ... })` rather than a standalone API.
 
 ## Working Memory (recall)
 

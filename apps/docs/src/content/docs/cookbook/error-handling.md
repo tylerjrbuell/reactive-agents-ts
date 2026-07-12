@@ -48,7 +48,7 @@ try {
     console.log(`Gave up after ${err.iterations} iterations.`);
     console.log("Partial output:", err.partialOutput);
   } else if (err instanceof GuardrailViolationError) {
-    console.log(`Blocked: ${err.violationType} — ${err.reason}`);
+    console.log(`Blocked: ${err.violation} — ${err.message}`);
   } else if (err instanceof ExecutionError) {
     console.log(`Error in phase [${err.phase}]: ${err.message}`);
     // unwrapErrorWithSuggestion adds actionable fix hints
@@ -152,14 +152,13 @@ Without `withStrictValidation()`, misconfiguration typically surfaces at runtime
 
 Use the circuit breaker to automatically open (stop sending requests) after repeated failures and close again after a recovery window:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCircuitBreaker({
-    failureThreshold: 5,      // open after 5 failures in window
-    recoveryTimeMs: 60_000,   // try again after 1 minute
-    windowMs: 30_000,         // failure counting window
+    failureThreshold: 5,      // open after 5 consecutive failures
+    cooldownMs: 60_000,       // try again after 1 minute
+    halfOpenRequests: 1,      // trial requests allowed while recovering
   })
   .build();
 ```
@@ -184,8 +183,8 @@ const agent = await ReactiveAgents.create()
     reportToSentry(err, { extra: ctx });
   })
   .withGuardrails({
-    injectionThreshold: 0.8,
-    toxicityThreshold: 0.7,
+    injection: true,
+    toxicity: true,
   })
   .withLogging({ level: "warn", format: "json", filePath: "./logs/agent.log" })
   .build();

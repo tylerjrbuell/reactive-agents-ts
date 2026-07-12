@@ -26,12 +26,19 @@ describe("Error context and suggestions", () => {
     const ctx = errorContext(err);
     expect(ctx.suggestion).toContain("withCostTracking");
     expect(ctx.suggestion).toContain("perRequest");
+    // Honesty pin: CostTrackingOptions is FLAT — the suggestion must not point
+    // at the never-existed `.withCostTracking({ budget: {...} })` wrapper.
+    expect(ctx.suggestion).not.toContain("budget:");
   });
 
   test("GuardrailViolationError has context with guardrail type", () => {
     const err = new GuardrailViolationError({ message: "blocked", taskId: "task-1", violation: "injection" });
     const ctx = errorContext(err);
     expect(ctx.suggestion).toContain("injection");
+    // Honesty pin: no `.withGuardrailThresholds()` builder method exists; the
+    // suggestion must route to the real `.withGuardrails({ <detector>: false })`.
+    expect(ctx.suggestion).toContain("withGuardrails(");
+    expect(ctx.suggestion).not.toContain("withGuardrailThresholds");
   });
 
   test("KillSwitchTriggeredError has context", () => {

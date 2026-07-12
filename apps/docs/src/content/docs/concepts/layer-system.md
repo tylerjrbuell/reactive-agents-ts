@@ -97,14 +97,14 @@ const agent = await ReactiveAgents.create()
 
 Replace any layer with a test implementation:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
-// The test provider is a Layer that returns canned responses
-const testLLM = TestLLMServiceLayer({
-  "capital of France": "Paris",
-});
+// The test provider is a Layer that returns canned responses. Each turn can
+// gate on a `match` substring so a specific prompt yields a specific reply.
+const testLLM = TestLLMServiceLayer([
+  { text: "Paris", match: "capital of France" },
+]);
 ```
 
 This is the power of the layer system — any service can be swapped at the composition boundary without changing application code.

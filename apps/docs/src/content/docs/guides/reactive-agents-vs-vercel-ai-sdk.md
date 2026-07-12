@@ -70,16 +70,25 @@ All of this is built on **Effect-TS**, so boundaries are schema-validated, error
 <!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { z } from "zod";
+import { Effect } from "effect";
 
 const agent = ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withTool({
-    name: "weather",
-    description: "Get weather in a location (Fahrenheit)",
-    inputSchema: z.object({ location: z.string() }),
-    handler: async ({ location }) => ({ location, tempF: 68 }),
+  .withTools({
+    tools: [
+      {
+        definition: {
+          name: "weather",
+          description: "Get weather in a location (Fahrenheit)",
+          parameters: [
+            { name: "location", type: "string", description: "City name", required: true },
+          ],
+        },
+        handler: (args) =>
+          Effect.succeed({ location: args.location, tempF: 68 }),
+      },
+    ],
   })
   .build();
 

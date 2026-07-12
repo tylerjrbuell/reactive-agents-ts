@@ -17,18 +17,15 @@ Three settings are non-negotiable for any production agent: a **budget cap** (`.
 
 ### Guardrails
 
-Guardrails screen every prompt and response for prompt injection, PII leakage, and toxic content. Enable with `.withGuardrails()`. Pass optional thresholds (0–1 scale) to tighten or relax detection sensitivity.
+Guardrails screen every prompt and response for prompt injection, PII leakage, and toxic content. Enable with `.withGuardrails()`. Each detector can be toggled independently; pass a `customBlocklist` to reject additional phrases.
 
-{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withGuardrails({
-    thresholds: {
-      injection: 0.8,
-      pii: 0.7,
-      toxicity: 0.9,
-    },
+    injection: true,
+    pii: true,
+    toxicity: true,
   })
   .build();
 ```
@@ -39,14 +36,13 @@ A `GuardrailViolationDetected` event is emitted on the EventBus whenever a check
 
 Behavioral contracts constrain what the agent is allowed to do at runtime. Use a tool deny list to block dangerous tools, cap iterations, and restrict output patterns.
 
-{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withBehavioralContracts({
-    toolDenyList: ["shell-execute"],
+    deniedTools: ["shell-execute"],
     maxIterations: 20,
-    outputPatterns: [],
+    maxToolCalls: 40,
   })
   .build();
 ```
@@ -147,11 +143,10 @@ const agent = await ReactiveAgents.create()
 
 Configure automatic retries on transient failures (network errors, rate limits). Exponential backoff is applied between attempts.
 
-{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withRetryPolicy({ maxAttempts: 3, backoffMs: 1000 })
+  .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
   .build();
 ```
 
@@ -168,10 +163,8 @@ Set per-request and daily token budgets. The agent performs a pre-flight budget 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCostTracking({
-    budget: {
-      perRequest: 0.10,  // USD
-      daily: 5.00,       // USD
-    },
+    perRequest: 0.10,  // USD
+    daily: 5.00,       // USD
   })
   .build();
 
@@ -189,11 +182,10 @@ try {
 
 With complexity routing enabled, simple queries are automatically routed to a cheaper model tier, reserving your primary model for tasks that need it.
 
-{/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withCostTracking({ complexityRouting: true })
+  .withModelRouting()
   .build();
 ```
 

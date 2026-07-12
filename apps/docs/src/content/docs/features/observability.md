@@ -271,29 +271,26 @@ console.log(telemetry);
 
 By default, telemetry is enabled when observability is enabled. To disable:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withObservability({ verbosity: "normal", telemetry: { enabled: false } })
+  .withObservability({ verbosity: "normal", telemetry: false })
   .build();
 ```
 
-To customize what's collected:
+To configure privacy-preserving telemetry sharing:
 
 <!-- docs-skip-typecheck -->
 ```typescript
 .withObservability({
   verbosity: "normal",
+  // Differential-privacy telemetry. `mode` selects whether this agent
+  // contributes anonymized metrics, consumes aggregate benchmarks, both, or
+  // stays isolated. `privacy` tunes the DP noise (epsilon/sensitivity/minClamp).
   telemetry: {
-    enabled: true,
-    collectPhaseMetrics: true,   // Record duration of each phase
-    collectToolMetrics: true,    // Track which tools are called
-    collectTokenMetrics: true,   // Record token usage per run
-    collectCostMetrics: true,    // Track estimated costs
-    collectErrors: true,         // Log error types and frequencies
-    retentionDays: 30,          // Keep 30 days of data (default)
-  }
+    mode: "isolated",
+    privacy: { epsilon: 1.0 },
+  },
 })
 ```
 

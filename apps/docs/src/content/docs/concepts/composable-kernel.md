@@ -272,8 +272,9 @@ The built-in kernel `"react"` is pre-registered in `StrategyRegistryLive`. Custo
 
 <!-- docs-skip-typecheck -->
 ```typescript
-import type { ThoughtKernel, KernelState, KernelContext } from "@reactive-agents/reasoning";
-import { transitionState } from "@reactive-agents/reasoning";
+// ThoughtKernel, KernelState, KernelContext and transitionState are the kernel's
+// internal contracts (defined above). They are not part of the public package
+// surface — this snippet illustrates the shape a custom kernel takes internally.
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 

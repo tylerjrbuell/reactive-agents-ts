@@ -391,25 +391,32 @@ const agent = await ReactiveAgents.create()
 
 Convert plain functions into tool definitions:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { adaptFunction } from "@reactive-agents/tools";
+import { Effect } from "effect";
 
 const tool = adaptFunction({
   name: "calculate",
   description: "Perform arithmetic",
-  fn: ({ a, b, op }) => {
+  parameters: [
+    { name: "a", type: "number", description: "First operand", required: true },
+    { name: "b", type: "number", description: "Second operand", required: true },
+    {
+      name: "op",
+      type: "string",
+      description: "Operation to perform",
+      required: true,
+      enum: ["add", "sub", "mul", "div"],
+    },
+  ],
+  fn: (args) => {
+    const { a, b, op } = args as { a: number; b: number; op: string };
     switch (op) {
-      case "add": return a + b;
-      case "sub": return a - b;
-      case "mul": return a * b;
-      case "div": return a / b;
+      case "add": return Effect.succeed(a + b);
+      case "sub": return Effect.succeed(a - b);
+      case "mul": return Effect.succeed(a * b);
+      default: return Effect.succeed(a / b);
     }
-  },
-  parameters: {
-    a: { type: "number", description: "First operand" },
-    b: { type: "number", description: "Second operand" },
-    op: { type: "string", enum: ["add", "sub", "mul", "div"] },
   },
 });
 ```

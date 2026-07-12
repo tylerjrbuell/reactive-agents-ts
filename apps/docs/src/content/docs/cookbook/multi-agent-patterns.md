@@ -224,16 +224,22 @@ import { EventBus } from "@reactive-agents/core";
 const program = Effect.gen(function* () {
   const bus = yield* EventBus;
 
-  // Agent A publishes events
+  // Agent A publishes a typed lifecycle event (AgentEvent is a discriminated
+  // union — pick the variant that fits; here the research task completed).
   yield* bus.publish({
-    type: "research.complete",
-    agentId: "researcher",
-    data: { findings: "..." },
+    _tag: "TaskCompleted",
+    taskId: "research-1",
+    success: true,
   });
 
-  // Agent B subscribes and reacts
-  const events = yield* bus.subscribe("research.complete");
-  // Process events as they arrive
+  // Agent B subscribes with a handler and reacts to matching events.
+  yield* bus.subscribe((event) =>
+    Effect.sync(() => {
+      if (event._tag === "TaskCompleted") {
+        // react to completion
+      }
+    }),
+  );
 });
 ```
 

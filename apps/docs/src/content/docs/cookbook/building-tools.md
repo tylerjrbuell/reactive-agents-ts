@@ -172,14 +172,14 @@ const agent = await ReactiveAgents.create()
 
 Large tool outputs (e.g., full file contents, long API responses) are automatically compressed to fit the context window. Configure the compression behavior:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({
     resultCompression: {
-      maxChars: 2_000,          // truncate results longer than this
-      strategy: "preview",      // "preview" | "truncate" | "summarize"
+      budget: 2_000,            // chars before overflow triggers compression
+      previewItems: 3,          // array items shown in the preview
+      autoStore: true,          // stash overflow in the scratchpad for recall
     },
   })
   .build();
