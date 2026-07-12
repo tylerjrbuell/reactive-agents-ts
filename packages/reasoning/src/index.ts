@@ -157,6 +157,11 @@ export {
   amendContract,
 } from "./kernel/contract/run-contract.js";
 export { computeDeliverableReport } from "./kernel/contract/deliverable-report.js";
+// Canonical step factories — the runtime's inline agent loop mints the same
+// action/observation ledger pairs the kernel act phase writes, so deliverable
+// receipts verify on the engine path too (2026-07-11 inline-loop fix).
+export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
+export { makeObservationResult } from "./kernel/utils/observation-helpers.js";
 export type {
   RunContract,
   TaskRequirement,

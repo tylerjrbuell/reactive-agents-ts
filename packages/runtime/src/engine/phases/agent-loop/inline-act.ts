@@ -16,6 +16,7 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
+import { makeStep, makeObservationResult, type ReasoningStep } from "@reactive-agents/reasoning";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
@@ -143,6 +144,8 @@ export const runInlineAct = (
               toolName,
               result: `[ToolService not available — add .withTools() to agent builder]`,
               durationMs,
+              success: false,
+              args,
             };
           }
 
@@ -160,6 +163,7 @@ export const runInlineAct = (
                 result: r.result,
                 durationMs: Date.now() - startMs,
                 success: true,
+                args,
               })),
               Effect.catchAll((e) =>
                 Effect.succeed({
@@ -168,6 +172,7 @@ export const runInlineAct = (
                   result: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
                   durationMs: Date.now() - startMs,
                   success: false,
+                  args,
                 }),
               ),
             );
@@ -200,9 +205,48 @@ export const runInlineAct = (
       { concurrency: 3 },
     );
 
+    // Canonical ledger pairs — the SAME action/observation shape the kernel
+    // act phase writes (metadata.toolCall {id,name,arguments} ←→ toolCallId +
+    // observationResult). Without these the inline loop executed tools while
+    // `metadata.reasoningSteps` stayed empty, so isArtifactProduced's linkage
+    // scan starved and every default-path receipt reported a written
+    // deliverable as `produced:false` (2026-07-11 probe fleet, p1/p2/p4/p5/p10).
+    const ledgerSteps: ReasoningStep[] = toolResults.flatMap((tr) => {
+      const r = tr as {
+        toolCallId?: unknown;
+        toolName?: unknown;
+        result?: unknown;
+        success?: unknown;
+        args?: Record<string, unknown>;
+      };
+      if (typeof r.toolName !== "string" || typeof r.toolCallId !== "string") return [];
+      const resultText =
+        typeof r.result === "string" ? r.result : JSON.stringify(r.result) ?? "";
+      return [
+        makeStep("action", `[ACT] ${r.toolName}`, {
+          toolCall: { id: r.toolCallId, name: r.toolName, arguments: r.args ?? {} },
+        }),
+        makeStep("observation", resultText.slice(0, 2000), {
+          toolCallId: r.toolCallId,
+          observationResult: makeObservationResult(
+            r.toolName,
+            r.success === true,
+            resultText.slice(0, 2000),
+          ),
+        }),
+      ];
+    });
+
     return {
       ...c,
       toolResults: [...c.toolResults, ...toolResults],
+      metadata: {
+        ...c.metadata,
+        reasoningSteps: [
+          ...((c.metadata.reasoningSteps as ReasoningStep[] | undefined) ?? []),
+          ...ledgerSteps,
+        ],
+      },
     };
   }) as unknown as Effect.Effect<ExecutionContext, BehavioralContractViolationError>;
 };
