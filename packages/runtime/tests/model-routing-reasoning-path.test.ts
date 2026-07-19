@@ -111,7 +111,47 @@ describe("model routing — reasoning path (C2)", () => {
  *   The gut-check test confirms "claude-sonnet-4-6" flows through on the same
  *   path without routing, proving the two states are distinct.
  */
-describe("model routing — builder reasoning path (C1 gate, EventBus seam)", () => {
+// CI-parity: CI has NO API keys — these two tests call live Anthropic, so they
+// must skip when the API is unusable (mirrors the ollamaState probe pattern in
+// llm-timeout-builder.test.ts). Key presence alone is NOT enough: a drained
+// credit balance 400s every call ("credit balance is too low"), which would
+// leave the suite red for account reasons. Probe once at module load with a
+// 1-output-token haiku call; skip on any non-OK outcome (no key, bad key,
+// drained credits, network down).
+// They CANNOT convert to .withProvider("test"): cost-route.ts explicitly
+// degrades non-routable providers (incl. "test") to defaultModel (T2 guard,
+// cost-route.ts:44-48), so the routed-haiku assertion would be unexercisable —
+// the live provider is the only path on which this test is RED-capable.
+const anthropicLive = await (async (): Promise<boolean> => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return false;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      console.warn(
+        `[model-routing-reasoning-path] live-Anthropic probe non-OK (${res.status}) — skipping C1 live tests`,
+      );
+    }
+    return res.ok;
+  } catch {
+    return false;
+  }
+})();
+
+describe.skipIf(!anthropicLive)("model routing — builder reasoning path (C1 gate, EventBus seam)", () => {
   it("C1: .withModelRouting().withReasoning() routes to haiku (LLMExchangeEmitted)", async () => {
     const capturedModels: string[] = [];
 

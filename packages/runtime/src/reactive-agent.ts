@@ -2412,20 +2412,17 @@ export class ReactiveAgent<TOut = unknown> {
      */
     private async killSwitchAction(
         method: string,
-        run: (ks: Context.Tag.Service<typeof KillSwitchService>) => Effect.Effect<void, unknown>,
+        // KillSwitchService's pause/resume/stop/terminate are all
+        // `Effect.Effect<void>` (never-typed error channel, see
+        // guardrails/src/kill-switch.ts) — so no error translation or
+        // swallow is needed here; failures would be defects, not errors.
+        run: (ks: Context.Tag.Service<typeof KillSwitchService>) => Effect.Effect<void>,
     ): Promise<void> {
         return this.runtime.runPromise(
             Effect.serviceOption(KillSwitchService).pipe(
                 Effect.flatMap((opt) =>
                     opt._tag === "Some"
-                        ? run(opt.value).pipe(
-                              Effect.catchAll((err) =>
-                                  emitErrorSwallowed({
-                                      site: `runtime/src/reactive-agent.ts:${method}`,
-                                      tag: errorTag(err),
-                                  }),
-                              ),
-                          )
+                        ? run(opt.value)
                         : Effect.die(
                               new Error(
                                   `agent.${method}() requires the kill switch. Build the agent with .withKillSwitch() (or features.killSwitch in a config) to enable pause/resume/stop/terminate.`,

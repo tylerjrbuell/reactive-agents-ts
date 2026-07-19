@@ -66,10 +66,43 @@ const mockAnthropicCreate = mock(async (_opts: unknown): Promise<AnthropicCreate
   model: "claude-haiku-4-5",
 }));
 
+// COMPLETE mock: anthropic.ts stream() calls `client.messages.stream(...)` and
+// registers `.on("streamEvent"|"finalMessage"|"error", cb)` handlers
+// (anthropic.ts:325..467). A mock lacking `stream` turns any cross-file leak of
+// this module mock into "client.messages.stream is not a function" for every
+// later suite that touches the Anthropic streaming path. Mirror the mockStream
+// shape from anthropic-provider.test.ts: register handlers, then fire
+// finalMessage on a microtask so the Effect stream completes deterministically.
+const mockAnthropicStream = mock((_opts: unknown) => {
+  const handlers: Record<string, (...a: unknown[]) => void> = {};
+  queueMicrotask(() => {
+    handlers.finalMessage?.({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 10, output_tokens: 5 },
+      model: "claude-haiku-4-5",
+    });
+  });
+  return {
+    on: (ev: string, cb: (...a: unknown[]) => void) => {
+      handlers[ev] = cb;
+    },
+  };
+});
+
+// Bun module mocks are process-global and leak across test FILES. Capture the
+// real module and re-install it in afterAll (Bun has no unmock; re-mocking
+// with the real exports is the documented restore) so later files — e.g.
+// runtime live-Anthropic tests — hit the real SDK again.
+const realAnthropicSdk = { ...(await import("@anthropic-ai/sdk")) };
+afterAll(() => {
+  mock.module("@anthropic-ai/sdk", () => realAnthropicSdk);
+});
+
 mock.module("@anthropic-ai/sdk", () => ({
   default: class MockAnthropic {
     constructor(_opts?: { apiKey?: string }) {}
-    messages = { create: mockAnthropicCreate };
+    messages = { create: mockAnthropicCreate, stream: mockAnthropicStream };
   },
 }));
 

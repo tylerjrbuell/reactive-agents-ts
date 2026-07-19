@@ -3,8 +3,16 @@
 // Cluster B parity: Anthropic must surface a non-OK stop_reason with no content
 // as an explicit error (like gemini.ts does), instead of silently returning an
 // empty-success the agent can't distinguish from "model finished early".
-import { describe, it, expect, mock, beforeAll } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
+
+// Bun module mocks are process-global and leak across test FILES. Capture the
+// real module and re-install it in afterAll so later files (e.g. runtime
+// live-Anthropic tests) hit the real SDK again.
+const realAnthropicSdk = { ...(await import("@anthropic-ai/sdk")) };
+afterAll(() => {
+  mock.module("@anthropic-ai/sdk", () => realAnthropicSdk);
+});
 
 const NON_OK_FINAL = {
   id: "msg_test",

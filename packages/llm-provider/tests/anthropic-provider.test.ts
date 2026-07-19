@@ -1,5 +1,13 @@
-import { describe, it, expect, mock, beforeAll } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
+
+// Bun module mocks are process-global and leak across test FILES. Capture the
+// real module and re-install it in afterAll so later files (e.g. runtime
+// live-Anthropic tests) hit the real SDK again.
+const realAnthropicSdk = { ...(await import("@anthropic-ai/sdk")) };
+afterAll(() => {
+  mock.module("@anthropic-ai/sdk", () => realAnthropicSdk);
+});
 
 // ─── Mock @anthropic-ai/sdk BEFORE the provider module is imported ───
 // Pattern mirrors anthropic-prompt-caching.test.ts. Must precede any dynamic

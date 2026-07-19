@@ -1,7 +1,17 @@
-import { describe, it, expect, mock, beforeAll } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer } from "effect";
 
 // ─── Mock the `ollama` package BEFORE provider module is imported ───
+
+// Bun module mocks are process-global and leak across test FILES in a full
+// `bun test` run. Capture the real module up-front and re-install it in
+// afterAll (Bun has no unmock; re-mocking with the real exports is the
+// documented restore) so later files — e.g. runtime live-Ollama tests — hit
+// the real SDK again.
+const realOllamaModule = { ...(await import("ollama")) };
+afterAll(() => {
+  mock.module("ollama", () => realOllamaModule);
+});
 
 const mockChat = mock(async (_opts: unknown) => ({
   model: "cogito:14b",

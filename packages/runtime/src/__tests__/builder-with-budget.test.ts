@@ -6,7 +6,8 @@ import { asBuilderState } from "./_helpers.js";
  * `.withBudget()` wiring tests.
  *
  * Validates:
- *  (a) calling withBudget() without either tokenLimit or costLimit throws.
+ *  (a) calling withBudget() without any cap (spend: tokenLimit/costLimit;
+ *      execution: maxIterations/minIterations/timeout/llmTimeout) throws.
  *  (b) costLimit-only call lands on `_budgetLimits.costLimit`.
  *  (c) tokenLimit + warningRatio combination is preserved.
  *  (d) without withBudget(), `_budgetLimits` stays undefined (backward compat).
@@ -28,7 +29,7 @@ describe(".withBudget() builder", () => {
   it("throws when neither tokenLimit nor costLimit is supplied", () => {
     const builder = ReactiveAgents.create().withProvider("test");
     expect(() => builder.withBudget({} as BudgetLimits)).toThrow(
-      /requires at least one of `tokenLimit` or `costLimit`/,
+      /withBudget\(\) requires at least one of `tokenLimit`, `costLimit`, `maxIterations`, `minIterations`, `timeout`, or `llmTimeout`/,
     );
   });
 
@@ -40,7 +41,9 @@ describe(".withBudget() builder", () => {
         costLimit: undefined,
         warningRatio: 0.5,
       } as BudgetLimits),
-    ).toThrow(/requires at least one of `tokenLimit` or `costLimit`/);
+    ).toThrow(
+      /withBudget\(\) requires at least one of `tokenLimit`, `costLimit`, `maxIterations`, `minIterations`, `timeout`, or `llmTimeout`/,
+    );
   });
 
   it("stores costLimit on the builder's internal state", () => {

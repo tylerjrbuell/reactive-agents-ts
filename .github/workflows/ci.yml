@@ -112,6 +112,41 @@ jobs:
             echo "✓ Baseline change has BASELINE-UPDATE: trailer"
           fi
 
+  # Anti-rot gates for published claims (debt register P0-13..P0-21 structural
+  # note: both gates existed but nothing ran them, which is how 23 published
+  # claims went stale). Deliberately network-free: doc-example typecheck runs
+  # pure tsc against workspace src (no build, no API keys), and the metrics
+  # chain regenerates metrics.json from the tree + committed test-count
+  # snapshot (apps/docs/src/data/metrics-cache.json) WITHOUT the
+  # fetch-github-stats prebuild step, which needs network.
+  docs-gates:
+    name: Docs Anti-Rot Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Typecheck doc code examples (README + docs site)
+        run: bun run docs:examples:check
+      - name: Generate metrics from the real tree
+        working-directory: apps/docs
+        run: bun run metrics
+      - name: Check README metric claims against generated metrics
+        working-directory: apps/docs
+        run: bun run metrics:check
+
   docs-links:
     name: Docs Link Check
     runs-on: ubuntu-latest

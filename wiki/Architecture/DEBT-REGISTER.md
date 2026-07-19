@@ -36,7 +36,7 @@ Only **PROVEN** counts as shipped.
 | Strategy × mechanism cells | 90 | 41 | 12 | — | **31 MISSING** |
 | Packages | 36 | 31 | — | — | 5 (1 dead, 2 unintegrated, 1 stub, 1 merge) |
 | Published claims (README/docs/errors/CHANGELOG) | 38 | 9 | — | **23** | 6 UNVALIDATED |
-| **Failing tests on main** | — | — | — | **3 env-independent** (CI-gating) + 18 Docker | — |
+| **Failing tests on main** | — | — | — | **0 env-independent** (was 3 — fixed Wave 0, 2026-07-19) + Docker-daemon flakes (env-dependent) | — |
 
 **Headline: half the public API surface (42/86) is unproven. 9 withers actively lie. 23 published claims are false.
 Main is red. Every published benchmark number came from an instrument that scored "did not crash" as a pass.**
@@ -64,22 +64,27 @@ Main is red. Every published benchmark number came from an instrument that score
 
 ## 2b. P0 — PUBLISHED CLAIMS (the docs lie to visitors today)
 
-**Main is RED.** Verified `bun test` 2026-07-13: **8,199 pass / 21 fail / 8,247 tests / 1,045 files**.
-18 failures are Docker-daemon-dependent; **3 are environment-independent and gate CI** (`ci.yml:82` runs bare `bun test`):
-`.withBudget()` ×2 (stale assertion — the real message broadened) and **`WS-5 silent-swallow ceiling` — a breached ratchet**.
-Meanwhile README:20 claims *"Verified with `bun test` on every PR"* and `faq.mdx:60` claims *"current main has 0 failures."*
+**Main is GREEN as of Wave 0 (2026-07-19).** Verified `bun test` twice: **8,224 pass / 0 fail / 8,253 tests / 1,045 files**.
+Fixed: `.withBudget()` ×2 (assertions now pin the real broadened message), **WS-5 ceiling** (new
+`reactive-agent.ts` killSwitchAction site TYPED to `Effect<void>` — count back to 21, ceiling not raised),
+plus 3 order-dependent full-suite failures root-caused to **leaked `mock.module` registrations**
+(`@anthropic-ai/sdk` mock without `stream`; `ollama` mock leaking into runtime's live timeout test) —
+every mock site of those two modules now captures the real module and restores it in `afterAll`.
+Live-Anthropic tests now probe-gate (skip on missing key / drained credits / network down).
+Residual leak exposure: `openai` / `@google/genai` / litellm-fetch mocks (no observed victims; needs
+the same all-sites treatment if one appears). Docker-daemon tests remain env-dependent flakes.
 
 | # | Claim | Reality | Verdict |
 |---|---|---|---|
 | **P0-13** | **Every published benchmark number.** "86.7% recovery · +80pp accuracy · 10× cheaper" (**13 sites incl. the docs homepage hero**), "bare ReAct 85% → harness 100%", "local 91–94%", "35-task suite", "38.6% tokens saved" | The instrument that produced them scored **"did not crash"** as a pass (found `1daa3910`, 2026-07-09). Provenance of 86.7%/+80pp is a **15-case hand-authored unit fixture** (`m4-healing-measurement.test.ts`) — **not a live-model benchmark**, and "+80pp accuracy" is not measured by it at all. The committed `real-world-full.json` is 3 tasks × 1 model and shows **`passRate: 1` while `accuracy: 0`** in 5 of 6 cells. | **FALSE — take them down, don't re-tune** (owner's rule: self-built benches are internal tooling, not public claims) |
 | **P0-14** | `apps/docs/src/data/benchmark-report.json` feeds the docs benchmark component | **`"runs": []`** — a 626 KB file whose runs array is empty. The site renders benchmarks off nothing. | FALSE |
-| **P0-15** | README test/package counts | "7,671 tests · 974 files" (×4 sites) vs actual **8,247 / 1,045**; `metrics.json` says 7,190 — **three-way disagreement, none correct**. "33 published" → **34**. | FALSE |
+| **P0-15** | README test/package counts | **FIXED Wave 0 (2026-07-19):** synced to measured **8,253 / 1,045** via `metrics:sync-readme` (script-written, all 4 sites); `metrics-cache.json` refreshed; `metrics:check` now **wired into CI** (`docs-gates` job) so drift fails the build. | PROVEN |
 | **P0-16** | README headline quickstart: `import { createAgent }`, `.withLongHorizon()`, `.withAdaptiveHarness()`, `.withReceiptSigning()` | **Absent from published `0.13.6`** (tarballs unpacked). Exists only on main. If v0.14 doesn't ship from main, README's **first code block is broken for every visitor**. | FALSE (today) |
 | **P0-17** | "**27-signal** complexity router" (5 sites) | `complexity-router.ts` has **4 named factors** + length thresholds. No registry, no weights. | FALSE |
 | **P0-18** | README lists **6** providers in its Multi-Provider + Architecture tables | The same README claims **8**. Code has 8. Internal contradiction. | FALSE |
 | **P0-19** | `errors.ts` suggestions | `:247` renders **syntactically invalid TS** (`violation` is a joined summary, not a key). `:256` says "call `agent.resume()`" — but `resume()` only completes a pause deferred and KillSwitch fires on stop/terminate (unresumable); its `reason === "manual"` branch is **dead** (no writer emits it). `:134,147` JSDoc names `agent.resume(runId)` — the real method is `resumeRun(runId)`. The ee9a1471 "honesty pin" is green against **fixture values production never emits**. | FALSE |
 | **P0-20** | CHANGELOG `[Unreleased]` | Contains **only** the 3-wither removal, while **~40 user-facing feat/fix commits** landed since v0.13.6 — including the **meta-tools going opt-in** (a behavior change users must know about). | FALSE |
-| **P0-21** | The docs example gate | **Never runs in CI** (zero `.github/` references). 283 of 632 blocks skipped (45%). Ships **`--fix-fragments`, which silences drift by inserting skip comments into failing blocks**. One parse error suppresses all semantic diagnostics program-wide. **6 skips hide real drift**: `.withContextProfile({budgetTokens})` (keys don't exist), `SessionOptions {persist,id}` (both fabricated), the documented **ToolBuilder→withTools flow does not compile**, and `withTelemetry`/`withTerminalTools`/`withoutTracing` (**removed in v0.14**, still documented). | FALSE |
+| **P0-21** | The docs example gate | **INSTRUMENT FIXED Wave 0 (2026-07-19):** wired into CI (`docs-gates` job); `--fix-fragments` **deleted**; parse-error suppression fixed (in-process compiler API, per-file syntactic+semantic diagnostics — proven with a deliberately broken pair); skip-count **ratchet added** (`SKIP_CEILING = 283`, only falls). **REMAINING (Wave 1):** the 283 skips themselves, incl. **6 that hide real drift**: `.withContextProfile({budgetTokens})` (keys don't exist), `SessionOptions {persist,id}` (both fabricated), the documented **ToolBuilder→withTools flow does not compile**, and `withTelemetry`/`withTerminalTools`/`withoutTracing` (**removed in v0.14**, still documented). | PARTIAL — gate PROVEN, skips remain |
 
 > **Structural note:** every stale number traces to a **sync gate that exists but isn't wired to CI**, and every hidden API
 > drift traces to a **doc gate that isn't wired to CI and ships a command to silence itself**. The claims did not rot

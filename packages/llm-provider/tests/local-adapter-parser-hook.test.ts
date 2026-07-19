@@ -5,9 +5,17 @@
 // selectAdapter() per CompletionRequest and consumes adapter.parseToolCalls
 // when supplied, falling back to the default Ollama-shaped parser otherwise.
 
-import { describe, it, expect, mock, beforeAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterEach, afterAll } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { ProviderAdapter } from "../src/adapter.js";
+
+// Bun module mocks are process-global and leak across test FILES. Capture the
+// real `ollama` module and re-install it in afterAll so later files (e.g.
+// runtime live-Ollama tests) hit the real SDK again.
+const realOllamaModule = { ...(await import("ollama")) };
+afterAll(() => {
+  mock.module("ollama", () => realOllamaModule);
+});
 
 // ─── Adapter swap seam ──────────────────────────────────────────────────
 //

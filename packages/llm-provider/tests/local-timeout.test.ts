@@ -10,10 +10,18 @@
 //   (4) provider error mapping de-duplicates raw JSON to one clean line with a
 //       one-line string cause (no leaked stack).
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeEach, afterEach, afterAll } from "bun:test";
 import { Effect, Layer, Exit, Cause } from "effect";
 
 // ─── Mock the `ollama` package BEFORE the provider module is imported ───
+
+// Bun module mocks are process-global and leak across test FILES. Capture the
+// real module and re-install it in afterAll so later files (e.g. runtime
+// live-Ollama tests) hit the real SDK again.
+const realOllamaModule = { ...(await import("ollama")) };
+afterAll(() => {
+  mock.module("ollama", () => realOllamaModule);
+});
 
 // A chat that never resolves — forces Effect.timeout to fire. Part C's mock
 // (installed per-test) additionally drives the injected fetch to observe abort.

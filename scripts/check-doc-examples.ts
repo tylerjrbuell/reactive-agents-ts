@@ -20,15 +20,20 @@
  * Usage:
  *   bun run scripts/check-doc-examples.ts             # check all docs
  *   bun run scripts/check-doc-examples.ts --list      # list every block + status
- *   bun run scripts/check-doc-examples.ts --fix-fragments  # mark currently-failing blocks
  *   bun run scripts/check-doc-examples.ts <glob...>   # limit to matching source files
  */
 import { Glob } from "bun";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { resolve, join, relative } from "node:path";
+import ts from "typescript";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const SKIP_MARKER = "docs-skip-typecheck";
+// Skip-count ratchet. Baseline 2026-07-19: 283 of 632 blocks carry a
+// docs-skip-typecheck marker. THE CEILING ONLY GOES DOWN: when you un-skip
+// blocks, lower this number to the new skip count. Never raise it — adding a
+// skip marker to dodge a failure is exactly the drift this gate exists to stop.
+const SKIP_CEILING = 283;
 
 interface Block {
   sourceFile: string; // repo-relative
@@ -129,46 +134,50 @@ function packageSubpaths(): Record<string, string[]> {
   return paths;
 }
 
-function writeGateTsconfig(dir: string): string {
-  const cfg = {
-    compilerOptions: {
-      target: "ES2022",
-      module: "ESNext",
-      moduleResolution: "bundler",
-      lib: ["ES2022", "DOM", "DOM.Iterable"],
-      strict: true,
-      // Relaxed vs the repo config: doc snippets are typechecked for API
-      // correctness, not compiled — allow value/type import mixing and unused
-      // locals that read naturally in prose.
-      verbatimModuleSyntax: false,
-      isolatedModules: false,
-      noUnusedLocals: false,
-      noUnusedParameters: false,
-      noImplicitReturns: false,
-      // Doc callbacks routinely omit param types for brevity (`(payload) =>
-      // ...`); that reads fine and is not an API-correctness concern.
-      noImplicitAny: false,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      resolveJsonModule: true,
-      noEmit: true,
-      types: ["bun-types", "node"],
-      ignoreDeprecations: "6.0",
-      baseUrl: REPO_ROOT,
-      paths: {
-        "@reactive-agents/*": ["packages/*/src/index.ts"],
-        "reactive-agents": ["packages/reactive-agents/src/index.ts"],
-        "reactive-agents/compose/killswitches": [
-          "packages/compose/src/killswitches/index.ts",
-        ],
-        ...packageSubpaths(),
-      },
+function gateCompilerOptions(): ts.CompilerOptions {
+  const json = {
+    target: "ES2022",
+    module: "ESNext",
+    moduleResolution: "bundler",
+    lib: ["ES2022", "DOM", "DOM.Iterable"],
+    strict: true,
+    // Relaxed vs the repo config: doc snippets are typechecked for API
+    // correctness, not compiled — allow value/type import mixing and unused
+    // locals that read naturally in prose.
+    verbatimModuleSyntax: false,
+    isolatedModules: false,
+    noUnusedLocals: false,
+    noUnusedParameters: false,
+    noImplicitReturns: false,
+    // Doc callbacks routinely omit param types for brevity (`(payload) =>
+    // ...`); that reads fine and is not an API-correctness concern.
+    noImplicitAny: false,
+    esModuleInterop: true,
+    skipLibCheck: true,
+    resolveJsonModule: true,
+    noEmit: true,
+    types: ["bun-types", "node"],
+    ignoreDeprecations: "6.0",
+    baseUrl: REPO_ROOT,
+    paths: {
+      "@reactive-agents/*": ["packages/*/src/index.ts"],
+      "reactive-agents": ["packages/reactive-agents/src/index.ts"],
+      "reactive-agents/compose/killswitches": [
+        "packages/compose/src/killswitches/index.ts",
+      ],
+      ...packageSubpaths(),
     },
-    include: [join(dir, "*.ts")],
   };
-  const cfgPath = join(dir, "tsconfig.gate.json");
-  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  return cfgPath;
+  // convertCompilerOptionsFromJson handles the enum-valued fields
+  // (target/module/lib/moduleResolution) exactly as a tsconfig.json would.
+  const { options, errors } = ts.convertCompilerOptionsFromJson(json, REPO_ROOT);
+  if (errors.length > 0) {
+    for (const e of errors) {
+      console.error(ts.flattenDiagnosticMessageText(e.messageText, "\n"));
+    }
+    process.exit(2);
+  }
+  return options;
 }
 
 // ─── 3b. narrative continuation support ──────────────────────────────────────
@@ -262,63 +271,56 @@ checked.forEach((b, idx) => {
   // top-level await is legal.
   writeFileSync(join(tmp, name), `${preamble}${b.code}\n\nexport {};\n`);
 });
-const cfgPath = writeGateTsconfig(tmp);
+// Typecheck IN-PROCESS via the compiler API rather than spawning `tsc -p`.
+// Rationale: when any single file has a syntax error, the tsc CLI suppresses
+// semantic diagnostics for the ENTIRE program — one malformed snippet would
+// hide every other block's API drift. Collecting per-file syntactic AND
+// semantic diagnostics keeps every block independently accountable: a file
+// with syntax errors reports them, and all other files still get full
+// semantic checking.
+const options = gateCompilerOptions();
+const host = ts.createCompilerHost(options);
+host.getCurrentDirectory = () => REPO_ROOT;
+const rootNames = checked.map((b) => join(tmp, b.tempName!));
+const program = ts.createProgram({ rootNames, options, host });
 
-const proc = Bun.spawnSync(["bunx", "tsc", "--noEmit", "-p", cfgPath], {
-  cwd: REPO_ROOT,
-  stdout: "pipe",
-  stderr: "pipe",
-});
-const out = proc.stdout.toString() + proc.stderr.toString();
+const setupDiags = program.getOptionsDiagnostics();
+if (setupDiags.length > 0) {
+  for (const d of setupDiags) {
+    console.error(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+  }
+  rmSync(tmp, { recursive: true, force: true });
+  process.exit(2);
+}
 
-// ─── 5. map tsc errors back to doc blocks ────────────────────────────────────
+// ─── 5. map diagnostics back to doc blocks ───────────────────────────────────
 const failingBlocks = new Map<Block, string[]>();
-for (const line of out.split("\n")) {
-  // e.g. /tmp/ra-doc-examples-xxx/block_0003.ts(4,10): error TS2345: ...
-  const m = line.match(/block_(\d+)\.ts\((\d+),(\d+)\):\s*(error.*)$/);
+for (const sf of program.getSourceFiles()) {
+  const m = sf.fileName.match(/block_(\d+)\.ts$/);
   if (!m) continue;
   const block = byTempName.get(`block_${m[1]}.ts`);
   if (!block) continue;
-  // temp line = preamble + inner block line; map back past the injected preamble.
-  const innerLine = Number(m[2]) - (block.preambleLines ?? 0);
-  const docLine = block.startLine + Math.max(0, innerLine); // fence + inner line
-  const arr = failingBlocks.get(block) ?? [];
-  arr.push(`  ${block.sourceFile}:${docLine}  ${m[4]}`);
-  failingBlocks.set(block, arr);
+  const diags = [
+    ...program.getSyntacticDiagnostics(sf),
+    ...program.getSemanticDiagnostics(sf),
+  ];
+  for (const d of diags) {
+    if (d.category !== ts.DiagnosticCategory.Error) continue;
+    // temp line = preamble + inner block line; map back past the injected preamble.
+    const tempLine =
+      d.file !== undefined && d.start !== undefined
+        ? d.file.getLineAndCharacterOfPosition(d.start).line + 1
+        : 1;
+    const innerLine = tempLine - (block.preambleLines ?? 0);
+    const docLine = block.startLine + Math.max(0, innerLine); // fence + inner line
+    const msg = ts.flattenDiagnosticMessageText(d.messageText, " ");
+    const arr = failingBlocks.get(block) ?? [];
+    arr.push(`  ${block.sourceFile}:${docLine}  error TS${d.code}: ${msg}`);
+    failingBlocks.set(block, arr);
+  }
 }
 
 rmSync(tmp, { recursive: true, force: true });
-
-// ─── 5b. optional: mark currently-failing blocks as illustrative fragments ────
-if (process.argv.includes("--fix-fragments") && failingBlocks.size > 0) {
-  const byFile = new Map<string, Block[]>();
-  for (const b of failingBlocks.keys()) {
-    const arr = byFile.get(b.sourceFile) ?? [];
-    arr.push(b);
-    byFile.set(b.sourceFile, arr);
-  }
-  let marked = 0;
-  for (const [rel, blocks] of byFile) {
-    const abs = join(REPO_ROOT, rel);
-    const lines = readFileSync(abs, "utf8").split("\n");
-    const comment = rel.endsWith(".mdx")
-      ? "{/* docs-skip-typecheck */}"
-      : "<!-- docs-skip-typecheck -->";
-    // Insert bottom-up so earlier fence line numbers stay valid.
-    const fenceIdxs = blocks
-      .map((b) => b.startLine - 1) // 0-based index of the opening fence
-      .sort((a, b) => b - a);
-    for (const idx of fenceIdxs) {
-      if (precedingMarker(lines, idx)) continue; // already marked
-      lines.splice(idx, 0, comment);
-      marked++;
-    }
-    writeFileSync(abs, lines.join("\n"));
-  }
-  console.log(`↻ marked ${marked} illustrative fragment block(s) with the skip comment.`);
-  console.log("Re-run without --fix-fragments to verify green.");
-  process.exit(0);
-}
 
 // ─── 6. report ───────────────────────────────────────────────────────────────
 const passing = checked.length - failingBlocks.size;
@@ -357,11 +359,22 @@ console.log(`  passed               : ${passing}`);
 console.log(`  failed               : ${failingBlocks.size}`);
 console.log(`  skipped (marked)     : ${skipped.length}`);
 
+let red = false;
 if (failingBlocks.size > 0) {
   console.log(
     `\n✗ ${failingBlocks.size} doc example(s) do not typecheck. ` +
       `Fix the API usage or mark illustrative fragments with \`// ${SKIP_MARKER}\`.`,
   );
-  process.exit(1);
+  red = true;
 }
+if (skipped.length > SKIP_CEILING) {
+  console.log(
+    `\n✗ skip-count ratchet violated: ${skipped.length} skipped block(s) > ` +
+      `ceiling ${SKIP_CEILING} (overage ${skipped.length - SKIP_CEILING}). ` +
+      `The ceiling only goes DOWN — remove ${SKIP_MARKER} markers (and lower ` +
+      `SKIP_CEILING when un-skipping); never add skips to silence failures.`,
+  );
+  red = true;
+}
+if (red) process.exit(1);
 console.log("\n✓ all checked doc examples typecheck.");

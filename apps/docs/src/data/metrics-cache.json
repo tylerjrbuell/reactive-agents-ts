@@ -1,5 +1,5 @@
 {
-  "tests": 7190,
-  "updated": "2026-07-05",
-  "_note": "Latest bun test snapshot. Refreshed by CI on PR merge to main; safe to manually update if you just ran tests locally and want the docs to reflect the new count."
+  "tests": 8253,
+  "updated": "2026-07-19",
+  "_note": "Latest bun test snapshot (post-build full run: 8223 pass / 23 skip / 4 todo / 3 fail = 8253 across 1045 files). NOT auto-refreshed by CI — update manually after running the suite locally when the count moves."
 }
