@@ -1,7 +1,7 @@
 ---
 tags: [harness, planning, root-cause, goal-completion, eval, north-star]
 date: 2026-07-10
-status: active
+status: SUPERSEDED (2026-07-19) — open items absorbed into wiki/Architecture/DEBT-REGISTER.md §3b; execution order now owned by 2026-07-13-debt-burndown.md. Do not work from this list.
 follows: 2026-07-10-harness-root-cause-closure-program.md
 ---
 

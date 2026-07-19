@@ -2,7 +2,7 @@
 tags: [debt, canonical, register, release-gate]
 date: 2026-07-13
 status: CANONICAL — single source of truth for technical debt
-supersedes: scattered findings in Audit-Reports-2026-07-{07,08,09,10,11,12}
+supersedes: scattered findings in Audit-Reports-2026-07-{07,08,09,10,11,12}; open lists of 2026-07-10-harness-root-cause-closure-program (SUPERSEDED) and 2026-07-10-goal-reliability-and-feedback-loop-program (SUPERSEDED) — absorbed in §3b below (2026-07-19 absorb-or-defer pass)
 ---
 
 # Debt Register — CANONICAL
@@ -103,6 +103,27 @@ later obsoleted by the boundary fix that eventually arrived.)
 | **B5** | **EventBus→public stream projection** (`execute-stream.ts`) | `PhaseStarted`/`PhaseCompleted` have zero stream writers — byte-identical to the tool-events bug fixed in `61f05489`. Advertised in `ui-core` + `apps/docs/features/streaming.md`. | A `density:"full"` consumer waits forever |
 | **B6** | **`selectAdapter` early-return** (`adapter.ts:322`) | Calibration discards the tier adapter | P0-2 |
 | **B7** | **`requirement` ledger kind: ZERO writers** | Two live readers (`assess.ts:207`, `standing-frame.ts:193`) always see `[]` ⇒ the meta-loop's requirement lifecycle (declared→satisfied→blocked) is **fiction**; Projector renders no outstanding work; `evidenceRefs` double-dead | The load-bearing hole in the architecture Waves A–G shipped |
+| **B8** | **Subagent detached-runtime dispatch boundary** (`spawn-handlers.ts:140,163`, `local-agent-tools.ts:141,157`, `sub-agent-executor.ts:296`) — fresh root fiber per spawn; parent EventBus/Trace/Logger dropped | Invisible workers, no cancellation, flat teams, not-background, unattributable logs — **five symptoms, one line**. H-risk #1 of the 07-12 audit. | **Disposition (2026-07-19): debt repair, not new architecture.** Fix spec = the 2026-07-11 subagents-and-logging DRAFT plan; executes in burndown Wave 2 **after B1–B7**, gated on RATIFY of that plan (owner sign-off before code). |
+
+## 3b. Absorbed open work (from the superseded 07-10 programs — absorb-or-defer pass, 2026-07-19)
+
+Every item below was open in the root-cause closure or goal-reliability programs and had NO row here.
+That silence violated this register's own exhaustiveness clause; corrected now. Wave = burndown wave.
+
+| Item | Source | Wave | Status |
+|---|---|---|---|
+| **Bench P2**: 7 llm-judge tasks → deterministic graded (suite sd 0.50 → ≤0.30) + immediate re-baseline | root-cause #11 | **Wave 5 ENTRY GATE** — re-earning numbers on an sd-0.50 instrument repeats July | OPEN |
+| **Bench P3**: more `horizon:long` tasks (only lh-1 + rw-7 exist) | root-cause #12 | Wave 5 entry gate | OPEN |
+| **#39 per-entity requirements** (gate tracks tool NAMES; `orders.json` read satisfied a `rates.json` requirement; dead `cardinality:"per-entity"`) | root-cause T1.2 | Wave 2 (rides B7 — same requirement machinery) | OPEN |
+| **#44 kernel→engine signal unification** (`ctx.toolResults`/`lastResponse` empty on kernel path; memory extraction erratically reachable) | root-cause T1.3 | Wave 2 (sibling of B4 — same projection disease, engine side) | OPEN |
+| **#38 thought-continuity ablation** (flag shipped, never measured; prereq: Ollama provider discards `thinking` ⇒ inert on local tier) | root-cause T1.1 | Wave 5 (needs the fixed instrument) | OPEN |
+| **M6 contract-driven terminal gate** missing on blueprint/code-action/inline | matrix sweep | **DEFERRED by design** — receipt recompiles the contract strategy-agnostically at the boundary (`builder/helpers.ts:182`), so the receipt stays truthful; only in-loop steering is absent. Revisit if Wave 5 bench shows those paths stopping short. | DEFERRED |
+| **#36 adaptive-ablation re-cut** (Phase-6 exit gate unmet; verdict INCONCLUSIVE n=1) | root-cause #13 | Wave 5 | OPEN |
+| **Compaction never fires** (threshold ≈ whole window; failed tool results pinned) | root-cause T3.9 | Wave 3 (wire-or-delete: fix the threshold or delete the documented `recencyBudgetChars` role) | OPEN |
+| **Tool-roster consolidation** (two terminators; three overlapping memory tools; superseded-yet-exported tools) | root-cause T3.10 | Wave 3 | OPEN |
+| **runtime pkg 67 `as any`** (runtime.ts 12, telemetry-emit.ts 7, execution-engine.ts 6) | 07-12 audit §3.6 | Wave 2 (B3 rides the same seam — fix casts while writing the seam tests) | OPEN |
+| **check-control-plane GRANDFATHERED list** (4 forcing sites, never shrunk) | root-cause T2.7 | Wave 3 (one site per PR, ratcheted) | OPEN |
+| **Probe-fleet residue**: success+empty-output edge, ToT trivial-task cost floor, reflexion empty-generate budget collision, output⊆observations grounding depth | probe debriefs | Wave 5 (fleet is part of the instrument) | OPEN |
 
 ---
 
@@ -123,7 +144,7 @@ later obsoleted by the boundary fix that eventually arrived.)
 
 ---
 
-## 5. Latent correctness bugs (new, not previously known)
+## 5. Latent correctness bugs (new, not previously known) — **owned by burndown Wave 2** (ride B2/B4)
 
 1. **`adaptive` fallback discards the failed sub-strategy's steps** (`adaptive.ts:290-305`). If plan-execute wrote 2 of 3 files then returned partial, those real writes **vanish from the ledger** and the receipt reports produced deliverables as missing.
 2. **`direct` drops honesty markers entirely** (`direct.ts:194`) — no `extraMetadata`, hardcodes `totalCost: 0`, can report `completed` on an unverified ship.

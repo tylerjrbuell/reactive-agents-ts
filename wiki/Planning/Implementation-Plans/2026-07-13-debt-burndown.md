@@ -75,7 +75,12 @@ The ~200 findings are **7 boundaries** (register §3). Fix them in dependency or
    CompletionEnvelope). Rescues the verifier verdict; retires most of the 19 KernelMeta orphans.
 5. **B5 EventBus→stream projection** — `PhaseStarted`/`PhaseCompleted` (same bug as `61f05489`).
 6. **B3 builder-seam test lane** — one behavioral test per wither. *Converts 30 SILENT → PROVEN.*
-   Largest single quality win in the repo; highly parallelizable.
+   Largest single quality win in the repo; highly parallelizable. Fix runtime's 67 `as any` while in the seam.
+7. **B8 subagent dispatch boundary** — after B1–B7. Debt repair, not new architecture (owner disposition
+   2026-07-19); spec = the 2026-07-11 subagents-and-logging plan, which needs RATIFY before code.
+
+**Also owned by this wave:** register §5 latent bugs (`adaptive` step-discard, `direct` honesty-drop,
+two-verifiers non-linkage — ride B2/B4) and §3b items tagged Wave 2 (#39 rides B7, #44 rides B4).
 
 **Gate:** each boundary ships with a mutation test — cut the boundary, something goes red.
 
@@ -104,8 +109,14 @@ pure noise), `packages/scenarios` (merge), the orphan builder fields, and whatev
 
 ## Wave 5 — RE-EARN THE NUMBERS
 
-Only now, on a trustworthy instrument: run the real bench, publish receipts, restate any claim we can back.
-Anything we can't back stays deleted. (Self-built benches are internal tooling, not public claims.)
+**ENTRY GATE (hard):** bench P2 complete — the 7 llm-judge tasks converted to deterministic graded checks
+(suite sd 0.50 → ≤0.30) and an immediate re-baseline; plus P3 `horizon:long` tasks. Re-earning numbers on
+the sd-0.50 instrument would repeat July with fresher branding. Nothing publishes until this gate passes.
+
+Then, on the trustworthy instrument: run the real bench, publish receipts, restate any claim we can back.
+Also here: #38 thought-continuity ablation (prereq: Ollama `thinking` capture), #36 adaptive re-cut,
+probe-fleet residue. Anything we can't back stays deleted. (Self-built benches are internal tooling,
+not public claims.)
 
 ## Wave 6 — CONSOLIDATE, THEN SHIP
 

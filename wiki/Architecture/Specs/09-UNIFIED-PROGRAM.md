@@ -42,6 +42,14 @@ User mandate (2026-07-07/08): harness wins first; publication blocked until the 
 
 ## 4. The unified sequence (supersedes 08 §arc-ordering)
 
+> **AMENDMENT (ratified by owner decision, 2026-07-13/19).** C7's "launch line does not wait for the ledger"
+> is suspended: the 07-13 validation sweep found the release would ship false claims (9 lying withers incl.
+> an inert safety switch, invalid benchmark numbers, red main). **v0.14 now ships at Wave 6 of
+> [[../../Planning/Implementation-Plans/2026-07-13-debt-burndown|the debt burndown]]**, which is the ONLY
+> active program until complete (WIP=1). Items live in [[../DEBT-REGISTER|DEBT-REGISTER]]. The sequence
+> below resumes (Waves C+ consumers, Arc 2, …) after burndown Wave 6. The one-goal sentence in §1 is
+> unchanged — the burndown IS strand T applied to ourselves.
+
 ```
 NOW   Wave A (lh-1 ∥ horizon profile ∥ lift rule)      [K+T — the instrument]
   ∥   v0.14 launch-line prep (bench receipts thread)    [T+P]
