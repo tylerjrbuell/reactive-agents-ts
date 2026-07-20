@@ -319,6 +319,80 @@ export const makeExecuteStream =
           );
       }
 
+      // Lifecycle phases. `runObservablePhase` (engine/pipeline.ts) publishes
+      // `ExecutionPhaseEntered` / `ExecutionPhaseCompleted` on the bus for every
+      // one of the 10 ExecutionEngine phases, and observability subscribes to
+      // build metrics — but nothing ever projected them onto the public stream,
+      // so `PhaseStarted` / `PhaseCompleted` were declared in AgentStreamEvent
+      // (and advertised as density:"full" events in ui-core + the docs) with
+      // ZERO writers. A density:"full" consumer waited forever for phase events
+      // that were published internally but never surfaced. Byte-identical to the
+      // tool-events gap fixed in 61f05489; wired both tags at this single
+      // projection point, gated on density:"full", same as the verbose events
+      // above. The bus `ExecutionPhaseEntered` carries no timestamp, so the
+      // public `PhaseStarted.timestamp` is stamped at projection time.
+      if (eb && density === "full") {
+        yield* eb
+          .on("ExecutionPhaseEntered", (event) =>
+            Effect.gen(function* () {
+              const e = event as { taskId?: string; phase?: string };
+              if (String(e.taskId ?? "") !== String(task.id)) {
+                return;
+              }
+              yield* Queue.offer(queue, {
+                _tag: "PhaseStarted",
+                phase: String(e.phase ?? "unknown"),
+                timestamp: Date.now(),
+              } as AgentStreamEvent).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:PhaseStarted-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:PhaseStarted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+
+        yield* eb
+          .on("ExecutionPhaseCompleted", (event) =>
+            Effect.gen(function* () {
+              const e = event as { taskId?: string; phase?: string; durationMs?: number };
+              if (String(e.taskId ?? "") !== String(task.id)) {
+                return;
+              }
+              yield* Queue.offer(queue, {
+                _tag: "PhaseCompleted",
+                phase: String(e.phase ?? "unknown"),
+                durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
+              } as AgentStreamEvent).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/execute-stream.ts:PhaseCompleted-offer",
+                    tag: errorTag(err),
+                  }),
+                ),
+              );
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:PhaseCompleted-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+      }
+
       // Bind the streaming callback + run-controller as FiberRef values for the
       // reasoning kernel. We use `Effect.locally` *wrapping execute(task)* (not a
       // bare FiberRef.set) so the values are scoped to this run and RESTORED when
