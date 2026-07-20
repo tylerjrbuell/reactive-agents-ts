@@ -303,7 +303,16 @@ export const executeAdaptive = (
     }
 
     // ── Combine results ──
-    const allSteps = [...steps, ...finalSubResult.steps];
+    // §5.1 (B2): on a fallback the FAILED sub-strategy's real steps must NOT be
+    // discarded — a partial plan-execute may have written 2 of 3 files before
+    // returning, and those tool-write steps are the deliverable receipt's only
+    // evidence. Merge (do not replace) the prior sub-strategy's steps ahead of
+    // the fallback reactive's steps so real writes survive to the ledger. Guard
+    // the double-count case: when reactive itself failed, catchAll handed back
+    // the SAME subResult object, so its steps must not appear twice.
+    const priorSubSteps =
+      fallbackOccurred && finalSubResult !== subResult ? subResult.steps : [];
+    const allSteps = [...steps, ...priorSubSteps, ...finalSubResult.steps];
 
     yield* emitPhaseEnd({ emitLog, phase: "adaptive:dispatch", startedAt: start });
 
@@ -319,6 +328,17 @@ export const executeAdaptive = (
       timestamp: new Date(),
     });
 
+    // §5.1 (B2): adaptive returns the dispatched sub-strategy's outcome, so it
+    // must ALSO relay that sub-strategy's terminatedBy / rawTerminatedBy /
+    // abstention — otherwise every adaptive run fell back to `end_turn` at the
+    // engine boundary (goalAchieved unknown) and a sub-strategy abstention was
+    // invisible, even though the sub-strategy now forwards all three. `metadata`
+    // is statically typed to the closed ReasoningMetadata struct; the boundary
+    // fields ride the runtime object, so read them off a Record view (mirrors
+    // execution-engine.ts). `finalSubResult` is whatever actually produced the
+    // final output (the fallback reactive on a fallback, else the sub-strategy).
+    const subMeta = finalSubResult.metadata as Record<string, unknown>;
+
     return buildStrategyResult({
       strategy: "adaptive",
       steps: allSteps,
@@ -331,6 +351,15 @@ export const executeAdaptive = (
       extraMetadata: {
         selectedStrategy: activeStrategy,
         fallbackOccurred,
+        ...(typeof subMeta.terminatedBy === "string"
+          ? { terminatedBy: subMeta.terminatedBy }
+          : {}),
+        ...(typeof subMeta.rawTerminatedBy === "string"
+          ? { rawTerminatedBy: subMeta.rawTerminatedBy }
+          : {}),
+        ...(subMeta.abstention !== undefined
+          ? { abstention: subMeta.abstention }
+          : {}),
         ...(costAwareDowngradeReason
           ? { costAwareDowngrade: costAwareDowngradeReason }
           : {}),

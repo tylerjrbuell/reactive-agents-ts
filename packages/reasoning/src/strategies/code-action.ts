@@ -368,6 +368,19 @@ export const executeCodeAction = (
         ? lastResult
         : JSON.stringify(lastResult) ?? "";
 
+    // B2: code-action runs no kernel and cannot abstain, but it still MUST
+    // forward an honest closed terminatedBy — otherwise every code-action run
+    // was mislabeled `end_turn` and goalAchieved never resolved. A PASS verdict
+    // that produced a non-empty result IS a delivered answer (`final_answer`);
+    // a FAIL-verdict / iteration-cap / empty-output termination is NOT — it maps
+    // to `end_turn` (goalAchieved defers to the deliverable scan) rather than
+    // fabricating `final_answer` on a give-up (the DEFECT-3 lie). This ties the
+    // claim to the same evidence buildStrategyResult uses for `status`, so
+    // success and goalAchieved never contradict.
+    const producedOutput = resultString.trim().length > 0;
+    const terminatedBy: "final_answer" | "end_turn" =
+      lastVerdict === "PASS" && producedOutput ? "final_answer" : "end_turn";
+
     return buildStrategyResult({
       strategy: "code-action",
       steps,
@@ -387,6 +400,7 @@ export const executeCodeAction = (
         ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
         : {}),
       extraMetadata: {
+        terminatedBy,
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
         llmCalls,

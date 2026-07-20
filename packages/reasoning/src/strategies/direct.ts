@@ -24,10 +24,13 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { runKernel } from "../kernel/loop/runner.js";
-import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
-import { resolveCompletionStatus } from "../kernel/state/completion-status.js";
+import {
+  resolveCompletionStatus,
+  honestPartialMetadata,
+} from "../kernel/state/completion-status.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
@@ -177,6 +180,15 @@ export const executeDirect = (
 
     const output = state.output ?? null;
 
+    // §5.2 (B2): direct emitted NO extraMetadata, hardcoded `totalCost: 0`, and
+    // could report `completed` with none of the honesty markers reactive ships.
+    // `state` here is the raw terminal KernelState from runKernel, so the SAME
+    // canonical helper reactive uses (react-kernel.ts single source of truth)
+    // derives the closed terminatedBy + raw channel — this fixes goalAchieved
+    // (was permanently `end_turn` on every direct run) and lets an honest
+    // decline cross the boundary as `abstained` + descriptor.
+    const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
+
     yield* emitPhaseEnd({
       emitLog,
       phase: "direct:kernel",
@@ -199,6 +211,28 @@ export const executeDirect = (
       status: resolveCompletionStatus(state),
       start,
       totalTokens: state.tokens ?? 0,
-      totalCost: 0,
+      totalInputTokens: state.inputTokens ?? 0,
+      totalOutputTokens: state.outputTokens ?? 0,
+      // §5.2: forward the REAL cost/tokens the kernel accrued instead of the
+      // hardcoded 0 — direct can call tools (up to 3 iters) and those cost money.
+      totalCost: state.cost ?? 0,
+      error: state.error,
+      extraMetadata: {
+        terminatedBy,
+        // Honesty markers cross the result boundary — empty on a clean run,
+        // mirroring reactive's honestPartialMetadata.
+        ...honestPartialMetadata(state.meta),
+        ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
+        llmCalls: state.llmCalls ?? 0,
+        // O3 C1: forward the run-level abstention surface (present only when the
+        // kernel terminated by an earned abstention) so projectAbstention can
+        // set receipt.abstained on direct runs too.
+        ...(state.meta.abstention !== undefined
+          ? { abstention: state.meta.abstention }
+          : {}),
+        ...(state.meta.lastDialectObserved !== undefined
+          ? { lastDialectObserved: state.meta.lastDialectObserved }
+          : {}),
+      },
     });
   });

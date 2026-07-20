@@ -264,6 +264,11 @@ export const executePlanExecute = (
     // augment machinery), then honest abstention instead of fabricated success.
     let groundedRedirects = 0;
     let groundedAbstained = false;
+    // B2: the abstention descriptor (reason + still-missing tools) captured at
+    // the grounded-abstain site, so it can cross the strategy→engine boundary
+    // as `metadata.abstention` (projectAbstention needs BOTH terminatedBy ===
+    // "abstained" AND this descriptor to set receipt.abstained).
+    let groundedAbstainMissing: readonly string[] = [];
 
     // Extract plain goal text from taskDescription (may be JSON-wrapped)
     const goal = extractGoalText(input.taskDescription);
@@ -595,6 +600,11 @@ export const executePlanExecute = (
         totalTokens,
         totalCost,
         extraMetadata: {
+          // B2: a produced single-analysis answer IS a delivered final answer
+          // (`final_answer`); no output maps to `end_turn` (defers to the
+          // deliverable scan). This path cannot abstain. Fixes goalAchieved —
+          // previously every plan-execute run reported `end_turn`.
+          terminatedBy: scOutput ? "final_answer" : "end_turn",
           llmCalls: llmCallsTotal,
           // C8 — the run's canonical tool ledger (empty on this no-dispatch
           // short-circuit, but present for shape consistency).
@@ -1174,6 +1184,7 @@ export const executePlanExecute = (
         reflectionForRefine = `UNSATISFIED: required tools were never executed: ${grounded.missing.join(", ")}. Add tool_call steps that actually invoke them and ground the answer in their results before declaring the goal met.\n${reflectionContent}`;
       } else if (grounded.verdict === "abstain") {
         groundedAbstained = true;
+        groundedAbstainMissing = grounded.missing;
         finalOutput = `Unable to verify this answer: the required tools (${grounded.missing.join(", ")}) were never successfully executed, so the analysis below is ungrounded. ${reflectionContent}`;
         break;
       }
@@ -1364,21 +1375,38 @@ export const executePlanExecute = (
     // it may never upgrade past the envelope.
     const subKernelEnvelope = joinEnvelopes(contributingEnvelopes);
 
+    // Grounded abstention is an honest non-success: the output explains what
+    // could not be verified, and the status must not read as completed.
+    const finalStatus: "completed" | "partial" | "failed" = groundedAbstained
+      ? "partial"
+      : finalOutput
+        ? capStatusToEnvelope("completed", subKernelEnvelope)
+        : "partial";
+
+    // B2: forward the CLOSED terminatedBy so goalAchieved derives correctly
+    // (every plan-execute run previously fell back to `end_turn` at
+    // execution-engine.ts:1096, so goalAchieved was permanently unknown). The
+    // claim is tied to the strategy's own honest evidence:
+    //   - grounded abstention  → "abstained" (+ descriptor below);
+    //   - envelope-blessed output → "final_answer";
+    //   - anything else → "end_turn" (defers to the deliverable scan; never
+    //     fabricates final_answer on a give-up — the DEFECT-3 lie).
+    const terminatedBy: "abstained" | "final_answer" | "end_turn" = groundedAbstained
+      ? "abstained"
+      : finalStatus === "completed"
+        ? "final_answer"
+        : "end_turn";
+
     return buildStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
       output: finalOutput,
-      // Grounded abstention is an honest non-success: the output explains what
-      // could not be verified, and the status must not read as completed.
-      status: groundedAbstained
-        ? "partial"
-        : finalOutput
-          ? capStatusToEnvelope("completed", subKernelEnvelope)
-          : "partial",
+      status: finalStatus,
       start,
       totalTokens,
       totalCost,
       extraMetadata: {
+        terminatedBy,
         llmCalls: llmCallsTotal,
         // C8 — the run's canonical tool ledger (tool-invocation + tool-result
         // per direct dispatch), minted by the primitive into `ledgerRef`.
@@ -1386,6 +1414,18 @@ export const executePlanExecute = (
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(subKernelEnvelope),
+        // B2: the abstention descriptor — present ONLY on a grounded abstention,
+        // so projectAbstention (which requires BOTH terminatedBy === "abstained"
+        // AND this descriptor) can set receipt.abstained for plan-execute runs.
+        ...(groundedAbstained
+          ? {
+              abstention: {
+                reason:
+                  "Required tools were never successfully executed; the answer is ungrounded.",
+                missing: groundedAbstainMissing,
+              },
+            }
+          : {}),
         ...((groundedAbstained ? "abstained" : lastRawTerminatedBy) !== undefined
           ? {
               // Parallel open-string channel mirroring reactive strategy.

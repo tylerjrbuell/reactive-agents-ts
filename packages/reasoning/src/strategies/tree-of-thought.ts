@@ -20,7 +20,7 @@ import {
   honestPartialMetadata,
 } from "../kernel/state/completion-status.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
-import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
@@ -292,6 +292,13 @@ export const executeTreeOfThought = (
         ? resolveCompletionStatus(skipExecState)
         : "partial";
 
+      // B2: the skip path runs a real react kernel — derive the closed
+      // terminatedBy + raw channel from its terminal state via the canonical
+      // helper (pairs coherently with resolveCompletionStatus above), and
+      // forward the abstention descriptor so an honest decline on the trivial
+      // fast-path crosses the boundary instead of shipping as `end_turn`.
+      const skipTb = deriveTerminatedBy(skipExecState);
+
       yield* emitLog({
         _tag: "completion",
         success: skipStatus === "completed",
@@ -311,6 +318,13 @@ export const executeTreeOfThought = (
         totalCost,
         extraMetadata: {
           llmCalls,
+          terminatedBy: skipTb.terminatedBy,
+          ...(skipTb.rawTerminatedBy !== undefined
+            ? { rawTerminatedBy: skipTb.rawTerminatedBy }
+            : {}),
+          ...(skipExecState.meta.abstention !== undefined
+            ? { abstention: skipExecState.meta.abstention }
+            : {}),
           ...honestPartialMetadata(skipExecState.meta),
           bfsSkipped: true,
           bfsSkipReason: complexityVerdict.reason,
@@ -766,6 +780,12 @@ export const executeTreeOfThought = (
       ? resolveCompletionStatus(execState)
       : "partial";
 
+    // B2: Phase 2 is a real react kernel — forward its closed terminatedBy +
+    // raw channel + abstention descriptor (mirrors reactive; pairs coherently
+    // with resolveCompletionStatus). Without this every ToT run was mislabeled
+    // `end_turn` and an honest Phase-2 abstention was invisible to the receipt.
+    const execTb = deriveTerminatedBy(execState);
+
     yield* emitLog({
       _tag: "completion",
       success: execStatus === "completed",
@@ -783,6 +803,13 @@ export const executeTreeOfThought = (
       totalCost,
       extraMetadata: {
         llmCalls,
+        terminatedBy: execTb.terminatedBy,
+        ...(execTb.rawTerminatedBy !== undefined
+          ? { rawTerminatedBy: execTb.rawTerminatedBy }
+          : {}),
+        ...(execState.meta.abstention !== undefined
+          ? { abstention: execState.meta.abstention }
+          : {}),
         ...honestPartialMetadata(execState.meta),
       },
     });

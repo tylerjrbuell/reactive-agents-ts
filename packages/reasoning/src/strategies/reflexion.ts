@@ -16,7 +16,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
@@ -25,7 +25,7 @@ import {
   continueWith,
   terminateWith,
 } from "../kernel/loop/iterate-until.js";
-import type { KernelMessage } from "../kernel/state/kernel-state.js";
+import type { KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import {
   makeStrategyEmitLog,
   emitPhaseEnd,
@@ -321,6 +321,16 @@ export const executeReflexion = (
        * a pass shipped a harness-authored or budget-terminal partial.
        */
       readonly envelope: CompletionEnvelope;
+      /**
+       * B2: the terminal KernelState of the last kernel pass that shipped this
+       * response (generate seed, or the most recent improve pass). Its
+       * `meta.terminatedBy` / `meta.abstention` are what deriveTerminatedBy
+       * reads at the result boundary so the closed terminatedBy + abstention
+       * descriptor cross into the engine (fixes goalAchieved; surfaces an
+       * honest sub-kernel decline). Only the LAST pass's state is retained —
+       * the envelope above already carries the worst-of honesty join.
+       */
+      readonly lastPassState: KernelState;
     }
 
     const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError, LLMService>({
@@ -333,6 +343,7 @@ export const executeReflexion = (
         totalTokens: genPass.tokens + backfillTokens,
         totalCost: genPass.cost + backfillCost,
         envelope: envelopeFromKernelState(genPass.state),
+        lastPassState: genPass.state,
       },
       maxIters: maxRetries,
       step: (s, attempt) =>
@@ -589,6 +600,10 @@ export const executeReflexion = (
               s.envelope,
               envelopeFromKernelState(improvePass.state),
             ]),
+            // B2: the improve pass is the newest terminal state — it (or the
+            // generate seed on the first iteration) owns the terminatedBy /
+            // abstention the result boundary forwards.
+            lastPassState: improvePass.state,
           });
         }),
     });
@@ -642,6 +657,24 @@ export const executeReflexion = (
         : "partial";
     const confidence = status === "completed" ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4;
 
+    // B2: forward the closed terminatedBy + abstention across the result
+    // boundary (mirrors reactive). Reflexion's status is the critique's verdict,
+    // decoupled from any single sub-kernel, so the positive claim is tied to
+    // `status` to stay coherent (final_answer iff completed → goalAchieved and
+    // success never contradict). A genuine sub-kernel abstention on the terminal
+    // pass still wins — an honest decline must surface as `abstained` + its
+    // descriptor even though the critique never blessed it. `deriveTerminatedBy`
+    // (single source of truth) supplies both the abstain detection and the raw
+    // open-string channel.
+    const lastPassTb = deriveTerminatedBy(final.lastPassState);
+    const lastPassAbstention = final.lastPassState.meta.abstention;
+    const terminatedBy: "abstained" | "final_answer" | "end_turn" =
+      lastPassTb.terminatedBy === "abstained"
+        ? "abstained"
+        : status === "completed"
+          ? "final_answer"
+          : "end_turn";
+
     // Canonical tool evidence crosses the strategy boundary. The sub-kernels'
     // action/observation steps (metadata.toolCall ←→ toolCallId +
     // observationResult) are the ONLY shape isArtifactProduced's linkage scan
@@ -667,9 +700,18 @@ export const executeReflexion = (
       totalTokens: finalTokens,
       totalCost: finalCost,
       extraMetadata: {
+        terminatedBy,
         confidence,
         llmCalls,
         reflexionCritiques: final.previousCritiques,
+        ...(lastPassTb.rawTerminatedBy !== undefined
+          ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
+          : {}),
+        // B2: abstention descriptor — present only when the terminal sub-kernel
+        // earned an abstention, so projectAbstention can set receipt.abstained.
+        ...(terminatedBy === "abstained" && lastPassAbstention !== undefined
+          ? { abstention: lastPassAbstention }
+          : {}),
         // H5/#40: sub-kernel honesty fields cross the result boundary — empty
         // on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(final.envelope),

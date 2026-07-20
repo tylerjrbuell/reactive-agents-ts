@@ -655,24 +655,42 @@ export const executeBlueprint = (
       timestamp: new Date(),
     });
 
+    // #40: an unverified ship never reads as completed. The budget-capped join
+    // is a partial regardless of worker success (see envelope comment above);
+    // otherwise the worker's deterministic step evidence governs.
+    const finalStatus: "completed" | "partial" = finalOutput
+      ? budgetCappedJoin
+        ? "partial"
+        : workerResult.allSucceeded
+          ? "completed"
+          : "partial"
+      : "partial";
+
+    // B2: blueprint runs no kernel and cannot abstain (the 0-LLM worker has no
+    // abstain path; unfixable-plan / no-result degrades return executeReactive
+    // verbatim, which already forwards its own terminatedBy). A completed run
+    // delivered a synthesized answer (`final_answer`); a budget-capped or
+    // partial-step ship is NOT model-authored, so it maps to `end_turn`
+    // (goalAchieved defers to the deliverable scan) rather than fabricating
+    // `final_answer` on a give-up. Ties the claim to `finalStatus` so success
+    // and goalAchieved stay coherent.
+    const terminatedBy: "final_answer" | "end_turn" =
+      finalStatus === "completed" ? "final_answer" : "end_turn";
+
     return buildStrategyResult({
       strategy: STRATEGY,
       steps,
       output: finalOutput,
-      // #40: an unverified ship never reads as completed. The budget-capped
-      // join is a partial regardless of worker success (see envelope comment
-      // above); otherwise the worker's deterministic step evidence governs.
-      status: finalOutput
-        ? budgetCappedJoin
-          ? "partial"
-          : workerResult.allSucceeded
-            ? "completed"
-            : "partial"
-        : "partial",
+      status: finalStatus,
       start,
       totalTokens,
       totalCost,
       extraMetadata: {
+        terminatedBy,
+        // The budget-capped join is a harness-authored terminal — surface the
+        // raw reason on the open-string channel for observability parity with
+        // reactive's dynamic killswitch reasons.
+        ...(budgetCappedJoin ? { rawTerminatedBy: "budget-limit:tokens" } : {}),
         // Honest accounting (2026-07-11): the runtime reads
         // result.metadata.llmCalls (execution-engine.ts:1188) — blueprint
         // counted its calls and never shipped the count, so receipts said
