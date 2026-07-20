@@ -15,7 +15,7 @@ import {
   buildEvidenceCorpusFromSteps,
   classifyMeasurementClaims,
 } from "../capabilities/verify/evidence-grounding.js";
-import { appendEntries, appendEntry, type RunLedger } from "./run-ledger.js";
+import { appendEntries, appendEntry, entriesOfKind, type RunLedger } from "./run-ledger.js";
 import { stepToEntries } from "./step-projection.js";
 
 /** One direct tool dispatch, distilled to the facts the canonical ledger pair needs. */
@@ -192,4 +192,101 @@ export function recordEvidenceClaims(
       grounded: c.grounded,
     })),
   );
+}
+
+// ─── Requirement lifecycle (B7 / meta-loop §3b #39) ──────────────────────────
+//
+// The RunContract's requirement lifecycle (declared → satisfied|blocked) is the
+// FIRST-node fact the meta-loop's two live readers wait on:
+//   - assess.ts:207 (`entriesOfKind(ledger, "requirement")` → satisfiedIds/blockedIds)
+//   - standing-frame.ts:193 (`satisfiedRequirementIds` → the outstanding-goal frame)
+// Both saw `[]` until now (run-ledger.ts:96 declared the kind with zero writers),
+// so the lifecycle was fiction. These two emitters are the ONLY writers: DECLARED
+// at contract-compile (runner), SATISFIED/BLOCKED at the assess gate (iterate-pass).
+//
+// REUSE, DO NOT FORK. Satisfaction is NOT recomputed here — assess() (kernel/
+// assessment/assess.ts) is the single satisfaction authority and is already
+// entity-aware for entity-carrying conditions (ArtifactProduced matches by PATH
+// via pathMatches, so a write to a DIFFERENT path does not satisfy a specific
+// requirement). This emitter only PERSISTS the ids assess() partitions, so the
+// entity-keying (#39's false-positive kill) rides the one authority instead of a
+// forked copy. Per-entity gating of GENERIC tool-coverage requirements (binding
+// `file-read` to a specific arg via `cardinality:"per-entity"`) is NOT closed
+// here: TaskRequirement/RequirementSpec carry no entity/cardinality field, so
+// there is no per-entity tool requirement to key — that needs a new condition +
+// tool-metadata threading (out of B7's boundary).
+
+/** A requirement id + kind, the minimum a `declared` entry needs. */
+export interface RequirementRef {
+  readonly id: string;
+}
+
+/** Latest recorded status per requirement id (append-only ⇒ last write wins). */
+function latestRequirementStatus(ledger: RunLedger | undefined): ReadonlyMap<string, string> {
+  const latest = new Map<string, string>();
+  for (const e of entriesOfKind(ledger, "requirement")) latest.set(e.requirementId, e.status);
+  return latest;
+}
+
+/**
+ * DECLARED — mint one `requirement` entry (status `declared`) per contract
+ * requirement that has never been recorded. Called ONCE at contract-compile
+ * (runner), but idempotent: a requirement already present in the ledger (any
+ * status) is skipped, so a replay/resume never double-declares. No-op when every
+ * requirement is already recorded. Pure — returns a NEW ledger.
+ */
+export function recordRequirementsDeclared(
+  ledger: RunLedger | undefined,
+  requirements: readonly RequirementRef[],
+  iteration: number,
+): RunLedger {
+  const seen = latestRequirementStatus(ledger);
+  const fresh = requirements.filter((r) => !seen.has(r.id));
+  if (fresh.length === 0) return ledger ?? [];
+  return appendEntries(
+    ledger,
+    fresh.map((r) => ({
+      kind: "requirement" as const,
+      iteration,
+      requirementId: r.id,
+      status: "declared" as const,
+    })),
+  );
+}
+
+/**
+ * SATISFIED/BLOCKED — mint the lifecycle TRANSITION for each requirement id that
+ * assess() has just partitioned as satisfied or blocked and that does not yet
+ * carry that terminal status in the ledger. Called every iteration at the assess
+ * gate (iterate-pass); idempotent, so a persistently-satisfied requirement is
+ * recorded once, not per turn. `blocked` wins over `satisfied` if an id is (only
+ * transiently) in both. Pure — returns a NEW ledger. No-op when nothing changed.
+ */
+export function recordRequirementTransitions(
+  ledger: RunLedger | undefined,
+  satisfiedIds: readonly string[],
+  blockedIds: readonly string[],
+  iteration: number,
+): RunLedger {
+  const latest = latestRequirementStatus(ledger);
+  const additions: Array<{
+    readonly kind: "requirement";
+    readonly iteration: number;
+    readonly requirementId: string;
+    readonly status: "satisfied" | "blocked";
+  }> = [];
+  const blocked = new Set(blockedIds);
+  for (const id of blocked) {
+    if (latest.get(id) !== "blocked") {
+      additions.push({ kind: "requirement", iteration, requirementId: id, status: "blocked" });
+    }
+  }
+  for (const id of satisfiedIds) {
+    if (blocked.has(id)) continue;
+    if (latest.get(id) !== "satisfied") {
+      additions.push({ kind: "requirement", iteration, requirementId: id, status: "satisfied" });
+    }
+  }
+  if (additions.length === 0) return ledger ?? [];
+  return appendEntries(ledger, additions);
 }

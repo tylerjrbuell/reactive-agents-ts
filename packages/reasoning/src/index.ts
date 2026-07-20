@@ -212,7 +212,12 @@ export type {
 } from "./kernel/ledger/run-ledger.js";
 export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
 export { deriveArtifactEntries, artifacts } from "./kernel/ledger/artifact-projection.js";
-export { recordTerminalVerdict, recordEvidenceClaims } from "./kernel/ledger/emit.js";
+export {
+  recordTerminalVerdict,
+  recordEvidenceClaims,
+  recordRequirementsDeclared,
+  recordRequirementTransitions,
+} from "./kernel/ledger/emit.js";
 
 // ─── RunAssessment — the progress estimator (meta-loop Phase 5a / task E1) ───
 // The THIRD node of the meta-loop DAG: the pure perception of where the run

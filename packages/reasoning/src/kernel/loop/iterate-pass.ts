@@ -142,7 +142,7 @@ import {
 } from "../../kernel/utils/diagnostics.js";
 import { assess } from "../../kernel/assessment/assess.js";
 import { recompileOnAssessment } from "../../kernel/policy/harness-plan.js";
-import { recordHarnessRecompiled } from "../../kernel/ledger/emit.js";
+import { recordHarnessRecompiled, recordRequirementTransitions } from "../../kernel/ledger/emit.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
@@ -478,7 +478,22 @@ export function runIterationPass(
             ...(limits?.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
             ...(limits?.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
           });
-          state = transitionState(state, { meta: { ...state.meta, assessment } });
+          // B7: mint the requirement lifecycle TRANSITIONS at this gate — assess()
+          // is the single, entity-aware satisfaction authority; this persists the
+          // ids it partitioned as satisfied|blocked as `requirement` ledger facts,
+          // so assess.ts:207 (next iteration) + standing-frame read a REAL lifecycle
+          // instead of re-deriving. Routed through the ledger-home emitter (single-
+          // writer invariant), threaded via patch.ledger. Idempotent: a persistently
+          // satisfied requirement records once, so the ledger does not grow per turn.
+          state = transitionState(state, {
+            meta: { ...state.meta, assessment },
+            ledger: recordRequirementTransitions(
+              state.ledger,
+              assessment.requirements.satisfied,
+              assessment.requirements.blocked,
+              state.iteration,
+            ),
+          });
           yield* emitAssessment({
             taskId: currentOptions.taskId ?? state.taskId,
             iteration: state.iteration,

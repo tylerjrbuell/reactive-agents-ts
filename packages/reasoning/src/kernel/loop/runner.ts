@@ -41,6 +41,7 @@ import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../ker
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
 import {
   applyExplicitOverrides,
@@ -366,8 +367,16 @@ export function runKernel(
       // B2: store the compiled contract on state.meta so the CONSUMERS reach it
       // (terminal gate check 2.5, receipt deliverables). Frozen + JSON-plain, so
       // it rides the meta bag through kernel-codec for durable resume.
+      //
+      // B7: mint the DECLARED requirement lifecycle facts here, at the contract's
+      // FIRST node, so the meta-loop's two live readers (assess.ts satisfiedIds /
+      // standing-frame outstanding frame) read a REAL lifecycle instead of `[]`.
+      // Routed through the ledger-home emitter (single-writer invariant) and
+      // threaded via patch.ledger; behavior-neutral (declared status is neither
+      // satisfied nor blocked, so no reader's decision changes at declare).
       state = transitionState(state, {
         meta: { ...state.meta, runContract },
+        ledger: recordRequirementsDeclared(state.ledger, runContract.requirements, state.iteration),
       });
       yield* emitContractCompiled({
         taskId: state.taskId,
