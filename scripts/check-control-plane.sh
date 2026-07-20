@@ -32,6 +32,13 @@ SEARCH_DIR="$ROOT/packages/reasoning/src"
 # home + grandfathered set is a new un-reconciled control decision.
 PRIMITIVES='applyStrategySwitch\(|decideForcedAbstention\('
 
+# The primitives' own definitions are NOT forcing calls — they are the actuator
+# and the decision function the resolver drives. Skip the definition lines so the
+# guard matches CALLS only. (This also hardens the guard: a stray CALL added
+# inside a definition file is still caught, whereas a blanket file-level
+# grandfather would have missed it.)
+DEFINITIONS='export function (applyStrategySwitch|decideForcedAbstention)\('
+
 # The control plane home — the ONE sanctioned owner of control-action decisions
 # (the resolver, the proposal emitters, and the in-loop abstain derivation).
 ALLOWED_FILES=(
@@ -42,11 +49,15 @@ ALLOWED_FILES=(
 # control action locally; later waves route them through resolveControlPlane. DO
 # NOT ADD to this list — a NEW control decision belongs in kernel/control/,
 # resolved via the resolver. The list must SHRINK, never grow.
+#
+# Was 4 entries; the two DEFINITION files (strategy-switch.ts / force-abstention.ts)
+# were never migration targets — they define the primitives the resolver drives —
+# and are now excluded structurally via $DEFINITIONS, leaving the 2 real forcing
+# sites below (iterate-pass.ts calls applyStrategySwitch ×2; runner.ts calls
+# decideForcedAbstention ×1). These are the true one-per-PR ratchet target.
 GRANDFATHERED=(
-  "kernel/loop/runner-helpers/strategy-switch.ts"  # DEFINES applyStrategySwitch (the actuator)
-  "kernel/loop/runner-helpers/force-abstention.ts" # DEFINES decideForcedAbstention (the decision)
-  "kernel/loop/iterate-pass.ts"                     # dispatcher switch seam (loop-detected seam now resolver-gated)
-  "kernel/loop/runner.ts"                           # §7.5 post-loop forced abstention
+  "kernel/loop/iterate-pass.ts"                     # dispatcher switch seam — 2 applyStrategySwitch calls (loop-detected seam, resolver-gated)
+  "kernel/loop/runner.ts"                           # §7.5 post-loop forced abstention — 1 decideForcedAbstention call
 )
 
 # Build a single grep -v exclude pattern from allowed + grandfathered lists.
@@ -62,6 +73,7 @@ done
 HITS="$(grep -rn -E "$PRIMITIVES" \
   --include='*.ts' "$SEARCH_DIR" 2>/dev/null \
   | grep -E -v "$EXCLUDE" \
+  | grep -E -v "$DEFINITIONS" \
   | grep -E -v '\.(test|spec)\.ts:' \
   | awk -F: '{ code=$0; sub(/^[^:]*:[0-9]+:/, "", code); gsub(/^[ \t]+/, "", code);
               if (code !~ /^(\/\/|\*|\/\*)/) print $0 }' \
