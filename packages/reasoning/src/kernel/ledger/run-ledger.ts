@@ -27,18 +27,14 @@
 import type { PostCondition } from "../capabilities/verify/post-conditions.js";
 
 // ─── Entry kinds ───────────────────────────────────────────────────────────────
-
-/** The nine fact families the ledger can record (meta-loop spec §"ledger"). */
-export type LedgerEntryKind =
-  | "tool-invocation"
-  | "tool-result"
-  | "artifact"
-  | "requirement"
-  | "claim"
-  | "verdict"
-  | "harness-signal"
-  | "handoff"
-  | "compaction-marker";
+//
+// `LedgerEntryKind` is DERIVED from the `LedgerEntry` union below
+// (`LedgerEntry["kind"]`), not hand-maintained. A kind literal that no entry
+// interface declares is therefore impossible, and a new entry interface's kind
+// joins the union automatically — the two lists cannot drift (Wave 4:
+// declarations derive from implementations; an orphan kind is a compile error,
+// not an audit finding). The base intentionally omits `kind` so the derivation
+// is non-circular; every concrete entry declares its own literal `kind`.
 
 /** Fields carried by EVERY entry. `seq` is assigned by {@link appendEntry}. */
 interface LedgerEntryBase {
@@ -46,7 +42,6 @@ interface LedgerEntryBase {
   readonly seq: number;
   /** The run iteration this fact was recorded at (advisory correlation). */
   readonly iteration: number;
-  readonly kind: LedgerEntryKind;
 }
 
 /** A tool call was issued (grown from an `action` step; enriched by C2). */
@@ -179,6 +174,13 @@ export type LedgerEntry =
   | HarnessSignalEntry
   | HandoffEntry
   | CompactionMarkerEntry;
+
+/**
+ * The fact families the ledger can record — DERIVED from {@link LedgerEntry}
+ * (meta-loop spec §"ledger"). Do NOT hand-edit; add an entry interface to the
+ * union above and its `kind` joins here automatically.
+ */
+export type LedgerEntryKind = LedgerEntry["kind"];
 
 /** The ledger IS a plain readonly array of facts — codec-round-trippable. */
 export type RunLedger = readonly LedgerEntry[];
