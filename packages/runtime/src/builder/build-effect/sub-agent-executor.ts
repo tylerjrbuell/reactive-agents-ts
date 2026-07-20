@@ -55,6 +55,7 @@ import type {
 import type {
   ContextProfile,
 } from "@reactive-agents/reasoning";
+import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
 //
@@ -401,10 +402,19 @@ export const buildSubAgentTask = (
 
       // Register proxied MCP tools + execute in one Effect scope. This whole
       // Effect is forked into the PARENT's fiber tree below.
+      // B8-T5: nesting is opt-in. Children get spawn tools (and can therefore
+      // sub-delegate) only when the parent EXPLICITLY set maxRecursionDepth and
+      // the child is still below the cap. Default configs give children no spawn
+      // tools — matching the documented behavior and keeping flat delegations
+      // free of any nested-spawn side effects.
+      const registerChildSpawn =
+        maxRecursionDepth !== undefined && childCtx.depth < maxDepth;
+      const needsMcp = parentMcpToolDefs.length > 0 && parentToolServiceRef;
+
       const childEffect = Effect.gen(function* () {
         const subEngine = yield* ExecutionEngine;
 
-        if (parentMcpToolDefs.length > 0 && parentToolServiceRef) {
+        if (needsMcp || registerChildSpawn) {
           const subToolsMod = yield* Effect.promise(
             () => import("@reactive-agents/tools"),
           );
@@ -416,32 +426,54 @@ export const buildSubAgentTask = (
                   def: unknown,
                   handler: (
                     args: Record<string, unknown>,
-                  ) => Effect.Effect<unknown>,
+                  ) => Effect.Effect<unknown, Error>,
                 ) => Effect.Effect<unknown>;
               }
             >);
-          for (const toolDef of parentMcpToolDefs) {
-            // Proxy handler routes calls to the parent's live MCP connection,
-            // in the child's fiber (no detached runPromise).
-            const proxyHandler = (
-              args: Record<string, unknown>,
-            ): Effect.Effect<unknown> =>
-              (
-                parentToolServiceRef as {
-                  execute: (p: {
-                    toolName: string;
-                    arguments: Record<string, unknown>;
-                    agentId: string;
-                    sessionId: string;
-                  }) => Effect.Effect<unknown>;
-                }
-              ).execute({
-                toolName: toolDef.name,
-                arguments: args,
-                agentId,
-                sessionId: `sub-${t.name}`,
-              });
-            yield* subTs.register(toolDef, proxyHandler);
+
+          if (needsMcp) {
+            for (const toolDef of parentMcpToolDefs) {
+              // Proxy handler routes calls to the parent's live MCP connection,
+              // in the child's fiber (no detached runPromise).
+              const proxyHandler = (
+                args: Record<string, unknown>,
+              ): Effect.Effect<unknown> =>
+                (
+                  parentToolServiceRef as {
+                    execute: (p: {
+                      toolName: string;
+                      arguments: Record<string, unknown>;
+                      agentId: string;
+                      sessionId: string;
+                    }) => Effect.Effect<unknown>;
+                  }
+                ).execute({
+                  toolName: toolDef.name,
+                  arguments: args,
+                  agentId,
+                  sessionId: `sub-${t.name}`,
+                });
+              yield* subTs.register(toolDef, proxyHandler);
+            }
+          }
+
+          if (registerChildSpawn) {
+            // Give the child its own spawn tools so it can sub-delegate. The
+            // recursive buildSubAgentTask runs in the CHILD's fiber, where the
+            // ambient CurrentRunContextRef is childCtx — so a grandchild derives
+            // at childCtx.depth + 1 and the recursion cap advances honestly.
+            const childHandlers = makeSpawnHandlers({
+              buildSubAgentTask: (childArgs, childShared) =>
+                buildSubAgentTask(childArgs, deps, childShared),
+            });
+            yield* subTs.register(
+              subToolsMod.createSpawnAgentTool(),
+              childHandlers.spawnHandler,
+            );
+            yield* subTs.register(
+              subToolsMod.createSpawnAgentsTool(),
+              childHandlers.spawnAgentsHandler,
+            );
           }
         }
 
