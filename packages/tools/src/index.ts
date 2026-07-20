@@ -168,11 +168,17 @@ export {
   executeRemoteAgentTool,
   createSubAgentExecutor,
   buildParentContextPrefix,
+  composeSubAgentDirectivePrompt,
+  computeEffectiveTools,
+  subAgentDepthRefusal,
+  finalizeSubAgentResult,
+  resolveMaxRecursionDepth,
+  SUB_AGENT_DIRECTIVE,
   MAX_RECURSION_DEPTH,
   MAX_PARENT_CONTEXT_CHARS,
   ALWAYS_INCLUDE_TOOLS,
 } from "./adapters/agent-tool-adapter.js";
-export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
 // ─── Tool Calling Drivers ───
 export { NativeFCDriver } from "./drivers/native-fc-driver.js"

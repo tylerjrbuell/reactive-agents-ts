@@ -158,7 +158,7 @@ export interface BuilderState {
   _agentTools: AgentToolOptions[];
   _contextProfile?: Partial<ContextProfile>;
   _allowDynamicSubAgents: boolean;
-  _dynamicSubAgentOptions?: { maxIterations?: number };
+  _dynamicSubAgentOptions?: { maxIterations?: number; maxRecursionDepth?: number };
   _enableKillSwitch: boolean;
   _enableBehavioralContracts: boolean;
   _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;

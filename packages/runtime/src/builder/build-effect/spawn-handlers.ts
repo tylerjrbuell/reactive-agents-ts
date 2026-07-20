@@ -57,11 +57,15 @@ export interface SpawnHandlerDeps {
    * the local `buildSingleSubAgentTask` wrapper that captures parent
    * refs — by passing it as a dep we avoid pulling those refs into
    * this module.
+   *
+   * B8-T4: returns an Effect (forked into the parent's fiber tree by the
+   * executor) rather than a detached Promise, so parent interruption reaches
+   * in-flight children.
    */
   readonly buildSubAgentTask: (
     args: SubAgentTaskArgs,
     runtimeShared?: SubAgentRuntimeShared,
-  ) => Promise<SubAgentResult>;
+  ) => Effect.Effect<SubAgentResult, never, never>;
 }
 
 export interface SpawnHandlers {
@@ -86,37 +90,34 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
       const runtimeShared: SubAgentRuntimeShared = {
         sharedEventBus: Option.getOrUndefined(busOpt),
       };
-      return yield* Effect.tryPromise({
-        try: async () => {
-          const task =
-            typeof args.task === "string"
-              ? args.task
-              : JSON.stringify(args.task ?? "");
-          const subName =
-            typeof args.name === "string" && args.name.trim().length > 0
-              ? args.name.trim()
-              : deriveSubAgentName(task);
-          return buildSubAgentTask(
-            {
-              task,
-              name: subName,
-              role: typeof args.role === "string" ? args.role : undefined,
-              instructions:
-                typeof args.instructions === "string"
-                  ? args.instructions
-                  : undefined,
-              tone: typeof args.tone === "string" ? args.tone : undefined,
-              tools: Array.isArray(args.tools)
-                ? (args.tools as unknown[]).filter(
-                    (x): x is string => typeof x === "string",
-                  )
-                : undefined,
-            },
-            runtimeShared,
-          );
+      const task =
+        typeof args.task === "string"
+          ? args.task
+          : JSON.stringify(args.task ?? "");
+      const subName =
+        typeof args.name === "string" && args.name.trim().length > 0
+          ? args.name.trim()
+          : deriveSubAgentName(task);
+      // Forked into THIS fiber's tree by the executor — parent interruption
+      // reaches the child. No detached runPromise.
+      return yield* buildSubAgentTask(
+        {
+          task,
+          name: subName,
+          role: typeof args.role === "string" ? args.role : undefined,
+          instructions:
+            typeof args.instructions === "string"
+              ? args.instructions
+              : undefined,
+          tone: typeof args.tone === "string" ? args.tone : undefined,
+          tools: Array.isArray(args.tools)
+            ? (args.tools as unknown[]).filter(
+                (x): x is string => typeof x === "string",
+              )
+            : undefined,
         },
-        catch: (e) => new Error(String(e)),
-      });
+        runtimeShared,
+      );
     });
 
   const spawnAgentsHandler = (args: Record<string, unknown>) =>
@@ -125,101 +126,66 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
       const runtimeShared: SubAgentRuntimeShared = {
         sharedEventBus: Option.getOrUndefined(busOpt),
       };
-      return yield* Effect.tryPromise({
-      try: async () => {
-        const rawTasks = Array.isArray(args.tasks)
-          ? (args.tasks as unknown[])
-          : [];
-        const failFast = args.failFast === true;
-        const maxConcurrency =
-          typeof args.maxConcurrency === "number"
-            ? Math.max(1, args.maxConcurrency)
-            : rawTasks.length;
+      const rawTasks = Array.isArray(args.tasks)
+        ? (args.tasks as unknown[])
+        : [];
+      const failFast = args.failFast === true;
+      const maxConcurrency =
+        typeof args.maxConcurrency === "number"
+          ? Math.max(1, args.maxConcurrency)
+          : Math.max(1, rawTasks.length);
 
-        const taskArgs: SubAgentTaskArgs[] = rawTasks.map((item) => {
-          const obj = item as Record<string, unknown>;
-          const taskStr = typeof obj.task === "string" ? obj.task : "";
-          const rawName =
-            typeof obj.name === "string" ? obj.name.trim() : "";
-          return {
-            task: taskStr,
-            name:
-              rawName.length > 0 ? rawName : deriveSubAgentName(taskStr),
-            role: typeof obj.role === "string" ? obj.role : undefined,
-            instructions:
-              typeof obj.instructions === "string"
-                ? obj.instructions
-                : undefined,
-            tone: typeof obj.tone === "string" ? obj.tone : undefined,
-            tools: Array.isArray(obj.tools)
-              ? (obj.tools as unknown[]).filter(
-                  (x): x is string => typeof x === "string",
-                )
-              : undefined,
-          };
-        });
-
-        if (failFast) {
-          const results = await Effect.runPromise(
-            Effect.all(
-              taskArgs.map((ta) =>
-                Effect.tryPromise({
-                  try: () => buildSubAgentTask(ta, runtimeShared),
-                  catch: (e) => new Error(String(e)),
-                }),
-              ),
-              {
-                concurrency: Math.max(1, maxConcurrency),
-              },
-            ),
-          );
-          return {
-            results,
-            summary: {
-              total: results.length,
-              succeeded: results.filter((r) => r.success).length,
-              failed: results.filter((r) => !r.success).length,
-            },
-          };
-        }
-
-        const eithers = await Effect.runPromise(
-          Effect.all(
-            taskArgs.map((ta) =>
-              Effect.tryPromise({
-                try: () => buildSubAgentTask(ta),
-                catch: (e) => new Error(String(e)),
-              }).pipe(Effect.either),
-            ),
-            {
-              concurrency: Math.max(1, maxConcurrency),
-            },
-          ),
-        );
-
-        const results: SubAgentResult[] = eithers.map((either, i) => {
-          if (either._tag === "Right") return either.right;
-          const err = either.left;
-          return {
-            subAgentName: taskArgs[i]!.name,
-            summary: err instanceof Error ? err.message : String(err),
-            success: false,
-            tokensUsed: 0,
-            stepsCompleted: 0,
-          };
-        });
-
+      const taskArgs: SubAgentTaskArgs[] = rawTasks.map((item) => {
+        const obj = item as Record<string, unknown>;
+        const taskStr = typeof obj.task === "string" ? obj.task : "";
+        const rawName = typeof obj.name === "string" ? obj.name.trim() : "";
         return {
-          results,
-          summary: {
-            total: results.length,
-            succeeded: results.filter((r) => r.success).length,
-            failed: results.filter((r) => !r.success).length,
-          },
+          task: taskStr,
+          name: rawName.length > 0 ? rawName : deriveSubAgentName(taskStr),
+          role: typeof obj.role === "string" ? obj.role : undefined,
+          instructions:
+            typeof obj.instructions === "string"
+              ? obj.instructions
+              : undefined,
+          tone: typeof obj.tone === "string" ? obj.tone : undefined,
+          tools: Array.isArray(obj.tools)
+            ? (obj.tools as unknown[]).filter(
+                (x): x is string => typeof x === "string",
+              )
+            : undefined,
         };
-      },
-      catch: (e) => new Error(String(e)),
       });
+
+      // Each sub-agent forks into this fiber's tree (via the executor) and is
+      // run concurrently by Effect.all. buildSubAgentTask never fails, so a
+      // child failure is already a `SubAgentResult{success:false}` — no cascade.
+      // failFast aborts remaining children on the first FAILED result.
+      const results: SubAgentResult[] = yield* Effect.all(
+        taskArgs.map((ta) =>
+          buildSubAgentTask(ta, runtimeShared).pipe(
+            Effect.flatMap((r) =>
+              failFast && !r.success
+                ? Effect.fail(r)
+                : Effect.succeed(r),
+            ),
+          ),
+        ),
+        { concurrency: Math.max(1, maxConcurrency) },
+      ).pipe(
+        // In failFast mode the first failed child short-circuits Effect.all;
+        // recover the partial by re-running non-failFast is unnecessary — the
+        // failed result itself is the error payload.
+        Effect.catchAll((firstFailure) => Effect.succeed([firstFailure])),
+      );
+
+      return {
+        results,
+        summary: {
+          total: results.length,
+          succeeded: results.filter((r) => r.success).length,
+          failed: results.filter((r) => !r.success).length,
+        },
+      };
     });
 
   return { spawnHandler, spawnAgentsHandler };

@@ -146,6 +146,110 @@ export interface SubAgentResult {
 }
 
 /**
+ * Directive prefix prepended to every sub-agent's system prompt to orient it as
+ * a focused, tool-using worker that returns a complete final answer.
+ *
+ * Exported so the Effect-native delegation path (`sub-agent-executor.ts`) can
+ * compose the identical prompt the Promise-based `createSubAgentExecutor` builds
+ * — one source of truth, no drift between the two entry points.
+ */
+export const SUB_AGENT_DIRECTIVE = `You are a focused sub-agent. Complete your assigned task efficiently:
+- Use tools when they help. Do not explain what you're about to do — just do it.
+- When you have the answer, respond with FINAL ANSWER: <your complete result>.
+- Include raw values (numbers, code, data) in your answer — not descriptions of them.
+- Do not ask follow-up questions. Do not offer alternatives.`;
+
+/** Raw output shape a sub-agent execution returns before summary finalization. */
+export interface SubAgentRawResult {
+  readonly output: string;
+  readonly success: boolean;
+  readonly tokensUsed: number;
+  readonly stepsCompleted?: number;
+  readonly delegatedToolsUsed?: readonly string[];
+  readonly scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
+}
+
+/**
+ * Compose the sub-agent's system prompt: directive + parent-context prefix +
+ * the config's own system prompt. Shared by the Promise executor and the
+ * Effect-native delegation path so both produce byte-identical prompts.
+ */
+export const composeSubAgentDirectivePrompt = (
+  configSystemPrompt: string | undefined,
+  parentCtx: ParentContext | undefined,
+): string => {
+  const parentPrefix = buildParentContextPrefix(parentCtx);
+  const parts: string[] = [SUB_AGENT_DIRECTIVE];
+  if (parentPrefix) parts.push(parentPrefix);
+  if (configSystemPrompt) parts.push(configSystemPrompt);
+  return parts.join("\n\n");
+};
+
+/** Compute the effective tool whitelist (baseTools ∪ ALWAYS_INCLUDE_TOOLS). */
+export const computeEffectiveTools = (
+  tools: readonly string[] | undefined,
+): readonly string[] | undefined =>
+  tools !== undefined ? [...new Set([...tools, ...ALWAYS_INCLUDE_TOOLS])] : undefined;
+
+/** The structured refusal returned when the recursion cap is hit. */
+export const subAgentDepthRefusal = (
+  name: string,
+  maxRecursionDepth: number,
+): SubAgentResult => ({
+  subAgentName: name,
+  success: false,
+  summary: `Maximum agent recursion depth (${maxRecursionDepth}) exceeded`,
+  tokensUsed: 0,
+});
+
+/**
+ * Turn a raw sub-agent execution result into the structured `SubAgentResult`
+ * the parent sees: strip ReAct markers, cap the summary, forward scratchpad
+ * keys. Shared by both delegation entry points.
+ */
+export const finalizeSubAgentResult = (
+  config: { readonly name: string },
+  raw: SubAgentRawResult,
+  parentScratchpadWriter?: (key: string, value: string) => void,
+): SubAgentResult => {
+  const forwardedKeys: string[] = [];
+  if (raw.scratchpadEntries && parentScratchpadWriter) {
+    for (const [key, value] of raw.scratchpadEntries) {
+      const forwardedKey = `sub:${config.name}:${key}`;
+      parentScratchpadWriter(forwardedKey, value);
+      forwardedKeys.push(forwardedKey);
+    }
+  }
+
+  let summary = raw.output;
+  summary = summary
+    .replace(/^(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i, "")
+    .replace(/^(Thought:\s*|Answer:\s*)/i, "")
+    .trim();
+  if (summary.length <= 500) {
+    // already clean
+  } else if (summary.length > 1200) {
+    const head = summary.slice(0, 600);
+    const tail = summary.slice(-400);
+    summary = `${head}\n...[${summary.length - 1000} chars omitted]...\n${tail}`;
+  }
+
+  if (forwardedKeys.length > 0) {
+    summary += `\n\n[Scratchpad keys forwarded to parent: ${forwardedKeys.join(", ")}]`;
+  }
+
+  return {
+    subAgentName: config.name,
+    success: raw.success,
+    summary,
+    tokensUsed: raw.tokensUsed,
+    stepsCompleted: raw.stepsCompleted,
+    delegatedToolsUsed: raw.delegatedToolsUsed,
+    forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
+  };
+};
+
+/**
  * Create a sub-agent executor that delegates tasks to a sub-agent.
  * Returns a structured summary instead of raw output.
  *
@@ -202,36 +306,18 @@ export const createSubAgentExecutor = (
             : JSON.stringify(rawTask);
     const maxRecursionDepth = resolveMaxRecursionDepth(config.maxRecursionDepth);
     if (depth >= maxRecursionDepth) {
-      return {
-        subAgentName: config.name,
-        success: false,
-        summary: `Maximum agent recursion depth (${maxRecursionDepth}) exceeded`,
-        tokensUsed: 0,
-      };
+      return subAgentDepthRefusal(config.name, maxRecursionDepth);
     }
 
     try {
-      // Directive prefix — always prepended first to orient the sub-agent
-      const DIRECTIVE = `You are a focused sub-agent. Complete your assigned task efficiently:
-- Use tools when they help. Do not explain what you're about to do — just do it.
-- When you have the answer, respond with FINAL ANSWER: <your complete result>.
-- Include raw values (numbers, code, data) in your answer — not descriptions of them.
-- Do not ask follow-up questions. Do not offer alternatives.`;
-
-      // Build parent context prefix if a provider was given
-      const parentCtx = parentContextProvider?.();
-      const parentPrefix = buildParentContextPrefix(parentCtx);
-
       // Compose system prompt: directive + parent context prefix + configured system prompt
-      const parts: string[] = [DIRECTIVE];
-      if (parentPrefix) parts.push(parentPrefix);
-      if (config.systemPrompt) parts.push(config.systemPrompt);
-      const composedSystemPrompt = parts.join("\n\n");
+      const parentCtx = parentContextProvider?.();
+      const composedSystemPrompt = composeSubAgentDirectivePrompt(
+        config.systemPrompt,
+        parentCtx,
+      );
 
-      const baseTools = config.tools;
-      const effectiveTools: readonly string[] | undefined = baseTools !== undefined
-        ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
-        : undefined;
+      const effectiveTools = computeEffectiveTools(config.tools);
 
       const subAgentDefaults = {
         maxIterations: 3,
@@ -262,47 +348,8 @@ export const createSubAgentExecutor = (
         allowedTools: effectiveTools,
       });
 
-      // Fix 3: Forward sub-agent recall entries to parent with a
-      // `sub:<agentName>:` prefix so parent agents can access sub-results.
-      const forwardedKeys: string[] = [];
-      if (result.scratchpadEntries && parentScratchpadWriter) {
-        for (const [key, value] of result.scratchpadEntries) {
-          const forwardedKey = `sub:${config.name}:${key}`;
-          parentScratchpadWriter(forwardedKey, value);
-          forwardedKeys.push(forwardedKey);
-        }
-      }
-
-      // Extract a concise summary — strip ReAct artifacts and trim
-      let summary = result.output;
-      // Remove leading ReAct markers (bold or plain FINAL ANSWER:, Thought:, Answer:)
-      summary = summary
-        .replace(/^(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i, "")
-        .replace(/^(Thought:\s*|Answer:\s*)/i, "")
-        .trim();
-      // Short factual answers pass through as-is — no truncation, no wrapping
-      if (summary.length <= 500) {
-        // summary is already clean — no further processing needed
-      } else if (summary.length > 1200) {
-        const head = summary.slice(0, 600);
-        const tail = summary.slice(-400);
-        summary = `${head}\n...[${summary.length - 1000} chars omitted]...\n${tail}`;
-      }
-
-      // Append forwarded key list to summary for parent agent visibility
-      if (forwardedKeys.length > 0) {
-        summary += `\n\n[Scratchpad keys forwarded to parent: ${forwardedKeys.join(", ")}]`;
-      }
-
-      return {
-        subAgentName: config.name,
-        success: result.success,
-        summary,
-        tokensUsed: result.tokensUsed,
-        stepsCompleted: result.stepsCompleted,
-        delegatedToolsUsed: result.delegatedToolsUsed,
-        forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
-      };
+      // Finalize: forward scratchpad keys, strip ReAct artifacts, cap summary.
+      return finalizeSubAgentResult(config, result, parentScratchpadWriter);
     } catch (error) {
       return {
         subAgentName: config.name,

@@ -17,6 +17,7 @@ import type {
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import type { MCPServerConfig } from "../../runtime.js";
 import type { ReasoningOptions } from "../../types.js";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import type {
   AgentToolOptions,
   ToolsOptions,
@@ -40,7 +41,10 @@ export interface ToolMcpRegistrationsDeps {
   readonly toolsOptions?: ToolsOptions;
   readonly agentTools: readonly AgentToolOptions[];
   readonly allowDynamicSubAgents: boolean;
-  readonly dynamicSubAgentOptions?: { maxIterations?: number };
+  readonly dynamicSubAgentOptions?: {
+    maxIterations?: number;
+    maxRecursionDepth?: number;
+  };
   readonly agentId: string;
   readonly getParentContext: () => ParentContext | undefined;
   readonly parentProvider: ProviderName;
@@ -51,6 +55,8 @@ export interface ToolMcpRegistrationsDeps {
   readonly parentObservabilityOptions: ObservabilityOptions;
   readonly parentContextProfile?: Partial<ContextProfile>;
   readonly parentEnableCostTracking: boolean;
+  /** Inherited deterministic `test`-provider scenario (undefined for real providers). */
+  readonly parentTestScenario?: TestTurn[];
 }
 
 export interface ToolMcpRegistrationsOutput {
@@ -109,7 +115,9 @@ export const buildToolMcpRegistrations = (
             createLocalAgentToolRegistration(agentTool, {
               toolsMod: {
                 createAgentTool,
-                createSubAgentExecutor: toolsMod.createSubAgentExecutor,
+                composeSubAgentDirectivePrompt:
+                  toolsMod.composeSubAgentDirectivePrompt,
+                finalizeSubAgentResult: toolsMod.finalizeSubAgentResult,
               },
               agentId: deps.agentId,
               getParentContext: deps.getParentContext,
@@ -136,17 +144,24 @@ export const buildToolMcpRegistrations = (
       // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
       if (deps.allowDynamicSubAgents) {
         const defaultMaxIter = deps.dynamicSubAgentOptions?.maxIterations ?? 4;
+        const maxRecursionDepth =
+          deps.dynamicSubAgentOptions?.maxRecursionDepth;
 
         const buildSingleSubAgentTask = (
           t: SubAgentTaskArgs,
           runtimeShared?: import("./sub-agent-executor.js").SubAgentRuntimeShared,
-        ): Promise<import("@reactive-agents/tools").SubAgentResult> =>
+        ): Effect.Effect<
+          import("@reactive-agents/tools").SubAgentResult,
+          never,
+          never
+        > =>
           buildSubAgentTask(
             t as ExtractedSubAgentTaskArgs,
             {
               parentProvider: deps.parentProvider,
               parentModel: deps.parentModel,
               defaultMaxIter,
+              maxRecursionDepth,
               getParentToolService: () => parentToolServiceRef,
               mcpServers: deps.mcpServers as MCPServerConfig[],
               parentReasoningOptions: deps.parentReasoningOptions,
@@ -155,11 +170,18 @@ export const buildToolMcpRegistrations = (
               parentObservabilityOptions: deps.parentObservabilityOptions,
               parentContextProfile: deps.parentContextProfile,
               parentEnableCostTracking: deps.parentEnableCostTracking,
+              parentTestScenario: deps.parentTestScenario,
               parentAgentId: deps.agentId,
               getParentContext: deps.getParentContext,
               toolsMod: {
                 createSubAgentExecutor: toolsMod.createSubAgentExecutor,
                 ALWAYS_INCLUDE_TOOLS: toolsMod.ALWAYS_INCLUDE_TOOLS,
+                composeSubAgentDirectivePrompt:
+                  toolsMod.composeSubAgentDirectivePrompt,
+                computeEffectiveTools: toolsMod.computeEffectiveTools,
+                subAgentDepthRefusal: toolsMod.subAgentDepthRefusal,
+                finalizeSubAgentResult: toolsMod.finalizeSubAgentResult,
+                resolveMaxRecursionDepth: toolsMod.resolveMaxRecursionDepth,
               },
             },
             runtimeShared,

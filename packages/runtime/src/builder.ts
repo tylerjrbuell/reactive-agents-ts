@@ -392,7 +392,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _agentTools: AgentToolOptions[] = []
     private _contextProfile?: Partial<ContextProfile>
     private _allowDynamicSubAgents: boolean = false
-    private _dynamicSubAgentOptions?: { maxIterations?: number }
+    private _dynamicSubAgentOptions?: { maxIterations?: number; maxRecursionDepth?: number }
     private _persona?: AgentPersona
     private _enableKillSwitch: boolean = false
     private _enableBehavioralContracts: boolean = false
@@ -745,7 +745,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param options - Optional configuration (maxIterations for spawned agents)
      * @returns `this` for chaining
      */
-    withDynamicSubAgents(options?: { maxIterations?: number }): this {
+    withDynamicSubAgents(options?: {
+        maxIterations?: number
+        maxRecursionDepth?: number
+    }): this {
         this._allowDynamicSubAgents = true
         this._dynamicSubAgentOptions = options
         return this
@@ -2523,6 +2526,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     parentObservabilityOptions,
                     parentContextProfile,
                     parentEnableCostTracking,
+                    parentTestScenario: self._testScenario,
                 })
             let fullRuntime: Layer.Layer<unknown, unknown, unknown> = fullRuntimeAfterTools
 

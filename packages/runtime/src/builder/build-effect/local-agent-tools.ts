@@ -19,9 +19,21 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, Layer, Schema } from "effect";
-import type { AgentDefinition, Task, TaskResult } from "@reactive-agents/core";
-import { generateTaskId, AgentId } from "@reactive-agents/core";
+import { Effect, Exit, FiberRef, Schema } from "effect";
+import type {
+  AgentDefinition,
+  Task,
+  RunContext,
+} from "@reactive-agents/core";
+import {
+  generateTaskId,
+  AgentId,
+  EventBus,
+  CurrentRunContext,
+  CurrentRunContextRef,
+  rootContext,
+  childContext,
+} from "@reactive-agents/core";
 import type {
   ParentContext,
   SubAgentResult,
@@ -58,9 +70,12 @@ export interface LocalAgentToolDeps {
       name: string,
       agent: AgentDefinition,
     ) => ToolDefinition;
-    readonly createSubAgentExecutor: typeof import(
+    readonly composeSubAgentDirectivePrompt: typeof import(
       "@reactive-agents/tools"
-    ).createSubAgentExecutor;
+    ).composeSubAgentDirectivePrompt;
+    readonly finalizeSubAgentResult: typeof import(
+      "@reactive-agents/tools"
+    ).finalizeSubAgentResult;
   };
   /** Parent agent id — propagated as `parentAgentId` in the sub-task metadata. */
   readonly agentId: string;
@@ -79,116 +94,130 @@ export const createLocalAgentToolRegistration = (
   deps: LocalAgentToolDeps,
 ): LocalAgentToolRegistration => {
   const { toolsMod, agentId, getParentContext } = deps;
-  const { createAgentTool, createSubAgentExecutor } = toolsMod;
+  const {
+    createAgentTool,
+    composeSubAgentDirectivePrompt,
+    finalizeSubAgentResult,
+  } = toolsMod;
+  const subName = agentTool.agent!.name;
 
   // Local agent tool — real sub-agent delegation
   const agentConfig: AgentDefinition = {
-    name: agentTool.agent!.name,
-    description:
-      agentTool.agent!.description ?? `Agent: ${agentTool.agent!.name}`,
+    name: subName,
+    description: agentTool.agent!.description ?? `Agent: ${subName}`,
     capabilities: [],
   };
   const toolDef = createAgentTool(agentTool.name, agentConfig);
 
-  const subAgentExec = createSubAgentExecutor(
-    {
-      name: agentTool.agent!.name,
-      description: agentTool.agent!.description,
-      provider: agentTool.agent!.provider,
-      model: agentTool.agent!.model,
-      tools: agentTool.agent!.tools,
-      maxIterations: agentTool.agent!.maxIterations,
-      systemPrompt: agentTool.agent!.systemPrompt,
-      persona: agentTool.agent!.persona,
-    },
-    async (opts) => {
-      const _subLabel = agentTool.agent!.name;
-      const _taskPreview =
-        opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
-      process.stdout.write(
-        `\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`,
-      );
-      const _subStart = Date.now();
-
-      // Compose persona with system prompt
-      const composedSystemPrompt = buildSubAgentSystemPrompt(
-        opts.persona,
-        opts.systemPrompt,
-        opts.name,
-      );
-
-      // When allowedTools is specified, those tools become required
-      const staticAllowed = opts.allowedTools;
-      const staticRequired =
-        staticAllowed && staticAllowed.length > 0
-          ? {
-              tools: [...staticAllowed],
-              adaptive: false,
-              maxRetries: 2,
-            }
-          : undefined;
-      const subRuntime = createLightRuntime({
-        agentId: opts.agentId,
-        provider: (opts.provider ?? "test") as ProviderName,
-        model: opts.model,
-        maxIterations: opts.maxIterations,
-        systemPrompt: composedSystemPrompt,
-        enableReasoning: opts.enableReasoning,
-        enableTools: opts.enableTools,
-        allowedTools: staticAllowed,
-        requiredTools: staticRequired,
-      });
-      const subEngine = await Effect.runPromise(
-        ExecutionEngine.pipe(Effect.provide(subRuntime)),
-      );
-      const taskObj: Task = {
-        id: generateTaskId(),
-        agentId: Schema.decodeSync(AgentId)(opts.agentId),
-        type: "query" as const,
-        input: { question: opts.task },
-        priority: "medium" as const,
-        status: "pending" as const,
-        metadata: {
-          tags: [],
-          context: { parentAgentId: agentId },
-        },
-        createdAt: new Date(),
-      };
-      const result: TaskResult = await Effect.runPromise(
-        subEngine
-          .execute(taskObj)
-          .pipe(
-            Effect.provide(subRuntime as unknown as Layer.Layer<never>),
-          ),
-      );
-      const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
-      const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
-      process.stdout.write(
-        `  \x1b[36m└─ [sub-agent: ${_subLabel}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`,
-      );
-      return {
-        output: String(result.output ?? ""),
-        success: result.success,
-        tokensUsed: result.metadata.tokensUsed,
-      };
-    },
-    0,
-    getParentContext,
-  );
-
+  // B8-T4: the fixed `.withAgentTool` sub-agent runs forked into the PARENT's
+  // fiber tree (Effect.forkScoped + Fiber.await), never on a detached
+  // runPromise root. Parent interruption reaches it; a child failure is
+  // contained via the Exit and never cascades.
   const handler = (args: Record<string, unknown>) =>
-    Effect.tryPromise({
-      try: () => {
+    Effect.scoped(
+      Effect.gen(function* () {
         const task =
           typeof args.input === "string"
             ? args.input
             : typeof args.message === "string"
-            ? args.message
-            : JSON.stringify(args);
-        return subAgentExec(task);
-      },
-      catch: (e) => new Error(String(e)),
-    });
+              ? args.message
+              : JSON.stringify(args);
+
+        // Resolve the spawning agent's RunContext (ambient → run-scoped fallback).
+        const explicit = yield* FiberRef.get(CurrentRunContextRef);
+        const spawningCtx =
+          explicit ??
+          (yield* Effect.gen(function* () {
+            const legacy = yield* FiberRef.get(CurrentRunContext);
+            const taskId =
+              legacy &&
+              typeof legacy.taskId === "string" &&
+              legacy.taskId.length > 0
+                ? legacy.taskId
+                : `run-${crypto.randomUUID().slice(0, 8)}`;
+            return rootContext(taskId, agentId);
+          }));
+        const childCtx = childContext(spawningCtx, subName);
+        const childAgentId = `sub-${subName}-${Date.now()}`;
+
+        const composedSystemPrompt = buildSubAgentSystemPrompt(
+          agentTool.agent!.persona,
+          composeSubAgentDirectivePrompt(
+            agentTool.agent!.systemPrompt,
+            getParentContext(),
+          ),
+          subName,
+        );
+
+        const staticAllowed = agentTool.agent!.tools;
+        const staticRequired =
+          staticAllowed && staticAllowed.length > 0
+            ? { tools: [...staticAllowed], adaptive: false, maxRetries: 2 }
+            : undefined;
+
+        const busOpt = yield* Effect.serviceOption(EventBus);
+        const sharedEventBus = busOpt._tag === "Some" ? busOpt.value : undefined;
+
+        const subRuntime = createLightRuntime({
+          agentId: childAgentId,
+          provider: (agentTool.agent!.provider ?? "test") as ProviderName,
+          model: agentTool.agent!.model,
+          maxIterations: agentTool.agent!.maxIterations,
+          systemPrompt: composedSystemPrompt,
+          enableReasoning: true,
+          enableTools: true,
+          allowedTools: staticAllowed,
+          requiredTools: staticRequired,
+          sharedEventBus,
+        });
+
+        const taskObj: Task = {
+          id: generateTaskId(),
+          agentId: Schema.decodeSync(AgentId)(childAgentId),
+          type: "query" as const,
+          input: { question: task },
+          priority: "medium" as const,
+          status: "pending" as const,
+          metadata: {
+            tags: [],
+            context: { parentAgentId: agentId, runContext: childCtx },
+          },
+          createdAt: new Date(),
+        };
+
+        const childEffect = Effect.gen(function* () {
+          const subEngine = yield* ExecutionEngine;
+          return yield* subEngine.execute(taskObj);
+        }).pipe(
+          Effect.provide(subRuntime),
+          Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
+        );
+
+        const fiber = yield* Effect.forkScoped(childEffect);
+        const exit = yield* fiber.await;
+
+        if (Exit.isSuccess(exit)) {
+          const result = exit.value;
+          return finalizeSubAgentResult(
+            { name: subName },
+            {
+              output: String(result.output ?? ""),
+              success: result.success,
+              tokensUsed: result.metadata.tokensUsed,
+            },
+          );
+        }
+        const summary = Exit.isInterrupted(exit)
+          ? "Sub-agent was interrupted before completion"
+          : `Sub-agent failed: ${String(exit.cause)}`;
+        return {
+          subAgentName: subName,
+          success: false,
+          summary,
+          tokensUsed: 0,
+        } satisfies SubAgentResult;
+      }),
+    );
   return { def: toolDef, handler };
 };
 
@@ -213,7 +242,7 @@ export interface DynamicSpawnDeps {
    */
   readonly buildSubAgentTask: (
     args: SubAgentTaskArgs,
-  ) => Promise<SubAgentResult>;
+  ) => Effect.Effect<SubAgentResult, never, never>;
 }
 
 /**

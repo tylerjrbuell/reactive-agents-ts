@@ -3,17 +3,32 @@
  * a delegated task. Used by both spawnHandler (single) and
  * spawnAgentsHandler (batch).
  *
- * Owns: createLightRuntime invocation for isolated sub-agent runtime,
- * parent MCP tool proxy setup, tool filtering & scoping (META_TOOL_NAMES,
- * allowedTools → required-tools conversion), persona composition,
- * task result unwrapping, tool-usage extraction.
+ * Owns: createLightRuntime invocation for the sub-agent runtime, parent MCP
+ * tool proxy setup, tool filtering & scoping (META_TOOL_NAMES, allowedTools →
+ * required-tools conversion), persona composition, task result unwrapping,
+ * tool-usage extraction.
  *
- * Lifted from builder.ts pre-W25 (5,478-LOC checkpoint).
+ * B8-T4 (2026-07-20): the child no longer runs on a DETACHED root fiber
+ * (`await Effect.runPromise(subEffect)`). `buildSubAgentTask` now returns an
+ * Effect that forks the child into the PARENT's fiber tree (`Effect.forkScoped`
+ * + `Fiber.await`) on the parent's shared service stack. Interrupting the parent
+ * therefore reaches in-flight children (real cancellation), and a FAILED child
+ * surfaces as `SubAgentResult{success:false}` — `Fiber.await` returns an `Exit`,
+ * so a child failure can never cascade to fail the parent.
  */
 
-import { Context, Effect, Layer, Schema } from "effect";
-import type { Task, TaskResult } from "@reactive-agents/core";
-import { generateTaskId, AgentId, EventBus } from "@reactive-agents/core";
+import { Context, Effect, Exit, Fiber, FiberRef, Schema } from "effect";
+import type { Task, TaskResult, RunContext } from "@reactive-agents/core";
+import {
+  generateTaskId,
+  AgentId,
+  EventBus,
+  CurrentRunContext,
+  CurrentRunContextRef,
+  rootContext,
+  childContext,
+} from "@reactive-agents/core";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
 export interface SubAgentRuntimeShared {
@@ -23,6 +38,7 @@ export interface SubAgentRuntimeShared {
 import type {
   ParentContext,
   SubAgentResult,
+  SubAgentRawResult,
 } from "@reactive-agents/tools";
 import { createLightRuntime } from "../../runtime.js";
 import type { MCPServerConfig } from "../../runtime.js";
@@ -66,6 +82,19 @@ export interface SubAgentTaskArgs {
   tools?: string[];
 }
 
+/** MCP tool definition shape proxied from the parent's ToolService. */
+interface ParentMcpToolDef {
+  readonly name: string;
+  readonly source?: string;
+  readonly description?: string;
+  readonly parameters?: ReadonlyArray<{
+    name?: string;
+    type?: string;
+    description?: string;
+    required?: boolean;
+  }>;
+}
+
 /**
  * Closure-captured state lifted out of buildEffect()'s body.
  * The call site in builder.ts wraps `buildSubAgentTask` with these
@@ -78,6 +107,13 @@ export interface SubAgentExecutorDeps {
   readonly parentModel: string | undefined;
   /** Default max iterations for spawned sub-agents. */
   readonly defaultMaxIter: number;
+  /**
+   * Recursion cap for nested delegation (B8-T5). When a spawning agent's
+   * `RunContext.depth` is already `>= maxRecursionDepth`, delegation is refused
+   * (a tool-result observation, never a throw). `undefined` ⇒ framework default
+   * (`resolveMaxRecursionDepth`).
+   */
+  readonly maxRecursionDepth?: number;
   /**
    * Live getter for the parent's ToolService — assigned during
    * agentToolInitEffect and read at sub-agent dispatch time. Returning
@@ -98,9 +134,15 @@ export interface SubAgentExecutorDeps {
   readonly parentContextProfile: Partial<ContextProfile> | undefined;
   /** Inherited cost-tracking toggle. */
   readonly parentEnableCostTracking: boolean | undefined;
-  /** Parent agent id — stamped as `parentAgentId` on the child's task metadata
-   *  so the child's `AgentStarted` event (published on the shared bus) is
-   *  attributable to this parent (audit G1). */
+  /**
+   * Inherited deterministic `test`-provider scenario. Passed through so a
+   * sub-agent driven by the `test` provider is scriptable (delays, tool calls)
+   * the same way its parent is — undefined for real providers.
+   */
+  readonly parentTestScenario: TestTurn[] | undefined;
+  /** Parent agent id — used as a fallback `RunContext.agentId` and stamped as
+   *  `parentAgentId` on the child's task metadata so the child's events
+   *  (published on the shared bus) are attributable to this parent (audit G1). */
   readonly parentAgentId: string;
   /** Lazy reader for the parent's execution context (tool results, task description). */
   readonly getParentContext: () => ParentContext | undefined;
@@ -116,121 +158,203 @@ export interface SubAgentExecutorDeps {
     ALWAYS_INCLUDE_TOOLS: typeof import(
       "@reactive-agents/tools"
     ).ALWAYS_INCLUDE_TOOLS;
+    composeSubAgentDirectivePrompt: typeof import(
+      "@reactive-agents/tools"
+    ).composeSubAgentDirectivePrompt;
+    computeEffectiveTools: typeof import(
+      "@reactive-agents/tools"
+    ).computeEffectiveTools;
+    subAgentDepthRefusal: typeof import(
+      "@reactive-agents/tools"
+    ).subAgentDepthRefusal;
+    finalizeSubAgentResult: typeof import(
+      "@reactive-agents/tools"
+    ).finalizeSubAgentResult;
+    resolveMaxRecursionDepth: typeof import(
+      "@reactive-agents/tools"
+    ).resolveMaxRecursionDepth;
   };
 }
 
 /**
- * Build and execute a single sub-agent task.
- * Shared by spawnHandler (singular) and spawnAgentsHandler (batch).
+ * Resolve the RunContext of the agent that is *doing* the spawning.
  *
- * Verbatim port of the closure previously declared inline at builder.ts
- * line 2762 (pre-W25-T4 checkpoint). Closure captures lifted into
- * `deps`. Behavior unchanged.
+ * Authority order (mirrors the RunContext doctrine): the explicitly-threaded
+ * ambient value (`CurrentRunContextRef`, set by a running child's own overlay
+ * so nested spawns derive correctly), then a run-scoped fallback built from the
+ * pre-existing `CurrentRunContext.taskId` + the parent's agent id. The fallback
+ * yields depth-0 (a top-level parent), never a WRONG attribution.
  */
-export const buildSubAgentTask = async (
+const resolveSpawningContext = (
+  parentAgentId: string,
+): Effect.Effect<RunContext, never, never> =>
+  Effect.gen(function* () {
+    const explicit = yield* FiberRef.get(CurrentRunContextRef);
+    if (explicit) return explicit;
+    const legacy = yield* FiberRef.get(CurrentRunContext);
+    const taskId =
+      legacy && typeof legacy.taskId === "string" && legacy.taskId.length > 0
+        ? legacy.taskId
+        : `run-${crypto.randomUUID().slice(0, 8)}`;
+    return rootContext(taskId, parentAgentId);
+  });
+
+/** Pull the successful, non-meta tools a sub-agent used from its reasoning steps. */
+const extractDelegatedToolsUsed = (result: TaskResult): string[] => {
+  const subReasoningSteps = ((
+    result.metadata as { reasoningSteps?: unknown }
+  ).reasoningSteps ?? []) as Array<{
+    type?: string;
+    content?: string;
+    metadata?: {
+      toolUsed?: string;
+      observationResult?: {
+        success?: boolean;
+        delegatedToolsUsed?: readonly string[];
+      };
+    };
+  }>;
+  return [...subReasoningSteps.entries()]
+    .flatMap(([index, step]) => {
+      if (step.type !== "action") return [] as string[];
+      const toolName =
+        step.metadata?.toolUsed ??
+        (typeof step.content === "string"
+          ? step.content.split("(")[0]?.trim()
+          : undefined);
+      const observationStep = subReasoningSteps[index + 1];
+      const observationResult = observationStep?.metadata?.observationResult;
+      const succeeded =
+        observationStep?.type === "observation"
+          ? observationResult?.success !== false
+          : true;
+      if (!succeeded) return [] as string[];
+      const nestedDelegated = Array.isArray(observationResult?.delegatedToolsUsed)
+        ? observationResult.delegatedToolsUsed.filter(
+            (name): name is string => typeof name === "string" && name.length > 0,
+          )
+        : [];
+      const directTool =
+        toolName &&
+        !META_TOOL_NAMES.has(toolName) &&
+        toolName !== "spawn-agent" &&
+        !toolName.startsWith("agent-")
+          ? [toolName]
+          : [];
+      return [...directTool, ...nestedDelegated];
+    })
+    .filter((toolName, index, arr) => arr.indexOf(toolName) === index);
+};
+
+/**
+ * Build and execute a single sub-agent task, forked into the parent's fiber
+ * tree. Shared by spawnHandler (singular) and spawnAgentsHandler (batch).
+ *
+ * Returns an Effect (never fails) that yields a structured `SubAgentResult`.
+ * The child runs on the parent's shared EventBus (G1) and, because it is forked
+ * with `Effect.forkScoped` inside the caller's scope, is interrupted when the
+ * parent is interrupted (real cancellation). Child failures are contained via
+ * the `Exit` returned by `Fiber.await` — they never cascade to the parent.
+ */
+export const buildSubAgentTask = (
   t: SubAgentTaskArgs,
   deps: SubAgentExecutorDeps,
   runtimeShared?: SubAgentRuntimeShared,
-): Promise<SubAgentResult> => {
-  const {
-    parentProvider,
-    parentModel,
-    defaultMaxIter,
-    getParentToolService,
-    mcpServers,
-    parentReasoningOptions,
-    parentEnableGuardrails,
-    parentEnableObservability,
-    parentObservabilityOptions,
-    parentContextProfile,
-    parentEnableCostTracking,
-    parentAgentId,
-    getParentContext,
-    toolsMod,
-  } = deps;
-  const sharedEventBus = runtimeShared?.sharedEventBus;
+): Effect.Effect<SubAgentResult, never, never> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const {
+        parentProvider,
+        parentModel,
+        defaultMaxIter,
+        maxRecursionDepth,
+        getParentToolService,
+        mcpServers,
+        parentReasoningOptions,
+        parentEnableGuardrails,
+        parentEnableObservability,
+        parentObservabilityOptions,
+        parentContextProfile,
+        parentEnableCostTracking,
+        parentTestScenario,
+        parentAgentId,
+        getParentContext,
+        toolsMod,
+      } = deps;
+      const sharedEventBus = runtimeShared?.sharedEventBus;
 
-  const executor = toolsMod.createSubAgentExecutor(
-    {
-      name: t.name,
-      provider: parentProvider,
-      model: parentModel,
-      maxIterations: defaultMaxIter,
-      tools: t.tools && t.tools.length > 0 ? t.tools : undefined,
-      persona:
+      // ── Depth guard (B8-T5) ── the spawning agent's RunContext drives the cap.
+      const spawningCtx = yield* resolveSpawningContext(parentAgentId);
+      const maxDepth = toolsMod.resolveMaxRecursionDepth(maxRecursionDepth);
+      if (spawningCtx.depth >= maxDepth) {
+        // Refusal is an observation the model can route around, never a throw.
+        return toolsMod.subAgentDepthRefusal(t.name, maxDepth);
+      }
+      const childCtx = childContext(spawningCtx, t.name);
+
+      const agentId = `sub-${t.name}-${Date.now()}`;
+      const persona: AgentPersona | undefined =
         t.role || t.instructions || t.tone
-          ? {
-              role: t.role,
-              instructions: t.instructions,
-              tone: t.tone,
-            }
-          : undefined,
-    },
-    async (opts) => {
-      const _taskPreview =
-        opts.task.length > 80 ? opts.task.slice(0, 80) + "…" : opts.task;
-      process.stdout.write(
-        `\n  \x1b[36m┌── sub-agent: \x1b[1m${t.name}\x1b[22m ──────────────────────────────\x1b[0m\n  \x1b[36m│\x1b[0m  task: "${_taskPreview}"\n`,
-      );
-      const _subStart = Date.now();
+          ? { role: t.role, instructions: t.instructions, tone: t.tone }
+          : undefined;
 
-      // Compose persona with system prompt
+      // Compose the child's system prompt exactly as the Promise executor does:
+      // directive + parent-context prefix, then persona composition.
+      const directivePrompt = toolsMod.composeSubAgentDirectivePrompt(
+        undefined,
+        getParentContext(),
+      );
       const composedSystemPrompt = buildSubAgentSystemPrompt(
-        opts.persona as AgentPersona | undefined,
-        opts.systemPrompt,
-        opts.name,
+        persona,
+        directivePrompt,
+        t.name,
       );
 
       // ── Collect parent's MCP tool definitions for proxy ──
-      // Instead of spawning duplicate Docker containers, we list
-      // the parent's already-connected tools and register proxy
-      // handlers that route calls through the parent's ToolService.
-      let parentMcpToolDefs: any[] = [];
+      // List the parent's already-connected tools and register proxy handlers
+      // that route calls through the parent's ToolService (no duplicate Docker).
+      let parentMcpToolDefs: ParentMcpToolDef[] = [];
       const parentToolServiceRef = getParentToolService();
       if (parentToolServiceRef && mcpServers.length > 0) {
-        try {
-          const allTools = await Effect.runPromise(
-            (parentToolServiceRef as {
-              listTools: () => Effect.Effect<ReadonlyArray<{ source?: string; name?: string }>>;
-            }).listTools(),
-          );
-          parentMcpToolDefs = allTools.filter(
+        const listed = yield* Effect.either(
+          (
+            parentToolServiceRef as {
+              listTools: () => Effect.Effect<
+                ReadonlyArray<ParentMcpToolDef>,
+                Error
+              >;
+            }
+          ).listTools(),
+        );
+        if (listed._tag === "Right") {
+          parentMcpToolDefs = listed.right.filter(
             (m) => m.source === "mcp" || m.name?.includes("/"),
           );
-        } catch {
-          // Parent tools unavailable — sub-agent gets built-ins only
         }
+        // Left ⇒ parent tools unavailable — sub-agent gets built-ins only.
       }
 
-      // Sub-agent inherits parent's reasoning, guardrails,
-      // observability, and context profile. MCP tools are proxied
-      // from the parent (no duplicate containers).
-      // When allowedTools is specified, those tools become required —
-      // if you're constrained to specific tools, you must use them.
-      //
-      // Auto-scope: when no explicit tool whitelist was given,
-      // auto-filter MCP tools by task relevance so the sub-agent
-      // doesn't see all 40+ tools (reduces context noise + confusion).
-      let subAllowed = opts.allowedTools;
+      // Auto-scope: when no explicit whitelist was given, filter MCP tools by
+      // task relevance so the sub-agent doesn't see all 40+ tools.
+      let subAllowed = toolsMod.computeEffectiveTools(t.tools);
       if (
         (!subAllowed || subAllowed.length === 0) &&
         parentMcpToolDefs.length > 0
       ) {
-        const { filterToolsByRelevance } = await import(
-          "@reactive-agents/reasoning"
+        const { filterToolsByRelevance } = yield* Effect.promise(
+          () => import("@reactive-agents/reasoning"),
         );
-        const mcpSchemas = parentMcpToolDefs.map((m: any) => ({
-          name: m.name as string,
-          description: (m.description ?? "") as string,
-          parameters: ((m.parameters ?? []) as ReadonlyArray<{ name?: string; type?: string; description?: string; required?: boolean }>).map((p) => ({
+        const mcpSchemas = parentMcpToolDefs.map((m) => ({
+          name: m.name,
+          description: m.description ?? "",
+          parameters: (m.parameters ?? []).map((p) => ({
             name: p.name as string,
             type: (p.type ?? "string") as string,
             description: p.description as string | undefined,
             required: p.required as boolean | undefined,
           })),
         }));
-        const filtered = filterToolsByRelevance(opts.task, mcpSchemas);
-        // Only scope if filtering actually reduces the set meaningfully
+        const filtered = filterToolsByRelevance(t.task, mcpSchemas);
         if (
           filtered.primary.length > 0 &&
           filtered.primary.length < mcpSchemas.length * 0.7
@@ -238,81 +362,84 @@ export const buildSubAgentTask = async (
           subAllowed = [...filtered.primary.map((s) => s.name)];
         }
       }
-      // subRequiredTools must exclude ALWAYS_INCLUDE_TOOLS (e.g., recall).
-      // These are optional meta-tools; requiring them causes kernel-pre-loop guard to fail
-      // because they're not registered in builtin tools. Only require what the caller asked for.
+
+      // subRequiredTools must exclude ALWAYS_INCLUDE_TOOLS (e.g. recall).
       const subRequiredToolNames =
         subAllowed?.filter(
-          (tn) =>
-            !toolsMod.ALWAYS_INCLUDE_TOOLS.includes(tn as never),
+          (tn) => !toolsMod.ALWAYS_INCLUDE_TOOLS.includes(tn as never),
         ) ?? [];
       const subRequiredTools =
         subRequiredToolNames.length > 0
-          ? {
-              tools: subRequiredToolNames,
-              adaptive: false,
-              maxRetries: 2,
-            }
+          ? { tools: subRequiredToolNames, adaptive: false, maxRetries: 2 }
           : undefined;
+
       const subRuntime = createLightRuntime({
-        agentId: opts.agentId,
-        provider: (opts.provider ?? "test") as ProviderName,
-        model: opts.model,
-        maxIterations: opts.maxIterations,
+        agentId,
+        provider: parentProvider ?? "test",
+        model: parentModel,
+        maxIterations: defaultMaxIter,
         systemPrompt: composedSystemPrompt,
-        enableReasoning: opts.enableReasoning,
-        enableTools: opts.enableTools,
+        enableReasoning: true,
+        enableTools: true,
         allowedTools: subAllowed,
         requiredTools: subRequiredTools,
         reasoningOptions: parentReasoningOptions,
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
         observabilityOptions: parentObservabilityOptions
-          ? {
-              ...parentObservabilityOptions,
-              logPrefix: "  │ ",
-            }
+          ? { ...parentObservabilityOptions, logPrefix: "  │ " }
           : { logPrefix: "  │ " },
         contextProfile: parentContextProfile,
         enableCostTracking: parentEnableCostTracking,
+        // Inherit the deterministic scenario so `test`-provider sub-agents are
+        // scriptable (delays for cancellation tests, nested tool calls).
+        testScenario: parentTestScenario,
         // G1: join the parent's EventBus so this sub-agent's lifecycle events
         // are observable on the parent's bus + trace bridge.
         sharedEventBus,
       });
 
-      // Register proxied MCP tools + execute in one Effect scope
-      const subEffect = Effect.gen(function* () {
+      // Register proxied MCP tools + execute in one Effect scope. This whole
+      // Effect is forked into the PARENT's fiber tree below.
+      const childEffect = Effect.gen(function* () {
         const subEngine = yield* ExecutionEngine;
 
-        // Register parent's MCP tools as proxy handlers
-        if (parentMcpToolDefs.length > 0) {
+        if (parentMcpToolDefs.length > 0 && parentToolServiceRef) {
           const subToolsMod = yield* Effect.promise(
             () => import("@reactive-agents/tools"),
           );
           const subTs =
-            yield* subToolsMod.ToolService as unknown as import("effect").Context.Tag<
-              any,
-              any
-            >;
+            yield* (subToolsMod.ToolService as unknown as Context.Tag<
+              unknown,
+              {
+                register: (
+                  def: unknown,
+                  handler: (
+                    args: Record<string, unknown>,
+                  ) => Effect.Effect<unknown>,
+                ) => Effect.Effect<unknown>;
+              }
+            >);
           for (const toolDef of parentMcpToolDefs) {
-            // Proxy handler routes calls to parent's live MCP connection
-            const proxyHandler = (args: Record<string, unknown>) =>
-              Effect.promise(async () => {
-                return Effect.runPromise(
-                  (parentToolServiceRef as {
-                    execute: (p: {
-                      toolName: string;
-                      arguments: Record<string, unknown>;
-                      agentId: string;
-                      sessionId: string;
-                    }) => Effect.Effect<unknown>;
-                  }).execute({
-                    toolName: toolDef.name,
-                    arguments: args,
-                    agentId: opts.agentId,
-                    sessionId: `sub-${t.name}`,
-                  }),
-                );
+            // Proxy handler routes calls to the parent's live MCP connection,
+            // in the child's fiber (no detached runPromise).
+            const proxyHandler = (
+              args: Record<string, unknown>,
+            ): Effect.Effect<unknown> =>
+              (
+                parentToolServiceRef as {
+                  execute: (p: {
+                    toolName: string;
+                    arguments: Record<string, unknown>;
+                    agentId: string;
+                    sessionId: string;
+                  }) => Effect.Effect<unknown>;
+                }
+              ).execute({
+                toolName: toolDef.name,
+                arguments: args,
+                agentId,
+                sessionId: `sub-${t.name}`,
               });
             yield* subTs.register(toolDef, proxyHandler);
           }
@@ -320,92 +447,59 @@ export const buildSubAgentTask = async (
 
         const taskObj: Task = {
           id: generateTaskId(),
-          agentId: Schema.decodeSync(AgentId)(opts.agentId),
+          agentId: Schema.decodeSync(AgentId)(agentId),
           type: "query" as const,
-          input: { question: opts.task },
+          input: { question: t.task },
           priority: "medium" as const,
           status: "pending" as const,
-          // G1: stamp parentAgentId so the child's AgentStarted (published on the
-          // shared bus) is attributable to this parent. execution-engine reads
-          // metadata.context.parentAgentId when publishing AgentStarted.
-          metadata: { tags: [], context: { parentAgentId } },
+          // G1/T3b: stamp parentAgentId + the child's RunContext so the child's
+          // AgentStarted/AgentCompleted (published on the shared bus) are
+          // attributable to this parent and correlated in the trace tree.
+          metadata: {
+            tags: [],
+            context: { parentAgentId, runContext: childCtx },
+          },
           createdAt: new Date(),
         };
         return yield* subEngine.execute(taskObj);
-      }) as Effect.Effect<TaskResult, any, never>;
-      const result: TaskResult = await Effect.runPromise(
-        subEffect.pipe(
-          Effect.provide(subRuntime as unknown as Layer.Layer<never>),
-        ),
+      }).pipe(
+        Effect.provide(subRuntime),
+        // Fallback-only ambient correlation for the child's own fiber, so a
+        // nested spawn inside the child derives from the child's RunContext.
+        Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
       );
-      const subReasoningSteps = ((
-        result.metadata as {
-          reasoningSteps?: unknown;
-        }
-      ).reasoningSteps ?? []) as Array<{
-        type?: string;
-        content?: string;
-        metadata?: {
-          toolUsed?: string;
-          observationResult?: {
-            success?: boolean;
-            delegatedToolsUsed?: readonly string[];
-          };
-        };
-      }>;
-      const delegatedToolsUsed = [...subReasoningSteps.entries()]
-        .flatMap(([index, step]) => {
-          if (step.type !== "action") return [] as string[];
-          const toolName =
-            step.metadata?.toolUsed ??
-            (typeof step.content === "string"
-              ? step.content.split("(")[0]?.trim()
-              : undefined);
-          const observationStep = subReasoningSteps[index + 1];
-          const observationResult =
-            observationStep?.metadata?.observationResult;
-          const succeeded =
-            observationStep?.type === "observation"
-              ? observationResult?.success !== false
-              : true;
-          if (!succeeded) return [] as string[];
-          const nestedDelegated = Array.isArray(
-            observationResult?.delegatedToolsUsed,
-          )
-            ? observationResult.delegatedToolsUsed.filter(
-                (name): name is string =>
-                  typeof name === "string" && name.length > 0,
-              )
-            : [];
-          const directTool =
-            toolName &&
-            !META_TOOL_NAMES.has(toolName) &&
-            toolName !== "spawn-agent" &&
-            !toolName.startsWith("agent-")
-              ? [toolName]
-              : [];
-          return [...directTool, ...nestedDelegated];
-        })
-        .filter((toolName, index, arr) => arr.indexOf(toolName) === index);
-      const _subElapsed = ((Date.now() - _subStart) / 1000).toFixed(1);
-      const _subIcon = result.success ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
-      const _subSteps = result.metadata.stepsCount ?? 0;
-      const _subTok = result.metadata.tokensUsed;
-      process.stdout.write(
-        `  \x1b[36m└── ${_subIcon} \x1b[1m${t.name}\x1b[22m\x1b[0m  ${_subSteps} steps | ${_subTok} tok | ${_subElapsed}s\n\n`,
-      );
-      return {
-        output: String(result.output ?? ""),
-        success: result.success,
-        tokensUsed: result.metadata.tokensUsed,
-        stepsCompleted: _subSteps,
-        delegatedToolsUsed:
-          delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
-      };
-    },
-    0,
-    getParentContext,
-  );
 
-  return executor(t.task);
-};
+      // Fork into the PARENT's fiber tree: parent interruption reaches the
+      // child. `Fiber.await` returns an Exit, so a child FAILURE is contained
+      // here and mapped to a structured result — it never cascades.
+      const fiber = yield* Effect.forkScoped(childEffect);
+      const exit = yield* fiber.await;
+
+      if (Exit.isSuccess(exit)) {
+        const result = exit.value;
+        const delegatedToolsUsed = extractDelegatedToolsUsed(result);
+        const raw: SubAgentRawResult = {
+          output: String(result.output ?? ""),
+          success: result.success,
+          tokensUsed: result.metadata.tokensUsed,
+          stepsCompleted: result.metadata.stepsCount ?? 0,
+          delegatedToolsUsed:
+            delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
+        };
+        return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
+      }
+
+      // Failure or interruption — contained, never rethrown to the parent.
+      const cause = exit.cause;
+      const summary = Exit.isInterrupted(exit)
+        ? "Sub-agent was interrupted before completion"
+        : `Sub-agent failed: ${String(cause)}`;
+      return {
+        subAgentName: t.name,
+        success: false,
+        summary,
+        tokensUsed: 0,
+        stepsCompleted: 0,
+      } satisfies SubAgentResult;
+    }),
+  );
