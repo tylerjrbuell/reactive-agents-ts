@@ -49,6 +49,15 @@ opt-in). Still open: P0-4/P0-5 (forbidden-tool enforcement + abstention — Wave
 B1/B2), P0-12 (noise benches — Wave 3), P0-16 (README quickstart ships only when v0.14 cuts from
 main — Wave 6).
 
+**Wave 2 (2026-07-20): the spine.** All 7 boundaries shipped (B1–B8) with red-on-cut mutation tests
+(see §3). **Wave 3 (2026-07-20): delete + §3b.** Rounds 1+2: `packages/orchestration` (−2833 LOC) +
+`packages/scenarios`, dead RA flags, noise benches, 4 corrupted probes, dead ledger-kinds/vocabulary/
+health-fields, orphan builder fields. Remainder: **`withCacheTimeout` removed (public-wither count
+85→84)** + its full cortex control; the Wave-1 `progressCheckpoint` cortex landmine; dead tools
+`task-complete` + `rag-search` (§3b T3.10); compaction doc-lie + dead `agedBudgetChars` (T3.9);
+control-plane guard tightened 4→2 (T2.7). Deferred (behavioral, needs bench/kernel PR): earlier
+compaction, control-plane resolver-routing of the 2 real forcing sites.
+
 ---
 
 ## 2. P0 — PUBLIC API LIES (block the release; a user is misled today)
