@@ -444,12 +444,11 @@ export const createRuntime = (options: RuntimeOptions) => {
                 ),
               stream: (req: Parameters<typeof primary.stream>[0]) => primary.stream(req),
               completeStructured: (req: Parameters<typeof primary.completeStructured>[0]) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                let effect = primary.completeStructured(req as any) as any;
+                let effect: ReturnType<typeof primary.completeStructured> =
+                  primary.completeStructured(req);
                 for (const fb of fallbacks) {
                   const captured = fb;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  effect = effect.pipe(Effect.catchAll(() => captured.completeStructured(req as any)));
+                  effect = effect.pipe(Effect.catchAll(() => captured.completeStructured(req)));
                 }
                 return effect;
               },
@@ -919,7 +918,7 @@ export const createRuntime = (options: RuntimeOptions) => {
 
   const reactiveIntelOptLayer = options.enableReactiveIntelligence
     ? createReactiveIntelligenceLayer(
-        options.reactiveIntelligenceOptions as any,
+        options.reactiveIntelligenceOptions,
         undefined,
         skillLayerForRi,
       )
@@ -953,10 +952,10 @@ export const createRuntime = (options: RuntimeOptions) => {
             const core = yield* Effect.promise(
               () => import("@reactive-agents/core"),
             );
-            type BusLike = { publish: (e: any) => Effect.Effect<void, never> };
+            type BusLike = { publish: (e: unknown) => Effect.Effect<void, never> };
             const bus: BusLike | undefined = yield* Effect.gen(function* () {
-              const eb = yield* core.EventBus as any;
-              return { publish: (e: any) => (eb as any).publish(e) } as BusLike;
+              const eb = yield* core.EventBus;
+              return { publish: (e: unknown) => eb.publish(e as Parameters<typeof eb.publish>[0]) } as BusLike;
             }).pipe(
               Effect.catchAll(() =>
                 Effect.succeed(undefined as BusLike | undefined),
@@ -964,16 +963,16 @@ export const createRuntime = (options: RuntimeOptions) => {
             );
 
             const gwLayer = gw.GatewayServiceLive(
-              (options.gatewayOptions ?? {}) as any,
+              (options.gatewayOptions ?? {}) as Parameters<typeof gw.GatewayServiceLive>[0],
               bus,
             );
             const schedLayer = gw.SchedulerServiceLive(
               {
                 agentId: options.agentId,
-                timezone: options.gatewayOptions?.timezone as any,
-                heartbeat: options.gatewayOptions?.heartbeat as any,
-                crons: options.gatewayOptions?.crons as any,
-              },
+                timezone: options.gatewayOptions?.timezone,
+                heartbeat: options.gatewayOptions?.heartbeat,
+                crons: options.gatewayOptions?.crons,
+              } as Parameters<typeof gw.SchedulerServiceLive>[0],
               bus,
             );
             return Layer.merge(gwLayer, schedLayer);
@@ -1323,7 +1322,9 @@ const A2aExtraLayer = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Effect.promise<any>(async () => {
       try {
-        const mod = (await import("@reactive-agents/a2a")) as any;
+        const mod = (await import("@reactive-agents/a2a")) as {
+          createA2AServerLayer: (card: unknown, port: number) => Layer.Layer<unknown>;
+        };
         const { createA2AServerLayer } = mod;
         const agentCard = {
           id: agentId,

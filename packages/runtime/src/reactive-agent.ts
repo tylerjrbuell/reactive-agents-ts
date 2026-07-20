@@ -375,7 +375,7 @@ export class ReactiveAgent<TOut = unknown> {
                     )
                     const ts = yield* asToolServiceTag(toolsMod.ToolService)
                     for (const name of serverNames) {
-                        yield* (ts as any)
+                        yield* ts
                             .disconnectMCPServer(name)
                             .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:4182", tag: errorTag(err) })))
                     }
@@ -513,7 +513,7 @@ export class ReactiveAgent<TOut = unknown> {
                     () => import('@reactive-agents/tools')
                 )
                 const ts = yield* asToolServiceTag(toolsMod.ToolService)
-                yield* (ts as any).register(definition, handler)
+                yield* ts.register(definition, handler)
             })
         )
     }
@@ -538,7 +538,7 @@ export class ReactiveAgent<TOut = unknown> {
                     () => import('@reactive-agents/tools')
                 )
                 const ts = yield* asToolServiceTag(toolsMod.ToolService)
-                yield* (ts as any).unregisterTool(name)
+                yield* ts.unregisterTool(name)
             })
         )
     }
@@ -610,7 +610,7 @@ export class ReactiveAgent<TOut = unknown> {
             ? path.join(skillPath, 'SKILL.md')
             : skillPath
 
-        const parsed = (parseSKILLmd as any)(skillMdPath)
+        const parsed = parseSKILLmd(skillMdPath)
         if (!parsed)
             throw new Error(`Failed to parse SKILL.md at ${skillMdPath}`)
 
@@ -1630,7 +1630,7 @@ export class ReactiveAgent<TOut = unknown> {
                 // Capture reasoning context so chat() has access to actual data.
                 // Includes: tool observations + agent analysis thoughts (which contain
                 // the synthesized data from tool results, not just compressed previews).
-                const steps = ((r.metadata as any)?.reasoningSteps ??
+                const steps = ((r.metadata as { reasoningSteps?: readonly unknown[] } | undefined)?.reasoningSteps ??
                     []) as Array<{
                     type: string
                     content: string

@@ -32,7 +32,7 @@ export const resolveCalibration = (
 
     if (cal === "auto") {
       const fetchCommunity =
-        (config.reactiveIntelligenceOptions as any)?.communityCalibration !== false;
+        (config.reactiveIntelligenceOptions as { communityCalibration?: boolean } | undefined)?.communityCalibration !== false;
       const modelId = String(config.defaultModel ?? "");
       const observationsBaseDir = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
 

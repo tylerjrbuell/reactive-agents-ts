@@ -148,18 +148,18 @@ export const emitTelemetryRunReport = (
         const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
         const telemetryCfg = riOpts?.telemetry;
         const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
-          (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as any).enabled !== false);
+          (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as Record<string, unknown>).enabled !== false);
 
         if (telemetryEnabled) {
           const endpoint = typeof telemetryCfg === "object" && telemetryCfg !== null
-            ? (telemetryCfg as any).endpoint : undefined;
+            ? ((telemetryCfg as Record<string, unknown>).endpoint as string | undefined) : undefined;
           const client = new TelemetryClientImpl(endpoint);
 
           const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
           const modelEntry = lookupModelFn(modelId, undefined, String(config.provider ?? ""));
           const taskText = extractTaskText(task.input);
           const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
-          const strategySwitched = !!(rr?.metadata as any)?.strategyFallback;
+          const strategySwitched = !!rr?.metadata?.strategyFallback;
 
           const outcome: "success" | "partial" | "failure" =
             terminatedByRaw === "max_iterations" ? "partial"
@@ -173,7 +173,7 @@ export const emitTelemetryRunReport = (
           const contextPressurePeak = peakContextPressure(entropyLog);
 
           // Skills: use autoActivateSkills (actually injected at bootstrap), not resolvedSkills (full catalog)
-          const activeSkills = ((ctx.metadata as any)?.autoActivateSkills ?? []) as Array<{ source: string }>;
+          const activeSkills = (ctx.metadata.autoActivateSkills ?? []) as ReadonlyArray<{ source: string }>;
           const skillsActiveCount = activeSkills.length;
           const learnedSkillsContribution = activeSkills.some(s => s.source === "learned");
 
@@ -182,7 +182,7 @@ export const emitTelemetryRunReport = (
           const taskComplexity = deriveTaskComplexity(realIterations, toolCallLog.length, strategySwitched, contextPressurePeak);
           const failurePattern = deriveFailurePattern(outcome, terminatedByRaw, errorsFromLoop, contextPressurePeak);
 
-          const reasoningStepsForTelemetry = ((ctx.metadata as any)?.reasoningSteps ?? []) as Array<{ type: string }>;
+          const reasoningStepsForTelemetry = ctx.metadata.reasoningSteps ?? [];
           const thoughtToActionRatio = deriveThoughtToActionRatio(reasoningStepsForTelemetry, toolCallLog.length);
 
           const classifierAcc = diffClassifierAccuracy(
@@ -192,7 +192,7 @@ export const emitTelemetryRunReport = (
 
           // Derive subagent invocations from toolCallLog.
           // Custom agent tool names come from the builder's agentTools config.
-          const customAgentToolNames = (config as any).agentToolNames ?? [];
+          const customAgentToolNames = (config as { agentToolNames?: readonly string[] }).agentToolNames ?? [];
           const subagentInvocations = toolCallLog
             .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
             .map((e) => ({ delegated: true, succeeded: e.success }));
@@ -202,7 +202,7 @@ export const emitTelemetryRunReport = (
           const toolArgValidityRate = computeArgValidityRate(
             toolCallLog.map((e) => ({
               toolName: e.toolName,
-              arguments: (e as any).arguments ?? {},
+              arguments: (e as { arguments?: unknown }).arguments ?? {},
             })),
           );
 

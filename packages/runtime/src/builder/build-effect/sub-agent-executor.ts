@@ -177,10 +177,12 @@ export const buildSubAgentTask = async (
       if (parentToolServiceRef && mcpServers.length > 0) {
         try {
           const allTools = await Effect.runPromise(
-            (parentToolServiceRef as any).listTools(),
+            (parentToolServiceRef as {
+              listTools: () => Effect.Effect<ReadonlyArray<{ source?: string; name?: string }>>;
+            }).listTools(),
           );
-          parentMcpToolDefs = (allTools as any[]).filter(
-            (m: any) => m.source === "mcp" || m.name?.includes("/"),
+          parentMcpToolDefs = allTools.filter(
+            (m) => m.source === "mcp" || m.name?.includes("/"),
           );
         } catch {
           // Parent tools unavailable — sub-agent gets built-ins only
@@ -207,7 +209,7 @@ export const buildSubAgentTask = async (
         const mcpSchemas = parentMcpToolDefs.map((m: any) => ({
           name: m.name as string,
           description: (m.description ?? "") as string,
-          parameters: ((m.parameters ?? []) as any[]).map((p: any) => ({
+          parameters: ((m.parameters ?? []) as ReadonlyArray<{ name?: string; type?: string; description?: string; required?: boolean }>).map((p) => ({
             name: p.name as string,
             type: (p.type ?? "string") as string,
             description: p.description as string | undefined,
@@ -281,7 +283,14 @@ export const buildSubAgentTask = async (
             const proxyHandler = (args: Record<string, unknown>) =>
               Effect.promise(async () => {
                 return Effect.runPromise(
-                  (parentToolServiceRef as any).execute({
+                  (parentToolServiceRef as {
+                    execute: (p: {
+                      toolName: string;
+                      arguments: Record<string, unknown>;
+                      agentId: string;
+                      sessionId: string;
+                    }) => Effect.Effect<unknown>;
+                  }).execute({
                     toolName: toolDef.name,
                     arguments: args,
                     agentId: opts.agentId,
@@ -289,7 +298,7 @@ export const buildSubAgentTask = async (
                   }),
                 );
               });
-            yield* (subTs as any).register(toolDef, proxyHandler);
+            yield* subTs.register(toolDef, proxyHandler);
           }
         }
 

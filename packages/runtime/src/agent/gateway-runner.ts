@@ -69,7 +69,7 @@ export const queryGatewayStatus = async (
         const gwMod = yield* Effect.promise(
           () => import("@reactive-agents/gateway"),
         );
-        const gw = yield* gwMod.GatewayService as any;
+        const gw = yield* gwMod.GatewayService;
         return yield* gw.status();
       }) as Effect.Effect<any>,
     );

@@ -203,8 +203,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             if (obs && lp) {
               const origInfo = obs.info.bind(obs);
               const origDebug = obs.debug.bind(obs);
-              (obs as any).info = (msg: string, meta?: Record<string, unknown>) => origInfo(`${lp}${msg}`, meta);
-              (obs as any).debug = (msg: string, meta?: Record<string, unknown>) => origDebug(`${lp}${msg}`, meta);
+              const mutableObs = obs as {
+                info: (msg: string, meta?: Record<string, unknown>) => unknown;
+                debug: (msg: string, meta?: Record<string, unknown>) => unknown;
+              };
+              mutableObs.info = (msg, meta) => origInfo(`${lp}${msg}`, meta);
+              mutableObs.debug = (msg, meta) => origDebug(`${lp}${msg}`, meta);
             }
 
             // ── Phase 0.2: Acquire EventBus optionally ──
@@ -918,7 +922,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       // Log action phase for each tool call
-                      for (const toolResult of (ctx.toolResults.slice(-pendingCalls.length) as any[])) {
+                      for (const toolResult of ctx.toolResults.slice(-pendingCalls.length) as ReadonlyArray<{ toolName?: string; success?: boolean }>) {
                         yield* progressLogger.logIteration({
                           iteration: ctx.iteration,
                           maxIterations: ctx.maxIterations,
@@ -940,7 +944,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       );
 
                       // Log observation phase with summary
-                      const recentResults = (ctx.toolResults.slice(-pendingCalls.length) as any[]);
+                      const recentResults = ctx.toolResults.slice(-pendingCalls.length) as ReadonlyArray<{ toolName?: string; success?: boolean; result?: unknown }>;
                       for (const toolResult of recentResults) {
                         const resultPreview = typeof toolResult.result === "string"
                           ? toolResult.result.slice(0, 100)
@@ -1106,7 +1110,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
-                const dialectObserved = ((rr as any)?.metadata?.lastDialectObserved ?? "none") as
+                const dialectObserved = ((rr?.metadata as { lastDialectObserved?: string } | undefined)?.lastDialectObserved ?? "none") as
                   "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";
 
                 // Reactive strategy often reports partial + max_iterations whenever the kernel did not
@@ -1232,7 +1236,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   terminatedBy?: string;
                   debrief?: AgentDebrief;
                 } = {
-                  taskId: task.id as any,
+                  taskId: task.id,
                   agentId: task.agentId,
                   output: verificationOutcome.output,
                   success: verificationOutcome.success,

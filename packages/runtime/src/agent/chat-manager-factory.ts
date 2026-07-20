@@ -40,7 +40,7 @@ export const createChatManager = (
         agentId: deps.agentId,
         sessionTtlDays,
         executeEvent: (event, source, instruction) =>
-            deps.executeEvent(event as any, source, instruction),
+            deps.executeEvent(event as Parameters<typeof deps.executeEvent>[0], source, instruction),
         logEpisode: async (entry) => {
             await deps.runtime.runPromise(
                 Effect.gen(function* () {
@@ -51,7 +51,7 @@ export const createChatManager = (
                         memMod.EpisodicMemoryService
                     )
                     if (svcOpt._tag !== 'Some') return
-                    yield* svcOpt.value.log(entry as any)
+                    yield* svcOpt.value.log(entry as Parameters<typeof svcOpt.value.log>[0])
                 }).pipe(Effect.catchAll(() => Effect.void))
             )
         },
@@ -65,7 +65,7 @@ export const createChatManager = (
                         memMod.SessionStoreService
                     )
                     if (storeOpt._tag !== 'Some') return
-                    yield* storeOpt.value.save(input as any)
+                    yield* storeOpt.value.save(input as Parameters<typeof storeOpt.value.save>[0])
                 }).pipe(Effect.catchAll(() => Effect.void))
             )
         },
@@ -81,6 +81,10 @@ export const createChatManager = (
                     if (storeOpt._tag !== 'Some') return null
                     const record = yield* storeOpt.value.findById(sessionId)
                     return record
+                        // `as any` justified: the persisted SessionStore record's
+                        // message shape is the dynamically-imported memory package's
+                        // type; reconciling it with the local ChatSession message type
+                        // is a cross-package type unification out of scope here.
                         ? { messages: record.messages as any }
                         : null
                 }).pipe(Effect.catchAll(() => Effect.succeed(null)))

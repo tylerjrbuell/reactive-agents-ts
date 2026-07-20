@@ -64,7 +64,7 @@ export const applyReactiveIntelligenceOptions = (
     onSkillConflict,
     onMidRunAdjustment,
     ...riConfig
-  } = arg as any;
+  } = arg;
   state._reactiveIntelligenceOptions = riConfig;
   if (
     onEntropyScored ||

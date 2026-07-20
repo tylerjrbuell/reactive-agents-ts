@@ -39,12 +39,21 @@ export const runBootstrapSkillPostprocess = (
 
     // ── Apply learned skills from procedural memory ──
     {
-      const mc = ctx.memoryContext as any;
-      if (mc?.activeWorkflows?.length > 0) {
+      const mc = ctx.memoryContext as {
+        activeWorkflows?: readonly {
+          tags?: readonly string[];
+          pattern?: string;
+          name?: string;
+          id?: string;
+          successRate?: number;
+          useCount?: number;
+        }[];
+      } | undefined;
+      if (mc?.activeWorkflows && mc.activeWorkflows.length > 0) {
         const taskCat = classifyTaskCategoryFn(String(task.input));
-        const modelIdForSkill = String((config as any).model ?? config.provider ?? "unknown");
-        const matchingSkill = (mc.activeWorkflows as any[]).find(
-          (w: any) => w.tags?.includes(taskCat) && w.tags?.includes(modelIdForSkill),
+        const modelIdForSkill = String((config as { model?: string }).model ?? config.provider ?? "unknown");
+        const matchingSkill = mc.activeWorkflows.find(
+          (w) => w.tags?.includes(taskCat) && w.tags?.includes(modelIdForSkill),
         );
 
         if (matchingSkill?.pattern) {
@@ -110,9 +119,9 @@ export const runBootstrapSkillPostprocess = (
     // ── Log bootstrap summary ──
     if (obs && isNormal) {
       const bootstrapMs = Date.now() - bootstrapStartedAt.getTime();
-      const mc = ctx.memoryContext as any;
+      const mc = ctx.memoryContext as { semanticContext?: string; recentEpisodes?: readonly unknown[] } | undefined;
       // MemoryBootstrapResult fields: semanticContext (string) + recentEpisodes (array)
-      const semanticLines = (mc?.semanticContext as string | undefined)
+      const semanticLines = mc?.semanticContext
         ?.split("\n").filter((l: string) => l.trim()).length ?? 0;
       const episodicCount = (mc?.recentEpisodes as unknown[] | undefined)?.length ?? 0;
       const memInfo = `${semanticLines} semantic lines, ${episodicCount} episodic`;
@@ -170,7 +179,7 @@ export const runBootstrapSkillPostprocess = (
         skillsActive: resolvedSkills
           .map((s) => s?.name ?? s?.id ?? "")
           .filter(Boolean),
-      } as any).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:emit-memory-snapshot", tag: errorTag(err) })));
+      } as Parameters<typeof eb.publish>[0]).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:emit-memory-snapshot", tag: errorTag(err) })));
     }
 
     return ctx;

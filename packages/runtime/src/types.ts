@@ -283,6 +283,8 @@ export interface ExecutionContextMetadata {
   skillCatalogXml?: string;
   /** Skills resolved for this task */
   resolvedSkills?: readonly { name?: string; description?: string }[];
+  /** Subset of resolved skills auto-injected at bootstrap (expert confidence) */
+  autoActivateSkills?: readonly { source?: string }[];
   /** ID of the skill that was applied this run */
   appliedSkillId?: string;
   /** Mean entropy of the applied skill */

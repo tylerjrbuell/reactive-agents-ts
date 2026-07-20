@@ -738,7 +738,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
 
   // MCP servers
   if (config.mcpServers && config.mcpServers.length > 0) {
-    builder = builder.withMCP(config.mcpServers as any);
+    builder = builder.withMCP(config.mcpServers as Parameters<typeof builder.withMCP>[0]);
   }
 
   // Reactive intelligence
@@ -748,12 +748,12 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
 
   // Logging
   if (config.logging) {
-    builder = builder.withLogging(config.logging as any);
+    builder = builder.withLogging(config.logging as Parameters<typeof builder.withLogging>[0]);
   }
 
   // Fallbacks
   if (config.fallbacks) {
-    builder = builder.withFallbacks(config.fallbacks as any);
+    builder = builder.withFallbacks(config.fallbacks as Parameters<typeof builder.withFallbacks>[0]);
   }
 
   // Feature flags (remaining ones not handled inline above)

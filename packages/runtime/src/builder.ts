@@ -2491,11 +2491,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 const { PromptService } = yield* Effect.promise(
                     () => import('@reactive-agents/prompts')
                 )
+                // `as any` justified: resolving a dynamically-imported service Tag
+                // against `baseRuntime`, whose R/E/ROut channels are intentionally
+                // erased to `unknown` at the build seam (see BuildBaseRuntimeResult
+                // in runtime-construction.ts — tightening them is a separate refactor).
                 const promptService = yield* (PromptService as any).pipe(
                     Effect.provide(baseRuntime)
                 )
                 for (const template of promptsOptions.templates) {
-                    yield* (promptService as any).register(template)
+                    yield* (promptService as { register: (t: unknown) => Effect.Effect<unknown> }).register(template)
                 }
             }
 

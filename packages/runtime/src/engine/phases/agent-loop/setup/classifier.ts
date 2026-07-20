@@ -155,7 +155,7 @@ export const classifyTools = (
       availableTools: cachedToolDefs.map((t: any) => ({
         name: t.name as string,
         description: (t.description ?? "") as string,
-        parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
+        parameters: ((t.parameters ?? []) as ReadonlyArray<{ name?: string; type?: string; description?: string; required?: unknown }>).map((p) => ({
           name: p.name as string,
           type: (p.type ?? "string") as string,
           description: (p.description ?? "") as string,

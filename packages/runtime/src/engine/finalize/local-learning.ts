@@ -84,14 +84,14 @@ export const runLocalLearning = (
               entropyHistory: entropyLog,
               totalTokens: ctx.tokensUsed,
               durationMs: executionDurationMs,
-              temperature: (config as any).temperature ?? 0.7,
+              temperature: (config as { temperature?: number }).temperature ?? 0.7,
               maxIterations: config.maxIterations ?? 10,
               provider: String(ctx.provider ?? config.provider ?? "unknown"),
-              skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
+              skillsActivated: (ctx.metadata.resolvedSkills as ReadonlyArray<{ name?: string; confidence?: string }> | undefined)?.filter((s) => s.confidence === "expert").map((s) => s.name) ?? [],
               convergenceIteration: entropyLog.length > 0
-                ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
+                ? entropyLog.findIndex((e) => e.trajectory?.shape === "converging")
                 : null,
-              toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
+              toolCallSequence: (ctx.metadata as { toolCallSequence?: readonly unknown[] }).toolCallSequence ?? [],
             });
 
             // Pass learning result to the outcome block via a scoped variable.
@@ -141,7 +141,7 @@ export const runLocalLearning = (
 
     // ── Record outcome for applied skill ──
     {
-      const appliedSkillId = (ctx.metadata as any)?.appliedSkillId;
+      const appliedSkillId = ctx.metadata.appliedSkillId;
       if (appliedSkillId) {
         const skillOutcome = terminatedByRaw === "max_iterations" ? "partial"
           : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
@@ -159,7 +159,7 @@ export const runLocalLearning = (
               // Change 3: re-store improved fragment when entropy improved on a full success
               if (config.enableReactiveIntelligence) {
                 const learningResultRef = lastLearningResult;
-                const appliedSkillMeanEntropy = (ctx.metadata as any)?.appliedSkillMeanEntropy as number | undefined;
+                const appliedSkillMeanEntropy = ctx.metadata.appliedSkillMeanEntropy;
                 if (
                   skillOutcome === "success" &&
                   learningResultRef?.skillSynthesized &&
