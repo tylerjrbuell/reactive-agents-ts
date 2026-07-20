@@ -1,6 +1,6 @@
 ---
 name: provider-patterns
-description: Configure per-provider behavior, understand streaming quirks, and use the 7-hook adapter system for optimal performance across LLM providers.
+description: Configure per-provider behavior, understand streaming quirks, and use the 5-hook adapter system for optimal performance across LLM providers.
 compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
@@ -92,19 +92,17 @@ const agent = await ReactiveAgents.create()
 .withModel({ model: "claude-sonnet-4-6", temperature: 0.9 })  // more creative
 ```
 
-## 7 adapter hooks (automatic — no configuration needed)
+## 5 adapter hooks (automatic — no configuration needed)
 
 These hooks run automatically and adapt prompts/behavior for each provider's strengths:
 
-| Hook | Method name | What it does |
-|------|-------------|-------------|
-| `taskFraming` | `adapter.frameTask(task, tier)` | Wraps task in provider-optimal framing |
-| `toolGuidance` | `adapter.injectToolGuidance(prompt)` | Injects provider-specific tool-use instructions |
-| `continuationHint` | `adapter.getContinuationHint(lastMsg)` | Tells model to continue after tool results |
-| `errorRecovery` | `adapter.getErrorRecoveryPrompt(error)` | Recovery prompt on tool errors |
-| `synthesisPrompt` | `adapter.getSynthesisPrompt(context)` | Final answer synthesis guidance |
-| `qualityCheck` | `adapter.checkQuality(output, task)` | Post-step quality assessment |
-| `systemPromptPatch` | `adapter.patchSystemPrompt(base)` | Provider-specific system prompt additions |
+| Hook | What it does |
+|------|-------------|
+| `continuationHint` | Tells the model to continue after tool results while required tools are pending |
+| `errorRecovery` | Recovery prompt appended to the observation on tool errors |
+| `synthesisPrompt` | Final answer synthesis guidance on the research→produce transition |
+| `qualityCheck` | Post-step quality assessment (fires once before the final answer) |
+| `parseToolCalls` | Normalizes malformed native tool calls (e.g. qwen3 stringified `arguments`) in every provider `complete()`/`stream()` response |
 
 Adapter selection is automatic via `selectAdapter(capabilities, tier)`. Each provider (Anthropic, OpenAI, Gemini, Ollama) has an adapter with specialized implementations.
 

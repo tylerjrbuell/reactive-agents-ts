@@ -24,25 +24,34 @@ import {
   localModelAdapter,
   defaultAdapter,
   midModelAdapter,
+  selectAdapter,
+  composeAdapters,
 } from "../src/adapter.js";
 
 // ─── Adapter swap seam (shared across all provider suites) ─────────────────
+//
+// Delegates to the REAL selectAdapter when no override is active (reference
+// captured into a const before mock.module installs, so no recursion through
+// the rewired binding). Never re-encode tier fallback inline — bun module
+// mocks are process-global and an inline copy of the old non-composing logic
+// masks calibration-composition (B6) regressions for later test files.
 
 let overrideAdapter: ProviderAdapter | null = null;
+
+const passthroughSelectAdapter = selectAdapter;
 
 mock.module("../src/adapter.js", () => ({
   localModelAdapter,
   defaultAdapter,
   midModelAdapter,
+  composeAdapters,
   selectAdapter: (
-    _caps: { supportsToolCalling: boolean },
+    caps: { supportsToolCalling: boolean },
     tier?: string,
-    _modelId?: string,
+    modelId?: string,
   ) => {
     if (overrideAdapter) return { adapter: overrideAdapter };
-    if (tier === "local") return { adapter: localModelAdapter };
-    if (tier === "mid") return { adapter: midModelAdapter };
-    return { adapter: defaultAdapter };
+    return passthroughSelectAdapter(caps, tier, modelId);
   },
 }));
 

@@ -25,7 +25,15 @@ const asState = asBuilderState;
 /**
  * Apply `.withReactiveIntelligence(arg)` configuration. Handles both the
  * boolean toggle form and the object form (which may carry RI-only fields
- * mixed with handler callbacks, constraints, and autonomy).
+ * mixed with handler callbacks).
+ *
+ * v0.14 (DEBT-REGISTER P0-1): the former `autonomy` / `constraints` options
+ * (`autonomy: 'observe'`, `neverEarlyStop`, `neverHumanEscalate`,
+ * `lockedSkills`, `protectedSkills`, …) were accepted but NEVER read — a
+ * user asking for observe-only got a fully autonomous controller. They were
+ * removed from the accepted type; because the object form is structural,
+ * explicitly-passed stragglers are rejected here at runtime instead of
+ * silently faking safety.
  */
 export const applyReactiveIntelligenceOptions = (
   builder: ReactiveAgentBuilder,
@@ -43,6 +51,11 @@ export const applyReactiveIntelligenceOptions = (
   }
   state._enableReactiveIntelligence = true;
   if (!arg) return;
+  if ("autonomy" in arg || "constraints" in arg) {
+    throw new Error(
+      ".withReactiveIntelligence({ autonomy, constraints }) were no-ops (never enforced by the controller) and were removed in v0.14; see DEBT-REGISTER P0-1. Remove these keys — passing them would silently grant full autonomy.",
+    );
+  }
   const {
     onEntropyScored,
     onControllerDecision,
@@ -50,8 +63,6 @@ export const applyReactiveIntelligenceOptions = (
     onSkillRefined,
     onSkillConflict,
     onMidRunAdjustment,
-    constraints,
-    autonomy,
     ...riConfig
   } = arg as any;
   state._reactiveIntelligenceOptions = riConfig;
@@ -72,8 +83,6 @@ export const applyReactiveIntelligenceOptions = (
       onMidRunAdjustment,
     };
   }
-  if (constraints) state._riConstraints = constraints;
-  if (autonomy) state._riAutonomy = autonomy;
 };
 
 /**

@@ -47,18 +47,6 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-### Identity and RBAC
-
-Assign an identity to the agent so that downstream services, audit logs, and A2A protocol messages carry a verified agent ID and role.
-
-{/* docs-skip-typecheck */}
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withIdentity({ agentId: "prod-agent", role: "analyst" })
-  .build();
-```
-
 ### Tool Approval Gates (human-in-the-loop)
 
 Gate high-risk tool calls behind human approval. Name the tools in
@@ -350,7 +338,7 @@ const agent = await ReactiveAgents.create()
 | Iteration limit | `.withMaxIterations(N)` | 10 | 20–50 for complex tasks |
 | Min iterations | `.withMinIterations(N)` | none | 2–3 for research tasks |
 | Output quality | `.withOutputValidator(fn)` | none | Validate structure for critical outputs |
-| Answer verification | `.withVerificationStep()` | none | Enable for high-stakes decisions |
+| Answer verification | `.withVerificationStep()` | none | Enable for high-stakes decisions — on a REVISE verdict, reflect mode re-runs once with the verification feedback so the verdict shapes the final answer |
 | Timeout | `.withTimeout(ms)` | none | 60\_000–300\_000 |
 | Retry | `.withRetryPolicy()` | none | `{ maxAttempts: 3 }` |
 | Observability | `.withObservability()` | off | Enable with `verbosity: "normal"` |

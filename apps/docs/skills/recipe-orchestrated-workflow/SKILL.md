@@ -1,6 +1,6 @@
 ---
 name: recipe-orchestrated-workflow
-description: Full recipe for a 3-agent pipeline (researcher → writer → reviewer) coordinated by a lead orchestrator agent using withAgentTool() and withOrchestration().
+description: Full recipe for a 3-agent pipeline (researcher → writer → reviewer) coordinated by a lead orchestrator agent using withAgentTool().
 compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
@@ -16,7 +16,7 @@ A 3-agent pipeline where a lead orchestrator delegates to a researcher (web sear
 
 ## Skills loaded by this recipe
 
-- `multi-agent-orchestration` — withAgentTool(), withOrchestration(), withRemoteAgent()
+- `multi-agent-orchestration` — withAgentTool(), withDynamicSubAgents(), withRemoteAgent()
 - `reasoning-strategy-selection` — plan-execute-reflect for the lead agent
 - `memory-patterns` — shared checkpoint state between agents
 - `cost-budget-enforcement` — per-session budgets per sub-agent
@@ -33,7 +33,6 @@ const orchestrator = await ReactiveAgents.create()
     defaultStrategy: "plan-execute-reflect",
     maxIterations: 30,
   })
-  .withOrchestration()
   .withAgentTool("researcher", {
     name: "Research Specialist",
     description: "Searches the web for information on a topic and returns key findings with source URLs",
@@ -149,4 +148,3 @@ const result = await orchestrator.run("Create an article about...");
 - Sub-agent results are returned as strings — instruct agents to produce structured output (JSON or markdown) for reliable parsing
 - `maxIterations` on sub-agents applies per invocation — a researcher called 3 times can use up to `3 × maxIterations` total
 - Total cost = orchestrator cost + sum of all sub-agent costs — set `withCostTracking` budgets that account for the full pipeline
-- `.withOrchestration()` must be called alongside `.withAgentTool()` — without it, the orchestration service layer is inactive

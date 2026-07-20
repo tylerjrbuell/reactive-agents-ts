@@ -148,13 +148,13 @@ describe("Living Intelligence System integration", () => {
 
   describe("Builder integration", () => {
     it("withSkills() + withReactiveIntelligence() chain works", () => {
+      // v0.14: skills `evolution` + RI `constraints`/`autonomy` were no-op
+      // options and were REMOVED (DEBT-REGISTER P0-1 / P0-10).
       const builder = ReactiveAgents.create()
         .withProvider("test")
-        .withSkills({ paths: ["./skills/"], evolution: { mode: "auto" } })
+        .withSkills({ paths: ["./skills/"] })
         .withReactiveIntelligence({
           onEntropyScored: () => {},
-          constraints: { maxTemperatureAdjustment: 0.15 },
-          autonomy: "suggest",
         })
         .withReasoning();
 
@@ -166,7 +166,7 @@ describe("Living Intelligence System integration", () => {
       const builder = ReactiveAgents.create()
         .withProvider("test")
         .withReactiveIntelligence()
-        .withSkills();
+        .withSkills({ paths: ["./skills/"] });
 
       expect(builder).toBeDefined();
     });

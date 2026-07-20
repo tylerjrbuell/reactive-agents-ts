@@ -50,7 +50,7 @@ describe("Smoke: Builder Combinations", () => {
     expect(result.success).toBe(true);
   });
 
-  it("full (all 11 optional features)", async () => {
+  it("full (all 8 optional features)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("full-featured")
       .withTestScenario([{ text: "FINAL ANSWER: Fully loaded." }])
@@ -61,10 +61,7 @@ describe("Smoke: Builder Combinations", () => {
       .withCostTracking()
       .withObservability()
       .withAudit()
-      .withIdentity()
-      .withInteraction()
       .withPrompts()
-      .withOrchestration()
       .withMemory("1")
       .build();
 

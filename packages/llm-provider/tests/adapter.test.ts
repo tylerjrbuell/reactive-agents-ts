@@ -1,6 +1,13 @@
 // Run: bun test packages/llm-provider/tests/adapter.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
-import { localModelAdapter, midModelAdapter, defaultAdapter, selectAdapter } from "../src/adapter.js";
+import {
+  localModelAdapter,
+  midModelAdapter,
+  defaultAdapter,
+  selectAdapter,
+  composeAdapters,
+  type ProviderAdapter,
+} from "../src/adapter.js";
 import {
   buildCalibratedAdapter,
   clearCalibrationCache,
@@ -137,25 +144,6 @@ describe("ProviderAdapter", () => {
     });
   });
 
-  describe("localModelAdapter.systemPromptPatch", () => {
-    it("appends multi-step instruction for local tier", () => {
-      const patched = localModelAdapter.systemPromptPatch!("Base prompt.", "local");
-      expect(patched).toContain("Base prompt.");
-      expect(patched).toContain("IMPORTANT");
-      expect(patched).toContain("ALL steps");
-    });
-
-    it("returns undefined for non-local tier", () => {
-      const result = localModelAdapter.systemPromptPatch!("Base prompt.", "frontier");
-      expect(result).toBeUndefined();
-    });
-
-    it("returns undefined for mid tier", () => {
-      const result = localModelAdapter.systemPromptPatch!("Base prompt.", "mid");
-      expect(result).toBeUndefined();
-    });
-  });
-
   describe("defaultAdapter", () => {
     it("provides structured decision framework via continuationHint", () => {
       const hint = defaultAdapter.continuationHint!({
@@ -167,10 +155,6 @@ describe("ProviderAdapter", () => {
       });
       expect(hint).toContain("file-write");
       expect(hint).toContain("Call");
-    });
-
-    it("has no systemPromptPatch", () => {
-      expect(defaultAdapter.systemPromptPatch).toBeUndefined();
     });
 
     it("qualityCheck fires when tools were used", () => {
@@ -266,66 +250,6 @@ const baseCalibration: ModelCalibration = {
 };
 
 describe("buildCalibratedAdapter", () => {
-  it("sets toolGuidance for sequential-only models", () => {
-    const cal: ModelCalibration = {
-      ...baseCalibration,
-      parallelCallCapability: "sequential-only",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.toolGuidance).toBeDefined();
-    const guidance = adapter.toolGuidance!({
-      toolNames: [],
-      requiredTools: [],
-      tier: "local",
-    });
-    expect(guidance?.toLowerCase()).toContain("one at a time");
-  });
-
-  it("sets toolGuidance for partial parallel models", () => {
-    const cal: ModelCalibration = {
-      ...baseCalibration,
-      parallelCallCapability: "partial",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.toolGuidance).toBeDefined();
-    const guidance = adapter.toolGuidance!({
-      toolNames: [],
-      requiredTools: [],
-      tier: "local",
-    });
-    expect(guidance).toContain("2");
-  });
-
-  it("does NOT set toolGuidance for reliable parallel models", () => {
-    const cal: ModelCalibration = {
-      ...baseCalibration,
-      parallelCallCapability: "reliable",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.toolGuidance).toBeUndefined();
-  });
-
-  it("sets systemPromptPatch for weak attention models", () => {
-    const cal: ModelCalibration = {
-      ...baseCalibration,
-      systemPromptAttention: "weak",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.systemPromptPatch).toBeDefined();
-    const patched = adapter.systemPromptPatch!("base prompt", "local");
-    expect(patched).toContain("base prompt");
-    expect((patched ?? "").length).toBeGreaterThan("base prompt".length);
-  });
-
-  it("does NOT set systemPromptPatch for strong attention models", () => {
-    const cal: ModelCalibration = {
-      ...baseCalibration,
-      systemPromptAttention: "strong",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.systemPromptPatch).toBeUndefined();
-  });
-
   it("sets profileOverrides.toolResultMaxChars from calibration", () => {
     const cal: ModelCalibration = {
       ...baseCalibration,
@@ -335,13 +259,61 @@ describe("buildCalibratedAdapter", () => {
     expect(profileOverrides.toolResultMaxChars).toBe(1500);
   });
 
-  it("compiles moderate systemPromptAttention to no patch", () => {
-    const cal: ModelCalibration = {
+  it("compiles to an EMPTY adapter overlay — no hook is written that nothing reads", () => {
+    // systemPromptPatch / toolGuidance writes were deleted 2026-07-19 (debt
+    // register P0-11): their call sites died in 279b61fb. Behavioral intents
+    // flow through harness-plan / blueprint / recall readers instead.
+    const { adapter } = buildCalibratedAdapter({
       ...baseCalibration,
-      systemPromptAttention: "moderate",
-    };
-    const { adapter } = buildCalibratedAdapter(cal);
-    expect(adapter.systemPromptPatch).toBeUndefined();
+      parallelCallCapability: "sequential-only",
+      systemPromptAttention: "weak",
+    });
+    expect(Object.keys(adapter)).toEqual([]);
+  });
+});
+
+// ─── composeAdapters (boundary B6) ───────────────────────────────────────────
+
+describe("composeAdapters", () => {
+  const base: ProviderAdapter = {
+    continuationHint: () => "base-hint",
+    qualityCheck: () => "base-qc",
+  };
+
+  it("overlay hook wins where set", () => {
+    const overlay: ProviderAdapter = { qualityCheck: () => "overlay-qc" };
+    const merged = composeAdapters(base, overlay);
+    expect(
+      merged.qualityCheck!({ task: "t", requiredTools: [], toolsUsed: new Set(), tier: "local" }),
+    ).toBe("overlay-qc");
+  });
+
+  it("base hook survives where overlay is silent", () => {
+    const merged = composeAdapters(base, { qualityCheck: () => "overlay-qc" });
+    expect(
+      merged.continuationHint!({
+        toolsUsed: new Set(),
+        requiredTools: [],
+        missingTools: [],
+        iteration: 1,
+        maxIterations: 10,
+      }),
+    ).toBe("base-hint");
+  });
+
+  it("overlay keys explicitly set to undefined never clobber base hooks", () => {
+    const overlay: ProviderAdapter = { continuationHint: undefined };
+    const merged = composeAdapters(base, overlay);
+    expect(merged.continuationHint).toBe(base.continuationHint);
+  });
+
+  it("never removes capability: every base hook is present after composing", () => {
+    for (const tierAdapter of [localModelAdapter, midModelAdapter, defaultAdapter]) {
+      const merged = composeAdapters(tierAdapter, {});
+      for (const key of Object.keys(tierAdapter) as Array<keyof ProviderAdapter>) {
+        expect(merged[key]).toBe(tierAdapter[key]!);
+      }
+    }
   });
 });
 
@@ -361,5 +333,40 @@ describe("selectAdapter with calibration", () => {
     const result = selectAdapter({ supportsToolCalling: true }, "mid");
     expect(result).toHaveProperty("adapter");
     // profileOverrides is optional when no calibration was loaded.
+  });
+
+  // ── MUTATION TEST (debt register P0-2, boundary B6) ────────────────────────
+  // llama3.2:3b has a prebaked calibration in src/calibrations/llama3.2-3b.json
+  // (optimalToolResultChars: 2000). Re-introducing the old early-return
+  // `if (cal) return buildCalibratedAdapter(cal)` — which DISCARDS the tier
+  // adapter — turns every hook assertion below red. Deleting the calibration
+  // branch instead turns the profileOverrides assertion red. Both mutations
+  // are killed.
+  it("calibrated model keeps every tier hook (calibration is additive, never capability-removing)", () => {
+    clearCalibrationCache();
+    const { adapter, profileOverrides } = selectAdapter(
+      { supportsToolCalling: true },
+      "local",
+      "llama3.2:3b",
+    );
+
+    // Proof the calibration actually loaded (kills the drop-calibration mutation):
+    expect(profileOverrides).toBeDefined();
+    expect(profileOverrides!.toolResultMaxChars).toBe(2000);
+
+    // Proof the tier adapter survived (kills the early-return-discard mutation):
+    expect(adapter.continuationHint).toBe(localModelAdapter.continuationHint!);
+    expect(adapter.errorRecovery).toBe(localModelAdapter.errorRecovery!);
+    expect(adapter.synthesisPrompt).toBe(localModelAdapter.synthesisPrompt!);
+    expect(adapter.qualityCheck).toBe(localModelAdapter.qualityCheck!);
+  });
+
+  it("calibrated model is never weaker than its uncalibrated tier baseline", () => {
+    clearCalibrationCache();
+    const calibrated = selectAdapter({ supportsToolCalling: true }, "local", "llama3.2:3b");
+    const baseline = selectAdapter({ supportsToolCalling: true }, "local");
+    for (const key of Object.keys(baseline.adapter) as Array<keyof ProviderAdapter>) {
+      expect(calibrated.adapter[key]).toBeDefined();
+    }
   });
 });

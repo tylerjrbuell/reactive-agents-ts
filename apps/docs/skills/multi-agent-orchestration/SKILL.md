@@ -12,7 +12,7 @@ metadata:
 
 ## Agent objective
 
-Produce a builder with agent tools registered and the orchestration layer enabled so an agent can delegate subtasks to specialized sub-agents and integrate their results.
+Produce a builder with agent tools registered so an agent can delegate subtasks to specialized sub-agents and integrate their results.
 
 ## When to load this skill
 
@@ -31,7 +31,6 @@ const agent = await ReactiveAgents.create()
   .withName("lead")
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 20 })
-  .withOrchestration()
   .withAgentTool("researcher", {
     name: "Research Agent",
     description: "Gathers information, reads web pages, and synthesizes findings",
@@ -101,7 +100,6 @@ The sub-agent runs as a tool call — the LLM calls it with a task description a
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 25 })
-  .withOrchestration()
   .withAgentTool("researcher", {
     name: "Researcher",
     description: "Research a topic and return key findings",
@@ -144,14 +142,12 @@ const agent = await ReactiveAgents.create()
 
 | Method | Notes |
 |--------|-------|
-| `.withOrchestration()` | Enables the orchestration service layer |
 | `.withAgentTool(name, opts)` | Registers a local sub-agent as a named tool |
 | `.withDynamicSubAgents(opts?)` | Allows the agent to spawn sub-agents at runtime |
 | `.withRemoteAgent(name, url)` | Connects to a remote A2A agent as a named tool |
 
 ## Pitfalls
 
-- `.withOrchestration()` must be called alongside `.withAgentTool()` — without it, sub-agent tools are registered but the coordination layer is inactive
 - Sub-agent `tools` are scoped to that sub-agent only — the parent's tool set does not propagate down
 - Each sub-agent runs in an isolated context — it has no access to the parent's conversation history
 - `withDynamicSubAgents` is open-ended — the agent can create arbitrary sub-agents, which can significantly increase costs

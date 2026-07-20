@@ -9,7 +9,7 @@ sidebar:
 
 # Local Models Guide
 
-Reactive Agents is designed to work with local models via Ollama. The model-adaptive context system automatically tunes prompts, compaction, and truncation for smaller models — and the [Healing Pipeline](/features/llm-providers/) recovers from **86.7% of tool-call errors** with **+80pp accuracy lift** vs. naive prompting. Same code, frontier-to-local. But choosing the right model for your task still matters.
+Reactive Agents is designed to work with local models via Ollama. The model-adaptive context system automatically tunes prompts, compaction, and truncation for smaller models — and the [Healing Pipeline](/features/llm-providers/) repairs malformed tool calls before they fail, which is what makes tool-calling viable on small models at all. Same code, frontier-to-local. But choosing the right model for your task still matters.
 
 :::tip[Why local works here]
 The framework includes 4 layers specifically for small-model viability:
@@ -19,7 +19,7 @@ The framework includes 4 layers specifically for small-model viability:
 - **Calibration system** — learns each model's tool-call dialect after 5 runs (`toolCallDialect`, `parallelCallCapability`, `classifierReliability`)
 - **Model-adaptive context profiles** — lean prompts, aggressive compaction, 800-char truncation for `tier: "local"`
 
-Without these, a 4B model is unusable for tool-calling agents. With them, qwen3:4b passes the same harness as Claude — at 0% the cost.
+Without these, a 4B model is unusable for tool-calling agents. With them, qwen3:4b runs the same agent loop as Claude — locally, with no API cost.
 :::
 
 

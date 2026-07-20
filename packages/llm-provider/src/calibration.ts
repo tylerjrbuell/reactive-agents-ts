@@ -2,13 +2,18 @@
  * ModelCalibration — per-model behavior measurements that drive harness adaptation.
  *
  * Calibration data answers questions that cannot be derived from model card, tier,
- * or general LLM knowledge. Each field has a downstream consumer in the harness:
+ * or general LLM knowledge. Live downstream consumers (verified 2026-07-19):
  *
- * - steeringCompliance → ContextManager.build() guidance delivery channel
- * - parallelCallCapability → tool gating maxBatch + RULES parallel hint
- * - observationHandling → observation pipeline (inline-facts vs compress+recall)
- * - systemPromptAttention → rule repetition strategy on later turns
- * - optimalToolResultChars → ContextProfile.toolResultMaxChars
+ * - parallelCallCapability → blueprint strategy batch cap (blueprint.ts)
+ * - observationHandling → recall force-on (think.ts) + hallucinate-risk
+ *   scaffolding/verifier bump (harness-plan.ts)
+ * - systemPromptAttention → weak-attention scaffolding bump (harness-plan.ts)
+ * - optimalToolResultChars → ProfileOverrides.toolResultMaxChars, applied to
+ *   the runtime ContextProfile (kernel loop runner)
+ * - classifierReliability → classifier bypass (runtime classifier-bypass.ts)
+ *
+ * (An earlier ContextManager.build() consumer for steeringCompliance was
+ * deleted in `279b61fb`; the field remains measured for future spine work.)
  */
 import { Schema } from "effect";
 import * as fs from "node:fs";
@@ -150,38 +155,27 @@ export function clearCalibrationCache(): void {
 // ── Compile calibration to adapter + profile overrides ───────────────────────
 
 /**
- * Compile a ModelCalibration into a runtime ProviderAdapter + ProfileOverrides.
+ * Compile a ModelCalibration into a runtime ProviderAdapter overlay +
+ * ProfileOverrides.
  *
- * The returned adapter overrides default tier behavior with measured behavior:
- *   - systemPromptAttention "weak"        → adds emphasis suffix to system prompt
- *   - parallelCallCapability "sequential-only" → nudges model to call tools one at a time
- *   - parallelCallCapability "partial"    → nudges model to cap batches at 2
- *   - parallelCallCapability "reliable"   → no toolGuidance override (default batching)
- *   - systemPromptAttention "strong"      → no systemPromptPatch override
+ * The adapter overlay is layered ON TOP of the tier adapter by
+ * `selectAdapter` (see `composeAdapters` in adapter.js) — it can refine tier
+ * behavior but never removes it. Today the overlay is EMPTY: every measured
+ * behavioral intent is delivered through a live non-adapter channel instead
+ * (see module header — harness-plan scaffolding, blueprint batch cap, recall
+ * force-on). Earlier versions compiled `systemPromptPatch` / `toolGuidance`
+ * overrides here, but those hooks lost their only call sites in `279b61fb`
+ * and were removed from the ProviderAdapter contract (2026-07-19); the writes
+ * were dead. If a future calibration field needs per-turn prompt shaping,
+ * add the hook back WITH a kernel call site first, then compile it here.
  *
- * profileOverrides apply to the runtime ContextProfile (tool result sizing, etc.).
- *
- * Note: steeringCompliance and observationHandling are read directly by
- * ContextManager.build() and the observation pipeline — they do not surface
- * as adapter hooks here.
+ * profileOverrides apply to the runtime ContextProfile (tool result sizing)
+ * and ARE read — the kernel loop runner spreads them into the active profile.
  */
 export function buildCalibratedAdapter(
   calibration: ModelCalibration,
 ): { adapter: ProviderAdapter; profileOverrides: ProfileOverrides } {
-  const adapter: ProviderAdapter = {
-    systemPromptPatch: calibration.systemPromptAttention === "weak"
-      ? (base: string, _tier: string) =>
-          `${base}\n\nIMPORTANT: Follow ALL rules above exactly. Re-read them on each turn.`
-      : undefined,
-
-    toolGuidance: calibration.parallelCallCapability === "sequential-only"
-      ? () =>
-          "Call tools one at a time. Do not batch multiple tool calls in a single turn."
-      : calibration.parallelCallCapability === "partial"
-        ? () =>
-            "You may call up to 2 independent tools at once. Avoid larger batches."
-        : undefined, // type assertion needed: implementation doesn't use context params
-  };
+  const adapter: ProviderAdapter = {};
 
   const profileOverrides: ProfileOverrides = {
     toolResultMaxChars: calibration.optimalToolResultChars,

@@ -31,20 +31,34 @@ describe("Error context and suggestions", () => {
     expect(ctx.suggestion).not.toContain("budget:");
   });
 
-  test("GuardrailViolationError has context with guardrail type", () => {
-    const err = new GuardrailViolationError({ message: "blocked", taskId: "task-1", violation: "injection" });
+  test("GuardrailViolationError suggestion is valid — no fabricated code snippet", () => {
+    // Production emits `violation` as a JOINED HUMAN SUMMARY built at
+    // engine/phases/guardrail.ts:44 (`${v.type}: ${v.message}; ...`), NOT a
+    // detector key. Pin against that real shape.
+    const violation = "prompt-injection: detected override attempt; pii: found SSN";
+    const err = new GuardrailViolationError({ message: "blocked", taskId: "task-1", violation });
     const ctx = errorContext(err);
-    expect(ctx.suggestion).toContain("injection");
-    // Honesty pin: no `.withGuardrailThresholds()` builder method exists; the
-    // suggestion must route to the real `.withGuardrails({ <detector>: false })`.
+    // Honesty pin: no `.withGuardrailThresholds()` builder method exists; route
+    // to the real `.withGuardrails({ ... })`.
     expect(ctx.suggestion).toContain("withGuardrails(");
     expect(ctx.suggestion).not.toContain("withGuardrailThresholds");
+    // The old suggestion spliced the summary into `{ ${violation}: false }`,
+    // which rendered syntactically INVALID TypeScript. The summary must never
+    // appear as an object key.
+    expect(ctx.suggestion).not.toContain(`${violation}: false`);
+    expect(ctx.suggestion).not.toContain(": false })");
   });
 
-  test("KillSwitchTriggeredError has context", () => {
-    const err = new KillSwitchTriggeredError({ message: "stopped", taskId: "task-1", agentId: "agent-1", reason: "manual" });
+  test("KillSwitchTriggeredError suggestion does not promise a non-existent resume", () => {
+    // Real emitted `reason` values: "stop() requested", "terminate() called",
+    // "terminated", "no reason" — production NEVER emits "manual".
+    const err = new KillSwitchTriggeredError({ message: "stopped", taskId: "task-1", agentId: "agent-1", reason: "stop() requested" });
     const ctx = errorContext(err);
     expect(ctx.suggestion).toContain("kill switch");
+    // A stopped/terminated run is UNRESUMABLE — the suggestion must not tell the
+    // user to call resume() to continue this run.
+    expect(ctx.suggestion).not.toContain("resume() to continue");
+    expect(ctx.suggestion).toContain("cannot be resumed");
   });
 
   test("BehavioralContractViolationError has context", () => {

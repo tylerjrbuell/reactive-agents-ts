@@ -17,7 +17,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 | **41 packages & apps**       | 36 packages + 5 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **7 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **8,253 tests · 1045 files**  | Verified with `bun test` on every PR                            |
+| **8,253 tests · 1048 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -110,7 +110,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **8 LLM providers** — Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
 -   **Model-adaptive context profiles** — 4 tiers (local / mid / large / frontier) with tier-aware prompts, compaction, and truncation; **4B+ Ollama models work** with the same code
 -   **Adaptive tool calling** — FC dialect probe routes to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code)
--   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution (86.7% recovery rate, +80pp accuracy on small models)
+-   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution, so malformed tool calls from smaller models get repaired instead of failing
 -   **Provider fallback chains** — `withFallbacks()` for graceful degradation across providers and models
 -   **Native thinking mode** — `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning across all four cloud/local adapters (off unless enabled); `.withModel({ thinking: true })` is the quick boolean
 -   **Cost-aware model routing** — `.withModelRouting()` (opt-in, off by default) routes each run to the cheapest *capable* model of the configured provider by task complexity, degrading to the configured model on any error
@@ -122,7 +122,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Fabrication guard** — `.withFabricationGuard()` is **on by default**; rejects invented empirical performance measurements (benchmark timings, % speed-ups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
 -   **Stall / no-progress policy** — `.withStallPolicy()` bounds wasted iterations when the model ignores required-tool nudges: fast-escalate after N ignored nudges instead of looping to the full cap (progress resets the streak)
 -   **Harness-forced abstention** — when grounding is structurally impossible (a required tool is missing, or synthesis is repeatedly rejected as ungrounded), the run ends honestly with `terminatedBy: "abstained"` and `result.abstention { reason, missing }` instead of fabricating or grinding to `max_iterations`
--   **Cost controls** — 27-signal complexity router, semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
+-   **Cost controls** — multi-factor complexity router (task length, code presence, multi-step markers, tool-reliability escalation), semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
 -   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
 -   **Evidence ledger + deliverable-truth** — every run keeps an append-only ledger (tool invocations, artifacts with path + content digest — including files written by code-execute / shell / MCP tools — verifier verdicts, and the answer's evidence claims) that rides crash-resume. It also compiles a typed contract of what "done" means from the task; the terminal gate checks requirement satisfaction against the ledger, and `result.receipt.deliverables[]` names each declared output as **produced or missing** — a partial multi-file run reports exactly which outputs never landed instead of claiming success. **Default-on** in a reasoning run
 
@@ -143,7 +143,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Persistent gateway** — adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine, **chat mode** with per-sender SQLite session history
 
 ### ⚙️ Builder Hardening
-- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withProgressCheckpoint()`, `withTaskContext()`
+- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withTaskContext()`
 - **`defineTool`** typed tool authoring — Standard Schema input (Effect Schema / Zod / Valibot / ArkType) + a plain async handler with arg types inferred from the schema; malformed options (`parameters`/`execute` instead of `input`/`handler`) fail fast with a typed error
 - **ToolBuilder** fluent API — define tools without raw schema objects
 - **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
@@ -158,7 +158,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **8,253 tests** across 1045 files — verified `bun test` on every PR
+- **8,253 tests** across 1048 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -463,7 +463,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 ReactiveAgentBuilder
   -> createRuntime()
     -> Core Services     EventBus, AgentService, TaskService
-    -> LLM Provider      Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test
+    -> LLM Provider      Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, Test
     -> Memory            Working, Semantic, Episodic, Procedural
     -> Reasoning         ReAct, Reflexion, Plan-Execute, ToT, Adaptive
     -> Tools             Registry, Sandbox, MCP Client
@@ -546,6 +546,8 @@ const agent2 = await ReactiveAgents.create()
 | **Anthropic**     | Claude Haiku, Sonnet, Opus   |     Yes      |    Yes    |
 | **OpenAI**        | GPT-4o, GPT-4o-mini          |     Yes      |    Yes    |
 | **Google Gemini** | Gemini Flash, Pro            |     Yes      |    Yes    |
+| **Groq**          | Llama, Qwen, and more (hosted) |     Yes      |    Yes    |
+| **xAI**           | Grok models                  |     Yes      |    Yes    |
 | **Ollama**        | Any local model              |     Yes      |    Yes    |
 | **LiteLLM**       | 40+ models via LiteLLM proxy |     Yes      |    Yes    |
 | **Test**          | Mock (deterministic)         |      --      |    --     |
@@ -604,13 +606,13 @@ gauge in Cortex Studio.
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@reactive-agents/core`](packages/core)                                   | EventBus pub/sub, AgentService lifecycle, TaskService state machine, canonical types                                                                                                      |
 | [`@reactive-agents/runtime`](packages/runtime)                             | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
-| [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Ollama, LiteLLM, and Test providers                                                                                                  |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, and Test providers                                                                                                  |
 | [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite; ExperienceStore cross-agent learning; background consolidation + decay                                            |
 | [`@reactive-agents/reasoning`](packages/reasoning)                         | 7 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action @experimental) with composable kernel architecture                                                               |
 | [`@reactive-agents/tools`](packages/tools)                                 | Tool registry with sandboxed execution, MCP client, agent-as-tool adapter, dynamic sub-agent spawning                                                                                     |
 | [`@reactive-agents/guardrails`](packages/guardrails)                       | Pre-LLM safety: injection detection, PII filtering, toxicity blocking                                                                                                                     |
 | [`@reactive-agents/verification`](packages/verification)                   | Post-LLM quality: semantic entropy, fact decomposition, NLI hallucination detection                                                                                                       |
-| [`@reactive-agents/cost`](packages/cost)                                   | 27-signal complexity routing, per-execution budget enforcement, semantic cache                                                                                                            |
+| [`@reactive-agents/cost`](packages/cost)                                   | Multi-factor complexity routing, per-execution budget enforcement, semantic cache                                                                                                            |
 | [`@reactive-agents/identity`](packages/identity)                           | Ed25519 agent certificates, RBAC policies, delegation chains, audit logging                                                                                                               |
 | [`@reactive-agents/observability`](packages/observability)                 | Distributed tracing (OTLP), MetricsCollector, structured logging, console + JSON exporters                                                                                                |
 | [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning                                                                                                                  |
@@ -896,7 +898,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (8,253 tests / 1045 files, ~95s)
+bun test                 # Run full test suite (8,253 tests / 1048 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

@@ -91,7 +91,6 @@ describe("AgentConfigSchema — validation", () => {
       },
       fallbacks: {
         providers: ["anthropic", "openai"],
-        errorThreshold: 3,
       },
       verification: {
         hallucinationDetection: true,

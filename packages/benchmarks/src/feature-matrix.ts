@@ -77,18 +77,15 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withExperienceLearning: { featureClass: "capability", gapReason: "cross-run learning; needs a repeated-task arm" },
   withHarness: { featureClass: "capability", gapReason: "compose-API harness injection" },
   withHook: { featureClass: "capability", gapReason: "user hooks alter control flow; unmeasured" },
-  withInteraction: { featureClass: "capability", gapReason: "user-interaction tool; bench has no user" },
   withKillSwitch: { featureClass: "capability", gapReason: "abort path; unmeasured" },
   withLearning: { featureClass: "capability", gapReason: "learning loop; needs a repeated-task arm" },
   withMCP: { featureClass: "capability", gapReason: "MCP tool servers; needs a docker fixture" },
   withMemoryConsolidation: { featureClass: "capability", gapReason: "needs a long/repeated-session arm" },
   withMinIterations: { featureClass: "capability", gapReason: "iteration floor unmeasured" },
   withModelRouting: { featureClass: "capability", gapReason: "structurally inert: bench runs ONE resident model per cell, so there is no pool to route across" },
-  withOrchestration: { featureClass: "capability", gapReason: "multi-agent orchestration; no task exercises it" },
   withOutputSchema: { featureClass: "capability", gapReason: "typed structured output; no schema task in the bench corpus" },
   withOutputValidator: { featureClass: "capability", gapReason: "structured-output repair; no schema task" },
   withoutMemory: { featureClass: "capability", gapReason: "negative wither; memory is default-off, so this is a no-op arm" },
-  withProgressCheckpoint: { featureClass: "capability", gapReason: "checkpoint cadence unmeasured" },
   withPrompts: { featureClass: "capability", gapReason: "prompt-pack override unmeasured" },
   withRemoteAgent: { featureClass: "capability", gapReason: "remote delegation; needs a second process" },
   withRetryPolicy: { featureClass: "capability", gapReason: "retry/backoff unmeasured" },
@@ -119,7 +116,6 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withFallbacks: { featureClass: "plumbing" },
   withGateway: { featureClass: "plumbing" },
   withHealthCheck: { featureClass: "plumbing" },
-  withIdentity: { featureClass: "plumbing" },
   withLayers: { featureClass: "plumbing" },
   withReplayLLM: { featureClass: "plumbing" },
   withLazyValidation: { featureClass: "plumbing" },
@@ -161,7 +157,11 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
  * one sanctioned upward move: it reflects a capability the bench never saw, now
  * made visible — the exact blindness this ratchet exists to prevent.
  */
-export const UNCOVERED_CAPABILITY_CEILING = 38;
+// 2026-07-19 (debt burndown Wave 1): 38 → 35. Three uncovered capability
+// withers were REMOVED from the builder (withInteraction, withOrchestration,
+// withProgressCheckpoint — register P0-6/P0-10), shrinking the real gap. Ratchet
+// down, never up.
+export const UNCOVERED_CAPABILITY_CEILING = 35;
 
 /** Capability features that must have a `builder.<name>(` call in runner.ts. */
 export function coveredCapabilityFeatures(): readonly string[] {

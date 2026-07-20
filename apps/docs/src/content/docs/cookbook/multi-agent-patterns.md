@@ -254,7 +254,6 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("orchestrator")
   .withProvider("anthropic")
-  .withOrchestration()
   .withObservability()
   .withHook({
     phase: "complete",

@@ -164,7 +164,7 @@ Two headline capabilities just landed: **typed structured output** and **durable
 
 An agent is a loop — LLM → tool → observe → repeat. Hand-rolling it works well for prototypes.
 
-The gap shows up under real workloads. On our 35-task benchmark, a bare ReAct loop (an LLM in a `while` with tools) reaches **85%**. The same models inside this harness reach **100%**. That difference is everything that isn't the loop itself:
+The gap shows up under real workloads. A bare ReAct loop (an LLM in a `while` with tools) breaks in ways the loop itself can't see — and everything that isn't the loop is where the work lives:
 
 - Tool calls returning malformed JSON, wrong types, or hallucinated tool names
 - Loops that don't terminate — or terminate too early
@@ -208,190 +208,41 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
 ## What You Get Out of the Box
 
 <p class="ra-lab-meta">
-    Built-in capabilities measured on real workloads — no extra wiring required.
+    Built-in reliability machinery — on by default, no extra wiring required.
 </p>
 
-<div class="ra-lab-grid">
-    <div class="ra-readout">
-        <p class="ra-readout-label">Self-healing tool calls</p>
-        <p class="ra-readout-value">
-            +80<span class="unit">pp accuracy</span>
-        </p>
-        <span class="ra-readout-mark">fires on every tool call</span>
-        <ul class="ra-readout-rows">
-            <li class="ok">
-                <span>Recovers from</span>
-                <b>86.7%</b>
-            </li>
-            <li class="ok">
-                <span>Cheaper than LLM reprompt</span>
-                <b>10×</b>
-            </li>
-            <li>
-                <span>Lifts local models most</span>
-                <b>4B+ Ollama</b>
-            </li>
-        </ul>
-    </div>
-    <div class="ra-readout">
-        <p class="ra-readout-label">Compact context on long runs</p>
-        <p class="ra-readout-value">
-            38.6<span class="unit">% tokens saved</span>
-        </p>
-        <span class="ra-readout-mark">runs every iteration</span>
-        <ul class="ra-readout-rows">
-            <li>
-                <span>Context compression</span>
-                <b>60.7%</b>
-            </li>
-            <li class="ok">
-                <span>Per-step overhead</span>
-                <b>0.16ms</b>
-            </li>
-            <li>
-                <span>Aggressive mode</span>
-                <b>44.1%</b>
-            </li>
-        </ul>
-    </div>
-    <div class="ra-readout">
-        <p class="ra-readout-label">Secret-leak detection</p>
-        <p class="ra-readout-value">
-            100<span class="unit">% catch rate</span>
-        </p>
-        <span class="ra-readout-mark">scans every output</span>
-        <ul class="ra-readout-rows">
-            <li class="ok">
-                <span>False positives</span>
-                <b>0%</b>
-            </li>
-            <li class="ok">
-                <span>Detection latency</span>
-                <b>0.02ms</b>
-            </li>
-            <li>
-                <span>Leak categories</span>
-                <b>4 types</b>
-            </li>
-        </ul>
-    </div>
-    <div class="ra-readout">
-        <p class="ra-readout-label">Guaranteed termination</p>
-        <p class="ra-readout-value">
-            12<span class="unit">/12 phases</span>
-        </p>
-        <span class="ra-readout-mark">single-owner termination</span>
-        <ul class="ra-readout-rows">
-            <li class="ok">
-                <span>Stop paths covered</span>
-                <b>100%</b>
-            </li>
-            <li class="ok">
-                <span>Loop detector + iter cap</span>
-                <b>built-in</b>
-            </li>
-            <li>
-                <span>Enforced by</span>
-                <b>CI</b>
-            </li>
-        </ul>
-    </div>
-</div>
-
-<div class="ra-bench">
-    <div class="ra-bench-label">
-        <strong>Frontier Benchmark</strong>
-        ra-full · 4 frontier models · Apr 30 2026 (W21)
-    </div>
-    <div class="ra-bench-bars">
-        <div class="ra-bar">
-            <span class="ra-bar-name">claude-sonnet-4-6</span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:100%"></span>
-            </span>
-            <span class="ra-bar-pct">100%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">claude-haiku-4-5</span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:100%"></span>
-            </span>
-            <span class="ra-bar-pct">100%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">gpt-4o-mini</span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:100%"></span>
-            </span>
-            <span class="ra-bar-pct">100%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">gemini-2.5-pro</span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:100%"></span>
-            </span>
-            <span class="ra-bar-pct">100%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">bare LLM (no harness)</span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill bare" style="width:85%"></span>
-            </span>
-            <span class="ra-bar-pct">85%</span>
-        </div>
-    </div>
-</div>
-
-<div class="ra-bench">
-    <div class="ra-bench-label">
-        <strong>Local Model Benchmark</strong>
-        ra-full · same harness · 35-task suite (Apr 7 2026 baseline)
-    </div>
-    <div class="ra-bench-bars">
-        <div class="ra-bar">
-            <span class="ra-bar-name">
-                gemma4:e4b<em> (local · 4 GB)</em>
-            </span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:94%"></span>
-            </span>
-            <span class="ra-bar-pct">94%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">
-                gemini-2.5-flash<em> (frontier ref)</em>
-            </span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:94%"></span>
-            </span>
-            <span class="ra-bar-pct">94%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">
-                cogito:14b<em> (local · 9 GB)</em>
-            </span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:91%"></span>
-            </span>
-            <span class="ra-bar-pct">91%</span>
-        </div>
-        <div class="ra-bar">
-            <span class="ra-bar-name">
-                gpt-4o-mini<em> (frontier ref)</em>
-            </span>
-            <span class="ra-bar-track">
-                <span class="ra-bar-fill" style="width:91%"></span>
-            </span>
-            <span class="ra-bar-pct">91%</span>
-        </div>
-    </div>
-</div>
+<CardGrid>
+    <Card title="Self-healing tool calls" icon="setting">
+        A 4-stage Healing Pipeline runs before every tool execution: tool-name
+        fuzzy match → parameter-name aliasing → path resolution → type
+        coercion. Malformed calls from smaller models get repaired
+        deterministically instead of failing or burning an LLM reprompt —
+        which is what makes 4B+ Ollama models usable for tool-calling agents.
+    </Card>
+    <Card title="Compact context on long runs" icon="document">
+        Three-stage context curation: tool results are compressed and stashed,
+        the curator renders only what the next step needs, and an optional
+        reactive trim kicks in under pressure. Long runs stay inside the
+        context window without you managing it.
+    </Card>
+    <Card title="Secret-leak detection" icon="warning">
+        Every output is scanned for system-prompt, API-key, credential, and
+        internal-instruction leaks (4 categories) with regex-based detection
+        and false-positive filters — deterministic and fast, no extra LLM
+        call.
+    </Card>
+    <Card title="Guaranteed termination" icon="approve-check">
+        All 12 phases route stop decisions through a single-owner termination
+        arbitrator, with a loop detector and iteration cap built in. A CI lint
+        guard prevents new bypass paths. Agents finish cleanly instead of
+        hanging or looping.
+    </Card>
+</CardGrid>
 
 <p class="ra-bench-note">
-    Local models tied with frontier on the same 35-task harness. The Healing
-    Pipeline closes the gap that bare prompting can't: tool-call recovery for
-    4B+ Ollama lifts accuracy by <b>+80pp</b> on FC-heavy tasks (6.7% → 86.7%).
-    Same agent code, same builder chain — just{' '}
+    Verified tool execution, evidence receipts, and the healing pipeline are
+    what carry the same agent code from a frontier API down to a local 4B
+    model. Same builder chain — just{' '}
     <code>.withProvider("ollama")</code>.
 </p>
 
@@ -432,10 +283,11 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         your own.
     </Card>
     <Card title="Reliable on Local Models" icon="setting">
-        **+80pp accuracy** on Ollama 4B+ vs. naive prompting. The 4-stage
-        Healing Pipeline recovers from **86.7% of tool-call errors** — 90%
-        cheaper than LLM reprompt. Model-adaptive context tunes prompts and
-        compaction per tier. Same code, frontier-to-local.
+        The 4-stage Healing Pipeline repairs malformed tool calls
+        deterministically — no LLM reprompt needed — and model-adaptive
+        context tunes prompts and compaction per tier. That's what makes
+        Ollama 4B+ viable for tool-calling agents. Same code,
+        frontier-to-local.
     </Card>
     <Card title="MCP-Native Tool I/O" icon="puzzle">
         **Connect any Model Context Protocol server** — local (`stdio`) or remote (`streamable-http`). The 9,400+ public MCP servers (filesystem, GitHub, Slack,
@@ -448,11 +300,12 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         cross-tool skill format used by Claude Code, Codex, and Cursor.
         [Browse the Skills guide &rarr;](/guides/agent-skills/)
     </Card>
-    <Card title="Frontier-Verified" icon="approve-check">
-        **100% pass on `ra-full`** across `claude-sonnet-4-6`,
-        `claude-haiku-4-5`, `gpt-4o-mini`, and `gemini-2.5-pro` (Apr 30 2026).
-        Bare LLM only achieves 85% on the same harness — a measurable lift from
-        the framework, not the model.
+    <Card title="Verified, Not Vibes" icon="approve-check">
+        Every run produces an **evidence receipt**: tool invocations, artifact
+        digests, verifier verdicts, and per-deliverable produced/missing
+        status. The verify phase checks output against tool observations, and
+        the fabrication guard rejects invented measurements — the framework
+        proves what it did instead of asserting it.
     </Card>
     <Card title="Developer Experience" icon="rocket">
         **60 seconds to first agent.** Progressive disclosure — start with 3
@@ -495,7 +348,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         Multi-agent-first frameworks. Reactive Agents takes the
         Cognition-aligned posture: **single-threaded writes, sub-agent
         delegation only when it pays for itself**. Type-safe, composable, with
-        the **healing pipeline that lifts local-model accuracy by +80pp** —
+        the **healing pipeline that keeps local-model tool calling viable** —
         and A2A (JSON-RPC + SSE) ready when you actually need fan-out.
     </Card>
     <Card title="vs. Building From Scratch" icon="document">

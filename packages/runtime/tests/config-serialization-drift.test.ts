@@ -54,7 +54,7 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 // Builder methods deliberately NOT represented as data, and why. Documented so
 // "should this be config?" is a conscious, reviewed decision rather than drift:
 //   - Functions/callbacks: withHook, withErrorHandler, withOutputValidator,
-//     withVerificationStep, withProgressCheckpoint, withCustomTermination,
+//     withVerificationStep, withCustomTermination,
 //     withHarness, withLayers, withEvents — not JSON-expressible.
 //   - withOutputSchema: the SCHEMA OBJECT is not JSON (options DO serialize; see
 //     NON_BUILDER_ROUNDTRIP above).
@@ -250,8 +250,6 @@ const MAXIMAL_CONFIG: AgentConfig = {
   logging: { level: "info", format: "json", output: "console" },
   fallbacks: {
     providers: ["openai"],
-    models: ["gpt-4o"],
-    errorThreshold: 3,
   },
   verification: {
     semanticEntropy: true,
@@ -290,10 +288,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
     tools: true,
     memory: true,
     observability: true,
-    identity: true,
-    interaction: true,
     prompts: true,
-    orchestration: true,
     killSwitch: true,
     audit: true,
     selfImprovement: true,

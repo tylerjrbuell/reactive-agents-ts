@@ -1,5 +1,6 @@
 import { Layer, Effect, Context, Ref } from "effect";
 import { applyRetryToLlmService } from "./llm-retry.js";
+import { cascadeWithTransitions } from "./llm-fallback-cascade.js";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import { CapabilityRegistryLive } from "./capabilities/registry.js";
@@ -13,7 +14,6 @@ import {
   getProviderDefaultModel,
   LLMService,
   makeRateLimitedProvider,
-  FallbackChain,
 } from "@reactive-agents/llm-provider";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive, SkillStoreServiceLive } from "@reactive-agents/memory";
@@ -39,15 +39,12 @@ import type { ReasoningOptions } from "./types.js";
 import { withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { createIdentityLayer } from "@reactive-agents/identity";
 import {
   createObservabilityLayer,
   MetricsCollectorLive,
   TelemetryCollectorLive,
 } from "@reactive-agents/observability";
-import { createInteractionLayer } from "@reactive-agents/interaction";
 import { createPromptLayer } from "@reactive-agents/prompts";
-import { createOrchestrationLayer } from "@reactive-agents/orchestration";
 import {
   createReactiveIntelligenceLayer,
   makeSkillResolverService,
@@ -333,7 +330,6 @@ export const createRuntime = (options: RuntimeOptions) => {
     cacheTimeoutMs: options.cacheTimeoutMs,
     minIterations: options.minIterations,
     taskContext: options.taskContext,
-    progressCheckpoint: options.progressCheckpoint,
     verificationStep: options.verificationStep,
     outputValidator: options.outputValidator,
     outputValidatorOptions: options.outputValidatorOptions,
@@ -434,60 +430,18 @@ export const createRuntime = (options: RuntimeOptions) => {
             const all = [primary, ...fallbacks];
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return {
-              complete: (req: Parameters<typeof primary.complete>[0]) => {
-                const fallbackTransitions: Array<{
-                  fromProvider: string;
-                  toProvider: string;
-                  reason: string;
-                  attemptNumber: number;
-                }> = [];
-                const fallbackChain = new FallbackChain(
-                  {
-                    providers: [options.provider ?? "test", ...fallbackProviders],
-                    errorThreshold: options.fallbackConfig?.errorThreshold,
-                  },
-                  (fromProvider, toProvider, reason, attemptNumber) => {
-                    fallbackTransitions.push({
-                      fromProvider,
-                      toProvider,
-                      reason,
-                      attemptNumber,
-                    });
-                  },
-                );
-                let effect = primary.complete(req);
-                for (const fb of fallbacks) {
-                  const captured = fb;
-                  effect = effect.pipe(
-                    Effect.catchAllCause(() =>
-                      Effect.sync(() => {
-                        fallbackChain.recordError(options.provider ?? "test");
-                      }).pipe(Effect.zipRight(captured.complete(req))),
-                    ),
-                  );
-                }
-                return effect.pipe(
-                  Effect.flatMap((response) =>
-                    Effect.gen(function* () {
-                      const transitions = [...fallbackTransitions];
-
-                      return transitions.length > 0
-                        ? ({
-                            ...response,
-                            fallbackTransitions: transitions,
-                          } as typeof response & {
-                            fallbackTransitions: Array<{
-                              fromProvider: string;
-                              toProvider: string;
-                              reason: string;
-                              attemptNumber: number;
-                            }>;
-                          })
-                        : response;
-                    }),
-                  ),
-                );
-              },
+              complete: (req: Parameters<typeof primary.complete>[0]) =>
+                // Honest provider cascade: try the primary, and on ANY error fall
+                // through to the next configured provider in order. Each real
+                // switch attaches a transition (consumed by inline-think.ts /
+                // verification-think-retry.ts to emit ProviderFallbackActivated).
+                // No consecutive-error threshold and no per-model chain — those
+                // knobs were removed (P0-3) because they were never wired.
+                cascadeWithTransitions(
+                  [options.provider ?? "test", ...fallbackProviders],
+                  primary.complete(req),
+                  fallbacks.map((fb) => fb.complete(req)),
+                ),
               stream: (req: Parameters<typeof primary.stream>[0]) => primary.stream(req),
               completeStructured: (req: Parameters<typeof primary.completeStructured>[0]) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -819,11 +773,6 @@ export const createRuntime = (options: RuntimeOptions) => {
       })()
     : Layer.empty;
 
-  // ── Identity ──
-  const identityOptLayer = options.enableIdentity
-    ? createIdentityLayer()
-    : Layer.empty;
-
   // ── Observability ──
   const observabilityOptLayer = options.enableObservability
     ? (() => {
@@ -978,18 +927,8 @@ export const createRuntime = (options: RuntimeOptions) => {
       ? makeSkillResolverService(skillLayerForRi.resolver)
       : Layer.empty;
 
-  // ── Interaction ──
-  const interactionOptLayer = options.enableInteraction
-    ? createInteractionLayer().pipe(Layer.provide(eventBusLayer))
-    : Layer.empty;
-
   // ── Prompts (already constructed above; included only if enabled) ──
   const promptOptLayer = promptLayer ?? Layer.empty;
-
-  // ── Orchestration ──
-  const orchestrationOptLayer = options.enableOrchestration
-    ? createOrchestrationLayer()
-    : Layer.empty;
 
   // ── A2A ──
   const a2aOptLayer = options.enableA2A
@@ -1091,15 +1030,12 @@ export const createRuntime = (options: RuntimeOptions) => {
       sessionStoreOptLayer,
       skillStoreOptLayer,
       reasoningOptLayer,
-      identityOptLayer,
       observabilityOptLayer,
       telemetryOptLayer,
       loggerTapOptLayer,
       healthOptLayer,
       reactiveIntelOptLayer,
-      interactionOptLayer,
       promptOptLayer,
-      orchestrationOptLayer,
       a2aOptLayer,
       gatewayOptLayer,
       extraOptLayer,
@@ -1115,7 +1051,7 @@ export const createRuntime = (options: RuntimeOptions) => {
  * - MetricsCollector (auto-subscribed EventBus listener — overhead for short-lived agents)
  * - LifecycleHookRegistry (sub-agents don't fire lifecycle hooks)
  * - Memory system (unless parent explicitly enables it)
- * - All optional layers: Identity, Interaction, Prompts, Orchestration, Gateway, A2A,
+ * - All optional layers: Prompts, Gateway, A2A,
  *   Health, ReactiveIntelligence, Telemetry, Logging, KillSwitch, BehavioralContracts
  *
  * The parent can toggle heavier layers (memory, guardrails, observability, cost tracking)

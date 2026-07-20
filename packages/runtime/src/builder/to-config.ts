@@ -71,10 +71,7 @@ export interface BuilderStateForSerialization {
   _reactiveIntelligenceOptions?: unknown;
   _loggingConfig?: unknown;
   _fallbackConfig?: unknown;
-  _enableIdentity: boolean;
-  _enableInteraction: boolean;
   _enablePrompts: boolean;
-  _enableOrchestration: boolean;
   _enableKillSwitch: boolean;
   _enableAudit: boolean;
   _enableSelfImprovement: boolean;
@@ -269,10 +266,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._enableTools) features["tools"] = true;
   if (state._enableMemory) features["memory"] = true;
   if (state._enableObservability) features["observability"] = true;
-  if (state._enableIdentity) features["identity"] = true;
-  if (state._enableInteraction) features["interaction"] = true;
   if (state._enablePrompts) features["prompts"] = true;
-  if (state._enableOrchestration) features["orchestration"] = true;
   if (state._enableKillSwitch) features["killSwitch"] = true;
   if (state._enableAudit) features["audit"] = true;
   if (state._enableSelfImprovement) features["selfImprovement"] = true;

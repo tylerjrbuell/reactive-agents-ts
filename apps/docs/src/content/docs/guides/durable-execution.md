@@ -125,12 +125,6 @@ const runId = (await b.listRuns())[0].runId;
 const result = await b.resumeRun(runId);   // reconstructs + completes
 ```
 
-## Relationship to `withProgressCheckpoint`
-
-`.withProgressCheckpoint(every)` is a lighter, plan-level hint: on restart,
-session resumption surfaces the incomplete plan as prior context. It does **not**
-reconstruct full kernel state. For true crash-resume, use `.withDurableRuns()`.
-
 ## Human-in-the-loop builds on this
 
 The same checkpoint + resume machinery powers durable **approval gates**: a gated

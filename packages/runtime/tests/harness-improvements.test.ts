@@ -12,8 +12,11 @@
  *   2. withCustomTermination(fn)  — user-defined done predicate
  *   3. withVerificationStep()     — mandatory reflection pass before completion
  *   4. withOutputValidator(fn)    — structural validation with retry on failure
- *   5. withProgressCheckpoint(n) — persist partial state every N iterations
- *   6. withTaskContext(record)    — inject background data into reasoning context
+ *   5. withTaskContext(record)    — inject background data into reasoning context
+ *
+ * (withProgressCheckpoint was REMOVED in v0.14 — the config dead-ended in a
+ * struct and autoResume was never implemented; see DEBT-REGISTER P0-10. Use
+ * .withDurableRuns() for real crash-resume.)
  */
 
 import { describe, it, expect } from "bun:test";
@@ -373,39 +376,13 @@ describe("withOutputValidator", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. withProgressCheckpoint
+// 5. withProgressCheckpoint — REMOVED v0.14 (DEBT-REGISTER P0-10)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("withProgressCheckpoint", () => {
-  it("builder method exists and returns this for chaining", async () => {
-    const builder = ReactiveAgents.create()
-      .withName("checkpoint-test")
-      .withTestScenario([{ text: "done" }])
-      .withProgressCheckpoint(2);
-
-    expect(builder).toBeDefined();
-  });
-
-  it("config stores progressCheckpoint settings", async () => {
-    const agent = await ReactiveAgents.create()
-      .withName("checkpoint-config")
-      .withTestScenario([{ text: "done" }])
-      .withProgressCheckpoint(2)
-      .build();
-
-    const stored =
-      (agent as any)._config?.progressCheckpoint ?? (agent as any).config?.progressCheckpoint;
-    expect(stored).toBeDefined();
-    expect(stored.every).toBe(2);
-  });
-
-  it("accepts optional autoResume flag", async () => {
-    const builder = ReactiveAgents.create()
-      .withName("checkpoint-resume-test")
-      .withTestScenario([{ text: "done" }])
-      .withProgressCheckpoint(3, { autoResume: true });
-
-    expect(builder).toBeDefined();
+describe("withProgressCheckpoint (removed v0.14)", () => {
+  it("stays removed — the config dead-ended and autoResume was never implemented", () => {
+    const proto = Object.getPrototypeOf(ReactiveAgents.create());
+    expect(Object.getOwnPropertyNames(proto)).not.toContain("withProgressCheckpoint");
   });
 });
 

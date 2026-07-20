@@ -82,7 +82,6 @@ const agent = await ReactiveAgents.create()
 | `.withGuardrails()` | <Badge text="recommended" variant="note" size="small" /> | Pre-LLM injection / PII / toxicity blocking |
 | `.withVerification()` | <Badge text="opt-in" variant="tip" size="small" /> | Post-LLM fact-check (semantic entropy, NLI) |
 | `.withCostTracking()` | <Badge text="recommended" variant="note" size="small" /> | Complexity routing + budget enforcement |
-| `.withIdentity()` | <Badge text="advanced" variant="caution" size="small" /> | Ed25519 certificates + RBAC + delegation |
 | `.withKillSwitch()` | <Badge text="recommended" variant="note" size="small" /> | Per-agent + global emergency halt |
 | `.withRequiredTools({ tools: ["web-search"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Force critical tool calls before answering |
 | `.withApprovalPolicy({ tools, mode: "detach" })` | <Badge text="opt-in" variant="tip" size="small" /> | Gate tool calls behind durable human approval ([HITL](/guides/durable-hitl/)) |
@@ -102,10 +101,10 @@ const agent = await ReactiveAgents.create()
 |--------|--------------|
 | `.withTimeout(ms)` | Hard execution timeout |
 | `.withRetryPolicy({ maxRetries, backoffMs })` | Retry on transient LLM failures |
-| `.withFallbacks({ providers, errorThreshold })` | Provider/model fallback chain |
+| `.withFallbacks({ providers })` | Ordered provider cascade — falls back to the next provider on any error |
 | `.withErrorHandler(fn)` | Global error callback |
 | `.withMinIterations(n)` | Force at least N reasoning steps |
-| `.withVerificationStep({ mode: "reflect" })` | LLM self-review before answering |
+| `.withVerificationStep({ mode: "reflect" })` | LLM self-review; on a REVISE verdict it re-runs once with the feedback so the answer is actually revised |
 | `.withOutputValidator(fn)` | Retry until output passes a predicate |
 | `.withCustomTermination(fn)` | User-defined "done" check |
 | `.withDurableRuns({ dir, checkpointEvery })` | Checkpoint every iteration to SQLite; crash-resume via `resumeRun` ([Durable Execution](/guides/durable-execution/)) |
@@ -116,7 +115,6 @@ const agent = await ReactiveAgents.create()
 |--------|--------------|
 | `.withDynamicSubAgents({ maxIterations })` | Model-spawned sub-agents at runtime |
 | `.withAgentTool(name, config)` | Named purpose-built sub-agent |
-| `.withOrchestration()` | Sequential / parallel / pipeline / map-reduce |
 | `.withA2A()` | Agent Cards + JSON-RPC + SSE for cross-agent calls |
 | `.withGateway({ heartbeat, crons, webhooks, policies })` | Persistent autonomous harness |
 

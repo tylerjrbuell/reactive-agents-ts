@@ -224,8 +224,19 @@ export { validateAndRepairMessages } from "./validation.js";
 
 /**
  * ─── Provider Behavior Adapters ───
- * Composable per-tier prompt/guidance hooks (7 hooks: taskFraming, toolGuidance,
- * continuationHint, errorRecovery, synthesisPrompt, qualityCheck, systemPromptPatch).
+ * Composable per-tier prompt/guidance hooks. Live contract (all hooks have
+ * kernel/provider call sites): continuationHint, errorRecovery,
+ * synthesisPrompt, qualityCheck (kernel phases) + parseToolCalls (every
+ * provider's complete()/stream()).
+ *
+ * `selectAdapter` composes: tier adapter is the base; a resolved
+ * ModelCalibration overlays on top via `composeAdapters` (calibrated hook
+ * wins where set, tier hook survives where not — calibration is additive,
+ * never capability-removing).
+ *
+ * History: taskFraming / toolGuidance / systemPromptPatch were removed
+ * 2026-07-19 after their sole call sites died in `279b61fb` (see adapter.ts
+ * header).
  *
  * @unstable Phase 1 surface. `selectAdapter` resolution + tier dispatch may change
  * in v0.10.x. See AUDIT-overhaul-2026.md §11 #15.
@@ -237,6 +248,7 @@ export {
   localModelAdapter,
   midModelAdapter,
   selectAdapter,
+  composeAdapters,
 } from "./adapter.js";
 
 /**

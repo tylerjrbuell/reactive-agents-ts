@@ -29,6 +29,24 @@ type MemoryServiceLike = {
 type MemoryConsolidatorLike = {
   decayUnused: (agentId: string, decayFactor: number) => Effect.Effect<number>;
 };
+/**
+ * `.withMemoryConsolidation()` service (memory pkg
+ * `services/memory-consolidator.ts`) — REPLAY→CONNECT→COMPRESS cycles.
+ * Wired here (v0.14, DEBT-REGISTER P0-7): each non-trivial run counts as one
+ * pending entry via `notifyEntry()`; when the configured threshold is
+ * reached, a full `consolidate()` cycle runs. Before this the service was
+ * built by the layer but consolidate()/notifyEntry() had ZERO callers.
+ */
+type MemoryConsolidatorServiceLike = {
+  // Narrow service-interface shim (Category-A, errors/index.ts doc-block):
+  // the real `consolidate` returns `Effect<ConsolidationResult, DatabaseError>`,
+  // but this file dodges cross-package error coupling — same convention as the
+  // sibling `MemoryConsolidatorLike.decayUnused` above (never-typed error,
+  // runtime `Effect.catchAll` is the actual safety net). Success channel is
+  // `unknown` (not the error channel), so this is NOT a silent-swallow site.
+  consolidate: (agentId: string) => Effect.Effect<unknown>;
+  notifyEntry: () => Effect.Effect<boolean, never>;
+};
 type MemoryExtractorLike = {
   extractFromConversation: (
     agentId: string,
@@ -38,6 +56,8 @@ type MemoryExtractorLike = {
 
 const MemoryServiceTag = Context.GenericTag<MemoryServiceLike>("MemoryService");
 const MemoryConsolidatorTag = Context.GenericTag<MemoryConsolidatorLike>("MemoryConsolidator");
+const MemoryConsolidatorServiceTag =
+  Context.GenericTag<MemoryConsolidatorServiceLike>("MemoryConsolidatorService");
 const MemoryExtractorTag = Context.GenericTag<MemoryExtractorLike>("MemoryExtractor");
 
 export const memoryFlush: Phase = {
@@ -47,12 +67,16 @@ export const memoryFlush: Phase = {
     Effect.gen(function* () {
       const memoryServiceOpt = yield* Effect.serviceOption(MemoryServiceTag);
       const memoryConsolidatorOpt = yield* Effect.serviceOption(MemoryConsolidatorTag);
+      const consolidatorServiceOpt = yield* Effect.serviceOption(
+        MemoryConsolidatorServiceTag,
+      );
       const memoryExtractorOpt = yield* Effect.serviceOption(MemoryExtractorTag);
 
       // Skip when no memory services are configured
       if (
         memoryServiceOpt._tag === "None" &&
         memoryConsolidatorOpt._tag === "None" &&
+        consolidatorServiceOpt._tag === "None" &&
         memoryExtractorOpt._tag === "None"
       ) {
         return { ...ctx, agentState: "flushing" as const };
@@ -195,6 +219,28 @@ export const memoryFlush: Phase = {
           Effect.catchAll((err) =>
             emitErrorSwallowed({
               site: "runtime/src/engine/phases/memory-flush.ts:extract",
+              tag: errorTag(err),
+            }),
+          ),
+        );
+      }
+
+      // ── MemoryConsolidatorService: entry-count trigger (P0-7 wiring) ──
+      // Each non-trivial run counts as one pending entry. When notifyEntry()
+      // reports the threshold reached, run a full REPLAY→CONNECT→COMPRESS
+      // consolidate() cycle. Errors are swallowed (post-run hygiene must not
+      // fail the run) but surfaced via ErrorSwallowed telemetry.
+      if (consolidatorServiceOpt._tag === "Some") {
+        const consolidator = consolidatorServiceOpt.value;
+        yield* Effect.gen(function* () {
+          const thresholdReached = yield* consolidator.notifyEntry();
+          if (thresholdReached) {
+            yield* consolidator.consolidate(ctx.agentId);
+          }
+        }).pipe(
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/phases/memory-flush.ts:consolidate",
               tag: errorTag(err),
             }),
           ),

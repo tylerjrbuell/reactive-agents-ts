@@ -10,11 +10,91 @@ the rest of the observability/tools families). Migrate:
 - `.withTelemetry(cfg?)` → `.withObservability({ telemetry: cfg ?? true })`
 - `.withoutTracing()` → `.withObservability({ tracing: false })`
 
-The builder `with*`/`without*` surface drops 92 → 89 unique methods and is now
-guarded by a monotone-decreasing ratchet test (`builder-wither-ratchet.test.ts`)
-per the ratified north-star architecture §5: new capability arrives as a config
-option or profile field, never a new top-level method. Also fixed the
-`withDocuments` JSDoc, which advertised a non-existent `withTools({ rag })`.
+The builder `with*`/`without*` surface is guarded by a monotone-decreasing
+ratchet test (`builder-wither-ratchet.test.ts`) per the ratified north-star
+architecture §5: new capability arrives as a config option or profile field,
+never a new top-level method. Also fixed the `withDocuments` JSDoc, which
+advertised a non-existent `withTools({ rag })`.
+
+### Breaking — removed builder methods and options that did nothing (v0.14)
+
+An audit found several public methods and options that a caller could set but
+that had **no reader** — the harness silently ignored them. Rather than ship a
+promise we don't keep, they are removed; a call that passed them now fails
+loudly (compile error, or a runtime throw naming the removal) instead of
+misleading you. The builder wither surface drops from 89 to 85 methods.
+
+- **`.withReactiveIntelligence({ autonomy, constraints })` — the `autonomy` and
+  `constraints` options are removed.** `autonomy: 'observe'`, `neverEarlyStop`,
+  `neverHumanEscalate`, `lockedSkills`, and `protectedSkills` were written but
+  never read: a caller who asked for observe-only got a fully autonomous
+  controller. This was a no-op **safety** switch, so it is removed outright
+  rather than deprecated. The method's working options are unchanged.
+- **`.withIdentity()`, `.withInteraction()`, `.withOrchestration()` removed.**
+  Each merged a service layer nothing resolved (`.withOrchestration()` was a
+  literal no-op). The `@reactive-agents/identity` and `/interaction` packages
+  remain for direct use; `.withOrchestration()` has no replacement.
+- **`.withProgressCheckpoint()` removed.** Its `autoResume` was never
+  implemented. Use `.withDurableRuns()` for real crash-resume.
+- **`.withFallbacks()` — the `models` and `errorThreshold` options are removed.**
+  Docs claimed it "switches after 3 consecutive errors" and fell back to a
+  cheaper model on a 429; neither was implemented. It now does what it always
+  actually did — an immediate ordered **provider** cascade (primary → each
+  fallback on any error) — and its config is `{ providers }` only.
+- **`.withSkills()` now throws on a no-op call.** A bare `.withSkills()` (no
+  `paths`) was silently doing nothing, and the `packages`/`overrides` keys were
+  dropped. It now requires a non-empty `paths` array and rejects the removed keys.
+
+### Fixed — APIs that now do what they say
+
+- **`.withVerificationStep()` influences the answer.** Previously it burned an
+  LLM call per run and wrote the verdict to a field nothing read. A `REVISE`
+  verdict now re-runs once with the verification feedback, so the verdict
+  actually shapes the final output.
+- **`.withCalibration("skip")` is honored.** It was silently rewritten to
+  `"auto"` whenever reasoning was enabled, so the opt-out did not exist. `"skip"`
+  now skips calibration even with reasoning on; when unset, calibration
+  auto-enables only if reasoning is active.
+- **Model calibration no longer weakens the harness.** A model with a
+  calibration file previously *lost* its four live provider-adapter hooks
+  (continuation, error-recovery, synthesis, quality-check) and gained two dead
+  ones. Calibration now **composes** with the tier adapter (additive): it can
+  refine behavior but can never remove a capability.
+- **Error suggestions are valid and accurate.** `errorContext()` no longer emits
+  a syntactically invalid `.withGuardrails({ ... })` snippet, no longer tells you
+  to `resume()` an agent stopped by the kill switch (stopped/terminated runs are
+  not resumable), and its JSDoc names the real `agent.resumeRun(runId)` method.
+
+### Changed — behavior
+
+- **The meta-tool suite is opt-in.** The default toolbox is now task-facing; the
+  planning/reflection meta-tools (and their web-egress default) no longer load
+  unless you ask for them.
+
+### Fixed — receipt & telemetry truthfulness
+
+A sweep made the run receipt honest across every strategy, not just `reactive`:
+
+- Every strategy now mints the canonical tool ledger, so deliverable receipts,
+  `terminatedBy`, `goalAchieved`, and abstention resolve on the plan-execute,
+  blueprint, code-action, and inline paths — not only the reactive one.
+- `reflexion`, `plan-execute`, `tree-of-thought`, and `blueprint` report their
+  real `llmCalls`/`tokensUsed` instead of zeros; a missing declared deliverable
+  now caps the trust verdict; result-boundary verification reaches every path.
+- Tool events reach the public stream, failing tools stop retrying silently,
+  every started tool call completes, and Tree-of-Thought's cost guards became
+  reachable. Kernel logs are no longer discarded and carry correlation ids.
+- `code-action` (previously structurally broken with real tools) works; the
+  inline agent loop and pause/resume/stop/terminate fail clearly instead of
+  crashing without a kill switch configured.
+
+### Added
+
+- **Groq and xAI providers** (v0.13.5), both on the shared OpenAI-compatible
+  stack (streaming, native function calling, structured output).
+- `CompletionEnvelope` — honesty signals cross every strategy boundary uniformly.
+- A universal todo-checklist meta-tool (opt-in) and a real-world agent probe
+  fleet (10 archetypes with graded receipt checks) for internal evaluation.
 
 ## [0.13.6] — 2026-07-06
 

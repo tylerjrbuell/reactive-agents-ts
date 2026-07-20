@@ -47,6 +47,36 @@ import type {
 } from "../types.js";
 
 /**
+ * Resolve the effective calibration setting from the user's explicit choice and
+ * whether reasoning is enabled.
+ *
+ * The gate that P0-9 fixed: calibration auto-enables when reasoning is on and
+ * the user hasn't touched `.withCalibration()`, BUT an explicit
+ * `.withCalibration("skip")` must be honored — the opt-out is real, not
+ * silently rewritten to `"auto"`. `undefined` means "unset" (user never called
+ * the wither), which is distinct from an explicit `"skip"`.
+ *
+ * Downstream (`engine/phases/agent-loop/setup/calibration.ts`) treats both
+ * `undefined` and `"skip"` as "no calibration adapter", so we collapse an
+ * explicit skip to `undefined` here.
+ *
+ * @param explicit - The value passed to `.withCalibration()`, or `undefined` if never called.
+ * @param enableReasoning - Whether the reasoning kernel is active.
+ * @returns The calibration mode to forward to the runtime, or `undefined` to skip.
+ */
+export function resolveCalibrationSetting(
+  explicit: CalibrationMode | undefined,
+  enableReasoning: boolean,
+): CalibrationMode | undefined {
+  // Explicit opt-out — honor it even when reasoning is on.
+  if (explicit === "skip") return undefined;
+  // Any other explicit choice ("auto" or a ModelCalibration object) wins.
+  if (explicit !== undefined) return explicit;
+  // Unset: auto-enable calibration when reasoning is active, otherwise none.
+  return enableReasoning ? "auto" : undefined;
+}
+
+/**
  * Structural view over the builder state fields read by
  * {@link buildBaseRuntimeAndEngine}. The `ReactiveAgentBuilder` class
  * structurally satisfies this interface — call sites cast via
@@ -75,12 +105,9 @@ export interface BuilderRuntimeStateView {
   readonly _enableAudit: boolean;
   readonly _enableReasoning: boolean;
   readonly _enableTools: boolean;
-  readonly _enableIdentity: boolean;
   readonly _enableObservability: boolean;
   readonly _observabilityOptions: ObservabilityOptions;
-  readonly _enableInteraction: boolean;
   readonly _enablePrompts: boolean;
-  readonly _enableOrchestration: boolean;
   readonly _enableKillSwitch: boolean;
   readonly _enableBehavioralContracts: boolean;
   readonly _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
@@ -140,7 +167,6 @@ export interface BuilderRuntimeStateView {
   readonly _enableHealthCheck: boolean;
   readonly _minIterations?: number;
   readonly _taskContext?: Record<string, string>;
-  readonly _progressCheckpoint?: { every: number; autoResume?: boolean };
   readonly _verificationStep?: { mode: "reflect"; prompt?: string };
   readonly _outputValidator?: (output: string) => {
     valid: boolean;
@@ -153,25 +179,16 @@ export interface BuilderRuntimeStateView {
     import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
   >;
   readonly _skillsConfig?: {
-    paths?: string[];
-    packages?: string[];
-    evolution?: {
-      mode?: string;
-      refinementThreshold?: number;
-      rollbackOnRegression?: boolean;
-    };
-    overrides?: Record<string, { evolutionMode?: string }>;
+    paths: readonly string[];
   };
   readonly _fallbackConfig?: {
     providers?: string[];
-    models?: string[];
-    errorThreshold?: number;
   };
   readonly _pricingRegistry: Record<
     string,
     { readonly input: number; readonly output: number }
   >;
-  readonly _calibration: CalibrationMode;
+  readonly _calibration?: CalibrationMode;
   readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
   readonly _cortexUrl: string | null;
   readonly _leanHarness: boolean;
@@ -386,12 +403,9 @@ export const buildBaseRuntimeAndEngine = (
       enableAudit: state._enableAudit,
       enableReasoning: state._enableReasoning,
       enableTools: state._enableTools,
-      enableIdentity: state._enableIdentity,
       enableObservability: state._enableObservability,
       observabilityOptions: state._observabilityOptions,
-      enableInteraction: state._enableInteraction,
       enablePrompts: state._enablePrompts,
-      enableOrchestration: state._enableOrchestration,
       enableKillSwitch: state._enableKillSwitch,
       enableBehavioralContracts: state._enableBehavioralContracts,
       behavioralContract: state._behavioralContract,
@@ -492,26 +506,16 @@ export const buildBaseRuntimeAndEngine = (
       enableHealthCheck: state._enableHealthCheck,
       minIterations: state._minIterations,
       taskContext: state._taskContext,
-      progressCheckpoint: state._progressCheckpoint,
       verificationStep: state._verificationStep,
       outputValidator: state._outputValidator,
       outputValidatorOptions: state._outputValidatorOptions,
       customTermination: state._customTermination,
       enableReactiveIntelligence: state._enableReactiveIntelligence,
       reactiveIntelligenceOptions: state._reactiveIntelligenceOptions,
-      ...(state._skillsConfig?.paths?.length
-        ? {
-            skills: {
-              paths: [...state._skillsConfig.paths],
-              ...(state._skillsConfig.evolution
-                ? {
-                    evolution: {
-                      ...state._skillsConfig.evolution,
-                    },
-                  }
-                : {}),
-            },
-          }
+      // `.withSkills()` guarantees non-empty paths (it throws otherwise —
+      // v0.14 P0-10), so presence of the config IS the gate.
+      ...(state._skillsConfig
+        ? { skills: { paths: [...state._skillsConfig.paths] } }
         : {}),
       fallbackConfig: state._fallbackConfig,
       pricingRegistry:
@@ -519,15 +523,13 @@ export const buildBaseRuntimeAndEngine = (
           ? state._pricingRegistry
           : undefined,
       metaTools: kernelMetaTools,
-      // Auto-enable calibration when reasoning is active and user hasn't explicitly skipped.
-      // This ensures per-model adaptation (steering channel, parallel capability, classifier
-      // reliability) works by default — users only need .withCalibration("skip") to opt out.
-      calibration:
-        state._calibration !== "skip"
-          ? state._calibration
-          : state._enableReasoning
-          ? "auto"
-          : undefined,
+      // Auto-enable calibration when reasoning is active and the user hasn't
+      // touched `.withCalibration()`. An explicit `.withCalibration("skip")` is
+      // honored as a real opt-out (P0-9) — see resolveCalibrationSetting.
+      calibration: resolveCalibrationSetting(
+        state._calibration,
+        state._enableReasoning,
+      ),
       leanHarness: state._leanHarness || undefined,
       budgetLimits: state._budgetLimits,
       grounding: state._groundingConfig,

@@ -19,11 +19,8 @@ describe("Full Layer Integration", () => {
       enableCostTracking: true,
       enableReasoning: true,
       enableTools: true,
-      enableIdentity: true,
       enableObservability: true,
-      enableInteraction: true,
       enablePrompts: true,
-      enableOrchestration: true,
       enableAudit: true,
     });
 
@@ -51,11 +48,8 @@ describe("Full Layer Integration", () => {
       enableCostTracking: true,
       enableReasoning: true,
       enableTools: true,
-      enableIdentity: true,
       enableObservability: true,
-      enableInteraction: true,
       enablePrompts: true,
-      enableOrchestration: true,
       enableAudit: true,
       // `testResponses` is not a RuntimeOption — use `testScenario` so the test provider returns text.
       testScenario: [{ text: "The answer is 42." }],
@@ -95,11 +89,8 @@ describe("Full Layer Integration", () => {
       .withCostTracking()
       .withReasoning()
       .withTools()
-      .withIdentity()
       .withObservability()
-      .withInteraction()
       .withPrompts()
-      .withOrchestration()
       .withAudit()
       .withTestScenario([{ match: "Hello", text: "Hi there! How can I help you?" }])
       .build();
@@ -117,11 +108,8 @@ describe("Full Layer Integration", () => {
       .withCostTracking()
       .withReasoning()
       .withTools()
-      .withIdentity()
       .withObservability()
-      .withInteraction()
       .withPrompts()
-      .withOrchestration()
       .withAudit()
       .withTestScenario([{ match: "reasoning agent", text: "FINAL ANSWER: The answer is 42." }])
       .build();
@@ -152,7 +140,6 @@ describe("Full Layer Integration", () => {
       .withProvider("test")
       .withGuardrails()
       .withPrompts()
-      .withIdentity()
       .build();
 
     expect(agent).toBeInstanceOf(ReactiveAgent);

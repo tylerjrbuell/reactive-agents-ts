@@ -164,14 +164,16 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   const fb = raw.fallbacks;
   if (fb && typeof fb === "object" && !Array.isArray(fb)) {
     const o = fb as Record<string, unknown>;
-    const providers = asStringArray(o.providers);
-    out.fallbacks = {
-      enabled: o.enabled === true,
-      ...(providers ? { providers } : {}),
-      ...(asFiniteNumber(o.errorThreshold) !== undefined
-        ? { errorThreshold: asFiniteNumber(o.errorThreshold) }
-        : {}),
-    };
+    // v0.14 (register P0-3): the runtime FallbackConfig is `{ providers }` only.
+    // `enabled` stays a cortex-boundary on/off toggle (not forwarded);
+    // `errorThreshold` was never wired and is dropped. The API schemas still
+    // accept both for back-compat.
+    if (o.enabled !== false) {
+      const providers = asStringArray(o.providers);
+      if (providers) {
+        out.fallbacks = { providers };
+      }
+    }
   }
 
   const mt = raw.metaTools;

@@ -6,46 +6,25 @@
  * Frontier models return undefined (no intervention needed).
  * Local/mid models return explicit guidance to improve task completion rates.
  *
- * Hook call sites in the kernel phases (think.ts, context-utils.ts, act.ts):
- *   systemPromptPatch  — once, when building the static system prompt
- *   taskFraming        — once, wrapping the initial user task message
- *   toolGuidance       — once, appended to system prompt after tool schema block
+ * Hook call sites in the kernel phases (think.ts, think-guards.ts,
+ * conversation-assembly.ts, act.ts):
  *   continuationHint   — each iteration, injected as user message after tool results
  *   errorRecovery      — when a tool returns a failed result
  *   synthesisPrompt    — when transitioning from research → produce phase
  *   qualityCheck       — optional self-eval prompt injected before final answer
+ *
+ * History note (2026-07-19): three further hooks — `systemPromptPatch`,
+ * `taskFraming`, `toolGuidance` — were removed from this contract. Their sole
+ * call sites (APC/ContextManager) were deleted in `279b61fb`, leaving them
+ * written-but-never-read. The behavioral intents they carried for calibrated
+ * models are delivered through live channels instead: weak
+ * `systemPromptAttention` → harness-plan scaffolding bump;
+ * `parallelCallCapability` → blueprint batch cap; `observationHandling` →
+ * recall force-on. Re-adding a prompt-assembly hook requires a kernel-side
+ * call site (Wave 2 B4/B5 spine work), not a provider-side one.
  */
 
 export interface ProviderAdapter {
-  /**
-   * Patch the system prompt for model-specific needs.
-   * Called once when building the system prompt.
-   */
-  systemPromptPatch?(basePrompt: string, tier: string): string | undefined;
-
-  /**
-   * Wrap or annotate the initial task message.
-   * Called once when the first user message is constructed.
-   * Return undefined to use the task as-is.
-   */
-  taskFraming?(context: {
-    task: string;
-    requiredTools: readonly string[];
-    tier: string;
-  }): string | undefined;
-
-  /**
-   * Append inline tool usage guidance after the tool schema block in the system prompt.
-   * Helps local models that ignore JSON schema descriptions.
-   * Return undefined to add nothing.
-   */
-  toolGuidance?(context: {
-    toolNames: readonly string[];
-    requiredTools: readonly string[];
-    tier: string;
-    experienceSummary?: ExperienceSummary | null;
-  }): string | undefined;
-
   /**
    * Generate a continuation hint injected as a user message after tool results.
    * Called each iteration when required tools are still pending.
@@ -162,35 +141,6 @@ export const defaultAdapter: ProviderAdapter = {
 // ─── Local model adapter ──────────────────────────────────────────────────────
 
 export const localModelAdapter: ProviderAdapter = {
-  systemPromptPatch(basePrompt, tier) {
-    if (tier !== "local") return undefined;
-    return (
-      basePrompt +
-      "\n\nIMPORTANT: When given a multi-step task, complete ALL steps in sequence. " +
-      "After gathering information, immediately proceed to the next step. " +
-      "Never stop after only searching — always produce the deliverable."
-    );
-  },
-
-  taskFraming({ task, requiredTools, tier }) {
-    if (tier !== "local" || requiredTools.length === 0) return undefined;
-    const steps = requiredTools.map((t, i) => `${i + 1}. Call ${t}`).join("\n");
-    return `${task}\n\nComplete these steps in order:\n${steps}\nDo not stop until all steps are done.`;
-  },
-
-  toolGuidance({ toolNames, requiredTools, tier, experienceSummary }) {
-    if (tier !== "local") return undefined;
-    const experienceGuidance = formatToolGuidanceFromSummary(
-      experienceSummary ?? null,
-      toolNames,
-    );
-    if (requiredTools.length === 0 && !experienceGuidance) return undefined;
-    const requiredText = requiredTools.length > 0
-      ? `\nRequired tools for this task: ${requiredTools.join(", ")}. You MUST call all of them before giving a final answer.`
-      : "";
-    return [requiredText, experienceGuidance].filter(Boolean).join("\n") || undefined;
-  },
-
   continuationHint({ toolsUsed, missingTools, iteration, maxIterations, lastToolName }) {
     if (missingTools.length === 0) return undefined;
 
@@ -286,9 +236,7 @@ export const midModelAdapter: ProviderAdapter = {
 import {
   loadCalibration,
   buildCalibratedAdapter,
-  formatToolGuidanceFromSummary,
   type ProfileOverrides,
-  type ExperienceSummary,
 } from "./calibration.js";
 
 /**
@@ -301,11 +249,45 @@ export interface AdapterSelection {
 }
 
 /**
+ * Merge two adapters: every hook the overlay defines wins; every hook it
+ * leaves undefined survives from the base.
+ *
+ * Invariant (debt register P0-2 / boundary B6): an overlay can REFINE
+ * behavior but can never REMOVE capability — keys the overlay sets to
+ * `undefined` (explicitly or by omission) never clobber a base hook. This is
+ * what makes calibration strictly additive: a model WITH a calibration file
+ * keeps all tier-adapter hooks.
+ *
+ * Generic over `Object.entries` on purpose: hooks added to `ProviderAdapter`
+ * in the future compose automatically instead of silently vanishing for
+ * calibrated models (the original B6 disease).
+ */
+export function composeAdapters(
+  base: ProviderAdapter,
+  overlay: ProviderAdapter,
+): ProviderAdapter {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged as ProviderAdapter;
+}
+
+/**
  * Select the appropriate ProviderAdapter for a given model.
  *
- * Priority:
- * 1. modelId-based calibration (loads from calibrations/<modelId>.json or user cache)
- * 2. Tier-based adapter (current default path)
+ * Resolution:
+ * 1. Tier-based adapter is ALWAYS the base (local | mid | default).
+ * 2. When a ModelCalibration resolves for `modelId`, its compiled adapter is
+ *    layered ON TOP via {@link composeAdapters} (calibrated hook wins where
+ *    set, tier hook survives where not) and its profileOverrides are attached.
+ *
+ * History (2026-07-19, debt register P0-2): this used to EARLY-RETURN the
+ * calibrated adapter, discarding the tier adapter entirely — a model with a
+ * calibration file lost every tier hook (continuationHint, errorRecovery,
+ * synthesisPrompt, qualityCheck). Calibrating strictly weakened the harness.
+ * Do not reintroduce the early return; the mutation test in
+ * `tests/adapter.test.ts` ("calibrated model keeps every tier hook") pins it.
  *
  * @param _capabilities - provider capabilities (reserved for future use)
  * @param tier - model tier ("local" | "mid" | "large" | "frontier")
@@ -316,14 +298,18 @@ export function selectAdapter(
   tier?: string,
   modelId?: string,
 ): AdapterSelection {
-  // 1. Calibrated adapter wins when available.
+  const tierAdapter =
+    tier === "local" ? localModelAdapter
+    : tier === "mid" ? midModelAdapter
+    : defaultAdapter;
+
   if (modelId) {
     const cal = loadCalibration(modelId);
-    if (cal) return buildCalibratedAdapter(cal);
+    if (cal) {
+      const { adapter: calibrated, profileOverrides } = buildCalibratedAdapter(cal);
+      return { adapter: composeAdapters(tierAdapter, calibrated), profileOverrides };
+    }
   }
-  // 2. Fall back to tier-based adapter.
-  if (tier === "local") return { adapter: localModelAdapter };
-  if (tier === "mid") return { adapter: midModelAdapter };
-  return { adapter: defaultAdapter };
+  return { adapter: tierAdapter };
 }
 

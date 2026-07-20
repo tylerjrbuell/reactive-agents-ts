@@ -367,16 +367,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         adaptive?: boolean
         maxRetries?: number
     }
-    private _enableIdentity: boolean = false
     private _enableObservability: boolean = false
     private _observabilityOptions: ObservabilityOptions = {
         verbosity: 'minimal',
     }
     private _cortexUrl: string | null = null
-    private _enableInteraction: boolean = false
     private _enablePrompts: boolean = false
     private _promptsOptions?: PromptsOptions
-    private _enableOrchestration: boolean = false
     private _testScenario?: TestTurn[]
     private _extraLayers?: Layer.Layer<any, any, any>
     private _llmOverrideLayer?: Layer.Layer<any, any, any>
@@ -442,8 +439,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _rateLimiterConfig?: import('@reactive-agents/llm-provider').RateLimiterConfig
     private _fallbackConfig?: {
         providers?: string[]
-        models?: string[]
-        errorThreshold?: number
     }
     private _enableExperienceLearning: boolean = false
     private _enableMemoryConsolidation: boolean = false
@@ -464,7 +459,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableHealthCheck: boolean = false
     private _minIterations?: number
     private _taskContext?: Record<string, string>
-    private _progressCheckpoint?: { every: number; autoResume?: boolean }
     private _verificationStep?: { mode: 'reflect'; prompt?: string }
     private _outputValidator?: (output: string) => {
         valid: boolean
@@ -486,27 +480,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     > = {}
     private _pricingProvider?: import('@reactive-agents/llm-provider').PricingProvider
     private _skillsConfig?: {
-        paths?: string[]
-        packages?: string[]
-        evolution?: {
-            mode?: string
-            refinementThreshold?: number
-            rollbackOnRegression?: boolean
-        }
-        overrides?: Record<string, { evolutionMode?: string }>
+        paths: readonly string[]
     }
     private _riHooks?: RiHooks
-    private _riConstraints?: {
-        allowedStrategySwitch?: string[]
-        maxTemperatureAdjustment?: number
-        neverEarlyStop?: boolean
-        neverHumanEscalate?: boolean
-        protectedSkills?: string[]
-        lockedSkills?: string[]
-    }
-    private _riAutonomy?: 'full' | 'suggest' | 'observe'
     private _metaTools?: import('./types.js').MetaToolsConfig | false
-    private _calibration: CalibrationMode = 'skip'
+    // `undefined` = never set (auto-enabled when reasoning is on). An explicit
+    // `.withCalibration("skip")` is honored as a real opt-out. See P0-9.
+    private _calibration?: CalibrationMode
     private _leanHarness: boolean = false
     /**
      * Declarative budget caps consumed by the Arbitrator's pre-intent guard
@@ -546,10 +526,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Configure per-model calibration for this agent.
      *
-     * - `"skip"` (default): no lookup, pure tier-based adapters.
+     * - `"skip"`: no lookup, pure tier-based adapters. Honored even when
+     *   reasoning is enabled — an explicit opt-out (P0-9).
      * - `"auto"`: load pre-baked or user-cached calibration for the resolved modelId.
      * - `ModelCalibration` object: provide calibration data directly (e.g. after running
      *   the calibration probe suite).
+     *
+     * Default when unset: calibration auto-enables (`"auto"`) if reasoning is
+     * active, otherwise none.
      *
      * Calibration mode is also resolved automatically from the model id;
      * explicit override here is most useful with the calibration probe
@@ -1488,21 +1472,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Enable agent identity and identity verification via Ed25519 certificates.
-     *
-     * Allows the agent to sign messages and verify the identity of other agents in a network.
-     *
-     * @returns `this` for chaining
-     * Pair with `.withA2A()` / `.withGateway()` for cross-agent
-     * verification; identity is also available as a registry-driven
-     * capability.
-     */
-    withIdentity(): this {
-        this._enableIdentity = true
-        return this
-    }
-
-    /**
      * Enable observability — metrics collection, structured logging, and tracing.
      *
      * Automatically displays a metrics dashboard on completion showing execution timeline,
@@ -1626,21 +1595,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Enable interactive collaboration — approval gates and user feedback loops.
-     *
-     * Allows the agent to pause and request human approval for critical operations.
-     *
-     * @returns `this` for chaining
-     * Composable equivalent: `.compose(requireApprovalFor(...))` killswitch
-     *   (master plan §11.4) — approval gates also compose through the
-     *   killswitch set.
-     */
-    withInteraction(): this {
-        this._enableInteraction = true
-        return this
-    }
-
-    /**
      * Configure durable human-in-the-loop approval gates (Phase D).
      *
      * In `mode: "detach"` (the default when `.withDurableRuns()` is set), a tool
@@ -1675,21 +1629,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     withPrompts(options?: PromptsOptions): this {
         this._enablePrompts = true
         if (options) this._promptsOptions = options
-        return this
-    }
-
-    /**
-     * Enable the orchestration layer for multi-agent workflows.
-     *
-     * Allows defining and executing complex workflows with approval gates and task dependencies.
-     *
-     * @returns `this` for chaining
-     * Related primitives: `.withAgentTool()` / `.withDynamicSubAgents()` /
-     *   `.compose(...)` workflow composition can build orchestration from
-     *   the sub-agent + compose primitives directly.
-     */
-    withOrchestration(): this {
-        this._enableOrchestration = true
         return this
     }
 
@@ -1766,10 +1705,17 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Enable MemoryConsolidatorService background memory intelligence.
      *
-     * Periodically consolidates episodic entries, decays semantic importance, and
-     * prunes low-importance entries to keep memory manageable.
+     * Consolidation cycles (REPLAY → CONNECT → COMPRESS: count recent episodic
+     * entries, decay semantic importance, prune below-threshold entries) are
+     * triggered from the post-run memory-flush phase: each completed
+     * non-trivial run counts one pending entry, and when `threshold` entries
+     * accumulate (default: 10) a full `consolidate()` cycle runs. Requires
+     * `.withMemory()` (the consolidator persists into the memory database).
      *
      * @param config - Optional consolidation thresholds
+     * @param config.threshold - Pending runs before a cycle triggers (default: 10)
+     * @param config.decayFactor - Importance decay multiplier per cycle (default: 0.95)
+     * @param config.pruneThreshold - Minimum importance before pruning (default: 0.1)
      * @returns `this` for chaining
      * @see {@link HarnessProfile.intelligent} — composable preset that
      *   activates memory consolidation as part of the compounding-
@@ -2035,29 +1981,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Save a coarse progress checkpoint to PlanStore every N iterations. On
-     * restart, session resumption detects the incomplete plan and injects it as
-     * prior context (a soft "where was I" hint).
-     *
-     * **For true crash-resume, use {@link withDurableRuns} instead.** That path
-     * persists a lossless serialized `KernelState` per iteration to a SQLite
-     * RunStore and exposes `agent.resumeRun(runId)` / `agent.listRuns()` to
-     * reconstruct and finish a crashed run from its last checkpoint. This method
-     * remains a lighter-weight plan-level hint and does not reconstruct full
-     * kernel state.
-     * @param every - Checkpoint interval in iterations
-     * @param options.autoResume - Automatically resume from last checkpoint (default: false)
-     * @returns `this` for chaining
-     */
-    withProgressCheckpoint(
-        every: number,
-        options?: { autoResume?: boolean }
-    ): this {
-        this._progressCheckpoint = { every, ...options }
-        return this
-    }
-
-    /**
      * Run a verification pass after the initial reasoning result before accepting it.
      * In "reflect" mode (the only supported mode), one LLM call reviews the output
      * and confirms completeness.
@@ -2128,17 +2051,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         options?: Partial<
             import('@reactive-agents/reactive-intelligence').ReactiveIntelligenceConfig
         > &
-            RiHooks & {
-                constraints?: {
-                    allowedStrategySwitch?: string[]
-                    maxTemperatureAdjustment?: number
-                    neverEarlyStop?: boolean
-                    neverHumanEscalate?: boolean
-                    protectedSkills?: string[]
-                    lockedSkills?: string[]
-                }
-                autonomy?: 'full' | 'suggest' | 'observe'
-            }
+            RiHooks
     ): this
     withReactiveIntelligence(
         arg?:
@@ -2153,26 +2066,36 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Enable the Living Skills System.
-     * Skills are discovered from standard filesystem paths, loaded from packages,
-     * and evolved over time based on agent performance.
+     * Register Living Skills directories. Each path must contain subfolders
+     * with a `SKILL.md` (agentskills.io layout); matching skills are resolved
+     * per task and injected as `<available_skills>`.
      *
-     * @param config - Optional skills configuration
+     * `paths` is REQUIRED and must be non-empty — a path-less call has no
+     * effect, so it throws instead of silently no-opping (v0.14, DEBT-REGISTER
+     * P0-10). The former `packages` / `evolution` / `overrides` keys were
+     * accepted-but-ignored and were removed in v0.14; passing them throws.
+     *
+     * @param config.paths - Skill directories to resolve from (non-empty)
      * @see {@link HarnessProfile.intelligent} — composable preset where
-     *   skills graduate as part of the compounding-intelligence stack. Use
-     *   this method for explicit path / evolution overrides.
+     *   skills graduate as part of the compounding-intelligence stack.
      */
-    withSkills(config?: {
-        paths?: string[]
-        packages?: string[]
-        evolution?: {
-            mode?: string
-            refinementThreshold?: number
-            rollbackOnRegression?: boolean
+    withSkills(config: { paths: readonly string[] }): this {
+        const cfg = config as {
+            paths?: readonly string[]
+        } & Record<string, unknown>
+        for (const removed of ['packages', 'evolution', 'overrides']) {
+            if (cfg && removed in cfg) {
+                throw new Error(
+                    `.withSkills({ ${removed} }) was a no-op (the key was accepted but never read) and was removed in v0.14; see DEBT-REGISTER P0-10. Pass { paths: [...] } only.`
+                )
+            }
         }
-        overrides?: Record<string, { evolutionMode?: string }>
-    }): this {
-        this._skillsConfig = config ?? {}
+        if (!cfg?.paths?.length) {
+            throw new Error(
+                '.withSkills() requires { paths: [...] } with at least one skill directory — a path-less call was a silent no-op and now throws (v0.14, DEBT-REGISTER P0-10).'
+            )
+        }
+        this._skillsConfig = { paths: [...cfg.paths] }
         return this
     }
 
@@ -2202,21 +2125,25 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Configure provider and model fallbacks for graceful degradation.
+     * Configure provider fallbacks for graceful degradation.
      *
-     * When the primary provider errors consecutively (3x by default), switches
-     * to the next provider in the chain. On 429 rate limits, falls back to a
-     * cheaper model from the same provider.
+     * The providers are tried in order: the primary first, then each fallback
+     * on ANY error, until one succeeds or all are exhausted. Each real switch
+     * emits a `ProviderFallbackActivated` event.
      *
-     * @param config - Fallback chain configuration with provider, model, and error threshold
+     * NOTE: this is an IMMEDIATE cascade — the first error on a provider moves to
+     * the next. There is no consecutive-error threshold and no per-model
+     * (cheaper-model-on-429) chain; those options were removed in v0.14 (P0-3)
+     * because they were never wired. Model fallback within a provider is not
+     * supported here — configure distinct providers instead.
+     *
+     * @param config - `{ providers }`: ordered provider names (primary first).
      * @returns `this` for chaining
      * Fallback order also resolves from `CapabilityRegistry` provider tiers;
      * use this explicit override to pin a multi-provider deployment chain.
      */
     withFallbacks(config: {
         providers?: string[]
-        models?: string[]
-        errorThreshold?: number
     }): this {
         this._fallbackConfig = config
         return this
@@ -2635,7 +2562,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 capabilities: {
                     minIterations: self._minIterations,
                     taskContext: self._taskContext,
-                    progressCheckpoint: self._progressCheckpoint,
                     verificationStep: self._verificationStep,
                     outputValidator: self._outputValidator,
                     outputValidatorOptions: self._outputValidatorOptions,

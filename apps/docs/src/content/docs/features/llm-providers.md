@@ -62,7 +62,7 @@ const agent = await ReactiveAgents.create()
   .withModel("grok-4")
   .build();
 
-// Ollama (local) — Healing Pipeline lifts 4B+ models by +80pp accuracy
+// Ollama (local) — Healing Pipeline repairs malformed tool calls from small models
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("qwen3:14b")                // Best native FC at this size
@@ -203,21 +203,19 @@ The framework ships three built-in adapters selected automatically by model tier
 
 | Tier       | Adapter           | Behavior                                                              |
 | ---------- | ----------------- | --------------------------------------------------------------------- |
-| `local`    | `localModelAdapter` | Explicit task framing, tool guidance, error recovery, quality check |
+| `local`    | `localModelAdapter` | Continuation/synthesis steering, error recovery, quality check |
 | `mid`      | `midModelAdapter`   | Lighter continuation hint + synthesis prompt                        |
 | `large` / `frontier` | `defaultAdapter` | Structured decision framework only                        |
 
-### Adapter Hooks (7 total)
+### Adapter Hooks (5 total)
 
 | Hook              | When it fires                                              | What it does                                           |
 | ----------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| `systemPromptPatch` | Once at system prompt build time                         | Append multi-step completion instructions (local tier) |
-| `toolGuidance`    | Once after the tool schema block in the system prompt      | Append inline required-tool reminder                   |
-| `taskFraming`     | First iteration only (iteration 0)                         | Wrap task message with explicit numbered steps         |
 | `continuationHint` | Each iteration when required tools are still pending      | Inject guidance as user message after tool results     |
 | `errorRecovery`   | When a tool call returns a failed result                   | Append context-aware recovery hint to the observation  |
 | `synthesisPrompt` | Research→produce transition (all search tools satisfied)   | Replace generic progress message with "write it now"   |
 | `qualityCheck`    | Once before final answer (gated by `qualityCheckDone` flag)| Self-eval prompt; fires only once to prevent loops     |
+| `parseToolCalls`  | Every provider `complete()` / `stream()` response          | Normalize malformed native tool calls (e.g. qwen3 stringified `arguments`) before the kernel sees them |
 
 You can register a fully custom adapter:
 
@@ -228,6 +226,8 @@ import { selectAdapter } from "@reactive-agents/llm-provider";
 // Access them directly for inspection or extension:
 import { localModelAdapter, midModelAdapter, defaultAdapter } from "@reactive-agents/llm-provider";
 ```
+
+**Calibration composes with the tier adapter — it no longer replaces it.** A model that has a calibration file keeps *all* of its tier-adapter hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) and *additionally* gains its calibrated profile overrides (e.g. `toolResultMaxChars`). Calibration is additive: earlier releases dropped every tier hook when a calibration file was present, which strictly weakened the harness for calibrated models.
 
 ## Embeddings
 

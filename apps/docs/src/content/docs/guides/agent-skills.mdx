@@ -130,9 +130,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
   .withSkills({
-    paths: ["./my-skills/"],                    // Additional scan paths
-    evolution: { mode: "suggest" },             // "auto" | "suggest" | "locked"
-    overrides: { "critical-skill": { evolutionMode: "locked" } },
+    paths: ["./my-skills/"],                    // Scan paths (at least one required)
   })
   .withReactiveIntelligence()                   // Enables entropy-driven skill activation
   .build();

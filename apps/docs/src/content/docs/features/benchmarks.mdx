@@ -1,19 +1,15 @@
 ---
 title: Benchmarks
 description: >-
-  Real-world agentic benchmark suite — 20 tasks across 5 tiers aligned with
-  HumanEval, SWE-bench, BIG-Bench Hard, GAIA, and AgentBench standards.
+  Internal benchmark harness — 20 tasks across 5 complexity tiers for
+  evaluating your own agents against a real LLM.
 sidebar:
   order: 17
 ---
 
-import BenchmarkResults from "../../../components/BenchmarkResults.astro";
+The `@reactive-agents/benchmarks` package is an **internal evaluation harness**: 20 tasks spanning 5 complexity tiers that you run against a real LLM to measure correctness, latency, token usage, and cost for *your* provider and model choices — not just framework overhead.
 
-The `@reactive-agents/benchmarks` package evaluates end-to-end agent performance across 20 tasks spanning 5 complexity tiers. Tasks are aligned with **leading agentic benchmark standards** used by the research community, and run against a real LLM to measure actual correctness, latency, token usage, and cost — not just framework overhead.
-
-## Results
-
-<BenchmarkResults />
+We use it as development tooling to catch regressions; we don't publish its scores as marketing claims. Run it yourself against your own stack — the numbers that matter are the ones from your provider, your model, and your tasks.
 
 ## Benchmark Methodology
 
@@ -85,14 +81,7 @@ bun run src/run.ts --provider gemini --model gemini-2.5-flash --output report.js
 | `gemini` | `gemini-2.5-flash` | Fast inference, competitive pricing |
 | `ollama` | `llama3.2` | Local inference, no API cost |
 
-## Updating the Displayed Results
+## Reading the Report
 
-To regenerate the benchmark data shown on this page using the Anthropic provider:
-
-```bash
-cd packages/benchmarks
-bun run src/run.ts --provider anthropic --output ../../apps/docs/src/data/benchmark-report.json
-```
-
-The page renders dynamically from the JSON report at build time — no manual table updates needed.
+Pass `--output report.json` to persist a full JSON report (per-task pass/fail, latency, token usage, and cost) for your own analysis. Without `--output`, results print to the console and nothing is persisted.
 

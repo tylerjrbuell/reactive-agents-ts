@@ -187,7 +187,8 @@ export const runReasoningHarnessHooks = (
       }
     }
 
-    // withVerificationStep (reflect mode): one extra LLM call to confirm completeness
+    // withVerificationStep (reflect mode): one extra LLM call to confirm
+    // completeness; on a REVISE verdict, re-run once with the feedback injected.
     if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
       const outputToVerify = String(ctx.metadata.lastResponse ?? "");
       if (outputToVerify) {
@@ -215,15 +216,45 @@ export const runReasoningHarnessHooks = (
         if (verifyOutcome._tag === "Success") {
           const v = verifyOutcome.value as { output?: unknown; metadata: { cost?: number; tokensUsed?: number } };
           const verifyContent = String(v.output ?? "");
-          const metaUpdate = verifyContent.startsWith("REVISE")
-            ? { verificationFeedback: verifyContent }
-            : {};
+          const needsRevision = verifyContent.startsWith("REVISE");
           ctx = {
             ...ctx,
             cost: ctx.cost + (v.metadata.cost ?? 0),
             tokensUsed: ctx.tokensUsed + (v.metadata.tokensUsed ?? 0),
-            metadata: { ...ctx.metadata, ...metaUpdate },
+            metadata: {
+              ...ctx.metadata,
+              ...(needsRevision ? { verificationFeedback: verifyContent } : {}),
+            },
           };
+          // WIRE (P0-8): a REVISE verdict is not just recorded — it feeds back as
+          // a continuation signal. Re-run once with the verification feedback
+          // injected so the final answer actually addresses the gap the verify
+          // pass found. Without this consumer the extra LLM call (and the user's
+          // tokens) would change nothing.
+          if (needsRevision) {
+            const req = buildExecuteRequest([
+              { role: "user" as const, content: extractTaskText(task.input) },
+              { role: "assistant" as const, content: outputToVerify },
+              { role: "user" as const, content: verifyContent },
+            ]);
+            delete (req as Record<string, unknown>).calibration;
+            const reviseOutcome = yield* Effect.exit(reasoningOpt.value.execute(req));
+            if (reviseOutcome._tag === "Success") {
+              const revised = normalizeReasoningResult(reviseOutcome.value);
+              if (revised) {
+                ctx = {
+                  ...ctx,
+                  cost: ctx.cost + (revised.metadata.cost ?? 0),
+                  tokensUsed: ctx.tokensUsed + (revised.metadata.tokensUsed ?? 0),
+                  metadata: {
+                    ...ctx.metadata,
+                    lastResponse: String(revised.output ?? ""),
+                    reasoningResult: revised,
+                  },
+                };
+              }
+            }
+          }
         }
       }
     }

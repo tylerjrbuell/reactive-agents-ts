@@ -185,7 +185,7 @@ const agent = await ReactiveAgents.create()
 
 To route simple tasks to cheaper models and reserve the expensive model for hard ones, `@reactive-agents/cost` ships the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`, so you can decide the model **before** building the agent. Pick the model from the routing result, then pass it to `.withModel(...)`.
 
-For an automatic, builder-level path — fall back to a cheaper or alternate model on error or budget pressure — use [`.withFallbacks()`](/reference/builder-api/), which is wired into the agent loop directly.
+For an automatic, builder-level path — fall back to an alternate provider on any error — use [`.withFallbacks({ providers })`](/reference/builder-api/), which is wired into the agent loop directly. It is an immediate, ordered provider cascade: the primary provider is tried first, and on any error the runtime falls back to the next provider in the `providers` array, in order (no error-count threshold, no budget-pressure logic).
 
 ### Cost-Aware Model Routing (New in v0.13)
 
@@ -306,7 +306,7 @@ Before deploying to production:
 - [ ] Tool result compression enabled for large APIs
 - [ ] Monitoring alerts set up (via observability layer)
 - [ ] Cost estimates reviewed against real usage monthly
-- [ ] Fallback model configured for budget spikes (optional)
+- [ ] Provider fallback cascade configured via `.withFallbacks({ providers })` for resilience on provider errors (optional)
 
 ## Next Steps
 

@@ -120,7 +120,6 @@ const agent = await ReactiveAgents.create()
 | `.withKillSwitch()` | — | Exposes `.pause()`, `.resume()`, `.stop()`, `.terminate()` |
 | `.withBehavioralContracts(c)` | `{ deniedTools?, allowedTools?, maxToolCalls?, maxIterations?, maxOutputLength?, deniedTopics?, requireDisclosure? }` | Rule-based constraints |
 | `.withVerification(opts?)` | `{ semanticEntropy?, factDecomposition?, nli?, hallucinationDetection?, passThreshold?, useLLMTier? }` | Runtime hallucination detection |
-| `.withIdentity()` | — | Ed25519 certs, RBAC, delegation, audit trail |
 | `.withAudit()` | — | Append-only action audit log |
 
 ### Cost
@@ -143,8 +142,6 @@ const agent = await ReactiveAgents.create()
 |--------|--------|-------|
 | `.withGateway(opts?)` | `GatewayOptions` | Persistent agent with heartbeats/crons/webhooks |
 | `.withA2A(opts?)` | `{ port?, basePath? }` | A2A server (JSON-RPC 2.0 + SSE) |
-| `.withInteraction()` | — | Autonomy modes, approval gates, checkpoints |
-| `.withOrchestration()` | — | Multi-agent orchestration layer |
 | `.withStreaming(opts?)` | `{ density?: "tokens"\|"full" }` | Streaming output |
 | `.withAgentTool(name, cfg)` | name + `{ agent }` | Local agent registered as a tool |
 | `.withDynamicSubAgents(opts?)` | `{ maxIterations? }` | Dynamic sub-agent spawning |

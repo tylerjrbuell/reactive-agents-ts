@@ -60,19 +60,14 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `execution.strictValidation` | `boolean` | no |  |
 | `execution.timeoutMs` | `number` | no |  |
 | `fabricationGuard` | `off` \| `warn` \| `block` | no |  |
-| `fallbacks.errorThreshold` | `number` | no |  |
-| `fallbacks.models` | `array` | no |  |
 | `fallbacks.providers` | `array` | no |  |
 | `features.audit` | `boolean` | no |  |
 | `features.costTracking` | `boolean` | no |  |
 | `features.guardrails` | `boolean` | no |  |
 | `features.healthCheck` | `boolean` | no |  |
-| `features.identity` | `boolean` | no |  |
-| `features.interaction` | `boolean` | no |  |
 | `features.killSwitch` | `boolean` | no |  |
 | `features.memory` | `boolean` | no |  |
 | `features.observability` | `boolean` | no |  |
-| `features.orchestration` | `boolean` | no |  |
 | `features.prompts` | `boolean` | no |  |
 | `features.reactiveIntelligence` | `boolean` | no |  |
 | `features.reasoning` | `boolean` | no |  |
@@ -235,7 +230,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withRateLimiting(config?)` | off until set | RPM / TPM / concurrency limits |
 | `.withModelPricing(registry)` | none | Static $/1M token overrides |
 | `.withDynamicPricing(provider)` | none | Fetch pricing at build |
-| `.withFallbacks(config)` | none | Provider/model chain + `errorThreshold` |
+| `.withFallbacks(config)` | none | Ordered provider cascade — `{ providers }`; falls back to the next provider on any error |
 | `.withCacheTimeout(ms)` | `3_600_000` | Semantic cache TTL (1h) |
 
 ### Memory
@@ -273,16 +268,13 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withAudit()` | disabled | Compliance audit logging |
 | `.withEvents()` | — | Wire EventBus for `agent.subscribe()` |
 
-### Identity & Orchestration
+### Metacognition & control
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withIdentity()` | disabled | Ed25519 agent certificates + RBAC |
-| `.withOrchestration()` | disabled | Multi-agent workflow engine |
-| `.withInteraction()` | disabled | 5 autonomy modes + checkpoints |
 | `.withSelfImprovement()` | disabled | Cross-task strategy outcome learning |
 | `.withReactiveIntelligence(false)` | on | Pass `false` to disable entropy/controller/telemetry stack |
-| `.withReactiveIntelligence(options?)` | defaults | Entropy, controller, hooks, `autonomy`, `constraints` — see [Reactive Intelligence](/features/reactive-intelligence/) |
+| `.withReactiveIntelligence(options?)` | defaults | Entropy, controller, hooks — see [Reactive Intelligence](/features/reactive-intelligence/) |
 | `.withHealthCheck()` | disabled | Exposes `agent.health()` |
 
 ### Sub-agents & A2A
@@ -306,7 +298,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 |--------|---------|-------------|
 | `.withTestScenario(turns)` | none | Deterministic **test** provider. `TestTurn[]` from `@reactive-agents/llm-provider`; forces `provider: "test"`. |
 | `.withLayers(layers)` | none | Merge custom Effect `Layer`s into the runtime |
-| `.withSkills(config?)` | disabled | Living skills: `paths`, `packages`, `evolution`, `overrides` |
+| `.withSkills(config)` | disabled | Living skills: `{ paths }` — one or more SKILL.md directories (required; a path-less call throws) |
 | `.toConfig()` / `ReactiveAgents.fromConfig()` / `fromJSON()` | — | **Agent as Data** — round-trip via `agentConfigToJSON` / `agentConfigFromJSON` (`reactive-agents` or `@reactive-agents/runtime`) |
 | `agentFn` / `pipe` / `parallel` / `race` | — | Promise-based multi-agent composition (see [Builder API](/reference/builder-api/)) |
 | `agent.registerTool()` / `unregisterTool()` / `ingest()` | — | Runtime tool + RAG ingestion on built agents |

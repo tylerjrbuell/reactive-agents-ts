@@ -13,7 +13,7 @@ import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 Reactive Agents is a composable TypeScript framework for building reliable LLM agents on a harness you fully control. It's built on [Effect-TS](https://effect.website), so the runtime is type-safe, observable, and composable end to end.
 
 <Aside type="tip" title="At a glance">
-Every prompt, tool call, and reasoning step is a **typed event you can subscribe to** — no hidden prompts, no proprietary loop. A self-healing tool layer recovers **86.7% of tool-call errors**, so the *same code* runs on a local 4B Ollama model and on Claude, GPT, or Gemini.
+Every prompt, tool call, and reasoning step is a **typed event you can subscribe to** — no hidden prompts, no proprietary loop. A self-healing tool layer repairs malformed tool calls before they fail, so the *same code* runs on a local 4B Ollama model and on Claude, GPT, or Gemini.
 </Aside>
 
 ## The Problem
@@ -43,7 +43,7 @@ Reactive Agents solves each of these with a layered, composable architecture:
     Every one of the 12 phases emits typed events with `before` / `after` / `on-error` hooks. System prompts are readable templates, not buried strings. Raw provider clients ship standalone — skip the harness entirely if you want.
   </Card>
   <Card title="Reliable on local models" icon="setting">
-    A 4-stage healing pipeline recovers malformed tool calls on the fly (**+80pp accuracy**, 10× cheaper than an LLM reprompt). Local Ollama models reach **91–94%** on the same suite where frontier APIs reach 100%.
+    A 4-stage healing pipeline repairs malformed tool calls on the fly — deterministic string/type fixes instead of an LLM reprompt — so local Ollama models can run the same tool-calling loop as frontier APIs.
   </Card>
   <Card title="Typed structured output" icon="seti:typescript">
     Attach a Zod / Valibot / ArkType / Effect schema and read a fully-typed `result.object` — streaming field-by-field if you want. No prompt engineering, no manual parsing. *(New in v0.12)*

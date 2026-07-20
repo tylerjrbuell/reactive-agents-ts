@@ -10,9 +10,9 @@ import { buildCalibratedAdapter, ALIAS_FREQUENCY_THRESHOLD } from "@reactive-age
  *
  * Active fields:
  *   1. toolCallDialect         → runner.ts:526 (driver selection)
- *   2. systemPromptAttention   → calibration.ts:191 (system-prompt patch)
- *   3. parallelCallCapability  → calibration.ts:196 (tool batching)
- *   4. optimalToolResultChars  → calibration.ts:206 (ContextProfile)
+ *   2. systemPromptAttention   → harness-plan.ts (weak → prompt attention scaffold)
+ *   3. parallelCallCapability  → blueprint.ts (batch cap 1/2/∞)
+ *   4. optimalToolResultChars  → calibration.ts profileOverrides (ContextProfile)
  *   5. steeringCompliance      → context-manager.ts:112
  *   6. observationHandling     → tool-schemas.ts:120 + final-answer.ts
  *   7. classifierReliability   → setup/classifier.ts:25
@@ -73,41 +73,12 @@ describe("M7 Calibration: Core Field Consumers", () => {
     });
   });
 
-  describe("parallelCallCapability — consumer: buildCalibratedAdapter()", () => {
-    it("generates toolGuidance when not 'reliable'", () => {
-      const { adapter: adapterSeq } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        parallelCallCapability: "sequential-only",
-      });
-      expect(adapterSeq.toolGuidance).toBeDefined();
-      expect(adapterSeq.toolGuidance?.({ toolNames: [], requiredTools: [], tier: "frontier" })).toContain("one at a time");
-
-      const { adapter: adapterPart } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        parallelCallCapability: "partial",
-      });
-      expect(adapterPart.toolGuidance).toBeDefined();
-      expect(adapterPart.toolGuidance?.({ toolNames: [], requiredTools: [], tier: "frontier" })).toContain("up to 2");
-
-      const { adapter: adapterRel } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        parallelCallCapability: "reliable",
-      });
-      expect(adapterRel.toolGuidance).toBeUndefined();
-    });
-
-    it("impact: affects tool batching behavior in kernel", () => {
-      const sequential = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        parallelCallCapability: "sequential-only",
-      });
-      const partial = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        parallelCallCapability: "partial",
-      });
-      expect(sequential.adapter.toolGuidance).not.toBe(partial.adapter.toolGuidance);
-    });
-  });
+  // NOTE (2026-07-19, debt burndown Wave 1b / register P0-11): the former
+  // "parallelCallCapability → buildCalibratedAdapter().toolGuidance" block was
+  // deleted. `toolGuidance` was removed from the ProviderAdapter contract
+  // (orphaned since 279b61fb — zero call sites). The schema field itself stays
+  // live: `parallelCallCapability` is consumed at reasoning blueprint.ts (batch
+  // cap 1/2/∞), which is where the real behavioral test belongs.
 
   describe("observationHandling — consumer: (claimed, needs verification)", () => {
     it("field is defined in schema but consumer location unverified", () => {
@@ -134,37 +105,13 @@ describe("M7 Calibration: Core Field Consumers", () => {
     });
   });
 
-  describe("systemPromptAttention — consumer: buildCalibratedAdapter()", () => {
-    it("generates systemPromptPatch only when 'weak'", () => {
-      const { adapter: weak } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        systemPromptAttention: "weak",
-      });
-      expect(weak.systemPromptPatch).toBeDefined();
-
-      const { adapter: moderate } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        systemPromptAttention: "moderate",
-      });
-      expect(moderate.systemPromptPatch).toBeUndefined();
-
-      const { adapter: strong } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        systemPromptAttention: "strong",
-      });
-      expect(strong.systemPromptPatch).toBeUndefined();
-    });
-
-    it("patch adds emphasis suffix when weak", () => {
-      const { adapter } = buildCalibratedAdapter({
-        ...FULL_CALIBRATION,
-        systemPromptAttention: "weak",
-      });
-      const patched = adapter.systemPromptPatch?.("Base prompt", "local") ?? "";
-      expect(patched).toContain("IMPORTANT");
-      expect(patched).toContain("Follow ALL rules");
-    });
-  });
+  // NOTE (2026-07-19, debt burndown Wave 1b / register P0-11): the former
+  // "systemPromptAttention → buildCalibratedAdapter().systemPromptPatch" block
+  // was deleted. `systemPromptPatch` was removed from the ProviderAdapter
+  // contract (orphaned since 279b61fb — zero call sites; wiring it at the
+  // provider boundary would patch every LLM call, incl. classifier/judge
+  // probes). The schema field stays live: `systemPromptAttention: "weak"` is
+  // consumed at reasoning harness-plan.ts, which is where the real test belongs.
 
   describe("optimalToolResultChars — consumer: buildCalibratedAdapter()", () => {
     it("flows into profileOverrides.toolResultMaxChars", () => {
@@ -319,9 +266,9 @@ describe("M7 Calibration: Field Usage Report (post-cleanup 2026-05-14)", () => {
     //
     // Remaining 9 fields all have verified consumers:
     //   1. toolCallDialect            → runner.ts:526 (driver selection)
-    //   2. systemPromptAttention      → calibration.ts:191 (system-prompt patch)
-    //   3. parallelCallCapability     → calibration.ts:196 (tool batching)
-    //   4. optimalToolResultChars     → calibration.ts:206 (ContextProfile)
+    //   2. systemPromptAttention      → harness-plan.ts (prompt attention scaffold)
+    //   3. parallelCallCapability     → blueprint.ts (tool batching cap)
+    //   4. optimalToolResultChars     → calibration.ts profileOverrides (ContextProfile)
     //   5. steeringCompliance         → context-manager.ts:112
     //   6. observationHandling        → tool-schemas.ts:120 + final-answer.ts
     //   7. classifierReliability      → setup/classifier.ts:25

@@ -67,7 +67,6 @@ export async function createSaaSAgent(userId: string, plan: "free" | "pro" | "en
       windowMs: 60_000,
       retryAfterMs: 30_000,
     })
-    .withIdentity()
     .withAudit()
     .withObservability({
       verbosity: "minimal",            // silent in production — results returned programmatically

@@ -27,28 +27,38 @@ afterAll(() => {
 
 let overrideAdapter: ProviderAdapter | null = null;
 
-// We rebuild a minimal selectAdapter inline rather than delegating back to
-// the real module (delegating causes recursion through the mocked binding).
-// For the default path we just return `{ adapter: localModelAdapter }` since
-// that's what selectAdapter does for tier="local" with no calibration.
-import { localModelAdapter, defaultAdapter, midModelAdapter } from "../src/adapter.js";
+// Delegate to the REAL selectAdapter when no override is active. The function
+// reference is captured into a const BEFORE mock.module installs (imports are
+// evaluated first), so the wrapper cannot recurse through the rewired live
+// binding. Do NOT re-encode tier-fallback logic inline here — that silently
+// duplicates the pre-B6 "calibration discards the tier adapter" behavior and
+// masks composition regressions from every later-loaded test file (bun module
+// mocks are process-global).
+import {
+  localModelAdapter,
+  defaultAdapter,
+  midModelAdapter,
+  selectAdapter,
+  composeAdapters,
+} from "../src/adapter.js";
+
+const passthroughSelectAdapter = selectAdapter;
 
 mock.module("../src/adapter.js", () => ({
   // Preserve named exports the rest of the package may import.
   localModelAdapter,
   defaultAdapter,
   midModelAdapter,
+  composeAdapters,
   selectAdapter: (
-    _caps: { supportsToolCalling: boolean },
+    caps: { supportsToolCalling: boolean },
     tier?: string,
-    _modelId?: string,
+    modelId?: string,
   ) => {
     if (overrideAdapter) {
       return { adapter: overrideAdapter };
     }
-    if (tier === "local") return { adapter: localModelAdapter };
-    if (tier === "mid") return { adapter: midModelAdapter };
-    return { adapter: defaultAdapter };
+    return passthroughSelectAdapter(caps, tier, modelId);
   },
 }));
 

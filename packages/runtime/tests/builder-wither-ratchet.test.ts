@@ -15,7 +15,11 @@ import { ReactiveAgents } from "../src/index.js";
 // Frozen 2026-07-11 at 89 (was 92; withTerminalTools → withTools({terminal}),
 // withTelemetry → withObservability({telemetry}), withoutTracing →
 // withObservability({tracing:false}) removed this wave). MONOTONE DOWN ONLY.
-const WITHER_CEILING = 89;
+// Lowered to 85 on 2026-07-19 (v0.14 debt burndown Wave 1b, DEBT-REGISTER
+// P0-6/P0-10): withIdentity / withInteraction / withOrchestration
+// (provide-and-forget layers nothing resolved) and withProgressCheckpoint
+// (unimplemented promise) removed.
+const WITHER_CEILING = 85;
 
 function witherNames(): string[] {
   const proto = Object.getPrototypeOf(ReactiveAgents.create());
@@ -33,5 +37,11 @@ describe("builder wither-surface ratchet", () => {
     expect(names.has("withTerminalTools")).toBe(false); // → withTools({ terminal })
     expect(names.has("withTelemetry")).toBe(false); // → withObservability({ telemetry })
     expect(names.has("withoutTracing")).toBe(false); // → withObservability({ tracing: false })
+    // v0.14 Wave 1b (DEBT-REGISTER P0-6/P0-10) — provide-and-forget layers /
+    // unimplemented promises removed rather than left lying:
+    expect(names.has("withIdentity")).toBe(false); // layer nothing resolved
+    expect(names.has("withInteraction")).toBe(false); // layer nothing resolved (use withApprovalPolicy / withUserInteraction)
+    expect(names.has("withOrchestration")).toBe(false); // literal no-op layer
+    expect(names.has("withProgressCheckpoint")).toBe(false); // dead-ended config; use withDurableRuns
   });
 });

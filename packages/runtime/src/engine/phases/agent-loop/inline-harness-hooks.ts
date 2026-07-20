@@ -116,10 +116,29 @@ export const runInlineHarnessHooks = (
           { role: "user", content: verifyPrompt },
         ]);
         if (verifyContent !== null) {
-          const metaUpdate = verifyContent.startsWith("REVISE")
-            ? { verificationFeedback: verifyContent }
-            : {};
-          ctx = { ...ctx, metadata: { ...ctx.metadata, ...metaUpdate } };
+          const needsRevision = verifyContent.startsWith("REVISE");
+          ctx = {
+            ...ctx,
+            metadata: {
+              ...ctx.metadata,
+              ...(needsRevision ? { verificationFeedback: verifyContent } : {}),
+            },
+          };
+          // WIRE (P0-8): a REVISE verdict is not just recorded — it feeds back as
+          // a continuation signal. Re-run once with the verification feedback
+          // injected so the final answer actually addresses the gap the verify
+          // pass found. Without this consumer the extra LLM call (and the user's
+          // tokens) would change nothing.
+          if (needsRevision) {
+            const revised = yield* callLLMForRetry([
+              { role: "user", content: extractTaskText(task.input) },
+              { role: "assistant", content: outputToVerify },
+              { role: "user", content: verifyContent },
+            ]);
+            if (revised !== null) {
+              ctx = { ...ctx, metadata: { ...ctx.metadata, lastResponse: revised } };
+            }
+          }
         }
       }
     }

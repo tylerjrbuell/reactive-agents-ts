@@ -16,9 +16,13 @@ export type { RawHookResult } from "./hooks-normalize.js";
 
 /**
  * Calibration mode for `.withCalibration()`:
- *  - `"skip"` (default): no calibration lookup, use pure tier-based adapters.
+ *  - `"skip"`: no calibration lookup, use pure tier-based adapters. Honored as a
+ *    real opt-out even when reasoning is enabled (P0-9).
  *  - `"auto"`: load pre-baked or cached calibration for the resolved modelId, if any.
  *  - `ModelCalibration` object: use the supplied calibration directly.
+ *
+ * When unset, calibration auto-enables (`"auto"`) if reasoning is active,
+ * otherwise none.
  */
 export type CalibrationMode = "auto" | "skip" | ModelCalibration;
 
@@ -511,13 +515,6 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   minIterations: Schema.optional(Schema.Number),
   /** Inject background data into reasoning context (separate from system prompt instructions). */
   taskContext: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
-  /** Persist partial run state every N iterations for resumable long-running agents. */
-  progressCheckpoint: Schema.optional(Schema.Struct({
-    /** Checkpoint interval — save state every N iterations. */
-    every: Schema.Number,
-    /** Automatically resume from the latest checkpoint on next run (default: false). */
-    autoResume: Schema.optional(Schema.Boolean),
-  })),
   /** Run a verification pass after the initial answer before accepting the result. */
   verificationStep: Schema.optional(Schema.Struct({
     /** "reflect" = single LLM review call (the only supported mode). */

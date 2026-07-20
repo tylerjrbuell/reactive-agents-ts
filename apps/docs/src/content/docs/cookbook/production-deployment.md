@@ -37,9 +37,6 @@ const agent = await ReactiveAgents.create()
   .withObservability()          // Tracing, metrics, logging
   .withAudit()                  // Compliance audit trail
 
-  // Identity
-  .withIdentity()               // RBAC + certificates
-
   // Execution limits
   .withMaxIterations(20)        // Prevent runaway loops
 
@@ -127,12 +124,6 @@ const agent = await ReactiveAgents.create()
 - Enable `.withVerification()` for accuracy-sensitive applications
 - Verification runs semantic entropy, fact decomposition, and consistency checks
 - Low scores (< 0.7) trigger `"review"` or `"reject"` recommendations
-
-### Identity
-
-- Use `.withIdentity()` to enforce RBAC on tool and resource access
-- Assign the minimum required role to each agent
-- Use delegation for temporary permissions with automatic expiry
 
 ## Observability
 

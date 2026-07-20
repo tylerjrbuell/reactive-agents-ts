@@ -19,7 +19,6 @@ const agent = await ReactiveAgents.create()
     deniedTools: ["code-execute"],
     maxIterations: 10,
   })
-  .withIdentity()
   .withAudit()
   .withKillSwitch()
   .build();
@@ -51,9 +50,8 @@ const agent = await ReactiveAgents.create()
 - Require approval for state-changing tools where possible — gate them with `.withApprovalPolicy({ tools: [...], mode: "detach" })` (with `.withDurableRuns()`) so the run pauses for a human and survives process death. See [Durable Human-in-the-Loop](/guides/durable-hitl/).
 - Isolate file-write scope to approved directories.
 
-## Identity and Audit
+## Audit
 
-- Enable `.withIdentity()` for RBAC and delegation controls.
 - Enable `.withAudit()` to preserve action history for investigations.
 - Subscribe to security-relevant events and alert in near real-time.
 

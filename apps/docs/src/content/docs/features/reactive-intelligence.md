@@ -141,12 +141,6 @@ All controller decisions can be intercepted and overridden:
     if (decision.decision === "human-escalate") return "reject";
     return "accept";
   },
-  constraints: {
-    maxTemperatureAdjustment: 0.15,
-    neverEarlyStop: false,
-    protectedSkills: ["my-critical-skill"],
-  },
-  autonomy: "suggest",  // "full" | "suggest" | "observe"
 })
 ```
 

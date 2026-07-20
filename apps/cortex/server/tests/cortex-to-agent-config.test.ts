@@ -150,13 +150,15 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.logging?.level).toBe("debug");
   });
 
-  it("maps fallbacks (drops enabled flag)", () => {
+  it("maps fallbacks providers (drops enabled + errorThreshold — v0.14 P0-3)", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",
       fallbacks: { enabled: true, providers: ["openai"], errorThreshold: 3 },
     });
     expect(config.fallbacks?.providers).toEqual(["openai"]);
-    expect(config.fallbacks?.errorThreshold).toBe(3);
+    // errorThreshold was never wired; the runtime FallbackConfig is { providers } only.
+    expect((config.fallbacks as Record<string, unknown>)?.errorThreshold).toBeUndefined();
+    expect((config.fallbacks as Record<string, unknown>)?.enabled).toBeUndefined();
   });
 
   it("omits fallbacks when not enabled", () => {

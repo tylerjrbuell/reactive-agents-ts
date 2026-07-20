@@ -29,11 +29,12 @@ import ts from "typescript";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const SKIP_MARKER = "docs-skip-typecheck";
-// Skip-count ratchet. Baseline 2026-07-19: 283 of 632 blocks carry a
-// docs-skip-typecheck marker. THE CEILING ONLY GOES DOWN: when you un-skip
-// blocks, lower this number to the new skip count. Never raise it — adding a
-// skip marker to dodge a failure is exactly the drift this gate exists to stop.
-const SKIP_CEILING = 283;
+// Skip-count ratchet. Baseline 2026-07-19: 283; ratcheted to 262 the same day
+// after Wave 1 deleted phantom docs pages and un-skipped now-valid examples.
+// THE CEILING ONLY GOES DOWN: when you un-skip blocks, lower this number to the
+// new skip count. Never raise it — adding a skip marker to dodge a failure is
+// exactly the drift this gate exists to stop.
+const SKIP_CEILING = 262;
 
 interface Block {
   sourceFile: string; // repo-relative

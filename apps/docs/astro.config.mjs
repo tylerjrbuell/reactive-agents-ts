@@ -213,18 +213,10 @@ export default defineConfig({
                         },
                         { label: 'Lifecycle Hooks', link: 'guides/hooks/' },
                         {
-                            label: 'Interaction Modes',
-                            link: 'guides/interaction-modes/',
-                        },
-                        {
                             label: 'Context Engineering',
                             link: 'guides/context-engineering/',
                         },
                         { label: 'Sub-Agents', link: 'guides/sub-agents/' },
-                        {
-                            label: 'Orchestration',
-                            link: 'features/orchestration/',
-                        },
                         { label: 'Agent Skills', link: 'guides/agent-skills/' },
                         { label: 'Local Models', link: 'guides/local-models/' },
                         {
@@ -282,7 +274,6 @@ export default defineConfig({
                             label: 'Security Hardening',
                             link: 'guides/security-hardening/',
                         },
-                        { label: 'Identity', link: 'features/identity/' },
                         {
                             label: 'Observability',
                             link: 'features/observability/',

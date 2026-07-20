@@ -20,24 +20,31 @@ import {
   localModelAdapter,
   defaultAdapter,
   midModelAdapter,
+  selectAdapter,
+  composeAdapters,
 } from "../src/adapter.js";
 import type { StreamEvent } from "../src/types.js";
 
 // Adapter override seam (mirrors provider-adapter-wiring.test.ts).
+// Delegates to the REAL selectAdapter when no override is active (const
+// capture before mock.module installs — no recursion, no inline copy of the
+// old non-composing tier fallback; bun module mocks are process-global).
 let overrideAdapter: ProviderAdapter | null = null;
+
+const passthroughSelectAdapter = selectAdapter;
+
 mock.module("../src/adapter.js", () => ({
   localModelAdapter,
   defaultAdapter,
   midModelAdapter,
+  composeAdapters,
   selectAdapter: (
-    _caps: { supportsToolCalling: boolean },
+    caps: { supportsToolCalling: boolean },
     tier?: string,
-    _modelId?: string,
+    modelId?: string,
   ) => {
     if (overrideAdapter) return { adapter: overrideAdapter };
-    if (tier === "local") return { adapter: localModelAdapter };
-    if (tier === "mid") return { adapter: midModelAdapter };
-    return { adapter: defaultAdapter };
+    return passthroughSelectAdapter(caps, tier, modelId);
   },
 }));
 

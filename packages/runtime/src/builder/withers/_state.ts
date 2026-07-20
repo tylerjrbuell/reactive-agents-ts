@@ -95,14 +95,7 @@ export interface BuilderState {
   };
   _enableSelfImprovement: boolean;
   _skillsConfig?: {
-    paths?: string[];
-    packages?: string[];
-    evolution?: {
-      mode?: string;
-      refinementThreshold?: number;
-      rollbackOnRegression?: boolean;
-    };
-    overrides?: Record<string, { evolutionMode?: string }>;
+    paths: readonly string[];
   };
 
   // hooks / harness
@@ -150,14 +143,11 @@ export interface BuilderState {
     maxRetries?: number;
   };
   _taskContract?: import("@reactive-agents/core").TaskContract;
-  _enableIdentity: boolean;
   _enableObservability: boolean;
   _observabilityOptions: ObservabilityOptions;
   _cortexUrl: string | null;
-  _enableInteraction: boolean;
   _enablePrompts: boolean;
   _promptsOptions?: PromptsOptions;
-  _enableOrchestration: boolean;
   _testScenario?: TestTurn[];
   _extraLayers?: Layer.Layer<any, any, any>;
   _tracingConfig: { dir: string } | null;
@@ -190,8 +180,6 @@ export interface BuilderState {
   _rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
   _fallbackConfig?: {
     providers?: string[];
-    models?: string[];
-    errorThreshold?: number;
   };
 
   // error / health / progress
@@ -206,7 +194,6 @@ export interface BuilderState {
   ) => void;
   _enableHealthCheck: boolean;
   _taskContext?: Record<string, string>;
-  _progressCheckpoint?: { every: number; autoResume?: boolean };
   _verificationStep?: { mode: "reflect"; prompt?: string };
   _outputValidator?: (output: string) => {
     valid: boolean;
@@ -221,19 +208,13 @@ export interface BuilderState {
     import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
   >;
   _riHooks?: RiHooks;
-  _riConstraints?: {
-    allowedStrategySwitch?: string[];
-    maxTemperatureAdjustment?: number;
-    neverEarlyStop?: boolean;
-    neverHumanEscalate?: boolean;
-    protectedSkills?: string[];
-    lockedSkills?: string[];
-  };
-  _riAutonomy?: "full" | "suggest" | "observe";
   _metaTools?: import("../../types.js").MetaToolsConfig | false;
 
   // calibration / lean
-  _calibration: CalibrationMode;
+  // `undefined` = user never called `.withCalibration()` (auto-enabled when
+  // reasoning is on); an explicit `"skip"` is a real opt-out. See P0-9 /
+  // resolveCalibrationSetting.
+  _calibration?: CalibrationMode;
   _leanHarness: boolean;
 
   // RAG

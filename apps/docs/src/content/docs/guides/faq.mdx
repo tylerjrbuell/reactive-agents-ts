@@ -57,7 +57,7 @@ Skeptical-engineer questions answered straight. If you have one that isn't here,
 
 ### Is it production-ready?
 
-The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The frontier benchmark passes at **100% across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, and `gemini-2.5-pro`** on the `ra-full` 35-task suite. Local-tier `gemma4:e4b` and `cogito:14b` hit 91-94% on the same suite — tied with `gemini-2.5-flash` and `gpt-4o-mini`.
+The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The same agent code runs the full loop — tool execution with healing, verification, receipts — on frontier APIs (Anthropic, OpenAI, Gemini, Groq, xAI) and on local Ollama models, and we exercise both tiers continuously during development.
 
 **Honest caveats:**
 - **Bun ≥ 1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js 22.5+ is also fully supported** via `@reactive-agents/runtime-shim`; Node 20+ runs too, with an in-memory SQLite fallback where `node:sqlite` isn't available.
@@ -91,13 +91,13 @@ Three reasons that matter once you're past hello-world:
 
 ### What's the catch with local models?
 
-Local Ollama models (4B+) hit 91-94% on the same harness as paid frontier models — *because* of the framework, not despite it. Specifically:
+Local Ollama models (4B+) can run the same tool-calling agent loop as paid frontier models — *because* of the framework, not despite it. Specifically:
 
-- The **Healing Pipeline** recovers 86.7% of malformed tool calls (with +80 pp accuracy lift on FC-heavy tasks)
+- The **Healing Pipeline** repairs malformed tool calls (name aliases, param aliases, paths, type coercion) before they fail
 - The **TextParseDriver** handles models without native function-calling via XML / JSON / pseudo-code cascade
 - The **calibration system** learns each model's tool-call dialect after 5 runs
 
-**Catch:** Local inference is slower (1-5 s/response on 14B vs 100 ms on a fast frontier API), and you need ~9 GB RAM for `qwen3:14b` / `cogito:14b`. The 4 GB `gemma4:e4b` is faster and still hits 94%.
+**Catch:** Local inference is slower (1-5 s/response on 14B vs 100 ms on a fast frontier API), and you need ~9 GB RAM for `qwen3:14b` / `cogito:14b`. The 4 GB `gemma4:e4b` is a faster, lighter option that still handles tool-calling well.
 
 If you only ever want one paid frontier model, you're paying for capabilities (healing, calibration, dialect detection) you don't strictly need — but you also pay nothing extra for them, so there's no real downside.
 
@@ -117,7 +117,7 @@ Great for streaming + tool calling, but stops there. Reactive Agents adds **{met
 
 ### vs AutoGen / CrewAI
 
-Multi-agent frameworks without type safety, composable architecture, or model-adaptive intelligence. Reactive Agents ships **A2A protocol** (JSON-RPC + SSE for cross-agent calls), dynamic sub-agent spawning, and the healing pipeline that lifts local-model accuracy by +80pp. We see them as complementary — you can wrap a CrewAI agent as a Reactive Agents tool via `agent-tool-adapter`.
+Multi-agent frameworks without type safety, composable architecture, or model-adaptive intelligence. Reactive Agents ships **A2A protocol** (JSON-RPC + SSE for cross-agent calls), dynamic sub-agent spawning, and the healing pipeline that keeps local-model tool calling viable. We see them as complementary — you can wrap a CrewAI agent as a Reactive Agents tool via `agent-tool-adapter`.
 
 ### vs Building from scratch
 

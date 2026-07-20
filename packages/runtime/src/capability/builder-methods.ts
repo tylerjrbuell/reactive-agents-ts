@@ -119,10 +119,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withAdaptiveHarness: { kind: "config", configKeys: ["adaptiveHarness"], description: "Adaptive harness / policy compiler." },
   withLongHorizon: { kind: "config", configKeys: ["horizonProfile"], description: "Long-horizon guard profile." },
   withReactiveIntelligence: { kind: "config", configKeys: ["reactiveIntelligence", "features.reactiveIntelligence"], description: "Reactive intelligence posture." },
-  withIdentity: { kind: "config", configKeys: ["features.identity"], description: "Enable identity feature." },
-  withInteraction: { kind: "config", configKeys: ["features.interaction"], description: "Enable durable interaction." },
   withKillSwitch: { kind: "config", configKeys: ["features.killSwitch"], description: "Emergency stop / terminate control." },
-  withOrchestration: { kind: "config", configKeys: ["features.orchestration"], description: "Enable orchestration topology." },
   withPrompts: { kind: "config", configKeys: ["features.prompts"], description: "Register custom prompt templates." },
   withSelfImprovement: { kind: "config", configKeys: ["features.selfImprovement"], description: "Enable self-improvement loop." },
   withStreaming: { kind: "config", configKeys: ["features.streaming"], description: "Enable event streaming." },
@@ -135,7 +132,6 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withErrorHandler: { kind: "overlay", overlayReason: "carries an error-handler function (not JSON)", description: "Custom error handler." },
   withOutputValidator: { kind: "overlay", overlayReason: "carries a validator function (folds into withVerification)", description: "Custom output validator." },
   withVerificationStep: { kind: "overlay", overlayReason: "carries a verification-step function (folds into withVerification)", description: "Single post-answer reflect pass." },
-  withProgressCheckpoint: { kind: "overlay", overlayReason: "carries a checkpoint cadence/function (folds into withReasoning)", description: "Progress checkpoint cadence." },
   withCustomTermination: { kind: "overlay", overlayReason: "carries a termination predicate (folds into withReasoning)", description: "Custom termination predicate." },
   withApprovalPolicy: { kind: "overlay", overlayReason: "carries an approval predicate (HITL durability rail)", description: "Human-in-the-loop tool approval gate." },
 
@@ -166,7 +162,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withContract: { kind: "overlay", overlayReason: "behavioral-contract overlay (not JSON data)", description: "Behavioral contract." },
   withBehavioralContracts: { kind: "overlay", overlayReason: "behavioral-contract overlay (folds into withContract)", description: "Behavioral contracts." },
   withDynamicPricing: { kind: "overlay", overlayReason: "pricing overlay (folds into withCostTracking)", description: "Dynamic pricing overlay." },
-  withUserInteraction: { kind: "overlay", overlayReason: "durable ask overlay (folds into withInteraction)", description: "Durable user interaction." },
+  withUserInteraction: { kind: "overlay", overlayReason: "durable ask overlay (channel adapters are code-only)", description: "Durable user interaction." },
 
   // ── Overlays: timeouts/validation with no schema field (gaps G3) ──
   withLlmTimeout: { kind: "overlay", overlayReason: "sets _ollamaTimeoutMs; no schema field (G3, folds into withBudget)", description: "LLM request timeout (ms)." },

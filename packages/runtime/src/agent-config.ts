@@ -247,10 +247,11 @@ export const ObservabilityConfigSchema = Schema.Struct({
   costs: Schema.optional(Schema.Union(Schema.Boolean, CostTrackingConfigSchema)),
 });
 
+// P0-3: `models` and `errorThreshold` removed in v0.14 — they were never wired
+// (no cheaper-model chain, no consecutive-error threshold). Only the ordered
+// provider cascade is real.
 export const FallbackConfigSchema = Schema.Struct({
   providers: Schema.optional(Schema.Array(Schema.String)),
-  models: Schema.optional(Schema.Array(Schema.String)),
-  errorThreshold: Schema.optional(Schema.Number),
 });
 
 export const VerificationConfigSchema = Schema.Struct({
@@ -444,10 +445,7 @@ export const AgentConfigSchema = Schema.Struct({
       tools: Schema.optional(Schema.Boolean),
       memory: Schema.optional(Schema.Boolean),
       observability: Schema.optional(Schema.Boolean),
-      identity: Schema.optional(Schema.Boolean),
-      interaction: Schema.optional(Schema.Boolean),
       prompts: Schema.optional(Schema.Boolean),
-      orchestration: Schema.optional(Schema.Boolean),
       killSwitch: Schema.optional(Schema.Boolean),
       audit: Schema.optional(Schema.Boolean),
       selfImprovement: Schema.optional(Schema.Boolean),
@@ -759,10 +757,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   }
 
   // Feature flags (remaining ones not handled inline above)
-  if (config.features?.identity) builder = builder.withIdentity();
-  if (config.features?.interaction) builder = builder.withInteraction();
   if (config.features?.prompts) builder = builder.withPrompts();
-  if (config.features?.orchestration) builder = builder.withOrchestration();
   if (config.features?.killSwitch) builder = builder.withKillSwitch();
   if (config.features?.audit) builder = builder.withAudit();
   if (config.features?.selfImprovement) builder = builder.withSelfImprovement();

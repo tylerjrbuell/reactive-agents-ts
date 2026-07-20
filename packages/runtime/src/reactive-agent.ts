@@ -201,7 +201,6 @@ export class ReactiveAgent<TOut = unknown> {
         private readonly _config?: {
             minIterations?: number
             taskContext?: Record<string, string>
-            progressCheckpoint?: { every: number; autoResume?: boolean }
             verificationStep?: { mode: 'reflect'; prompt?: string }
             outputValidator?: (output: string) => {
                 valid: boolean

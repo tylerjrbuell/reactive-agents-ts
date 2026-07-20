@@ -47,7 +47,6 @@ const agent = await ReactiveAgents.create()
 const lead = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 20 })
-  .withOrchestration()
   .withRemoteAgent("specialist", "http://specialist-service:8000")
   // Registers the remote A2A agent as a callable tool named "specialist"
   .withTools({ allowedTools: ["specialist", "checkpoint", "final-answer"] })

@@ -67,12 +67,11 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")          // primary provider
   .withFallbacks({
     providers: ["anthropic", "openai", "gemini"],  // tried in order
-    errorThreshold: 2,                             // errors before switching
   })
   .build();
 ```
 
-After `errorThreshold` consecutive failures on a provider, the runtime automatically switches to the next one. The switch is transparent to the caller.
+`.withFallbacks({ providers })` takes only a `providers` array. It is an immediate, ordered provider cascade: the primary provider is tried first, and on **any** error the runtime falls back to the next provider in the array, in order. There is no error-count threshold and no 429/cost-specific logic — any error triggers the next provider immediately. The switch is transparent to the caller.
 
 ## Retry Policy
 
@@ -94,7 +93,7 @@ Retries apply to every `llm.complete()` call across all reasoning strategies. Us
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withRetryPolicy({ maxRetries: 2, backoffMs: 500 })
-  .withFallbacks({ providers: ["anthropic", "openai"], errorThreshold: 3 })
+  .withFallbacks({ providers: ["anthropic", "openai"] })
   .build();
 ```
 
@@ -177,7 +176,6 @@ const agent = await ReactiveAgents.create()
   .withRetryPolicy({ maxRetries: 3, backoffMs: 1_000 })
   .withFallbacks({
     providers: ["anthropic", "openai"],
-    errorThreshold: 3,
   })
   .withErrorHandler((err, ctx) => {
     reportToSentry(err, { extra: ctx });

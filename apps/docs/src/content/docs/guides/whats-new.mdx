@@ -44,7 +44,7 @@ A new framework-agnostic headless package holds the shared controllers behind ev
 
 ### Cortex `request_user_input` rail
 
-Cortex gains a durable request-for-input rail — runner methods plus a `.withInteraction(...)` surface, an interaction-watcher, and a real pause → register → respond → resume flow. The Cortex UI renders a live Interact panel and streaming structured previews.
+Cortex gains a durable request-for-input rail — runner methods plus a `.withUserInteraction(...)` surface, an interaction-watcher, and a real pause → register → respond → resume flow. The Cortex UI renders a live Interact panel and streaming structured previews.
 
 ### Honest run errors
 
@@ -368,28 +368,27 @@ The Cortex Run View's Trace Panel adds a **Timeline** view: a fine-grained, filt
 
 ---
 
-## v0.10.x — Local models match frontier (May 2026)
+## v0.10.x — Local models run the full loop (May 2026)
 
-The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four weeks. The headline: **local Ollama models now hit 91–94% on the same task suite as paid frontier APIs**, thanks to a closed-loop healing pipeline and adaptive tool-calling. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for engineering detail.
+The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four weeks. The headline: **local Ollama models now run the same tool-calling agent loop as paid frontier APIs**, thanks to a closed-loop healing pipeline and adaptive tool-calling. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for engineering detail.
 
 ### What you gain
 
 #### Local models that actually work
 
-- **Healing Pipeline** — 4-stage closed-loop recovery on every tool call (tool-name fuzzy match → parameter-name aliasing → path resolution → type coercion). **86.7% recovery rate, +80pp accuracy, 90% cheaper than LLM reprompt.** Ships on by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
+- **Healing Pipeline** — 4-stage closed-loop recovery on every tool call (tool-name fuzzy match → parameter-name aliasing → path resolution → type coercion). Deterministic repairs instead of an LLM reprompt. Ships on by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
 - **Adaptive tool calling** — Each model gets fingerprinted on first run; native FC capable models route through the JSON path, weaker ones through a 3-tier text-parse cascade (XML → JSON → pseudo-code). The framework learns each model's dialect after 5 runs and stops asking it to do things it can't.
 - **Calibration system** — Per-model observations (parallel-call capability, classifier reliability, tool-call dialect) adapt empirically. Auto-enabled when `.withReasoning()` is on.
-- **Frontier benchmark: 100% on `ra-full`** verified across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, `gemini-2.5-pro`. Bare LLM only reaches 85% on the same suite.
-- **Local benchmark: 91–94% on `ra-full`** for `gemma4:e4b` (4 GB) and `cogito:14b` (9 GB) — tied with `gemini-2.5-flash` and `gpt-4o-mini` on the same 35-task suite.
+- **Cross-tier verification** — the same agent loop exercised across frontier models (`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, `gemini-2.5-pro`) and local models (`gemma4:e4b` at 4 GB, `cogito:14b` at 9 GB) during development.
 
 #### Long agent runs stay cheap
 
-- **Three-stage context curation** — Tool results get compressed and stashed → curator renders only what's needed → optional reactive trim. **60.7% context reduction, 38.6% token savings, 0.16 ms overhead per step.** See [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
+- **Three-stage context curation** — Tool results get compressed and stashed → curator renders only what's needed → optional reactive trim. Long runs stay inside the context window with negligible per-step overhead. See [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
 - **Reactive Intelligence dispatcher** — 6 corrective interventions fire automatically when an agent shows entropy signs (early-stop, temperature adjust, strategy switch, context compress, tool inject, skill activate). Suppression gates prevent runaway dispatch. See [Reactive Intelligence](/features/reactive-intelligence/).
 
 #### Production safety hardened
 
-- **`@reactive-agents/diagnose`** — Standalone npm package detects system-prompt, API-key, credential, and internal-instruction leaks in any output. **100% true positive, 0% false positive, 0.02 ms latency.** 25 regex patterns + 4 FP filters.
+- **`@reactive-agents/diagnose`** — Standalone npm package detects system-prompt, API-key, credential, and internal-instruction leaks in any output. Deterministic regex-based detection with false-positive filters — no extra LLM call.
 - **Single-owner termination** — All 12 phases route stop decisions through one arbitrator. CI lint guard prevents future bypass paths. Agents always finish cleanly, never get stuck.
 
 #### Better runtime + tooling
@@ -417,7 +416,7 @@ None. All existing `ReactiveAgents.create().with*()` builder chains keep working
 
 ## v0.9.x — MCP Production Hardening + Pre-v0.10 Polish
 
-- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Orchestration](/features/orchestration/)
+- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Tools](/guides/tools/)
 - **Composable kernel architecture (initial)** — `react-kernel.ts` reduced from ~1,700 to ~197 lines via `makeKernel({ phases })` factory — see [Composable Kernel](/concepts/composable-kernel/)
 - **Permanently-failed required tools fix** — tools that always error no longer cause loop-until-maxIterations — see [Harness Control Flow](/features/harness-control-flow/)
 - **Cortex MCP CRUD + JSON import** — import Cursor/Claude-style MCP configs directly into Cortex — see [Cortex](/features/cortex/)
@@ -432,7 +431,7 @@ None. All existing `ReactiveAgents.create().with*()` builder chains keep working
 
 ## v0.9.0 — MCP Production Hardening
 
-- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Orchestration](/features/orchestration)
+- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Tools](/guides/tools/)
 - **Composable kernel architecture** — `react-kernel.ts` reduced from ~1,700 to ~197 lines via `makeKernel({ phases })` factory; phases are now individually swappable — see [Composable Kernel](/concepts/composable-kernel)
 - **Permanently-failed required tools fix** — tools that always error no longer cause loop-until-maxIterations; framework detects and stops early — see [Harness Control Flow](/features/harness-control-flow)
 - **Cortex MCP CRUD + JSON import** — import Cursor/Claude-style MCP configs directly into Cortex — see [Cortex](/features/cortex)
@@ -443,7 +442,7 @@ None. All existing `ReactiveAgents.create().with*()` builder chains keep working
 ## v0.8.5 — Native FC Hardening + Web Framework Adapters
 
 - **React, Vue, and Svelte adapters** — `useAgentStream()` and `useAgent()` hooks/composables/stores for all three frameworks, consuming SSE endpoints — see [Web Integration](/guides/web-integration) and [Streaming](/features/streaming)
-- **7-hook provider adapter system** — `taskFraming`, `toolGuidance`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`, `continuationHint`, `systemPromptPatch` fully wired — see [Reactive Intelligence](/features/reactive-intelligence)
+- **Provider adapter hook system** — 4 kernel prompt hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) plus `parseToolCalls` (normalizes malformed native tool calls in every provider `complete()`/`stream()`); calibration composes additively with the tier adapter rather than replacing it — see [LLM Providers](/features/llm-providers/)
 - **Dynamic stopping (3-layer)** — novelty signal (Jaccard overlap), budget exhaustion phase transition, and per-tool call cap (`maxCallsPerTool`) — see [Harness Control Flow](/features/harness-control-flow)
 - **Full prompt observability** — `logModelIO: true` logs the complete FC conversation thread with no truncation — see [Observability](/features/observability)
 - **Actionable failure messages** — loop detection, required-tools, and stall detection all emit `Fix:` suggestions with specific builder options — see [Troubleshooting](/guides/troubleshooting)

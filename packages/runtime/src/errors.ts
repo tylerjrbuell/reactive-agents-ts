@@ -131,7 +131,7 @@ export class BudgetExceededError extends Data.TaggedError(
 }> {}
 
 /**
- * Thrown by `agent.resume(runId)` when no run / no checkpoint exists for `runId`.
+ * Thrown by `agent.resumeRun(runId)` when no run / no checkpoint exists for `runId`.
  *
  * Either the run id is unknown to the durable store, or the run was created but
  * never checkpointed (nothing to rehydrate). Durable execution Phase C.
@@ -144,7 +144,7 @@ export class DurableRunNotFoundError extends Data.TaggedError(
 }> {}
 
 /**
- * Thrown by `agent.resume(runId)` when the resuming agent's config hash differs
+ * Thrown by `agent.resumeRun(runId)` when the resuming agent's config hash differs
  * from the hash stored when the run was created.
  *
  * Resume rehydrates a `KernelState` (data) but re-materializes services, tools,
@@ -242,18 +242,27 @@ export function errorContext(error: unknown): ErrorContext {
         };
       }
       case "GuardrailViolationError": {
+        // `violation` is a human summary ("<type>: <message>; ..."), not a
+        // detector key — so we must NOT splice it into a code snippet (that
+        // rendered syntactically invalid TS). Point at the real detector-toggle
+        // config without fabricating a specific key.
         const violation = e.violation as string;
         return {
-          suggestion: `Input blocked by ${violation} guardrail. Options: (1) rephrase input to avoid trigger, (2) disable this detector via .withGuardrails({ ${violation}: false })`,
+          suggestion: `Input blocked by a guardrail (${violation}). Options: (1) rephrase input to avoid the trigger, (2) tune or disable the offending detector via .withGuardrails({ ... }) — e.g. set injection/pii/toxicity to false for the detector that fired.`,
           taskId: e.taskId as string,
           phase: "guardrail",
           details: { violation },
         };
       }
       case "KillSwitchTriggeredError": {
+        // The kill switch fires on stop()/terminate() — the run is halted and
+        // is NOT resumable (resume() only continues a pause()). Do not suggest
+        // resuming. `reason` is one of "stop() requested" / "terminate() called"
+        // / a policy string — there is no "manual" reason emitted, so no such
+        // branch here.
         const reason = e.reason as string;
         return {
-          suggestion: `Agent stopped by kill switch (reason: ${reason}). The kill switch was triggered ${reason === "manual" ? "manually" : "by policy"}. Call agent.resume() to continue.`,
+          suggestion: `Agent halted by kill switch (reason: ${reason}). A stopped or terminated run cannot be resumed — start a new run(). To pause and later continue instead, use agent.pause()/agent.resume().`,
           taskId: e.taskId as string,
           details: { agentId: e.agentId, reason },
         };

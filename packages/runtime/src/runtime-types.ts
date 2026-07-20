@@ -381,13 +381,6 @@ export interface RuntimeOptions {
   enableTools?: boolean;
 
   /**
-   * Enable agent identity and certificate verification.
-   *
-   * Default: `false`
-   */
-  enableIdentity?: boolean;
-
-  /**
    * Enable observability (metrics, tracing, structured logging).
    *
    * Default: `false`
@@ -395,25 +388,11 @@ export interface RuntimeOptions {
   enableObservability?: boolean;
 
   /**
-   * Enable interactive collaboration (approval gates, user feedback loops).
-   *
-   * Default: `false`
-   */
-  enableInteraction?: boolean;
-
-  /**
    * Enable prompt template service (template library, A/B experiments).
    *
    * Default: `false`
    */
   enablePrompts?: boolean;
-
-  /**
-   * Enable multi-agent orchestration (workflow engine, task dependencies).
-   *
-   * Default: `false`
-   */
-  enableOrchestration?: boolean;
 
   /**
    * Enable audit logging (compliance, phase transitions, decision points).
@@ -766,9 +745,6 @@ export interface RuntimeOptions {
   /** Background data injected into reasoning memory context (not system prompt). */
   taskContext?: Record<string, string>;
 
-  /** Save a progress checkpoint every N iterations. */
-  progressCheckpoint?: { every: number; autoResume?: boolean };
-
   /** Verification pass after the initial reasoning result. "reflect" = one extra LLM review call (the only supported mode). */
   verificationStep?: { mode: "reflect"; prompt?: string };
 
@@ -851,11 +827,6 @@ export interface RuntimeOptions {
    */
   skills?: {
     readonly paths?: readonly string[];
-    readonly evolution?: {
-      mode?: string;
-      refinementThreshold?: number;
-      rollbackOnRegression?: boolean;
-    };
   };
 
   /**
@@ -873,7 +844,7 @@ export interface RuntimeOptions {
    *
    * Default: undefined (no fallback, single provider)
    */
-  fallbackConfig?: { providers?: string[]; models?: string[]; errorThreshold?: number };
+  fallbackConfig?: { providers?: string[] };
 
   /**
    * Rate limiter configuration. When provided, wraps LLM complete/stream/completeStructured

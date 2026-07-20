@@ -1,6 +1,6 @@
 ---
 name: identity-and-guardrails
-description: Enable prompt injection detection, PII masking, behavioral contracts, kill switch controls, and agent identity for safe production deployments.
+description: Enable prompt injection detection, PII masking, behavioral contracts, kill switch controls, and audit logging for safe production deployments.
 compatibility: Reactive Agents TypeScript projects using @reactive-agents/*
 metadata:
   author: reactive-agents
@@ -44,7 +44,6 @@ const agent = await ReactiveAgents.create()
     requireDisclosure: true,   // agent must disclose it is an AI
   })
   .withKillSwitch()   // enables pause/resume/stop/terminate controls
-  .withIdentity()     // enables identity and session tracking
   .withAudit()        // records all tool calls and decisions to audit log
   .build();
 ```
@@ -108,14 +107,13 @@ await handle.terminate("Emergency shutdown");
 
 Kill switch controls are no-ops if `.withKillSwitch()` was not called during build.
 
-### Identity and audit
+### Audit
 
 ```ts
-.withIdentity()   // enables agent identity headers, session IDs, and persona tracking
 .withAudit()      // records all tool calls, guardrail decisions, and contract checks to an audit trail
 ```
 
-Identity and audit work independently — enable both for full traceability.
+Audit events flow to the observability stream — pair with `.withObservability()` to capture them.
 
 ## GuardrailsOptions reference
 
