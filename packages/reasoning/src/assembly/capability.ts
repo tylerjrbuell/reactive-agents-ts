@@ -15,9 +15,16 @@ export interface ResolvedCapability {
   readonly dialect: CapabilityInput["dialect"];
   readonly tier: Tier;
   /**
-   * Total recency window budget (chars). Governs `compactHistoryStage`'s
-   * bulk-truncate threshold across the WHOLE message thread.
-   * NOT for per-result preservation — see `toolResultPreserveBudget`.
+   * Generous per-result preservation cap (chars) applied ONLY to the LATEST
+   * tool result (`projectResultsStage`), so verbatim/recall tasks keep the most
+   * recent payload in full. OLDER results use the tighter `toolResultPreserveBudget`.
+   * Derived as `window × 0.35 × 4` chars (≈35% of the window in tokens);
+   * env override `RA_RECENCY_BUDGET_CHARS`.
+   *
+   * NOTE: this does NOT drive compaction. The whole-thread bulk-truncate
+   * threshold is separate — `compactHistoryStage` fires at the full window
+   * (`window × 4` chars) as a last-resort safety valve. Proactive earlier
+   * compaction is a behavioral change tracked for the Wave-5 bench, not here.
    */
   readonly recencyBudgetChars: number;
   /**
@@ -35,7 +42,6 @@ export interface ResolvedCapability {
    * legacy code path. Env override: `RA_TOOL_RESULT_BUDGET_CHARS`.
    */
   readonly toolResultPreserveBudget: number;
-  readonly agedBudgetChars: number;
   predictNumCtx(assembledPromptTokens: number): number;
 }
 
@@ -73,12 +79,10 @@ export function resolveCapability(input: CapabilityInput): ResolvedCapability {
       ? envPreserve
       : TIER_TOOL_RESULT_PRESERVE[input.tier];
 
-  const agedBudgetChars = Math.max(600, Math.min(4000, Math.floor(input.window * 0.04 * 4)));
   return {
     ...input,
     recencyBudgetChars,
     toolResultPreserveBudget,
-    agedBudgetChars,
     predictNumCtx(assembledPromptTokens: number): number {
       const need = assembledPromptTokens + input.outputBudget + 1024; // headroom
       return BUCKETS.find((b) => b >= need) ?? BUCKETS[BUCKETS.length - 1];
