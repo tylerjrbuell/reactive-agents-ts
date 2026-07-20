@@ -86,7 +86,7 @@ export const applyWithTools = (
 
 /**
  * Apply `.withDocuments(docs)` — accumulate RAG documents and enable the
- * tools layer (rag-search needs tools enabled).
+ * tools layer (the `find` retrieval tool needs tools enabled).
  */
 export const applyWithDocuments = (
   builder: ReactiveAgentBuilder,

@@ -8,22 +8,32 @@ import {
 } from "../../src/skills/rag-ingest.js";
 import type { RagMemoryStore } from "../../src/skills/rag-ingest.js";
 import {
-  ragSearchTool,
-  makeRagSearchHandler,
   makeInMemorySearchCallback,
+  type RagSearchResult,
 } from "../../src/skills/rag-search.js";
 import { ToolExecutionError } from "../../src/errors.js";
 
 // ─── Shared store for ingest + search integration ───
+//
+// The `rag-search` callable tool was removed in v0.14 (superseded by `find`).
+// The in-memory search callback below remains LIVE — it is the keyword
+// retrieval engine `find` uses. These tests exercise it directly. The tiny
+// adapter mirrors the shape `find` reads: { query, results, totalResults }.
 
 let store: RagMemoryStore;
 let ingestHandler: ReturnType<typeof makeRagIngestHandler>;
-let searchHandler: ReturnType<typeof makeRagSearchHandler>;
+let searchHandler: (
+  args: { query: string; topK?: number; source?: string },
+) => Effect.Effect<{ query: string; results: RagSearchResult[]; totalResults: number }, ToolExecutionError>;
 
 beforeEach(() => {
   store = new Map();
   ingestHandler = makeRagIngestHandler(makeInMemoryStoreCallback(store));
-  searchHandler = makeRagSearchHandler(makeInMemorySearchCallback(store));
+  const searchCallback = makeInMemorySearchCallback(store);
+  searchHandler = (args) =>
+    searchCallback(args.query, args.topK ?? 5, args.source).pipe(
+      Effect.map((results) => ({ query: args.query, results, totalResults: results.length })),
+    );
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -42,17 +52,6 @@ describe("RAG tool definitions", () => {
     expect(paramNames).toContain("format");
     expect(paramNames).toContain("chunkStrategy");
     expect(paramNames).toContain("maxChunkSize");
-  });
-
-  it("rag-search should have correct metadata", () => {
-    expect(ragSearchTool.name).toBe("rag-search");
-    expect(ragSearchTool.source).toBe("builtin");
-    expect(ragSearchTool.category).toBe("search");
-    expect(ragSearchTool.riskLevel).toBe("low");
-    const paramNames = ragSearchTool.parameters.map((p) => p.name);
-    expect(paramNames).toContain("query");
-    expect(paramNames).toContain("topK");
-    expect(paramNames).toContain("source");
   });
 });
 
@@ -208,10 +207,10 @@ describe("rag-ingest handler", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
-// rag-search handler
+// in-memory search callback (the retrieval engine `find` uses)
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("rag-search handler", () => {
+describe("in-memory search callback", () => {
   it("should find relevant chunks after ingest", async () => {
     await Effect.runPromise(
       ingestHandler({
@@ -298,12 +297,14 @@ describe("rag-search handler", () => {
     }
   });
 
-  it("should fail without query parameter", async () => {
-    const error = await Effect.runPromise(
-      searchHandler({}).pipe(Effect.flip),
+  it("should return empty results for a query with no usable terms", async () => {
+    await Effect.runPromise(
+      ingestHandler({ content: "Apples and oranges.", source: "fruit.txt" }),
     );
-    expect(error).toBeInstanceOf(ToolExecutionError);
-    expect(error.toolName).toBe("rag-search");
+
+    const result = await Effect.runPromise(searchHandler({ query: "" }));
+    const typed = result as { results: unknown[] };
+    expect(typed.results.length).toBe(0);
   });
 
   it("should return results sorted by relevance score", async () => {

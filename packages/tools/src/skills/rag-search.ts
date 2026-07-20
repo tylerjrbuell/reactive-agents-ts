@@ -1,45 +1,12 @@
 import { Effect } from "effect";
 
-import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import type { DocumentChunk } from "../rag/types.js";
 
-export const ragSearchTool: ToolDefinition = {
-  name: "rag-search",
-  description:
-    "Search ingested documents using semantic similarity or keyword matching. " +
-    "Returns the most relevant document chunks for a query. " +
-    "Documents must first be loaded with rag-ingest before they can be searched.",
-  parameters: [
-    {
-      name: "query",
-      type: "string",
-      description: "Search query — describe what information you are looking for.",
-      required: true,
-    },
-    {
-      name: "topK",
-      type: "number",
-      description: "Number of results to return. Default: 5.",
-      required: false,
-      default: 5,
-    },
-    {
-      name: "source",
-      type: "string",
-      description:
-        "Filter results to chunks from a specific source document. Accepts a partial, case-insensitive substring of the source identifier (e.g. 'memory' matches './.agents/MEMORY.md'). Omit to search all ingested documents.",
-      required: false,
-    },
-  ],
-  returnType:
-    "{ query: string, results: Array<{ content: string, source: string, chunkIndex: number, score: number }> }",
-  category: "search",
-  riskLevel: "low",
-  timeoutMs: 10_000,
-  requiresApproval: false,
-  source: "builtin",
-};
+// The `rag-search` callable tool was removed in v0.14 (superseded by the unified
+// `find` tool). The in-memory search callback below remains LIVE — it is the
+// keyword retrieval engine that `find` (makeFindHandler) uses over documents
+// loaded via `.withDocuments()` / `agent.ingest()`.
 
 /**
  * Search result from RAG retrieval.
@@ -59,33 +26,6 @@ export type RagSearchCallback = (
   topK: number,
   source?: string,
 ) => Effect.Effect<RagSearchResult[], ToolExecutionError>;
-
-export const makeRagSearchHandler =
-  (searchCallback: RagSearchCallback) =>
-  (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> => {
-    const query = args.query as string | undefined;
-    const topK = (args.topK as number) ?? 5;
-    const source = args.source as string | undefined;
-
-    if (!query || typeof query !== "string") {
-      return Effect.fail(
-        new ToolExecutionError({
-          message: 'Missing required parameter "query" (must be a non-empty string)',
-          toolName: "rag-search",
-        }),
-      );
-    }
-
-    return Effect.gen(function* () {
-      const results = yield* searchCallback(query, topK, source);
-
-      return {
-        query,
-        results,
-        totalResults: results.length,
-      };
-    });
-  };
 
 /**
  * Create a default keyword-based search callback over an in-memory store.

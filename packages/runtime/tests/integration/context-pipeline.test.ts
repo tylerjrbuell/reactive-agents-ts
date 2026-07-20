@@ -4,7 +4,6 @@
 //   1. ExperienceStore record/query cycle
 //   2. ALWAYS_INCLUDE_TOOLS stays empty by default for sub-agents
 //   3. context-status handler returns accurate snapshot
-//   4. shouldShowTaskComplete visibility gating
 
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
@@ -17,9 +16,8 @@ import {
 import {
   ALWAYS_INCLUDE_TOOLS,
   makeContextStatusHandler,
-  shouldShowTaskComplete,
 } from "@reactive-agents/tools";
-import type { ContextStatusState, TaskCompleteVisibility } from "@reactive-agents/tools";
+import type { ContextStatusState } from "@reactive-agents/tools";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,37 +112,5 @@ describe("makeContextStatusHandler", () => {
     expect(snapshot.remaining).toBe(7);
     expect(snapshot.toolsPending).toEqual(["web-search"]);
     expect(snapshot.toolsUsed).toEqual(["file-write"]);
-  });
-});
-
-// ─── Test 4: shouldShowTaskComplete visibility gating ────────────────────────
-
-describe("shouldShowTaskComplete", () => {
-  const base: TaskCompleteVisibility = {
-    requiredToolsCalled: new Set(["file-write"]),
-    requiredTools: ["file-write"],
-    iteration: 3,
-    hasErrors: false,
-    hasNonMetaToolCalled: true,
-  };
-
-  it("is hidden at iteration 0 (too early)", () => {
-    const result = shouldShowTaskComplete({ ...base, iteration: 0 });
-    expect(result).toBe(false);
-  });
-
-  it("is hidden when errors are present (even at iteration 3)", () => {
-    const result = shouldShowTaskComplete({ ...base, hasErrors: true });
-    expect(result).toBe(false);
-  });
-
-  it("is hidden when no non-meta tool has been called (even at iteration 3)", () => {
-    const result = shouldShowTaskComplete({ ...base, hasNonMetaToolCalled: false });
-    expect(result).toBe(false);
-  });
-
-  it("is visible when all conditions are met", () => {
-    const result = shouldShowTaskComplete(base);
-    expect(result).toBe(true);
   });
 });

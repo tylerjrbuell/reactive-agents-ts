@@ -48,7 +48,7 @@ export const ingestRagDocuments = (
     } = deps;
 
     // Resolve the shared RAG store for runtime ingestion support.
-    // The ragMemoryStore is a module-level Map shared with the rag-search handler.
+    // The ragMemoryStore is a module-level Map searched by the `find` tool's handler.
     // We eagerly resolve it when tools are enabled so agent.ingest() works at runtime.
     let ragStore: RagMemoryStore | undefined;
     if (

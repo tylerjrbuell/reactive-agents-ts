@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Removed — dead built-in tools (v0.14)
+
+- Removed the unregistered dead built-in tools `task-complete` and `rag-search` (public exports of `@reactive-agents/tools`); neither was ever registered as callable — `final-answer` is the sole terminator and `find` the unified retrieval tool, superseding them respectively.
+
 ### Breaking — builder surface consolidation (v0.14)
 
 Three redundant builder methods removed; each was already folded into a

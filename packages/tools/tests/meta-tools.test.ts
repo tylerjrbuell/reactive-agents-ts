@@ -6,13 +6,6 @@ import {
   makeContextStatusHandler,
   type ContextStatusState,
 } from "../src/skills/context-status.js";
-import {
-  taskCompleteTool,
-  makeTaskCompleteHandler,
-  shouldShowTaskComplete,
-  type TaskCompleteState,
-  type TaskCompleteVisibility,
-} from "../src/skills/task-complete.js";
 
 // ─── context-status tests ───
 
@@ -82,100 +75,5 @@ describe("makeContextStatusHandler", () => {
     expect(typed.toolsPending).toEqual([]);
     expect(typed.storedKeys).toEqual([]);
     expect(typed.tokensUsed).toBe(0);
-  });
-});
-
-// ─── task-complete tests ───
-
-describe("task-complete tool definition", () => {
-  it("has the correct metadata", () => {
-    expect(taskCompleteTool.name).toBe("task-complete");
-    expect(taskCompleteTool.riskLevel).toBe("low");
-    expect(taskCompleteTool.requiresApproval).toBe(false);
-    expect(taskCompleteTool.source).toBe("function");
-
-    const summaryParam = taskCompleteTool.parameters.find((p) => p.name === "summary");
-    expect(summaryParam).toBeDefined();
-    expect(summaryParam?.required).toBe(true);
-    expect(summaryParam?.type).toBe("string");
-  });
-});
-
-describe("shouldShowTaskComplete", () => {
-  const baseInput: TaskCompleteVisibility = {
-    requiredToolsCalled: new Set(["file-write", "web-search"]),
-    requiredTools: ["file-write", "web-search"],
-    iteration: 3,
-    hasErrors: false,
-    hasNonMetaToolCalled: true,
-  };
-
-  it("returns true when all conditions are met", () => {
-    expect(shouldShowTaskComplete(baseInput)).toBe(true);
-  });
-
-  it("returns false when required tools are not all called", () => {
-    const input: TaskCompleteVisibility = {
-      ...baseInput,
-      requiredToolsCalled: new Set(["file-write"]), // missing web-search
-      requiredTools: ["file-write", "web-search"],
-    };
-    expect(shouldShowTaskComplete(input)).toBe(false);
-  });
-
-  it("returns false on iteration < 2", () => {
-    expect(shouldShowTaskComplete({ ...baseInput, iteration: 1 })).toBe(false);
-    expect(shouldShowTaskComplete({ ...baseInput, iteration: 0 })).toBe(false);
-  });
-
-  it("returns false when hasErrors is true", () => {
-    expect(shouldShowTaskComplete({ ...baseInput, hasErrors: true })).toBe(false);
-  });
-
-  it("returns false when no non-meta tool has been called", () => {
-    expect(shouldShowTaskComplete({ ...baseInput, hasNonMetaToolCalled: false })).toBe(false);
-  });
-
-  it("returns true when requiredTools is empty and other conditions are met", () => {
-    const input: TaskCompleteVisibility = {
-      requiredToolsCalled: new Set(),
-      requiredTools: [],
-      iteration: 2,
-      hasErrors: false,
-      hasNonMetaToolCalled: true,
-    };
-    expect(shouldShowTaskComplete(input)).toBe(true);
-  });
-});
-
-describe("makeTaskCompleteHandler", () => {
-  it("rejects with pending tool list when canComplete=false", async () => {
-    const state: TaskCompleteState = {
-      canComplete: false,
-      pendingTools: ["web-search", "http-get"],
-    };
-
-    const handler = makeTaskCompleteHandler(state);
-    const result = await Effect.runPromise(handler({ summary: "done" }));
-
-    const typed = result as Record<string, unknown>;
-    expect(typed.canComplete).toBe(false);
-    expect(typed.error).toContain("web-search");
-    expect(typed.error).toContain("http-get");
-  });
-
-  it("returns {completed: true, summary} when canComplete=true", async () => {
-    const state: TaskCompleteState = {
-      canComplete: true,
-    };
-
-    const handler = makeTaskCompleteHandler(state);
-    const result = await Effect.runPromise(
-      handler({ summary: "Wrote the report and searched the web." }),
-    );
-
-    const typed = result as Record<string, unknown>;
-    expect(typed.completed).toBe(true);
-    expect(typed.summary).toBe("Wrote the report and searched the web.");
   });
 });

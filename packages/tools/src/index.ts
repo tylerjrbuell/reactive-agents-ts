@@ -232,8 +232,6 @@ export {
 } from "./skills/rag-ingest.js";
 export type { RagStoreCallback, RagMemoryStore } from "./skills/rag-ingest.js";
 export {
-  ragSearchTool,
-  makeRagSearchHandler,
   makeInMemorySearchCallback,
 } from "./skills/rag-search.js";
 export type { RagSearchCallback, RagSearchResult } from "./skills/rag-search.js";
@@ -256,12 +254,6 @@ export {
   makeContextStatusHandler,
 } from "./skills/context-status.js";
 export type { ContextStatusState } from "./skills/context-status.js";
-export {
-  taskCompleteTool,
-  shouldShowTaskComplete,
-  makeTaskCompleteHandler,
-} from "./skills/task-complete.js";
-export type { TaskCompleteVisibility, TaskCompleteState } from "./skills/task-complete.js";
 export {
   finalAnswerTool,
   makeFinalAnswerHandler,

@@ -1416,7 +1416,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Pre-load documents into the agent's RAG memory store at build time.
      *
      * Documents are chunked and indexed so the agent can retrieve them via the
-     * built-in `rag-search` tool during execution. Call multiple times to
+     * built-in `find` tool during execution. Call multiple times to
      * accumulate documents. Automatically enables tools if not already enabled.
      *
      * @param docs - Array of document specifications to ingest

@@ -20,14 +20,8 @@ import {
   makeScratchpadReadHandler,
 } from "./scratchpad.js";
 import { contextStatusTool, makeContextStatusHandler } from "./context-status.js";
-import { taskCompleteTool, makeTaskCompleteHandler } from "./task-complete.js";
 import { finalAnswerTool } from "./final-answer.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
-import {
-  ragSearchTool,
-  makeRagSearchHandler,
-  makeInMemorySearchCallback,
-} from "./rag-search.js";
 import { recallTool, makeRecallHandler, type RecallConfig } from "./recall.js";
 import { findTool, makeFindHandler, type FindConfig, type FindState } from "./find.js";
 import { checkpointTool, makeCheckpointHandler, type CheckpointConfig } from "./checkpoint.js";
@@ -54,13 +48,6 @@ export {
   type ContextStatusState,
 } from "./context-status.js";
 export {
-  taskCompleteTool,
-  makeTaskCompleteHandler,
-  shouldShowTaskComplete,
-  type TaskCompleteState,
-  type TaskCompleteVisibility,
-} from "./task-complete.js";
-export {
   finalAnswerTool,
   makeFinalAnswerHandler,
   shouldShowFinalAnswer,
@@ -76,8 +63,6 @@ export {
   type RagMemoryStore,
 } from "./rag-ingest.js";
 export {
-  ragSearchTool,
-  makeRagSearchHandler,
   makeInMemorySearchCallback,
   type RagSearchCallback,
   type RagSearchResult,
@@ -147,12 +132,12 @@ export const ragMemoryStore: RagMemoryStore = new Map();
  * Capability tools auto-registered when ToolServiceLive is created.
  *
  * These are the agent's task tools — what it uses to accomplish work.
- * Framework infrastructure tools (recall, find, brief, pulse, scratchpad-*,
- * rag-search, final-answer, etc.) are registered separately by the kernel
- * with live state, or are conductor tools injected via .withMetaTools().
+ * Framework infrastructure tools (recall, find, brief, pulse, final-answer,
+ * etc.) are registered separately by the kernel with live state, or are
+ * conductor tools injected via .withMetaTools().
  *
- * scratchpad-write/read removed: superseded by recall (richer API).
- * rag-search removed: superseded by find (unified routing).
+ * `find` is the unified retrieval tool — it searches documents (via the
+ * in-memory keyword callback), memory, and the web from one surface.
  */
 export const builtinTools: ReadonlyArray<{
   definition: ToolDefinition;
@@ -196,7 +181,6 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
  */
 export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   contextStatusTool,
-  taskCompleteTool,
   finalAnswerTool,
   briefTool,
   findTool,

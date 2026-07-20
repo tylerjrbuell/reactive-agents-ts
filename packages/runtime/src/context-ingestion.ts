@@ -47,10 +47,10 @@ export interface DocumentSpec {
  * Ingest documents into the RAG memory store.
  *
  * Processes each document through the RAG loader/chunker pipeline and stores
- * the resulting chunks for later retrieval via `rag-search`.
+ * the resulting chunks for later retrieval via the `find` tool.
  *
  * @param docs - Array of documents to ingest
- * @param store - The in-memory RAG store (shared with rag-search)
+ * @param store - The in-memory RAG store (searched by the `find` tool)
  * @returns Effect that completes when all documents are ingested
  */
 export function ingestDocuments(

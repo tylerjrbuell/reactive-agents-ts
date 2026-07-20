@@ -9,7 +9,7 @@ export const ragIngestTool: ToolDefinition = {
   name: "rag-ingest",
   description:
     "Load and index a document for semantic search. Supports text, markdown, JSON, CSV, and HTML. " +
-    "The document will be chunked, embedded, and stored in semantic memory for later retrieval via rag-search. " +
+    "The document will be chunked, embedded, and stored in semantic memory for later retrieval via the find tool. " +
     "IMPORTANT: use 'content' and 'source' parameters. Returns the number of chunks stored.",
   parameters: [
     {
@@ -65,7 +65,7 @@ export const ragIngestTool: ToolDefinition = {
  * into semantic memory. The callback receives the chunks and returns a count.
  *
  * By default (no storeCallback), chunks are stored in an in-memory map for retrieval
- * via rag-search. When wired into the full runtime, the execution engine provides
+ * via the find tool. When wired into the full runtime, the execution engine provides
  * a callback that writes through to SemanticMemoryService.
  */
 export type RagStoreCallback = (

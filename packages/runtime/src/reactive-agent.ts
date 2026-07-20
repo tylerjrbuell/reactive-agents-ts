@@ -437,7 +437,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Ingest a document into the agent's RAG memory store at runtime.
      *
      * The document is chunked and indexed so the agent can retrieve it via the
-     * `rag-search` tool on subsequent `run()` calls. This is the runtime counterpart
+     * `find` tool on subsequent `run()` calls. This is the runtime counterpart
      * of the builder's `.withDocuments()` method.
      *
      * @param content - The full document content to ingest
