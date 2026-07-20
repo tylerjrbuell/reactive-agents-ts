@@ -76,7 +76,6 @@ describe("AgentConfigSchema — validation", () => {
         maxIterations: 15,
         timeoutMs: 30000,
         retryPolicy: { maxRetries: 3, backoffMs: 1000 },
-        cacheTimeoutMs: 3600000,
         strictValidation: false,
       },
       gateway: {
@@ -268,14 +267,12 @@ describe("agentConfigToBuilder — builder reconstruction", () => {
         maxIterations: 20,
         timeoutMs: 30000,
         retryPolicy: { maxRetries: 3, backoffMs: 500 },
-        cacheTimeoutMs: 3600000,
       },
     };
     const builder = await agentConfigToBuilder(config);
     expect((builder as any)._maxIterations).toBe(20);
     expect((builder as any)._executionTimeoutMs).toBe(30000);
     expect((builder as any)._retryPolicy?.maxRetries).toBe(3);
-    expect((builder as any)._cacheTimeoutMs).toBe(3600000);
   });
 
   test("full config roundtrip through builder", async () => {

@@ -211,7 +211,6 @@ const MAXIMAL_CONFIG: AgentConfig = {
     minIterations: 2,
     timeoutMs: 60_000,
     retryPolicy: { maxRetries: 3, backoffMs: 250 },
-    cacheTimeoutMs: 30_000,
     strictValidation: true,
   },
   gateway: {

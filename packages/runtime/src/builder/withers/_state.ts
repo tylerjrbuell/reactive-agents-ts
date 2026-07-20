@@ -124,7 +124,6 @@ export interface BuilderState {
   _executionTimeoutMs?: number;
   _ollamaTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
-  _cacheTimeoutMs?: number;
 
   // capabilities (flags + configs)
   _enableGuardrails: boolean;

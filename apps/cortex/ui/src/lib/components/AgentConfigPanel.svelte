@@ -24,7 +24,6 @@
     maxTokens: number;
     timeout: number;
     retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    cacheTimeout: number;
     progressCheckpoint: number;
     metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
@@ -1574,21 +1573,12 @@
     {#if openSections.has("execution")}
       <div id="acp-panel-execution" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-execution">
         <!-- Timeout -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/30 normal-case font-normal">(seconds, 0 = none)</span></label>
-            <input id="execution-timeout" type="number" min="0" max="3600" step="5"
-              value={Math.round(config.timeout / 1000)}
-              oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
-              class="config-input" />
-          </div>
-          <div>
-            <label for="cache-ttl" class="config-label">Cache TTL <span class="text-outline/30 normal-case font-normal">(seconds, 0 = off)</span></label>
-            <input id="cache-ttl" type="number" min="0" max="86400" step="60"
-              value={Math.round(config.cacheTimeout / 1000)}
-              oninput={(e) => (config = { ...config, cacheTimeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
-              class="config-input" />
-          </div>
+        <div>
+          <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/30 normal-case font-normal">(seconds, 0 = none)</span></label>
+          <input id="execution-timeout" type="number" min="0" max="3600" step="5"
+            value={Math.round(config.timeout / 1000)}
+            oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
+            class="config-input" />
         </div>
         <!-- Progress checkpoint -->
         <div>

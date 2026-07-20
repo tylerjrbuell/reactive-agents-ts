@@ -103,7 +103,6 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   // ── Plumbing: cannot change a task's outcome ────────────────────────────────
   withAgentId: { featureClass: "plumbing" },
   withAudit: { featureClass: "plumbing" },
-  withCacheTimeout: { featureClass: "plumbing" },
   withChannels: { featureClass: "plumbing" },
   withCircuitBreaker: { featureClass: "plumbing" },
   withContextProfile: { featureClass: "plumbing" },

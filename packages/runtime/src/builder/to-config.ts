@@ -63,7 +63,6 @@ export interface BuilderStateForSerialization {
   _maxIterations: number | undefined;
   _executionTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
-  _cacheTimeoutMs?: number;
   _strictValidation: boolean;
   _gatewayOptions?: unknown;
   _mcpServers: unknown[];
@@ -236,7 +235,6 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._minIterations !== undefined) exec["minIterations"] = state._minIterations;
   if (state._executionTimeoutMs !== undefined) exec["timeoutMs"] = state._executionTimeoutMs;
   if (state._retryPolicy) exec["retryPolicy"] = { ...state._retryPolicy };
-  if (state._cacheTimeoutMs !== undefined) exec["cacheTimeoutMs"] = state._cacheTimeoutMs;
   if (state._strictValidation) exec["strictValidation"] = true;
   if (Object.keys(exec).length > 0) config["execution"] = exec;
 

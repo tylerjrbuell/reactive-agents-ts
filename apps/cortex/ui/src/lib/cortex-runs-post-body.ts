@@ -43,7 +43,6 @@ export function cortexRunsPostBody(
     numCtx: typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? cfg.numCtx : undefined,
     timeout: cfg.timeout || undefined,
     retryPolicy: cfg.retryPolicy.enabled ? cfg.retryPolicy : undefined,
-    cacheTimeout: cfg.cacheTimeout || undefined,
     progressCheckpoint: cfg.progressCheckpoint || undefined,
     fallbacks: cfg.fallbacks.enabled ? cfg.fallbacks : undefined,
     metaTools: cfg.metaTools.enabled ? cfg.metaTools : undefined,

@@ -99,7 +99,6 @@ export const ExecutionConfigSchema = Schema.Struct({
       backoffMs: Schema.Number,
     }),
   ),
-  cacheTimeoutMs: Schema.optional(Schema.Number),
   strictValidation: Schema.optional(Schema.Boolean),
 });
 
@@ -723,9 +722,6 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   }
   if (config.execution?.retryPolicy) {
     builder = builder.withRetryPolicy(config.execution.retryPolicy);
-  }
-  if (config.execution?.cacheTimeoutMs !== undefined) {
-    builder = builder.withCacheTimeout(config.execution.cacheTimeoutMs);
   }
   if (config.execution?.strictValidation) {
     builder = builder.withStrictValidation();

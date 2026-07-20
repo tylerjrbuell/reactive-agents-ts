@@ -148,7 +148,6 @@ The full set of `.with*()` methods on `ReactiveAgentBuilder`:
 | `.withCustomTermination(fn)` | Custom termination predicate |
 | `.withHook(hook)` | Lifecycle hook (`phase × timing` → fn) |
 | `.withLayers(layer)` | Inject extra Effect layers |
-| `.withCacheTimeout(ms)` | Tool-result cache TTL |
 | `.withIdentity()` | Identity service |
 | `.withInteraction()` | Human-in-the-loop interaction service |
 | `.withPrompts(opts?)` | Prompt manager |

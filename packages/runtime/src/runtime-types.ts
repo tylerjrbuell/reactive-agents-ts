@@ -736,9 +736,6 @@ export interface RuntimeOptions {
     backoffMs: number;
   };
 
-  /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
-  cacheTimeoutMs?: number;
-
   /** Minimum iterations before final-answer is permitted. */
   minIterations?: number;
 

@@ -63,7 +63,6 @@ describe("chat ⇄ runs agent-config schema parity", () => {
       "taskContext",
       "healthCheck",
       "timeout",
-      "cacheTimeout",
       "progressCheckpoint",
       "retryPolicy",
     ]) {

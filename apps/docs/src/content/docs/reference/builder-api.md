@@ -44,7 +44,7 @@ const agent = await ReactiveAgents.create()
 | [Tools & MCP](#optional-features) | `withTools`, `withRequiredTools`, `withMCP`, `withMetaTools`, `withSkills`, `withAgentTool`, `withDynamicSubAgents`, `withRemoteAgent` |
 | [Observability & Telemetry](#optional-features) | `withObservability`, `withTelemetry`, `withCortex`, `withStreaming`, `withLogging`, `withEvents` |
 | [Safety & Resilience](#optional-features) | `withGuardrails`, `withKillSwitch`, `withBehavioralContracts`, `withVerification`, `withGrounding`, `withReceiptSigning`, `withCircuitBreaker`, `withRateLimiting` |
-| [Cost & Performance](#optional-features) | `withCostTracking`, `withModelRouting`, `withBudget`, `withModelPricing`, `withDynamicPricing`, `withCacheTimeout`, `withRetryPolicy`, `withTimeout`, `withLlmTimeout` |
+| [Cost & Performance](#optional-features) | `withCostTracking`, `withModelRouting`, `withBudget`, `withModelPricing`, `withDynamicPricing`, `withRetryPolicy`, `withTimeout`, `withLlmTimeout` |
 | [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
 | [Advanced](#advanced) | `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withUserInteraction`, `withLazyValidation`, `withDocuments`, `withTaskContext`, `withLayers` |
 | [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
@@ -72,7 +72,6 @@ reference](/reference/configuration/) for the declarative field list.
 | `withAudit` | `features.audit` | config | Per-tool-call rationale auditing. |
 | `withBehavioralContracts` | _overlay — behavioral-contract overlay (folds into withContract)_ | overlay | Behavioral contracts. |
 | `withBudget` | `budget` | config | Declarative token/cost budget caps. |
-| `withCacheTimeout` | `execution.cacheTimeoutMs` | config | Tool-result cache TTL (ms). |
 | `withCalibration` | _overlay — runtime-probed calibration (not static data)_ | overlay | Model calibration mode. |
 | `withChannels` | _overlay — messaging transport wiring (not data)_ | overlay | Messaging channels. |
 | `withCircuitBreaker` | `circuitBreaker` | config | Circuit-breaker thresholds (false disables). |
@@ -305,7 +304,6 @@ interface ThinkingOptions {
 | `withTimeout`          | `(ms: number) => this`                       | Execution timeout in milliseconds for the **whole agent run** (all iterations combined). Throws `TimeoutError` if exceeded |
 | `withLlmTimeout`       | `(ms: number) => this`                       | Per-LLM-call timeout in milliseconds — bounds a **single provider request**, distinct from `withTimeout`. Honored by the Ollama/local provider (maps to `LLMConfig.ollamaTimeoutMs`; equivalent to the `OLLAMA_TIMEOUT_MS` env var but scoped to this agent — useful to tolerate cold model loads, e.g. `.withLlmTimeout(600_000)`). Hosted providers (Anthropic/OpenAI/Gemini) ignore it |
 | `withRetryPolicy`      | `(policy: RetryPolicy) => this`              | Retry on transient LLM failures. `{ maxRetries: number, backoffMs: number }`                     |
-| `withCacheTimeout`     | `(ms: number) => this`                       | Semantic cache TTL in milliseconds. Entries older than this are evicted                          |
 
 #### ContextProfile fields
 

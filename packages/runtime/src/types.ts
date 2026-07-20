@@ -560,8 +560,6 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       backoffMs: Schema.Number,
     })
   ),
-  /** Semantic cache TTL in milliseconds. Cached responses older than this are evicted. */
-  cacheTimeoutMs: Schema.optional(Schema.Number),
   /** Session persistence configuration. When persist is true, SessionStoreLive must be
    *  in the runtime layer (requires memory layer to be active). */
   session: Schema.optional(

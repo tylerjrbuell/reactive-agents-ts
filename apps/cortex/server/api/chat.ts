@@ -90,7 +90,6 @@ export const ChatSessionConfigBody = t.Object({
   taskContext: t.Optional(t.Record(t.String(), t.String())),
   healthCheck: t.Optional(t.Boolean()),
   timeout: t.Optional(t.Number()),
-  cacheTimeout: t.Optional(t.Number()),
   progressCheckpoint: t.Optional(t.Number()),
   retryPolicy: t.Optional(
     t.Object({
@@ -163,9 +162,6 @@ export const chatRouter = (svc: ChatSessionService) =>
                 : {}),
               ...(body.healthCheck === true ? { healthCheck: true } : {}),
               ...(typeof body.timeout === "number" && body.timeout > 0 ? { timeout: body.timeout } : {}),
-              ...(typeof body.cacheTimeout === "number" && body.cacheTimeout > 0
-                ? { cacheTimeout: body.cacheTimeout }
-                : {}),
               ...(typeof body.progressCheckpoint === "number" && body.progressCheckpoint > 0
                 ? { progressCheckpoint: body.progressCheckpoint }
                 : {}),
@@ -264,7 +260,6 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.taskContext !== undefined ? { taskContext: body.taskContext } : {}),
             ...(body.healthCheck !== undefined ? { healthCheck: body.healthCheck } : {}),
             ...(body.timeout !== undefined ? { timeout: body.timeout } : {}),
-            ...(body.cacheTimeout !== undefined ? { cacheTimeout: body.cacheTimeout } : {}),
             ...(body.progressCheckpoint !== undefined
               ? { progressCheckpoint: body.progressCheckpoint }
               : {}),

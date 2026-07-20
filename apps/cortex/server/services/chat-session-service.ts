@@ -547,9 +547,6 @@ export class ChatSessionService {
       ...(typeof agentConfig.timeout === "number" && agentConfig.timeout > 0
         ? { timeout: agentConfig.timeout }
         : {}),
-      ...(typeof agentConfig.cacheTimeout === "number" && agentConfig.cacheTimeout > 0
-        ? { cacheTimeout: agentConfig.cacheTimeout }
-        : {}),
       ...(typeof agentConfig.progressCheckpoint === "number" && agentConfig.progressCheckpoint > 0
         ? { progressCheckpoint: agentConfig.progressCheckpoint }
         : {}),

@@ -118,7 +118,6 @@ export interface AgentConfig {
   // ── Execution controls ──────────────────────────────────────────────
   timeout: number;            // ms, 0 = no timeout
   retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-  cacheTimeout: number;       // ms, 0 = no cache
   progressCheckpoint: number; // every N iterations, 0 = disabled
   // ── Conductor's Suite meta-tools ────────────────────────────────────
   metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
@@ -209,7 +208,6 @@ export function defaultConfig(): AgentConfig {
     persona: { enabled: false, role: "", tone: "concise", traits: "", responseStyle: "prose" },
     timeout: 0,
     retryPolicy: { enabled: false, maxRetries: 3, backoffMs: 1000 },
-    cacheTimeout: 0,
     progressCheckpoint: 0,
     metaTools: { enabled: false, brief: false, find: false, pulse: false, recall: false, harnessSkill: false },
     fallbacks: { enabled: false, providers: [], errorThreshold: 3 },

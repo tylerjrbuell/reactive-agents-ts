@@ -64,11 +64,9 @@ describe("cortexParamsToAgentConfig", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",
       timeout: 30000,
-      cacheTimeout: 3600000,
       retryPolicy: { enabled: true, maxRetries: 3, backoffMs: 1000 },
     });
     expect(config.execution?.timeoutMs).toBe(30000);
-    expect(config.execution?.cacheTimeoutMs).toBe(3600000);
     expect(config.execution?.retryPolicy).toEqual({ maxRetries: 3, backoffMs: 1000 });
   });
 
@@ -273,7 +271,6 @@ describe("cortexParamsToAgentConfig schema validation", () => {
         strategy: "reactive",
         maxIterations: 10,
         timeout: 60000,
-        cacheTimeout: 3600000,
         retryPolicy: { enabled: true, maxRetries: 2, backoffMs: 500 },
         tools: ["web-search"],
         memory: { episodic: true },

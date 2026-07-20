@@ -105,7 +105,6 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   n("maxIterations");
   n("minIterations");
   n("timeout");
-  n("cacheTimeout");
   n("progressCheckpoint");
 
   const prov = asNonEmptyString(raw.provider);

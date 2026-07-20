@@ -89,7 +89,6 @@ export function cortexParamsToAgentConfig(
   const execution: Record<string, unknown> = {};
   if (params.maxIterations && params.maxIterations > 0) execution.maxIterations = params.maxIterations;
   if (params.timeout && params.timeout > 0) execution.timeoutMs = params.timeout;
-  if (params.cacheTimeout && params.cacheTimeout > 0) execution.cacheTimeoutMs = params.cacheTimeout;
   if (params.retryPolicy?.enabled === true && params.retryPolicy.maxRetries > 0) {
     execution.retryPolicy = {
       maxRetries: params.retryPolicy.maxRetries,

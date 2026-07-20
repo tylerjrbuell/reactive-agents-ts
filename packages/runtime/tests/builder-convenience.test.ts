@@ -20,15 +20,6 @@ describe("Builder convenience methods", () => {
     await agent.dispose();
   });
 
-  test("withCacheTimeout sets semantic cache TTL", async () => {
-    const agent = await ReactiveAgents.create()
-      .withProvider("test")
-      .withCacheTimeout(300_000)
-      .build();
-    expect(agent).toBeDefined();
-    await agent.dispose();
-  });
-
   test("withGuardrails accepts customBlocklist", async () => {
     const agent = await ReactiveAgents.create()
       .withProvider("test")
@@ -43,7 +34,6 @@ describe("Builder convenience methods", () => {
       .withProvider("test")
       .withTimeout(5000)
       .withRetryPolicy({ maxRetries: 2, backoffMs: 500 })
-      .withCacheTimeout(600_000)
       .withGuardrails({ injection: true })
       .withStrictValidation()
       .build();

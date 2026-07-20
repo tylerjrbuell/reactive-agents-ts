@@ -223,8 +223,7 @@ describe("Builder method chaining via umbrella imports", () => {
       .withTimeout(30_000)
       .withMaxIterations(10)
       .withStrictValidation()
-      .withRetryPolicy({ maxRetries: 2, backoffMs: 500 })
-      .withCacheTimeout(600_000);
+      .withRetryPolicy({ maxRetries: 2, backoffMs: 500 });
 
     expect(chained).toBeInstanceOf(ReactiveAgentBuilder);
   });

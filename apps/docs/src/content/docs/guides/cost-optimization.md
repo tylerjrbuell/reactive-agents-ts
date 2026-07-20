@@ -143,20 +143,6 @@ const result = await agent.run("Complex task");
 console.log(result.metadata.cost);  // Estimated USD cost
 ```
 
-### Semantic Cache (1-hour dedupe)
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withCacheTimeout(3600000)  // 1-hour cache window
-  .build();
-
-// Repeated queries within 1 hour reuse LLM output
-// Zero tokens used on cache hits
-```
-
-**Impact:** ~40–60% token reduction for applications with repeated queries (e.g., FAQ bots, recurring reports).
-
 ### Iteration Limits
 
 <!-- docs-skip-typecheck -->

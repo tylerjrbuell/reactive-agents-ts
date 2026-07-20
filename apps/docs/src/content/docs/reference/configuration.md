@@ -52,7 +52,6 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `costTracking.perSession` | `number` | no |  |
 | `durableRuns.checkpointEvery` | `number` | no |  |
 | `durableRuns.dir` | `string` | no |  |
-| `execution.cacheTimeoutMs` | `number` | no |  |
 | `execution.maxIterations` | `number` | no |  |
 | `execution.minIterations` | `number` | no |  |
 | `execution.retryPolicy.backoffMs` | `number` | **yes** |  |

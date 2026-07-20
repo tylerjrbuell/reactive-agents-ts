@@ -69,7 +69,6 @@ const FULL_CONFIG_BODY = {
   systemPrompt:       "You are helpful",
   agentName:          "parity-agent",
   timeout:            30000,
-  cacheTimeout:       3600000,
   progressCheckpoint: 3,
   retryPolicy:        { enabled: true, maxRetries: 2, backoffMs: 500 },
   fallbacks:          { enabled: true, providers: ["openai"], errorThreshold: 2 },
@@ -137,7 +136,6 @@ describe("AgentConfig → LaunchParams parity", () => {
 
     // ── Execution controls ────────────────────────────────────────────────
     expect(p.timeout).toBe(30000);
-    expect(p.cacheTimeout).toBe(3600000);
     expect(p.progressCheckpoint).toBe(3);
 
     // ── retryPolicy ───────────────────────────────────────────────────────

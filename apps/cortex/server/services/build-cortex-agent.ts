@@ -63,7 +63,6 @@ export interface BuildCortexAgentParams {
   readonly metaTools?: CortexMetaToolsConfig;
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
-  readonly cacheTimeout?: number;
   readonly progressCheckpoint?: number;
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
   readonly verificationStep?: string;

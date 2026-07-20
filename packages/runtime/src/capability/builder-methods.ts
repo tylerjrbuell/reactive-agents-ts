@@ -102,7 +102,6 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withMaxIterations: { kind: "config", configKeys: ["execution.maxIterations"], description: "Iteration cap." },
   withMinIterations: { kind: "config", configKeys: ["execution.minIterations"], description: "Minimum iterations before termination." },
   withTimeout: { kind: "config", configKeys: ["execution.timeoutMs"], description: "Run timeout (ms)." },
-  withCacheTimeout: { kind: "config", configKeys: ["execution.cacheTimeoutMs"], description: "Tool-result cache TTL (ms)." },
   withRetryPolicy: { kind: "config", configKeys: ["execution.retryPolicy"], description: "LLM retry policy (maxRetries/backoff)." },
   withCircuitBreaker: { kind: "config", configKeys: ["circuitBreaker"], description: "Circuit-breaker thresholds (false disables)." },
   withRateLimiting: { kind: "config", configKeys: ["rateLimiting"], description: "Outbound LLM rate limiting." },

@@ -29,7 +29,6 @@
     maxTokens: number;
     timeout: number;
     retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    cacheTimeout: number;
     progressCheckpoint: number;
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
     metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };

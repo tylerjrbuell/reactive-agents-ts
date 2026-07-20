@@ -148,7 +148,6 @@ Updated: 2026-05-24. Smoke run: 43 examples, 6 xfail, 0 fail. (AX2 killswitch-to
 | `withOutputValidator(...)` | ❌ | — | |
 | `withCustomTermination(...)` | ❌ | — | |
 | `withLayers(...)` | ❌ | — | Effect-TS layer composition |
-| `withCacheTimeout(...)` | ❌ | — | |
 
 ## Tier 9 — Packages without builder hook
 

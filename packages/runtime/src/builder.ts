@@ -410,7 +410,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _executionTimeoutMs?: number
     private _ollamaTimeoutMs?: number
     private _retryPolicy?: { maxRetries: number; backoffMs: number }
-    private _cacheTimeoutMs?: number
     private _behavioralContract?: import('@reactive-agents/guardrails').BehavioralContract
     private _enableSelfImprovement: boolean = false
     private _streamDensity?: StreamDensity
@@ -2104,19 +2103,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withMetaTools(config?: import('./types.js').MetaToolsConfig | false): this {
         applyWithMetaTools(this, config)
-        return this
-    }
-
-    /**
-     * Set the TTL for semantic cache entries. Cached LLM responses older than
-     * this duration will be evicted.
-     * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
-     * @example .withCacheTimeout(600_000) // 10 minutes
-     * Cache lifetime also resolves from `CapabilityRegistry` defaults; use
-     * this explicit override for per-deployment tuning.
-     */
-    withCacheTimeout(ms: number): this {
-        this._cacheTimeoutMs = ms
         return this
     }
 

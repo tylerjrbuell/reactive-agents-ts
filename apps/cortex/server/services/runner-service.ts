@@ -45,7 +45,6 @@ export interface LaunchParams {
   readonly numCtx?: number;
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
-  readonly cacheTimeout?: number;
   readonly progressCheckpoint?: number;
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
   readonly metaTools?: { enabled?: boolean; brief?: boolean; find?: boolean; pulse?: boolean; recall?: boolean; harnessSkill?: boolean };
@@ -276,7 +275,6 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.metaTools ? { metaTools: params.metaTools } : {}),
                 ...(params.timeout != null ? { timeout: params.timeout } : {}),
                 ...(params.retryPolicy ? { retryPolicy: params.retryPolicy } : {}),
-                ...(params.cacheTimeout != null ? { cacheTimeout: params.cacheTimeout } : {}),
                 ...(params.progressCheckpoint != null ? { progressCheckpoint: params.progressCheckpoint } : {}),
                 ...(params.fallbacks ? { fallbacks: params.fallbacks } : {}),
                 ...(params.verificationStep ? { verificationStep: params.verificationStep } : {}),

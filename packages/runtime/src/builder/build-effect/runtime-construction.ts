@@ -155,7 +155,6 @@ export interface BuilderRuntimeStateView {
   readonly _executionTimeoutMs?: number;
   readonly _ollamaTimeoutMs?: number;
   readonly _retryPolicy?: { maxRetries: number; backoffMs: number };
-  readonly _cacheTimeoutMs?: number;
   readonly _sessionPersist: boolean;
   readonly _sessionMaxAgeDays?: number;
   readonly _skillPersistence?: boolean;
@@ -496,7 +495,6 @@ export const buildBaseRuntimeAndEngine = (
       consolidationConfig: state._consolidationConfig,
       executionTimeoutMs: state._executionTimeoutMs,
       retryPolicy: state._retryPolicy,
-      cacheTimeoutMs: state._cacheTimeoutMs,
       sessionPersist: state._sessionPersist,
       sessionMaxAgeDays: state._sessionMaxAgeDays,
       skillPersistence: state._skillPersistence,

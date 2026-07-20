@@ -327,7 +327,6 @@ export const createRuntime = (options: RuntimeOptions) => {
     consolidationConfig: options.consolidationConfig,
     executionTimeoutMs: options.executionTimeoutMs,
     retryPolicy: options.retryPolicy,
-    cacheTimeoutMs: options.cacheTimeoutMs,
     minIterations: options.minIterations,
     taskContext: options.taskContext,
     verificationStep: options.verificationStep,
