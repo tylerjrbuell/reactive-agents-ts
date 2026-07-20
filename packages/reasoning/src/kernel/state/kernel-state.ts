@@ -491,24 +491,14 @@ export interface KernelMeta {
    * is type-checked and the read path is discoverable.
    */
   readonly harnessAuthoredOutput?: boolean;
-  /**
-   * The terminal verifier's human-readable summary. Consumed by the receipt
-   * (`@reactive-agents/core` → `receipt.ts:52`).
-   *
-   * Previously written via an `as KernelState["meta"]` cast; declared so the
-   * write is type-checked.
-   */
-  readonly verifierVerdict?: string;
-  /**
-   * Whether the terminal verifier rejected the answer.
-   *
-   * ⚠ WRITE-ONLY TODAY: written at five sites in `runner.ts`, read by NO
-   * production consumer (only `grounding-block-mode.test.ts:121`). It is
-   * declared rather than deleted because a test pins it, but it earns no
-   * behavior. Wire it or delete it in the inert-surface pass — do not add
-   * readers casually. See wiki/Research/Audit-Reports-2026-07-09.
-   */
-  readonly verifierRejected?: boolean;
+  // ── B4/§5.3 (2026-07-20) — REMOVED: `verifierVerdict` + `verifierRejected` ──
+  // Both were write-only in `runner.ts` and DROPPED at the kernel→strategy
+  // boundary (`react-kernel.ts` never projected them). `receipt.verifierVerdict`
+  // is authored by the result-boundary verifier (runtime `result-verification.ts`),
+  // which runs on every path; the in-kernel verifier owns control flow (status +
+  // error) and the honesty markers that DO cross via the CompletionEnvelope
+  // (`verificationWarning`, `harnessAuthoredOutput`). The dead writes + the false
+  // "lands on receipt.verifierVerdict" comment were deleted with the fields.
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

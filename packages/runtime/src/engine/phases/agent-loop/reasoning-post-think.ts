@@ -178,13 +178,21 @@ export const runReasoningPostThink = (
       const syntheticToolResults = actionSteps.map((s) => {
         const actionIdx = reasoningSteps.indexOf(s);
         const nextStep = actionIdx >= 0 ? reasoningSteps[actionIdx + 1] : undefined;
-        const success = nextStep?.type === "observation"
-          ? (nextStep.metadata?.observationResult?.success ?? true)
+        const isObservation = nextStep?.type === "observation";
+        const success = isObservation
+          ? (nextStep!.metadata?.observationResult?.success ?? true)
           : true;
+        // #44 (2026-07-20): the kernel path emits tool calls as an `action`
+        // step FOLLOWED BY the tool result as an `observation` step. The
+        // synthetic tool-result must carry the OBSERVATION content (the actual
+        // tool output) — not `s.content` (the `toolName(args)` CALL text) —
+        // so the engine's memory-flush extractor sees the kernel path's real
+        // tool results (`memory-flush.ts:184` reads `tr.result`). Falls back to
+        // the action content only when no paired observation step exists.
         return {
           toolName: s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "unknown",
           toolCallId: s.id,
-          result: s.content,
+          result: isObservation ? nextStep!.content : s.content,
           durationMs: s.metadata?.duration ?? 0,
           success,
         };

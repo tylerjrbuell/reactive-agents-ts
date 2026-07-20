@@ -115,10 +115,12 @@ describe("block-mode grounding: persistent fabrication → degrade-to-warn", () 
     expect(result.status).toBe("done");
     // Answer is surfaced, not nullified.
     expect(result.output ?? "").toBeTruthy();
-    // Degrade-to-warn: warning present, not flagged as a hard rejection.
+    // Degrade-to-warn: warning present, run not hard-failed (status stays
+    // "done", asserted above). B4/§5.3: the honesty signal is `verificationWarning`
+    // (which crosses the boundary via the CompletionEnvelope); the write-only
+    // `verifierRejected` meta field was removed.
     expect(result.meta.verificationWarning).toBeDefined();
     expect(String(result.meta.verificationWarning)).toContain(FABRICATED);
-    expect(result.meta.verifierRejected).not.toBe(true);
     // Capped at exactly maxRetries — never looped past.
     expect(result.meta.groundingBlockRetry).toBe(1);
   });

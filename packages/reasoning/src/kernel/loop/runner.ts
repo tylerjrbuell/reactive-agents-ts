@@ -1188,13 +1188,16 @@ export function runKernel(
 
       if (groundingDegradeWarning !== undefined) {
         // DEGRADE-to-warn: surface the answer WITH a warning; do NOT nullify,
-        // do NOT fail. Mirrors the softFail warn-surface contract.
+        // do NOT fail. Mirrors the softFail warn-surface contract. The honesty
+        // marker (`verificationWarning`) crosses the strategy boundary via the
+        // CompletionEnvelope (spec §1b). The in-kernel verifier owns CONTROL
+        // FLOW here; `receipt.verifierVerdict` is owned by the result-boundary
+        // verifier (runtime `result-verification.ts`) — B4/§5.3.
         state = transitionState(state, {
           meta: {
             ...state.meta,
-            verifierRejected: false,
             verificationWarning: groundingDegradeWarning,
-          } as KernelState["meta"],
+          },
         });
       } else if (!verdict.verified) {
         // GH #121 / I5 Loop Controller wire — resolve severity with the
@@ -1207,10 +1210,11 @@ export function runKernel(
           timestamp: new Date(),
         });
         //   - escalate : structural failure (harness fallback, shallow give-up).
-        //                Suppress + tag for downstream strategy switch /
-        //                human-in-loop. Persist `verifierEscalation` so the
-        //                consumer (today: post-loop failure path; tomorrow:
-        //                strategy-switch controller) can branch on it.
+        //                Suppress by FAILING the run — the `failed` status +
+        //                error IS the escalation signal, and it crosses the
+        //                strategy boundary as the envelope's `failed`
+        //                completionStatus. (The former `verifierEscalation`
+        //                meta write had zero readers — deleted in B4/§5.3.)
         //   - reject   : recoverable hard failure (parrot, missing required
         //                action). Suppress entirely. Identical to legacy
         //                non-softFail path.
@@ -1239,22 +1243,18 @@ export function runKernel(
           state = transitionState(state, {
             meta: {
               ...state.meta,
-              verifierRejected: false,
               verificationWarning: verdict.summary,
-              verifierVerdict: verdict.summary,
               harnessAuthoredOutput: true,
             },
           });
         } else if (verdictSeverity === "escalate") {
+          // Structural failure: the `failed` status + error IS the escalation
+          // signal (crosses the boundary as the envelope's `failed`
+          // completionStatus). The former `verifierEscalation`/`verifierVerdict`
+          // meta writes had zero readers — deleted in B4/§5.3.
           state = transitionState(state, {
             status: "failed",
             error: `Verifier escalated output: ${verdict.summary}`,
-            meta: {
-              ...state.meta,
-              verifierRejected: true,
-              verifierVerdict: verdict.summary,
-              verifierEscalation: true,
-            } as KernelState["meta"],
           });
         } else if (verdict.softFail) {
           // Advisory failure: grounding check missed compressed observation.
@@ -1262,20 +1262,18 @@ export function runKernel(
           state = transitionState(state, {
             meta: {
               ...state.meta,
-              verifierRejected: false,
               verificationWarning: verdict.summary,
-            } as KernelState["meta"],
+            },
           });
         } else {
           // Hard failure: parrot or harness-authored output. Suppress entirely.
+          // The `failed` status + error crosses the boundary as the envelope's
+          // `failed` completionStatus; `receipt.verifierVerdict` is owned by the
+          // result-boundary verifier (result-verification.ts), NOT by a meta
+          // field dropped here (B4/§5.3).
           state = transitionState(state, {
             status: "failed",
             error: `Verifier rejected output: ${verdict.summary}`,
-            meta: {
-              ...state.meta,
-              verifierRejected: true,
-              verifierVerdict: verdict.summary,
-            } as KernelState["meta"],
           });
         }
 
@@ -1283,10 +1281,13 @@ export function runKernel(
         // guard is the (or a) failing check, record it as a receipt-visible
         // intervention on a dedicated step. Deterministic: the guard rejects
         // ONLY perf measurements no tool observation produced (evidence-driven).
-        // The verdict summary already lands on `receipt.verifierVerdict`; this
-        // additionally names the guard in `interventions[]` so the debugging
-        // spine shows WHICH control actor fired. Stamped after the branch chain
-        // so it rides whichever meta transition applied (reject/escalate/warn).
+        // `receipt.verifierVerdict` is owned by the result-boundary verifier
+        // (runtime `result-verification.ts`), which runs on EVERY path — NOT by
+        // the in-kernel verdict above (which governs control flow only; its
+        // former `meta.verifierVerdict` write had zero receipt readers, B4/§5.3).
+        // This step additionally names the guard in `interventions[]` so the
+        // debugging spine shows WHICH control actor fired. Stamped after the
+        // branch chain so it rides whichever meta transition applied.
         const fabCheck = verdict.checks.find(
           (c) => c.name === "output-not-fabricated-measurement" && !c.passed,
         );
