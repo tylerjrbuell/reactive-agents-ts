@@ -9,7 +9,7 @@
 // nothing wired a real agent through it, because `.withLayers()` cannot
 // override LLMService (it is captured at construction). `.withReplayLLM()` can.
 
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,15 +19,18 @@ import { makeReplayAgent } from "../src/replay-agent.js";
 
 const TRACE_DIR = mkdtempSync(join(tmpdir(), "ra-replay-golden-"));
 const REPLAY_ROOT = mkdtempSync(join(tmpdir(), "ra-replay-golden-root-"));
-const PRIOR = process.env.REACTIVE_AGENTS_TRACE_DIR;
 const TASK = "Write a short note to ./note.md and report done.";
 
-beforeAll(() => {
-  process.env.REACTIVE_AGENTS_TRACE_DIR = TRACE_DIR;
-});
+// NOTE (2026-07-19, debt burndown): the trace dir is set EXPLICITLY on the
+// builder below via `.withObservability({ tracing: { dir: TRACE_DIR } })`,
+// NOT via `process.env.REACTIVE_AGENTS_TRACE_DIR`. Bun runs test files
+// concurrently in one process, and that env var is process-global: two other
+// suites (diagnose, meta-tools-default-surface) mutate it, so a shared-env
+// approach raced — the recorder wrote its LLM exchanges to another suite's
+// dir, leaving this golden's llmTable empty (deterministic CI failure). An
+// explicit builder dir is captured on the agent and immune to that race.
+
 afterAll(() => {
-  if (PRIOR === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR;
-  else process.env.REACTIVE_AGENTS_TRACE_DIR = PRIOR;
   rmSync(TRACE_DIR, { recursive: true, force: true });
   rmSync(REPLAY_ROOT, { recursive: true, force: true });
 });
@@ -39,6 +42,9 @@ describe("replay rail — record a harness run, replay it deterministically", ()
     const recorder = await ReactiveAgents.create()
       .withProvider("test")
       .withModel("test")
+      // Explicit trace dir — immune to the process-global REACTIVE_AGENTS_TRACE_DIR
+      // race under Bun's concurrent test-file execution (see module header).
+      .withObservability({ tracing: { dir: TRACE_DIR } })
       .withTestScenario([
         { match: "note\\.md", toolCall: { name: "file-write", args: { path: "./note.md", content: "hello from the harness" } } },
         { text: "FINAL ANSWER: wrote the note and it is done." },
