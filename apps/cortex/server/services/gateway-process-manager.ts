@@ -264,7 +264,6 @@ export class GatewayProcessManager {
       const _taskContext = coerceTaskContextRecord(config.taskContext) ?? undefined;
       const _skills = parseCortexSkillsConfig(config.skills) ?? undefined;
       const _timeout = typeof config.timeout === "number" && config.timeout > 0 ? config.timeout : undefined;
-      const _progressCheckpoint = typeof config.progressCheckpoint === "number" && config.progressCheckpoint > 0 ? config.progressCheckpoint : undefined;
       const _verificationStep = config.verificationStep as string | undefined;
       const _runtimeVerification = config.runtimeVerification === true;
       const _terminalTools = config.terminalTools === true;
@@ -326,7 +325,6 @@ export class GatewayProcessManager {
         ...(metaToolsCfg ? { metaTools: metaToolsCfg } : {}),
         ...(_timeout != null ? { timeout: _timeout } : {}),
         ...(retryPolicy ? { retryPolicy } : {}),
-        ...(_progressCheckpoint != null ? { progressCheckpoint: _progressCheckpoint } : {}),
         ...(fallbacksCfg ? { fallbacks: fallbacksCfg } : {}),
         ...(_verificationStep ? { verificationStep: _verificationStep } : {}),
         ...(_runtimeVerification ? { runtimeVerification: true as const } : {}),

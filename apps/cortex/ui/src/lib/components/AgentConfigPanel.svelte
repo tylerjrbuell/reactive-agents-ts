@@ -24,7 +24,6 @@
     maxTokens: number;
     timeout: number;
     retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    progressCheckpoint: number;
     metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean };
     fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
     observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
@@ -1565,7 +1564,6 @@
         {[
           config.timeout > 0 ? `${Math.round(config.timeout/1000)}s timeout` : null,
           config.retryPolicy.enabled ? `${config.retryPolicy.maxRetries} retries` : null,
-          config.progressCheckpoint > 0 ? `ckpt/${config.progressCheckpoint}` : null,
         ].filter(Boolean).join(" · ") || "defaults"}
       </span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('execution') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
@@ -1578,13 +1576,6 @@
           <input id="execution-timeout" type="number" min="0" max="3600" step="5"
             value={Math.round(config.timeout / 1000)}
             oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
-            class="config-input" />
-        </div>
-        <!-- Progress checkpoint -->
-        <div>
-          <label for="progress-checkpoint" class="config-label">Progress Checkpoint <span class="text-outline/30 normal-case font-normal">(every N iterations, 0 = off)</span></label>
-          <input id="progress-checkpoint" type="number" min="0" max="50" step="1"
-            bind:value={config.progressCheckpoint}
             class="config-input" />
         </div>
         <!-- Retry policy -->

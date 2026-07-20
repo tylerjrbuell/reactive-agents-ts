@@ -63,7 +63,6 @@ describe("chat ⇄ runs agent-config schema parity", () => {
       "taskContext",
       "healthCheck",
       "timeout",
-      "progressCheckpoint",
       "retryPolicy",
     ]) {
       expect(chatKeys.has(k)).toBe(true);

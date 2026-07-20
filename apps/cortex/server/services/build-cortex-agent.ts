@@ -63,7 +63,6 @@ export interface BuildCortexAgentParams {
   readonly metaTools?: CortexMetaToolsConfig;
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
-  readonly progressCheckpoint?: number;
   readonly fallbacks?: { enabled?: boolean; providers?: string[]; errorThreshold?: number };
   readonly verificationStep?: string;
   /** Enables `@reactive-agents/verification` (semantic checks, etc.). Separate from `verificationStep: "reflect"`. */
@@ -324,9 +323,6 @@ export async function buildCortexAgent(
   }
 
   if (params.minIterations && params.minIterations > 0) b = b.withMinIterations(params.minIterations);
-  if (params.progressCheckpoint && params.progressCheckpoint > 0) {
-    b = b.withProgressCheckpoint(params.progressCheckpoint);
-  }
   if (params.verificationStep === "reflect") b = b.withVerificationStep({ mode: "reflect" });
 
   if (params.runtimeVerification === true) {

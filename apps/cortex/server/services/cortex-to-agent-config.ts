@@ -3,7 +3,7 @@
  *
  * Covers all fields that have a direct AgentConfig representation.
  * Cortex-specific fields with no AgentConfig equivalent (skills, agentTools,
- * metaTools, dynamicSubAgents, taskContext, minIterations, progressCheckpoint,
+ * metaTools, dynamicSubAgents, taskContext, minIterations,
  * verificationStep, contextSynthesis) are handled as overlays in build-cortex-agent.ts.
  */
 import { Schema } from "effect";

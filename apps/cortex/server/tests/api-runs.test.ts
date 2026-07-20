@@ -259,7 +259,7 @@ describe("POST /api/runs — expanded launch params", () => {
     expect(captured.params?.agentName).toBe("my-agent");
   });
 
-  it("passes execution controls: timeout, progressCheckpoint", async () => {
+  it("passes execution controls: timeout", async () => {
     const captured = { params: null as LaunchParams | null };
     const db = new Database(":memory:");
     const app = makeCapApp(db, captured);
@@ -271,13 +271,11 @@ describe("POST /api/runs — expanded launch params", () => {
         body: JSON.stringify({
           prompt: "Go",
           timeout: 30000,
-          progressCheckpoint: 5,
         }),
       }),
     );
 
     expect(captured.params?.timeout).toBe(30000);
-    expect(captured.params?.progressCheckpoint).toBe(5);
   });
 
   it("passes retryPolicy to runner", async () => {

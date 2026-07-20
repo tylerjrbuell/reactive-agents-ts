@@ -547,9 +547,6 @@ export class ChatSessionService {
       ...(typeof agentConfig.timeout === "number" && agentConfig.timeout > 0
         ? { timeout: agentConfig.timeout }
         : {}),
-      ...(typeof agentConfig.progressCheckpoint === "number" && agentConfig.progressCheckpoint > 0
-        ? { progressCheckpoint: agentConfig.progressCheckpoint }
-        : {}),
       ...(agentConfig.terminalTools === true ? { terminalTools: true as const } : {}),
       // Forward shell CLI config whenever tools are on and the session stored values — do not
       // gate on `shellInToolPick` alone so `buildCortexAgent` can still apply `terminalShell*`
