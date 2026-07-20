@@ -16,6 +16,43 @@ import {
   classifyMeasurementClaims,
 } from "../capabilities/verify/evidence-grounding.js";
 import { appendEntries, appendEntry, type RunLedger } from "./run-ledger.js";
+import { stepToEntries } from "./step-projection.js";
+
+/** One direct tool dispatch, distilled to the facts the canonical ledger pair needs. */
+export interface ToolDispatchFact {
+  readonly toolName: string;
+  readonly args?: Readonly<Record<string, unknown>>;
+  readonly toolCallId?: string;
+  readonly iteration: number;
+  /** The observation step the caller built — its tool-result projection is minted verbatim. */
+  readonly obsStep: ReasoningStep;
+}
+
+/**
+ * Record ONE direct tool dispatch as the canonical `tool-invocation` +
+ * `tool-result` pair — byte-identical to what `transitionState` projects for
+ * the kernel path, but exposed as a ledger-home emitter so the hand-rolled
+ * strategies (plan-execute / blueprint) mint identical entries WITHOUT calling
+ * the append primitives from outside `kernel/ledger/` (check-ledger-writes.sh).
+ * The tool-result is derived from `obsStep` via `stepToEntries`, so preview /
+ * storedKey / extractedFact match the projection exactly. Pure — returns a NEW
+ * ledger; the primitive threads it into its config-supplied sink.
+ */
+export function recordToolDispatch(
+  ledger: RunLedger | undefined,
+  fact: ToolDispatchFact,
+): RunLedger {
+  return appendEntries(ledger, [
+    {
+      kind: "tool-invocation" as const,
+      iteration: fact.iteration,
+      toolName: fact.toolName,
+      ...(fact.args !== undefined ? { args: fact.args } : {}),
+      ...(fact.toolCallId !== undefined ? { toolCallId: fact.toolCallId } : {}),
+    },
+    ...stepToEntries(fact.obsStep, fact.iteration),
+  ]);
+}
 
 /** The terminal verdict, distilled to the ledger's verdict shape. */
 export interface TerminalVerdictFact {

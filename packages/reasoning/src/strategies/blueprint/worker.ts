@@ -81,6 +81,14 @@ export interface BlueprintWorkerContext {
   /** System prompt forwarded to inline analysis-step LLM calls. */
   readonly systemPrompt?: string;
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
+  /** P0-4 — tool-policy forwarded into the canonical primitive so a forbidden /
+   *  non-allowed planned tool is blocked before dispatch. */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /** C8 — RunLedger sink handed to the primitive so each dispatch mints its
+   *  canonical tool-invocation + tool-result entries (blueprint otherwise mints
+   *  no ledger). Surfaced on `result.metadata.runLedger`. */
+  readonly ledgerSink?: import("effect").Ref.Ref<import("../../kernel/ledger/run-ledger.js").RunLedger>;
 }
 
 export interface BlueprintWorkerOptions {
@@ -272,6 +280,11 @@ function executeBlueprintStep(
         ...(ctx.agentId ? { agentId: ctx.agentId } : {}),
         ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
         emitLog: ctx.emitLog,
+        // P0-4 — inherit the tool-policy gate from the canonical primitive.
+        ...(ctx.allowedTools !== undefined ? { allowedTools: ctx.allowedTools } : {}),
+        ...(ctx.forbiddenTools !== undefined ? { forbiddenTools: ctx.forbiddenTools } : {}),
+        // C8 — mint the canonical tool-invocation + tool-result ledger pair.
+        ...(ctx.ledgerSink ? { ledgerSink: ctx.ledgerSink } : {}),
         // verifier / memoryService / LLM-facts omitted — parity-cheap opt-out.
       },
     );

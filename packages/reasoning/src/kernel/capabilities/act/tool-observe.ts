@@ -15,7 +15,7 @@
  * the canonical-tool-execution plan (they unify a pre-existing kernel
  * single/batch asymmetry as a separate, visible behavior change).
  */
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runHealingPipeline, type ToolCallSpec } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -29,6 +29,9 @@ import {
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts } from "./tool-execution.js";
 import { makeStep } from "../sense/step-utils.js";
+import { META_TOOLS } from "../../state/kernel-constants.js";
+import { type RunLedger } from "../../ledger/run-ledger.js";
+import { recordToolDispatch } from "../../ledger/emit.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { StrategyServices } from "../../utils/service-utils.js";
@@ -126,6 +129,30 @@ export interface ToolObserveConfig {
    * memory (it already forks a daemon store). Absent ⇒ no memory write.
    */
   readonly memoryService?: MaybeService<MemoryServiceInstance>;
+  /**
+   * Tool-policy enforcement (P0-4, a SAFETY gate). When either field is present
+   * the primitive BLOCKS a violating tool BEFORE dispatch — returning a normal
+   * `ToolObserveResult` with `success:false` and the blocked observation
+   * (mirrors act.ts:378-392), never widening the `never` error channel. This is
+   * THE single choke point every hand-rolled strategy (plan-execute / blueprint
+   * / any inline caller) inherits, so a forbidden or hallucinated tool arriving
+   * via a planned step can no longer execute. META_TOOLS always bypass.
+   * BOTH absent ⇒ no policy check (byte-identical — the kernel act path enforces
+   * upstream via `evaluateToolPolicy` and passes no policy here).
+   */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /**
+   * RunLedger sink (C8). When present, the primitive appends the canonical
+   * `tool-invocation` + `tool-result` ledger entries for THIS executed call —
+   * byte-identical to what the kernel's `transitionState` step-projection mints
+   * (the tool-result is derived from the built obsStep via `stepToEntries`) — so
+   * plan-execute / blueprint get queryable tool-usage + deliverable receipts.
+   * The kernel path passes NO sink (it already projects steps→ledger at the
+   * transition chokepoint), so there is no double-mint. Absent ⇒ no ledger mint
+   * (byte-identical).
+   */
+  readonly ledgerSink?: Ref.Ref<RunLedger>;
 }
 
 export interface ToolObserveResult {
@@ -159,6 +186,48 @@ const defaultEmitLog = (event: LogEvent): Effect.Effect<void, never> =>
         : Effect.void,
     ),
   );
+
+// ─── Tool-policy gate (P0-4) — ONE decision shared by act.ts + the primitive ──
+
+/** Allow/deny policy the tool-observe gate enforces. Both fields optional. */
+export interface ToolPolicy {
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+}
+
+/** A policy verdict: blocked (with the observation message) or permitted. */
+export type ToolPolicyDecision =
+  | { readonly blocked: true; readonly message: string }
+  | { readonly blocked: false };
+
+/**
+ * Pure tool-policy decision (P0-4). The SINGLE gate the kernel act path and the
+ * canonical primitive both delegate to — so there are not two independent
+ * allow/deny implementations to drift (boundary-first). Rules:
+ *   - META_TOOLS always pass (mirrors act.ts:367 unconditional bypass).
+ *   - `forbiddenTools` (the contract deny-list) beats everything.
+ *   - a non-empty `allowedTools` is a hard whitelist.
+ * The `allowedTools` block message is BYTE-IDENTICAL to the legacy act.ts:375
+ * text so the kernel path's observable behavior is unchanged.
+ */
+export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPolicyDecision {
+  if (META_TOOLS.has(toolName)) return { blocked: false };
+  const forbidden = policy.forbiddenTools ?? [];
+  if (forbidden.includes(toolName)) {
+    return {
+      blocked: true,
+      message: `[Tool "${toolName}" is forbidden by contract — blocked.]`,
+    };
+  }
+  const allowed = policy.allowedTools ?? [];
+  if (allowed.length > 0 && !allowed.includes(toolName)) {
+    return {
+      blocked: true,
+      message: `[Tool "${toolName}" is not in allowedTools — blocked. Allowed: ${allowed.join(", ")}]`,
+    };
+  }
+  return { blocked: false };
+}
 
 export function executeToolAndObserve(
   toolService: MaybeService<ToolServiceInstance>,
@@ -214,6 +283,33 @@ export function executeToolAndObserve(
             severity: "warn",
           },
         );
+      }
+    }
+
+    // ── 1b. Tool-policy gate (P0-4) — THE single choke point ─────────────────
+    // Enforce allowed/forbidden HERE so every caller inherits the same gate.
+    // A block is NOT an error: return a normal failed ToolObserveResult carrying
+    // the blocked observation (mirrors act.ts:378-392), keeping the `never`
+    // error channel. Checked against the post-heal `toolName` (what would
+    // actually run). The kernel act path blocks upstream via `evaluateToolPolicy`
+    // and passes no policy, so a blocked tool never reaches here on that path.
+    if (config.allowedTools !== undefined || config.forbiddenTools !== undefined) {
+      const decision = evaluateToolPolicy(toolName, {
+        ...(config.allowedTools !== undefined ? { allowedTools: config.allowedTools } : {}),
+        ...(config.forbiddenTools !== undefined ? { forbiddenTools: config.forbiddenTools } : {}),
+      });
+      if (decision.blocked) {
+        const obsStep = makeStep("observation", decision.message, {
+          toolCallId: ctx.callId,
+          observationResult: makeObservationResult(toolName, false, decision.message),
+        });
+        return {
+          obsStep,
+          content: decision.message,
+          success: false,
+          durationMs: 0,
+          healed,
+        } satisfies ToolObserveResult;
       }
     }
 
@@ -353,6 +449,24 @@ export function executeToolAndObserve(
       observationResult: obsResult,
       ...(verification ? { verification } : {}),
     });
+
+    // ── 9b. RunLedger mint (C8) — config-gated sink ──────────────────────────
+    // Append the canonical tool-invocation + tool-result pair for this executed
+    // call. The tool-result is derived from `obsStep` via `stepToEntries`, so
+    // preview / storedKey / extractedFact are IDENTICAL to the kernel's
+    // transitionState projection. Only fires when a caller passes a sink; the
+    // kernel passes none (it projects via transitionState → no double-mint).
+    if (config.ledgerSink) {
+      yield* Ref.update(config.ledgerSink, (led) =>
+        recordToolDispatch(led, {
+          toolName,
+          args,
+          toolCallId: ctx.callId,
+          iteration: ctx.iteration,
+          obsStep,
+        }),
+      );
+    }
 
     // ── 10. Compose tags ─────────────────────────────────────────────────────
     yield* emitToCompose(config.pipeline, "observation.tool-result", obsStep, {

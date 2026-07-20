@@ -12,7 +12,8 @@
  * 4. Retry on failure — retry once with error context; if retry fails, LLM patch via buildPatchPrompt
  * 5. Reflect — call LLM with buildReflectionPrompt. SATISFIED → synthesize. Otherwise refine.
  */
-import { Effect, Cause, Exit, Option } from "effect";
+import { Effect, Cause, Exit, Option, Ref } from "effect";
+import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
@@ -74,7 +75,7 @@ import {
 // Single-step dispatch (tool_call / analysis / composite). StepExecResult is
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
-import { executeStep } from "./plan-execute/step-executor.js";
+import { executeStep, type StepExecutorInput } from "./plan-execute/step-executor.js";
 import {
   capStatusToEnvelope,
   honestEnvelopeMetadata,
@@ -150,6 +151,22 @@ interface PlanExecuteInput {
    * reactive / tree-of-thought (7b6e1ad1).
    */
   readonly horizonProfile?: "long";
+  /**
+   * P0-4 (tool-policy safety gate). Forwarded to every direct tool-dispatch via
+   * the canonical `executeToolAndObserve` primitive so a forbidden or
+   * non-allowed tool arriving as a planned step is BLOCKED (not executed) — the
+   * gate the hand-rolled dispatch path previously lacked. `forbiddenTools`
+   * defaults to the declared `taskContract` deny-list (the production `.withContract`
+   * signal); both may be passed explicitly by callers/tests.
+   */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /**
+   * Declared TaskContract (spread from the reasoning-service params via
+   * `.withContract`). Its `forbidden` tools seed the deny-list above so the
+   * safety gate is production-real, not test-only.
+   */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
 }
 
 export const executePlanExecute = (
@@ -179,6 +196,30 @@ export const executePlanExecute = (
 
     const steps: ReasoningStep[] = [];
     const start = Date.now();
+
+    // C8 — plan-execute mints NO RunLedger on its own (it returns a
+    // ReasoningResult, which carries no ledger). Create one sink here, hand it to
+    // every direct tool dispatch via the canonical primitive, and surface the
+    // accumulated ledger on `result.metadata.runLedger` so tool-usage +
+    // deliverable receipts are no longer blind for plan-execute runs.
+    const ledgerRef = yield* Ref.make<RunLedger>([]);
+    // P0-4 — the deny-list the safety gate enforces: explicit override first,
+    // else the declared TaskContract's forbidden tools (the production
+    // `.withContract` signal). Threaded into every dispatch via the primitive.
+    const forbiddenToolList: readonly string[] =
+      input.forbiddenTools ??
+      (input.taskContract?.tools
+        ?.filter((t) => t.kind === "forbidden")
+        .map((t) => t.name) ??
+        []);
+    // The step-executor input, augmented with the policy + ledger sink the
+    // canonical primitive reads. Built once; passed to every executeStep call.
+    const stepExecutorInput: StepExecutorInput = {
+      ...input,
+      forbiddenTools: forbiddenToolList,
+      ledgerSink: ledgerRef,
+      ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+    };
     let totalTokens = 0;
     // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every
     // plan-execute run) — planner/patch/augment/reflect/synthesis are direct
@@ -553,7 +594,12 @@ export const executePlanExecute = (
         start,
         totalTokens,
         totalCost,
-        extraMetadata: { llmCalls: llmCallsTotal },
+        extraMetadata: {
+          llmCalls: llmCallsTotal,
+          // C8 — the run's canonical tool ledger (empty on this no-dispatch
+          // short-circuit, but present for shape consistency).
+          runLedger: yield* Ref.get(ledgerRef),
+        },
       });
     }
 
@@ -685,7 +731,7 @@ export const executePlanExecute = (
                   stepIndex,
                   plan,
                   completedSteps,
-                  input,
+                  stepExecutorInput,
                   toolSummaries,
                   services,
                   stepKernelMaxIterations,
@@ -1334,6 +1380,9 @@ export const executePlanExecute = (
       totalCost,
       extraMetadata: {
         llmCalls: llmCallsTotal,
+        // C8 — the run's canonical tool ledger (tool-invocation + tool-result
+        // per direct dispatch), minted by the primitive into `ledgerRef`.
+        runLedger: yield* Ref.get(ledgerRef),
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(subKernelEnvelope),

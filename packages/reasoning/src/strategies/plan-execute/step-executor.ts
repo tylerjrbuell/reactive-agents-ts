@@ -22,8 +22,9 @@
  * consumes — keeps this module decoupled from the full `PlanExecuteInput`
  * shape declared in `strategies/plan-execute.ts`.
  */
-import { Effect } from "effect";
+import { Effect, type Ref } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import type { RunLedger } from "../../kernel/ledger/run-ledger.js";
 import { getFileRoot } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -132,6 +133,14 @@ export interface StepExecutorInput {
   /** #40: long-horizon guard profile — forwarded to each composite sub-kernel so
    *  the A2 pace bands (and thus the budget-terminal honest partial) can arm. */
   readonly horizonProfile?: "long";
+  /** P0-4 — tool-policy passed straight into the canonical primitive so a
+   *  forbidden / non-allowed planned tool is blocked before dispatch. */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /** C8 — RunLedger sink handed to the primitive so each direct tool dispatch
+   *  mints its canonical tool-invocation + tool-result entries (plan-execute
+   *  otherwise produces NO ledger). Surfaced on `result.metadata.runLedger`. */
+  readonly ledgerSink?: Ref.Ref<RunLedger>;
 }
 
 /** File tools whose relative paths the healing pipeline resolves (mirrors act.ts). */
@@ -246,6 +255,11 @@ export function executeStep(
           ...(input.agentId ? { agentId: input.agentId } : {}),
           ...(input.sessionId ? { sessionId: input.sessionId } : {}),
           emitLog,
+          // P0-4 — inherit the tool-policy gate from the canonical primitive.
+          ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+          ...(input.forbiddenTools !== undefined ? { forbiddenTools: input.forbiddenTools } : {}),
+          // C8 — mint the canonical tool-invocation + tool-result ledger pair.
+          ...(input.ledgerSink ? { ledgerSink: input.ledgerSink } : {}),
           // extractFactsLLM omitted (false) — parity-cheap, no LLM fact pass.
           // verifier / memoryService omitted — opt-out holds (Phase E only).
         },

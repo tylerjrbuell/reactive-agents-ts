@@ -31,7 +31,8 @@ import {
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
-import { executeToolAndObserve } from "./tool-observe.js";
+import { executeToolAndObserve, evaluateToolPolicy } from "./tool-observe.js";
+import { forbiddenTools } from "../../contract/run-contract.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
 // defaultVerifier.verify() so the structured VerificationResult is
@@ -364,15 +365,20 @@ export function handleActing(
           continue;
         }
 
-        // ── allowedTools execution gate ──────────────────────────────────────────
-        // Block non-allowed tools before any dispatch. META_TOOLS bypass unconditionally.
-        const effectiveAllowedTools = input.allowedTools ?? [];
-        if (
-          effectiveAllowedTools.length > 0 &&
-          !META_TOOLS.has(tc.name) &&
-          !effectiveAllowedTools.includes(tc.name)
-        ) {
-          const blockedMsg = `[Tool "${tc.name}" is not in allowedTools — blocked. Allowed: ${effectiveAllowedTools.join(", ")}]`;
+        // ── tool-policy execution gate (P0-4) ────────────────────────────────────
+        // Delegate to the SAME `evaluateToolPolicy` predicate the canonical
+        // primitive uses — one decision function, not two independent gates
+        // (boundary-first). This keeps the allowedTools block BYTE-IDENTICAL to
+        // the legacy inline check AND closes the forbiddenTools hole on the
+        // kernel path: the declared RunContract deny-list is now enforced at
+        // execution too (defense-in-depth behind the tool-surface visibility
+        // filter). META_TOOLS bypass lives inside the predicate.
+        const policyDecision = evaluateToolPolicy(tc.name, {
+          ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+          forbiddenTools: forbiddenTools(state.meta.runContract),
+        });
+        if (policyDecision.blocked) {
+          const blockedMsg = policyDecision.message;
           const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
             toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
             toolUsed: tc.name,

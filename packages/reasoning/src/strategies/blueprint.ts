@@ -32,7 +32,8 @@
  * per-step ReAct sub-kernels (the worker dispatches tools directly), PLUS the
  * deterministic VERIFY gate and the tier/capability concurrency branch.
  */
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
+import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
@@ -93,6 +94,13 @@ interface BlueprintInput {
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   /** Pre-resolved model calibration — drives the concurrency tier branch. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  /** P0-4 — tool-policy forwarded into every dispatch via the canonical
+   *  primitive. `forbiddenTools` defaults to the declared `taskContract` deny-list. */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /** Declared TaskContract (spread from the reasoning-service params via
+   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
 }
 
 // ── Concurrency tier/capability branch ───────────────────────────────────────
@@ -146,6 +154,18 @@ export const executeBlueprint = (
 
     const steps: ReasoningStep[] = [];
     const start = Date.now();
+    // C8 — blueprint mints NO RunLedger on its own; create one sink, hand it to
+    // every worker dispatch via the canonical primitive, and surface the result
+    // on `result.metadata.runLedger`.
+    const ledgerRef = yield* Ref.make<RunLedger>([]);
+    // P0-4 — the deny-list the safety gate enforces: explicit override, else the
+    // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    const forbiddenToolList: readonly string[] =
+      input.forbiddenTools ??
+      (input.taskContract?.tools
+        ?.filter((t) => t.kind === "forbidden")
+        .map((t) => t.name) ??
+        []);
     let totalTokens = 0;
     let totalCost = 0;
     // Self-budget: blueprint makes at most plan(1) + solve(1) LLM calls — the
@@ -364,6 +384,10 @@ export const executeBlueprint = (
         : {}),
       ...(input.harnessPipeline ? { harnessPipeline: input.harnessPipeline } : {}),
       emitLog,
+      // P0-4 + C8 — tool-policy gate + ledger sink inherited by every dispatch.
+      forbiddenTools: forbiddenToolList,
+      ledgerSink: ledgerRef,
+      ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
     };
 
     let workerResult = yield* executeBlueprintWorker(
@@ -654,6 +678,8 @@ export const executeBlueprint = (
         // counted its calls and never shipped the count, so receipts said
         // llmCalls:0 beside 5 real calls in the trace.
         llmCalls,
+        // C8 — the run's canonical tool ledger, minted by the primitive.
+        runLedger: yield* Ref.get(ledgerRef),
         ...(budgetCappedJoin
           ? {
               // H5/#40 honesty markers for the budget-capped harness join —
