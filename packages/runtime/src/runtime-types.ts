@@ -914,6 +914,21 @@ export interface LightRuntimeOptions {
   environmentContext?: Record<string, string>;
   testScenario?: TestTurn[];
 
+  /**
+   * Shared parent EventBus instance (audit G1 — the child-observability spine).
+   *
+   * When present, the light runtime's ExecutionEngine joins the parent's
+   * singleton EventBus instead of building a fresh one, so a delegated
+   * sub-agent's lifecycle events (AgentStarted/AgentCompleted/…) are visible to
+   * the parent's subscribers and the parent's trace bridge — instead of being
+   * emitted to a bus nobody is listening to. The child's MetricsCollector stays
+   * on its own isolated bus so parent traffic does not inflate the child's
+   * metrics. Absent = today's behavior (fresh, isolated bus).
+   */
+  sharedEventBus?: import("effect").Context.Tag.Service<
+    typeof import("@reactive-agents/core").EventBus
+  >;
+
   // Always-on for sub-agents
   enableReasoning?: boolean;
   enableTools?: boolean;

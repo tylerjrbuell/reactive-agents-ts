@@ -1120,7 +1120,12 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   };
 
   // ── Minimal required layers ──
-  const eventBusLayer = EventBusLive;
+  // Audit G1: when the parent threads its EventBus instance, the child's
+  // ExecutionEngine joins it (via Layer.succeed) so sub-agent lifecycle events
+  // land on the parent's bus and trace bridge. Absent = fresh, isolated bus.
+  const eventBusLayer = options.sharedEventBus
+    ? Layer.succeed(EventBus, options.sharedEventBus)
+    : EventBusLive;
   const coreLayer = CoreServicesLive;
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
@@ -1166,9 +1171,12 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   const hookLayer = LifecycleHookRegistryLive;
 
   // MetricsCollector is still needed by ExecutionEngine but we skip the EventBus subscription
-  // by providing it with an isolated EventBus (no listeners accumulating in the parent's bus)
+  // by providing it with an isolated EventBus (no listeners accumulating in the parent's bus).
+  // NB: this is deliberately a FRESH EventBusLive, not `eventBusLayer` — when the
+  // parent shares its bus for G1 observability, the child's metrics must NOT
+  // subscribe to parent traffic (which would inflate the child's counters).
   const metricsCollectorLayer = MetricsCollectorLive.pipe(
-    Layer.provide(eventBusLayer),
+    Layer.provide(EventBusLive),
   );
 
   const engineLayer = ExecutionEngineLive(config).pipe(

@@ -3,7 +3,26 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Date:** 2026-07-11
-**Status:** DRAFT — awaiting RATIFY
+**Status:** RATIFIED (RE-SCOPED) 2026-07-20 — owner sign-off, debt-burndown Wave 2 B8.
+
+> **RE-SCOPE (2026-07-20, owner-ratified).** Only **Tasks 1–5** are in scope for B8 (the debt-repair
+> core: the `RunContext` correlation spine + the detached-fiber boundary fix + live nesting). They
+> close the real, shipped-today defects — subagents invisible/uncancellable/unattributable, teams
+> structurally flat (dead recursion cap). Value-verified 2026-07-20: the boundary at
+> `sub-agent-executor.ts:317` (`await Effect.runPromise(... createLightRuntime)`) is intact and
+> `agent-tool-adapter.ts:188` still passes `depth: number = 0`.
+>
+> **Already done — SKIP:** Task 7 (route kernel `Effect.log*` — `execution-engine.ts:1534`
+> `effectLoggerBridgeLayer`, commit `311bce38`).
+> **Moved to Wave 3 — SKIP here:** Task 16 worker-pool delete (Wave 3 deletes all of
+> `packages/orchestration`).
+> **DEFERRED (new capability, not debt — separate bench-gated track):** Phase 3 (Tasks 11–12, true
+> background subagents), Phase 4 (Tasks 13–14, typed hand-off + per-worker budgets), Phase 5
+> (Task 15, the M8 bench). Rationale: mock numbers are marginal (~2.3% token save, **+41% latency**),
+> the M8 bench that would justify any default has never run, and async-handle management on low-tier
+> models is unproven. These need a product/bench decision, not a debt sweep.
+> **Logging Tasks 6, 8, 9, 10 (unified writer, `console.*` ban, config collision, llm re-key):**
+> DEFERRED to a later cleanup pass — real tidiness, medium value, not a lie misleading a user today.
 **Supersedes/extends:** `wiki/Research/Audit-Reports-2026-06-17/subagent-system-audit.md` (G1–G10), `wiki/Architecture/Design-Specs/2026-06-17-agentic-orchestration-strategies.md` (substrate contracts), `wiki/Decisions/2026-06-24-high-leverage-roadmap-ranking.md` (sequencing: item **A** = observable substrate, ranked prerequisite)
 
 **Goal:** Make sub-agents first-class, independently observable, cancellable, nestable, and genuinely background — and make every log line in the framework attributable to the run (and sub-run) that produced it.

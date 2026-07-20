@@ -6,9 +6,13 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
+import { EventBus } from "@reactive-agents/core";
 import type { SubAgentResult } from "@reactive-agents/tools";
-import type { SubAgentTaskArgs } from "./sub-agent-executor.js";
+import type {
+  SubAgentTaskArgs,
+  SubAgentRuntimeShared,
+} from "./sub-agent-executor.js";
 
 // Derive a descriptive kebab-case name from a task description.
 // Extracts the primary action verb + object from the task text.
@@ -56,6 +60,7 @@ export interface SpawnHandlerDeps {
    */
   readonly buildSubAgentTask: (
     args: SubAgentTaskArgs,
+    runtimeShared?: SubAgentRuntimeShared,
   ) => Promise<SubAgentResult>;
 }
 
@@ -72,37 +77,55 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
   const { buildSubAgentTask } = deps;
 
   const spawnHandler = (args: Record<string, unknown>) =>
-    Effect.tryPromise({
-      try: async () => {
-        const task =
-          typeof args.task === "string"
-            ? args.task
-            : JSON.stringify(args.task ?? "");
-        const subName =
-          typeof args.name === "string" && args.name.trim().length > 0
-            ? args.name.trim()
-            : deriveSubAgentName(task);
-        return buildSubAgentTask({
-          task,
-          name: subName,
-          role: typeof args.role === "string" ? args.role : undefined,
-          instructions:
-            typeof args.instructions === "string"
-              ? args.instructions
-              : undefined,
-          tone: typeof args.tone === "string" ? args.tone : undefined,
-          tools: Array.isArray(args.tools)
-            ? (args.tools as unknown[]).filter(
-                (x): x is string => typeof x === "string",
-              )
-            : undefined,
-        });
-      },
-      catch: (e) => new Error(String(e)),
+    // Resolve the parent's EventBus from ambient context (the tool handler runs
+    // inside the parent's runtime) so the child can JOIN it — audit G1. Reading
+    // via serviceOption keeps the handler's requirement channel `never` and
+    // degrades gracefully (undefined ⇒ today's isolated-bus behavior).
+    Effect.gen(function* () {
+      const busOpt = yield* Effect.serviceOption(EventBus);
+      const runtimeShared: SubAgentRuntimeShared = {
+        sharedEventBus: Option.getOrUndefined(busOpt),
+      };
+      return yield* Effect.tryPromise({
+        try: async () => {
+          const task =
+            typeof args.task === "string"
+              ? args.task
+              : JSON.stringify(args.task ?? "");
+          const subName =
+            typeof args.name === "string" && args.name.trim().length > 0
+              ? args.name.trim()
+              : deriveSubAgentName(task);
+          return buildSubAgentTask(
+            {
+              task,
+              name: subName,
+              role: typeof args.role === "string" ? args.role : undefined,
+              instructions:
+                typeof args.instructions === "string"
+                  ? args.instructions
+                  : undefined,
+              tone: typeof args.tone === "string" ? args.tone : undefined,
+              tools: Array.isArray(args.tools)
+                ? (args.tools as unknown[]).filter(
+                    (x): x is string => typeof x === "string",
+                  )
+                : undefined,
+            },
+            runtimeShared,
+          );
+        },
+        catch: (e) => new Error(String(e)),
+      });
     });
 
   const spawnAgentsHandler = (args: Record<string, unknown>) =>
-    Effect.tryPromise({
+    Effect.gen(function* () {
+      const busOpt = yield* Effect.serviceOption(EventBus);
+      const runtimeShared: SubAgentRuntimeShared = {
+        sharedEventBus: Option.getOrUndefined(busOpt),
+      };
+      return yield* Effect.tryPromise({
       try: async () => {
         const rawTasks = Array.isArray(args.tasks)
           ? (args.tasks as unknown[])
@@ -141,7 +164,7 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
             Effect.all(
               taskArgs.map((ta) =>
                 Effect.tryPromise({
-                  try: () => buildSubAgentTask(ta),
+                  try: () => buildSubAgentTask(ta, runtimeShared),
                   catch: (e) => new Error(String(e)),
                 }),
               ),
@@ -196,6 +219,7 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
         };
       },
       catch: (e) => new Error(String(e)),
+      });
     });
 
   return { spawnHandler, spawnAgentsHandler };

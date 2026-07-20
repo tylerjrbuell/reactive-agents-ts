@@ -11,9 +11,15 @@
  * Lifted from builder.ts pre-W25 (5,478-LOC checkpoint).
  */
 
-import { Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import type { Task, TaskResult } from "@reactive-agents/core";
-import { generateTaskId, AgentId } from "@reactive-agents/core";
+import { generateTaskId, AgentId, EventBus } from "@reactive-agents/core";
+
+/** Per-execution shared handles resolved from the parent's ambient context. */
+export interface SubAgentRuntimeShared {
+  /** Parent's EventBus instance — shared so child events reach the parent bus (G1). */
+  readonly sharedEventBus?: Context.Tag.Service<typeof EventBus>;
+}
 import type {
   ParentContext,
   SubAgentResult,
@@ -92,6 +98,10 @@ export interface SubAgentExecutorDeps {
   readonly parentContextProfile: Partial<ContextProfile> | undefined;
   /** Inherited cost-tracking toggle. */
   readonly parentEnableCostTracking: boolean | undefined;
+  /** Parent agent id — stamped as `parentAgentId` on the child's task metadata
+   *  so the child's `AgentStarted` event (published on the shared bus) is
+   *  attributable to this parent (audit G1). */
+  readonly parentAgentId: string;
   /** Lazy reader for the parent's execution context (tool results, task description). */
   readonly getParentContext: () => ParentContext | undefined;
   /**
@@ -120,6 +130,7 @@ export interface SubAgentExecutorDeps {
 export const buildSubAgentTask = async (
   t: SubAgentTaskArgs,
   deps: SubAgentExecutorDeps,
+  runtimeShared?: SubAgentRuntimeShared,
 ): Promise<SubAgentResult> => {
   const {
     parentProvider,
@@ -133,9 +144,11 @@ export const buildSubAgentTask = async (
     parentObservabilityOptions,
     parentContextProfile,
     parentEnableCostTracking,
+    parentAgentId,
     getParentContext,
     toolsMod,
   } = deps;
+  const sharedEventBus = runtimeShared?.sharedEventBus;
 
   const executor = toolsMod.createSubAgentExecutor(
     {
@@ -262,6 +275,9 @@ export const buildSubAgentTask = async (
           : { logPrefix: "  │ " },
         contextProfile: parentContextProfile,
         enableCostTracking: parentEnableCostTracking,
+        // G1: join the parent's EventBus so this sub-agent's lifecycle events
+        // are observable on the parent's bus + trace bridge.
+        sharedEventBus,
       });
 
       // Register proxied MCP tools + execute in one Effect scope
@@ -309,7 +325,10 @@ export const buildSubAgentTask = async (
           input: { question: opts.task },
           priority: "medium" as const,
           status: "pending" as const,
-          metadata: { tags: [] },
+          // G1: stamp parentAgentId so the child's AgentStarted (published on the
+          // shared bus) is attributable to this parent. execution-engine reads
+          // metadata.context.parentAgentId when publishing AgentStarted.
+          metadata: { tags: [], context: { parentAgentId } },
           createdAt: new Date(),
         };
         return yield* subEngine.execute(taskObj);

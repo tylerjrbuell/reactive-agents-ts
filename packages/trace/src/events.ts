@@ -1,6 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
+import type { RunContext } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -48,7 +49,40 @@ export interface TraceEventBase {
   readonly timestamp: number          // ms since epoch
   readonly iter: number                // -1 before first iteration
   readonly seq: number                 // monotonic within a run
+  // ─── Delegation-tree correlation (RunContext spine, 2026-07-20) ───
+  // Optional so historical JSONL (written before the spine existed) still
+  // loads: a reader treats a missing `depth` as 0 and a missing `rootRunId`
+  // as equal to `runId` (a root run). New events are stamped via
+  // `traceBaseFrom(ctx, iter, seq)`, which always populates them.
+  /** Top-most run in this delegation tree. Absent ⇒ treat as `runId` (root). */
+  readonly rootRunId?: string
+  /** The run that spawned this one. Absent at the root. */
+  readonly parentRunId?: string
+  /** Delegation depth. Absent ⇒ 0 (root). */
+  readonly depth?: number
 }
+
+/**
+ * Single constructor for the correlated base of every trace event.
+ *
+ * Threading `RunContext` here is what makes "show me this run and everything
+ * it spawned" a single JSONL filter: a sub-agent's events carry a different
+ * `runId` than the parent's (correct), but share `rootRunId` and record
+ * `parentRunId`/`depth` so the tree is reconstructable.
+ */
+export const traceBaseFrom = (
+  ctx: RunContext,
+  iter: number,
+  seq: number,
+): TraceEventBase => ({
+  runId: ctx.runId,
+  rootRunId: ctx.rootRunId,
+  parentRunId: ctx.parentRunId,
+  depth: ctx.depth,
+  timestamp: Date.now(),
+  iter,
+  seq,
+})
 
 export interface RunStartedEvent extends TraceEventBase {
   readonly kind: "run-started"

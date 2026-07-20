@@ -139,25 +139,31 @@ export const buildToolMcpRegistrations = (
 
         const buildSingleSubAgentTask = (
           t: SubAgentTaskArgs,
+          runtimeShared?: import("./sub-agent-executor.js").SubAgentRuntimeShared,
         ): Promise<import("@reactive-agents/tools").SubAgentResult> =>
-          buildSubAgentTask(t as ExtractedSubAgentTaskArgs, {
-            parentProvider: deps.parentProvider,
-            parentModel: deps.parentModel,
-            defaultMaxIter,
-            getParentToolService: () => parentToolServiceRef,
-            mcpServers: deps.mcpServers as MCPServerConfig[],
-            parentReasoningOptions: deps.parentReasoningOptions,
-            parentEnableGuardrails: deps.parentEnableGuardrails,
-            parentEnableObservability: deps.parentEnableObservability,
-            parentObservabilityOptions: deps.parentObservabilityOptions,
-            parentContextProfile: deps.parentContextProfile,
-            parentEnableCostTracking: deps.parentEnableCostTracking,
-            getParentContext: deps.getParentContext,
-            toolsMod: {
-              createSubAgentExecutor: toolsMod.createSubAgentExecutor,
-              ALWAYS_INCLUDE_TOOLS: toolsMod.ALWAYS_INCLUDE_TOOLS,
+          buildSubAgentTask(
+            t as ExtractedSubAgentTaskArgs,
+            {
+              parentProvider: deps.parentProvider,
+              parentModel: deps.parentModel,
+              defaultMaxIter,
+              getParentToolService: () => parentToolServiceRef,
+              mcpServers: deps.mcpServers as MCPServerConfig[],
+              parentReasoningOptions: deps.parentReasoningOptions,
+              parentEnableGuardrails: deps.parentEnableGuardrails,
+              parentEnableObservability: deps.parentEnableObservability,
+              parentObservabilityOptions: deps.parentObservabilityOptions,
+              parentContextProfile: deps.parentContextProfile,
+              parentEnableCostTracking: deps.parentEnableCostTracking,
+              parentAgentId: deps.agentId,
+              getParentContext: deps.getParentContext,
+              toolsMod: {
+                createSubAgentExecutor: toolsMod.createSubAgentExecutor,
+                ALWAYS_INCLUDE_TOOLS: toolsMod.ALWAYS_INCLUDE_TOOLS,
+              },
             },
-          });
+            runtimeShared,
+          );
 
         for (const reg of createDynamicSpawnRegistrations({
           toolsMod: {

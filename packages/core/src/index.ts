@@ -212,6 +212,16 @@ export type {
   ControlStrategyEvaluatedPayload,
 } from "./services/harness-types.js";
 
+// ─── Run correlation spine (RunContext — the explicit value threaded through
+// Task.metadata / LLMRequest.traceContext; CurrentRunContextRef is fallback-only) ───
+export {
+  rootContext,
+  childContext,
+  contextOrFallback,
+  CurrentRunContextRef,
+} from "./run-context.js";
+export type { RunContext } from "./run-context.js";
+
 // ─── Streaming ───
 export { StreamingTextCallback, CurrentRunContext, RunControllerRef, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef } from "./streaming.js";
 export type { InteractionResponse } from "./streaming.js";
