@@ -679,19 +679,6 @@
         "typescript": "^6.0.3",
       },
     },
-    "packages/scenarios": {
-      "name": "@reactive-agents/scenarios",
-      "version": "0.10.6",
-      "dependencies": {
-        "@reactive-agents/testing": "0.10.2",
-        "@reactive-agents/trace": "0.10.2",
-      },
-      "devDependencies": {
-        "bun-types": "latest",
-        "tsup": "*",
-        "typescript": "*",
-      },
-    },
     "packages/svelte": {
       "name": "@reactive-agents/svelte",
       "version": "0.10.6",
@@ -1635,8 +1622,6 @@
     "@reactive-agents/runtime": ["@reactive-agents/runtime@workspace:packages/runtime"],
 
     "@reactive-agents/runtime-shim": ["@reactive-agents/runtime-shim@workspace:packages/runtime-shim"],
-
-    "@reactive-agents/scenarios": ["@reactive-agents/scenarios@workspace:packages/scenarios"],
 
     "@reactive-agents/svelte": ["@reactive-agents/svelte@workspace:packages/svelte"],
 

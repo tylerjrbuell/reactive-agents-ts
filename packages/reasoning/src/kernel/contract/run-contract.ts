@@ -19,8 +19,7 @@
 //
 // DAG law: this compiler reads TASK INPUTS ONLY (task prose, declared
 // TaskContract, required tools, comprehend classification). It never reads
-// runtime loop state — no back-edges. The single amendable seam is
-// `amendContract`, wired in Phase 4b via an explicit ledger-recorded entry.
+// runtime loop state — no back-edges.
 
 import type { TaskContract } from "@reactive-agents/core";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
@@ -69,8 +68,6 @@ export interface TaskRequirement {
   readonly id: string;
   readonly kind: RequirementKind;
   readonly spec: RequirementSpec;
-  /** Relative importance for partial-credit scoring (higher = more load-bearing). */
-  readonly weight: number;
 }
 
 /** A concrete producible output the receipt reports as produced|missing. */
@@ -80,7 +77,6 @@ export interface DeliverableSpec {
   readonly kind: "file" | "answer-section" | "structured-object";
   /** How to verify it was produced — a live PostCondition (graft). */
   readonly matcher: PostCondition;
-  readonly acceptance: AcceptanceTier;
 }
 
 /** A hard boundary the run must not cross. */
@@ -104,21 +100,12 @@ export function forbiddenTools(contract: RunContract | undefined): readonly stri
     .map((c) => c.tool);
 }
 
-/** Stakes-tiered acceptance policy: deterministic checks > checker > self-critique. */
-export interface AcceptancePolicy {
-  /** Verification tiers, strongest first. */
-  readonly tiers: readonly AcceptanceTier[];
-  /** Stakes level — scales how strict acceptance is. */
-  readonly stakes: "low" | "standard" | "high";
-}
-
 /** The compiled, frozen answer to "what does DONE mean for this run?". */
 export interface RunContract {
   readonly requirements: readonly TaskRequirement[];
   readonly deliverables: readonly DeliverableSpec[];
   readonly constraints: readonly Constraint[];
   readonly horizon: TaskHorizon;
-  readonly acceptance: AcceptancePolicy;
   /**
    * The deterministic floor — the union of every requirement's PostCondition —
    * so B2's terminal gate / the existing verify() can consume the contract's
@@ -164,8 +151,6 @@ function freezeContract(contract: RunContract): RunContract {
   Object.freeze(contract.deliverables);
   Object.freeze(contract.constraints);
   Object.freeze(contract.postConditions);
-  Object.freeze(contract.acceptance.tiers);
-  Object.freeze(contract.acceptance);
   return Object.freeze(contract);
 }
 
@@ -214,7 +199,6 @@ export function compileRunContract(
       id: `tool:${tool}`,
       kind: "tool-coverage",
       spec: { description: `call the \`${tool}\` tool`, condition, acceptance: "deterministic" },
-      weight: 1,
     });
     pushCondition(condition);
   }
@@ -227,9 +211,8 @@ export function compileRunContract(
       id: `artifact:${path}`,
       kind: "artifact-produced",
       spec: { description: `produce the file ${path}`, condition, acceptance: "deterministic" },
-      weight: 2,
     });
-    deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition, acceptance: "deterministic" });
+    deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition });
     pushCondition(condition);
   }
   // A derived artifact implies a writing tool must have been called.
@@ -241,7 +224,6 @@ export function compileRunContract(
         id: `tool:${writer}`,
         kind: "tool-coverage",
         spec: { description: `call the \`${writer}\` tool`, condition: writerCond, acceptance: "deterministic" },
-        weight: 1,
       });
       pushCondition(writerCond);
     }
@@ -257,9 +239,8 @@ export function compileRunContract(
       id: `output:${inc}`,
       kind: "question-answered",
       spec: { description: `include "${inc}" in the answer`, condition, acceptance: "deterministic" },
-      weight: 1,
     });
-    deliverables.push({ id: `output:${inc}`, kind: "answer-section", matcher: condition, acceptance: "deterministic" });
+    deliverables.push({ id: `output:${inc}`, kind: "answer-section", matcher: condition });
     pushCondition(condition);
   }
 
@@ -283,22 +264,15 @@ export function compileRunContract(
       description: "produce a substantive answer that addresses the task",
       acceptance: "self-critique",
     },
-    weight: 1,
   });
 
   const horizon = opts.horizon ?? classifyTaskHorizon(task).horizon;
-  const hasDeterministicDeliverable = deliverables.some((d) => d.acceptance === "deterministic");
-  const acceptance: AcceptancePolicy = {
-    tiers: ["deterministic", "checker", "self-critique"],
-    stakes: hasDeterministicDeliverable ? "high" : "standard",
-  };
 
   return freezeContract({
     requirements,
     deliverables,
     constraints,
     horizon,
-    acceptance,
     postConditions,
   });
 }
@@ -322,8 +296,8 @@ export function mergeLlmRequirements(
 
 /**
  * Rebuild a frozen contract with an amended requirement set (used after LLM
- * decomposition and by the Phase-4b amend seam). Recomputes the postConditions
- * floor and re-freezes. Deliverables/constraints/horizon/acceptance carry over.
+ * decomposition). Recomputes the postConditions floor and re-freezes.
+ * Deliverables/constraints/horizon carry over.
  */
 export function withRequirements(
   contract: RunContract,
@@ -339,32 +313,4 @@ export function withRequirements(
     postConditions.push(r.spec.condition);
   }
   return freezeContract({ ...contract, requirements, postConditions });
-}
-
-// ─── Mutation seam (Phase 4b) ────────────────────────────────────────────────
-
-/**
- * A ledger-recorded mid-run amendment to the contract. The ONLY sanctioned way
- * a frozen contract changes after compile (DAG law: control actions re-enter as
- * ledger entries). Typed now; `ledgerEntryId` is wired in Phase 4b when the
- * RunLedger exists — until then `amendContract` is a reserved seam with no
- * production caller.
- */
-export interface ContractAmendment {
-  readonly requirement: TaskRequirement;
-  readonly reason: string;
-  /** The RunLedger `contract-amended` entry id that authorized this (Phase 4b). */
-  readonly ledgerEntryId: string;
-}
-
-/**
- * Apply a ledger-recorded amendment, returning a NEW frozen contract (the
- * original stays frozen/untouched). Reserved seam — not called in production
- * until the Phase-4b ledger emits `contract-amended` entries.
- */
-export function amendContract(
-  contract: RunContract,
-  amendment: ContractAmendment,
-): RunContract {
-  return withRequirements(contract, [...contract.requirements, amendment.requirement]);
 }

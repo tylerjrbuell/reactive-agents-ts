@@ -335,14 +335,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * to any agent that relied on implicit cross-session memory.
      */
     private _enableMemory: boolean = false
-    /**
-     * Explicit-disable flag set by `.withoutMemory()` / `.withLeanHarness()`.
-     * Distinguishes "user opted out" from "user did not specify". Wardens
-     * and downstream auto-enable rules (e.g. `.withLearning()` re-enable
-     * after a lean opt-out) consult this to avoid silently re-enabling
-     * something the user explicitly turned off.
-     */
-    private _memoryExplicitlyDisabled: boolean = false
     private _hooks: LifecycleHook[] = []
     /**
      * Max kernel iterations override. `undefined` means "honor the
@@ -421,7 +413,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _cacheTimeoutMs?: number
     private _behavioralContract?: import('@reactive-agents/guardrails').BehavioralContract
     private _enableSelfImprovement: boolean = false
-    private _enableEvents: boolean = false
     private _streamDensity?: StreamDensity
     private _telemetryConfig?: TelemetryConfig
     private _memoryOptions?: MemoryOptions
@@ -1746,7 +1737,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * `agent.subscribe(...)` works whether or not `withEvents()` was called.
      */
     withEvents(): this {
-        this._enableEvents = true
+        // No-op: the EventBus is always active on every agent. This method is
+        // retained for API compatibility / readability only. (v0.14: the former
+        // write-only `_enableEvents` flag was removed — it gated no branch.)
         return this
     }
 

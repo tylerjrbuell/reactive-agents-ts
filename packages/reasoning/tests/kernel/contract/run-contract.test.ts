@@ -3,12 +3,11 @@
 // Property tests (the sweep's acceptance): every rw-1..9 + lh-1 prompt compiles
 // to a NON-EMPTY contract; rw-8 compiles 3 artifact-produced requirements (the
 // 1-of-3 partial-completion witness B2 scores); determinism (same input → same
-// contract, deep-equal). Plus: PostCondition graft, freeze, amend seam, and the
+// contract, deep-equal). Plus: PostCondition graft, freeze, and the
 // LLM-decomposition floor invariant.
 import { describe, expect, it } from "bun:test";
 import type { TaskContract } from "@reactive-agents/core";
 import {
-  amendContract,
   compileRunContract,
   mergeLlmRequirements,
   type TaskRequirement,
@@ -163,28 +162,6 @@ describe("compileRunContract — frozen post-compile", () => {
   });
 });
 
-describe("amendContract — the Phase-4b mutation seam", () => {
-  it("returns a new frozen contract; the original is untouched", () => {
-    const base = compileRunContract("Answer this question.");
-    const before = base.requirements.length;
-    const extra: TaskRequirement = {
-      id: "llm:extra",
-      kind: "question-answered",
-      spec: { description: "cover the edge case", acceptance: "checker" },
-      weight: 1,
-    };
-    const amended = amendContract(base, {
-      requirement: extra,
-      reason: "mid-run discovery",
-      ledgerEntryId: "stub-4b",
-    });
-    expect(base.requirements.length).toBe(before); // original unchanged
-    expect(amended.requirements.length).toBe(before + 1);
-    expect(amended.requirements.some((r) => r.id === "llm:extra")).toBe(true);
-    expect(Object.isFrozen(amended)).toBe(true);
-  });
-});
-
 describe("LLM decomposition — floor invariant (deterministic core stands alone)", () => {
   it("shouldDecompose is closed unless opt-in AND structured-output capability", () => {
     expect(shouldDecompose({})).toBe(false);
@@ -216,8 +193,8 @@ describe("LLM decomposition — floor invariant (deterministic core stands alone
   it("mergeLlmRequirements never drops the floor and de-dupes by id", () => {
     const floor = compileRunContract(RW_PROMPTS["rw-8"]!).requirements;
     const llm: TaskRequirement[] = [
-      { id: "llm:new", kind: "question-answered", spec: { description: "new", acceptance: "checker" }, weight: 1 },
-      { id: "answer", kind: "question-answered", spec: { description: "collides with floor", acceptance: "checker" }, weight: 9 },
+      { id: "llm:new", kind: "question-answered", spec: { description: "new", acceptance: "checker" } },
+      { id: "answer", kind: "question-answered", spec: { description: "collides with floor", acceptance: "checker" } },
     ];
     const merged = mergeLlmRequirements(floor, llm);
     // Floor preserved intact (same objects, same order at the front).

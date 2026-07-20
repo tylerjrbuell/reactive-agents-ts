@@ -28,15 +28,12 @@ function assessment(overrides: {
     phase: "gather",
     pace: {
       burnRatio: overrides.burnRatio ?? 0,
-      projectedCompletion: 0,
       band: overrides.band ?? "green",
     },
     health: {
       recentFailures: 0,
       consecutiveFailures: 0,
-      repeatWaste: 0,
       stuckSignals: 0,
-      contradictions: 0,
       iterationsSinceEvidence: 0,
       failureArgVariety: 0,
     },
@@ -50,7 +47,6 @@ function req(id: string, description: string): TaskRequirement {
     id,
     kind: "question-answered",
     spec: { description, acceptance: "deterministic" },
-    weight: 1,
   };
 }
 
@@ -61,7 +57,6 @@ function selfCritiqueReq(id: string, description: string): TaskRequirement {
     id,
     kind: "question-answered",
     spec: { description, acceptance: "self-critique" },
-    weight: 1,
   };
 }
 
@@ -71,7 +66,6 @@ function contract(requirements: readonly TaskRequirement[]): RunContract {
     deliverables: [],
     constraints: [],
     horizon: "long",
-    acceptance: { tiers: ["self-critique"], stakes: "standard" },
     postConditions: [],
   };
 }

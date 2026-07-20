@@ -44,7 +44,7 @@ const DECOMPOSE_SYSTEM =
   "independently-verifiable requirements that must ALL be satisfied for the task " +
   "to count as complete. Respond with ONLY a JSON array; each element is " +
   '{"id": string, "kind": "question-answered"|"artifact-produced"|"constraint-held"|"tool-coverage", ' +
-  '"description": string, "weight": number}. No prose, no code fences.';
+  '"description": string}. No prose, no code fences.';
 
 const VALID_KINDS: ReadonlySet<string> = new Set<RequirementKind>([
   "question-answered",
@@ -57,7 +57,6 @@ interface RawRequirement {
   readonly id?: unknown;
   readonly kind?: unknown;
   readonly description?: unknown;
-  readonly weight?: unknown;
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -88,7 +87,6 @@ function parseRequirements(text: string): readonly TaskRequirement[] {
     const id = `llm:${baseId}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    const weight = typeof raw.weight === "number" && Number.isFinite(raw.weight) ? raw.weight : 1;
     // LLM requirements are checker-tier by default (no deterministic ledger
     // condition), except when a substring "must include" is explicit enough to
     // graft onto OutputContains — kept conservative to avoid false-DONE.
@@ -97,7 +95,6 @@ function parseRequirements(text: string): readonly TaskRequirement[] {
       id,
       kind: kind as RequirementKind,
       spec: { description, condition, acceptance: "checker" },
-      weight,
     });
   }
   return out;

@@ -80,10 +80,7 @@ describe("RunLedger — append-only spine", () => {
       "verdict",
       "harness-signal",
       "handoff",
-      "contract-amended",
       "compaction-marker",
-      "checkpoint-marker",
-      "deliverable-commit",
     ];
     let ledger: RunLedger = [];
     ledger = appendEntry(ledger, { kind: "tool-invocation", iteration: 0, toolName: "t" });
@@ -94,10 +91,7 @@ describe("RunLedger — append-only spine", () => {
     ledger = appendEntry(ledger, { kind: "verdict", iteration: 0, gate: "per-step", verified: true });
     ledger = appendEntry(ledger, { kind: "harness-signal", iteration: 0, signal: "s" });
     ledger = appendEntry(ledger, { kind: "handoff", iteration: 0, from: "a", to: "b", summary: "sum" });
-    ledger = appendEntry(ledger, { kind: "contract-amended", iteration: 0, requirementId: "r1", reason: "why" });
     ledger = appendEntry(ledger, { kind: "compaction-marker", iteration: 0, droppedRefs: ["res_1"] });
-    ledger = appendEntry(ledger, { kind: "checkpoint-marker", iteration: 0 });
-    ledger = appendEntry(ledger, { kind: "deliverable-commit", iteration: 0, ref: "./r.md" });
     expect(new Set(ledger.map((e) => e.kind))).toEqual(new Set(kinds));
     // compaction-marker carries its dropped-ref enumeration (audit 03-F4).
     const compaction = entriesOfKind(ledger, "compaction-marker")[0];

@@ -338,7 +338,6 @@ These packages are **not bundled** — install them directly when needed:
 | [`@reactive-agents/react`](https://www.npmjs.com/package/@reactive-agents/react) | React 18+ hooks (`useAgent`, `useAgentStream`) |
 | [`@reactive-agents/vue`](https://www.npmjs.com/package/@reactive-agents/vue) | Vue 3 composables |
 | [`@reactive-agents/svelte`](https://www.npmjs.com/package/@reactive-agents/svelte) | Svelte 4/5 stores |
-| [`@reactive-agents/scenarios`](https://www.npmjs.com/package/@reactive-agents/scenarios) | Pre-built test scenarios |
 | [`@reactive-agents/trace`](https://www.npmjs.com/package/@reactive-agents/trace) | Lightweight tracing utilities |
 
 ---

@@ -28,7 +28,7 @@ import type { PostCondition } from "../capabilities/verify/post-conditions.js";
 
 // ─── Entry kinds ───────────────────────────────────────────────────────────────
 
-/** The twelve fact families the ledger can record (meta-loop spec §"ledger"). */
+/** The nine fact families the ledger can record (meta-loop spec §"ledger"). */
 export type LedgerEntryKind =
   | "tool-invocation"
   | "tool-result"
@@ -38,10 +38,7 @@ export type LedgerEntryKind =
   | "verdict"
   | "harness-signal"
   | "handoff"
-  | "contract-amended"
-  | "compaction-marker"
-  | "checkpoint-marker"
-  | "deliverable-commit";
+  | "compaction-marker";
 
 /** Fields carried by EVERY entry. `seq` is assigned by {@link appendEntry}. */
 interface LedgerEntryBase {
@@ -160,13 +157,6 @@ export interface HandoffEntry extends LedgerEntryBase {
   readonly summary: string;
 }
 
-/** A ledger-recorded mid-run contract amendment (the frozen-contract seam). */
-export interface ContractAmendedEntry extends LedgerEntryBase {
-  readonly kind: "contract-amended";
-  readonly requirementId: string;
-  readonly reason: string;
-}
-
 /**
  * A compaction happened. Carries the ENUMERATION of dropped refs (audit 03-F4:
  * no more "summarized" lies) so C4's protected-class + resolvable-ref
@@ -176,21 +166,6 @@ export interface CompactionMarkerEntry extends LedgerEntryBase {
   readonly kind: "compaction-marker";
   readonly droppedRefs: readonly string[];
   readonly reason?: string;
-}
-
-/** A durable checkpoint boundary (correlates the ledger to a persisted state). */
-export interface CheckpointMarkerEntry extends LedgerEntryBase {
-  readonly kind: "checkpoint-marker";
-  readonly checkpointId?: string;
-  readonly label?: string;
-}
-
-/** A deliverable was committed as the run's output (provenance at commit). */
-export interface DeliverableCommitEntry extends LedgerEntryBase {
-  readonly kind: "deliverable-commit";
-  /** Path or requirement id of the committed deliverable. */
-  readonly ref: string;
-  readonly digest?: string;
 }
 
 /** The append-only entry union. */
@@ -203,10 +178,7 @@ export type LedgerEntry =
   | VerdictEntry
   | HarnessSignalEntry
   | HandoffEntry
-  | ContractAmendedEntry
-  | CompactionMarkerEntry
-  | CheckpointMarkerEntry
-  | DeliverableCommitEntry;
+  | CompactionMarkerEntry;
 
 /** The ledger IS a plain readonly array of facts — codec-round-trippable. */
 export type RunLedger = readonly LedgerEntry[];

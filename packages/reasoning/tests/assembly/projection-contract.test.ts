@@ -86,11 +86,10 @@ describe("Projector — reachability (every ledger evidence entry reachable via 
 
 describe("Projector — traceability (projection-rendered provenance)", () => {
   const contract: RunContract = {
-    requirements: [{ id: "r1", kind: "question-answered", spec: { description: "Answer Q1", acceptance: "checker" }, weight: 1 }],
+    requirements: [{ id: "r1", kind: "question-answered", spec: { description: "Answer Q1", acceptance: "checker" } }],
     deliverables: [],
     constraints: [],
     horizon: "long",
-    acceptance: { tiers: ["checker"], stakes: "standard" },
     postConditions: [],
   };
   const ledger: RunLedger = [

@@ -25,19 +25,16 @@ function toolContract(tool = "web-search"): RunContract {
         id: `tool:${tool}`,
         kind: "tool-coverage",
         spec: { description: `call ${tool}`, condition: toolCalled(tool), acceptance: "deterministic" },
-        weight: 1,
       },
       {
         id: "answer",
         kind: "question-answered",
         spec: { description: "answer the task", acceptance: "self-critique" },
-        weight: 1,
       },
     ],
     deliverables: [],
     constraints: [],
     horizon: "long",
-    acceptance: { tiers: ["deterministic", "checker", "self-critique"], stakes: "standard" },
     postConditions: [toolCalled(tool)],
   };
 }
@@ -50,25 +47,21 @@ function deliverContract(): RunContract {
         id: "tool:web-search",
         kind: "tool-coverage",
         spec: { description: "call web-search", condition: toolCalled("web-search"), acceptance: "deterministic" },
-        weight: 1,
       },
       {
         id: "artifact:report.md",
         kind: "artifact-produced",
         spec: { description: "write report.md", condition: artifactProduced("report.md"), acceptance: "deterministic" },
-        weight: 2,
       },
       {
         id: "artifact:findings.json",
         kind: "artifact-produced",
         spec: { description: "write findings.json", condition: artifactProduced("findings.json"), acceptance: "deterministic" },
-        weight: 2,
       },
       {
         id: "answer",
         kind: "question-answered",
         spec: { description: "answer the task", acceptance: "self-critique" },
-        weight: 1,
       },
     ],
     deliverables: [
@@ -77,7 +70,6 @@ function deliverContract(): RunContract {
     ],
     constraints: [],
     horizon: "long",
-    acceptance: { tiers: ["deterministic", "checker", "self-critique"], stakes: "high" },
     postConditions: [toolCalled("web-search"), artifactProduced("report.md"), artifactProduced("findings.json")],
   };
 }
@@ -107,7 +99,6 @@ describe("assess — long-gathering false positive", () => {
       const a = assess(contract, gatherLedger(i), budget({ iteration: i }));
       expect(a.evidenceDelta).toBeGreaterThan(0);
       expect(a.health.stuckSignals).toBe(0);
-      expect(a.health.repeatWaste).toBe(0);
       expect(a.health.consecutiveFailures).toBe(0);
       expect(a.health.recentFailures).toBe(0);
       expect(a.health.iterationsSinceEvidence).toBe(0);
@@ -261,7 +252,6 @@ describe("assess — requirements + deliverables", () => {
           id: "output:Summary",
           kind: "question-answered",
           spec: { description: "include Summary", condition: outputContains("Summary"), acceptance: "deterministic" },
-          weight: 1,
         },
       ],
       deliverables: [
@@ -269,7 +259,6 @@ describe("assess — requirements + deliverables", () => {
       ],
       constraints: [],
       horizon: "short",
-      acceptance: { tiers: ["deterministic", "checker", "self-critique"], stakes: "standard" },
       postConditions: [outputContains("Summary")],
     };
     const a = assess(contract, gatherLedger(1), budget({ iteration: 1 }));
@@ -281,22 +270,18 @@ describe("assess — requirements + deliverables", () => {
 // ── Health windowing ────────────────────────────────────────────────────────
 
 describe("assess — health", () => {
-  it("counts recent failures, consecutive failures, dedup waste and stuck signals", () => {
+  it("counts recent failures, consecutive failures and stuck signals", () => {
     const contract = toolContract();
     const ledger = appendEntries(undefined, [
       { kind: "tool-invocation", iteration: 3, toolName: "web-search", args: { q: "a" }, toolCallId: "c1" },
       { kind: "tool-result", iteration: 3, toolName: "web-search", success: false, preview: "err", toolCallId: "c1" },
       { kind: "tool-result", iteration: 4, toolName: "web-search", success: false, preview: "err", toolCallId: "c2" },
-      { kind: "harness-signal", iteration: 4, signal: "gather-dedup", detail: "duplicate gather" },
       { kind: "harness-signal", iteration: 4, signal: "loop-detected", detail: "repetition" },
-      { kind: "claim", iteration: 4, text: "42% faster", value: 42, grounded: false },
     ]);
     const a = assess(contract, ledger, budget({ iteration: 4 }));
     expect(a.health.recentFailures).toBe(2);
     expect(a.health.consecutiveFailures).toBe(2);
-    expect(a.health.repeatWaste).toBe(1);
     expect(a.health.stuckSignals).toBe(1);
-    expect(a.health.contradictions).toBe(1);
   });
 });
 

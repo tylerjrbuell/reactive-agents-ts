@@ -36,10 +36,8 @@ export const applyWithProfile = (
   }
   if (profile.enableMemory === false) {
     s._enableMemory = false;
-    s._memoryExplicitlyDisabled = true;
   } else if (profile.enableMemory === true) {
     s._enableMemory = true;
-    s._memoryExplicitlyDisabled = false;
   }
   if (profile.enableReactiveIntelligence === false) {
     s._enableReactiveIntelligence = false;

@@ -81,10 +81,6 @@ const SPEC: Record<string, { desc?: string; kw: string[] }> = {
   "@reactive-agents/runtime-shim": {
     kw: ["nodejs", "bun", "cross-runtime", "polyfill", "adapter"],
   },
-  "@reactive-agents/scenarios": {
-    desc: "Pre-built test scenarios and fixtures for Reactive Agents",
-    kw: ["testing", "scenarios", "fixtures", "mock", "test-fixtures"],
-  },
   "@reactive-agents/svelte": {
     kw: ["svelte", "svelte-store", "stores", "streaming", "ai-ui", "agent-ui"],
   },

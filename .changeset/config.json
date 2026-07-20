@@ -30,7 +30,6 @@
       "@reactive-agents/channels",
       "@reactive-agents/diagnose",
       "@reactive-agents/trace",
-      "@reactive-agents/scenarios",
       "@reactive-agents/compose",
       "@reactive-agents/observe",
       "@reactive-agents/replay",

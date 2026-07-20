@@ -87,9 +87,6 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/diagnose      — Trace diagnostics + replay-driven root-cause analysis (rax-diagnose CLI)
 │   └── depends on: replay, trace
 │
-├── @reactive-agents/scenarios     — Canonical scenario fixtures for the testing harness (gate scenarios, schema-drift, etc.)
-│   └── depends on: testing, trace
-│
 ├── @reactive-agents/benchmarks    — Benchmark task suites + tier-aware runners for cross-model evaluation
 │   └── depends on: core, cost, judge-server, llm-provider, reasoning, runtime, runtime-shim
 │

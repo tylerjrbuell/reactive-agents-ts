@@ -81,7 +81,6 @@ export interface BuilderState {
   // memory + learning
   _memoryTier: "1" | "2";
   _enableMemory: boolean;
-  _memoryExplicitlyDisabled: boolean;
   _memoryOptions?: MemoryOptions;
   _skillPersistence?: boolean;
   _sessionPersist: boolean;
@@ -163,7 +162,6 @@ export interface BuilderState {
   _enableBehavioralContracts: boolean;
   _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
   _strictValidation: boolean;
-  _enableEvents: boolean;
   _streamDensity?: StreamDensity;
   _telemetryConfig?: TelemetryConfig;
   _loggingConfig?: {

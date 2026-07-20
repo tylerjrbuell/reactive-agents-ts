@@ -19,16 +19,12 @@ import { asBuilderState } from "./_state.js";
 /**
  * Apply `.withoutMemory()` — force memory + skill persistence off. Memory is
  * already off in a bare builder (v0.12); this also clears it after a profile
- * or `.withMemory()` opt-in, and sets `_memoryExplicitlyDisabled` so
- * auto-enable rules don't silently turn it back on. Disables the full stack
- * (memory layer, skill persistence, session store, experience learning,
- * memory consolidation) and sets the `_memoryExplicitlyDisabled` flag so
- * downstream auto-enable rules respect the opt-out.
+ * or `.withMemory()` opt-in. Disables the full stack (memory layer, skill
+ * persistence, session store, experience learning, memory consolidation).
  */
 export const applyWithoutMemory = (builder: ReactiveAgentBuilder): void => {
   const s = asBuilderState(builder);
   s._enableMemory = false;
-  s._memoryExplicitlyDisabled = true;
   s._skillPersistence = false;
   s._sessionPersist = false;
   s._enableExperienceLearning = false;
@@ -47,7 +43,6 @@ export const applyWithLearning = (
 ): void => {
   const s = asBuilderState(builder);
   s._enableMemory = true;
-  s._memoryExplicitlyDisabled = false;
   s._memoryTier = opts?.tier === "enhanced" ? "2" : "1";
   if (opts?.dbPath) {
     s._memoryOptions = { ...s._memoryOptions, dbPath: opts.dbPath };
@@ -66,7 +61,6 @@ export const applyWithLeanHarness = (builder: ReactiveAgentBuilder): void => {
   const s = asBuilderState(builder);
   s._leanHarness = true;
   s._enableMemory = false;
-  s._memoryExplicitlyDisabled = true;
   s._skillPersistence = false;
 };
 

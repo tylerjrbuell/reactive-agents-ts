@@ -37,7 +37,6 @@ const req = (id: string, description: string): TaskRequirement => ({
   id,
   kind: "question-answered",
   spec: { description, acceptance: "deterministic" },
-  weight: 1,
 });
 
 const contract = (reqs: readonly TaskRequirement[]): RunContract => ({
@@ -45,7 +44,6 @@ const contract = (reqs: readonly TaskRequirement[]): RunContract => ({
   deliverables: [],
   constraints: [],
   horizon: "long",
-  acceptance: { tiers: ["deterministic"], stakes: "standard" },
   postConditions: [],
 });
 
@@ -63,13 +61,11 @@ const assessment = (over: {
     deliverables: { produced: [], missing: [] },
     evidenceDelta: 0,
     phase: "gather",
-    pace: { burnRatio: 0.2, projectedCompletion: 0.2, band: "green" },
+    pace: { burnRatio: 0.2, band: "green" },
     health: {
       recentFailures: 0,
       consecutiveFailures: 0,
-      repeatWaste: 0,
       stuckSignals: 0,
-      contradictions: 0,
       iterationsSinceEvidence: 0,
       failureArgVariety: 0,
     },

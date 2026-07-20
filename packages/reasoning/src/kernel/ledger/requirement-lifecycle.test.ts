@@ -83,13 +83,11 @@ describe("#39 — a requirement bound to entity A is NOT satisfied by an interac
         id: "artifact:rates.json",
         kind: "artifact-produced" as const,
         spec: { description: "produce rates.json", condition: artifactProduced("rates.json"), acceptance: "deterministic" as const },
-        weight: 2,
       },
     ],
     deliverables: [],
     constraints: [],
     horizon: "short" as const,
-    acceptance: { tiers: ["deterministic" as const], stakes: "high" as const },
     postConditions: [artifactProduced("rates.json")],
   };
   const budget = { iteration: 1, maxIterations: 10, tokensUsed: 0, costUsd: 0 };

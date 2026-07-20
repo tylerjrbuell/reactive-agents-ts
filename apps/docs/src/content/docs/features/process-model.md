@@ -162,10 +162,7 @@ Each entry is a typed, plain-data **fact** with a dense, monotonic, append-assig
 | `verdict` | a verifier verdict (grounding, post-conditions, …) |
 | `harness-signal` | a control-plane signal, e.g. a mid-run harness recompile |
 | `handoff` | a strategy-switch / sub-agent handoff |
-| `contract-amended` | a mid-run change to the compiled contract |
 | `compaction-marker` | a re-projection of history (see below) |
-| `checkpoint-marker` | a durable checkpoint boundary |
-| `deliverable-commit` | a declared deliverable committed as produced |
 
 **Append-only, never mutated.** Appending returns a *new* ledger; prior entries keep their identity and their `seq`. This is what makes downstream reads pure functions of the ledger — and therefore replayable.
 

@@ -14,13 +14,12 @@ import type { RunAssessment, RunPhase } from "../../src/kernel/assessment/assess
 
 const contract: RunContract = {
   requirements: [
-    { id: "r1", kind: "question-answered", spec: { description: "Answer Q1", acceptance: "checker" }, weight: 1 },
-    { id: "r2", kind: "artifact-produced", spec: { description: "Write report.md", acceptance: "deterministic" }, weight: 2 },
+    { id: "r1", kind: "question-answered", spec: { description: "Answer Q1", acceptance: "checker" } },
+    { id: "r2", kind: "artifact-produced", spec: { description: "Write report.md", acceptance: "deterministic" } },
   ],
   deliverables: [],
   constraints: [],
   horizon: "long",
-  acceptance: { tiers: ["checker"], stakes: "standard" },
   postConditions: [],
 };
 
@@ -41,13 +40,11 @@ function assessment(phase: RunPhase): RunAssessment {
     deliverables: { produced: [], missing: [] },
     evidenceDelta: 0,
     phase,
-    pace: { burnRatio: 0.1, projectedCompletion: 0.2, band: "green" },
+    pace: { burnRatio: 0.1, band: "green" },
     health: {
       recentFailures: 0,
       consecutiveFailures: 0,
-      repeatWaste: 0,
       stuckSignals: 0,
-      contradictions: 0,
       iterationsSinceEvidence: 0,
       failureArgVariety: 0,
     },

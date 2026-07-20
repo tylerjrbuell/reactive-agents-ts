@@ -55,7 +55,6 @@ const contract = (): RunContract => ({
         condition: toolCalled("web-search"),
         acceptance: "deterministic",
       },
-      weight: 1,
     },
     // Left UNSATISFIED on purpose: the projector renders its phase emphasis
     // inside the "Outstanding requirements:" block, so a contract with nothing
@@ -68,13 +67,11 @@ const contract = (): RunContract => ({
         condition: artifactProduced("report.md"),
         acceptance: "deterministic",
       },
-      weight: 1,
     },
   ],
   deliverables: [],
   constraints: [],
   horizon: "long",
-  acceptance: { tiers: ["deterministic"], stakes: "standard" },
   postConditions: [toolCalled("web-search")],
 });
 

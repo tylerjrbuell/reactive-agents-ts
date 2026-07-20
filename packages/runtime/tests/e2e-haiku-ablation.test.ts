@@ -8,9 +8,16 @@
 
 import { test, expect } from "bun:test"
 import { runCounterfactual } from "@reactive-agents/testing"
-import { loopProneHaiku } from "@reactive-agents/scenarios"
 import { expectTrace } from "@reactive-agents/testing"
 import { traceStats } from "@reactive-agents/trace"
+
+// Inlined from the former `@reactive-agents/scenarios` package (deleted v0.14 —
+// 5 hardcoded fixtures, single OLLAMA_E2E consumer). This test only needs the
+// loop-prone haiku task string + a stable id prefix.
+const loopProneHaiku = {
+  id: "loop-prone-haiku",
+  task: "Write a valid haiku about the sea (5-7-5 syllables). Verify syllables before responding. Output only the final haiku.",
+} as const
 
 test.skipIf(!process.env.OLLAMA_E2E)(
   "RI dispatches interventions on loop-prone haiku; counterfactual (no RI) dispatches none",

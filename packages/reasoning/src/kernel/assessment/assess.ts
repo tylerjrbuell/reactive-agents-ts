@@ -67,8 +67,6 @@ export interface DeliverableAssessment {
 export interface PaceAssessment {
   /** Fraction of budget consumed (max of token/cost ratio; iteration fallback). */
   readonly burnRatio: number;
-  /** Projected burnRatio at completion given current deterministic progress. */
-  readonly projectedCompletion: number;
   readonly band: PaceBand;
 }
 
@@ -82,12 +80,8 @@ export interface RunHealth {
   readonly recentFailures: number;
   /** Trailing run of consecutive failed tool-results (most recent first). */
   readonly consecutiveFailures: number;
-  /** Duplicate-gather signals within the window (C3 `gather-dedup`) — wasted work. */
-  readonly repeatWaste: number;
   /** Stall/loop/no-progress harness-signals within the window. */
   readonly stuckSignals: number;
-  /** Ungrounded empirical claims (claim entries with grounded === false). */
-  readonly contradictions: number;
   /** Iterations since the last substantive evidence (stall proximity; 0 = fresh). */
   readonly iterationsSinceEvidence: number;
   /**
@@ -359,11 +353,6 @@ export function assess(
             ? "economize"
             : "green";
 
-  const detTotal = detRequirements.length;
-  const detProgress = detTotal > 0 ? (detTotal - detOutstandingCount) / detTotal : detOutstandingCount === 0 ? 1 : 0;
-  const projectedCompletion =
-    detProgress > 0 ? Math.min(burnRatio / detProgress, 9.99) : burnRatio;
-
   // ── Health (windowed) ─────────────────────────────────────────────────────
   const windowFloor = currentIter - HEALTH_WINDOW;
   const inWindow = (iter: number): boolean => iter > windowFloor && iter <= currentIter;
@@ -381,17 +370,10 @@ export function assess(
   }
 
   const harnessSignals = entriesOfKind(ledger, "harness-signal");
-  let repeatWaste = 0;
   let stuckSignals = 0;
   for (const s of harnessSignals) {
     if (!inWindow(s.iteration)) continue;
-    if (s.signal === "gather-dedup") repeatWaste++;
-    else if (STUCK_SIGNAL_PATTERNS.some((p) => s.signal.toLowerCase().includes(p))) stuckSignals++;
-  }
-
-  let contradictions = 0;
-  for (const c of entriesOfKind(ledger, "claim")) {
-    if (c.grounded === false) contradictions++;
+    if (STUCK_SIGNAL_PATTERNS.some((p) => s.signal.toLowerCase().includes(p))) stuckSignals++;
   }
 
   // Arg-normalized failure identity (audit 02-#11 / F3). Walk the trailing
@@ -426,13 +408,11 @@ export function assess(
     deliverables: { produced, missing },
     evidenceDelta,
     phase,
-    pace: { burnRatio, projectedCompletion, band },
+    pace: { burnRatio, band },
     health: {
       recentFailures,
       consecutiveFailures,
-      repeatWaste,
       stuckSignals,
-      contradictions,
       iterationsSinceEvidence,
       failureArgVariety,
     },

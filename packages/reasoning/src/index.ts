@@ -154,7 +154,6 @@ export {
   compileRunContract,
   mergeLlmRequirements,
   withRequirements,
-  amendContract,
 } from "./kernel/contract/run-contract.js";
 export { computeDeliverableReport } from "./kernel/contract/deliverable-report.js";
 // Canonical step factories — the runtime's inline agent loop mints the same
@@ -170,10 +169,8 @@ export type {
   RequirementKind,
   DeliverableSpec,
   Constraint,
-  AcceptancePolicy,
   AcceptanceTier,
   CompileRunContractOptions,
-  ContractAmendment,
 } from "./kernel/contract/run-contract.js";
 export { decomposeRequirements, shouldDecompose } from "./kernel/contract/decompose.js";
 export type { DecomposeOptions } from "./kernel/contract/decompose.js";
@@ -205,10 +202,7 @@ export type {
   VerdictEntry,
   HarnessSignalEntry,
   HandoffEntry,
-  ContractAmendedEntry,
   CompactionMarkerEntry,
-  CheckpointMarkerEntry,
-  DeliverableCommitEntry,
 } from "./kernel/ledger/run-ledger.js";
 export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
 export { deriveArtifactEntries, artifacts } from "./kernel/ledger/artifact-projection.js";
