@@ -37,9 +37,19 @@ import type {
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
   switch (raw._tag) {
     case "AgentStarted": {
+      // B8-T3b: correlate to the delegation tree. Absent ⇒ a root run
+      // (rootRunId = its own runId, depth 0).
+      const corr = raw as typeof raw & {
+        rootRunId?: string
+        parentRunId?: string
+        depth?: number
+      }
       const ev: RunStartedEvent = {
         kind: "run-started",
         runId: raw.taskId,
+        rootRunId: corr.rootRunId ?? raw.taskId,
+        depth: corr.depth ?? 0,
+        ...(corr.parentRunId ? { parentRunId: corr.parentRunId } : {}),
         timestamp: raw.timestamp,
         iter: -1,
         seq,
@@ -52,9 +62,17 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
     }
 
     case "AgentCompleted": {
+      const corr = raw as typeof raw & {
+        rootRunId?: string
+        parentRunId?: string
+        depth?: number
+      }
       const ev: RunCompletedEvent = {
         kind: "run-completed",
         runId: raw.taskId,
+        rootRunId: corr.rootRunId ?? raw.taskId,
+        depth: corr.depth ?? 0,
+        ...(corr.parentRunId ? { parentRunId: corr.parentRunId } : {}),
         timestamp: Date.now(),
         iter: -1,
         seq,

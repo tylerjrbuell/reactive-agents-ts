@@ -13,6 +13,11 @@ import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
+import {
+  CurrentRunContextRef,
+  rootContext,
+  type RunContext,
+} from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -585,6 +590,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       : "";
                   const agentDisplayName =
                     deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName) ? deskName : undefined;
+                  // B8-T3b: lift the child's RunContext (rootRunId/parentRunId/
+                  // depth) off the task metadata so the trace normalizer can
+                  // correlate this run to its node in the delegation tree.
+                  const rc = task.metadata?.context?.["runContext"] as
+                    | { rootRunId?: string; parentRunId?: string; depth?: number }
+                    | undefined;
+                  // Seed the ambient RunContext for THIS run's fiber (and every
+                  // tool handler it forks) so a `spawn-agent` call can derive the
+                  // child's context from a reliable root. Authority is the
+                  // explicit metadata value (a delegated child); a top-level run
+                  // roots at its own taskId/agentId (depth 0).
+                  const ambientRunContext: RunContext =
+                    (task.metadata?.context?.["runContext"] as
+                      | RunContext
+                      | undefined) ??
+                    rootContext(ctx.taskId, config.agentId);
+                  yield* FiberRef.set(CurrentRunContextRef, ambientRunContext);
                   yield* eb.publish({
                     _tag: "AgentStarted",
                     taskId: ctx.taskId,
@@ -596,6 +618,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),
                     ...(agentDisplayName ? { agentDisplayName } : {}),
+                    ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
+                    ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
+                    ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),
                   }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:792", tag: errorTag(err) })));
                 }
 

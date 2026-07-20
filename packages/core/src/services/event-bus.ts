@@ -394,6 +394,15 @@ export type AgentEvent =
       readonly parentAgentId?: string;
       /** Human label for UI (e.g. Cortex desk name); omitted for auto-generated desk placeholders */
       readonly agentDisplayName?: string;
+      /** B8-T3b: the top-most run in this delegation tree (RunContext.rootRunId).
+       *  Undefined for legacy/hand-rolled events; the trace normalizer falls back
+       *  to the run's own id. Lets a JSONL filter group a run with all it spawned. */
+      readonly rootRunId?: string;
+      /** B8-T3b: the run that spawned this one (RunContext.parentRunId). */
+      readonly parentRunId?: string;
+      /** B8-T3b: delegation depth (RunContext.depth). 0 at the root, 1 for a
+       *  directly-delegated sub-agent, etc. */
+      readonly depth?: number;
     }
   | {
       /**
@@ -437,6 +446,12 @@ export type AgentEvent =
        * closed `TerminatedBy` schema (5 values).
        */
       readonly terminationReason?: string;
+      /** B8-T3b: the top-most run in this delegation tree (RunContext.rootRunId). */
+      readonly rootRunId?: string;
+      /** B8-T3b: the run that spawned this one (RunContext.parentRunId). */
+      readonly parentRunId?: string;
+      /** B8-T3b: delegation depth (RunContext.depth). */
+      readonly depth?: number;
     }
   // ─── LLM request lifecycle ───
   | {

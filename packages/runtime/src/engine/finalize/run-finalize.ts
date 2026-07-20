@@ -58,6 +58,11 @@ export const finalizeRun = (
       const finalOutput = typeof result.output === "string" ? result.output : undefined;
       const outputTruncated = finalOutput !== undefined && finalOutput.length > RUN_OUTPUT_CAP;
 
+      // B8-T3b: carry the delegation-tree correlation from the task metadata so
+      // this run's run-completed trace event is grouped under its rootRunId.
+      const rc = task.metadata?.context?.["runContext"] as
+        | { rootRunId?: string; parentRunId?: string; depth?: number }
+        | undefined;
       yield* eb.publish({
         _tag: "AgentCompleted",
         taskId: ctx.taskId,
@@ -68,6 +73,9 @@ export const finalizeRun = (
         durationMs: Date.now() - executionStartMs,
         ...(!executionSucceeded && result.error ? { error: result.error } : {}),
         ...(terminationReason ? { terminationReason } : {}),
+        ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
+        ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
+        ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),
         ...(finalOutput !== undefined
           ? {
               output: outputTruncated ? finalOutput.slice(0, RUN_OUTPUT_CAP) : finalOutput,
