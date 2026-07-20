@@ -415,8 +415,8 @@ export interface HarnessConfig {
   readonly longHorizon?: boolean;
   /**
    * Arbitrary env vars to set for the duration of this variant's run (set before
-   * agent build, restored in finally). Used for env-gated arms like the context
-   * assembly A/B (`{ RA_ASSEMBLY: "0" }`). Generalizes the verifier:"noop" pattern.
+   * agent build, restored in finally). A generic seam for a future env-gated
+   * ablation arm. Generalizes the verifier:"noop" pattern.
    */
   readonly env?: Readonly<Record<string, string>>;
   /**

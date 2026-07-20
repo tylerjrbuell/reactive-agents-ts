@@ -438,12 +438,11 @@ export function handleThinking(
     // - Slice C: profile.recentObservationsLimit threads through here so agents
     //   can opt-in via profileOverrides without touching kernel internals.
     //   Defaults to 0 across all tiers → off by default, preserves prior shape.
-    // RA_ASSEMBLY: canonical context-assembly seam — DEFAULT-ON, opt-out only
-    // via RA_ASSEMBLY=0. Sources systemPrompt+messages from project(); the
-    // opt-out (=0) falls back to the legacy byte-identical curate() path (kept
-    // reachable as a killswitch — deletion deferred). The tools/recall-gate path
-    // below is shared by BOTH arms so they differ only on the context-assembly
-    // variable. Cleared the default-on bar by the hardened cross-tier A/B grid
+    // Canonical context-assembly seam: systemPrompt+messages come from
+    // project(), the SOLE assembler. (The legacy `curate()` fallback and its
+    // `RA_ASSEMBLY` env gate were deleted in Sprint-1 A2, 2026-06-02 — see
+    // below; there is no opt-out.) Cleared the default-on bar by the hardened
+    // cross-tier A/B grid before that deletion
     // (N=3, 2 tiers, faithfulness-graded:
     // wiki/Research/Harness-Reports/assembly-ab-grid-hardened-2026-05-31.md):
     // project() deterministic 1.0/1.0/1.0 section-coverage both tiers vs legacy

@@ -7,8 +7,8 @@
  * the content it already saw), and dishonest-success bait (claim done without
  * the real answer).
  *
- * Used in `sessions/context-stress.ts` to A/B `ra-full` (project() default-on)
- * vs `ra-full-assembly-off` (`RA_ASSEMBLY=0`, legacy curate()) cross-tier.
+ * Used in `sessions/context-stress.ts` to pin `ra-full` (project() default-on)
+ * cross-tier, and by the runner's `ALL_TASKS` / `CONTEXT_STRESS_TASKS` exports.
  */
 import type { BenchmarkTask } from "../types.js";
 import { gradedCheckHarness } from "./graded-check.js";

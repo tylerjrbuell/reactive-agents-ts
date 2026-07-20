@@ -99,8 +99,8 @@ export type FabricationGuardMode = "off" | "warn" | "block";
 /**
  * Resolve the active fabrication-guard mode. Precedence: an explicit per-run
  * value (e.g. a strategy/kernel caller's `ctx.fabricationGuard`) wins; else the
- * `RA_FABRICATION_GUARD` env killswitch (project convention — cf. RA_LAZY_TOOLS,
- * RA_RECITE); else the always-on default `block`. An unrecognised env value is
+ * `RA_FABRICATION_GUARD` env killswitch (project convention — cf. RA_LAZY_TOOLS);
+ * else the always-on default `block`. An unrecognised env value is
  * ignored (falls through to default) so a typo never silently disables the guard.
  */
 export function resolveFabricationGuardMode(explicit?: FabricationGuardMode): FabricationGuardMode {

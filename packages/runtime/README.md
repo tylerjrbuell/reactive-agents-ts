@@ -152,7 +152,6 @@ The full set of `.with*()` methods on `ReactiveAgentBuilder`:
 | `.withIdentity()` | Identity service |
 | `.withInteraction()` | Human-in-the-loop interaction service |
 | `.withPrompts(opts?)` | Prompt manager |
-| `.withOrchestration()` | Orchestration service (multi-agent workflows) |
 | `.withCortex(url?)` | Cortex telemetry endpoint |
 | `.withStreaming({density?})` | Stream events back to caller |
 

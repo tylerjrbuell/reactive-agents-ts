@@ -966,8 +966,9 @@ import { makeStep } from "../sense/step-utils.js";
 
 // ─── PostCondition spine — deterministic state-grounded success authority ─────
 //
-// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0 (prose-only success = legacy).
-// When ON and the run has non-empty derived post-conditions, a would-be
+// Unconditional (default-on, no opt-out — the RA_POST_CONDITIONS flag was
+// deleted Sprint-1 A4; prose-only success is the removed legacy path).
+// When the run has non-empty derived post-conditions, a would-be
 // exit-success Verdict is demoted to a "post-condition-steer" escalation when
 // any condition is unmet: the kernel CANNOT report success while a required
 // deliverable was never produced. The prose verdict becomes a quality signal,
@@ -980,7 +981,7 @@ import { makeStep } from "../sense/step-utils.js";
 // budget caps, not the 1-shot synthesis cap).
 const POST_CONDITION_STEER = "post-condition-steer";
 
-// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0. Cleared the default-on bar by the
+// Unconditional (default-on, no opt-out). Cleared the default-on bar by the
 // cross-tier ablation + frontier-judge verdict (wiki/Research/Harness-Reports/
 // postconditions-ablation-2026-05-31.md): the state-grounded spine steers incomplete
 // deliverable runs to completion — cogito summary success 1/3→3/3, per-run judged
@@ -1136,9 +1137,9 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
   // threshold unreachable. Grounded runs fall through (returns null).
   const grounded = applyGroundedTerminalGate(verdict, ctx);
   if (grounded) return grounded;
-  // Post-verdict PostCondition gate (single chokepoint, env-gated, additive).
-  // No-op unless RA_POST_CONDITIONS=1 AND the verdict is exit-success AND the
-  // run has non-empty derived post-conditions with an unmet member.
+  // Post-verdict PostCondition gate (single chokepoint, default-on, additive).
+  // No-op unless the verdict is exit-success AND the run has non-empty derived
+  // post-conditions with an unmet member.
   return applyPostConditionGate(verdict, ctx);
 }
 

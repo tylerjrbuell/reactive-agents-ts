@@ -29,12 +29,12 @@ import ts from "typescript";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const SKIP_MARKER = "docs-skip-typecheck";
-// Skip-count ratchet. Baseline 2026-07-19: 283; ratcheted to 262 the same day
-// after Wave 1 deleted phantom docs pages and un-skipped now-valid examples.
-// THE CEILING ONLY GOES DOWN: when you un-skip blocks, lower this number to the
-// new skip count. Never raise it — adding a skip marker to dodge a failure is
-// exactly the drift this gate exists to stop.
-const SKIP_CEILING = 262;
+// Skip-count ratchet. Baseline 2026-07-19: 283 → 262 (Wave 1) → 256 (Wave 3,
+// 2026-07-20, after deleting the orchestration cookbook blocks). THE CEILING
+// ONLY GOES DOWN: when you un-skip blocks, lower this number to the new skip
+// count. Never raise it — adding a skip marker to dodge a failure is exactly the
+// drift this gate exists to stop.
+const SKIP_CEILING = 256;
 
 interface Block {
   sourceFile: string; // repo-relative

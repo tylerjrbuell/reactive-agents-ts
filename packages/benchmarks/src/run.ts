@@ -15,7 +15,6 @@ import { localModelsSession } from "./sessions/local-models.js"
 import { frontierSpotCheckSession } from "./sessions/frontier-spot-check.js"
 import { m3AblationSession } from "./sessions/m3-ablation.js"
 import { contextStressSession } from "./sessions/context-stress.js"
-import { recitationAblationSession } from "./sessions/recitation-ablation.js"
 import { adaptiveAblationSession } from "./sessions/adaptive-ablation.js"
 import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
@@ -156,7 +155,6 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "frontier-spot-check":   frontierSpotCheckSession,
   "m3-ablation":           m3AblationSession,
   "context-stress":        contextStressSession,
-  "recitation-ablation":   recitationAblationSession,
   "adaptive-ablation":     adaptiveAblationSession,
   "cluster-a-gate":        clusterAGateSession,
   "cross-tier-stress":     crossTierStressSession,

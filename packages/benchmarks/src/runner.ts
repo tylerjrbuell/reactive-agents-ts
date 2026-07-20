@@ -32,8 +32,8 @@ import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
  * Apply env vars for the duration of a variant's run, return a restore fn.
- * Generalises the VERIFIER_ENV pattern so env-gated arms (e.g. `RA_ASSEMBLY=0`)
- * can run as `HarnessConfig.env` on a normal InternalVariant.
+ * Generalises the VERIFIER_ENV pattern so a future env-gated ablation arm can
+ * run as `HarnessConfig.env` on a normal InternalVariant.
  */
 export function withConfigEnv(env: Readonly<Record<string, string>> | undefined): () => void {
   if (!env) return () => {};
@@ -797,9 +797,9 @@ async function runInternal(
     if (config.verifier === "noop") {
       process.env[VERIFIER_ENV] = "1";
     }
-    // Generalised env-arm passthrough: variants like ra-full-assembly-off set
-    // `config.env = { RA_ASSEMBLY: "0" }` to flip framework env-gated paths for
-    // the duration of this cell. Same try/finally discipline as VERIFIER_ENV.
+    // Generalised env-arm passthrough: a variant may set `config.env` to flip
+    // framework env-gated paths for the duration of this cell (no arm currently
+    // uses it; kept as a seam). Same try/finally discipline as VERIFIER_ENV.
     const restoreConfigEnv = withConfigEnv(config.env);
 
     try {

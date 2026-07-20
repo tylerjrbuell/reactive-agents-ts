@@ -99,7 +99,6 @@ Updated: 2026-05-24. Smoke run: 43 examples, 6 xfail, 0 fail. (AX2 killswitch-to
 | `withDynamicSubAgents(opts)` | ✅ | 10 | offline witness via test branch |
 | `withRemoteAgent(name,url)` | ❌ | — | |
 | A2A protocol | ✅ | 08 + MX1 xfail | 08 offline witness; offline cassette gap (MX1) |
-| `withOrchestration()` | ✅ | 09 | offline witness via test branch |
 | `withChannels(cfg)` | ❌ | — | |
 
 ## Tier 6 — Tools

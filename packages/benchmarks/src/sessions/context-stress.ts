@@ -1,12 +1,12 @@
 /**
- * Phase-A Context-Assembly Stress A/B session.
+ * Phase-A Context-Assembly Stress session (single-arm pin).
  *
- * Pairs `ra-full` (canonical project() default-on) vs `ra-full-assembly-off`
- * (legacy `defaultContextCurator.curate()` via `RA_ASSEMBLY=0`) across local /
- * mid / frontier tiers on the failure-mode `CONTEXT_STRESS_TASKS`. Whole-vs-
- * whole, N≥3 → pass^k via `SessionReproducibility`. Used to gate the legacy
- * curate() deletion in the redesign arc; the equal-or-better invariant is
- * enforced through the package's existing judge + `AblationResult`.
+ * Runs the canonical `ra-full` (project() default-on) arm across local / mid /
+ * frontier tiers on the failure-mode `CONTEXT_STRESS_TASKS`, N≥3 → pass^k via
+ * `SessionReproducibility`. Originally an A/B vs a legacy `curate()` arm; that
+ * arm and its env gate were deleted in Sprint-1 A2 (2026-06-02) once project()
+ * became the sole assembler, so this now pins project()'s cross-tier behaviour
+ * on the stress tasks rather than comparing two arms.
  */
 import type { BenchmarkSession } from "../types.js";
 import { getVariant } from "../session.js";

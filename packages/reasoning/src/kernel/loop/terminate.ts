@@ -87,8 +87,7 @@ export type TerminateOptions = {
  * stall can force-deliver around the gated verdict and report a FALSE success
  * (cogito GitHub-MCP: result.success=true with ./commits.md never written).
  *
- * This gate closes that hole: by default (opt-out via RA_POST_CONDITIONS=0) AND
- * with a non-empty
+ * This gate closes that hole: unconditionally (no opt-out), with a non-empty
  * stored condition set AND a ledger that leaves a condition unmet, the terminal
  * state resolves to `status:"failed"` (honest partial failure) regardless of
  * `opts.reason` — even though output may already be assembled. `status:"failed"`
@@ -101,8 +100,8 @@ export type TerminateOptions = {
  * `state.meta.postConditions` — the SAME set the Arbitrator's steer gate reads.
  * NO LLM, NO fs: `verifyPostConditions` is a pure ledger scan.
  *
- * Opt-out (RA_POST_CONDITIONS=0) or no stored conditions → byte-identical
- * pass-through to the original done-transition below.
+ * No stored conditions → byte-identical pass-through to the original
+ * done-transition below.
  */
 function applyTerminalPostConditionGate(
   state: KernelState,
@@ -167,7 +166,7 @@ function applyTerminalPostConditionGate(
  * The Arbitrator's verdict-driven exit-success branch is the only sanctioned
  * caller outside this helper — see `kernel/capabilities/decide/arbitrator.ts`.
  *
- * Terminal PostCondition authority (default-on; opt-out via RA_POST_CONDITIONS=0): before recording a
+ * Terminal PostCondition authority (unconditional; no opt-out): before recording a
  * "done" transition, an unmet stored post-condition demotes the terminal state
  * to "failed" (honest failure) — see `applyTerminalPostConditionGate`.
  */

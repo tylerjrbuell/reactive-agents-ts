@@ -36,13 +36,11 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
   },
 
   // (Sprint-1 A2, 2026-06-02) The `ra-full-assembly-off` ablation variant
-  // was removed when RA_ASSEMBLY flag + legacy curate() were deleted. The
-  // env passthrough (config.env) remains for future env-gated arms.
-  //
-  // NOTE: env-gated ablation arms (e.g. WS-4 `ra-recite` = ra-full + RA_RECITE=1)
-  // are defined INLINE in their own session, NOT added here — adding to this
-  // ladder bloats every full sweep (realWorldFull / competitorComparison spread
-  // [...ABLATION_VARIANTS]) with an arm only one ablation needs.
+  // was removed when the legacy curate() path + its env gate were deleted;
+  // project() is the sole assembler. The env passthrough (config.env, applied
+  // in runSession) remains as a generic seam for any future env-gated arm —
+  // such arms are defined INLINE in their own session, NOT added to this ladder
+  // (adding here bloats every full sweep that spreads [...ABLATION_VARIANTS]).
 ]
 
 // ── Selection integrity ───────────────────────────────────────────────────────

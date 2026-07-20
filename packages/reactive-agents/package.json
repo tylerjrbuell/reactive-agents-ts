@@ -66,7 +66,6 @@
     "@reactive-agents/identity": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/interaction": "workspace:*",
-    "@reactive-agents/orchestration": "workspace:*",
     "@reactive-agents/prompts": "workspace:*",
     "@reactive-agents/eval": "workspace:*",
     "@reactive-agents/a2a": "workspace:*",
@@ -139,11 +138,6 @@
       "types": "./dist/interaction.d.ts",
       "import": "./dist/interaction.js",
       "default": "./dist/interaction.js"
-    },
-    "./orchestration": {
-      "types": "./dist/orchestration.d.ts",
-      "import": "./dist/orchestration.js",
-      "default": "./dist/orchestration.js"
     },
     "./prompts": {
       "types": "./dist/prompts.d.ts",

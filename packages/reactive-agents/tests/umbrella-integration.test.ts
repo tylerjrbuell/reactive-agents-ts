@@ -76,7 +76,6 @@ describe("Umbrella re-exports", () => {
     expect(typeof mod.createIdentityLayer).toBe("function");
     expect(typeof mod.createObservabilityLayer).toBe("function");
     expect(typeof mod.createInteractionLayer).toBe("function");
-    expect(typeof mod.createOrchestrationLayer).toBe("function");
     expect(typeof mod.createPromptLayer).toBe("function");
     expect(typeof mod.createEvalLayer).toBe("function");
     expect(typeof mod.createA2AServerLayer).toBe("function");

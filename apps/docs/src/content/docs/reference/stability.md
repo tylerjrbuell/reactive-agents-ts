@@ -69,7 +69,7 @@ Use at your own risk. Will change.
 When a stable surface is being replaced:
 
 1. The old API stays functional and gets `@deprecated` JSDoc with a pointer to the replacement
-2. A console warning fires at runtime (suppressible via `RA_SUPPRESS_DEPRECATION=1`)
+2. A console warning fires at runtime naming the replacement
 3. Removal happens **no sooner than** one full minor cycle later (e.g., deprecated in 0.12 → removed earliest in 0.13)
 4. The CHANGELOG lists the migration step for every removal
 

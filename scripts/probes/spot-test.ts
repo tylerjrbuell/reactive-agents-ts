@@ -9,10 +9,10 @@ const TASK =
 const TOOLS = (
     process.env.SPOT_TOOLS ?? 'file-write,github/list_commits'
 ).split(',')
-// Pin the strategy so the RA_ASSEMBLY A/B isolates context-assembly on a single
-// think path. adaptive may pick plan-execute/ToT (separate assembly) → the seam
-// wouldn't fire on both arms. 'reactive' routes through kernel think.ts where the
-// seam lives. Default reactive for the grid; override via SPOT_STRATEGY.
+// Pin the strategy to a single think path: adaptive may pick plan-execute/ToT
+// (separate assembly) → the context-assembly seam wouldn't fire consistently.
+// 'reactive' routes through kernel think.ts where the seam lives. Default
+// reactive; override via SPOT_STRATEGY.
 const STRATEGY = (process.env.SPOT_STRATEGY ?? 'reactive') as
     | 'reactive'
     | 'adaptive'

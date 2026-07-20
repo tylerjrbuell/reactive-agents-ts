@@ -18,7 +18,7 @@
 //
 // NOT trace-detectable here (reported as gaps): dishonest-success (artifact
 // content correct vs claimed) — needs post-condition/artifact inspection, and
-// RA_POST_CONDITIONS is currently OFF.
+// the post-condition gate operates on the ledger, not the trace.
 
 import type { Trace } from "./replay.js";
 import type {

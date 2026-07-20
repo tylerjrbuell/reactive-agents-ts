@@ -317,7 +317,6 @@ The umbrella re-exports these 17 packages. Sub-path imports are also available (
 | `@reactive-agents/identity` | `createIdentityLayer` — Ed25519 certs, RBAC, delegation, audit |
 | `@reactive-agents/observability` | `createObservabilityLayer` — OTLP tracing, metrics, structured logs |
 | `@reactive-agents/interaction` | `createInteractionLayer` — autonomy modes, checkpoints, approval gates |
-| `@reactive-agents/orchestration` | `createOrchestrationLayer` — sequential / parallel / pipeline / map-reduce |
 | `@reactive-agents/prompts` | `createPromptsLayer` — versioned templates |
 | `@reactive-agents/eval` | `createEvalLayer` — LLM-as-judge, EvalStore, comparison reports |
 | `@reactive-agents/a2a` | `A2AServer`, `A2AClient` — Agent Cards, JSON-RPC 2.0, SSE |

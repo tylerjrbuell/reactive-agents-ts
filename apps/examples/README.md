@@ -44,7 +44,6 @@ One-off without a file: `ANTHROPIC_API_KEY=sk-ant-... bun run index.ts`.
 | 06  | [tools/06-mcp-filesystem](src/tools/06-mcp-filesystem.ts)                     | MCP stdio filesystem               | `.withMCP([])`               | ⚡       |
 | 07  | [tools/07-mcp-github](src/tools/07-mcp-github.ts)                             | MCP GitHub server                  | `.withMCP([])`               | ⚡       |
 | 08  | [multi-agent/08-a2a-protocol](src/multi-agent/08-a2a-protocol.ts)             | A2A JSON-RPC protocol              | `generateAgentCard()`        | ⚡       |
-| 09  | [multi-agent/09-orchestration](src/multi-agent/09-orchestration.ts)           | Workflow pipeline + approval       | multi-agent sequencing       | ⚡       |
 | 10  | [multi-agent/10-dynamic-spawning](src/multi-agent/10-dynamic-spawning.ts)     | Runtime sub-agent spawning         | `.withDynamicSubAgents()`    | ⚡       |
 | 11  | [trust/11-identity](src/trust/11-identity.ts)                                 | Ed25519 certs + RBAC               | `makeCertificateAuth()`      | ✅       |
 | 12  | [trust/12-guardrails](src/trust/12-guardrails.ts)                             | Behavioral contracts + kill switch | `.withBehavioralContracts()` | ⚡       |

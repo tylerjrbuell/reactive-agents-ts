@@ -367,9 +367,9 @@ export interface KernelMeta {
   // ── PostCondition spine — derived-once state-grounded success authority ──────
   /**
    * Deterministic post-conditions derived ONCE at kernel-start from the task +
-   * requiredTools (no LLM, no fs). Seeded by runner.ts by default; opt-out via
-   * `RA_POST_CONDITIONS=0` — absent on opt-out runs so serialization stays
-   * byte-identical. Both gates read this SINGLE stored set:
+   * requiredTools (no LLM, no fs). Seeded unconditionally by runner.ts; absent
+   * only when no conditions derive, so serialization stays byte-identical for
+   * condition-free runs. Both gates read this SINGLE stored set:
    *   - the Arbitrator's mid-loop steer gate (`applyPostConditionGate`), via
    *     `arbitrationContextFromState` → `ArbitrationContext.postConditions`;
    *   - the terminal hard-stop in `kernel/loop/terminate.ts`, which demotes any

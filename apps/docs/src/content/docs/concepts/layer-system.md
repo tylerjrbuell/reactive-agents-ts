@@ -64,7 +64,6 @@ Each layer declares what it provides and what it requires:
 | Identity | IdentityService | Nothing |
 | Observability | ObservabilityService | Nothing |
 | Prompts | PromptService | Nothing |
-| Orchestration | OrchestrationService | Nothing |
 | Gateway | GatewayService, SchedulerService, WebhookService, PolicyEngine | EventBus |
 | A2A | A2A server/client helpers | Core (+ tools when serving) |
 | Reactive Intelligence | EntropySensor, ReactiveController, learning hooks | EventBus, reasoning kernel integration |

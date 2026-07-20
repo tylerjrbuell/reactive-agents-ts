@@ -172,13 +172,6 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/multi-agent/08-a2a-protocol.ts',
     },
     {
-        num: '09',
-        label: 'orchestration',
-        category: 'multi-agent',
-        requiresKey: false,
-        path: './src/multi-agent/09-orchestration.ts',
-    },
-    {
         num: '10',
         label: 'dynamic-spawning',
         category: 'multi-agent',

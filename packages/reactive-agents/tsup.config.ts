@@ -14,7 +14,6 @@ export default defineConfig({
     identity: "src/identity.ts",
     observability: "src/observability.ts",
     interaction: "src/interaction.ts",
-    orchestration: "src/orchestration.ts",
     prompts: "src/prompts.ts",
     eval: "src/eval.ts",
     a2a: "src/a2a.ts",

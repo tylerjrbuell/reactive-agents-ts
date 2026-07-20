@@ -42,9 +42,6 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/interaction   — 5 autonomy modes, checkpoints, preference learning, approval gates
 │   └── depends on: core
 │
-├── @reactive-agents/orchestration — Multi-agent workflows (sequential, parallel, pipeline, map-reduce)
-│   └── depends on: core, llm-provider, tools
-│
 ├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
 │   └── depends on: core, llm-provider
 │

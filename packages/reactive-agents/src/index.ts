@@ -182,7 +182,6 @@ export { createCostLayer } from "@reactive-agents/cost";
 export { createIdentityLayer } from "@reactive-agents/identity";
 export { createObservabilityLayer } from "@reactive-agents/observability";
 export { createInteractionLayer } from "@reactive-agents/interaction";
-export { createOrchestrationLayer } from "@reactive-agents/orchestration";
 export { createPromptLayer } from "@reactive-agents/prompts";
 export { createEvalLayer } from "@reactive-agents/eval";
 export {
