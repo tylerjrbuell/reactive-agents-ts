@@ -88,23 +88,33 @@ const reply = await session.chat("Where were we?");
 await session.end();
 ```
 
-Sessions are stored in the memory database under the `agent_sessions` table.
+Sessions are stored in the memory database under the `chat_sessions` table. Calling `session.end()` flushes the final history to storage — the database record is kept, so the session can still be resumed later by ID.
 
 ## Session with System Context
 
-Seed the session with context the agent should always have:
+Give the agent standing context at build time with `.withTaskContext()` — the key-value pairs are injected into the system context of every chat turn:
 
 ```typescript
-const session = agent.session({
-  context: `
-    The user is a senior engineer at Acme Corp.
-    They are working on a TypeScript monorepo with Bun.
-    Answer questions in a direct, technical style.
-  `,
-});
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTaskContext({
+    user: "Senior engineer at Acme Corp",
+    project: "TypeScript monorepo with Bun",
+    style: "Answer in a direct, technical style",
+  })
+  .build();
 
+const session = agent.session();
 const reply = await session.chat("How do I add a new package?");
 // Agent knows it's a Bun monorepo and answers accordingly
+```
+
+For one-off context on a single turn, pass `extraContext` in the chat options (used on the direct-LLM path):
+
+```typescript
+const reply = await session.chat("What should I check first?", {
+  extraContext: "The deploy failed with a TLS handshake error.",
+});
 ```
 
 ## Streaming Chat

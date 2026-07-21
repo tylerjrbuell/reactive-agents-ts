@@ -59,9 +59,18 @@ export interface ChatOptions {
 
 /**
  * Options for `agent.session()` — configure session lifecycle behavior.
+ *
+ * The live options are the ones accepted inline by
+ * `ReactiveAgent.session()`: `persist` (save/restore history via
+ * `SessionStoreService` — requires the memory layer) and `id` (stable
+ * session identifier for resuming).
  */
 export interface SessionOptions {
-  /** Write conversation to episodic memory on session.end(). Default: false */
+  /**
+   * NOT WIRED — no code path reads this flag (kept for backward
+   * compatibility of the type only). Use `persist: true` on
+   * `agent.session()` for SQLite-backed persistence.
+   */
   persistOnEnd?: boolean;
 }
 

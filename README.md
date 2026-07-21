@@ -710,19 +710,31 @@ const agent = await ReactiveAgents.create()
     .build()
 ```
 
-Or the `ToolBuilder` fluent API to define tools without raw schema objects:
+Or the `ToolBuilder` fluent API to build the tool *definition* without raw schema objects — the Effect handler is supplied at registration:
 
-<!-- docs-skip-typecheck -->
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
 import { ToolBuilder } from '@reactive-agents/tools'
 import { Effect } from 'effect'
 
-const webSearchTool = ToolBuilder.create('web_search')
+const { definition } = ToolBuilder.create('web_search')
     .description('Search the web for current information')
     .param('query', 'string', 'Search query', { required: true })
     .riskLevel('low')
     .timeout(10_000)
-    .handler((args) => Effect.succeed(`Results for: ${args.query}`))
+    .build()
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReasoning()
+    .withTools({
+        tools: [
+            {
+                definition,
+                handler: (args) => Effect.succeed(`Results for: ${args.query}`),
+            },
+        ],
+    })
     .build()
 ```
 

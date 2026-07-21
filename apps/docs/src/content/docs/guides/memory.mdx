@@ -170,15 +170,15 @@ const reply = await restoredSession.chat("Continue from where we left off");
 
 ### How It Works
 
-Each session is stored as a row in the `agent_sessions` SQLite table (in the same database as memory). The session record contains:
-- Session ID (user-provided or auto-generated UUID)
-- Agent ID and provider
+Each session is stored as a row in the `chat_sessions` SQLite table (in the same database as memory). The session record contains:
+- Session ID (user-provided or auto-generated `sess_<timestamp>_<random>`)
+- Agent ID
 - Full message history as JSON
 - Created/updated timestamps
 
-When `persist: true` is passed and an `id` is provided, the session is loaded from the database at construction time. Each new message is written back immediately.
+When `persist: true` is passed and an `id` is provided, prior history is loaded from the database lazily on the first `chat()` call. The full history is written back after every turn.
 
-Sessions are cleaned up by calling `session.end()`, which removes the database record.
+`session.end()` flushes the final history and clears the in-memory copy — the database record is kept so the session can be resumed later by ID. Old records are deleted only by age-based cleanup (`SessionStoreService.cleanup(maxAgeDays)`).
 
 ### Inspecting Sessions
 
@@ -186,7 +186,7 @@ Sessions are cleaned up by calling `session.end()`, which removes the database r
 bun -e "
 import { Database } from 'bun:sqlite';
 const db = new Database('./memory-db');
-const sessions = db.query('SELECT id, agent_id, created_at, json_array_length(messages) as msg_count FROM agent_sessions').all();
+const sessions = db.query('SELECT session_id, agent_id, created_at, json_array_length(messages) as msg_count FROM chat_sessions').all();
 console.table(sessions);
 "
 ```

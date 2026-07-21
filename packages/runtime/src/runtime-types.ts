@@ -755,9 +755,15 @@ export interface RuntimeOptions {
   customTermination?: (state: { output: string }) => boolean;
 
   /**
-   * Enable SQLite-backed session persistence via SessionStoreLive.
-   * Requires the memory layer to be active (`enableMemory: true` or `memoryTier` set).
-   * When false (default), `agent.session({ persist: true })` silently no-ops.
+   * Make chat sessions persist by default: sessions created via
+   * `agent.session()` behave as if `persist: true` was passed (per-call
+   * `persist: false` still opts out).
+   *
+   * The SQLite session store itself (`SessionStoreLive`) is wired whenever
+   * the memory layer is active (`enableMemory: true` or `memoryTier` set) —
+   * with memory on, a per-call `agent.session({ persist: true })` works
+   * regardless of this flag. Without the memory layer, persistence requests
+   * silently no-op (the store service is absent).
    *
    * Default: `false`
    */

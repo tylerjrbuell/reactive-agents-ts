@@ -115,7 +115,7 @@ const agent = await ReactiveAgents.create()
 
 For zero-schema quick tools there is also the `tool(name, description, handlerOrOptions)` helper (untyped args), and the [ToolBuilder fluent API](#toolbuilder-fluent-api) below.
 
-You can also register tools **after** `build()` on the agent facade: `await agent.registerTool({ definition, handler })` and `await agent.unregisterTool("name")` (non-builtin tools only).
+You can also register tools **after** `build()` on the agent facade: `await agent.registerTool(definition, handler)` and `await agent.unregisterTool("name")` (non-builtin tools only).
 
 ### With Reasoning (ReAct)
 
@@ -335,24 +335,23 @@ Invalid inputs are rejected before the tool handler runs.
 
 ## ToolBuilder Fluent API
 
-The `ToolBuilder` provides a fluent, type-safe API for defining tools without raw schema objects. It eliminates the boilerplate of `definition` + `handler` pairs.
+The `ToolBuilder` provides a fluent API for building `ToolDefinition` schema objects without raw literals. It validates at `build()` time (a missing description throws). The execution handler — `(args: Record<string, unknown>) => Effect<...>` — is supplied when you register the tool with `.withTools({ tools })`:
 
-<!-- docs-skip-typecheck -->
 ```typescript
+import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
 // Basic tool
-const calculator = ToolBuilder.create("calculator")
+const { definition: calculatorDef } = ToolBuilder.create("calculator")
   .description("Perform arithmetic calculations")
   .param("expression", "string", "Math expression to evaluate", { required: true })
   .riskLevel("low")
   .timeout(5_000)
-  .handler((args) => Effect.try(() => String(eval(String(args.expression)))))
   .build();
 
 // Tool with multiple params and enum
-const fileOp = ToolBuilder.create("file-operation")
+const { definition: fileOpDef } = ToolBuilder.create("file-operation")
   .description("Perform a file system operation")
   .param("path", "string", "File path", { required: true })
   .param("operation", "string", "Operation to perform", { required: true, enum: ["read", "write", "delete"] })
@@ -360,31 +359,46 @@ const fileOp = ToolBuilder.create("file-operation")
   .riskLevel("medium")
   .requiresApproval(true)
   .timeout(10_000)
-  .handler(async (args) => {
-    // ... implementation
-    return Effect.succeed("done");
-  })
   .build();
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools({ tools: [calculator, fileOp] })
+  .withTools({
+    tools: [
+      {
+        definition: calculatorDef,
+        handler: (args) => Effect.try(() => String(args.expression)),
+      },
+      {
+        definition: fileOpDef,
+        handler: (args) =>
+          Effect.tryPromise(async () => {
+            // ... implementation using args.path / args.operation / args.content
+            return "done";
+          }),
+      },
+    ],
+  })
   .build();
 ```
+
+Prefer [`defineTool`](#registering-custom-tools) when you want typed, schema-validated handler args and plain `async` handlers — `ToolBuilder` shines when you are assembling definitions imperatively.
 
 ### ToolBuilder Methods
 
 | Method | Description |
 |--------|-------------|
-| `ToolBuilder.create(name)` | Start a new tool definition |
-| `.description(text)` | Set the tool description (shown to LLM) |
-| `.param(name, type, description, options?)` | Add a parameter. `options`: `{ required?, enum?, default? }` |
-| `.riskLevel(level)` | `"low" \| "medium" \| "high"` |
-| `.timeout(ms)` | Execution timeout in milliseconds |
-| `.requiresApproval(bool)` | Whether the tool requires human approval before execution |
-| `.handler(fn)` | Set the handler function. Receives typed args, returns `Effect<string>` |
-| `.build()` | Produce a `{ definition, handler }` tool object |
+| `ToolBuilder.create(name)` | Start a new tool definition (equivalent to `new ToolBuilder(name)`) |
+| `.description(text)` | Set the tool description (shown to LLM) — required, `build()` throws without it |
+| `.param(name, type, description, options?)` | Add a parameter. `type`: `"string" \| "number" \| "boolean" \| "object" \| "array"`. `options`: `{ required?, enum?, default? }` |
+| `.riskLevel(level)` | `"low" \| "medium" \| "high" \| "critical"` (default `"low"`) |
+| `.timeout(ms)` | Execution timeout in milliseconds (default 30,000) |
+| `.requiresApproval(bool)` | Sets the approval-required flag on the definition (metadata — see [Durable HITL](/guides/durable-hitl/) for enforcement) |
+| `.returnType(text)` | Human-readable return type description |
+| `.category(cat)` | `"search" \| "file" \| "code" \| "http" \| "data" \| "system" \| "custom" \| "vcs" \| "productivity"` |
+| `.handler(fn)` | Optional: attach an untyped function `(...args: unknown[]) => unknown` to carry alongside the definition for custom pipelines. The agent runtime does **not** execute this — pass an Effect handler to `.withTools({ tools })` instead |
+| `.build()` | Produce `{ definition, handler? }` — use the `definition` with `.withTools({ tools })` |
 
 ## Function Adapter
 

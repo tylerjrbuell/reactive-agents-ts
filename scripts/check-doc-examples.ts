@@ -30,11 +30,13 @@ import ts from "typescript";
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const SKIP_MARKER = "docs-skip-typecheck";
 // Skip-count ratchet. Baseline 2026-07-19: 283 → 262 (Wave 1) → 256 (Wave 3,
-// 2026-07-20, after deleting the orchestration cookbook blocks). THE CEILING
-// ONLY GOES DOWN: when you un-skip blocks, lower this number to the new skip
-// count. Never raise it — adding a skip marker to dodge a failure is exactly the
-// drift this gate exists to stop.
-const SKIP_CEILING = 256;
+// 2026-07-20, after deleting the orchestration cookbook blocks) → 250
+// (2026-07-21, fabricated-API docs fix: ToolBuilder/session/ContextProfile
+// blocks corrected to compile and un-skipped). THE CEILING ONLY GOES DOWN:
+// when you un-skip blocks, lower this number to the new skip count. Never
+// raise it — adding a skip marker to dodge a failure is exactly the drift
+// this gate exists to stop.
+const SKIP_CEILING = 250;
 
 interface Block {
   sourceFile: string; // repo-relative

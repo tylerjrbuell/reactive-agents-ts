@@ -25,36 +25,46 @@ bun add reactive-agents
 
 ## Step 1 — An agent with one custom tool
 
-The fastest way to define a tool is `ToolBuilder`. You give it a name, a description (the model reads this to decide when to call it), typed parameters, and a `handler` that returns an Effect. Pass the finished tool to `.withTools({ tools: [...] })`.
+The fastest way to define a tool's schema is `ToolBuilder`. You give it a name, a description (the model reads this to decide when to call it), and typed parameters. The execution `handler` — a function that receives the validated `args` record and returns an Effect — is supplied when you register the tool via `.withTools({ tools: [...] })`.
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
-const weatherTool = ToolBuilder.create("get_weather")
+const { definition: weatherDef } = ToolBuilder.create("get_weather")
   .description("Get the current weather for a city")
   .param("city", "string", "City name, e.g. 'Tokyo'", { required: true })
   .riskLevel("low")
   .timeout(10_000)
-  .handler((args) =>
-    Effect.tryPromise(async () => {
-      const res = await fetch(
-        `https://wttr.in/${encodeURIComponent(String(args.city))}?format=j1`,
-      );
-      const data = await res.json();
-      const c = data.current_condition[0];
-      return `${args.city}: ${c.temp_C}°C, ${c.weatherDesc[0].value}`;
-    }),
-  )
   .build();
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning() // enables the Think → Act → Observe (ReAct) loop
-  .withTools({ tools: [weatherTool] })
+  .withTools({
+    tools: [
+      {
+        definition: weatherDef,
+        handler: (args) =>
+          Effect.tryPromise(async () => {
+            const city = String(args.city);
+            const res = await fetch(
+              `https://wttr.in/${encodeURIComponent(city)}?format=j1`,
+            );
+            const data = (await res.json()) as {
+              current_condition: Array<{
+                temp_C: string;
+                weatherDesc: Array<{ value: string }>;
+              }>;
+            };
+            const c = data.current_condition[0];
+            return `${city}: ${c.temp_C}°C, ${c.weatherDesc[0].value}`;
+          }),
+      },
+    ],
+  })
   .build();
 
 const result = await agent.run("What should I wear in Tokyo today?");
@@ -67,7 +77,7 @@ The handler returns an `Effect<string>`. Use `Effect.succeed(...)` for pure valu
 
 ## Step 2 — The raw-schema tool form
 
-`ToolBuilder` is sugar over a plain `{ definition, handler }` object. If you are generating tools dynamically or prefer explicit schemas, pass that shape directly:
+`ToolBuilder` is sugar over a plain `ToolDefinition` schema object. If you are generating tools dynamically or prefer explicit schemas, write the `{ definition, handler }` shape directly:
 
 ```typescript
 const agent = await ReactiveAgents.create()

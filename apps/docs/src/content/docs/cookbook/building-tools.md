@@ -11,13 +11,14 @@ Tools give agents the ability to take real-world actions — fetch data, run cod
 
 ## ToolBuilder (Recommended)
 
-The fluent `ToolBuilder` catches misconfiguration at build time:
+The fluent `ToolBuilder` builds the tool *definition* — name, description, typed parameters, risk metadata — and catches misconfiguration at build time (a missing description throws). The execution handler is supplied when you register the tool with `.withTools({ tools })`: it receives a single `args` record and returns an `Effect`.
 
-<!-- docs-skip-typecheck -->
 ```typescript
+import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
+import { Effect } from "effect";
 
-const searchTool = new ToolBuilder("web-search")
+const { definition } = ToolBuilder.create("web-search")
   .description("Search the web for current information")
   .param("query", "string", "The search query", { required: true })
   .param("maxResults", "number", "Max results to return", { default: 5 })
@@ -25,22 +26,30 @@ const searchTool = new ToolBuilder("web-search")
   .timeout(15_000)
   .returnType("SearchResult[]")
   .category("search")
-  .handler(async (query: string, maxResults: number = 5) => {
-    // your implementation
-    return { results: [] };
+  .build();
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({
+    tools: [
+      {
+        definition,
+        handler: (args) =>
+          Effect.tryPromise(async () => {
+            const query = String(args.query);
+            const maxResults = Number(args.maxResults ?? 5);
+            // your implementation
+            return { query, maxResults, results: [] };
+          }),
+      },
+    ],
   })
   .build();
 ```
 
-Register it on the agent:
+Use `Effect.succeed(...)` for pure values, `Effect.try(...)` for synchronous code that can throw, and `Effect.tryPromise(...)` for async work — errors are surfaced to the agent as observations instead of crashing the run.
 
-<!-- docs-skip-typecheck -->
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({ tools: [{ definition: searchTool.definition, handler: searchTool.handler }] })
-  .build();
-```
+For a fully *typed* handler (validated args inferred from a schema, plain `async` functions allowed), use [`defineTool`](/guides/tools/#registering-custom-tools) — its result is directly assignable to the `tools` array.
 
 ## Parameter Types
 
@@ -101,9 +110,9 @@ Categories help the agent reason about which tools to use:
 
 <!-- docs-skip-typecheck -->
 ```typescript
-new ToolBuilder("send-email")
-  .description("Send an email message")
-  .category("communication")   // "search" | "file" | "code" | "communication" | "data" | "compute"
+new ToolBuilder("fetch-status-page")
+  .description("Fetch the service status page")
+  .category("http")   // "search" | "file" | "code" | "http" | "data" | "system" | "custom" | "vcs" | "productivity"
   .build();
 ```
 
@@ -135,24 +144,32 @@ const calculator: ToolDefinition = {
 
 ## Tools with Side Effects
 
-For tools that modify state, use `riskLevel("high")` and return structured results so the agent can reason about success/failure:
+For tools that modify state, raise the `riskLevel` and return structured results so the agent can reason about success/failure:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-const writeFileTool = new ToolBuilder("write-file")
+import { ToolBuilder } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+const { definition: writeFileDef } = ToolBuilder.create("write-file")
   .description("Write content to a file, creating it if it doesn't exist")
   .param("path", "string", "Destination file path", { required: true })
   .param("content", "string", "Content to write", { required: true })
   .param("append", "boolean", "Append instead of overwrite", { default: false })
   .riskLevel("medium")
   .timeout(10_000)
-  .handler(async (path: string, content: string, append = false) => {
+  .build();
+
+const writeFileHandler = (args: Record<string, unknown>) =>
+  Effect.tryPromise(async () => {
+    const path = String(args.path);
+    const content = String(args.content);
     const { writeFile, appendFile } = await import("fs/promises");
-    const fn = append ? appendFile : writeFile;
+    const fn = args.append ? appendFile : writeFile;
     await fn(path, content, "utf-8");
     return { success: true, path, bytesWritten: content.length };
-  })
-  .build();
+  });
+
+// Register with .withTools({ tools: [{ definition: writeFileDef, handler: writeFileHandler }] })
 ```
 
 ## Restricting Available Tools

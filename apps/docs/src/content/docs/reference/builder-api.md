@@ -298,7 +298,7 @@ interface ThinkingOptions {
 | ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `withMaxIterations`    | `(n: number) => this`                        | Max agent loop iterations (default: 10)                                                          |
 | `withMinIterations`    | `(n: number) => this`                        | Minimum iterations before `final-answer` is permitted — prevents fast-path exit on complex tasks |
-| `withContextProfile`   | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget         |
+| `withContextProfile`   | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: tool result size/preview limits, tool schema verbosity, iterations, temperature, context-window tokens |
 | `withStrictValidation` | `() => this`                                 | Throw at build time if required config is missing (provider, model, etc.)                        |
 | `withLazyValidation`   | `() => this`                                 | Keep the missing-API-key and unknown-for-provider-model checks as **warnings even under `withStrictValidation`** — `build()` succeeds and the clean typed failure surfaces at `run()` time. Useful when keys are injected after construction, or in tooling that eagerly constructs many configs. Keyless providers (`ollama`, `test`) are exempt from the key gate anyway. Env equivalent: `REACTIVE_AGENTS_LAZY_VALIDATION=1` |
 | `withTimeout`          | `(ms: number) => this`                       | Execution timeout in milliseconds for the **whole agent run** (all iterations combined). Throws `TimeoutError` if exceeded |
@@ -307,13 +307,16 @@ interface ThinkingOptions {
 
 #### ContextProfile fields
 
-| Field                      | Type                                            | Description                                      |
-| -------------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| `tier`                     | `"local" \| "mid" \| "large" \| "frontier"`     | Model tier — controls which defaults are applied |
-| `budgetTokens`             | `number`                                        | Max tokens to include in the context window      |
-| `toolResultMaxChars`       | `number`                                        | Truncate tool results beyond this length         |
-| `compactionLevel`          | `"full" \| "summary" \| "grouped" \| "dropped"` | How aggressively to compact older steps          |
-| `maxStepsBeforeCompaction` | `number`                                        | Steps to keep in full detail before compacting   |
+| Field                     | Type                                          | Description                                                                     |
+| ------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- |
+| `tier`                    | `"local" \| "mid" \| "large" \| "frontier"`   | Model tier — controls which defaults are applied                                |
+| `toolResultMaxChars`      | `number`                                      | Max characters per compressed tool result before overflow compression           |
+| `toolResultPreviewItems`  | `number`                                      | Array items shown in a compressed tool result preview                           |
+| `toolSchemaDetail`        | `"names-only" \| "names-and-types" \| "full"` | Tool schema verbosity in the system prompt                                      |
+| `maxIterations`           | `number` (optional)                           | Max kernel iterations before failing                                            |
+| `temperature`             | `number` (optional)                           | LLM sampling temperature                                                        |
+| `maxTokens`               | `number` (optional)                           | Context-window token cap used by pressure gates and message compaction          |
+| `recentObservationsLimit` | `number` (optional)                           | When > 0, append the last N tool observations to the system prompt (default: 0) |
 
 <!-- docs-skip-typecheck -->
 ```typescript
@@ -322,9 +325,10 @@ interface ThinkingOptions {
 
 // Manual overrides for a specific task
 .withContextProfile({
-  budgetTokens: 4000,
+  maxTokens: 4000,
   toolResultMaxChars: 800,
-  compactionLevel: "grouped",
+  toolResultPreviewItems: 3,
+  toolSchemaDetail: "names-and-types",
 })
 ```
 
@@ -831,11 +835,11 @@ interface ChatOptions {
 }
 ```
 
-### `session(options?: SessionOptions): AgentSession`
+### `session(options?): AgentSession`
 
 Start a multi-turn conversation session with auto-managed history. Conversation history is forwarded to the LLM on every subsequent turn.
 
-Pass `{ persist: true, id: "my-session" }` to persist conversation history to SQLite via `SessionStoreService`. Persistent sessions survive process restarts and can be resumed by passing the same `id`.
+Pass `{ persist: true, id: "my-session" }` to persist conversation history to SQLite via `SessionStoreService`. Persistent sessions survive process restarts and can be resumed by passing the same `id`. **Persistence requires the memory layer** (`.withMemory()`): the session store is wired only when memory is enabled — without it, `persist: true` silently no-ops and the session stays in-memory only.
 
 ```typescript
 // In-memory session (default)
@@ -859,13 +863,14 @@ const restoredSession = agent.session({
 await restoredSession.chat('Continue where we left off')
 
 const history = session.history() // ChatMessage[]
-await session.end() // Clears history (and DB record if persisted)
+await session.end() // Flushes history to storage (if persisted) and clears the in-memory copy — the DB record is kept
 ```
 
 <!-- docs-skip-typecheck -->
 ```typescript
-interface SessionOptions {
-    persist?: boolean // Persist history to SQLite via SessionStoreService
+// session() options
+{
+    persist?: boolean // Persist history to SQLite via SessionStoreService (requires .withMemory())
     id?: string // Session ID for persistence (auto-generated if omitted)
 }
 
