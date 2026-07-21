@@ -65,8 +65,8 @@ function deliverContract(): RunContract {
       },
     ],
     deliverables: [
-      { id: "artifact:report.md", kind: "file", matcher: artifactProduced("report.md"), acceptance: "deterministic" },
-      { id: "artifact:findings.json", kind: "file", matcher: artifactProduced("findings.json"), acceptance: "deterministic" },
+      { id: "artifact:report.md", kind: "file", matcher: artifactProduced("report.md") },
+      { id: "artifact:findings.json", kind: "file", matcher: artifactProduced("findings.json") },
     ],
     constraints: [],
     horizon: "long",
@@ -255,7 +255,7 @@ describe("assess — requirements + deliverables", () => {
         },
       ],
       deliverables: [
-        { id: "output:Summary", kind: "answer-section", matcher: outputContains("Summary"), acceptance: "deterministic" },
+        { id: "output:Summary", kind: "answer-section", matcher: outputContains("Summary") },
       ],
       constraints: [],
       horizon: "short",

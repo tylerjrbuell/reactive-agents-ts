@@ -1333,6 +1333,9 @@ export interface ReActKernelResult {
   toolsUsed: string[];
   /** Number of iterations completed */
   iterations: number;
+  /** Count of LLM calls made during the run (emitted at the kernel return
+   *  site as `state.llmCalls ?? 0`; consumed by plan-execute step reporting). */
+  llmCalls: number;
   /** How the loop terminated (narrowed to closed enum) */
   terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
   /**
