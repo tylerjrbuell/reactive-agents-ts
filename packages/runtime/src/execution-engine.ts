@@ -37,7 +37,7 @@ import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { type AgentDebrief } from "./debrief.js";
 import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
-import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
+import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations, telemetryOptedOut } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { resolveCapability } from "@reactive-agents/llm-provider";
@@ -511,9 +511,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (config.enableReactiveIntelligence && !_riTelemetryNoticeEmitted) {
                   const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
                   const telemetryCfg = riOpts?.telemetry;
-                  const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
+                  // The notice must never claim telemetry the environment has
+                  // killed — consult the same opt-out the upload path honors.
+                  const telemetryEnabled = !telemetryOptedOut() &&
+                    (telemetryCfg === undefined || telemetryCfg === true ||
                     (typeof telemetryCfg === "object" && telemetryCfg !== null &&
-                      (telemetryCfg as Record<string, unknown>)["enabled"] !== false);
+                      (telemetryCfg as Record<string, unknown>)["enabled"] !== false));
                   if (telemetryEnabled) {
                     _riTelemetryNoticeEmitted = true;
                     yield* Effect.serviceOption(ObservableLogger).pipe(

@@ -20,6 +20,7 @@ import {
   classifyTaskCategory as classifyTaskCategoryFn,
   lookupModel as lookupModelFn,
   loadObservations,
+  telemetryOptedOut,
 } from "@reactive-agents/reactive-intelligence";
 import {
   buildTrajectoryFingerprint,
@@ -147,8 +148,9 @@ export const emitTelemetryRunReport = (
       try {
         const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
         const telemetryCfg = riOpts?.telemetry;
-        const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
-          (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as Record<string, unknown>).enabled !== false);
+        const telemetryEnabled = !telemetryOptedOut() &&
+          (telemetryCfg === undefined || telemetryCfg === true ||
+          (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as Record<string, unknown>).enabled !== false));
 
         if (telemetryEnabled) {
           const endpoint = typeof telemetryCfg === "object" && telemetryCfg !== null

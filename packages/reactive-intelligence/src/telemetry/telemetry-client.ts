@@ -18,6 +18,22 @@ export function resolveDefaultReportsEndpoint(): string {
   return HARDCODED_DEFAULT;
 }
 
+/**
+ * Environment-level telemetry opt-out (no code change required).
+ *
+ * Honored at the single upload choke point (`TelemetryClient.send`) and
+ * consulted by the runtime's notice/emit gates so the notice never claims
+ * telemetry that the environment has killed:
+ *   - `DO_NOT_TRACK` — console DNT convention: set and not "0" → opted out.
+ *   - `REACTIVE_AGENTS_TELEMETRY=0|false` — project-scoped kill switch.
+ */
+export function telemetryOptedOut(): boolean {
+  const dnt = process.env["DO_NOT_TRACK"];
+  if (dnt !== undefined && dnt !== "" && dnt !== "0") return true;
+  const ra = process.env["REACTIVE_AGENTS_TELEMETRY"];
+  return ra === "0" || ra?.toLowerCase() === "false";
+}
+
 export class TelemetryClient {
   private noticePrinted = false;
   private readonly installId: string;
@@ -56,6 +72,9 @@ export class TelemetryClient {
 
   /** Send a run report. Fire-and-forget — never blocks, never throws. */
   send(report: RunReport): void {
+    // Guard: environment opt-out (DO_NOT_TRACK / REACTIVE_AGENTS_TELEMETRY=0)
+    // — checked per send so a variable set after construction still wins.
+    if (telemetryOptedOut()) return;
     // Guard: never send telemetry for test runs
     if (this.isTestRun(report)) return;
 
