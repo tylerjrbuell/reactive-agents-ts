@@ -265,13 +265,15 @@ describe("provider error mapping — dedup + one-line cause (criterion 4)", () =
   });
 
   it("collapses a generic multi-line JSON error to a single clean line", () => {
+    // 400 (permanent bad-request) exercises the generic LLMError path; 5xx is
+    // now classified transient/retryable and takes the LLMRateLimitError branch.
     const raw = {
-      status: 500,
-      message: '500 {\n  "error": {\n    "message": "internal boom"\n  }\n}',
+      status: 400,
+      message: '400 {\n  "error": {\n    "message": "internal boom"\n  }\n}',
     };
     const mapped = mapProviderError(raw, "openai");
     const e = mapped as LLMError;
-    expect(e.message).toBe("openai request failed: 500 internal boom");
+    expect(e.message).toBe("openai request failed: 400 internal boom");
     expect(e.message).not.toContain("\n");
     expect(typeof e.cause).toBe("string");
   });

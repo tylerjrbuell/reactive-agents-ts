@@ -2,9 +2,13 @@ import { Schedule } from "effect";
 import type { LLMErrors } from "./errors.js";
 
 /**
- * Retry policy for LLM calls.
- * Handles rate limits with exponential backoff.
- * Only retries on rate limit and timeout errors.
+ * Retry policy for LLM calls — exponential backoff, up to 3 retries.
+ *
+ * Retries the two retryable classes: `LLMRateLimitError` (429 AND transient
+ * 5xx / 529-overload / network faults — see `mapProviderError`, which routes
+ * those to this class since the remediation is identical: back off and retry)
+ * and `LLMTimeoutError`. Permanent failures (4xx bad-request/auth, model-not-
+ * found, parse, context-overflow) are NOT retried — retrying can't change them.
  */
 export const retryPolicy = Schedule.intersect(
   Schedule.recurs(3),

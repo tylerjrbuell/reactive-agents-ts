@@ -38,8 +38,31 @@ type RawProviderError = {
 const MAX_REASON_LEN = 300;
 const MODEL_NOT_FOUND = /model\s+['"]?(\S+?)['"]?\s+not found/i;
 
-const statusOf = (e: RawProviderError): number | undefined =>
-  e.status ?? e.status_code ?? e.statusCode ?? e.code;
+/**
+ * Node/undici network faults that mean "the request never reached a verdict —
+ * retry it." These arrive as an error `code` string and/or a message fragment.
+ */
+const NETWORK_FAULT =
+  /\b(ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|EPIPE|EHOSTUNREACH|ECONNABORTED|socket hang up|network error|fetch failed|premature close)\b/i;
+
+const statusOf = (e: RawProviderError): number | undefined => {
+  const s = e.status ?? e.status_code ?? e.statusCode ?? e.code;
+  return typeof s === "number" ? s : undefined;
+};
+
+/**
+ * True when a failure is TRANSIENT — a 5xx (server overload/unavailable, incl.
+ * Anthropic/Groq 529) or a network fault. Same remediation as a 429: back off
+ * and retry. Kept distinct from permanent 4xx (bad request / auth / not-found),
+ * which must fail fast. `retry.ts` retries the LLMRateLimitError class these map
+ * to; misclassifying them as the catch-all LLMError (the prior behaviour) meant
+ * a single provider blip failed the whole call with no retry.
+ */
+function isTransientFailure(status: number | undefined, reason: string, raw: RawProviderError): boolean {
+  if (typeof status === "number" && status >= 500) return true;
+  const codeStr = String((raw as { code?: unknown }).code ?? "");
+  return NETWORK_FAULT.test(reason) || NETWORK_FAULT.test(codeStr);
+}
 
 /**
  * Collapse a provider SDK error into a single clean line — no stack, no
@@ -96,6 +119,20 @@ export function mapProviderError(
       message: reason || "Rate limit exceeded",
       provider,
       retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 60_000,
+    });
+  }
+
+  // Transient server (5xx incl. 529 overload) / network fault → retryable.
+  // Same class the schedule retries as a 429, but the message stays honest
+  // about the real cause instead of claiming "rate limit".
+  if (isTransientFailure(status, reason, err)) {
+    const retryAfter = err.headers?.["retry-after"];
+    return new LLMRateLimitError({
+      message:
+        reason ||
+        `${provider} transient failure${typeof status === "number" ? ` (status ${status})` : ""}`,
+      provider,
+      retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 1_000,
     });
   }
 
