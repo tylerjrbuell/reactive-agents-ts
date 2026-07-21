@@ -604,7 +604,7 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Architecture Debt
 
-> **▶ Latest audit: 2026-07-12 — `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`** (state-of-the-framework synthesis: program scoreboard, live built-never-wired register, 226-commit process analysis). Top live debt from it: subagent detached-runtime boundary (`spawn-handlers.ts:140,163`); 3/7 provider-adapter hooks orphaned by APC deletion `279b61fb` (taskFraming/toolGuidance/systemPromptPatch — calibration writes nothing reads); CompletionEnvelope not consumed by blueprint + code-action; runtime pkg 67 `as any`.
+> **▶ Latest audit: 2026-07-12 — `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`** (state-of-the-framework synthesis: program scoreboard, live built-never-wired register, 226-commit process analysis). Top live debt from it at audit time: subagent detached-runtime boundary (`spawn-handlers.ts:140,163`); 3/7 provider-adapter hooks orphaned by APC deletion `279b61fb` (taskFraming/toolGuidance/systemPromptPatch — calibration writes nothing reads); CompletionEnvelope not consumed by blueprint + code-action; runtime pkg 67 `as any`. **Since closed by the v0.14 debt burndown:** the 3 orphaned adapter hooks were deleted (4-hook system remains) and sub-agents now fork into the parent fiber tree. Live debt list: `wiki/Architecture/DEBT-REGISTER.md`.
 >
 > Prior: 2026-06-02 — `wiki/Research/Audit-Reports-2026-06-02/architecture-health-audit.md`. Verdict: foundation strong (clean layers, acyclic kernel/0 cycles, single arbitrator, canonical `project()` data-flow); typed-guarantee layer mid-migration ON-PLAN (3/5 contracts as types); ONE earned enforcement gap = **I4 single capability resolver** (5 entry points, caused the qwen3.5→fallback bug); real vision-gap = **Pillar 8 capability axis parked** (convergence Phase 2 recitation + experience-reuse = 0 matches). Structural hygiene near-done; don't polish cleanliness (A−) while capability axis (D) is where the vision lives.
 
@@ -675,31 +675,36 @@ Canonical project skills live in `.agents/skills/`:
 
 ---
 
-## Current Framework Snapshot (v0.13.6, 2026-07-12)
+## Current Framework Snapshot (v0.14.0, 2026-07-21)
 
-- Monorepo scale: **36 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz)
-- Verified quality: **7,671 pass / 7,698 tests across 974 files** (2026-07-09) — run `bun test` for the authoritative count before release
+- Monorepo scale: **36 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz) — `@reactive-agents/orchestration` and `@reactive-agents/scenarios` are removed from the published set in v0.14 (**34 published on npm**)
+- Verified quality: **8,276 pass / 0 fail across 1,060 files** (2026-07-21) — run `bun test` for the authoritative count before release
 - Current empirical state: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`
 
-> **Meta-loop overhaul on `main` (UNRELEASED — `main` is ~226 commits ahead of the v0.13.6 tag; v0.14 launch line pending).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
+> **Meta-loop overhaul ships in v0.14 (being cut from `main`; `main` is pushed).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
 >
 > - **Default-on + verified** (in every reasoning run now): append-only evidence ledger (rides crash-resume), deliverable-truth (typed contract + contract-driven terminal gate + `result.receipt.deliverables[]`), honest compaction (dropped refs enumerated), recall round-trip (one reference grammar), per-iteration run `assessment` trace event, and the Phase 3.6 reliability fixes (prior context renders across strategy switches, generous final-synthesis budget, structured-output retry-once, verifier-aware stall guard, non-amputating early-stop).
 > - **Opt-in + experimental** (NOT default, NOT "better"): `.withLongHorizon()` (scales guards to `maxIterations`; verified to finish long runs but not lift-gated for default-on) and `.withAdaptiveHarness()` (run-start policy compiler + mid-run recompile; cross-tier ablation **INCONCLUSIVE** — n=1 dev-box noise — so it stays opt-in under the lift-gate veto). `.withContract()` pre-existed but is now load-bearing.
 >
-> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. CHANGELOG / ROADMAP / version bump belong to the v0.14 release step, not this snapshot.
+> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. Full breaking-change and feature list: `CHANGELOG.md` (`[Unreleased]` → 0.14.0).
+- **v0.14 highlights** (see `CHANGELOG.md` for the full list):
+  - Tool policy (allowedTools/forbiddenTools + `.withContract` deny-list) enforced on **every** strategy at the shared choke point, including the code-action sandbox; blocked calls are recorded, never executed
+  - Sub-agents fork into the parent fiber tree: `agent.terminate()` cancels in-flight children, failed children report `success: false`, child events/traces correlate to the parent, recursion cap live
+  - Trust receipt (`result.receipt`: claim→evidence, verdict, signed provenance) + process model (`inspect()`, `agent.fork()`, `rax ps`, `rax attach`)
+  - Abstention + `terminatedBy` forwarded across all 8 strategies (was reactive-only)
 - Public facade: `reactive-agents` built on Effect-TS layered runtime
-- Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint, discover-tools) — *shell-execute is gated via `.withTerminalTools()`, not auto-registered*
+- Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, final-answer, brief, find, pulse, recall, checkpoint, discover-tools, todo) — *shell-execute is gated via `.withTools({ terminal: true })`, not auto-registered*
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
 
 1. Native function-calling harness with robust fallback behavior, including text JSON tool-call parsing when providers omit native calls
 2. Required-tools gate hardening with relevant-tool pass-through, satisfied-required re-calls, and per-tool call budgets (`maxCallsPerTool`)
 3. Dynamic stopping improvements (novelty signal + synthesis transition) to reduce research loops
-4. Provider adapter completion (7 hooks): `systemPromptPatch`, `toolGuidance`, `taskFraming`, `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`
+4. 4-hook adapter system: `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` (+ `parseToolCalls`) — the 3 orphaned hooks (`systemPromptPatch`, `toolGuidance`, `taskFraming`) were deleted in v0.14
 5. Full model I/O observability with `logModelIO` and raw response capture for FC threads
 6. Adaptive strategy reporting now surfaces selected sub-strategy in result metadata (`strategyUsed`, `selectedStrategy`)
 7. Web integration hooks packages: `@reactive-agents/react`, `@reactive-agents/vue`, `@reactive-agents/svelte`
-8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTerminalTools()` builder method
+8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTools({ terminal: true })`
 9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
 10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
 11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-chat.ts`.
@@ -752,7 +757,7 @@ Served from `apps/docs/skills/`, publicly fetchable at:
 - `ui-integration` — React/Vue/Svelte hooks, SSE streaming, real-time UI patterns
 - `interaction-autonomy` — 5 autonomy modes, approval gates, preference learning
 - `a2a-agent-networking` — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
-- `provider-patterns` — 7 adapter hooks, native FC patterns, per-provider streaming quirks
+- `provider-patterns` — 4 adapter hooks, native FC patterns, per-provider streaming quirks
 
 ### Tier 3 — Recipes
 

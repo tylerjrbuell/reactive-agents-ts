@@ -72,7 +72,7 @@ packages/reasoning/src/kernel/
 |-----------|----------|-----------------|
 | ~690 LOC dead text-assembly code | `context-engine.ts` | Still present? |
 | `buildDynamicContext`/`buildStaticContext` (~560 LOC behind flags) | `context-engine.ts` | Still behind flags? |
-| 5 of 7 provider adapter hooks unwired | `provider-adapters/` | `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`, `systemPromptPatch` |
+| Provider adapter hooks (resolved v0.14: 4-hook system, all wired) | `provider-adapters/` | `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` live; `taskFraming`/`toolGuidance`/`systemPromptPatch` removed |
 | `KernelState.meta` untyped bag | `kernel-state.ts` | `as any` casts? |
 | Strategy routing for local models | `strategy-registry.ts` | Still disabled? |
 
@@ -191,7 +191,7 @@ Keep the summary under 12 lines. The debt register carries the full detail.
 | `MetaToolHandler` registry | `phases/act.ts`      | Inline meta-tool dispatch; new tools = one registry entry                                                             |
 | `makeKernel()` factory     | `react-kernel.ts`    | Custom kernel configurations; override default phase set                                                              |
 | Two independent records    | `kernel-state.ts`    | `messages[]` (LLM sees) vs `steps[]` (systems observe)                                                                |
-| Provider adapter hooks     | `provider-adapters/` | 7 lifecycle hooks; only `taskFraming` + `toolGuidance` wired                                                          |
+| Provider adapter hooks     | `provider-adapters/` | 4-hook adapter system, all wired: `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` (+ `parseToolCalls`) |
 | ExecutionEngine loop       | `packages/runtime/`  | 10 phases: BOOTSTRAP → GUARDRAIL → STRATEGY-SELECT → THINK → ACT → OBSERVE → MEMORY-FLUSH → VERIFY → AUDIT → COMPLETE |
 
 ## Layer Boundary Rules
@@ -213,6 +213,5 @@ core → llm-provider / memory / tools / identity / observability / interaction
 | ------------------------------ | ------------------------------------------------- | ------------------------------------------- |
 | Dead code behind feature flags | `context-engine.ts`                               | `buildDynamicContext`, `buildStaticContext` |
 | Untyped meta bag with `as any` | `kernel-state.ts`                                 | `meta: Record<string, unknown>`             |
-| Half-built extensibility       | `provider-adapters/`                              | 5/7 hooks defined, never called             |
 | Disabled strategy routing      | `strategy-registry.ts`                            | Local model routing commented out           |
 | Two-path context building      | `context-engine.ts` + `phases/context-builder.ts` | Which is canonical?                         |

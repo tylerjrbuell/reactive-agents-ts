@@ -122,22 +122,20 @@ case "my-provider":
 
 ## Provider Adapter Hooks
 
-7 hooks that allow strategies to inject provider-specific guidance. All 7 are implemented. Wire them via `selectAdapter(capabilities, tier)`.
+4-hook adapter system: hooks that allow strategies to inject provider-specific guidance, plus `parseToolCalls` for provider-specific tool-call extraction. Wire them via `selectAdapter(capabilities, tier)`. (`taskFraming`, `toolGuidance`, and `systemPromptPatch` were removed in v0.14.)
 
 | Hook | When it fires | Purpose |
 |------|--------------|---------|
-| `systemPromptPatch` | Before every LLM call | Provider-specific system prompt additions |
-| `toolGuidance` | When tools are available | How to frame tool use for this provider |
-| `taskFraming` | Start of task | Provider-specific task framing language |
 | `continuationHint` | After tool results | Nudge toward next action |
-| `errorRecovery` | On LLM error | Recovery message phrasing |
+| `errorRecovery` | On tool/LLM error | Recovery message phrasing |
 | `synthesisPrompt` | Pre-final-answer | Synthesis framing |
 | `qualityCheck` | Post-output | Output quality validation prompt |
+| `parseToolCalls` | On raw model output | Provider-specific tool-call extraction |
 
 ```typescript
 // Usage in a phase:
 const adapter = selectAdapter(context.capabilities, context.tier);
-const patch = adapter.systemPromptPatch?.(state, context) ?? "";
+const hint = adapter.continuationHint?.({ toolsUsed, requiredTools, missingTools, iteration, maxIterations }) ?? "";
 ```
 
 ## Testing Provider Streaming

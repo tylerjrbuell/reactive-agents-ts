@@ -194,7 +194,6 @@ const config = ModelPresets["claude-sonnet"]; // { provider, model, costPer1MInp
 // Automatically falls back to secondary providers on error
 .withFallbacks({
   providers: ["anthropic", "openai"],
-  errorThreshold: 3,
 })
 ```
 

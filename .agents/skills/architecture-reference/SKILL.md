@@ -51,7 +51,6 @@ user-invocable: false
 
 - `@reactive-agents/reasoning` → `core`, `llm-provider`, `memory`, `tools`
 - `@reactive-agents/verification` → `core`, `llm-provider`, `memory`
-- `@reactive-agents/orchestration` → `core`, `llm-provider`, `tools`, `reasoning`
 - `@reactive-agents/gateway` → `core`, `llm-provider`, `tools`
 - `@reactive-agents/reactive-intelligence` → `core`, `llm-provider`
 - `@reactive-agents/replay` → `core`, `trace`, `runtime` — deterministic trace replay

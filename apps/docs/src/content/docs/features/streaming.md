@@ -286,8 +286,8 @@ console.log(result.metadata); // { stepsCount, tokensUsed, ... }
 
 | Value | Events | Overhead |
 |-------|--------|----------|
-| `"tokens"` | TextDelta, StreamCompleted, StreamError | Minimal — just text tokens |
-| `"full"` | All 8 event types | Higher — includes phase timing, tool tracking, thoughts |
+| `"tokens"` | TextDelta, StreamCompleted, StreamError, StreamCancelled, IterationProgress | Minimal — tokens and progress |
+| `"full"` | All 10 event types | Higher — includes phase timing, tool tracking, thoughts |
 
 ### Builder Methods
 

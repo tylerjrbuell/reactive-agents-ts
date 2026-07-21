@@ -31,6 +31,7 @@ handle.status();   // "running" | "paused" | "stopped" | "terminated" | "complet
 handle.pause();    // freeze at the next iteration boundary
 handle.resume();   // continue from paused
 handle.stop();     // graceful: synthesize, emit StreamCompleted
+handle.terminate(); // hard kill: interrupt the run's fiber tree (in-flight sub-agents included)
 handle.inspect();  // live kernel-state snapshot (below)
 ```
 

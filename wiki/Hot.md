@@ -12,7 +12,7 @@ updated: 2026-07-12
 
 ## Latest Session (2026-07-12) — state-of-the-framework audit + doc-truth restoration
 
-**Version: v0.13.6** (released 2026-07-06). Local `main` is **~226 commits ahead of origin/main** — push at next release/tag. CHANGELOG has an Unreleased v0.14 breaking section.
+**Version: v0.14.0 (release-ready, tag OWNER-GATED)** as of 2026-07-21. `main` pushed (origin/main `8158c757`+). The debt burndown (Waves 0–5) closed the audit façade: tool-policy enforced on every strategy incl. code-action sandbox, abstention across all 8 strategies, sub-agent cancellation/recursion, trust receipt + process model shipped, ~9 lying withers removed/wired, orchestration+scenarios packages unpublished, CHANGELOG `[Unreleased]` complete. Docs fully synced to 0.14 (README/whats-new/ROADMAP/AGENTS/skills). Only remaining before cut: owner tags `v0.14.0` (retitle `[Unreleased]`→`## 0.14.0`) + optional bench re-baseline. Canonical debt state: `wiki/Architecture/DEBT-REGISTER.md`.
 
 **Canonical snapshot (read this before any July plan/audit doc):**
 [`wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`](Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md) — full map of shipped vs open programs, the live built-never-wired register, the 226-commit process-failure analysis, corrective doctrine, and the deduped open-work list.

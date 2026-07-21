@@ -16,7 +16,7 @@ Two delegation modes exist:
 - **Static sub-agents** — configured at build time via `.withAgentTool()`. The sub-agent is always available as a named tool.
 - **Dynamic sub-agents** — spawned at runtime via the `spawn-agent` tool. The parent LLM decides when to spawn and what configuration to use.
 
-Both modes run fully within the parent's execution context. The child agent executes, produces a result, and that result is returned to the parent as a tool call observation.
+Both modes run fully within the parent's execution context: as of v0.14, a child forks into the **parent's fiber tree** rather than running as a detached worker. The child agent executes, produces a result, and that result is returned to the parent as a tool call observation. See [Lifecycle, cancellation, and supervision](#lifecycle-cancellation-and-supervision) for what that buys you.
 
 ---
 
@@ -74,6 +74,24 @@ Use dynamic sub-agents when:
 | Does the parent need to create agents dynamically? | Yes | Dynamic (`.withDynamicSubAgents()`) |
 | Do you need consistent, repeatable sub-agent behavior? | Yes | Static |
 | Does the sub-agent's role depend on the task at hand? | Yes | Dynamic |
+
+---
+
+## Lifecycle, Cancellation, and Supervision
+
+Sub-agents are part of the parent run, not fire-and-forget workers (v0.14):
+
+- **Structured concurrency** — each child's execution is forked into the parent's fiber tree. `agent.terminate()` interrupts in-flight sub-agents along with the parent; no orphaned workers keep burning tokens after the run is killed.
+- **Truthful failure** — a child that fails returns a `success: false` observation to the parent instead of a fabricated success. The parent LLM sees the failure and can retry, re-scope, or route around it.
+- **Observable on the parent's bus** — child lifecycle events are published on the parent's shared EventBus tagged with `parentAgentId`, so subscriptions and the trace bridge attribute them to the delegating parent. Traces correlate across the delegation via a shared root run id plus the child's depth.
+- **Recursion cap** — every delegation carries a depth counter (0 at the root). By default delegation is **flat**: children get no spawn tools, so they cannot sub-delegate. Nesting is opt-in — set `.withDynamicSubAgents({ maxRecursionDepth })` explicitly, and children can spawn only while their depth stays below the cap. A spawn at the cap is refused with a tool-result observation the model can route around — never a thrown error.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDynamicSubAgents({ maxIterations: 5, maxRecursionDepth: 2 }) // opt in to one level of nesting
+  .build();
+```
 
 ---
 

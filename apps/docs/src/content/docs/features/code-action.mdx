@@ -44,6 +44,8 @@ agent:my-agent              ← AGENT span
 `code-action` executes LLM-generated JavaScript in a Worker thread. The Worker runs inside Node.js with access to all built-in modules. Do not use with untrusted tool inputs in production without additional sandboxing.
 </Aside>
 
+Tool calls made from generated code go through the same tool-policy gate as every other strategy (v0.14): `allowedTools` and the `.withContract()` forbidden-tools deny-list are enforced per call inside the sandbox — a blocked tool is recorded as a failed call and never executes, even when the code names it directly.
+
 ## Stability
 
 `@experimental` — v0.11.1

@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-07-08 (unified program ratified — `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` now owns cross-strand sequencing: the kernel meta-loop overhaul executes ahead of Arcs 2-4; v0.14 = Arc 1 + harness meta-loop foundations, v0.15 = the self-aware kernel, v0.16 = Boundary+Gate, v0.17 = Team, v0.18 = Flywheel)
+> **Last updated:** 2026-07-21 (v0.14 release-readiness — the debt burndown closed the audit's façade gaps; the enforced control surface now matches the declared one, and v0.14 is being cut from `main`. Sequencing authority still `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md`: v0.14 = Arc 1 + harness meta-loop foundations, v0.15 = the self-aware kernel, v0.16 = Boundary+Gate, v0.17 = Team, v0.18 = Flywheel)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (program sequencing + convergence rulings, 2026-07-08) over `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (product-arc content, v6.0). When they disagree with this doc, the specs win and this doc is out of date — open an issue.
@@ -9,9 +9,11 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 ---
 
-## Where we are today (v0.13.0 published 2026-07-02)
+## Where we are today (v0.14.0 being cut from `main`, 2026-07-21)
 
-- **v0.13.0** on npm: all 35 packages. Cross-tier thinking (`.withThinking`), cost-aware model routing, abstention/trust-loop hardening, strict-validation opt-in, agentic UI kit foundation (`@reactive-agents/ui-core` + React/Svelte bindings, durable Interact/Inbox/Resume rails).
+- **v0.14.0** (release-ready on `main`, tag pending): the audit's façade closed. Tool policy is enforced at the shared tool-execution choke point on every strategy (incl. the code-action sandbox); abstention + `terminatedBy` cross all eight strategies; sub-agents fork into the parent fiber tree (cancellation + recursion cap); the trust receipt (`result.receipt`) and process model (`inspect()` / `fork()` / `rax ps` / `rax attach`) ship; ~9 lying builder methods removed or wired; two dead packages unpublished. Breaking release — see [CHANGELOG](CHANGELOG.md). Every fix carries a mutation test that goes red if the wiring is cut.
+- **v0.13.5** (2026-07-06) on npm: Groq + xAI providers, the `@reactive-agents/ui-core` headless kit, Cortex request-for-input rail.
+- **v0.13.0** (2026-07-02) on npm: Cross-tier thinking (`.withThinking`), cost-aware model routing, abstention/trust-loop hardening, strict-validation opt-in, agentic UI kit foundation (durable Interact/Inbox/Resume rails).
 - **v0.12.0** (2026-06-17): durable execution + durable HITL, typed structured output, memory default-OFF, effect-free hooks.
 - **Competitive receipts in hand:** public local-model bench (RA vs LangChain vs Vercel AI SDK vs Mastra vs bare LLM, cogito:8b + qwen3:14b via Ollama) — RA best-of-6 on accuracy after grounded-termination fixes, with honest per-dimension trade-offs published. Traces + methodology in-repo.
 - **Live-probe validation** (2026-07-05): 7 end-to-end probes confirmed the platform's strengths (durable rail, flywheel, cross-tier structured output) and its gaps (result trust surface, introspection, config truthfulness) — `wiki/Research/Harness-Reports/2026-07-05-north-star-live-probe-validation.md`.
@@ -27,17 +29,15 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 North star: **runs are processes, execution history is inspectable, trust is a type, the runtime learns the model it drives, and every consenting run improves the platform.** Executed as a *wiring program* — the audit showed most subsystems 70–90% built; we finish and enforce rather than pile new surface. Full detail: `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md`.
 
-### v0.13.1 — patch (imminent)
-- File-root sandbox fix (healing pipeline path resolution) — already on `main`, needs release.
-
-### v0.14 — "The Log & The Process" (Arc 1) — **public launch**
-- **Complete the record:** LLM exchanges captured with full response payloads (request side already lives), persisted for replay; one canonical event log direction (resolves the stream-union divergence, #188).
-- **The process model:** `run.inspect()` (state, tokens, pending calls), `fork()` from any checkpoint (counterfactual restart — honest scope), `rax ps` / `rax attach` / `rax fork`; Cortex replay viewer + fork.
-- **Trust receipt:** `result.receipt` on every run — claim→evidence provenance, verdict + confidence + method, Ed25519-signed provenance (not a truth certificate). Consolidates verification/guardrails/honesty/grounding into one spine.
-- **Launch gate (fixed, 5 items):** LLM I/O capture ✚ inspect + ps/attach ✚ fork v1 ✚ receipt v1 ✚ published bench receipts → **Show-HN fires here.**
+### v0.14 — "The Log & The Process" (Arc 1) — **public launch (cutting from `main`)**
+- **Complete the record:** ✅ LLM exchanges captured with full response payloads, persisted for replay (`packages/trace`); one canonical event log direction.
+- **The process model:** ✅ `run.inspect()` (live kernel state, pending calls), `agent.fork(runId, { at?, model?, task? })` from any durable checkpoint (counterfactual restart — honest scope), `rax ps` / `rax attach`; `rax diagnose replay` re-executes recorded runs zero-token.
+- **Trust receipt:** ✅ `result.receipt` on every run — claim→evidence provenance, verdict + confidence + method, Ed25519-signed provenance (not a truth certificate). Consolidates verification/guardrails/honesty/grounding into one spine.
+- **Enforcement that landed early (was slated for Arc 2):** ✅ tool policy (`allowedTools`/`forbiddenTools` + `.withContract` deny-list) enforced at the shared choke point on every strategy incl. the code-action sandbox — the burndown pulled this forward from v0.15.
+- **Launch gate (fixed, 5 items):** LLM I/O capture ✅ ✚ inspect + ps/attach ✅ ✚ fork v1 ✅ ✚ receipt v1 ✅ ✚ **published bench receipts ⏳ (owner-gated — the trustworthy re-baseline campaign has not run; no public numbers until it does)**. Four of five shipped; **Show-HN fires when the bench receipts land.**
 
 ### v0.15 — "The Boundary & The Gate" (Arc 2)
-- **Real enforcement at the tool boundary:** allowedTools/approval/per-tool budget enforced in `ToolService.execute`; `IdentityService.authorize()` wired; audit log.
+- **Enforcement at the `ToolService` boundary itself:** allowedTools/forbiddenTools + the contract deny-list already gate every reasoning path (landed in v0.14); Arc 2 pushes the check down into `ToolService.execute` so *non-reasoning* callers inherit it too, and adds **approval** + **per-tool budget** enforcement, `IdentityService.authorize()`, and the audit log.
 - **Config truthfulness:** unknown builder options rejected loudly; inert combinations warned (e.g. durable checkpoints require the kernel path); the builder never lies.
 - **Honesty default-on candidates** through the lift gate: post-condition verification, output-path guardrails.
 - **BYO eval gate:** one report shape across `packages/eval` and the lift-gate/ledger; `rax eval gate` runs on user suites.

@@ -16,6 +16,92 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.14.0 — The Log & The Process (July 2026)
+
+<Aside type="note" title="The truthful release">
+v0.14 is the release where the declared control surface and the *enforced* one converge. An internal audit found several builder methods that a caller could set but that the harness silently ignored; rather than ship a promise we don't keep, this release **removes the ones that lied** and **wires the ones worth keeping** — every fix landed with a mutation test that goes red if the wiring is cut. It is a **breaking** release: see [Migrating below](#migrating-to-v014).
+</Aside>
+
+The Arc 1 theme: **runs are inspectable processes, and every run leaves a signed record.**
+
+### The trust receipt — `result.receipt`
+
+Every run now returns a `receipt`: a claim→evidence record with a verdict, confidence, the verification method, the declared `deliverables[]`, and an Ed25519 signature over the provenance. It is a *provenance record, not a truth certificate* — it tells you what the run claimed, what evidence backs each claim, and whether the harness's own checks passed, so downstream code can gate on trust instead of parsing prose.
+
+```typescript
+const result = await agent.run("Summarize the Q3 report and cite figures.");
+result.receipt?.verdict;        // "verified" | "partial" | "abstained" | ...
+result.receipt?.deliverables;   // typed contract deliverables + their evidence
+result.abstained;               // honest decline — now correct on every strategy
+```
+
+### The process model — inspect, fork, attach
+
+A streamed run is a live handle. `runStream()` returns pause / resume / stop / terminate / status **and `inspect()`** for live kernel-state introspection (current iteration, steps, messages, pending tool calls, last thought).
+
+```typescript
+const run = agent.runStream("Research and draft the memo.");
+const state = run.inspect();     // { iteration, steps, pendingToolCalls, ... }
+run.pause(); /* ... */ run.resume();
+```
+
+Durable runs can be **forked** from any checkpoint for counterfactual restarts, and driven from the terminal:
+
+```typescript
+const alt = await agent.fork(runId, { at: 4, model: "claude-sonnet-5" }); // requires .withDurableRuns()
+```
+
+```bash
+rax ps                 # list durable runs
+rax attach <runId>     # tail a live run
+rax diagnose replay    # re-execute a recorded run with zero tokens (exact replay)
+```
+
+### Enforcement caught up to the docs
+
+The audit's central finding was a *façade* — surfaces that looked wired but weren't. v0.14 closes them:
+
+- **Tool policy is enforced, not suggested.** `allowedTools` / `forbiddenTools` and the `.withContract()` deny-list are now enforced at the shared tool-execution choke point on **every** strategy — including planned steps (plan-execute, blueprint), hallucinated tool names, and `code-action`'s sandbox, where generated code previously called tools with no policy check at all. A blocked call is recorded and never runs.
+- **Honest abstention everywhere.** `terminatedBy` and the abstention descriptor now cross the boundary on all eight strategies (was reactive-only), so `result.abstained` and the receipt are truthful regardless of which strategy ran.
+- **Sub-agents are part of the run.** Spawned sub-agents (`.withAgentTool()` / the `spawn-agent` tool) now fork into the parent's fiber tree: `agent.terminate()` interrupts in-flight children (no orphaned workers), a failed child returns a truthful `success: false`, child events reach the parent's EventBus tagged `parentAgentId`, traces correlate via `rootRunId` + depth, and the recursion cap is live (sub-delegation only below an explicit `maxRecursionDepth`).
+- **The requirement lifecycle is real.** Ledger `requirement` entries are minted when the contract compiles and transition at the verification gate, so run assessment sees declared / satisfied / blocked requirements — per entity, so touching `orders.json` no longer satisfies a requirement about `rates.json`.
+- **Phase stream events fire.** `PhaseStarted` / `PhaseCompleted` chunks (stream density `"full"`) are now actually emitted; they were advertised with zero writers before.
+
+### Reliability under provider turbulence
+
+- **Transient provider failures retry.** 5xx, `529` overload (Anthropic/Groq), and network faults (`ECONNRESET`, socket hang-up, `fetch failed`) are now classified as retryable and go through the exponential-backoff schedule; only `429` retried before. Permanent `4xx` still fail fast.
+- **A critique/reflect blip no longer discards the run.** If the self-critique pass (reflexion, plan-execute reflect) hits an LLM error, the run degrades gracefully — it keeps the answer it already produced and records an honest `[CRITIQUE skipped]` marker — instead of throwing away completed work.
+
+### APIs that now do what they say
+
+- **`.withVerificationStep()`** shapes the answer: a `REVISE` verdict re-runs once with the feedback (it previously burned a call and wrote to a field nothing read).
+- **`.withCalibration("skip")`** is honored (it was silently rewritten to `"auto"` under reasoning).
+- **Model calibration composes** with the tier adapter instead of replacing it — calibrating a model can refine behavior but can never remove a capability (it used to drop four live adapter hooks).
+- **The meta-tool suite is opt-in.** The default toolbox is task-facing; the planning/reflection meta-tools (and their web-egress default) load only when you ask for them.
+
+### Migrating to v0.14
+
+This release removes builder methods and options that had no reader, and unpublishes two packages that only a no-op reached. Migrate:
+
+| Removed | Replacement |
+| --- | --- |
+| `.withTerminalTools(cfg?)` | `.withTools({ terminal: cfg ?? true })` |
+| `.withTelemetry(cfg?)` | `.withObservability({ telemetry: cfg ?? true })` |
+| `.withoutTracing()` | `.withObservability({ tracing: false })` |
+| `.withProgressCheckpoint()` | `.withDurableRuns()` |
+| `.withCacheTimeout(ms)` | *removed — was a no-op* |
+| `.withIdentity()` / `.withInteraction()` / `.withOrchestration()` | *use `@reactive-agents/identity` / `/interaction` directly; orchestration has no replacement* |
+| `.withFallbacks({ models, errorThreshold })` | `.withFallbacks({ providers })` — ordered provider cascade |
+| `.withReactiveIntelligence({ autonomy, constraints })` | *options removed (were no-op safety switches)* |
+| bare `.withSkills()` / `packages` / `overrides` keys | `.withSkills({ paths: [...] })` (throws otherwise) |
+| `@reactive-agents/orchestration`, `@reactive-agents/scenarios` | *unpublished* |
+| `task-complete` tool | `final-answer` (the sole terminator) |
+| `rag-search` tool | the unified `find` tool (`.withDocuments()` still ingests) |
+
+The provider adapter contract is now **4 hooks** (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) plus `parseToolCalls`; the three that never fired (`taskFraming`, `toolGuidance`, `systemPromptPatch`) are removed. The full list is in the [CHANGELOG](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md).
+
+---
+
 ## v0.13.5 — Groq, xAI & the Agentic UI Kit (July 2026)
 
 <Aside type="tip" title="Released on npm">

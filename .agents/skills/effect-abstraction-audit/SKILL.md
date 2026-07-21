@@ -153,11 +153,10 @@ Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below
 
 3. **`context-engine.ts` size** — On the order of **~500 LOC** (not ~690). It holds scoring, environment/rules/tool-reference builders, **both** static and dynamic context builders, and helpers. The maintenance issue is the **unused dynamic path**, not “mostly dead file.”
 
-4. **Provider adapter hooks — all seven wired** — `ProviderAdapter` in `packages/llm-provider/src/adapter.ts` is consumed in the kernel as follows (confirm with `rg` if paths move):
-   - `systemPromptPatch`, `toolGuidance` → `packages/reasoning/src/kernel/capabilities/reason/think.ts`
-   - `taskFraming` → `packages/reasoning/src/kernel/capabilities/attend/context-utils.ts`
-   - `continuationHint`, `qualityCheck` → `think.ts`
-   - `errorRecovery`, `synthesisPrompt` → `packages/reasoning/src/kernel/capabilities/act/act.ts`
+4. **Provider adapter hooks — 4-hook system, all wired** — `ProviderAdapter` in `packages/llm-provider/src/adapter.ts` now has 4 guidance hooks + `parseToolCalls` (`taskFraming`/`toolGuidance`/`systemPromptPatch` were removed in v0.14), consumed in the kernel as follows (confirm with `rg` if paths move):
+   - `continuationHint`, `qualityCheck` → `packages/reasoning/src/kernel/capabilities/reason/think-guards.ts`
+   - `errorRecovery` → `packages/reasoning/src/kernel/capabilities/act/act.ts`
+   - `synthesisPrompt` → `packages/reasoning/src/kernel/capabilities/act/conversation-assembly.ts`
    Do not file issues for “unwired hooks” without checking these files first.
 
 5. **Adaptive meta-strategy defaults off** — Routing exists (`packages/reasoning/src/strategies/adaptive.ts`, selected when `config.adaptive.enabled` in `packages/reasoning/src/services/reasoning-service.ts`). **`defaultReasoningConfig` sets `adaptive.enabled: false`** in `packages/reasoning/src/types/config.ts`. That is a product/default choice, not absent multi-step routing code.
