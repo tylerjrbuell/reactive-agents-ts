@@ -154,10 +154,6 @@ export default defineConfig({
                     label: 'Get Started',
                     items: [
                         { label: 'Introduction', link: 'guides/introduction/' },
-                        {
-                            label: 'Build AI Agents in TypeScript',
-                            link: 'guides/build-ai-agents-typescript/',
-                        },
                         { label: 'Installation', link: 'guides/installation/' },
                         { label: 'Quickstart', link: 'guides/quickstart/' },
                         {
@@ -171,6 +167,10 @@ export default defineConfig({
                         {
                             label: 'Choosing a Stack',
                             link: 'guides/choosing-a-stack/',
+                        },
+                        {
+                            label: 'Build AI Agents in TypeScript',
+                            link: 'guides/build-ai-agents-typescript/',
                         },
                     ],
                 },
@@ -278,6 +278,7 @@ export default defineConfig({
                             label: 'Observability',
                             link: 'features/observability/',
                         },
+                        { label: 'Telemetry', link: 'telemetry/' },
                         { label: 'Observe (OTel)', link: 'features/observe/' },
                         {
                             label: 'Snapshot & Replay',

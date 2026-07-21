@@ -87,17 +87,11 @@ Every agent task flows through a deterministic lifecycle:
 
 Each phase supports `before`, `after`, and `on-error` lifecycle hooks.
 
-### 5 Interaction Modes
+### Interaction Modes (standalone package)
 
-Agents dynamically adjust their autonomy level:
+`@reactive-agents/interaction` is an opt-in, standalone package that models five autonomy levels — **autonomous**, **supervised**, **collaborative**, **consultative**, and **interrogative** — with mode switching, checkpoints, and notifications as composable Effect services.
 
-- **Autonomous** — Full self-direction
-- **Supervised** — Periodic checkpoints
-- **Collaborative** — Back-and-forth with the user
-- **Consultative** — Ask before acting
-- **Interrogative** — Gather information first
-
-Mode transitions happen automatically based on confidence thresholds, cost, and user activity.
+It is used directly, not through `createAgent` or the builder: `createInteractionLayer()` provides the `InteractionManager` service as an Effect layer you compose into your own program. See the [interaction modes example](../examples/) in the Examples Catalog for the working pattern.
 
 ## Who Is This For?
 

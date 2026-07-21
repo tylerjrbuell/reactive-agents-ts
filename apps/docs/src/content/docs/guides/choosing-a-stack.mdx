@@ -77,7 +77,7 @@ const agent = await ReactiveAgents.create()
 {/* docs-skip-typecheck */}
 ```typescript
 .withProvider("ollama")
-.withModel("qwen3.5")
+.withModel("qwen3:4b")
 .withContextProfile({ tier: "local", toolResultMaxChars: 800 })
 .withReasoning({ defaultStrategy: "reactive" })
 .withMaxIterations(6)

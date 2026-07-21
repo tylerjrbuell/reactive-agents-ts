@@ -5,12 +5,13 @@ sidebar:
   order: 3
 ---
 
-import { FileTree, Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { FileTree, Aside, Badge, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) ≥1.0.0 (`curl -fsSL https://bun.sh/install | bash`)
 - An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), [Groq](https://console.groq.com), [xAI](https://console.x.ai), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
+- TypeScript 5.5+ with `"moduleResolution": "bundler"` (`rax init` scaffolds this for you) — see [Installation](../installation/#typescript-configuration) for the full `tsconfig.json`
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
 
@@ -57,10 +58,12 @@ The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bu
 Using the CLI:
 
 ```bash
-bunx rax init my-agent-app --template standard
+bunx reactive-agents init my-agent-app --template standard
 cd my-agent-app
 bun install
 ```
+
+(Once `reactive-agents` is installed in a project, the shorter `rax` alias works: `rax init my-agent-app --template standard`.)
 
 `rax init --template standard` scaffolds:
 
@@ -114,6 +117,9 @@ echo 'SERPER_API_KEY=...'      >> .env   # Web search (Serper.dev backend)
 
 Create `src/agent.ts`:
 
+<Tabs>
+<TabItem label="Anthropic">
+
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -125,7 +131,25 @@ const result = await agent.run("What are the three laws of thermodynamics?");
 console.log(result.output);
 ```
 
-That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-6` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running.
+</TabItem>
+<TabItem label="Local (no API key)">
+
+```typescript title="src/agent.ts"
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama")
+  .withModel("qwen3:4b")   // any model you've pulled: ollama pull qwen3:4b
+  .build();
+
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log(result.output);
+```
+
+</TabItem>
+</Tabs>
+
+That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-6` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running — or use the local tab with [Ollama](https://ollama.com) and no key at all (see the [Local Models guide](../local-models/)).
 
 To pin a specific model or add a name:
 
@@ -189,7 +213,11 @@ const agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-6")
   .withProfile(HarnessProfile.balanced())
   .withMemory({ tier: "enhanced" })          // upgrade memory to vector embeddings
-  .compose((h) => h.before("act", logFn))    // canonical chokepoint composition
+  .compose((h) =>
+    h.before("act", (ctx) => {               // canonical chokepoint composition
+      console.log(`[act] iteration ${ctx.iteration}`);
+    }),
+  )
   .build();
 ```
 
@@ -202,19 +230,24 @@ precise chokepoint.
 
 <CardGrid>
   <LinkCard
-    title="Scaffold a New Project"
-    description="create-reactive-agent scaffolds a runnable agent in seconds — pick template, provider, and package manager."
-    href="/features/create-reactive-agent/"
+    title="Your First Agent"
+    description="Deeper walkthrough — memory, reasoning, guardrails, and lifecycle hooks step by step."
+    href="../your-first-agent/"
+  />
+  <LinkCard
+    title="Choosing a Stack"
+    description="Pick provider, model tier, memory, and reasoning strategy in 2 minutes."
+    href="../choosing-a-stack/"
+  />
+  <LinkCard
+    title="Local Models"
+    description="Run the same agent on Ollama with no API key — the healing pipeline keeps 4B+ tool calling viable."
+    href="../local-models/"
   />
   <LinkCard
     title="OpenTelemetry Tracing"
     description="Export spans from every agent run to Jaeger, Grafana Tempo, Langfuse, or any OTLP backend."
     href="/features/observe/"
-  />
-  <LinkCard
-    title="Your First Agent"
-    description="Deeper walkthrough — memory, reasoning, guardrails, and lifecycle hooks step by step."
-    href="../your-first-agent/"
   />
   <LinkCard
     title="Common Builder Stacks"
@@ -225,11 +258,6 @@ precise chokepoint.
     title="API Cheatsheet"
     description="The 80% of the API on one page — every important method, runtime call, and event tag."
     href="/reference/cheatsheet/"
-  />
-  <LinkCard
-    title="Choosing a Stack"
-    description="Pick provider, model tier, memory, and reasoning strategy in 2 minutes."
-    href="../choosing-a-stack/"
   />
   <LinkCard
     title="Browse 30+ Examples"

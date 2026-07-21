@@ -102,6 +102,7 @@ Watch the **same** agent investigate an incident — call two tools, correlate t
 
 ```bash
 bun add reactive-agents
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 ```
 
 ```typescript
@@ -120,6 +121,8 @@ console.log(result.output)
 ```
 
 One declarative config object — the front door you already know from the Vercel AI SDK. Enable exactly what you need as config keys; `createAgent` and the fluent `ReactiveAgents.create().withX()` builder are the [same API in two syntaxes](/reference/builder-api/).
+
+No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`) and skip the `.env` line entirely — see [Local Models](/guides/local-models/).
 
 <TerminalReplay />
 

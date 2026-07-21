@@ -93,6 +93,8 @@ With reasoning enabled, the agent uses a ReAct loop instead of a simple LLM call
 - Request tool calls
 - Observe results and adjust
 
+To switch strategy, pass `reasoning: { defaultStrategy: ... }` — valid values are `"reactive"` (the default), `"plan-execute-reflect"`, `"reflexion"`, `"tree-of-thought"`, `"adaptive"`, `"direct"`, `"code-action"`, and `"blueprint"`. See [Choosing a Strategy](../choosing-strategies/).
+
 ## Adding Safety
 
 Guardrails protect against prompt injection, PII leakage, and toxic content:
@@ -125,6 +127,7 @@ For advanced use cases, use the Effect-based API:
 
 ```typescript
 import { Effect } from "effect";
+import { ReactiveAgents } from "reactive-agents";
 
 const program = Effect.gen(function* () {
   const agent = yield* ReactiveAgents.create()
@@ -153,11 +156,13 @@ const agent = await ReactiveAgents.create()
     timing: "after",
     handler: (ctx) => {
       console.log(`[think] Response: ${ctx.metadata.lastResponse}`);
-      return Effect.succeed(ctx);
+      return ctx;
     },
   })
   .build();
 ```
+
+Effect is optional here — a hook handler can return a plain value (or nothing, to just observe), a `Promise`, or an `Effect`; no `effect` import needed.
 
 Available phases: `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`.
 
@@ -165,20 +170,24 @@ Each phase supports `before`, `after`, and `on-error` timing.
 
 ## Testing
 
-Use `withTestScenario()` for deterministic tests:
+Use `withTestScenario()` for deterministic tests — it automatically sets the provider to `"test"`, so no API key or real LLM call is involved:
 
-{/* docs-skip-typecheck */}
 ```typescript title="src/agent.test.ts"
-const agent = await ReactiveAgents.create()
-  .withName("test-agent")
-  .withTestScenario([
-    { match: "capital of France", text: "Paris is the capital of France." },
-    { match: "quantum", text: "Quantum mechanics describes nature at the atomic scale." },
-  ])
-  .build();
+import { expect, test } from "bun:test";
+import { ReactiveAgents } from "reactive-agents";
 
-const result = await agent.run("What is the capital of France?");
-expect(result.output).toContain("Paris");
+test("answers deterministically", async () => {
+  const agent = await ReactiveAgents.create()
+    .withName("test-agent")
+    .withTestScenario([
+      { match: "capital of France", text: "Paris is the capital of France." },
+      { match: "quantum", text: "Quantum mechanics describes nature at the atomic scale." },
+    ])
+    .build();
+
+  const result = await agent.run("What is the capital of France?");
+  expect(result.output).toContain("Paris");
+});
 ```
 
 ## Where to next

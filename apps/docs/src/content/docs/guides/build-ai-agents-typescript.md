@@ -6,7 +6,7 @@ description: >-
   or frontier APIs.
 sidebar:
   label: Build AI Agents in TypeScript
-  order: 2
+  order: 7
 ---
 
 If you want to **build AI agents in TypeScript** — agents that reason, call tools, remember context, and stream results into your app — this guide is the map. It explains what an agent actually is, the pieces you need for production, and how to assemble them with [Reactive Agents](https://docs.reactiveagents.dev), a type-safe TypeScript agent framework built on [Effect-TS](https://effect.website).

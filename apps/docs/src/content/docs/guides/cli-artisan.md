@@ -24,7 +24,7 @@ The framework gives you composable layers and a powerful runtime. The CLI turns 
 
 ```bash
 # 1) Scaffold a project
-bunx rax init my-agent --template standard
+bunx reactive-agents init my-agent --template standard   # (installed? the short alias works: rax init)
 cd my-agent
 bun install
 
