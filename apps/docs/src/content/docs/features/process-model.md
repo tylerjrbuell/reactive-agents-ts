@@ -124,7 +124,7 @@ Deterministic rules, evaluated in order — first match wins:
 
 Two honest footnotes:
 
-- **"Substantive" tool calls** exclude the kernel's own meta/termination/memory-retrieval tools (`final-answer`, `task-complete`, `recall`, `checkpoint`, `abstain`, …). Every kernel run terminates through `final-answer` — if it counted, `ungrounded` would be unreachable and the receipt would be meaningless. Only real work counts as grounding evidence.
+- **"Substantive" tool calls** exclude the kernel's own meta/termination/memory-retrieval tools (`final-answer`, `recall`, `checkpoint`, `abstain`, …). Every kernel run terminates through `final-answer` — if it counted, `ungrounded` would be unreachable and the receipt would be meaningless. Only real work counts as grounding evidence.
 - **`toolCallStats.ok` means executor-level success** — the tool ran without erroring. It does not grade the semantic quality of what the tool returned.
 
 ### Signing (optional, Ed25519)

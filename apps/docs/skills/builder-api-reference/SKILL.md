@@ -132,9 +132,8 @@ const agent = await ReactiveAgents.create()
 
 | Method | Params | Notes |
 |--------|--------|-------|
-| `.withObservability(opts?)` | `{ verbosity?, live?, logModelIO?, file? }` | `file` is JSONL output path |
+| `.withObservability(opts?)` | `{ verbosity?, live?, logModelIO?, file?, telemetry?, tracing? }` | `file` is JSONL output path; `telemetry: true \| { mode: "contribute"\|"isolated" }` enables run telemetry |
 | `.withLogging(cfg)` | `{ level?, format?, output?, filePath?, maxFileSizeBytes?, maxFiles? }` | Structured logging |
-| `.withTelemetry(cfg?)` | `{ mode: "contribute"\|"isolated" }` | OTEL telemetry |
 
 ### Persistence & integration
 
@@ -167,8 +166,8 @@ const agent = await ReactiveAgents.create()
 
 - `.build()` is async — always `await` or you get an unresolved Promise
 - `.withPersona()` and `.withSystemPrompt()` both set the system prompt — the **last** call wins
-- `.withTools()` no-args enables 5 standard tools: `web-search`, `http-get`, `file-read`, `file-write`, `code-execute` — `shell-execute` is opt-in only via `.withTerminalTools()` (see `shell-execution-sandbox` skill)
-- `.withTerminalTools()` enables shell execution sandboxed via Docker or local allowlist — use with caution in production
+- `.withTools()` no-args enables 5 standard tools: `web-search`, `http-get`, `file-read`, `file-write`, `code-execute` — `shell-execute` is opt-in only via `.withTools({ terminal: true })` (see `shell-execution-sandbox` skill)
+- `.withTools({ terminal: true })` enables shell execution sandboxed via Docker or local allowlist — use with caution in production
 - `.withMemory("enhanced")` without `dbPath` uses a default path — set it explicitly in multi-agent environments to avoid collisions
 - `.withGateway()` requires calling `.start()` on the built agent; `.build()` alone does not start the loop
 - `enableStrategySwitching: true` without `maxStrategySwitches` defaults to 2 switches max

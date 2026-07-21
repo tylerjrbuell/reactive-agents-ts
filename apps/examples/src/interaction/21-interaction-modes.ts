@@ -2,16 +2,19 @@
  * Example 21: Interaction Modes
  *
  * Demonstrates the interaction and autonomy modes available in reactive-agents.
- * The 5 conceptual modes are:
- * - fully-autonomous:  Agent acts without any human confirmation
- * - semi-autonomous:   Agent asks for confirmation before tool calls
- * - step-by-step:      Agent pauses after each step for human review
- * - supervised:        Human must approve each reasoning step
- * - fully-manual:      Human drives every action
+ * The 5 conceptual modes (from `@reactive-agents/interaction`) are:
+ * - autonomous:     Agent acts without any human confirmation
+ * - supervised:     Agent pauses at milestone checkpoints for approval
+ * - collaborative:  Agent and user work together in real time
+ * - consultative:   Agent observes and suggests
+ * - interrogative:  User drills into agent state / reasoning
  *
- * The `.withInteraction()` builder flag enables approval gate support via the
- * InteractionManager service. The `.withKillSwitch()` flag provides lifecycle
- * control (pause / resume / stop / terminate) usable as a checkpoint mechanism.
+ * The interaction layer is used **directly** via the
+ * `@reactive-agents/interaction` package: `createInteractionLayer()` provides
+ * the `InteractionManager` service (mode switching, checkpoints,
+ * notifications) as a composable Effect layer. The `.withKillSwitch()` builder
+ * flag provides lifecycle control (pause / resume / stop / terminate) usable
+ * as a checkpoint mechanism on the agent side.
  *
  * This example runs entirely offline — no API key required.
  *
@@ -19,6 +22,12 @@
  *   bun run apps/examples/src/interaction/21-interaction-modes.ts
  */
 import { ReactiveAgents } from "reactive-agents";
+import {
+  createInteractionLayer,
+  InteractionManager,
+} from "@reactive-agents/interaction";
+import { EventBusLive } from "@reactive-agents/core";
+import { Effect, Layer } from "effect";
 
 export interface ExampleResult {
   passed: boolean;
@@ -33,7 +42,7 @@ export async function run(): Promise<ExampleResult> {
   console.log("\n=== Interaction Modes Example ===\n");
   console.log("Mode: OFFLINE (test provider)\n");
 
-  // ─── Mode 1: Fully autonomous (default — no withInteraction() needed) ─────
+  // ─── Mode 1: Fully autonomous (default — no interaction layer needed) ─────
 
   console.log("Mode 1: Fully autonomous (default behavior)\n");
 
@@ -46,21 +55,56 @@ export async function run(): Promise<ExampleResult> {
   console.log(`  Result:  ${autoResult.output.slice(0, 70)}`);
   console.log(`  Success: ${autoResult.success}`);
 
-  // ─── Mode 2: Interaction-aware (approval gates via withInteraction()) ──────
+  // ─── Mode 2: The interaction layer, used directly ─────────────────────────
+  //
+  // `createInteractionLayer()` from @reactive-agents/interaction provides the
+  // InteractionManager service. It only requires an EventBus.
 
-  console.log("\nMode 2: Interaction-aware agent (.withInteraction())\n");
-
-  const interactionAgent = await ReactiveAgents.create()
-    .withName("interaction-agent")
-    .withTestScenario([{ text: "FINAL ANSWER: Task completed with interaction layer enabled." }])
-    .withInteraction()
-    .build();
-
-  const interactionResult = await interactionAgent.run(
-    "What is the product of 4 × 5?",
+  console.log(
+    "\nMode 2: Interaction layer (createInteractionLayer + InteractionManager)\n",
   );
-  console.log(`  Result:  ${interactionResult.output.slice(0, 70)}`);
-  console.log(`  Success: ${interactionResult.success}`);
+
+  const InteractionLive = createInteractionLayer().pipe(
+    Layer.provide(EventBusLive),
+  );
+
+  const interactionDemo = Effect.gen(function* () {
+    const manager = yield* InteractionManager;
+
+    // Every agent starts autonomous...
+    const initialMode = yield* manager.getMode("interaction-agent");
+
+    // ...and can be escalated to supervised (milestone checkpoints).
+    yield* manager.switchMode("interaction-agent", "supervised");
+    const currentMode = yield* manager.getMode("interaction-agent");
+
+    // In supervised mode the agent pauses at milestones for human review.
+    const checkpoint = yield* manager.createCheckpoint({
+      agentId: "interaction-agent",
+      taskId: "demo-task",
+      milestoneName: "plan-review",
+      description: "Review the computed plan before execution",
+    });
+    const resolved = yield* manager.resolveCheckpoint(
+      checkpoint.id,
+      "approved",
+      "Plan looks good — proceed.",
+    );
+
+    return { initialMode, currentMode, checkpointStatus: resolved.status };
+  });
+
+  const interactionOutcome = await Effect.runPromise(
+    interactionDemo.pipe(Effect.provide(InteractionLive)),
+  );
+  console.log(`  Initial mode:      ${interactionOutcome.initialMode}`);
+  console.log(`  Switched to:       ${interactionOutcome.currentMode}`);
+  console.log(`  Checkpoint status: ${interactionOutcome.checkpointStatus}`);
+  const interactionPassed =
+    interactionOutcome.initialMode === "autonomous" &&
+    interactionOutcome.currentMode === "supervised" &&
+    interactionOutcome.checkpointStatus === "approved";
+  console.log(`  Success: ${interactionPassed}`);
 
   // ─── Mode 3: Supervised via kill switch checkpoints ───────────────────────
 
@@ -80,47 +124,67 @@ export async function run(): Promise<ExampleResult> {
   console.log(`  Result:  ${supervisedResult.output.slice(0, 70)}`);
   console.log(`  Success: ${supervisedResult.success}`);
 
-  // ─── Mode 4: Full combination — interaction + kill switch + guardrails ─────
+  // ─── Mode 4: Full stack — interaction layer + kill switch + guardrails ────
+  //
+  // The interaction layer gates the run (pre-run checkpoint approval), while
+  // the agent itself carries kill-switch lifecycle control and guardrails.
 
   console.log(
-    "\nMode 4: Full supervision stack (interaction + kill switch + guardrails)\n",
+    "\nMode 4: Full supervision stack (interaction layer + kill switch + guardrails)\n",
   );
+
+  const preRunGate = Effect.gen(function* () {
+    const manager = yield* InteractionManager;
+    const checkpoint = yield* manager.createCheckpoint({
+      agentId: "full-supervised-agent",
+      taskId: "summarize-hitl",
+      milestoneName: "pre-run-review",
+      description: "Approve the task before the agent starts",
+    });
+    const resolved = yield* manager.resolveCheckpoint(checkpoint.id, "approved");
+    return resolved.status === "approved";
+  });
+
+  const approved = await Effect.runPromise(
+    preRunGate.pipe(Effect.provide(InteractionLive)),
+  );
+  console.log(`  Pre-run checkpoint approved: ${approved}`);
 
   const fullSupervisedAgent = await ReactiveAgents.create()
     .withName("full-supervised-agent")
     .withTestScenario([{ text: "FINAL ANSWER: Task completed under full supervision stack." }])
-    .withInteraction()
     .withKillSwitch()
     .withGuardrails()
     .build();
 
-  const fullResult = await fullSupervisedAgent.run(
-    "Summarize the benefits of human-in-the-loop AI systems.",
-  );
-  console.log(`  Result:  ${fullResult.output.slice(0, 70)}`);
-  console.log(`  Success: ${fullResult.success}`);
+  const fullResult = approved
+    ? await fullSupervisedAgent.run(
+        "Summarize the benefits of human-in-the-loop AI systems.",
+      )
+    : null;
+  console.log(`  Result:  ${fullResult?.output.slice(0, 70) ?? "(not approved — skipped)"}`);
+  console.log(`  Success: ${fullResult?.success ?? false}`);
 
   // ─── Summary ──────────────────────────────────────────────────────────────
 
   const passed =
     autoResult.success &&
-    interactionResult.success &&
+    interactionPassed &&
     supervisedResult.success &&
-    fullResult.success;
+    (fullResult?.success ?? false);
 
   const totalSteps =
     autoResult.metadata.stepsCount +
-    interactionResult.metadata.stepsCount +
     supervisedResult.metadata.stepsCount +
-    fullResult.metadata.stepsCount;
+    (fullResult?.metadata.stepsCount ?? 0);
 
   console.log(`\nAll 4 modes ran successfully: ${passed}`);
 
   const output = [
     `autonomous: ${autoResult.success}`,
-    `interaction: ${interactionResult.success}`,
+    `interaction: ${interactionPassed}`,
     `supervised: ${supervisedResult.success}`,
-    `full: ${fullResult.success}`,
+    `full: ${fullResult?.success ?? false}`,
   ].join(" | ");
 
   return {

@@ -143,7 +143,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Persistent gateway** — adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine, **chat mode** with per-sender SQLite session history
 
 ### ⚙️ Builder Hardening
-- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withTaskContext()`
+- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withTaskContext()`
 - **`defineTool`** typed tool authoring — Standard Schema input (Effect Schema / Zod / Valibot / ArkType) + a plain async handler with arg types inferred from the schema; malformed options (`parameters`/`execute` instead of `input`/`handler`) fail fast with a typed error
 - **ToolBuilder** fluent API — define tools without raw schema objects
 - **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime

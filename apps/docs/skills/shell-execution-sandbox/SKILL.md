@@ -31,7 +31,7 @@ const agent = await ReactiveAgents.create()
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 15 })
   .withTools({
     allowedTools: ["shell-execute", "file-read", "checkpoint"],
-    terminal: true, // registers shell-execute handler (or use .withTerminalTools())
+    terminal: true, // registers the shell-execute handler
   })
   .withSystemPrompt(`
     You have access to a shell. Use it to explore the codebase and run commands.

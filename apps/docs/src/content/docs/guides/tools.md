@@ -259,8 +259,7 @@ These are registered by the kernel with live state — not part of the static `b
 | Tool | Description |
 |------|-------------|
 | `context-status` | Zero-parameter introspection: iteration budget, tools used/pending, stored keys, tokens, etc. |
-| `task-complete` | Explicit completion with a `summary`. Visibility-gated when guardrails on early exit are needed. |
-| `final-answer` | Hard-gate meta-tool: structured deliverable + format + confidence — primary path for exiting the ReAct loop cleanly under native function calling. |
+| `final-answer` | Hard-gate meta-tool: structured deliverable + format + confidence — the sole termination path for exiting the ReAct loop cleanly under native function calling. |
 
 ### Conductor's Suite (default with tools)
 

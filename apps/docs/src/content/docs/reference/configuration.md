@@ -216,7 +216,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | Method | Default | Description |
 |--------|---------|-------------|
 | `.withTools(options?)` | disabled | `{ tools?` (custom defs + **Effect** handlers), `resultCompression?`, `allowedTools?`, `adaptive?` } |
-| `.withDocuments(docs)` | none | `DocumentSpec[]` ingested at build for `rag-search` |
+| `.withDocuments(docs)` | none | `DocumentSpec[]` ingested at build; retrieval via the unified `find` meta-tool |
 | `.withRequiredTools(config)` | none | `{ tools?, adaptive?, maxRetries? }` |
 | `.withMCP(config)` | none | MCP: `{ name, transport, command?, args?, endpoint?, headers?, env?, cwd? }` (see [Builder API](/reference/builder-api/) transport table) |
 | `.withMetaTools(config?)` | on with tools | Conductor suite; pass `false` to disable defaults |
@@ -230,7 +230,6 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withModelPricing(registry)` | none | Static $/1M token overrides |
 | `.withDynamicPricing(provider)` | none | Fetch pricing at build |
 | `.withFallbacks(config)` | none | Ordered provider cascade — `{ providers }`; falls back to the next provider on any error |
-| `.withCacheTimeout(ms)` | `3_600_000` | Semantic cache TTL (1h) |
 
 ### Memory
 
@@ -260,9 +259,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withObservability(options?)` | disabled | `{ verbosity?, live?, file?` (JSONL), `logPrefix?, logModelIO? }` |
+| `.withObservability(options?)` | disabled | `{ verbosity?, live?, file?` (JSONL), `logPrefix?, logModelIO?, telemetry?, tracing? }` — `telemetry: true \| TelemetryConfig` is the entry point for run telemetry (privacy modes, default `{ mode: "isolated" }`) |
 | `.withStreaming(options?)` | `"tokens"` | Default `agent.runStream()` density: `{ density?: "tokens" \| "full" }` |
-| `.withTelemetry(config?)` | `{ mode: "isolated" }` if enabled | Telemetry privacy / contribute modes |
 | `.withLogging(config)` | none | Structured logs: level, format, `output` (console / file / stream), rotation |
 | `.withAudit()` | disabled | Compliance audit logging |
 | `.withEvents()` | — | Wire EventBus for `agent.subscribe()` |

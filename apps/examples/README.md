@@ -55,7 +55,7 @@ One-off without a file: `ANTHROPIC_API_KEY=sk-ant-... bun run index.ts`.
 | 18  | [advanced/18-self-improvement](src/advanced/18-self-improvement.ts)           | Cross-task learning                | `.withSelfImprovement()`     | ⚡       |
 | 19  | [reasoning/19-reasoning-strategies](src/reasoning/19-reasoning-strategies.ts) | 3 strategies compared              | `.withReasoning()`           | ⚡       |
 | 20  | [reasoning/20-context-profiles](src/reasoning/20-context-profiles.ts)         | Local vs frontier tiers            | `.withContextProfile()`      | ✅       |
-| 21  | [interaction/21-interaction-modes](src/interaction/21-interaction-modes.ts)   | Autonomy modes                     | `.withInteraction()`         | ✅       |
+| 21  | [interaction/21-interaction-modes](src/interaction/21-interaction-modes.ts)   | Autonomy modes                     | `createInteractionLayer()`   | ✅       |
 | RS1 | [research/crypto-research-agent](src/research/crypto-research-agent.ts)        | Live crypto prices → briefing      | built-in `crypto-price` tool | ✅       |
 
 ✅ = offline (no API key) &nbsp; ⚡ = requires `ANTHROPIC_API_KEY`

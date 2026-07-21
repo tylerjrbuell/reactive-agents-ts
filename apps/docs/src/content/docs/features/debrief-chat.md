@@ -23,7 +23,7 @@ Three components work together:
 
 ## The `final-answer` Tool
 
-When reasoning is enabled, the agent sees a `final-answer` meta-tool (alongside `task-complete`). Calling it hard-terminates the ReAct loop immediately — no more "FINAL ANSWER:" text matching:
+When reasoning is enabled, the agent sees a `final-answer` meta-tool — the sole terminator of the ReAct loop. Calling it hard-terminates the loop immediately — no more "FINAL ANSWER:" text matching:
 
 ```
 final-answer({
