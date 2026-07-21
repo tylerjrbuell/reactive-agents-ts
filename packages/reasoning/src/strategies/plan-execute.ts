@@ -6,7 +6,7 @@
  * 1. Generate plan — call extractStructuredOutput with LLMPlanOutputSchema
  * 2. Hydrate plan — hydratePlan(llmOutput, context) → typed Plan with s1, s2, ... IDs
  * 3. Execute steps (sequential for linear mode):
- *    - tool_call → resolve references via resolveStepReferences → toolService.execute() directly
+ *    - tool_call → resolve references via resolveStepReferences → executeToolAndObserve (canonical primitive: policy gate + ledger)
  *    - analysis  → executeReActKernel with buildStepExecutionPrompt, NO tools, max 3 iterations
  *    - composite → executeReActKernel with scoped tools from toolHints, max 3 iterations
  * 4. Retry on failure — retry once with error context; if retry fails, LLM patch via buildPatchPrompt

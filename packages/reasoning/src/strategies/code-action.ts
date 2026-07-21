@@ -32,6 +32,7 @@ import { formatObservationMessage } from "./code-action/code-action-observe.js";
 import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
+import { evaluateToolPolicy } from "../kernel/capabilities/act/tool-observe.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -51,6 +52,16 @@ export interface CodeActionInput {
   readonly agentId?: string;
   readonly sessionId?: string;
   readonly requiredTools?: readonly string[];
+  /** P0-4 — tool-policy enforced on every sandbox-bridged tool call via the
+   *  shared `evaluateToolPolicy` gate (the same decision act.ts + the canonical
+   *  primitive delegate to). `forbiddenTools` defaults to the declared
+   *  `taskContract` deny-list. Closes the code-action bypass: the Worker
+   *  handlers previously called `toolSvc.execute()` with no policy check. */
+  readonly allowedTools?: readonly string[];
+  readonly forbiddenTools?: readonly string[];
+  /** Declared TaskContract (spread from the reasoning-service params via
+   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
@@ -96,12 +107,33 @@ export const executeCodeAction = (
     const { system, user } = buildPlanPrompt(input.taskDescription, bindings);
 
     // ── Build tool handler map — bridges Worker calls to ToolService ────────
+    // P0-4 — the deny-list the safety gate enforces: explicit override, else the
+    // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    const forbiddenToolList: readonly string[] =
+      input.forbiddenTools ??
+      (input.taskContract?.tools
+        ?.filter((t) => t.kind === "forbidden")
+        .map((t) => t.name) ??
+        []);
+    const toolPolicy = {
+      ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+      forbiddenTools: forbiddenToolList,
+    };
     const toolHandlers = new Map<string, (args: unknown) => Promise<unknown>>();
     if (Option.isSome(toolServiceOpt)) {
       const toolSvc = toolServiceOpt.value;
       for (const schema of input.availableToolSchemas ?? []) {
         const toolName = schema.name;
         toolHandlers.set(toolName, async (args: unknown) => {
+          // P0-4 safety gate — code-action executes tools inside the sandbox
+          // Worker (not the kernel act phase), so this closure is its ONLY
+          // dispatch choke point. A blocked tool surfaces to the generated code
+          // as a thrown error carrying the same policy message the kernel path
+          // emits, and is recorded as a failed tool call — never executed.
+          const decision = evaluateToolPolicy(toolName, toolPolicy);
+          if (decision.blocked) {
+            throw new Error(decision.message);
+          }
           const output = await Effect.runPromise(
             toolSvc.execute({
               toolName,
