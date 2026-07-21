@@ -24,7 +24,7 @@ export function providerDefaultModel(p: Provider): string {
     case "openai":
       return "gpt-4o-mini";
     case "google":
-      return "gemini-2.0-flash";
+      return "gemini-2.5-flash";
     case "groq":
       return "llama-3.3-70b-versatile";
     case "xai":
@@ -36,6 +36,17 @@ export function providerDefaultModel(p: Provider): string {
 
 export function providerImport(p: Provider): Provider {
   return p;
+}
+
+/**
+ * The provider name emitted into generated code (`.withProvider("...")`).
+ *
+ * The CLI accepts `--provider=google` as a friendly alias, but the framework's
+ * registered `ProviderName` is `"gemini"` — emitting `"google"` would fail
+ * build-validation at runtime. Env var naming (GOOGLE_API_KEY) is unaffected.
+ */
+export function providerRuntimeName(p: Provider): string {
+  return p === "google" ? "gemini" : p;
 }
 
 export function providerDisplayName(p: Provider): string {

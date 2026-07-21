@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const withStructuredOutputTemplate: Template = {
   name: "with-structured-output",
@@ -37,7 +37,7 @@ const CityFact = Schema.Struct({
 
 const agent = await ReactiveAgents.create()
   .withName("structured-assistant")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withOutputSchema(CityFact)
   .withMaxIterations(3)

@@ -55,7 +55,7 @@ const PROVIDER_PROFILES: Record<string, ProviderProfile> = {
       "This project uses OpenAI. Get an API key at https://platform.openai.com/api-keys and set `OPENAI_API_KEY` in `.env`.",
   },
   gemini: {
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     envVar: "GOOGLE_API_KEY",
     envPlaceholder: "AIza...",
     setupNote:
@@ -81,6 +81,8 @@ export function generateProject(config: ProjectConfig): { files: string[] } {
     name,
     version: "0.1.0",
     type: "module",
+    // Minimum Node version stated in the framework README.
+    engines: { node: ">=22.5" },
     scripts: {
       dev: "bun --watch run src/index.ts",
       start: "bun run src/index.ts",
@@ -241,6 +243,9 @@ function generateEntryPoint(
     providerLine,
     modelLine,
     '  .withName("production-agent")',
+    // Stable identity keys the memory store; .withMemory() takes tier/options,
+    // not an agent id.
+    '  .withAgentId("production-agent")',
     "  .withReasoning({",
     '    defaultStrategy: "adaptive",',
     "    enableStrategySwitching: true,",
@@ -248,9 +253,10 @@ function generateEntryPoint(
     '    fallbackStrategy: "plan-execute-reflect",',
     "  })",
     "  .withTools()",
-    '  .withMemory("production-agent")',
+    "  .withMemory()",
     "  .withGuardrails()",
-    "  .withCostTracking({ budget: { maxTokens: 50_000 } })",
+    // CostTrackingOptions caps are USD: { perRequest, perSession, daily, monthly }.
+    "  .withCostTracking({ perSession: 1 })",
     '  .withObservability({ verbosity: "normal", live: true })',
     "  .withRetryPolicy({ maxRetries: 2, backoffMs: 1_000 })",
     "  .withHealthCheck()",

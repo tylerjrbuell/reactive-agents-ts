@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const withApprovalGatesTemplate: Template = {
   name: "with-approval-gates",
@@ -28,7 +28,7 @@ ${envCheck}
 // \`onApproval\` callback drives pause -> decide -> resume in a single call.
 const agent = await ReactiveAgents.create()
   .withName("guarded-assistant")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withTools()
   .withReasoning({ defaultStrategy: "reactive" })

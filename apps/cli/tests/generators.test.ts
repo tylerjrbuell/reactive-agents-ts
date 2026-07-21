@@ -64,6 +64,23 @@ describe("Project Generator", () => {
     const entryCode = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
     expect(entryCode).toContain(".withGuardrails()");
     expect(entryCode).toContain(".withHealthCheck()");
+    // withMemory takes tier/options, not an agent id — identity goes through
+    // withAgentId. Cost caps are USD keys (perRequest/perSession/daily/monthly).
+    expect(entryCode).toContain('.withAgentId("production-agent")');
+    expect(entryCode).toContain(".withMemory()");
+    expect(entryCode).not.toContain('.withMemory("production-agent")');
+    expect(entryCode).toContain(".withCostTracking({ perSession: 1 })");
+    expect(entryCode).not.toContain("budget");
+  });
+
+  it("emits the README-stated Node engines minimum", () => {
+    generateProject({
+      name: "engines-proj",
+      template: "minimal",
+      targetDir: TEST_DIR,
+    });
+    const pkg = JSON.parse(readFileSync(join(TEST_DIR, "package.json"), "utf-8"));
+    expect(pkg.engines.node).toBe(">=22.5");
   });
 
   // ── FIX-13 / W16 — provider neutrality ──────────────────────────────────
@@ -147,7 +164,7 @@ describe("Project Generator", () => {
 
     const entry = readFileSync(join(TEST_DIR, "src", "index.ts"), "utf-8");
     expect(entry).toContain('.withProvider("gemini")');
-    expect(entry).toContain('.withModel("gemini-2.0-flash")');
+    expect(entry).toContain('.withModel("gemini-2.5-flash")');
 
     const env = readFileSync(join(TEST_DIR, ".env.example"), "utf-8");
     expect(env).toMatch(/^GOOGLE_API_KEY=AIza/m);
@@ -190,6 +207,18 @@ describe("Agent Generator", () => {
 
     const content = readFileSync(result.filePath, "utf-8");
     expect(content).toContain("coding assistant");
+  });
+
+  it("threads the provider through to generated agent code", () => {
+    const result = generateAgent({
+      name: "prov-bot",
+      recipe: "basic",
+      targetDir: TEST_DIR,
+      provider: "anthropic",
+    });
+
+    const content = readFileSync(result.filePath, "utf-8");
+    expect(content).toContain('.withProvider("anthropic")');
   });
 
   it("should generate an orchestrator agent", () => {

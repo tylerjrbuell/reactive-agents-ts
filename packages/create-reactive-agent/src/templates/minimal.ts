@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const minimalTemplate: Template = {
   name: "minimal",
@@ -25,7 +25,7 @@ ${envCheck}
 
 const agent = await ReactiveAgents.create()
   .withName("assistant")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withMaxIterations(3)
   .build();

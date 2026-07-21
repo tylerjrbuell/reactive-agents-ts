@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const streamingTemplate: Template = {
   name: "streaming",
@@ -25,7 +25,7 @@ ${envCheck}
 
 const agent = await ReactiveAgents.create()
   .withName("streaming-assistant")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withMaxIterations(3)
   .build();
@@ -34,24 +34,24 @@ const task = process.argv.slice(2).join(" ") || "Write a haiku about token strea
 
 console.log(\`> \${task}\\n\`);
 
-// runStream() yields AgentStreamEvents as the agent thinks + acts.
-// "text-delta" carries assistant token chunks; "step-complete" marks loop steps.
+// runStream() yields AgentStreamEvents as the agent thinks + acts. The union
+// is discriminated by \`_tag\`: "TextDelta" carries assistant token chunks,
+// "IterationProgress" marks each reasoning iteration, and "StreamCompleted" /
+// "StreamError" always end the stream. (Build with .withStreaming({ density:
+// "full" }) to also receive phase/tool/thought events.)
 for await (const event of agent.runStream(task)) {
-  switch (event.type) {
-    case "text-delta":
-      process.stdout.write(event.delta);
+  switch (event._tag) {
+    case "TextDelta":
+      process.stdout.write(event.text);
       break;
-    case "tool-call":
-      console.log(\`\\n[tool] \${event.name}\`);
+    case "IterationProgress":
+      // one reasoning iteration finished (event.iteration / event.maxIterations)
       break;
-    case "step-complete":
-      // one full ReAct iteration finished
-      break;
-    case "completed":
+    case "StreamCompleted":
       console.log(\`\\n\\n[done] steps=\${event.metadata.stepsCount} cost=$\${event.metadata.cost.toFixed(6)}\`);
       break;
-    case "error":
-      console.error(\`\\n[error] \${event.error}\`);
+    case "StreamError":
+      console.error(\`\\n[error] \${event.cause}\`);
       break;
   }
 }

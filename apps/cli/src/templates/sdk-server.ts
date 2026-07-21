@@ -44,7 +44,7 @@ async function buildAgent() {
   const a = await ReactiveAgents.create()
     .withName("${agentName}")
     .withProvider(provider)
-    .withModel(process.env.LLM_MODEL ?? "claude-sonnet-4-20250514")
+    .withModel(process.env.LLM_MODEL ?? "claude-sonnet-4-6")
     .withReasoning()
     .withTools()
     .withMemory("1")

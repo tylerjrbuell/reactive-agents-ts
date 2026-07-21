@@ -3,7 +3,9 @@ import { generateAgent, type AgentRecipe } from "../generators/agent-generator.j
 import { fail, info, section, success } from "../ui.js";
 
 const VALID_RECIPES: AgentRecipe[] = ["basic", "researcher", "coder", "orchestrator"];
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "groq", "xai"];
+// Mirrors the framework's user-facing ProviderName list
+// (packages/runtime/src/build-validation.ts).
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "groq", "xai"];
 
 const HELP = `
   Usage: rax create agent <name> [options]
@@ -15,12 +17,13 @@ const HELP = `
 
   Options:
     --recipe <type>     Recipe: basic | researcher | coder | orchestrator (default: basic)
+    --provider <name>   Provider: anthropic | openai | ollama | gemini | litellm | groq | xai (default: ollama)
     --interactive       Run in interactive mode (prompts for options)
     --help, -h          Show this help
 
   Examples:
     rax create agent my-agent
-    rax create agent my-agent --recipe researcher
+    rax create agent my-agent --recipe researcher --provider anthropic
     rax create agent --interactive
 `.trimEnd();
 
@@ -74,17 +77,13 @@ export async function runCreateAgent(args: string[]): Promise<void> {
       recipe = await promptUser("Recipe", "basic", VALID_RECIPES);
     }
 
-    const featuresStr = await promptUser("Features (comma-separated)", "reasoning,tools");
-    const features = featuresStr.split(",").map((f: string) => f.trim()).filter(Boolean);
-
-    args = [name, "--recipe", recipe, "--provider", provider, "--features", features.join(",")];
-
     console.log(info(`Creating agent "${name}" with recipe "${recipe}" and provider "${provider}"...`));
 
     const result = generateAgent({
       name,
       recipe: recipe as AgentRecipe,
       targetDir: process.cwd(),
+      provider,
     });
 
     console.log(success(`Created: ${result.filePath}`));
@@ -109,13 +108,27 @@ export async function runCreateAgent(args: string[]): Promise<void> {
     recipe = r;
   }
 
+  let provider: string | undefined;
+  const providerIdx = args.indexOf("--provider");
+  if (providerIdx !== -1 && args[providerIdx + 1]) {
+    const p = args[providerIdx + 1]!;
+    if (!VALID_PROVIDERS.includes(p)) {
+      console.error(fail(`Invalid provider: ${p}. Valid options: ${VALID_PROVIDERS.join(", ")}`));
+      process.exit(1);
+    }
+    provider = p;
+  }
+
   console.log(section("Create Agent"));
-  console.log(info(`Creating agent "${name}" with recipe "${recipe}"...`));
+  console.log(
+    info(`Creating agent "${name}" with recipe "${recipe}"${provider ? ` and provider "${provider}"` : ""}...`),
+  );
 
   const result = generateAgent({
     name,
     recipe,
     targetDir: process.cwd(),
+    ...(provider ? { provider } : {}),
   });
 
   console.log(success(`Created: ${result.filePath}`));

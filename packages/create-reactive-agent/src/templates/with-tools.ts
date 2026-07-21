@@ -1,9 +1,9 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const withToolsTemplate: Template = {
   name: "with-tools",
-  description: "Agent with built-in tools (filesystem, fetch, calculator).",
+  description: "Agent with built-in tools (web-search, http-get, file I/O, code-execute).",
   render: (opts: ScaffoldOptions): readonly TemplateFile[] => {
     return [{ path: "src/index.ts", content: renderIndex(opts) }];
   },
@@ -23,11 +23,12 @@ function renderIndex(opts: ScaffoldOptions): string {
 
 ${envCheck}
 
-// withTools() registers the built-in tool layer: filesystem (file-read/file-write),
-// fetch (http-get), shell, math, and more. The agent picks tools by name.
+// withTools() registers the built-in tool layer: web-search, http-get,
+// file-read/file-write, code-execute, and more. The agent picks tools by name —
+// e.g. it can run the arithmetic below through code-execute.
 const agent = await ReactiveAgents.create()
   .withName("tool-using-assistant")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withTools()
   .withReasoning({ defaultStrategy: "reactive" })

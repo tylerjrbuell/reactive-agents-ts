@@ -1,7 +1,13 @@
 import type { ScaffoldOptions, TemplateFile } from "../types.js";
 import { providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 
-const RA_VERSION_FALLBACK = "^0.11.0";
+// MUST track the current release major/minor. Templates rely on APIs that need
+// >= 0.14 (`.withOutputSchema`, `.withDurableRuns`, `.withApprovalPolicy`), so a
+// stale fallback scaffolds projects that install a framework too old to compile
+// them. The lockstep release flow (scripts/release.ts) stamps real versions
+// into package.json at publish time; callers can inject the exact version via
+// `opts.version` — this constant is only the safety net when they don't.
+const RA_VERSION_FALLBACK = "^0.14.0";
 
 export function renderSharedFiles(
   opts: ScaffoldOptions,
@@ -15,6 +21,8 @@ export function renderSharedFiles(
       version: "0.1.0",
       private: true,
       type: "module",
+      // Minimum Node version stated in the framework README.
+      engines: { node: ">=22.5" },
       scripts: {
         start: opts.packageManager === "bun" ? "bun run src/index.ts" : "tsx src/index.ts",
         typecheck: "tsc --noEmit",

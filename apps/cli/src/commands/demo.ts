@@ -259,7 +259,6 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
     // tools the agent actually used (e.g. get-hn-posts), not final-answer.
     const META_TOOL_NAMES: ReadonlySet<string> = new Set([
         'final-answer',
-        'task-complete',
         'context-status',
         'brief',
         'pulse',

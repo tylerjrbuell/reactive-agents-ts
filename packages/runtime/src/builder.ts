@@ -326,10 +326,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * SQLite writes, predictable in CI, no surprise cross-session state.
      * Opt in with one line — `.withMemory()` (tier-1 working memory + SQLite
      * cross-session store) — or via `HarnessProfile.balanced()` /
-     * `.intelligent()`, both of which enable it explicitly. When the user
-     * calls `.withMemory()` the option preserves the project-local dbPath;
-     * profile/opt-in builds without an explicit path resolve to
-     * `~/.reactive-agents/<agentId>/memory.db`.
+     * `.intelligent()`, both of which enable it explicitly. A bare
+     * `.withMemory()` (no `dbPath`) resolves to a stable user-scope store at
+     * `~/.reactive-agents/<agentId>/memory.db`; pass `.withMemory({ dbPath })`
+     * to keep a project-local path. Under `test` provider / `NODE_ENV=test`
+     * it resolves to SQLite `:memory:` so runs never write to disk.
      *
      * Migration from v0.11 (memory was default-on, GH #122): add `.withMemory()`
      * to any agent that relied on implicit cross-session memory.

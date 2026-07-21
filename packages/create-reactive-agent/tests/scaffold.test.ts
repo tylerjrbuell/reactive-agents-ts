@@ -9,6 +9,7 @@ import {
   providerDefaultModel,
   providerEnvVar,
   providerImport,
+  providerRuntimeName,
 } from "../src/lib/provider-config.js";
 import type { Provider, TemplateName, ScaffoldOptions } from "../src/types.js";
 
@@ -51,6 +52,13 @@ describe("provider-config", () => {
   test("provider import name is identity", () => {
     for (const p of ["anthropic", "openai", "google", "ollama"] as const) {
       expect(providerImport(p)).toBe(p);
+    }
+  });
+
+  test("runtime provider name maps google → gemini, identity otherwise", () => {
+    expect(providerRuntimeName("google")).toBe("gemini");
+    for (const p of ["anthropic", "openai", "ollama", "groq", "xai"] as const) {
+      expect(providerRuntimeName(p)).toBe(p);
     }
   });
 });
@@ -100,7 +108,10 @@ describe("renderTemplate", () => {
     const pkg = files.find((f) => f.path === "package.json")!;
     const parsed = JSON.parse(pkg.content) as Record<string, unknown>;
     expect(parsed.name).toBe("demo-app");
-    expect((parsed.dependencies as Record<string, string>)["reactive-agents"]).toBeDefined();
+    // Fallback must track the current release major/minor — templates use
+    // >=0.14 APIs (withOutputSchema / withDurableRuns / withApprovalPolicy).
+    expect((parsed.dependencies as Record<string, string>)["reactive-agents"]).toBe("^0.14.0");
+    expect((parsed.engines as Record<string, string>).node).toBe(">=22.5");
   });
 
   test(".env.example contains env var for cloud providers", () => {
@@ -156,7 +167,9 @@ describe("template-specific output", () => {
         const files = renderTemplate(baseOpts({ template: t, provider: p }));
         const idx = files.find((f) => f.path === "src/index.ts")!;
         expect(idx.content).toContain('import { ReactiveAgents } from "reactive-agents"');
-        expect(idx.content).toContain(`.withProvider("${p}")`);
+        // Generated code must use the framework's registered provider name
+        // ("gemini"), even when the CLI input alias is "google".
+        expect(idx.content).toContain(`.withProvider("${providerRuntimeName(p)}")`);
         expect(idx.content).toContain(`.withModel("${providerDefaultModel(p)}")`);
       });
     }
@@ -168,11 +181,30 @@ describe("template-specific output", () => {
     expect(idx.content).toContain(".withTools()");
   });
 
-  test("streaming template uses runStream()", () => {
+  test("streaming template uses runStream() with the real _tag event API", () => {
     const files = renderTemplate(baseOpts({ template: "streaming" }));
     const idx = files.find((f) => f.path === "src/index.ts")!;
     expect(idx.content).toContain("agent.runStream(");
-    expect(idx.content).toContain("text-delta");
+    // Real AgentStreamEvent union is discriminated by `_tag` (see
+    // packages/runtime/src/stream-types.ts) — the old "text-delta"/"event.type"
+    // shape never existed.
+    expect(idx.content).toContain("event._tag");
+    expect(idx.content).toContain('"TextDelta"');
+    expect(idx.content).toContain("event.text");
+    expect(idx.content).toContain('"StreamCompleted"');
+    expect(idx.content).toContain('"StreamError"');
+    expect(idx.content).not.toContain("text-delta");
+    expect(idx.content).not.toContain("event.type");
+  });
+
+  test("google provider emits gemini in code but keeps GOOGLE_API_KEY env", () => {
+    const files = renderTemplate(baseOpts({ provider: "google" }));
+    const idx = files.find((f) => f.path === "src/index.ts")!;
+    expect(idx.content).toContain('.withProvider("gemini")');
+    expect(idx.content).not.toContain('.withProvider("google")');
+    expect(idx.content).toContain("GOOGLE_API_KEY");
+    const env = files.find((f) => f.path === ".env.example")!;
+    expect(env.content).toContain("GOOGLE_API_KEY");
   });
 
   test("minimal template does NOT call withTools or runStream", () => {

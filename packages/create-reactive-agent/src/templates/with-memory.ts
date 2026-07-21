@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar } from "../lib/provider-config.js";
+import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
 
 export const withMemoryTemplate: Template = {
   name: "with-memory",
@@ -29,7 +29,7 @@ ${envCheck}
 const agent = await ReactiveAgents.create()
   .withName("memory-assistant")
   .withAgentId("memory-demo")
-  .withProvider("${opts.provider}")
+  .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withMemory()
   .withMaxIterations(4)
