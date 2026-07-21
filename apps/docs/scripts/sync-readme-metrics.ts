@@ -50,12 +50,6 @@ const rules: Rule[] = [
   {
     file: "README.md",
     subs: [
-      // "35 total" header label
-      {
-        label: "grand-total header",
-        pattern: /\*\*\d+ total\*\*/,
-        replacement: `**${metrics.grandTotal} total**`,
-      },
       // "30 packages + 5 apps"
       {
         label: "packages + apps inline",
