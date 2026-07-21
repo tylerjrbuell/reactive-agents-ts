@@ -51,6 +51,25 @@ const statusOf = (e: RawProviderError): number | undefined => {
 };
 
 /**
+ * The env var each cloud provider's layer reads for credentials (verified
+ * against `process.env.*` reads in this package). Local/keyless providers
+ * (ollama) and bring-your-own-layer ("custom", "test") are absent on purpose —
+ * naming an env var for them would be a lie.
+ */
+const PROVIDER_KEY_ENV: Partial<Record<string, string>> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  gemini: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  xai: "XAI_API_KEY",
+  litellm: "LITELLM_API_KEY",
+};
+
+/** Credential-shaped failure: 401/403, or an SDK message about keys/auth. */
+const AUTH_FAULT =
+  /authentication|unauthorized|invalid[ _-]?api[ _-]?key|api[ _-]?key.*(missing|not set|invalid)|apiKey or authToken|credential/i;
+
+/**
  * True when a failure is TRANSIENT — a 5xx (server overload/unavailable, incl.
  * Anthropic/Groq 529) or a network fault. Same remediation as a 429: back off
  * and retry. Kept distinct from permanent 4xx (bad request / auth / not-found),
@@ -133,6 +152,22 @@ export function mapProviderError(
         `${provider} transient failure${typeof status === "number" ? ` (status ${status})` : ""}`,
       provider,
       retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 1_000,
+    });
+  }
+
+  // Credential failure → one actionable line naming the env var to set.
+  // First-touch DX: the raw SDK text ("Could not resolve authentication
+  // method…") never names ANTHROPIC_API_KEY etc., leaving a new user to
+  // search for it. Permanent (never retried).
+  if (status === 401 || status === 403 || AUTH_FAULT.test(reason)) {
+    const envVar = PROVIDER_KEY_ENV[provider];
+    return new LLMError({
+      message: envVar
+        ? `${provider} rejected the request credentials. Set ${envVar} in your environment (or a .env file) with a valid API key.` +
+          (reason ? ` Provider said: ${reason}` : "")
+        : `${provider} rejected the request credentials.${reason ? ` Provider said: ${reason}` : ""}`,
+      provider,
+      cause: reason,
     });
   }
 

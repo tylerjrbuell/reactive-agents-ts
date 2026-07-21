@@ -80,3 +80,39 @@ describe("retryPolicy wiring", () => {
     expect(retryPolicy).toBeDefined();
   });
 });
+
+// ─── Auth failures name the missing env var (first-touch DX) ─────────────────
+// A first-time user with no key previously saw the raw SDK text ("Could not
+// resolve authentication method…") which never names ANTHROPIC_API_KEY. The
+// auth branch maps 401/403/credential-phrased errors to one actionable line.
+describe("mapProviderError — auth failures name the provider env var", () => {
+  it("anthropic no-key SDK error names ANTHROPIC_API_KEY", () => {
+    const e = mapProviderError(
+      { message: "Could not resolve authentication method. Expected either apiKey or authToken to be set." },
+      "anthropic",
+    );
+    expect(e._tag).toBe("LLMError");
+    expect(e.message).toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("401 on groq names GROQ_API_KEY", () => {
+    const e = mapProviderError({ status: 401, message: "Invalid API Key" }, "groq");
+    expect(e.message).toContain("GROQ_API_KEY");
+    expect(isRetried(e)).toBe(false);
+  });
+
+  it("403 on openai names OPENAI_API_KEY", () => {
+    const e = mapProviderError({ status: 403, message: "forbidden" }, "openai");
+    expect(e.message).toContain("OPENAI_API_KEY");
+  });
+
+  it("gemini names GOOGLE_API_KEY (not GEMINI_API_KEY)", () => {
+    const e = mapProviderError({ status: 401, message: "unauthorized" }, "gemini");
+    expect(e.message).toContain("GOOGLE_API_KEY");
+  });
+
+  it("ollama auth-ish error does NOT invent an env var (local, keyless)", () => {
+    const e = mapProviderError({ status: 401, message: "unauthorized" }, "ollama");
+    expect(e.message).not.toContain("_API_KEY");
+  });
+});
