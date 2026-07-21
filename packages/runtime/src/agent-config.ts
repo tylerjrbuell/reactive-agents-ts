@@ -7,16 +7,19 @@
  */
 import { Schema } from "effect";
 import { ReasoningStrategy } from "@reactive-agents/core";
+import { LLMProviderType } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentBuilder } from "./builder.js";
 
 // ─── Provider Schema ──────────────────────────────────────────────────────────
 
+// Derived from the canonical LLMProviderType union (single source — a provider
+// added there is accepted here automatically; a stale inline copy previously
+// rejected groq/xai from createAgent for two releases). "custom" is excluded:
+// the declarative config cannot carry a user-defined service layer, so
+// accepting it would only defer the failure to a more confusing place. "test"
+// (the deterministic in-repo provider) is runtime-side only, appended here.
 export const ProviderNameSchema = Schema.Literal(
-  "anthropic",
-  "openai",
-  "ollama",
-  "gemini",
-  "litellm",
+  ...LLMProviderType.literals.filter((p) => p !== "custom"),
   "test",
 );
 

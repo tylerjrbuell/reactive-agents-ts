@@ -101,4 +101,31 @@ describe("createAgent", () => {
       createAgent({ name: "x", provider: "test", modle: "oops" }),
     ).rejects.toThrow(/invalid config/i);
   });
+
+  // The provider union is DERIVED from the canonical LLMProviderType (minus
+  // "custom", plus "test") — a stale inline copy previously rejected groq/xai
+  // from the declarative front door for two releases while the fluent builder
+  // accepted them. Cut the derivation (re-inline a subset) and this goes red.
+  it("accepts every canonical provider the builder accepts (groq/xai included)", async () => {
+    for (const provider of [
+      "anthropic",
+      "openai",
+      "ollama",
+      "gemini",
+      "litellm",
+      "groq",
+      "xai",
+      "test",
+    ] as const) {
+      const agent = await createAgent({ name: `p-${provider}`, provider });
+      expect(agent).toBeInstanceOf(ReactiveAgent);
+    }
+  });
+
+  it('rejects "custom" (declarative config cannot carry a service layer)', async () => {
+    await expect(
+      // @ts-expect-error — custom requires a user-defined LLMService layer.
+      createAgent({ name: "x", provider: "custom" }),
+    ).rejects.toThrow(/invalid config/i);
+  });
 });

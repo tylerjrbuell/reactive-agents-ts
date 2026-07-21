@@ -149,7 +149,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `persona.tone` | `string` | no |  |
 | `pricingRegistry` | `object` | no |  |
 | `profile` | `lean` \| `balanced` \| `intelligent` | no |  |
-| `provider` | `anthropic` \| `openai` \| `ollama` \| `gemini` \| `litellm` \| `test` | **yes** |  |
+| `provider` | `anthropic` \| `openai` \| `ollama` \| `gemini` \| `litellm` \| `groq` \| `xai` \| `test` | **yes** |  |
 | `rateLimiting.maxConcurrent` | `number` | no |  |
 | `rateLimiting.requestsPerMinute` | `number` | no |  |
 | `rateLimiting.tokensPerMinute` | `number` | no |  |

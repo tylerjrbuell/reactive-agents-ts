@@ -19,7 +19,7 @@
  * - DP7 symmetry: `createAgent({ tools: { allowedTools } })` ≡
  *   `.withTools({ allowedTools })` — identical key, identical result.
  */
-import { Schema } from "effect";
+import { ParseResult, Schema } from "effect";
 import { AgentConfigSchema, agentConfigToBuilder, type AgentConfig } from "./agent-config.js";
 import type { ReactiveAgent } from "./reactive-agent.js";
 
@@ -62,12 +62,36 @@ export async function createAgent<TOut = string>(
       onExcessProperty: "error",
     });
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    // Report ONLY the failing paths, one line each — the default ParseError
+    // text prints the entire schema AST (a multi-KB wall) before the useful
+    // part, which buried the actual mistake for first-time users. Union
+    // mismatches (N "Expected X, actual Y" lines for one path) collapse to a
+    // single expected-one-of line.
+    let detail: string;
+    if (ParseResult.isParseError(err)) {
+      const byPath = new Map<string, string[]>();
+      for (const issue of ParseResult.ArrayFormatter.formatErrorSync(err)) {
+        const path = issue.path.join(".") || "(root)";
+        const msgs = byPath.get(path) ?? [];
+        msgs.push(issue.message);
+        byPath.set(path, msgs);
+      }
+      detail = [...byPath]
+        .map(([path, msgs]) => {
+          const expected = msgs.map((m) => /^Expected (.+), actual (.+)$/.exec(m));
+          if (msgs.length > 1 && expected.every((m) => m !== null)) {
+            return `  - ${path}: expected one of ${expected.map((m) => m![1]).join(" | ")}, got ${expected[0]![2]}`;
+          }
+          return msgs.map((m) => `  - ${path}: ${m}`).join("\n");
+        })
+        .join("\n");
+    } else {
+      detail = err instanceof Error ? err.message : String(err);
+    }
     throw new Error(
       `createAgent: invalid config.\n${detail}\n` +
-        "Every key must match AgentConfigSchema (unknown keys are rejected). " +
-        "See the generated reference at " +
-        "apps/docs/src/content/docs/reference/configuration.md.",
+        "Unknown keys are rejected. Full key reference: " +
+        "https://docs.reactiveagents.dev/reference/configuration/",
     );
   }
 
