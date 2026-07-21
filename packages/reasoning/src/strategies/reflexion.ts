@@ -403,6 +403,17 @@ export const executeReflexion = (
 
           const critique = critiqueResult.content || critiqueResult.thinking || "";
           llmCalls += 1; // critique = one direct LLM call
+          // Honest trace when the critique LLM call failed and degraded to a
+          // no-op (the run continues with the current answer rather than dying).
+          if (critiqueResult.degraded) {
+            steps.push(
+              makeStep(
+                "observation",
+                `[CRITIQUE ${attempt}] skipped — ${critiqueResult.degraded.reason}`,
+                { frameworkInstrumentation: "critique-marker" },
+              ),
+            );
+          }
           const tokensAfterCritique = s.totalTokens + critiqueResult.tokens;
           const costAfterCritique = s.totalCost + critiqueResult.cost;
 

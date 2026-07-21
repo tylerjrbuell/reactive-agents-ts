@@ -10,15 +10,44 @@
  *      critique pass locally; all must route through runCritiquePass.
  */
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMServiceLayer, LLMError } from "@reactive-agents/llm-provider";
 import {
   runCritiquePass,
   critiqueMaxTokens,
 } from "../../../../src/kernel/capabilities/verify/critique.js";
 import { ExecutionError } from "../../../../src/errors/errors.js";
+
+// An LLMService whose completion call fails with a transient provider error —
+// the exact shape that killed a whole run before the critique pass learned to
+// degrade (Wave 5 root-cause: critique.ts hard-failed on any LLM error).
+const failingLLMLayer = Layer.succeed(LLMService, {
+  complete: () => Effect.fail(new LLMError({ message: "529 overloaded_error: server overloaded", provider: "anthropic" })),
+  stream: () => Effect.fail(new LLMError({ message: "529 overloaded_error: server overloaded", provider: "anthropic" })),
+  completeStructured: () => Effect.die("unused: completeStructured"),
+  embed: () => Effect.die("unused: embed"),
+  countTokens: () => Effect.succeed(0),
+  getModelConfig: () => Effect.die("unused: getModelConfig"),
+  getStructuredOutputCapabilities: () => Effect.die("unused: getStructuredOutputCapabilities"),
+  capabilities: () => Effect.die("unused: capabilities"),
+});
+
+const runPassFailing = (strategyName = "reflexion", step = 0) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return yield* runCritiquePass({
+        llm,
+        systemPrompt: "You are an evaluator.",
+        promptBody: "Critique this response.",
+        depth: "shallow",
+        strategyName,
+        step,
+      });
+    }).pipe(Effect.provide(failingLLMLayer)),
+  );
 
 // ── 1. critiqueMaxTokens — pure depth mapping ────────────────────────────────
 
@@ -102,29 +131,30 @@ describe("runCritiquePass — thinking-safe fallback chain", () => {
   });
 });
 
-describe("runCritiquePass — error wrapping", () => {
-  it("wraps LLM failure into ExecutionError with strategy + step attribution", async () => {
-    // TestLLMServiceLayer doesn't error by default; simulate by providing an empty
-    // scenario that exhausts immediately — actually it repeats the last turn, so
-    // we instead use a turn that produces empty content (no error). To test the
-    // error path we'd need a mock that yields Effect.fail; defer to integration.
-    // This test asserts that on success the returned shape is well-formed —
-    // ExecutionError construction itself is exercised at type-check time.
-    const r = await runPass({
-      llmTurns: [{ text: "ok" }],
-      strategyName: "my-strat",
-      step: 7,
-    });
-    expect(r.content).toBe("ok");
-    // Type sanity: confirm ExecutionError import is reachable.
-    const err = new ExecutionError({
-      strategy: "my-strat",
-      message: "test",
-      step: 7,
-      cause: new Error("boom"),
-    });
-    expect(err.strategy).toBe("my-strat");
-    expect(err.step).toBe(7);
+describe("runCritiquePass — graceful degradation on LLM failure", () => {
+  it("degrades to an empty, flagged critique instead of failing the whole run", async () => {
+    // Root cause (Wave 5): a transient LLM error in the critique pass mapped to
+    // an ExecutionError that killed a run which had ALREADY produced an answer.
+    // A critique is an enhancement, not a gate — a failed one must degrade to
+    // "no critique this round", never abort. The Effect must RESOLVE, not reject.
+    const r = await runPassFailing("reflexion", 0);
+    expect(r.content).toBe("");
+    expect(r.thinking).toBeNull();
+    expect(r.tokens).toBe(0);
+    expect(r.cost).toBe(0);
+    expect(r.degraded).toBeDefined();
+    expect(r.degraded?.reason).toContain("overloaded");
+  });
+
+  it("does not reject the Effect (the strategy fiber survives)", async () => {
+    // If this ever throws, a provider blip is once again zeroing whole runs.
+    await expect(runPassFailing("plan-execute-reflect", 3)).resolves.toBeDefined();
+  });
+
+  // Type sanity: ExecutionError remains constructible (still used elsewhere).
+  it("ExecutionError shape is intact", () => {
+    const err = new ExecutionError({ strategy: "s", message: "m", step: 1, cause: new Error("x") });
+    expect(err.strategy).toBe("s");
   });
 });
 

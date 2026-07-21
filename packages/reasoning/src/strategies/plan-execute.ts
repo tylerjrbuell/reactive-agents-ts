@@ -1004,6 +1004,17 @@ export const executePlanExecute = (
       totalCost += reflectResult.cost;
 
       const reflectionContent = reflectResult.content;
+      // Honest trace when the reflect LLM call failed and degraded to a no-op —
+      // the run keeps its executed plan/answer instead of aborting on a blip.
+      if (reflectResult.degraded) {
+        steps.push(
+          makeStep(
+            "observation",
+            `[REFLECT ${refinement}] skipped — ${reflectResult.degraded.reason}`,
+            { frameworkInstrumentation: "critique-marker" },
+          ),
+        );
+      }
 
       yield* emitPhaseEnd({ emitLog, phase: "plan-execute:reflect", startedAt: start, totalTokens });
 

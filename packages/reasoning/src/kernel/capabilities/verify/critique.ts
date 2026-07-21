@@ -30,7 +30,6 @@ import {
   THINKING_SAFE_MIN_TOKENS,
 } from "../../utils/stream-parser.js";
 import { withEnvContext } from "../../../context/context-engine.js";
-import { ExecutionError } from "../../../errors/errors.js";
 
 /** Depth dial for critique passes. "deep" raises the token budget for richer
  *  reasoning; "shallow" stays at the thinking-safe minimum. */
@@ -46,6 +45,13 @@ export interface CritiqueResult {
   readonly thinking: string | null;
   readonly tokens: number;
   readonly cost: number;
+  /**
+   * Present ONLY when the critique LLM call failed and the pass degraded to an
+   * empty (no-op) critique instead of aborting the run. Callers should treat a
+   * degraded result as "no critique this round" and surface the reason so the
+   * skip is traceable, not silent. Absent on every successful pass.
+   */
+  readonly degraded?: { readonly reason: string };
 }
 
 /** Inputs for `runCritiquePass`. Caller resolves system + body prompts. */
@@ -85,11 +91,17 @@ export function critiqueMaxTokens(depth: CritiqueDepth): number {
  * - Extracts content via `extractThinkingSafeContent` — the 4-layer fallback
  *   that rescues answers trapped inside `<think>` blocks or provider-separated
  *   thinking fields.
- * - Maps any LLM failure to a strategy-attributed `ExecutionError`.
+ * - GRACEFUL DEGRADATION: a critique is an ENHANCEMENT, not a gate. A failed
+ *   critique LLM call (transient overload / rate-limit / timeout) must NOT abort
+ *   a run that already produced an answer — it degrades to a `degraded` empty
+ *   result so the caller proceeds with its current answer. This pass therefore
+ *   never fails (`E = never`); the prior behaviour mapped any LLM error to an
+ *   `ExecutionError` that killed the whole run on a provider blip (Wave 5
+ *   root-cause: a transient critique failure zeroed real work).
  */
 export function runCritiquePass(
   input: RunCritiquePassInput,
-): Effect.Effect<CritiqueResult, ExecutionError, never> {
+): Effect.Effect<CritiqueResult, never, never> {
   return gatewayComplete(input.llm, {
     purpose: "verify",
     // Depth-derived cap predates the gateway's class table; keep it exact.
@@ -101,16 +113,7 @@ export function runCritiquePass(
       ...(input.traceContext ? { traceContext: input.traceContext } : {}),
     })
     .pipe(
-      Effect.mapError(
-        (err) =>
-          new ExecutionError({
-            strategy: input.strategyName,
-            message: `Critique pass failed at step ${input.step}`,
-            step: input.step,
-            cause: err,
-          }),
-      ),
-      Effect.map((response) => {
+      Effect.map((response): CritiqueResult => {
         const safe = extractThinkingSafeContent(response);
         return {
           content: safe.content,
@@ -120,5 +123,19 @@ export function runCritiquePass(
           cost: response.usage.estimatedCost,
         };
       }),
+      Effect.catchAll((err) =>
+        Effect.succeed<CritiqueResult>({
+          content: "",
+          recovered: false,
+          thinking: null,
+          tokens: 0,
+          cost: 0,
+          degraded: {
+            reason: `${input.strategyName} critique failed at step ${input.step}: ${
+              (err as { message?: string }).message ?? String(err)
+            }`,
+          },
+        }),
+      ),
     );
 }
