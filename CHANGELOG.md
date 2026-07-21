@@ -4,6 +4,23 @@
 
 - Removed the unregistered dead built-in tools `task-complete` and `rag-search` (public exports of `@reactive-agents/tools`); neither was ever registered as callable — `final-answer` is the sole terminator and `find` the unified retrieval tool, superseding them respectively.
 
+### Breaking — packages and no-op surface removed (v0.14)
+
+- **`@reactive-agents/orchestration` is no longer published** and the
+  `reactive-agents/orchestration` subpath is removed. The package was only
+  reachable through the removed no-op `.withOrchestration()` and had zero
+  consumers. Multi-agent composition lives on the sub-agent rails
+  (`.withAgentTool()` / `spawn-agent`), which this release made first-class
+  (see below).
+- **`@reactive-agents/scenarios` is no longer published.** Its five scenario
+  fixtures moved into the framework's own test suite; it was never a
+  user-facing API.
+- **`.withCacheTimeout()` removed.** It was a no-op: the tool-result cache
+  never accepted a timeout, so the value was written and never read.
+- Dead run-ledger kinds `checkpoint-marker`, `deliverable-commit`, and
+  `contract-amended` (plus the never-invoked `amendContract()` helper) are
+  removed from the ledger vocabulary — no writer ever minted them.
+
 ### Breaking — builder surface consolidation (v0.14)
 
 Three redundant builder methods removed; each was already folded into a
@@ -74,6 +91,43 @@ misleading you. The builder wither surface drops from 89 to 85 methods.
 - **The meta-tool suite is opt-in.** The default toolbox is now task-facing; the
   planning/reflection meta-tools (and their web-egress default) no longer load
   unless you ask for them.
+
+### Fixed — enforcement and run integrity
+
+- **Tool policy is enforced, not suggested.** `allowedTools` / `forbiddenTools`
+  and the `.withContract` deny-list are now enforced at the shared tool-execution
+  choke point on **every** strategy — including tools arriving via planned steps
+  (plan-execute, blueprint), hallucinated tool names, and `code-action`'s
+  sandbox, where LLM-generated code previously called tools with no policy
+  check at all. A blocked call is recorded honestly and never executes.
+- **Sub-agents are part of the run.** Spawned sub-agents (`.withAgentTool()` and
+  the `spawn-agent` tool) now fork into the parent's fiber tree instead of a
+  detached runtime: `agent.terminate()` interrupts in-flight children (no
+  orphaned workers), a failed child returns a truthful `success: false` result,
+  child events reach the parent's EventBus tagged with `parentAgentId`, and
+  traces correlate across the tree via `rootRunId` + depth. The recursion cap is
+  live — sub-agents may sub-delegate only below an explicit
+  `maxRecursionDepth`, and a refusal is observable instead of silent.
+- **Phase events reach the public stream.** `PhaseStarted` / `PhaseCompleted`
+  chunks (stream density `"full"`) are now actually emitted — they were
+  advertised in the streaming docs and `ui-core` types but had zero writers.
+- **The requirement lifecycle is real.** Run-ledger `requirement` entries are
+  minted when the run contract compiles and transition at the verification
+  gate, so run assessment and the meta-loop see declared/satisfied/blocked
+  requirements instead of a permanently empty list — and a requirement for one
+  entity is no longer satisfied by touching a different one.
+- **Kernel-path tool results reach memory extraction.** The kernel execution
+  path now feeds real tool observations (not the tool-call text) into
+  memory-flush extraction, matching the classic path.
+- **Transient provider failures are retried.** 5xx / 529-overload / network
+  faults (ECONNRESET, socket hang-up, fetch failed …) are now classified as
+  retryable and go through the exponential-backoff schedule; previously only
+  429 retried and a single provider blip failed the whole call. Permanent 4xx
+  errors still fail fast.
+- **A critique/reflect failure no longer kills the run.** If the critique pass
+  (reflexion, plan-execute reflect) hits an LLM error, the run degrades
+  gracefully — it proceeds with the answer it already has and records an honest
+  `[CRITIQUE skipped]` marker — instead of discarding completed work.
 
 ### Fixed — receipt & telemetry truthfulness
 
