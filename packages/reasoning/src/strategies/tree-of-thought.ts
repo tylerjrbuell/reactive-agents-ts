@@ -319,6 +319,10 @@ export const executeTreeOfThought = (
         extraMetadata: {
           llmCalls,
           terminatedBy: skipTb.terminatedBy,
+          // Wave C.1 task 4 (B2-class boundary): the skip path runs a real
+          // react kernel — forward its canonical tool ledger (mirrors
+          // reactive/direct).
+          runLedger: skipExecState.ledger ?? [],
           ...(skipTb.rawTerminatedBy !== undefined
             ? { rawTerminatedBy: skipTb.rawTerminatedBy }
             : {}),
@@ -729,7 +733,12 @@ export const executeTreeOfThought = (
         start,
         totalTokens,
         totalCost,
-        extraMetadata: { llmCalls },
+        // Wave C.1 task 4 (B2-class boundary): degenerate no-bestLeaf branch —
+        // BFS explore never ran Phase 2's react kernel, so there is no kernel
+        // ledger to draw from. Empty is honest (shape consistency with the
+        // other two ToT return sites, mirrors plan-execute's no-dispatch
+        // short-circuit).
+        extraMetadata: { llmCalls, runLedger: [] },
       });
     }
 
@@ -804,6 +813,10 @@ export const executeTreeOfThought = (
       extraMetadata: {
         llmCalls,
         terminatedBy: execTb.terminatedBy,
+        // Wave C.1 task 4 (B2-class boundary): Phase 2 is a real react kernel —
+        // forward its canonical tool ledger (mirrors reactive/direct/the skip
+        // path above).
+        runLedger: execState.ledger ?? [],
         ...(execTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: execTb.rawTerminatedBy }
           : {}),

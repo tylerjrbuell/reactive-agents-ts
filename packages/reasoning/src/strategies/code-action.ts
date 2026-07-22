@@ -33,6 +33,7 @@ import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy } from "../kernel/capabilities/act/tool-observe.js";
+import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -436,6 +437,13 @@ export const executeCodeAction = (
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
         llmCalls,
+        // Wave C.1 task 4 (B2-class boundary): code-action runs NO kernel (no
+        // KernelState.ledger to read), so its ledger is derived from `steps[]`
+        // via the same pure step→ledger projection the kernel's
+        // transitionState chokepoint uses (kernel/ledger/step-projection.ts).
+        // The action/observation pairs pushed above (the sandbox's canonical
+        // ledger pairs) project to `tool-invocation`/`tool-result` entries.
+        runLedger: projectStepsToLedger(undefined, steps, iteration),
         codeLength: generatedCode.length,
         // H5/#40: name what stayed unmet — same channel reactive ships.
         ...(lastVerdict === "FAIL"

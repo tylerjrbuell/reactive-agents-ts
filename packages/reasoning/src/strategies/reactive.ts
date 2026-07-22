@@ -330,6 +330,11 @@ export const executeReactive = (
       error: state.error,
       extraMetadata: {
         terminatedBy,
+        // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
+        // tool ledger so Slice 2's receipt re-base doesn't silently fall back
+        // to step-scanning for this strategy (mirrors plan-execute/blueprint's
+        // C8 forward).
+        runLedger: state.ledger ?? [],
         // H5: the honesty fields cross the result boundary. Empty on a clean run.
         ...honestPartialMetadata(state.meta),
         // Parallel open-string channel preserving raw kernel meta.

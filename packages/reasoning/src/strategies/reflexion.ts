@@ -715,6 +715,14 @@ export const executeReflexion = (
         confidence,
         llmCalls,
         reflexionCritiques: final.previousCritiques,
+        // Wave C.1 task 4 (B2-class boundary): forward the terminal pass's
+        // canonical tool ledger — mirrors reactive/direct/plan-execute so
+        // Slice 2's receipt re-base doesn't fall back to step-scanning here.
+        // Only the LAST pass's ledger is retained (generate seed, or the most
+        // recent improve pass) — same "last pass wins" rule terminatedBy uses
+        // above; reflexion does not chain ledgers across generate→improve
+        // sub-kernel invocations.
+        runLedger: final.lastPassState.ledger ?? [],
         ...(lastPassTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
           : {}),
