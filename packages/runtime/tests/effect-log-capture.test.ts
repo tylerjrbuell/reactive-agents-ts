@@ -42,11 +42,12 @@ describe("Effect logs raised inside a run are captured, not discarded", () => {
     const agent = await ReactiveAgents.create()
       .withName("effect-log-capture")
       .withProvider("test")
-      .withLogging({ live: true, minLevel: "debug" })
+      .withLogging({ level: "debug" })
       .withHook({
         phase: "complete",
         timing: "before",
-        handler: () => Effect.logWarning("canary-from-inside-the-run"),
+        handler: (ctx) =>
+          Effect.logWarning("canary-from-inside-the-run").pipe(Effect.as(ctx)),
       })
       .withTestScenario([{ text: "Done." }])
       .build();

@@ -36,6 +36,13 @@ jobs:
       - run: bun install --frozen-lockfile
       # T1.3 — Single build invocation. Turbo handles the docs dep order.
       - run: bun run build
+      # Strict per-package `tsc --noEmit`. The build above is tsup DTS (lenient:
+      # it emits declarations without failing on every type error), so type rot
+      # in test files and non-emitted paths slipped through PR CI and only blew
+      # up at release time (publish.yml runs this same strict check before it
+      # publishes). Running it here — against the fresh dist just built — catches
+      # that class on every PR, not first at the tag. Do NOT drop this step.
+      - run: bun run typecheck
 
   test:
     name: Test

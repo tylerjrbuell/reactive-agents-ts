@@ -134,11 +134,11 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
     const agent = await ReactiveAgents.create()
       .withName("seam")
       .withTestScenario([{ text: "FINAL ANSWER: 4" }])
-      .withReasoning({ defaultStrategy: "plan-execute" })
+      .withReasoning({ defaultStrategy: "plan-execute-reflect" })
       .build();
     try {
       const r = await agent.run("q");
-      expect(r.metadata.strategyUsed).toBe("plan-execute");
+      expect(r.metadata.strategyUsed).toBe("plan-execute-reflect");
     } finally {
       await agent.dispose();
     }
@@ -151,7 +151,7 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
   it("withMaxIterations(2) caps the loop (terminatedBy max_iterations, few steps)", async () => {
     const agent = await ReactiveAgents.create()
       .withName("seam")
-      .withTestScenario([{ toolCalls: [{ name: "seam_marker_tool", arguments: {} }] }])
+      .withTestScenario([{ toolCalls: [{ name: "seam_marker_tool", args: {} }] }])
       .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(2)
       .withTools(loopTool)

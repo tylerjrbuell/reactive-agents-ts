@@ -11,7 +11,7 @@ import { Effect, Context } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task } from "@reactive-agents/core";
 import type { LearningResult } from "@reactive-agents/reactive-intelligence";
-import { ProceduralMemoryService } from "@reactive-agents/memory";
+import { ProceduralMemoryService, MemoryIdSchema } from "@reactive-agents/memory";
 import { skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { extractTaskText } from "../util.js";
@@ -152,7 +152,7 @@ export const runLocalLearning = (
             if (svcOpt._tag !== "Some") return Effect.void;
             return Effect.gen(function* () {
               // Change 2: record outcome (success rate update)
-              yield* svcOpt.value.recordOutcome(appliedSkillId, skillOutcome !== "failure").pipe(
+              yield* svcOpt.value.recordOutcome(MemoryIdSchema.make(appliedSkillId), skillOutcome !== "failure").pipe(
                 Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/local-learning.ts:record-outcome", tag: errorTag(err) })),
               );
 
