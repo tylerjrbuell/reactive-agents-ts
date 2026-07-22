@@ -179,13 +179,25 @@ export function deriveReceiptDeliverables(args: {
     readonly taskContract?: TaskContract
     readonly reasoningSteps?: readonly ReasoningStep[]
     readonly output: string
+    /**
+     * The append-only RunLedger (Wave C1 task 6), when the strategy forwarded
+     * one via `extraMetadata.runLedger`. A `kind: "artifact"` entry whose
+     * `path` matches a declared deliverable marks it produced WITHOUT
+     * re-scanning `reasoningSteps` — see `computeDeliverableReport`'s `opts`.
+     */
+    readonly runLedger?: readonly RunLedgerEntryShape[]
 }): readonly DeliverableReceipt[] | undefined {
     const contract = compileRunContract(args.task, {
         ...(args.requiredTools ? { requiredTools: args.requiredTools } : {}),
         ...(args.taskContract ? { taskContract: args.taskContract } : {}),
     })
     if (contract.deliverables.length === 0) return undefined
-    const report = computeDeliverableReport(contract, args.reasoningSteps ?? [], args.output)
+    const ledgerArtifacts = (args.runLedger ?? [])
+        .filter((e) => e.kind === 'artifact' && typeof e.path === 'string')
+        .map((e) => e.path as string)
+    const report = computeDeliverableReport(contract, args.reasoningSteps ?? [], args.output, {
+        ...(ledgerArtifacts.length > 0 ? { artifactPaths: ledgerArtifacts } : {}),
+    })
     return report.length > 0 ? report : undefined
 }
 
@@ -223,6 +235,13 @@ type RunLedgerEntryShape = {
     readonly toolCallId?: string
     readonly success?: boolean
     readonly args?: Readonly<Record<string, unknown>>
+    /**
+     * Present on `kind: "artifact"` entries (Wave C1 task 6, run-ledger.ts's
+     * `ArtifactEntry`) — the declared write path. Consumed by
+     * `deriveReceiptDeliverables` below; unused by `deriveReceiptToolCalls`.
+     */
+    readonly path?: string
+    readonly op?: string
 }
 
 export function deriveReceiptToolCalls(

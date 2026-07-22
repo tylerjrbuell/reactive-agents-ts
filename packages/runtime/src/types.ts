@@ -250,6 +250,13 @@ export interface ExecutionContextMetadata {
         readonly toolCallId?: string;
         readonly success?: boolean;
         readonly args?: Readonly<Record<string, unknown>>;
+        /**
+         * Present on `kind: "artifact"` entries (Wave C1 task 6) — the
+         * declared write path. Consumed by `deriveReceiptDeliverables` to
+         * mark a declared deliverable produced without re-scanning `steps`.
+         */
+        readonly path?: string;
+        readonly op?: string;
       }>;
     };
   };

@@ -1508,6 +1508,17 @@ export class ReactiveAgent<TOut = unknown> {
                           reasoningSteps: (rawMetadata as {
                               reasoningSteps?: readonly ReasoningStep[]
                           }).reasoningSteps,
+                          // Wave C1 (task 6) — same forwarded ledger deriveReceiptToolCalls
+                          // reads below; a ledger `artifact` entry marks a declared
+                          // deliverable produced without re-scanning reasoningSteps.
+                          runLedger: (rawMetadata as {
+                              runLedger?: ReadonlyArray<{
+                                  kind: string
+                                  toolCallId?: string
+                                  path?: string
+                                  op?: string
+                              }>
+                          }).runLedger,
                           output: String(r.output ?? ''),
                       })
                 // Deterministic upgrade over the terminatedBy heuristic: the

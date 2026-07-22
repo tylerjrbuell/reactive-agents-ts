@@ -585,6 +585,8 @@ export const makeExecuteStream =
                 readonly toolCallId?: string
                 readonly success?: boolean
                 readonly args?: Readonly<Record<string, unknown>>
+                readonly path?: string
+                readonly op?: string
               }>
             }
           };
@@ -598,6 +600,11 @@ export const makeExecuteStream =
                 ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                 ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
                 reasoningSteps: (taskResult as { metadata?: { reasoningSteps?: readonly ReasoningStep[] } }).metadata?.reasoningSteps,
+                // Wave C1 (task 6) — same runLedger the receipt's
+                // deriveReceiptToolCalls reads below; a ledger `artifact` entry
+                // marks a declared deliverable produced without re-scanning
+                // reasoningSteps.
+                runLedger: receiptSource.metadata?.runLedger,
                 output: String((taskResult as { output?: unknown }).output ?? ""),
               });
           const unsignedReceipt: TrustReceipt | undefined = isPausedRun

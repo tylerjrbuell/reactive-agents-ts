@@ -1169,6 +1169,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                     ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
                     reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
+                    // Wave C1 (task 6) — same `rr.metadata.runLedger` forwarded
+                    // onto TaskResult.metadata below (task 5); a ledger
+                    // `artifact` entry marks a declared deliverable produced
+                    // without re-scanning reasoningSteps.
+                    runLedger: rr?.metadata?.runLedger,
                     output: "",
                   });
                   if (
