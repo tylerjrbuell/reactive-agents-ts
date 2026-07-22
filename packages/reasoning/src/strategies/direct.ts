@@ -219,6 +219,10 @@ export const executeDirect = (
       error: state.error,
       extraMetadata: {
         terminatedBy,
+        // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
+        // tool ledger so Slice 2's receipt re-base doesn't silently fall back
+        // to step-scanning for this strategy (mirrors reactive/plan-execute).
+        runLedger: state.ledger ?? [],
         // Honesty markers cross the result boundary — empty on a clean run,
         // mirroring reactive's honestPartialMetadata.
         ...honestPartialMetadata(state.meta),

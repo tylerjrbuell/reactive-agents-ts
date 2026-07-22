@@ -1169,6 +1169,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                     ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
                     reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
+                    // Wave C1 (task 6) — same `rr.metadata.runLedger` forwarded
+                    // onto TaskResult.metadata below (task 5); a ledger
+                    // `artifact` entry marks a declared deliverable produced
+                    // without re-scanning reasoningSteps.
+                    runLedger: rr?.metadata?.runLedger,
                     output: "",
                   });
                   if (
@@ -1315,6 +1320,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // prefer step-derivation and use this as fallback.
                     ...(toolCallLog.length > 0
                       ? { receiptToolCalls: toolCallLog.map((t) => ({ name: t.toolName, ok: t.success })) } as Record<string, unknown>
+                      : {}),
+                    // Wave C1 (task 5): forward the strategy's RunLedger so the
+                    // trust receipt's deriveReceiptToolCalls can re-base its
+                    // tool-call evidence onto ledger pairs FIRST, ahead of the
+                    // reasoningSteps/receiptToolCalls fallbacks above. Read from
+                    // `rr.metadata.runLedger` (task 4 shipped every strategy
+                    // forwarding it there via `extraMetadata.runLedger`) — NOT
+                    // `ctx.metadata.reasoningSteps`, which only ever held
+                    // `result.steps`, never `result.metadata.runLedger`.
+                    ...(rr?.metadata?.runLedger && rr.metadata.runLedger.length > 0
+                      ? { runLedger: rr.metadata.runLedger } as Record<string, unknown>
                       : {}),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7

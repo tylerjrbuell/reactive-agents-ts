@@ -226,7 +226,7 @@ export function runKernel(
     );
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
-    const hooks = buildKernelHooks(eventBus);
+    const hooks = buildKernelHooks(eventBus, effectiveInput.agentId);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
     // Select tool-calling driver from the SAME capability signal as the resolver
@@ -288,6 +288,20 @@ export function runKernel(
       : effectiveInput.initialMessages?.length
         ? transitionState(baseState, { messages: effectiveInput.initialMessages })
         : baseState;
+    // Wave C.1 slice 3 — live ledger tap watermark. Captured HERE, immediately
+    // after the resume/fresh decision and BEFORE any of the pre-loop seeding
+    // blocks below grow the ledger (e.g. `recordRequirementsDeclared` at the
+    // RunContract compile step), so:
+    //   - RESUME-SAFETY: a durable-resumed kernel's `resumeState.ledger` was
+    //     already published in the prior process — those entries must NOT
+    //     re-publish. Capturing the watermark right at the resume/fresh split
+    //     (before any THIS-process growth) excludes exactly those, and only those.
+    //   - FRESH-RUN COVERAGE: a fresh run's pre-loop ledger growth (declared
+    //     requirements) IS new in this process and must reach `seen` — capturing
+    //     the watermark any later (e.g. just before the main loop) would silently
+    //     skip publishing those entries, breaking the "every entry exactly once"
+    //     invariant the ledger-tap test pins.
+    let publishedLedgerLen = state.ledger?.length ?? 0;
     // Seed environmentContext onto state so project()/fromKernelState can
     // reproduce the Environment block (incl. caller custom fields). It lives on
     // KernelInput (react-kernel.ts:193) but was never copied to state, so under
@@ -739,6 +753,17 @@ export function runKernel(
       (iterationCarrier.state.llmCalls ?? 0) < iterationCarrier.currentOptions.maxIterations
     ) {
       const signal = yield* runIterationPass(iterationCarrier, iterationConfig);
+      // Wave C.1 slice 3 — live ledger tap (exactly-once per entry, seq order).
+      // `iterationCarrier.state` holds the post-iteration ledger — `sync()`
+      // inside runIterationPass writes it back before every return, including
+      // "break".
+      if (iterationCarrier.state.ledger && iterationCarrier.state.ledger.length > publishedLedgerLen) {
+        yield* hooks.onLedgerAppend(
+          iterationCarrier.state,
+          iterationCarrier.state.ledger.slice(publishedLedgerLen),
+        );
+        publishedLedgerLen = iterationCarrier.state.ledger.length;
+      }
       if (signal === "break") break;
     }
 
@@ -1440,6 +1465,14 @@ export function runKernel(
       yield* hooks.onDone(state);
     } else if (state.status === "failed") {
       yield* hooks.onError(state, state.error ?? "unknown error");
+    }
+
+    // Wave C.1 slice 3 — live ledger tap, once more after loop exit. Covers any
+    // terminal-transition entries minted by the post-loop finalization blocks
+    // (§7.5–§9) between the last in-loop firing and this point.
+    if (state.ledger && state.ledger.length > publishedLedgerLen) {
+      yield* hooks.onLedgerAppend(state, state.ledger.slice(publishedLedgerLen));
+      publishedLedgerLen = state.ledger.length;
     }
 
     // ── 11. Return final state ────────────────────────────────────────────────

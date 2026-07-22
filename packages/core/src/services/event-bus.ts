@@ -1277,6 +1277,8 @@ export type AgentEvent =
       readonly metadata?: Record<string, unknown>;
       readonly timestamp: number;
     }
+  // ─── Ledger convergence (Wave C.1 slice 3) ───
+  | LedgerEntryAppendedEvent
   // ─── Skill lifecycle events ───
   | SkillActivated
   | SkillRefined
@@ -1300,6 +1302,30 @@ export type AgentEvent =
   | DebriefCompleted
   | AgentConnected
   | AgentDisconnected;
+
+/**
+ * A batch of RunLedger entries was appended at the kernel runner's iteration
+ * boundary (Wave C.1 slice 3 — live ledger tap). `KernelHooks.onLedgerAppend`
+ * fires this exactly once per entry, in ledger `seq` order, at
+ * `packages/reasoning/src/kernel/loop/runner.ts` — never twice (a
+ * durable-resumed run tracks how much of the ledger it already published in a
+ * prior process and only publishes the delta).
+ *
+ * `entries` is typed structurally as `Record<string, unknown>` rather than the
+ * reasoning package's `LedgerEntry` union — `@reactive-agents/core` does not
+ * depend on `@reactive-agents/reasoning`. Every concrete `LedgerEntry` variant
+ * (tool-invocation, tool-result, artifact, requirement, claim, verdict,
+ * harness-signal, handoff, compaction-marker) structurally satisfies this
+ * shape; consumers that need the narrow kinds re-import `LedgerEntry` from the
+ * reasoning package and narrow on `entries[i].kind`.
+ */
+export interface LedgerEntryAppendedEvent {
+  readonly _tag: "LedgerEntryAppended";
+  readonly agentId: string;
+  readonly taskId: string;
+  readonly entries: ReadonlyArray<Record<string, unknown>>;
+  readonly timestamp: number;
+}
 
 /**
  * Discriminant tag union of all agent event types.
@@ -1395,7 +1421,14 @@ export class EventBus extends Context.Tag("EventBus")<
      * All handlers execute concurrently; failures in one do not prevent others from running.
      *
      * @param event — The AgentEvent to broadcast
-     * @returns Effect that completes once all handlers have started (does not wait for completion)
+     * @returns Effect that resolves only once ALL handlers have completed — the
+     *   implementation awaits `Effect.all(handlers, { concurrency: "unbounded" })`, so
+     *   handlers run concurrently with each other but `publish` itself is NOT
+     *   fire-and-forget. Downstream ordering guarantees depend on this — e.g. the
+     *   `LedgerEntryAppended` → ledger-entry stream projection (Wave C.1) assumes a
+     *   published entry is fully observed by its tap before `publish` returns. Do not
+     *   change this to return before handlers complete without revisiting those
+     *   guarantees.
      *
      * @example
      * ```typescript

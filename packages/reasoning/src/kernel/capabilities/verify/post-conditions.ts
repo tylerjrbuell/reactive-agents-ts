@@ -110,8 +110,12 @@ function normalizePath(p: string): string {
  * `.includes()` / basename match — false-met is the dangerous direction for a
  * success authority, so we never match across a non-separator boundary and
  * never run the reverse direction (target ⊇ written). Pure: no fs, no cwd.
+ *
+ * Exported (Wave C1 task 6) so `deliverable-report.ts` can reuse this SAME
+ * normalizer when matching a RunLedger `artifact` entry's path against a
+ * declared deliverable's path, instead of re-deriving path-matching logic.
  */
-function writtenPathSatisfies(written: string, target: string): boolean {
+export function writtenPathSatisfies(written: string, target: string): boolean {
   const w = normalizePath(written);
   const t = normalizePath(target);
   if (t.length === 0) return false;

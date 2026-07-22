@@ -78,5 +78,21 @@ if [ -n "$HITS" ]; then
   exit 1
 fi
 
+# ── C-final tightening (Wave C.1, 2026-07-22) ────────────────────────────────
+# steps[] is mutated ONLY via transitionState patches (the chokepoint that
+# derives the ledger). Direct array mutation anywhere else in the kernel would
+# grow steps without growing the ledger — exactly the drift the C1 equivalence
+# invariant (equivalence.test.ts) pins. Ratified: wiki/Decisions/
+# 2026-07-22-c1-equivalence-invariant.md
+STEPS_MUTATIONS=$(grep -rnE '\.steps\.push\(|\.steps\[[^]]*\]\s*=|steps\.splice\(' \
+  packages/reasoning/src/kernel --include='*.ts' \
+  | grep -v '\.test\.ts' \
+  | grep -v 'state/kernel-state\.ts' || true)
+if [ -n "$STEPS_MUTATIONS" ]; then
+  echo "FAIL: direct steps[] mutation outside the transitionState chokepoint:"
+  echo "$STEPS_MUTATIONS"
+  exit 1
+fi
+
 echo "✅ RunLedger invariant holds — append API confined to kernel/ledger/ + the act.ts dual-emit seam."
 exit 0

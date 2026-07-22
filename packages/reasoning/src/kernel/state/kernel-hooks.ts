@@ -10,12 +10,26 @@
  * in MetricsCollector and ensures consistent event shapes across all strategies.
  */
 import { Effect } from "effect";
-import type { AgentEvent } from "@reactive-agents/core";
+import type { AgentEvent, LedgerEntryAppendedEvent } from "@reactive-agents/core";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
+import type { LedgerEntry } from "../ledger/run-ledger.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+
+/**
+ * Wave C.1 slice 3 (fixed) — `KernelState` carries no `agentId` field (it
+ * lives only on the optional `KernelInput.agentId`), and `onLedgerAppend`'s
+ * fixed `(state, entries)` signature does not receive it either. The real
+ * agentId is now threaded in via `buildKernelHooks(eventBus, agentId)` — see
+ * `runner.ts`'s `buildKernelHooks(eventBus, effectiveInput.agentId)` call —
+ * and closed over here. This fallback only fires when the caller's
+ * `KernelInput.agentId` is `undefined`, mirroring the same fallback used
+ * elsewhere in this package when an agent identity is unavailable in scope
+ * (`tool-execution.ts`, `act.ts`, `tool-observe.ts`).
+ */
+const DEFAULT_LEDGER_TAP_AGENT_ID = "reasoning-agent";
 
 function llmMessageToSynthesisPayload(m: LLMMessage): { readonly role: string; readonly content: string | null } {
   const role = m.role;
@@ -43,7 +57,7 @@ function getKernelPass(state: KernelState): string {
  * Each hook publishes the appropriate event(s) via `publishReasoningStep`, which
  * handles the None case internally and swallows publish errors.
  */
-export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): KernelHooks {
+export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>, agentId?: string): KernelHooks {
   return {
     onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string; messages?: readonly { readonly role: string; readonly content: string }[]; rawResponse?: string }): Effect.Effect<void, never> =>
       Effect.gen(function* () {
@@ -256,5 +270,26 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
             } as AgentEvent)
             .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/state/kernel-hooks.ts:197", tag: errorTag(err) })))
         : Effect.void,
+
+    onLedgerAppend: (
+      state: KernelState,
+      entries: readonly LedgerEntry[],
+    ): Effect.Effect<void, never> =>
+      publishReasoningStep(
+        eventBus,
+        {
+          _tag: "LedgerEntryAppended",
+          agentId: agentId ?? DEFAULT_LEDGER_TAP_AGENT_ID,
+          taskId: state.taskId,
+          // Every concrete LedgerEntry variant structurally satisfies
+          // Record<string, unknown> (the core event's package-boundary
+          // shape — core cannot depend on reasoning's LedgerEntry union),
+          // but TS's structural check requires an explicit index signature
+          // for direct assignability. Narrow, unavoidable widening — not an
+          // `any` escape hatch.
+          entries: entries as unknown as ReadonlyArray<Record<string, unknown>>,
+          timestamp: Date.now(),
+        } satisfies LedgerEntryAppendedEvent,
+      ),
   };
 }

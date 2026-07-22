@@ -1508,6 +1508,17 @@ export class ReactiveAgent<TOut = unknown> {
                           reasoningSteps: (rawMetadata as {
                               reasoningSteps?: readonly ReasoningStep[]
                           }).reasoningSteps,
+                          // Wave C1 (task 6) — same forwarded ledger deriveReceiptToolCalls
+                          // reads below; a ledger `artifact` entry marks a declared
+                          // deliverable produced without re-scanning reasoningSteps.
+                          runLedger: (rawMetadata as {
+                              runLedger?: ReadonlyArray<{
+                                  kind: string
+                                  toolCallId?: string
+                                  path?: string
+                                  op?: string
+                              }>
+                          }).runLedger,
                           output: String(r.output ?? ''),
                       })
                 // Deterministic upgrade over the terminatedBy heuristic: the
@@ -1521,6 +1532,17 @@ export class ReactiveAgent<TOut = unknown> {
                               rawMetadata as {
                                   reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>
                                   receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
+                                  // Wave C1 (task 5) — forwarded by execution-engine.ts
+                                  // from `rr.metadata.runLedger` (task 4's strategy
+                                  // forwarding); deriveReceiptToolCalls prefers this
+                                  // over reasoningSteps when non-empty.
+                                  runLedger?: ReadonlyArray<{
+                                      kind: string
+                                      toolName?: string
+                                      toolCallId?: string
+                                      success?: boolean
+                                      args?: Readonly<Record<string, unknown>>
+                                  }>
                               },
                           ),
                           ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),

@@ -34,6 +34,7 @@ import {
   publishReasoningStep,
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   evaluateTerminalGate,
@@ -715,6 +716,20 @@ export const executeReflexion = (
         confidence,
         llmCalls,
         reflexionCritiques: final.previousCritiques,
+        // Wave C.1 task 4 (B2-class boundary, review-corrected): the terminal
+        // pass's OWN ledger (final.lastPassState.ledger) is INCOMPLETE — it
+        // only covers the last generate/improve sub-kernel pass, while the
+        // steps[] this strategy actually returns (below) merges tool evidence
+        // from EVERY pass via `final.allSideEffectSteps`. An earlier pass's
+        // tool call (e.g. the generate pass writes a file, a later improve
+        // pass only polishes prose) would be present in steps[] but invisible
+        // in runLedger — a steps/ledger divergence Slice 2's receipt (which
+        // treats runLedger as authoritative) would silently miss. Mirror
+        // code-action's precedent: project a from-scratch ledger over the
+        // SAME merged steps[] array returned in this result, so runLedger ≡
+        // projection(steps) — every pass's tool-invocation/tool-result
+        // appears, with a single contiguous seq (no cross-pass collision).
+        runLedger: projectStepsToLedger(undefined, steps, iters),
         ...(lastPassTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
           : {}),

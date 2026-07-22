@@ -351,6 +351,18 @@ export const executeAdaptive = (
       extraMetadata: {
         selectedStrategy: activeStrategy,
         fallbackOccurred,
+        // Wave C.1 task 4 (B2-class boundary): relay the FINAL sub-strategy's
+        // runLedger (mirrors the terminatedBy/abstention forward below) —
+        // every dispatched sub-strategy now forwards this field itself.
+        // KNOWN LIMITATION: on a fallback (fallbackOccurred), this is ONLY the
+        // fallback reactive's ledger — the failed sub-strategy's ledger
+        // (subResult, distinct from finalSubResult) is NOT merged in, because
+        // the two ledgers were minted by independent runs and their `seq`
+        // numbering would collide if concatenated. steps merging (priorSubSteps
+        // above) already preserves the failed sub-strategy's real tool
+        // evidence for deliverable verification; only the ledger view is
+        // narrowed to the final sub-strategy on a fallback.
+        runLedger: Array.isArray(subMeta.runLedger) ? subMeta.runLedger : [],
         ...(typeof subMeta.terminatedBy === "string"
           ? { terminatedBy: subMeta.terminatedBy }
           : {}),

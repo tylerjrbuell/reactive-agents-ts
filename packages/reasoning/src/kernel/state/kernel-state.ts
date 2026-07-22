@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
-import type { RunLedger } from "../ledger/run-ledger.js";
+import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
@@ -521,7 +521,9 @@ export interface KernelState {
    * Optional so hand-built / legacy states need no change; readers guard with
    * `?? []`. `initialKernelState` seeds it empty; the durable kernel-codec
    * round-trips it (plain-data array) for crash-resume.
-   * TODO(C-final): steps becomes a projection OF this ledger (last step of Wave C).
+   * C-final (2026-07-22): resolved as the equivalence invariant — see
+   * wiki/Decisions/2026-07-22-c1-equivalence-invariant.md. Ledger is canonical
+   * for readers; steps[] mutates only via this chokepoint.
    */
   readonly ledger?: RunLedger;
   readonly toolsUsed: ReadonlySet<string>;
@@ -1013,6 +1015,16 @@ export interface KernelHooks {
     taskId: string,
     agentId: string,
   ) => Effect.Effect<void, never>;
+  /**
+   * Wave C.1 slice 3 — live ledger tap. Fired at the runner iteration
+   * boundary with the entries appended since the previous firing (seq order,
+   * exactly once). The engine bridge publishes these as LedgerEntryAppended
+   * bus events; journal.ts persistence + stream projection ride that event.
+   */
+  readonly onLedgerAppend: (
+    state: KernelState,
+    entries: readonly LedgerEntry[],
+  ) => Effect.Effect<void, never>;
 }
 
 // ── KernelContext — Injected into every kernel call ──────────────────────────
@@ -1313,6 +1325,7 @@ export const noopHooks: KernelHooks = {
   onStrategySwitched: () => Effect.void,
   onStrategySwitchEvaluated: () => Effect.void,
   onContextSynthesized: () => Effect.void,
+  onLedgerAppend: () => Effect.void,
 };
 
 // ─── ReAct Kernel Input / Output ─────────────────────────────────────────────

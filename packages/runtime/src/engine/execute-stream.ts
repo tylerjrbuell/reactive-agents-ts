@@ -391,6 +391,64 @@ export const makeExecuteStream =
               }),
             ),
           );
+
+        // Wave C.1 slice 3 — live ledger feed. `KernelHooks.onLedgerAppend`
+        // (reasoning/src/kernel/state/kernel-hooks.ts) publishes
+        // `LedgerEntryAppended` on the bus once per batch, in ledger `seq`
+        // order, for every RunLedger append at an iteration boundary AND
+        // once more after loop exit for terminal-transition entries
+        // (runner.ts:1470-1476). Nothing projected it onto the public
+        // stream — same PhaseStarted-shaped gap. One public `LedgerEntry`
+        // chunk per entry in the batch, gated on density:"full".
+        //
+        // Ordering: `EventBus.publish()` (core/src/services/event-bus.ts)
+        // awaits every subscribed handler via `Effect.all` before it
+        // resolves — it does NOT fire-and-forget. `hooks.onLedgerAppend` is
+        // `yield*`-ed synchronously inside the runner's generator, so this
+        // subscription's `Queue.offer` calls below complete strictly before
+        // `execute(task)`'s Effect resolves — which is strictly before the
+        // `.tap` further down builds and offers `StreamCompleted` onto the
+        // SAME queue. This holds even for the runner's final post-loop
+        // onLedgerAppend flush (fired after onDone/onError, but still
+        // inside the same generator, before `return state`) — so terminal-
+        // transition ledger entries DO cross onto the public stream ahead
+        // of StreamCompleted, verified in
+        // packages/runtime/tests/ledger-event-projection.test.ts.
+        yield* eb
+          .on("LedgerEntryAppended", (event) =>
+            Effect.gen(function* () {
+              const e = event as {
+                taskId?: string;
+                entries?: ReadonlyArray<Record<string, unknown>>;
+              };
+              if (String(e.taskId ?? "") !== String(task.id)) {
+                return;
+              }
+              for (const entry of e.entries ?? []) {
+                const rawSeq = (entry as { seq?: unknown }).seq;
+                yield* Queue.offer(queue, {
+                  _tag: "LedgerEntry",
+                  entry,
+                  seq: typeof rawSeq === "number" ? rawSeq : -1,
+                } as AgentStreamEvent).pipe(
+                  Effect.catchAll((err) =>
+                    emitErrorSwallowed({
+                      site: "runtime/src/engine/execute-stream.ts:LedgerEntry-offer",
+                      tag: errorTag(err),
+                    }),
+                  ),
+                );
+              }
+            }),
+          )
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/execute-stream.ts:LedgerEntry-subscribe",
+                tag: errorTag(err),
+              }),
+            ),
+          );
       }
 
       // Bind the streaming callback + run-controller as FiberRef values for the
@@ -574,6 +632,20 @@ export const makeExecuteStream =
                 readonly name: string
                 readonly ok: boolean
               }>
+              // Wave C1 (task 5) — same in-memory TaskResult as run()'s site
+              // (`execute` is the shared factory dependency, see
+              // ExecuteStreamDeps); execution-engine.ts forwards this from
+              // `rr.metadata.runLedger`. deriveReceiptToolCalls prefers it
+              // over reasoningSteps when non-empty.
+              runLedger?: ReadonlyArray<{
+                readonly kind: string
+                readonly toolName?: string
+                readonly toolCallId?: string
+                readonly success?: boolean
+                readonly args?: Readonly<Record<string, unknown>>
+                readonly path?: string
+                readonly op?: string
+              }>
             }
           };
           // B2 (meta-loop 4a): declared deliverables × produced-status, from the
@@ -586,6 +658,11 @@ export const makeExecuteStream =
                 ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                 ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
                 reasoningSteps: (taskResult as { metadata?: { reasoningSteps?: readonly ReasoningStep[] } }).metadata?.reasoningSteps,
+                // Wave C1 (task 6) — same runLedger the receipt's
+                // deriveReceiptToolCalls reads below; a ledger `artifact` entry
+                // marks a declared deliverable produced without re-scanning
+                // reasoningSteps.
+                runLedger: receiptSource.metadata?.runLedger,
                 output: String((taskResult as { output?: unknown }).output ?? ""),
               });
           const unsignedReceipt: TrustReceipt | undefined = isPausedRun

@@ -135,6 +135,7 @@ export type {
   AgentEventTag,
   EventHandler,
   TypedEventHandler,
+  LedgerEntryAppendedEvent,
 } from "./services/event-bus.js";
 // ErrorSwallowed instrumentation (Phase 0 S0.2) — replaces silent
 // `catchAll(() => Effect.void)` sites with an observable event.
