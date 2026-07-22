@@ -38,6 +38,12 @@ interface CapturedTask {
     readonly outcome: AgentRunOutcome
 }
 
+interface ReplayHarnessHandle {
+    readonly run: (task: string) => Promise<AgentRunOutcome>
+    readonly dispose: () => Promise<void>
+    readonly steps: () => readonly SemanticStep[]
+}
+
 /**
  * The replay contract intentionally compares semantic steps, not invocation
  * envelopes. Timestamps, UUID-shaped run IDs, and wall-clock durations vary
@@ -328,29 +334,34 @@ function mutateRecordedToolResult(captured: CapturedTask): RecordedRun {
     return toRecordedRun({ ...captured, events })
 }
 
+function makeReplayHarnessHandle(recordedRun: RecordedRun): ReplayHarnessHandle {
+    const replayLayers = Layer.mergeAll(
+        makeReplayLLMLayer(recordedRun.llmTable),
+        makeReplayToolLayer(makeReplayController(recordedRun.toolTable)),
+        TraceRecorderServiceLive({ dir: null }),
+    )
+    let replayedSteps: readonly SemanticStep[] = []
+
+    return {
+        run: async (task: string) => {
+            const replayed = await Effect.runPromise(
+                runSeededTask(`replay-${randomUUID()}`, task).pipe(Effect.provide(replayLayers)),
+            )
+            replayedSteps = replayed.steps
+            return replayed.outcome
+        },
+        dispose: async () => {},
+        steps: () => replayedSteps,
+    }
+}
+
 async function replayRecordedRun(recordedRun: RecordedRun): Promise<{
     readonly result: Awaited<ReturnType<typeof replay>>
     readonly steps: readonly SemanticStep[]
 }> {
-    let replayedSteps: readonly SemanticStep[] = []
-    const result = await replay(recordedRun, async () => {
-        const replayLayers = Layer.mergeAll(
-            makeReplayLLMLayer(recordedRun.llmTable),
-            makeReplayToolLayer(makeReplayController(recordedRun.toolTable)),
-            TraceRecorderServiceLive({ dir: null }),
-        )
-        return {
-            run: async (task: string) => {
-                const replayed = await Effect.runPromise(
-                    runSeededTask(`replay-${randomUUID()}`, task).pipe(Effect.provide(replayLayers)),
-                )
-                replayedSteps = replayed.steps
-                return replayed.outcome
-            },
-            dispose: async () => {},
-        }
-    })
-    return { result, steps: replayedSteps }
+    const replayHandle = makeReplayHarnessHandle(recordedRun)
+    const result = await replay(recordedRun, async () => replayHandle)
+    return { result, steps: replayHandle.steps() }
 }
 
 describe("replay end-to-end determinism", () => {
