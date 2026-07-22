@@ -54,7 +54,15 @@ describe("C1 equivalence invariant", () => {
       [
         step("observation", "contents-of-a", {
           toolCallId: "c1",
-          observationResult: { success: true, toolName: "file-read" },
+          observationResult: {
+            success: true,
+            toolName: "file-read",
+            displayText: "contents-of-a",
+            category: "file-read",
+            resultKind: "data",
+            preserveOnCompaction: false,
+            trustLevel: "untrusted",
+          },
         }),
       ],
       [step("harness_signal", "budget-nudge")],
