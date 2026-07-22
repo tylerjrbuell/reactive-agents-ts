@@ -46,6 +46,12 @@ const scenario = () =>
     { text: "Done — the answer is 42." },
   ]);
 
+// Deliberately NOT the kernel-hooks.ts fallback ("reasoning-agent") — a run
+// whose published agentId equals this value proves `buildKernelHooks` used
+// the REAL `KernelInput.agentId` threaded through `runner.ts`'s
+// `effectiveInput.agentId`, not the hardcoded placeholder.
+const TEST_AGENT_ID = "ledger-tap-live-agent";
+
 const run = (opts: Partial<KernelRunOptions> = {}) =>
   Effect.gen(function* () {
     const sink = yield* Ref.make<readonly Record<string, unknown>[]>([]);
@@ -56,10 +62,15 @@ const run = (opts: Partial<KernelRunOptions> = {}) =>
     // but would collapse every batch into a single end-of-run dump —
     // `batchSizes.length` catches that.
     const batchSizes: number[] = [];
+    // agentId observed on each published event — pins that `buildKernelHooks`
+    // threads the caller's real `KernelInput.agentId` end to end instead of
+    // publishing the module-level placeholder on every run.
+    const agentIds: string[] = [];
     const bus = yield* EventBus;
     yield* bus.on("LedgerEntryAppended", (ev) =>
       Ref.update(sink, (xs) => {
         batchSizes.push(ev.entries.length);
+        agentIds.push(ev.agentId);
         return [...xs, ...ev.entries];
       }),
     );
@@ -69,6 +80,7 @@ const run = (opts: Partial<KernelRunOptions> = {}) =>
         task: "Answer the question using the alpha tool.",
         availableToolSchemas: SCHEMAS,
         requiredTools: ["alpha"],
+        agentId: TEST_AGENT_ID,
       } as KernelInput,
       {
         maxIterations: 6,
@@ -80,12 +92,12 @@ const run = (opts: Partial<KernelRunOptions> = {}) =>
       },
     );
     const seen = yield* Ref.get(sink);
-    return { pass, seen, batchSizes };
+    return { pass, seen, batchSizes, agentIds };
   }).pipe(Effect.provide(Layer.mergeAll(scenario(), toolLayer, EventBusLive)));
 
 describe("Wave C.1 slice 3 — onLedgerAppend live tap", () => {
   it("publishes every ledger entry exactly once, in seq order, across multiple iteration-boundary firings", async () => {
-    const { pass, seen, batchSizes } = await Effect.runPromise(run());
+    const { pass, seen, batchSizes, agentIds } = await Effect.runPromise(run());
 
     // Sanity: this scenario actually grows the ledger (declared requirement +
     // tool-invocation/tool-result/requirement-satisfied entries) — otherwise
@@ -105,5 +117,11 @@ describe("Wave C.1 slice 3 — onLedgerAppend live tap", () => {
     // more than once. A single firing would mean the mechanism only dumps
     // the ledger at run end, not live during the run.
     expect(batchSizes.length).toBeGreaterThan(1);
+    // Real agentId threading — every published event carries the caller's
+    // KernelInput.agentId (`TEST_AGENT_ID`), not `buildKernelHooks`'s
+    // hardcoded fallback ("reasoning-agent"). Catches a regression that drops
+    // the `effectiveInput.agentId` argument at the `runner.ts` call site.
+    expect(agentIds.length).toBeGreaterThan(0);
+    expect(agentIds.every((id) => id === TEST_AGENT_ID)).toBe(true);
   });
 });

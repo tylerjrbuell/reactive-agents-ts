@@ -226,7 +226,7 @@ export function runKernel(
     );
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
-    const hooks = buildKernelHooks(eventBus);
+    const hooks = buildKernelHooks(eventBus, effectiveInput.agentId);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
     // Select tool-calling driver from the SAME capability signal as the resolver
