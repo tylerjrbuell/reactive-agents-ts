@@ -1421,7 +1421,14 @@ export class EventBus extends Context.Tag("EventBus")<
      * All handlers execute concurrently; failures in one do not prevent others from running.
      *
      * @param event — The AgentEvent to broadcast
-     * @returns Effect that completes once all handlers have started (does not wait for completion)
+     * @returns Effect that resolves only once ALL handlers have completed — the
+     *   implementation awaits `Effect.all(handlers, { concurrency: "unbounded" })`, so
+     *   handlers run concurrently with each other but `publish` itself is NOT
+     *   fire-and-forget. Downstream ordering guarantees depend on this — e.g. the
+     *   `LedgerEntryAppended` → ledger-entry stream projection (Wave C.1) assumes a
+     *   published entry is fully observed by its tap before `publish` returns. Do not
+     *   change this to return before handlers complete without revisiting those
+     *   guarantees.
      *
      * @example
      * ```typescript

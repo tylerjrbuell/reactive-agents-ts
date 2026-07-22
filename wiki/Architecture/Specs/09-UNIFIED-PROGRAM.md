@@ -96,6 +96,8 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > shipped red-on-cut, dead code deleted, P0-4 discharged), full doc sync + first-timer quality sweep done.
 > **The §4 sequence RESUMES: next program step = Wave C (4b RunLedger — Arc 1 log converges, C1).**
 > Remaining register debt = 5 Wave-5-class instrument items + the owed bench re-baseline run (owner-gated).
+> **Wave C.1 (slices 1–3) SHIPPED 2026-07-22:** equivalence invariant + receipt re-base +
+> `LedgerEntryAppended` live tap. Wave C.2 (engine-side entries, replay re-base) is next.
 
 ### Pre-release board (historical, 2026-07-12)
 

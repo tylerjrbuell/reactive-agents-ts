@@ -127,6 +127,27 @@ later obsoleted by the boundary fix that eventually arrived.)
 | **B7** ✅ | **`requirement` ledger kind: ZERO writers** | Two live readers (`assess.ts:207`, `standing-frame.ts:193`) always see `[]` ⇒ the meta-loop's requirement lifecycle (declared→satisfied→blocked) is **fiction**; Projector renders no outstanding work; `evidenceRefs` double-dead | **RESOLVED Wave 2 (2026-07-20):** two writers via the ledger-home emitter — `recordRequirementsDeclared` at contract-compile (`runner.ts:369`), `recordRequirementTransitions` at the gate (`iterate-pass.ts:481`); single-writer invariant green; 8-test mutation suite red-on-cut. **#39** false-positive killed by reusing `assess()`'s entity-keyed authority (orders.json ≠ rates.json requirement). Residual: generic per-entity tool-coverage (`cardinality:"per-entity"`) needs a new condition type — `TaskRequirement`/`RequirementSpec` carry no entity field today; out of boundary. |
 | **B8** ✅ | **Subagent detached-runtime dispatch boundary** (`spawn-handlers.ts`, `local-agent-tools.ts`, `sub-agent-executor.ts`) — fresh root fiber per spawn; parent EventBus/Trace/Logger dropped | Invisible workers, no cancellation, flat teams, not-background, unattributable logs — **five symptoms, one line**. H-risk #1 of the 07-12 audit. | **RESOLVED Wave 2 (2026-07-20, RATIFIED RE-SCOPED — Tasks 1–5).** T1 `RunContext` spine + T2 trace-correlation base; **T3 G1** — child events reach the parent's EventBus (shared-bus overlay) tagged `parentAgentId`; **T4** — the child now `Effect.forkScoped`+`Fiber.await`s in the parent's fiber tree (both dynamic + fixed `.withAgentTool` paths), so `agent.terminate()` **interrupts in-flight children** (no orphans); a failed child's `Exit`→`SubAgentResult{success:false}` — **no-cascade gate stayed green**; the `as ...,any,never` cast deleted. **T3b** — child trace bookends carry `depth:1`/`rootRunId`. **T5 (G7)** — recursion cap LIVE: guard reads `RunContext.depth` (literal `0` gone), children get spawn tools below the cap (gated on explicit `maxRecursionDepth`), refusal is an observation; sub-agents sub-delegate to depth 2. All red-on-cut pinned. **Task 7 already done (`311bce38`); Task 16 → Wave 3. DEFERRED as new capability (bench-gated, NOT debt): Phases 3–5 (background subagents, typed hand-off, M8 bench) + logging Tasks 6/8/9/10.** Residual: per-iteration child events default run-scoped (only run bookends carry depth:1) — sufficient to reconstruct the tree by `rootRunId`. |
 
+**Wave C.1 (2026-07-22): C1 convergence slices 1–3.** Equivalence invariant ratified
+([[../Decisions/2026-07-22-c1-equivalence-invariant|decision]]) — `steps[]` chokepoint-only
+(single-writer gate tightened) + ledger ≡ projection(steps) pinned red-on-cut
+(`equivalence.test.ts`); all 8 strategies forward `runLedger` across the result boundary
+(reflexion projects it from merged steps for completeness rather than dropping it); receipt
+tool-call + deliverable evidence re-based onto ledger queries (steps-derived fallback kept
+for paths with no ledger); `LedgerEntryAppended` live tap (`kernel/loop/runner.ts`) → EventBus
+→ public `stream(density:"full")` chunks + `run_events` journal row. **DEFERRED to Wave C.2:**
+engine-phase ledger entries (making `run_events` a pure ledger journal end-to-end) and the
+llm-exchange/replay re-base (byte-sensitive seam, deliberately not touched this wave).
+
+**Carried-forward debt (small, surfaced by Wave C.1 review — not silently dropped):**
+
+| Item | Note |
+|---|---|
+| No dedicated durable-RESUME-path test for the `onLedgerAppend` tap | Covered indirectly by adjacent tests + the requirement-lifecycle idempotency tests; residual risk assessed LOW. |
+| `TaskResult.metadata` is a hand-enumerated literal (`execution-engine.ts` ~:1290-1330) | Any future `extraMetadata` field silently dies at that boundary unless explicitly enumerated there — pre-existing precedent (`reasoningSteps`/`receiptToolCalls`/`confidence`/`runLedger` all had to be added by name). |
+| `post-conditions.ts:96-99` `writtenPathSatisfies` docstring is stale | Claims the resolved absolute path lands in `toolCall.arguments.path`; the arguments object is never mutated. Safe direction (false-UNMET, not false-MET), so left as a doc fix, not a behavior fix. |
+| code-action + reflexion ledger entries carry a single static `iteration` tag | Cosmetic only — `kind`/`toolName`/`toolCallId` are correct per-entry; the iteration counter just doesn't advance per-entry within those two strategies. |
+| ToT degenerate no-`bestLeaf` branch ships `runLedger: []` untested | Reviewer traced the branch as effectively unreachable in practice (requires a tree search that produces zero viable leaves); left unpinned rather than adding a test for dead-in-practice code. |
+
 ## 3b. Absorbed open work (from the superseded 07-10 programs — absorb-or-defer pass, 2026-07-19)
 
 Every item below was open in the root-cause closure or goal-reliability programs and had NO row here.
