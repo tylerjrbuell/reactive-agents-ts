@@ -132,6 +132,59 @@ function makeReflexionToolCallingLLMLayer() {
   );
 }
 
+/** Reflexion, TRUE multi-pass (Task 4 review defect): the tool call fires only
+ *  in the GENERATE pass. The first critique deliberately reports NOT satisfied
+ *  (`isSatisfied`'s legacy regex matches bare "satisfied:" ANYWHERE in the
+ *  text — even inside "NOT SATISFIED:" — so the critique text must avoid the
+ *  substring "satisfied" entirely, not just negate it) so an IMPROVE pass
+ *  runs; that improve pass ships plain prose with no further tool call
+ *  (`hadToolCalls: false`), so `lastPassState` (the improve pass's own
+ *  terminal kernel state) carries NO tool-invocation entry — only the merged
+ *  `steps[]` (generate pass's tool call + improve pass's prose) does. The
+ *  second critique then reports SATISFIED and the loop terminates.
+ *
+ *  The reactKernel's own local-tier "Review your answer" quality-check nudge
+ *  fires internally inside BOTH the generate and improve sub-kernel passes
+ *  (extra LLM turns beyond the obvious tool-call/text ones, count not fixed),
+ *  so the filler turns below are `match`-guarded on the ABSENCE of the
+ *  critique system prompt's distinctive "critical evaluator" phrase — this
+ *  lets any number of intra-pass continuation turns consume the same filler
+ *  entries without ever mis-consuming a critique turn (and vice versa: the
+ *  critique turns are guarded POSITIVELY on that same phrase, so they are
+ *  only ever matched by the two real critique calls, in order). */
+function makeReflexionMultiPassToolCallingLLMLayer() {
+  const NOT_CRITIQUE = "^(?![\\s\\S]*critical evaluator)[\\s\\S]*$";
+  const filler = { text: "Saved the summary to ./out.md.", match: NOT_CRITIQUE };
+  return Layer.succeed(
+    LLMService,
+    LLMService.of(
+      TestLLMService([
+        // Generate pass, turn 1: the ONLY tool call in the whole run.
+        {
+          toolCalls: [
+            { id: "tc-ledger-mp-1", name: "file-write", args: { path: "./out.md", content: "the summary" } },
+          ],
+        },
+        // Generate pass, remaining turns (final answer + any internal
+        // quality-check nudge continuations) — generous margin, all filler.
+        filler, filler, filler, filler,
+        // Critique 1: explicitly not satisfied — deliberately avoids the
+        // substring "satisfied" (see isSatisfied's legacy fallback regex,
+        // which false-positives on "NOT SATISFIED:") so an improve pass
+        // is forced.
+        { text: "INCOMPLETE: needs more detail on the topic before this is done.", match: "critical evaluator" },
+        // Improve pass turns (prose refinement + any internal nudges) — no
+        // further tool call, so `hadToolCalls` is false for this pass.
+        filler, filler, filler, filler,
+        // Critique 2: satisfied — loop terminates here. `lastPassState` is
+        // this (tool-call-free) improve pass's terminal kernel state.
+        { text: "SATISFIED: the response fully addresses the task.", match: "critical evaluator" },
+        filler,
+      ]),
+    ),
+  );
+}
+
 /** plan-execute: the planner turn emits one file-write tool_call step; later
  *  completions are plain-text answers. Identical to strategy-tool-ledger.test.ts. */
 function makePlanExecuteLLMLayer() {
@@ -239,6 +292,37 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
       ),
     );
     expectRunLedgerForwarded(result);
+  }, 15000);
+
+  it("reflexion: MULTI-PASS runLedger stays complete — an earlier (generate) pass's tool-invocation is not lost when a later (improve) pass is terminal", async () => {
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: TASK_FILE,
+        taskType: "general",
+        memoryContext: "",
+        availableTools: ["file-write"],
+        availableToolSchemas: [FILE_WRITE_SCHEMA],
+        config: defaultReasoningConfig,
+      } as never).pipe(
+        Effect.provide(
+          Layer.mergeAll(makeReflexionMultiPassToolCallingLLMLayer(), makeFileWriteToolLayer()),
+        ),
+      ),
+    );
+    expectRunLedgerForwarded(result);
+
+    // The review's defect, pinned directly: `runLedger`'s tool-invocation
+    // count must equal the returned `steps[]`'s action-step count. Before the
+    // fix, `runLedger` came from ONLY the terminal (improve) pass's kernel
+    // state, which has zero tool-invocation entries here — this assertion
+    // would fail (0 !== 1) against the pre-fix `final.lastPassState.ledger`.
+    const meta = result.metadata as unknown as Record<string, unknown>;
+    const ledgerToolInvocations = (meta.runLedger as { kind: string }[]).filter(
+      (e) => e.kind === "tool-invocation",
+    ).length;
+    const stepsActionCount = result.steps.filter((s) => s.type === "action").length;
+    expect(stepsActionCount).toBeGreaterThan(0);
+    expect(ledgerToolInvocations).toBe(stepsActionCount);
   }, 15000);
 
   it("tree-of-thought: forwards the skip-path kernel's ledger with a tool-invocation entry", async () => {
