@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
-import type { RunLedger } from "../ledger/run-ledger.js";
+import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
@@ -1015,6 +1015,16 @@ export interface KernelHooks {
     taskId: string,
     agentId: string,
   ) => Effect.Effect<void, never>;
+  /**
+   * Wave C.1 slice 3 — live ledger tap. Fired at the runner iteration
+   * boundary with the entries appended since the previous firing (seq order,
+   * exactly once). The engine bridge publishes these as LedgerEntryAppended
+   * bus events; journal.ts persistence + stream projection ride that event.
+   */
+  readonly onLedgerAppend: (
+    state: KernelState,
+    entries: readonly LedgerEntry[],
+  ) => Effect.Effect<void, never>;
 }
 
 // ── KernelContext — Injected into every kernel call ──────────────────────────
@@ -1315,6 +1325,7 @@ export const noopHooks: KernelHooks = {
   onStrategySwitched: () => Effect.void,
   onStrategySwitchEvaluated: () => Effect.void,
   onContextSynthesized: () => Effect.void,
+  onLedgerAppend: () => Effect.void,
 };
 
 // ─── ReAct Kernel Input / Output ─────────────────────────────────────────────
