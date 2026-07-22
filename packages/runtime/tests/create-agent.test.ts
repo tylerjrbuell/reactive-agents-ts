@@ -11,8 +11,9 @@ import { describe, it, expect } from "bun:test";
 import { ReactiveAgent } from "../src/reactive-agent.js";
 import { ReactiveAgents } from "../src/builder.js";
 import { createAgent } from "../src/create-agent.js";
-import { agentConfigToBuilder, type AgentConfig } from "../src/agent-config.js";
+import { agentConfigToBuilder, AgentConfigSchema, type AgentConfig } from "../src/agent-config.js";
 import { HarnessProfile } from "../src/capabilities/profile.js";
+import { Schema } from "effect";
 
 describe("createAgent", () => {
   it("builds a ReactiveAgent from a minimal declarative config (offline)", async () => {
@@ -104,19 +105,37 @@ describe("createAgent", () => {
 
   // The provider union is DERIVED from the canonical LLMProviderType (minus
   // "custom", plus "test") — a stale inline copy previously rejected groq/xai
-  // from the declarative front door for two releases while the fluent builder
-  // accepted them. Cut the derivation (re-inline a subset) and this goes red.
-  it("accepts every canonical provider the builder accepts (groq/xai included)", async () => {
-    for (const provider of [
-      "anthropic",
-      "openai",
-      "ollama",
-      "gemini",
-      "litellm",
-      "groq",
-      "xai",
-      "test",
-    ] as const) {
+  // at the declarative front door for two releases while the fluent builder
+  // accepted them. The regression lived in the SCHEMA decode, so assert it
+  // there: decode is network-free, so this runs identically in CI (no keys,
+  // no local Ollama server). Cut the derivation (re-inline a subset) → red.
+  const ALL_PROVIDERS = [
+    "anthropic",
+    "openai",
+    "ollama",
+    "gemini",
+    "litellm",
+    "groq",
+    "xai",
+    "test",
+  ] as const;
+
+  it("AgentConfigSchema decodes every canonical provider (groq/xai included)", () => {
+    for (const provider of ALL_PROVIDERS) {
+      expect(() =>
+        Schema.decodeUnknownSync(AgentConfigSchema)(
+          { name: `p-${provider}`, provider },
+          { onExcessProperty: "error" },
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  // End-to-end build for the fix targets + a couple of siblings. Excludes
+  // "ollama", whose build runs a live-server pre-flight (localhost:11434) that
+  // CI has no daemon for — a connection dependency, not a provider-union claim.
+  it("createAgent builds a ReactiveAgent for the cloud providers (groq/xai are the fix)", async () => {
+    for (const provider of ["groq", "xai", "anthropic", "test"] as const) {
       const agent = await createAgent({ name: `p-${provider}`, provider });
       expect(agent).toBeInstanceOf(ReactiveAgent);
     }

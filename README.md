@@ -17,7 +17,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 | **39 packages & apps**       | 34 packages + 5 apps — 34 published to npm, all opt-in, no hidden coupling |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **8 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Direct · Code-Action (@exp) |
-| **8,293 tests · 1061 files**  | Verified with `bun test` on every PR                            |
+| **8,294 tests · 1061 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -159,7 +159,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **8,293 tests** across 1061 files — verified `bun test` on every PR
+- **8,294 tests** across 1061 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -448,7 +448,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   8,293 tests   |      --      |      --       |   --    |
+| Test suite                    |   8,294 tests   |      --      |      --       |   --    |
 
 <sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
@@ -915,7 +915,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (8,293 tests / 1061 files, ~95s)
+bun test                 # Run full test suite (8,294 tests / 1061 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
