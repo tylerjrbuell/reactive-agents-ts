@@ -521,7 +521,9 @@ export interface KernelState {
    * Optional so hand-built / legacy states need no change; readers guard with
    * `?? []`. `initialKernelState` seeds it empty; the durable kernel-codec
    * round-trips it (plain-data array) for crash-resume.
-   * TODO(C-final): steps becomes a projection OF this ledger (last step of Wave C).
+   * C-final (2026-07-22): resolved as the equivalence invariant — see
+   * wiki/Decisions/2026-07-22-c1-equivalence-invariant.md. Ledger is canonical
+   * for readers; steps[] mutates only via this chokepoint.
    */
   readonly ledger?: RunLedger;
   readonly toolsUsed: ReadonlySet<string>;

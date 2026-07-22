@@ -6,10 +6,12 @@
 // stays the authoritative source of truth (byte-identical behavior); the ledger
 // grows ALONGSIDE it as the higher-value, queryable projection.
 //
-// TODO(C-final): steps becomes a PROJECTION of the ledger. That flip is the
-// LAST step of Wave C and is explicitly NOT in this task — today this is
-// additive dual-emit only. When it lands, this mapping inverts (ledger →
-// steps) and the chokepoint stops deriving here.
+// C-final RESOLVED as the equivalence invariant (ratified 2026-07-22,
+// wiki/Decisions/2026-07-22-c1-equivalence-invariant.md): steps[] stays the
+// in-loop record, mutated only via the transitionState chokepoint; the ledger
+// grows alongside it and equivalence.test.ts pins ledger ≡ projection(steps).
+// The physical write-direction flip was declined (lossy-by-design projection;
+// see the decision doc). The ledger is canonical for all NEW readers.
 //
 // Pure — no Effect, no state, no I/O. Reads only the step + its metadata.
 
