@@ -60,6 +60,7 @@ import { withEnvContext } from "../context/context-engine.js";
 import { executeBlueprintWorker } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
+import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
@@ -71,7 +72,7 @@ const STRATEGY = "blueprint" as const;
 // Mirrors PlanExecuteInput's shape (the registry widens via `as unknown as
 // StrategyFn`, so the extra fields beyond the base StrategyFn input are safe).
 
-interface BlueprintInput {
+interface BlueprintInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -151,6 +152,23 @@ export const executeBlueprint = (
     const { llm, eventBus } = services;
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog");
+
+    // Durable HITL (Phase D): blueprint dispatches its plan through the 0-LLM
+    // DAG worker, which calls tools directly — there is no kernel act phase, so
+    // the approval gate CANNOT fire on this path. Executing a `requiresApproval`
+    // tool unattended is not an acceptable degrade, and hard-failing would break
+    // adaptive routing (which can pick blueprint), so route to the gate-capable
+    // reactive strategy instead and say so in the trace. (2026-07-22)
+    if (input.approvalPolicy?.mode === "detach") {
+      yield* emitLog({
+        _tag: "metric",
+        name: "blueprint_degraded_to_reactive",
+        value: 1,
+        unit: "count",
+        timestamp: new Date(),
+      });
+      return yield* executeReactive(input);
+    }
 
     const steps: ReasoningStep[] = [];
     const start = Date.now();

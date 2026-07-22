@@ -46,6 +46,12 @@ const crossCutting: CrossCuttingInput = {
   calibration: { steeringCompliance: 0.8 } as never,
   harnessPipeline: { transform: () => undefined } as never,
   budgetLimits: { tokenLimit: 100_000, warningRatio: 0.9 },
+  // Durable HITL rails — REQUIRED keys on the bundle (2026-07-22): a strategy
+  // that omits them no longer compiles, because omitting `approvalPolicy` is a
+  // silent HITL bypass, not a degraded feature.
+  approvalPolicy: { mode: "detach", tools: new Set(["risky-tool"]) },
+  approvalDecision: undefined,
+  interactionResponse: undefined,
 };
 
 const basePerPass: Omit<PerPassInput, "verifier"> = {
@@ -96,6 +102,11 @@ function reactiveHandBuilt(verifier: Verifier | undefined): KernelInput {
     verifier,
     harnessPipeline: crossCutting.harnessPipeline,
     budgetLimits: crossCutting.budgetLimits,
+    // Durable HITL rails — reactive.ts sets all three on its literal; the
+    // builder must too, or a strategy migrated onto it loses the approval gate.
+    approvalPolicy: crossCutting.approvalPolicy,
+    approvalDecision: crossCutting.approvalDecision,
+    interactionResponse: crossCutting.interactionResponse,
   };
 }
 

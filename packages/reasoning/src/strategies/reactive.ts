@@ -328,6 +328,7 @@ export const executeReactive = (
       totalOutputTokens: pass.outputTokens,
       totalCost: pass.cost,
       error: state.error,
+      kernelMeta: state.meta,
       extraMetadata: {
         terminatedBy,
         // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
@@ -348,20 +349,12 @@ export const executeReactive = (
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }
           : {}),
-        // Durable HITL (Phase D): surface the paused-gate descriptor so the
-        // runtime engine can persist `awaiting-approval` + the pending approval
-        // row and populate AgentResult.pendingApproval. Present only on a paused
-        // run (terminatedBy === "awaiting-approval").
-        ...(state.meta.awaitingApprovalFor !== undefined
-          ? { awaitingApprovalFor: state.meta.awaitingApprovalFor }
-          : {}),
-        // Durable pause (Task 9): mirror the awaitingApprovalFor forwarding
-        // above for the request_user_input pause — surfaces the interaction
-        // descriptor so a later task (10, persist+resume) can read it off
-        // AgentCompleted without reaching back into raw kernel state.
-        ...(state.meta.awaitingInteractionFor !== undefined
-          ? { awaitingInteractionFor: state.meta.awaitingInteractionFor }
-          : {}),
+        // Durable HITL (Phase D) + interaction pause (Task 9): the paused-gate
+        // and paused-interaction descriptors are forwarded by
+        // buildStrategyResult from `kernelMeta` below — ONE derivation site for
+        // every strategy (2026-07-22: the inline spread that used to live here
+        // was the only one in the codebase, so a pause under reflexion / ToT /
+        // plan-execute reached the runtime with no descriptor at all).
         // O3 C1: forward the run-level abstention surface so the engine can
         // populate AgentResult.abstention. Present only when terminatedBy ===
         // "abstained" (harness-forced or model-initiated via the abstain tool).

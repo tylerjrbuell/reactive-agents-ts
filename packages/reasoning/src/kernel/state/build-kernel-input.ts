@@ -25,6 +25,23 @@
 import type { KernelInput } from "./kernel-state.js";
 
 /**
+ * Durable HITL rails (Phase D) as they arrive on a STRATEGY input.
+ *
+ * Every strategy declares its own hand-rolled input interface, so a run-wide
+ * field has to be re-declared 8× — which is exactly how the approval gate came
+ * to be threaded by `reactive` alone. Strategy inputs `extends StrategyHitlRails`
+ * so the rails are declared ONCE and stay type-identical to `KernelInput`'s.
+ */
+export interface StrategyHitlRails {
+  /** Durable HITL (Phase D): resolved approval-gate policy → `KernelInput.approvalPolicy`. */
+  readonly approvalPolicy?: KernelInput["approvalPolicy"];
+  /** Durable HITL (Phase D): human's approve/deny decision on a resumed run. */
+  readonly approvalDecision?: KernelInput["approvalDecision"];
+  /** Agentic-UI interaction rail: human's response to a paused `request_user_input`. */
+  readonly interactionResponse?: KernelInput["interactionResponse"];
+}
+
+/**
  * Run-wide fields — identical for every kernel pass of a single agent run.
  * A strategy builds this once and reuses it across all sub-kernel passes.
  */
@@ -56,7 +73,28 @@ export type CrossCuttingInput = Pick<
   | "fabricationGuard"
   | "stallPolicy"
   | "taskContract"
->;
+> & {
+  /**
+   * Durable HITL rails (Phase D) — REQUIRED keys whose types include
+   * `undefined`, deliberately not part of the `Pick` above.
+   *
+   * The `Pick`-derived fields are all OPTIONAL on `KernelInput`, so omitting one
+   * from a bundle is silently legal — the compile-error promise in this file's
+   * header only holds for fields a caller cannot leave out. The approval rails
+   * are the fields where a silent omission is a SECURITY defect, not a degraded
+   * feature: with `approvalPolicy` missing, `act.ts`'s detach gate never fires
+   * and a tool the caller declared `requiresApproval: true` executes with no
+   * human decision (2026-07-22: reflexion / tree-of-thought / plan-execute-per-step
+   * all bypassed the gate this way — reactive.ts was the only threading site).
+   *
+   * Declaring them REQUIRED-but-nullable forces every bundle to write
+   * `approvalPolicy: input.approvalPolicy` explicitly; forgetting is a compile
+   * error, passing `undefined` (no policy configured) stays free.
+   */
+  readonly approvalPolicy: KernelInput["approvalPolicy"];
+  readonly approvalDecision: KernelInput["approvalDecision"];
+  readonly interactionResponse: KernelInput["interactionResponse"];
+};
 
 /**
  * Per-pass fields — vary between sub-kernel invocations of the same run

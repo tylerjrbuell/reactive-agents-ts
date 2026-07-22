@@ -1371,6 +1371,14 @@ export interface ReActKernelResult {
   /** O3: present when terminatedBy === "abstained" — model's honest decline. */
   abstention?: { readonly reason: string; readonly missing: readonly string[] };
   /**
+   * Durable HITL (Phase D): present when this sub-kernel PAUSED at an approval
+   * gate. The gated call has NOT executed. A consuming strategy must treat this
+   * as terminal for the whole run — see `isKernelPaused` / `pausedStrategyResult`.
+   */
+  awaitingApprovalFor?: KernelState["meta"]["awaitingApprovalFor"];
+  /** Durable pause (Task 9): mirror of {@link awaitingApprovalFor} for `request_user_input`. */
+  awaitingInteractionFor?: KernelState["meta"]["awaitingInteractionFor"];
+  /**
    * The signal-boundary primitive (north-star spec 2026-07-11 §1b, task #40):
    * the completion authority's verdict for this sub-run, derived at the
    * return site via `envelopeFromKernelState`. REQUIRED — before this field,

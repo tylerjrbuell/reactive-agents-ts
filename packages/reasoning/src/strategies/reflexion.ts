@@ -18,7 +18,11 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
-import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
+import {
+  buildKernelInput,
+  type CrossCuttingInput,
+  type StrategyHitlRails,
+} from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import {
   iterateUntil,
@@ -33,7 +37,12 @@ import {
   compilePromptOrFallback,
   publishReasoningStep,
 } from "../kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  makeStep,
+  buildStrategyResult,
+  kernelPause,
+  pausedStrategyResult,
+} from "../kernel/capabilities/sense/step-utils.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -68,7 +77,7 @@ import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/to
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
 
-interface ReflexionInput {
+interface ReflexionInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -179,6 +188,13 @@ export const executeReflexion = (
       budgetLimits: input.budgetLimits,
       calibration: input.calibration,
       auditRationale: input.auditRationale,
+      // Durable HITL rails (Phase D) — every generate/improve sub-kernel must
+      // carry the gate, or a `requiresApproval` tool runs unattended inside a
+      // reflexion pass (2026-07-22 defect: reactive.ts was the only site that
+      // threaded these).
+      approvalPolicy: input.approvalPolicy,
+      approvalDecision: input.approvalDecision,
+      interactionResponse: input.interactionResponse,
     };
 
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
@@ -220,6 +236,26 @@ export const executeReflexion = (
       // #40: arm the A2 long-horizon pace bands in the generate sub-kernel.
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
+
+    // Durable pause (Phase D): the generate sub-kernel hit an approval gate (or
+    // a `request_user_input`). That is TERMINAL for the run — the gated call has
+    // not executed and the critique/improve loop must not run around it. Return
+    // the pause verbatim so the runtime persists it and a human can decide;
+    // resume replays from the durable checkpoint, not from here.
+    const genPause = kernelPause(genPass.state);
+    if (genPause) {
+      steps.push(...genPass.steps);
+      return pausedStrategyResult({
+        strategy: "reflexion",
+        steps,
+        pause: genPause,
+        start,
+        totalTokens: genPass.tokens,
+        totalInputTokens: genPass.inputTokens,
+        totalOutputTokens: genPass.outputTokens,
+        totalCost: genPass.cost,
+      });
+    }
 
     let initialResponse = genPass.output ?? "";
     let backfillTokens = 0;
@@ -576,6 +612,23 @@ export const executeReflexion = (
             ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
           });
 
+          // Durable pause inside an improve pass — stop the retry loop here for
+          // the same reason the generate pass returns early above. The finalize
+          // path below detects it off `lastPassState` and returns the pause.
+          if (kernelPause(improvePass.state)) {
+            return terminateWith<ReflexionIterState>(
+              {
+                ...s,
+                allSideEffectSteps: [...s.allSideEffectSteps, ...improvePass.steps],
+                runningMessages: improvePass.messages,
+                totalTokens: tokensAfterCritique + improvePass.tokens,
+                totalCost: costAfterCritique + improvePass.cost,
+                lastPassState: improvePass.state,
+              },
+              { kind: "custom", tag: "durable-pause" },
+            );
+          }
+
           const newResponse = improvePass.output || s.response;
           // Only replace critique evidence if improvement actually called tools.
           const newLastKernelSteps = improvePass.hadToolCalls ? improvePass.steps : s.lastKernelSteps;
@@ -622,6 +675,25 @@ export const executeReflexion = (
 
     // ── Single finalize path — replaces 3 duplicated build-result branches ──
     const { final, reason, iters } = loopResult;
+
+    // Durable pause wins over every finalize step below: the quality gate,
+    // the completion log and the verifier all assume the run was trying to
+    // ANSWER. A paused run has not answered — running them would burn LLM calls
+    // on the pause sentinel and report a completion the human never approved.
+    const finalPause = kernelPause(final.lastPassState);
+    if (finalPause) {
+      steps.push(...final.allSideEffectSteps);
+      return pausedStrategyResult({
+        strategy: "reflexion",
+        steps,
+        pause: finalPause,
+        start,
+        totalTokens: final.totalTokens,
+        totalCost: final.totalCost,
+        extraMetadata: { llmCalls, reflexionCritiques: final.previousCritiques },
+      });
+    }
+
     const gated = yield* enforceQualityGate({
       llm,
       taskDescription: input.taskDescription,
@@ -711,6 +783,9 @@ export const executeReflexion = (
       start,
       totalTokens: finalTokens,
       totalCost: finalCost,
+      // Terminal sub-kernel meta — carries the durable pause rails (a pause is
+      // returned earlier, but the forward keeps every exit consistent).
+      kernelMeta: final.lastPassState.meta,
       extraMetadata: {
         terminatedBy,
         confidence,

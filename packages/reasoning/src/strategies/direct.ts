@@ -25,6 +25,7 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
+import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import {
@@ -36,7 +37,7 @@ import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
-export interface DirectInput {
+export interface DirectInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -163,6 +164,12 @@ export const executeDirect = (
       calibration: input.calibration,
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
+      // Durable HITL rails (Phase D) — direct can dispatch tools (up to 3
+      // iterations), so the gate must reach its kernel like every other
+      // strategy's (2026-07-22).
+      approvalPolicy: input.approvalPolicy,
+      approvalDecision: input.approvalDecision,
+      interactionResponse: input.interactionResponse,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
@@ -217,6 +224,8 @@ export const executeDirect = (
       // hardcoded 0 — direct can call tools (up to 3 iters) and those cost money.
       totalCost: state.cost ?? 0,
       error: state.error,
+      // Durable pause rails forwarded centrally (see buildStrategyResult).
+      kernelMeta: state.meta,
       extraMetadata: {
         terminatedBy,
         // Wave C.1 task 4 (B2-class boundary): forward the run's canonical

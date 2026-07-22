@@ -75,3 +75,80 @@ export type TemplatedTerminateReason =
  * arbitrator.ts oracle-decision branch).
  */
 export type RawTerminatedBy = TerminateReason | TemplatedTerminateReason;
+
+
+/**
+ * Structural stand-in for `KernelState["status"]`. Declared locally so this
+ * module stays a true leaf (see header) — the two unions are pinned equal by
+ * `terminate-reason.leaf.test.ts`.
+ */
+export type KernelStatusLike =
+  | "thinking"
+  | "acting"
+  | "observing"
+  | "done"
+  | "failed"
+  | "evaluating";
+
+/**
+ * Derive the canonical `terminatedBy` + raw open-string channel from a kernel
+ * state's `meta.terminatedBy` + `status` pair.
+ *
+ * Returns BOTH:
+ *   - `terminatedBy`: the closed 5-value enum used by `ReActKernelResult.terminatedBy`
+ *   - `rawTerminatedBy?`: the raw `state.meta.terminatedBy` string, preserved
+ *     so dynamic killswitch reasons (e.g. `"budget-limit:tokens:1/0"`) survive
+ *     the narrowing for downstream observability.
+ *
+ * `rawTerminatedBy` is OMITTED (not set to `undefined`) when the source is
+ * absent, so spread-based consumers don't pollute their result with
+ * `{ rawTerminatedBy: undefined }`.
+ *
+ * Narrowing to `"final_answer"` is WHITELIST-gated (DEFECT 3, 2026-05-31):
+ * only genuine model-answer reasons — `final_answer`, `final_answer_regex`,
+ * `content_stable`, `entropy_converged` — map to `"final_answer"`. Any other
+ * `status === "done"` (harness/give-up reasons such as
+ * `controller_early_stop:*`, `low_delta_guard`, `oracle_forced`,
+ * `harness_deliverable`, `loop_graceful`, killswitch cut-offs, etc.) narrows
+ * to `"end_turn"`, NOT `"final_answer"`. The old catch-all `done → final_answer`
+ * was a codified lie: it forced `deriveGoalAchieved` to return `true` on FAILED
+ * runs (the observed `success:false` + `goalAchieved:true` incoherence).
+ * `end_turn` yields an honest `goalAchieved` null ("unknown") instead of the lie.
+ * A whitelist miss under-claims (honest, loud); a blacklist miss would
+ * over-claim (silent lie) — so whitelist is the chosen error-asymmetry.
+ *
+ * Pure / synchronous / no Effect — exported for unit testability.
+ */
+export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelStatusLike }): {
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
+  rawTerminatedBy?: string;
+} {
+  const rawTerminatedBy =
+    typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : undefined;
+  const terminatedBy:
+    | "final_answer"
+    | "final_answer_tool"
+    | "max_iterations"
+    | "end_turn"
+    | "llm_error"
+    | "abstained" =
+    rawTerminatedBy === "llm_error"
+      ? "llm_error"
+      : rawTerminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : rawTerminatedBy === "abstained"
+          ? "abstained"
+          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
+            ? "end_turn"
+            : rawTerminatedBy === "final_answer" ||
+                rawTerminatedBy === "final_answer_regex" ||
+                rawTerminatedBy === "content_stable" ||
+                rawTerminatedBy === "entropy_converged"
+              ? "final_answer"
+              : state.status === "done"
+                ? "end_turn"
+                : "max_iterations";
+  return rawTerminatedBy !== undefined
+    ? { terminatedBy, rawTerminatedBy }
+    : { terminatedBy };
+}

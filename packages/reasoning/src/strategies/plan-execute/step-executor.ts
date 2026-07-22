@@ -39,7 +39,9 @@ import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import type { KernelStateLike } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
-import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
+import { makeStep, reactResultPause } from "../../kernel/capabilities/sense/step-utils.js";
+import { shouldGate } from "../../kernel/capabilities/decide/tool-gating.js";
+import { deliverableToContent } from "@reactive-agents/core";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
@@ -76,6 +78,13 @@ export interface StepExecResult {
    * AgentCompleted.terminationReason.
    */
   rawTerminatedBy?: string;
+  /**
+   * Durable pause (Phase D) — set when this step's sub-kernel paused at an
+   * approval gate (or `request_user_input`) instead of completing. The step's
+   * work did NOT happen: the orchestrator stops the plan here and returns the
+   * pause so a human can decide.
+   */
+  pause?: import("../../kernel/capabilities/sense/step-utils.js").KernelPause;
   /**
    * #40 / spec §1b — the completion authority's verdict for this step, joined
    * worst-of by the outer orchestrator into plan-execute's aggregate envelope.
@@ -130,6 +139,15 @@ export interface StepExecutorInput {
   readonly budgetLimits?: import("../../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   readonly auditRationale?: boolean;
+  /**
+   * Durable HITL rails (Phase D) — composite steps call tools through the ReAct
+   * kernel, so the approval gate must travel with them. Omitted until
+   * 2026-07-22: a `requiresApproval` tool ran unattended on every plan-execute
+   * step (see `StrategyHitlRails`).
+   */
+  readonly approvalPolicy?: import("../../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
+  readonly approvalDecision?: import("../../kernel/state/kernel-state.js").KernelInput["approvalDecision"];
+  readonly interactionResponse?: import("../../kernel/state/kernel-state.js").KernelInput["interactionResponse"];
   /** #40: long-horizon guard profile — forwarded to each composite sub-kernel so
    *  the A2 pace bands (and thus the budget-terminal honest partial) can arm. */
   readonly horizonProfile?: "long";
@@ -174,6 +192,39 @@ export function executeStep(
     // OFF (parity-cheap opt-out); the result string flow is preserved via the
     // sanitize `preprocess` hook + `stripDeadStorageHints` + `fullResult`.
     return Effect.gen(function* () {
+      // Durable HITL gate (Phase D) — this branch dispatches the tool DIRECTLY,
+      // bypassing the kernel act phase where the gate normally fires. Without
+      // this check a `requiresApproval` tool executes unattended whenever the
+      // planner emits it as a `tool_call` step (2026-07-22). Same decision
+      // function the kernel uses, so gating stays consistent across paths.
+      const gatePolicy = input.approvalPolicy;
+      const pauseSentinel = deliverableToContent({
+        source: "sentinel",
+        reason: "awaiting_approval",
+      });
+      if (
+        gatePolicy?.mode === "detach" &&
+        shouldGate(step.toolName!, gatePolicy, { iteration: stepIndex })
+      ) {
+        return {
+          output: pauseSentinel,
+          tokens: 0,
+          cost: 0,
+          success: true,
+          // The step did not run: nothing was verified, nothing shipped.
+          envelope: { completionStatus: "partial" as const },
+          pause: {
+            reason: "awaiting-approval" as const,
+            output: pauseSentinel,
+            awaitingApprovalFor: {
+              gateId: crypto.randomUUID(),
+              toolName: step.toolName!,
+              args: resolveStepReferences(step.toolArgs ?? {}, completedSteps),
+            },
+          },
+        };
+      }
+
       const rawArgs = step.toolArgs ?? {};
       const resolvedArgs = resolveStepReferences(rawArgs, completedSteps);
 
@@ -421,6 +472,10 @@ export function executeStep(
     budgetLimits: input.budgetLimits,
     calibration: input.calibration,
     auditRationale: input.auditRationale,
+    // Durable HITL rails — see StepExecutorInput.
+    approvalPolicy: input.approvalPolicy,
+    approvalDecision: input.approvalDecision,
+    interactionResponse: input.interactionResponse,
     // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
     ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
   }).pipe(
@@ -437,6 +492,12 @@ export function executeStep(
       // boundary VERBATIM — this is exactly where harnessAuthoredOutput /
       // budgetTerminalPartial / verificationWarning previously died.
       envelope: kernelResult.envelope,
+      // Durable pause (Phase D): the sub-kernel stopped at an approval gate.
+      // The step did NOT run; the orchestrator must abandon the rest of the
+      // plan rather than composing around an unapproved call.
+      ...(reactResultPause(kernelResult) !== undefined
+        ? { pause: reactResultPause(kernelResult)! }
+        : {}),
     })),
     Effect.mapError(
       (err) =>

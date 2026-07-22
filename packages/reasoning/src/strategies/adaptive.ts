@@ -15,6 +15,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { executeReactive } from "./reactive.js";
+import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
@@ -39,7 +40,7 @@ export interface StrategyOutcome {
   readonly taskDescription: string;
 }
 
-interface AdaptiveInput {
+interface AdaptiveInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -371,6 +372,16 @@ export const executeAdaptive = (
           : {}),
         ...(subMeta.abstention !== undefined
           ? { abstention: subMeta.abstention }
+          : {}),
+        // Durable pause rails (Phase D): adaptive re-builds the result from its
+        // sub-strategy's, so a pause descriptor must be relayed explicitly or a
+        // gated call paused under the sub-strategy reports as a completed run
+        // (2026-07-22). Mirrors the terminatedBy/abstention relays above.
+        ...(subMeta.awaitingApprovalFor !== undefined
+          ? { awaitingApprovalFor: subMeta.awaitingApprovalFor }
+          : {}),
+        ...(subMeta.awaitingInteractionFor !== undefined
+          ? { awaitingInteractionFor: subMeta.awaitingInteractionFor }
           : {}),
         ...(costAwareDowngradeReason
           ? { costAwareDowngrade: costAwareDowngradeReason }

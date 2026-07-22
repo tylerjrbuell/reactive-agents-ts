@@ -21,7 +21,11 @@ import {
 } from "../kernel/state/completion-status.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
+import {
+  buildKernelInput,
+  type CrossCuttingInput,
+  type StrategyHitlRails,
+} from "../kernel/state/build-kernel-input.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -31,7 +35,12 @@ import {
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  makeStep,
+  buildStrategyResult,
+  kernelPause,
+  pausedStrategyResult,
+} from "../kernel/capabilities/sense/step-utils.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
@@ -84,7 +93,7 @@ export function getToTDepthForTier(
   return Math.min(configDepth, limits.maxBfsDepth);
 }
 
-interface TreeOfThoughtInput {
+interface TreeOfThoughtInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -199,6 +208,12 @@ export const executeTreeOfThought = (
       budgetLimits: input.budgetLimits,
       calibration: input.calibration,
       auditRationale: input.auditRationale,
+      // Durable HITL rails (Phase D) — the execute-phase branch kernel is where
+      // ToT calls tools; without the policy the gate never fires and a
+      // `requiresApproval` tool runs unattended (2026-07-22 defect).
+      approvalPolicy: input.approvalPolicy,
+      approvalDecision: input.approvalDecision,
+      interactionResponse: input.interactionResponse,
     };
     const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
@@ -277,6 +292,23 @@ export const executeTreeOfThought = (
       llmCalls += skipExecState.llmCalls ?? 0;
       totalCost += skipExecState.cost;
       steps.push(...skipExecState.steps);
+
+      // Durable pause (Phase D): the delegated kernel hit an approval gate. The
+      // pause is the run's terminal state — return it verbatim so the runtime
+      // persists it and surfaces `pendingApproval` to the caller.
+      const skipPause = kernelPause(skipExecState);
+      if (skipPause) {
+        return pausedStrategyResult({
+          strategy: "tree-of-thought",
+          steps,
+          pause: skipPause,
+          start,
+          totalTokens,
+          totalCost,
+          extraMetadata: { llmCalls, runLedger: skipExecState.ledger ?? [] },
+        });
+      }
+
       const skipFinalOutput =
         skipExecState.output ??
         [...skipExecState.steps]
@@ -778,6 +810,21 @@ export const executeTreeOfThought = (
     llmCalls += execState.llmCalls ?? 0;
     totalCost += execState.cost;
     steps.push(...execState.steps);
+
+    // Durable pause (Phase D) — same terminal treatment as the skip path above.
+    const execPause = kernelPause(execState);
+    if (execPause) {
+      return pausedStrategyResult({
+        strategy: "tree-of-thought",
+        steps,
+        pause: execPause,
+        start,
+        totalTokens,
+        totalCost,
+        extraMetadata: { llmCalls, runLedger: execState.ledger ?? [] },
+      });
+    }
+
     const finalOutput = execState.output
       ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
       ?? null;

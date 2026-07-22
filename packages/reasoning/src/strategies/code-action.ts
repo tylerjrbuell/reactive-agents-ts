@@ -10,6 +10,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
+import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -37,7 +38,7 @@ import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
-export interface CodeActionInput {
+export interface CodeActionInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -81,6 +82,23 @@ export const executeCodeAction = (
   input: CodeActionInput,
 ): Effect.Effect<ReasoningResult, ExecutionError, LLMService> =>
   Effect.gen(function* () {
+    // Durable HITL (Phase D): code-action composes tool calls inside generated
+    // TypeScript run by a Worker sandbox — there is no per-call kernel act
+    // phase, so an approval gate cannot fire. Refuse LOUDLY rather than execute
+    // a `requiresApproval` tool with no human decision. Unlike blueprint,
+    // code-action is never chosen by adaptive routing, so this can only be
+    // reached by an explicit `defaultStrategy: "code-action"` — the caller can
+    // pick a gate-capable strategy. (2026-07-22)
+    if (input.approvalPolicy?.mode === "detach") {
+      return yield* Effect.fail(
+        new ExecutionError({
+          strategy: "code-action",
+          message:
+            "code-action cannot honor .withApprovalPolicy({ mode: \"detach\" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.",
+        }),
+      );
+    }
+
     const start = Date.now();
     const steps: ReasoningStep[] = [];
     const llm = yield* LLMService;

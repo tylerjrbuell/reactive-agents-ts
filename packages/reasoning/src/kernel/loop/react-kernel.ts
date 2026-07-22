@@ -85,68 +85,13 @@ export function makeKernel(options?: { phases?: Phase[] }): ThoughtKernel {
  */
 export const reactKernel: ThoughtKernel = makeKernel();
 
-/**
- * Derive the canonical `terminatedBy` + raw open-string channel from a kernel
- * state's `meta.terminatedBy` + `status` pair.
- *
- * Returns BOTH:
- *   - `terminatedBy`: the closed 5-value enum used by `ReActKernelResult.terminatedBy`
- *   - `rawTerminatedBy?`: the raw `state.meta.terminatedBy` string, preserved
- *     so dynamic killswitch reasons (e.g. `"budget-limit:tokens:1/0"`) survive
- *     the narrowing for downstream observability.
- *
- * `rawTerminatedBy` is OMITTED (not set to `undefined`) when the source is
- * absent, so spread-based consumers don't pollute their result with
- * `{ rawTerminatedBy: undefined }`.
- *
- * Narrowing to `"final_answer"` is WHITELIST-gated (DEFECT 3, 2026-05-31):
- * only genuine model-answer reasons — `final_answer`, `final_answer_regex`,
- * `content_stable`, `entropy_converged` — map to `"final_answer"`. Any other
- * `status === "done"` (harness/give-up reasons such as
- * `controller_early_stop:*`, `low_delta_guard`, `oracle_forced`,
- * `harness_deliverable`, `loop_graceful`, killswitch cut-offs, etc.) narrows
- * to `"end_turn"`, NOT `"final_answer"`. The old catch-all `done → final_answer`
- * was a codified lie: it forced `deriveGoalAchieved` to return `true` on FAILED
- * runs (the observed `success:false` + `goalAchieved:true` incoherence).
- * `end_turn` yields an honest `goalAchieved` null ("unknown") instead of the lie.
- * A whitelist miss under-claims (honest, loud); a blacklist miss would
- * over-claim (silent lie) — so whitelist is the chosen error-asymmetry.
- *
- * Pure / synchronous / no Effect — exported for unit testability.
- */
-export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelState["status"] }): {
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
-  rawTerminatedBy?: string;
-} {
-  const rawTerminatedBy =
-    typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : undefined;
-  const terminatedBy:
-    | "final_answer"
-    | "final_answer_tool"
-    | "max_iterations"
-    | "end_turn"
-    | "llm_error"
-    | "abstained" =
-    rawTerminatedBy === "llm_error"
-      ? "llm_error"
-      : rawTerminatedBy === "final_answer_tool"
-        ? "final_answer_tool"
-        : rawTerminatedBy === "abstained"
-          ? "abstained"
-          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-            ? "end_turn"
-            : rawTerminatedBy === "final_answer" ||
-                rawTerminatedBy === "final_answer_regex" ||
-                rawTerminatedBy === "content_stable" ||
-                rawTerminatedBy === "entropy_converged"
-              ? "final_answer"
-              : state.status === "done"
-                ? "end_turn"
-                : "max_iterations";
-  return rawTerminatedBy !== undefined
-    ? { terminatedBy, rawTerminatedBy }
-    : { terminatedBy };
-}
+// `deriveTerminatedBy` moved to the dependency-free leaf `terminate-reason.ts`
+// (2026-07-22 cycle break): `step-utils.ts` needs the SAME narrowing for the
+// durable-pause result, and importing it from here would close the cycle
+// react-kernel -> act -> step-utils -> react-kernel. Re-exported for the
+// existing import sites.
+import { deriveTerminatedBy } from "./terminate-reason.js";
+export { deriveTerminatedBy };
 
 // ── Backwards-compatible wrapper ─────────────────────────────────────────────
 
@@ -215,6 +160,13 @@ export const executeReActKernel = (
           grounding: input.grounding,
           fabricationGuard: input.fabricationGuard,
           stallPolicy: input.stallPolicy,
+          // Durable HITL rails (Phase D): the per-step ReAct kernel is where
+          // plan-execute actually calls tools, so the approval gate must ride
+          // with it. Dropped here until 2026-07-22 → a `requiresApproval` tool
+          // executed unattended on every plan-execute step.
+          approvalPolicy: input.approvalPolicy,
+          approvalDecision: input.approvalDecision,
+          interactionResponse: input.interactionResponse,
         },
         {
           task: input.task,
@@ -269,6 +221,16 @@ export const executeReActKernel = (
       finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
       ...(state.meta.abstention !== undefined ? { abstention: state.meta.abstention } : {}),
       llmCalls: state.llmCalls ?? 0,
+      // Durable pause rails (Phase D) — a sub-kernel that paused for human
+      // approval must say so at THIS boundary, or the consuming strategy
+      // (plan-execute) reads a terminated sub-run, keeps executing the rest of
+      // the plan around a call nobody approved, and reports a completed run.
+      ...(state.meta.awaitingApprovalFor !== undefined
+        ? { awaitingApprovalFor: state.meta.awaitingApprovalFor }
+        : {}),
+      ...(state.meta.awaitingInteractionFor !== undefined
+        ? { awaitingInteractionFor: state.meta.awaitingInteractionFor }
+        : {}),
       // #40 / spec §1b: the completion authority's verdict crosses the boundary
       // WITH the output. Consumers join it via capStatusToEnvelope — their own
       // authority may downgrade, never upgrade past this.

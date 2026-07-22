@@ -30,6 +30,7 @@ import {
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
 import { compileRunContract } from "../kernel/contract/run-contract.js";
+import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -45,7 +46,12 @@ import {
 } from "../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  makeStep,
+  buildStrategyResult,
+  pausedStrategyResult,
+  type KernelPause,
+} from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
@@ -84,7 +90,7 @@ import {
 } from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
 
-interface PlanExecuteInput {
+interface PlanExecuteInput extends StrategyHitlRails {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -234,6 +240,9 @@ export const executePlanExecute = (
     // chain reactive uses. Direct-dispatch and analysis steps do not produce
     // a raw reason, so this stays `undefined` for pure tool/analysis plans.
     let lastRawTerminatedBy: string | undefined;
+    // Durable pause (Phase D) observed on a step's sub-kernel — set once,
+    // ends the plan (see the wave-loop bail below).
+    let pendingPause: KernelPause | undefined;
     // #40 / spec §1b: completion envelopes of every CONTRIBUTING step — steps
     // whose output was accepted into the plan (result.success). Joined
     // worst-of at the result boundary (kernel/state/completion-envelope.ts is
@@ -775,6 +784,11 @@ export const executePlanExecute = (
                   // #40: the step's completion envelope rides the wave result
                   // so the apply loop can join it into the aggregate.
                   envelope: exit.value.envelope,
+                  // Durable pause (Phase D): the step's sub-kernel stopped at an
+                  // approval gate — the step did NOT do its work. Carried to the
+                  // apply loop, which abandons the plan instead of composing
+                  // around an unapproved call.
+                  ...(exit.value.pause !== undefined ? { pause: exit.value.pause } : {}),
                 };
               }
               const squashed = Cause.squash(exit.cause);
@@ -792,6 +806,15 @@ export const executePlanExecute = (
         for (const result of waveResults) {
           const { step, stepIndex } = result;
           totalTokens += result.tokens;
+          // Durable pause (Phase D) — TERMINAL for the whole plan. Record it and
+          // stop applying: the remaining steps must not run around a gated call
+          // no human has approved yet, and no refinement/synthesis pass may
+          // narrate a completion. Resume replays from the durable checkpoint.
+          const stepPause = (result as { pause?: KernelPause }).pause;
+          if (stepPause !== undefined) {
+            pendingPause = stepPause;
+            break;
+          }
           llmCallsTotal += (result as { llmCalls?: number }).llmCalls ?? 0;
           totalCost += result.cost;
           // Track the most recent composite sub-kernel termination reason —
@@ -941,6 +964,25 @@ export const executePlanExecute = (
             toolsThisStep: step.toolName ? [step.toolName] : [],
           });
         }
+        // A paused step ends the wave loop too — later waves are downstream of
+        // the gated call.
+        if (pendingPause !== undefined) break;
+      }
+
+      // Durable pause (Phase D): return it as the strategy's terminal result.
+      // Everything below (reflect, refine, synthesis) assumes the plan RAN; on a
+      // pause it has not, and narrating a completion here is exactly the lie the
+      // approval gate exists to prevent.
+      if (pendingPause !== undefined) {
+        return pausedStrategyResult({
+          strategy: "plan-execute-reflect",
+          steps,
+          pause: pendingPause,
+          start,
+          totalTokens,
+          totalCost,
+          extraMetadata: { llmCalls: llmCallsTotal, runLedger: yield* Ref.get(ledgerRef) },
+        });
       }
 
       yield* emitPhaseEnd({ emitLog, phase: "plan-execute:execute", startedAt: start, totalTokens });
