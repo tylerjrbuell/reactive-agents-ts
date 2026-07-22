@@ -5,16 +5,31 @@ status: RATIFIED (owner decision, 2026-07-22 planning session)
 amends: wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md §3 C1 (wording only)
 ---
 
-# C1 "steps becomes a projection" → equivalence invariant
+# C1 "steps becomes a projection" → containment invariant
 
 ## Decision
 09-C1's literal wording — steps[] "becomes a ledger projection" — is satisfied
-by the **equivalence-invariant form**, not a physical write-direction flip:
+by the **containment-invariant form**, not a physical write-direction flip:
 
 1. steps[] mutates ONLY via the `transitionState` chokepoint
    (`scripts/check-ledger-writes.sh`, tightened this wave).
-2. `state.ledger ≡ projectStepsToLedger(steps history)` after every
-   transition (`kernel/ledger/equivalence.test.ts`, red-on-cut).
+2. **`projectStepsToLedger(steps history) ⊆ state.ledger`** — every step-derived
+   entry appears in the ledger, in seq order (`kernel/ledger/equivalence.test.ts`,
+   red-on-cut). It is a **subset, NOT an equality**: the ledger is a strict
+   SUPERSET that additionally carries non-step facts seeded through the SAME
+   chokepoint via `patch.ledger` — `artifact` (act.ts), `requirement`
+   declared/transitions (runner.ts / iterate-pass.ts), terminal `verdict`/`claim`
+   (arbitrator.ts). `projectStepsToLedger` never emits those kinds, so
+   re-projecting steps alone cannot reproduce the production ledger — and MUST
+   NOT be expected to. These extra entries are load-bearing: Slice 2's receipt
+   consumes the `artifact` entries as deliverable evidence. **Do not "converge"
+   by deleting the `patch.ledger` seeding — that would gut the receipt.** The
+   invariant the gate + test actually pin is: steps never grow without their
+   derived entries also appearing (no silent steps/ledger drift), and the single
+   write path is the chokepoint. (The equivalence test scripts a step-only
+   transition sequence with no `patch.ledger` seeding, so for that script the
+   two sides are byte-equal — that is the subset relation with the extra-facts
+   set empty, not a claim of general equality.)
 3. The ledger is CANONICAL for all new readers (receipt, stream, journal —
    Wave C.1 slices 2–3). No new reader may scan steps[] when a ledger query
    answers the same question.

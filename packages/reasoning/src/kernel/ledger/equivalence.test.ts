@@ -1,12 +1,19 @@
 /**
- * equivalence.test.ts — C1 equivalence invariant (ratified 2026-07-22,
+ * equivalence.test.ts — C1 containment invariant (ratified 2026-07-22,
  * wiki/Decisions/2026-07-22-c1-equivalence-invariant.md).
  *
- * After ANY sequence of `transitionState` appends, `state.ledger` is
- * byte-equal to re-projecting the full (steps, iteration) history from
- * scratch via `projectStepsToLedger`. This is the pinned form of 09-C1's
- * "steps becomes a projection" — authority lives in the equivalence, not in
- * a physical write-direction flip.
+ * The pinned relation is `projectStepsToLedger(steps) ⊆ state.ledger` — every
+ * step-derived entry appears in the ledger, in seq order. It is a SUBSET, not
+ * a general equality: in production the ledger is a strict SUPERSET carrying
+ * non-step facts seeded through the same chokepoint via `patch.ledger`
+ * (`artifact`/`requirement`/`verdict`/`claim`), which `projectStepsToLedger`
+ * never emits. This test scripts a STEP-ONLY transition sequence with no
+ * `patch.ledger` seeding, so for that script the extra-facts set is empty and
+ * the two sides are byte-equal — the subset relation with an empty remainder,
+ * NOT a claim that ledger == projection(steps) after arbitrary transitions.
+ * This is the pinned form of 09-C1's "steps becomes a projection" — authority
+ * lives in "no step grows without its derived entry + single write path",
+ * not in a physical write-direction flip.
  *
  * Imports/harness match the sibling `run-ledger-state.test.ts` and
  * `step-projection.test.ts` (the established conventions for this module):
