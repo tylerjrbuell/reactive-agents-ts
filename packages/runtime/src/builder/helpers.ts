@@ -210,6 +210,21 @@ export function toolCallTarget(args: unknown): string | undefined {
     }
 }
 
+/**
+ * Structural mirror of `@reactive-agents/reasoning`'s `RunLedger` entries
+ * (`kernel/ledger/run-ledger.ts`'s `LedgerEntry` union) — kept structural
+ * rather than imported, matching the cross-package convention already used
+ * for `reasoningSteps` above (runtime consumes the shape it needs, not the
+ * reasoning package's internal type).
+ */
+type RunLedgerEntryShape = {
+    readonly kind: string
+    readonly toolName?: string
+    readonly toolCallId?: string
+    readonly success?: boolean
+    readonly args?: Readonly<Record<string, unknown>>
+}
+
 export function deriveReceiptToolCalls(
     metadata: {
         readonly reasoningSteps?: ReadonlyArray<{
@@ -220,13 +235,55 @@ export function deriveReceiptToolCalls(
             readonly name: string
             readonly ok: boolean
         }>
+        /**
+         * The append-only RunLedger (Wave C1), when the strategy forwarded
+         * one via `extraMetadata.runLedger`. Authoritative over `reasoningSteps`
+         * when present — see `deriveFromLedger`'s JSDoc for why the ledger
+         * wins ties instead of merely supplementing steps.
+         */
+        readonly runLedger?: ReadonlyArray<RunLedgerEntryShape>
     } | undefined
 ): ReadonlyArray<{ readonly name: string; readonly ok: boolean; readonly target?: string }> {
+    const fromLedger = deriveFromLedger(metadata?.runLedger)
+    if (fromLedger.length > 0) return fromLedger
     const fromSteps = deriveFromSteps(metadata?.reasoningSteps)
     if (fromSteps.length > 0) return fromSteps
     return (metadata?.receiptToolCalls ?? []).filter((tc) =>
         isSubstantiveReceiptTool(tc.name),
     )
+}
+
+/**
+ * Ledger-first receipt evidence (Wave C1 ledger-convergence, task 5). The
+ * RunLedger is the append-only substrate every projection (steps, trace,
+ * receipt) is meant to converge onto (DAG law — run-ledger.ts's header
+ * comment); reading it FIRST here — instead of merely as a third fallback —
+ * means a steps/ledger divergence (adaptive handoffs, a strategy that mutates
+ * steps post-hoc) can no longer leak stale/contradictory tool-call evidence
+ * onto the trust receipt. Steps-derivation stays intact as the fallback for
+ * strategies that don't populate a ledger.
+ */
+function deriveFromLedger(
+    ledger: ReadonlyArray<RunLedgerEntryShape> | undefined,
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean; readonly target?: string }> {
+    if (!ledger || ledger.length === 0) return []
+    const okByCallId = new Map<string, boolean>()
+    for (const e of ledger) {
+        if (e.kind === "tool-result" && typeof e.toolCallId === "string" && typeof e.success === "boolean") {
+            okByCallId.set(e.toolCallId, e.success)
+        }
+    }
+    const result: Array<{ name: string; ok: boolean; target?: string }> = []
+    for (const e of ledger) {
+        if (e.kind !== "tool-invocation" || !e.toolName) continue
+        // Meta/termination/pseudo tools are not grounding evidence on the
+        // ledger path either — mirrors deriveFromSteps's exclusion below.
+        if (!isSubstantiveReceiptTool(e.toolName)) continue
+        const ok = typeof e.toolCallId === "string" ? (okByCallId.get(e.toolCallId) ?? false) : false
+        const target = toolCallTarget(e.args)
+        result.push({ name: e.toolName, ok, ...(target !== undefined ? { target } : {}) })
+    }
+    return result
 }
 
 function deriveFromSteps(

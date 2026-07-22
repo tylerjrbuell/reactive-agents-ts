@@ -1521,6 +1521,17 @@ export class ReactiveAgent<TOut = unknown> {
                               rawMetadata as {
                                   reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>
                                   receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
+                                  // Wave C1 (task 5) — forwarded by execution-engine.ts
+                                  // from `rr.metadata.runLedger` (task 4's strategy
+                                  // forwarding); deriveReceiptToolCalls prefers this
+                                  // over reasoningSteps when non-empty.
+                                  runLedger?: ReadonlyArray<{
+                                      kind: string
+                                      toolName?: string
+                                      toolCallId?: string
+                                      success?: boolean
+                                      args?: Readonly<Record<string, unknown>>
+                                  }>
                               },
                           ),
                           ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),

@@ -1316,6 +1316,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(toolCallLog.length > 0
                       ? { receiptToolCalls: toolCallLog.map((t) => ({ name: t.toolName, ok: t.success })) } as Record<string, unknown>
                       : {}),
+                    // Wave C1 (task 5): forward the strategy's RunLedger so the
+                    // trust receipt's deriveReceiptToolCalls can re-base its
+                    // tool-call evidence onto ledger pairs FIRST, ahead of the
+                    // reasoningSteps/receiptToolCalls fallbacks above. Read from
+                    // `rr.metadata.runLedger` (task 4 shipped every strategy
+                    // forwarding it there via `extraMetadata.runLedger`) — NOT
+                    // `ctx.metadata.reasoningSteps`, which only ever held
+                    // `result.steps`, never `result.metadata.runLedger`.
+                    ...(rr?.metadata?.runLedger && rr.metadata.runLedger.length > 0
+                      ? { runLedger: rr.metadata.runLedger } as Record<string, unknown>
+                      : {}),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"

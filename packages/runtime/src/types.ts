@@ -235,6 +235,22 @@ export interface ExecutionContextMetadata {
       rawTerminatedBy?: string;
       reflexionCritiques?: string[];
       finalAnswerCapture?: unknown;
+      /**
+       * The append-only RunLedger (Wave C1 ledger-convergence), forwarded by
+       * every strategy via `extraMetadata.runLedger` (reasoning package's
+       * `kernel/ledger/run-ledger.ts` `RunLedger`). Typed structurally here
+       * (cross-package) — mirrors how `steps` above mirrors `ReasoningStep`
+       * rather than importing it. Consumed by the trust receipt's
+       * `deriveReceiptToolCalls` (builder/helpers.ts) as the FIRST evidence
+       * source, ahead of the `reasoningSteps` fallback.
+       */
+      runLedger?: ReadonlyArray<{
+        readonly kind: string;
+        readonly toolName?: string;
+        readonly toolCallId?: string;
+        readonly success?: boolean;
+        readonly args?: Readonly<Record<string, unknown>>;
+      }>;
     };
   };
   /** Flattened step array written after reasoning completes */

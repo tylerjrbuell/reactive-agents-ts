@@ -574,6 +574,18 @@ export const makeExecuteStream =
                 readonly name: string
                 readonly ok: boolean
               }>
+              // Wave C1 (task 5) — same in-memory TaskResult as run()'s site
+              // (`execute` is the shared factory dependency, see
+              // ExecuteStreamDeps); execution-engine.ts forwards this from
+              // `rr.metadata.runLedger`. deriveReceiptToolCalls prefers it
+              // over reasoningSteps when non-empty.
+              runLedger?: ReadonlyArray<{
+                readonly kind: string
+                readonly toolName?: string
+                readonly toolCallId?: string
+                readonly success?: boolean
+                readonly args?: Readonly<Record<string, unknown>>
+              }>
             }
           };
           // B2 (meta-loop 4a): declared deliverables × produced-status, from the
