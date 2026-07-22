@@ -123,4 +123,28 @@ export type AgentStreamEvent =
       readonly _tag: "TrustEvent";
       readonly verdict: "tool-grounded" | "partially-grounded" | "ungrounded" | "abstained" | "failed";
       readonly confidence: number;
+    }
+  | {
+      /**
+       * A RunLedger entry was appended (Wave C.1 slice 3 — live ledger feed).
+       * Only emitted when density is "full". Projects the core `EventBus`'s
+       * `LedgerEntryAppended` event (published once per batch by
+       * `KernelHooks.onLedgerAppend`) onto the public stream as one chunk
+       * per entry — mirrors the ToolCallStarted/PhaseStarted per-item
+       * pattern rather than re-emitting the whole batch as a single chunk.
+       *
+       * `entry` stays structurally typed (`Record<string, unknown>`) for the
+       * same reason the bus event does: `@reactive-agents/runtime` does not
+       * import the reasoning package's `LedgerEntry` union. Consumers that
+       * need the narrow kinds re-import `LedgerEntry` from
+       * `@reactive-agents/reasoning` and narrow on `entry.kind`
+       * (e.g. "tool-invocation", "tool-result", "artifact", "requirement",
+       * "claim", "verdict", "harness-signal", "handoff",
+       * "compaction-marker").
+       *
+       * `seq` is the entry's own numeric `seq` field when present, else -1.
+       */
+      readonly _tag: "LedgerEntry";
+      readonly entry: Record<string, unknown>;
+      readonly seq: number;
     };
