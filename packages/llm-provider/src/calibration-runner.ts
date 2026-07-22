@@ -8,8 +8,11 @@
  */
 import type { ModelCalibration } from "./calibration.js";
 import { isMain } from "@reactive-agents/runtime-shim";
+import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE ?? "http://localhost:11434";
+// Shared resolution (OLLAMA_ENDPOINT → OLLAMA_HOST → OLLAMA_BASE → localhost)
+// so calibrating a model and running it can never disagree about the endpoint.
+const OLLAMA_BASE = resolveOllamaEndpoint();
 const PROBE_VERSION = 1;
 
 // ── Probe Result Types ────────────────────────────────────────────────────────

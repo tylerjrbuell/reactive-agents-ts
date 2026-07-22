@@ -28,6 +28,8 @@ export type CapabilitySource =
   | "probe"
   | "cache"
   | "static-table"
+  /** The caller declared it (`.withModel({ numCtx })`) — better than a guess. */
+  | "user"
   | "fallback";
 
 export type Tier = "local" | "mid" | "large" | "frontier";

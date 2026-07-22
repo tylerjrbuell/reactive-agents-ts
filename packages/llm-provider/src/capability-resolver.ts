@@ -31,6 +31,7 @@ import {
   fallbackCapability,
   type Capability,
 } from "./capability.js";
+import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 /**
  * One-shot tracker so the fallback warning fires at most once per
@@ -73,15 +74,21 @@ function warnFallbackOnce(provider: string, model: string): void {
   const key = `${provider}/${model}`;
   if (warnedFallbacks.has(key)) return;
   warnedFallbacks.add(key);
+  const endpointHint =
+    provider === "ollama"
+      ? ` The eager probe (/api/show) either could not reach the server or does ` +
+        `not serve this model — check the endpoint: OLLAMA_ENDPOINT / OLLAMA_HOST ` +
+        `(currently "${resolveOllamaEndpoint()}"), and that \`${model}\` is pulled there.`
+      : "";
   // eslint-disable-next-line no-console
   console.warn(
     `[reactive-agents] Capability fallback fired for ${provider}/${model}: ` +
       `using conservative defaults (recommendedNumCtx=2048, toolCallDialect="none"). ` +
       `Local models with 2048 num_ctx commonly fail to call tools because the ` +
-      `system prompt + tool schema overflows the context window. Either: ` +
-      `(a) add ${model} to STATIC_CAPABILITIES in @reactive-agents/llm-provider/capability.ts, ` +
-      `(b) override at request-time via { numCtx: 8192 } on agent.run options, or ` +
-      `(c) wait for builder probe-on-first-use (Phase 1 Sprint 2 S2.4).`,
+      `system prompt + tool schema overflows the context window.${endpointHint} ` +
+      `Otherwise: register the capability yourself at startup via ` +
+      `registerProbedCapability({...}), pass { numCtx } on .withModel(), or add ` +
+      `${model} to STATIC_CAPABILITIES in @reactive-agents/llm-provider/capability.ts.`,
   );
 }
 

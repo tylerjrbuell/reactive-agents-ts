@@ -1,5 +1,6 @@
 import { Context, Layer } from "effect";
 import type { LLMProvider, EmbeddingConfig, ObservabilityVerbosity } from "./types.js";
+import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 /**
  * LLM service configuration.
@@ -348,8 +349,9 @@ export const llmConfigFromEnv = LLMConfig.of({
   ...(process.env.XAI_BASE_URL !== undefined
     ? { xaiBaseUrl: process.env.XAI_BASE_URL }
     : {}),
-  ollamaEndpoint:
-    process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
+  // Honours OLLAMA_ENDPOINT, then Ollama's own OLLAMA_HOST, then OLLAMA_BASE —
+  // see ollama-endpoint.ts for why reading only the first was a footgun.
+  ollamaEndpoint: resolveOllamaEndpoint(),
   ollamaApiKey: process.env.OLLAMA_API_KEY,
   embeddingConfig: {
     model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",

@@ -1,4 +1,4 @@
-import { resolveCanonical } from "@reactive-agents/llm-provider";
+import { resolveCanonical, resolveOllamaEndpoint } from "@reactive-agents/llm-provider";
 import { capabilitySourcePreflight } from "@reactive-agents/core";
 import type {
   ContractCapability as Capability,
@@ -316,7 +316,9 @@ export async function validateProviderConnection(
   ollamaEndpoint?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (provider === "ollama") {
-    const endpoint = ollamaEndpoint ?? process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434";
+    // Same resolution the provider and the capability probe use, so a failed
+    // pre-flight names the endpoint the run would actually have used.
+    const endpoint = resolveOllamaEndpoint(ollamaEndpoint);
     try {
       const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(3000) });
       if (!res.ok) {

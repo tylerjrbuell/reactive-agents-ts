@@ -319,6 +319,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _thinkingOptions?: import('@reactive-agents/llm-provider').ThinkingOptions
     private _temperature?: number
     private _maxTokens?: number
+    /**
+     * Context window declared via `.withModel({ numCtx })`. Written by
+     * `applyWithModel` through the wither state view; declared here because
+     * `build()` reads it directly to register a caller-supplied capability when
+     * the live probe cannot run.
+     */
+    private _numCtx?: number
     private _memoryTier: '1' | '2' = '1'
     /**
      * Memory is OFF by default (v0.12 — "Durable & Honest"). A bare
@@ -2303,8 +2310,18 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         // `source: "fallback"`, tripping the honesty gate AND under-sizing the
         // first reasoning iteration. Best-effort: never throws, no-op for
         // providers without a probe (anthropic/openai/…).
-        const { primeCapability } = await import('@reactive-agents/llm-provider')
+        const { primeCapability, registerUserSuppliedCapability } = await import(
+            '@reactive-agents/llm-provider'
+        )
         await primeCapability(this._provider, this._model)
+        // Probe unavailable (air-gapped, proxied gateway, unreachable endpoint)
+        // but the caller declared the window via `.withModel({ numCtx })`? Use
+        // it. Otherwise validateBuild below fails on a `source: "fallback"`
+        // capability and tells the user to patch STATIC_CAPABILITIES for a fact
+        // they just supplied. No-op when the probe or the static table won.
+        if (this._numCtx !== undefined && this._model !== undefined) {
+            registerUserSuppliedCapability(this._provider, this._model, this._numCtx)
+        }
 
         const validation = validateBuild(
             this._provider,

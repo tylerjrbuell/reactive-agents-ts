@@ -19,11 +19,10 @@
 
 import { registerProbedCapability } from "./capability-resolver.js";
 import { probeOllamaCapability } from "./providers/local-probe.js";
-
-const DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434";
+import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 export interface PrimeCapabilityOptions {
-  /** Provider base URL. Defaults to `OLLAMA_ENDPOINT` env then localhost. */
+  /** Provider base URL. Falls back to the OLLAMA_* env vars, then localhost. */
   readonly endpoint?: string;
   /** Optional bearer token for authenticated local gateways. */
   readonly apiKey?: string;
@@ -38,7 +37,10 @@ export interface PrimeCapabilityOptions {
  * - **No-op for providers without a probe** (anthropic / openai / gemini / …),
  *   which keep resolving from the static table.
  * - Endpoint resolution mirrors `validateProviderConnection`:
- *   explicit `opts.endpoint` → `OLLAMA_ENDPOINT` env → localhost.
+ *   explicit `opts.endpoint` → `OLLAMA_ENDPOINT` → `OLLAMA_HOST` → `OLLAMA_BASE`
+ *   → localhost (see `resolveOllamaEndpoint`). Reading only `OLLAMA_ENDPOINT`
+ *   here meant a container that set Ollama's own `OLLAMA_HOST` probed localhost,
+ *   found nothing, and silently took the 2048-ctx fallback.
  *
  * Call this once, as early as possible in the async build/start path, before the
  * first synchronous capability resolve.
@@ -49,8 +51,7 @@ export async function primeCapability(
   opts: PrimeCapabilityOptions = {},
 ): Promise<void> {
   if (provider !== "ollama" || !model) return;
-  const endpoint =
-    opts.endpoint ?? process.env.OLLAMA_ENDPOINT ?? DEFAULT_OLLAMA_ENDPOINT;
+  const endpoint = resolveOllamaEndpoint(opts.endpoint);
   const cap = await probeOllamaCapability(model, endpoint, opts.apiKey);
   if (cap) registerProbedCapability(cap);
 }

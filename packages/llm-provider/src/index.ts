@@ -52,8 +52,23 @@ export type {
  *
  * @unstable See note above on Capability port.
  */
-export { resolveCapability, _resetProbedRegistryForTesting } from "./capability-resolver.js";
+export {
+  resolveCapability,
+  // Public because the eager probe cannot cover every deployment: an air-gapped
+  // host, a proxied gateway that doesn't expose /api/show, or a model the app
+  // already knows the window for. Registering a capability once at startup is
+  // then the supported alternative to editing STATIC_CAPABILITIES upstream.
+  // (Only the test-reset seam used to be exported, which made the registry
+  // effectively write-only for consumers.)
+  registerProbedCapability,
+  _resetProbedRegistryForTesting,
+} from "./capability-resolver.js";
 export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-resolver.js";
+
+// Ollama base-URL resolution — honours OLLAMA_ENDPOINT, Ollama's own
+// OLLAMA_HOST, then OLLAMA_BASE. Exported so apps that surface an
+// "Ollama host" setting can resolve it the same way the framework does.
+export { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 // Canonical capability resolver (Sprint-1 B3β). The single function consumers
 // should call when they need model-capability info; returns the canonical
@@ -65,6 +80,11 @@ export { resolveCanonical, warnCapabilityFallback } from "./canonical-resolver.j
 // synchronous resolvers at build-validation + every reasoning iteration, so any
 // pulled model resolves at its real window/dialect instead of the 2048 fallback.
 export { primeCapability } from "./capability-prime.js";
+
+// Caller-declared capability — `.withModel({ numCtx })` fills the hole a failed
+// probe leaves, instead of the build dying on a `source: "fallback"` window the
+// user had already told us.
+export { registerUserSuppliedCapability } from "./user-capability.js";
 export type { PrimeCapabilityOptions } from "./capability-prime.js";
 
 // ─── Types ───

@@ -55,7 +55,10 @@ export type ToolCallDialect = typeof ToolCallDialectSchema.Type;
  *   - fallback: conservative defaults (`maxContextTokens=4096`, ...) when
  *     both probe and static-table miss
  */
-export const CapabilitySourceSchema = Schema.Literal("probe", "static-table", "fallback");
+// "user" — the caller declared the window via `.withModel({ numCtx })`. Ranks
+// below a probe/static entry (it carries one fact, not the whole descriptor) but
+// above "fallback", which is the framework guessing.
+export const CapabilitySourceSchema = Schema.Literal("probe", "static-table", "user", "fallback");
 export type CapabilitySource = typeof CapabilitySourceSchema.Type;
 
 // ─── Capability struct ───────────────────────────────────────────────────────
