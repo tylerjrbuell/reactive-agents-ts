@@ -214,7 +214,19 @@ export const runReasoningPostThink = (
     };
 
     // ── Semantic cache store (after successful reasoning) ──
-    if (config.enableCostTracking && ctx.metadata.lastResponse) {
+    // A paused run is NOT an answer: its `lastResponse` is the pause sentinel
+    // ("Run paused — awaiting human approval."). Caching that under the task
+    // text poisoned every later run of the same prompt — including the run's own
+    // `approveRun` resume, which was then served the sentinel and never executed
+    // the approved call (2026-07-22, found dogfooding FORGE). The pause rails are
+    // forwarded by every strategy, so one check covers all of them.
+    const pausedMeta = (ctx.metadata.reasoningResult as
+      | { metadata?: { awaitingApprovalFor?: unknown; awaitingInteractionFor?: unknown } }
+      | undefined)?.metadata;
+    const runPaused =
+      pausedMeta?.awaitingApprovalFor !== undefined ||
+      pausedMeta?.awaitingInteractionFor !== undefined;
+    if (config.enableCostTracking && ctx.metadata.lastResponse && !runPaused) {
       const costOpt2 = yield* Effect.serviceOption(CostService).pipe(
         Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
       );

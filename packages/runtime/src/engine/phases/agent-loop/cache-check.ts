@@ -20,8 +20,14 @@
  *
  * Extracted from `execution-engine.ts:982-1014` (W23 step 5).
  */
-import { Effect } from "effect";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { Effect, FiberRef } from "effect";
+import {
+  emitErrorSwallowed,
+  errorTag,
+  ResumeStateRef,
+  ApprovalDecisionRef,
+  InteractionResponseRef,
+} from "@reactive-agents/core";
 import { CostService } from "@reactive-agents/cost";
 import { extractTaskText } from "../../util.js";
 import type { ReactiveAgentsConfig, ExecutionContext } from "../../../types.js";
@@ -50,6 +56,20 @@ export const checkSemanticCache = (
     const { config, task, ctx, obs, isNormal } = params;
 
     if (!config.enableCostTracking) {
+      return { ctx, cacheHit: false };
+    }
+
+    // Durable resume (Phase D) is never cacheable. `approveRun`/`denyRun`/
+    // `resume` re-run the ORIGINAL task text, so a cache keyed on that text
+    // matches the paused run's own entry: the resume would skip reasoning
+    // entirely and replay the pause sentinel, leaving the approved tool
+    // unexecuted while telling the caller the run had finished (2026-07-22,
+    // found dogfooding FORGE). A resume must always re-enter the kernel — that
+    // is the whole point of restoring the checkpoint.
+    const resumeState = yield* FiberRef.get(ResumeStateRef);
+    const approvalDecision = yield* FiberRef.get(ApprovalDecisionRef);
+    const interactionResponse = yield* FiberRef.get(InteractionResponseRef);
+    if (resumeState !== null || approvalDecision !== null || interactionResponse !== null) {
       return { ctx, cacheHit: false };
     }
 
