@@ -132,10 +132,32 @@ describe("Deliverable — typed channel into state.output", () => {
   });
 
   it("sentinel deliverables render structured markers", () => {
-    expect(deliverableToContent(sentinelDeliverable("no_substantive_output"))).toBe("Task complete.");
+    // CHANGED 2026-07-22: this previously asserted "Task complete." for
+    // `no_substantive_output` — i.e. the test PINNED a false success claim.
+    // Both abstention sentinels fell through to the "Task complete." default,
+    // so a run that honestly declined (terminatedBy="abstained") surfaced a
+    // success message to the user; the run's own diagnosis labelled it
+    // `dishonest-success-suspected` (eval-arena trace 01KY4X8SQQC7EYNBAG1GFT7RVS).
+    // An abstention must never render as success.
+    expect(deliverableToContent(sentinelDeliverable("no_substantive_output"))).toBe(
+      "Could not complete the task — no grounded answer could be produced from the available tools.",
+    );
+    expect(deliverableToContent(sentinelDeliverable("model-abstained"))).toBe(
+      "Declined to answer — the available evidence was insufficient to ground a response.",
+    );
     expect(
       deliverableToContent(sentinelDeliverable("max_iterations_no_artifacts")),
     ).toBe("Task did not converge within the iteration budget.");
+    // No sentinel reason may render as a success claim.
+    for (const reason of [
+      "no_substantive_output",
+      "max_iterations_no_artifacts",
+      "awaiting_approval",
+      "awaiting_interaction",
+      "model-abstained",
+    ] as const) {
+      expect(deliverableToContent(sentinelDeliverable(reason))).not.toBe("Task complete.");
+    }
   });
 
   it("ValidatedObservation cannot be widened from a dispatch-rejection observation (compile-time)", () => {

@@ -149,8 +149,17 @@ export function deliverableToContent(d: Deliverable): string {
           return "Run paused — awaiting human approval.";
         case "awaiting_interaction":
           return "Run paused — awaiting human input.";
-        default:
-          return "Task complete.";
+        // Both ABSTENTION sentinels previously fell through to the
+        // "Task complete." default (eval arena, 2026-07-22, trace
+        // 01KY4X8SQQC7EYNBAG1GFT7RVS): the harness honestly decided it could
+        // NOT ground an answer, terminated `abstained` — and then told the user
+        // the task succeeded. The run's own diagnosis flagged it
+        // `dishonest-success-suspected`. An abstention must never render as a
+        // success claim; the specific cause rides `meta.abstention.reason`.
+        case "no_substantive_output":
+          return "Could not complete the task — no grounded answer could be produced from the available tools.";
+        case "model-abstained":
+          return "Declined to answer — the available evidence was insufficient to ground a response.";
       }
   }
 }

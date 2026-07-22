@@ -552,7 +552,15 @@ describe("output quality gate", () => {
     const st = transitionState(base, { steps: [] });
     const d = assembleDeliverable(st);
     expect(d.source).toBe("sentinel");
-    expect(deliverableToContent(d)).toBe("Task complete.");
+    // CHANGED 2026-07-22: was "Task complete." — a run with NO validated
+    // artifact and NO thought produced nothing, so claiming completion was a
+    // false success claim (same defect that made abstained runs report success;
+    // eval-arena trace 01KY4X8SQQC7EYNBAG1GFT7RVS). Still TRUTHY, so the
+    // downstream truthiness gates documented in runner-helpers/deliverable.ts
+    // behave identically.
+    expect(deliverableToContent(d)).toBe(
+      "Could not complete the task — no grounded answer could be produced from the available tools.",
+    );
   });
 });
 
