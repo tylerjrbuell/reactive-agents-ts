@@ -69,6 +69,39 @@ export function hasSuccessfulSubstantiveToolCall(
 }
 
 /**
+ * Grounding measured against the task's DECLARED REQUIRED tools.
+ *
+ * Empirical defect this closes (eval arena, 2026-07-22, `ab-trap-5` ×
+ * qwen3.5:latest, trace 01KY4VYWG3ZTJC3STFYRXMNC25): the required tool
+ * (`file-read`) failed on all 3 attempts, but `list-directory` succeeded — a
+ * REAL, non-pseudo tool. `hasSuccessfulSubstantiveToolCall` therefore reported
+ * the run as GROUNDED, which (a) made `secondUngroundedTerminal` false and
+ * (b) let evidence candidates satisfy `hasDeliverable`, whose short-circuit is
+ * the FIRST line of `decideForcedAbstention`. Net effect: forced abstention
+ * could never fire, the run terminated `harness_deliverable` and fabricated
+ * (`abstentionAccuracy: 0`, `fabricationUnderTrapRate: 1`).
+ *
+ * Gathering adjacent evidence is not grounding. When a task declares required
+ * tools, only a SUCCESSFUL REQUIRED call grounds it.
+ *
+ * Contract:
+ *   - `requiredTools` non-empty → true iff ≥1 required tool has a successful
+ *     substantive call (pseudo/meta observations already excluded upstream).
+ *   - `requiredTools` empty → falls back to {@link hasSuccessfulSubstantiveToolCall},
+ *     so tasks that declare no required tools keep byte-identical behavior.
+ */
+export function hasSuccessfulRequiredToolCall(
+  steps: readonly ReasoningStep[],
+  requiredTools: readonly string[],
+): boolean {
+  if (requiredTools.length === 0) return hasSuccessfulSubstantiveToolCall(steps);
+  const succeeded = buildSuccessfulToolCallCounts(steps);
+  return requiredTools.some(
+    (toolName) => !HARNESS_PSEUDO_TOOLS.has(toolName) && (succeeded[toolName] ?? 0) > 0,
+  );
+}
+
+/**
  * Build the one-shot grounding redirect message (< 300 chars).
  *
  * When failed tool paths exist, reuse the existing recovery-steering builder

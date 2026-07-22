@@ -63,6 +63,7 @@ import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 import {
   TERMINAL_ANSWER_REASONS,
   hasSuccessfulSubstantiveToolCall,
+  hasSuccessfulRequiredToolCall,
 } from "./runner-helpers/grounded-terminal.js";
 
 // ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
@@ -828,10 +829,17 @@ export function runKernel(
       // runs (any successful call) and non-answer terminals contribute 0 —
       // pre-F1 arithmetic byte-identical.
       const groundingRedirects = state.meta.groundingRedirectCount ?? 0;
+      // Grounding is measured against the DECLARED REQUIRED tools (2026-07-22).
+      // Previously this asked "did ANY non-pseudo tool succeed", so a run whose
+      // required `file-read` failed 3× was still deemed grounded because
+      // `list-directory` returned ok — see hasSuccessfulRequiredToolCall's
+      // docstring for the trace. Falls back to the substantive predicate when
+      // the task declares no required tools (behavior unchanged there).
+      const groundedOnRequired = hasSuccessfulRequiredToolCall(state.steps, requiredTools);
       const secondUngroundedTerminal =
         groundingRedirects > 0 &&
         TERMINAL_ANSWER_REASONS.has(String(state.meta.terminatedBy ?? "")) &&
-        !hasSuccessfulSubstantiveToolCall(state.steps);
+        !groundedOnRequired;
       const ungroundedSynthesisRejections =
         (state.meta.synthesisRetryCount ?? 0) +
         (state.meta.groundingBlockRetry ?? 0) +
@@ -844,8 +852,15 @@ export function runKernel(
       // fallback so non-artifact tasks (research answers, no file) stay sane:
       // the union is a superset of the prior signal, so no run that was
       // previously protected loses protection (behavior pinned).
+      // A REAL artifact always protects. Evidence candidates only protect a run
+      // that actually GROUNDED on its required tools: otherwise a single
+      // successful adjacent call (`list-directory` on a `file-read` task)
+      // satisfies this predicate, and since `hasDeliverable` is the FIRST
+      // short-circuit in decideForcedAbstention, honest abstention could never
+      // fire on exactly the ungrounded shape it exists for (2026-07-22).
       const hasDeliverableForAbstain =
-        countArtifacts(state) > 0 || countDeliverableCandidates(state) > 0;
+        countArtifacts(state) > 0 ||
+        (groundedOnRequired && countDeliverableCandidates(state) > 0);
 
       const forced = decideForcedAbstention({
         requiredToolUnavailable,

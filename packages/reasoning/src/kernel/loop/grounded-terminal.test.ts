@@ -36,6 +36,7 @@ import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,
   hasSuccessfulSubstantiveToolCall,
+  hasSuccessfulRequiredToolCall,
   buildGroundingRedirectGuidance,
 } from "./runner-helpers/grounded-terminal.js";
 import {
@@ -188,6 +189,26 @@ describe("F1 unit — grounded-terminal helpers", () => {
     expect(
       hasSuccessfulSubstantiveToolCall([successObs("web-search", "data")]),
     ).toBe(true);
+  });
+
+  // 2026-07-22 harness bug (eval-arena, ab-trap-5): a successful NON-REQUIRED
+  // tool grounded a run whose REQUIRED tool never succeeded. `list-directory`
+  // returning ok made the harness treat a file-read-required task as grounded,
+  // which suppressed forced abstention (hasDeliverable short-circuit) and let
+  // the run fabricate. Grounding must be measured against the REQUIRED tools.
+  it("hasSuccessfulRequiredToolCall: non-required success does NOT ground a required-tool task", () => {
+    const steps = [failedObs("file-read", "ENOENT"), successObs("list-directory", "a\nb")];
+    // The pre-existing substantive predicate says "grounded" (the defect):
+    expect(hasSuccessfulSubstantiveToolCall(steps)).toBe(true);
+    // Required-aware grounding must say NOT grounded:
+    expect(hasSuccessfulRequiredToolCall(steps, ["file-read"])).toBe(false);
+    // A successful REQUIRED call does ground it:
+    expect(
+      hasSuccessfulRequiredToolCall([successObs("file-read", "data")], ["file-read"]),
+    ).toBe(true);
+    // No declared required tools -> falls back to substantive (unchanged behavior):
+    expect(hasSuccessfulRequiredToolCall(steps, [])).toBe(true);
+    expect(hasSuccessfulRequiredToolCall([successObs("pulse", "x")], [])).toBe(false);
   });
 
   it("TERMINAL_ANSWER_REASONS covers the final-answer/end_turn family only", () => {
