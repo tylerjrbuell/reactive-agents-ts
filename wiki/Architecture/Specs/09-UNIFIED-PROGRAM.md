@@ -89,7 +89,15 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 - The meta-loop DAG is one-directional; control re-enters as ledger entries only.
 - Falsified levers stay dead (no LATS/GoT, no resurfaced levers); non-goals in 08 §9 carried.
 
-## 7. Status board (updated 2026-07-12)
+## 7. Status board (updated 2026-07-22)
+
+> **v0.14.0 RELEASED 2026-07-22** (npm live, 34 pkgs; GitHub Release published; main synced with origin).
+> The §4 amendment is DISCHARGED: debt burndown Waves 0–5 complete (lies removed, 7-boundary spine
+> shipped red-on-cut, dead code deleted, P0-4 discharged), full doc sync + first-timer quality sweep done.
+> **The §4 sequence RESUMES: next program step = Wave C (4b RunLedger — Arc 1 log converges, C1).**
+> Remaining register debt = 5 Wave-5-class instrument items + the owed bench re-baseline run (owner-gated).
+
+### Pre-release board (historical, 2026-07-12)
 
 | Item | State |
 |---|---|

@@ -67,14 +67,17 @@ packages/reasoning/src/kernel/
   utils/                 # ics-coordinator, loop-detector, tool-utils, etc.
 ```
 
-**Known architectural debt (pre-loaded — verify each is still present):**
+**Known architectural debt (pre-loaded, refreshed 2026-07-22 post-v0.14 audit — verify each is still present):**
 | Debt item | Location | Status to verify |
 |-----------|----------|-----------------|
-| ~690 LOC dead text-assembly code | `context-engine.ts` | Still present? |
-| `buildDynamicContext`/`buildStaticContext` (~560 LOC behind flags) | `context-engine.ts` | Still behind flags? |
-| Provider adapter hooks (resolved v0.14: 4-hook system, all wired) | `provider-adapters/` | `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` live; `taskFraming`/`toolGuidance`/`systemPromptPatch` removed |
-| `KernelState.meta` untyped bag | `kernel-state.ts` | `as any` casts? |
-| Strategy routing for local models | `strategy-registry.ts` | Still disabled? |
+| Provider adapter hooks (resolved v0.14: 4-hook system, all wired) | `provider-adapters/` | `continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck` live (+ `parseToolCalls`); `taskFraming`/`toolGuidance`/`systemPromptPatch` removed |
+| B3 builder→runtime seam structural cast | `builder/build-effect/runtime-construction.ts` | `self as unknown as BuilderRuntimeStateView` — renamed field NOT a compile error; Wave-4 codegen candidate |
+| Loop-detector streak can mask duplicate-tool patterns | `loop-detector.ts` / kernel runner | strategySwitching may never trigger (W8) — still open? |
+| `PlanExecuteConfigSchema.patchStrategy` dead config | `reasoning/src/types/config.ts:32` | declared + test-asserted, zero source readers |
+| ToT outer loop ignores `dispatcher-early-stop` | `plan-execute.ts` / ToT sub-kernels | outer branches are separate sub-kernels |
+| Sub-agent fixed vs dynamic path duplication | `local-agent-tools.ts` / `spawn-handlers.ts` | fixed path could be `singletonAgentMode` of dynamic |
+
+> Resolved — do NOT resurface (verified 2026-07-22): `context-engine.ts` deleted entirely (with its flags); `KernelState.meta` is typed `KernelMeta` (0 `as any` in reasoning src); no disabled local-model strategy routing exists in `strategy-registry.ts`; `define-tool` DX (typed errors, Standard Schema, async handlers); `local.ts` timeout precedence; `build()` fail-fast on missing keys. Canonical ledger: `wiki/Architecture/DEBT-REGISTER.md`.
 
 **Determine scope before proceeding.** Full repo, one package, or one subsystem? Narrow scope = deeper findings.
 
