@@ -56,9 +56,13 @@ Session evidence: one un-aimed fix-verify cycle was costing GPU-hours. These fou
    ```
 2. **Verify narrow — one cell, not the matrix.** `--task` AND `--variant` compose; a fix iteration costs 1 variant × 1 task × 1 run:
    ```bash
-   bun run packages/benchmarks/src/run.ts --session <s> --task rw-2 --variant ra-full --runs 1 --output /tmp/claude-1000/<fix>-verify.json
+   bun run packages/benchmarks/src/run.ts --session <s> --task rw-2 --variant ra-full --runs 1 --output /tmp/claude-1000/<fix>-verify.json --timeout 90
    ```
-   ALWAYS pass `--output` — without it per-cell evidence (judge inputs, error causes) is unrecoverable after the run.
+   Four mechanics that bite (each cost a wasted cycle 2026-07):
+   - **`--session` is a PRESET name**, not free text — `real-world-full`, `cross-tier-stress`, `frontier-spot-check`, `local-models`, … (an unknown name prints the list and exits). `--provider/--model/--task/--variant/--runs` then OVERRIDE the preset on top (e.g. swap in a single `--provider anthropic --model claude-haiku-4-5-20251001`).
+   - **ALWAYS pass `--output`** — without it per-cell evidence (check stdout, judge inputs, error causes) is unrecoverable. It **OVERWRITES** per invocation (it does NOT merge across runs) — a second provider into the same file loses the first; use a distinct file per cell.
+   - **Run FOREGROUND with `--timeout ≤590`.** A bench cell launched as a background task gets SIGKILLed by the reaper mid-run (silent live-model cells especially); `timeout N bun … --timeout <sec>` foreground.
+   - **Per-run scores are Bernoulli (0/1).** A 0%→33% on n=3 is a MECHANISM confirmation (the deterministic barrier is gone), NOT a lift claim; never read a finding off the summary table (gaps <~26pp at small n are noise).
 3. **Trust the clock again — timeouts hard-kill.** Cell timeouts abort the agent fiber via AbortSignal (runner.ts, 2026-07-07); zombie-fiber GPU contention no longer degrades later cells. If successful-cell durations climb monotonically across a session, that regression has returned — investigate before trusting aggregates.
 4. **Judge recipe (memorize):** `JUDGE_LAYER=live JUDGE_PROVIDER=openai JUDGE_MODEL=gpt-4o-mini bun run packages/judge-server/src/index.ts` — **without JUDGE_LAYER=live a silent STUB scores 0.95 on everything.** Health-check with a REAL `/judge` POST (`/version` stays up when the LLM backend is dead). Error/timeout cells are never judged (`scoreErrorCell`) — evidence says the true cause.
 
@@ -139,7 +143,7 @@ For a broad weakness/failure-mode map, run a **2-variant cross-tier benchmark se
    bun run packages/judge-server/src/index.ts &
    # smoke: curl -s localhost:8910/version  then POST a /judge request
    ```
-2. **Use CALIBRATED models only.** The bench's preflight honesty guard marks any model NOT in `STATIC_CAPABILITIES` (`packages/llm-provider/src/capability.ts`) as `inconclusive` (2048 fallback ctx) and **refuses to score it** — you get 0 measured cells, 0 dishonest numbers (guard working as designed). Calibrated local set (2026-06): `qwen3:14b`, `cogito:14b`, `qwen3.5:latest`, `gemma4:latest`; frontier models are calibrated. (To bench an uncalibrated model intentionally: `RA_BENCH_ALLOW_FALLBACK=1` — but scores are at fallback ctx, flagged, not representative. Better: add it to `STATIC_CAPABILITIES` with its real `numCtx`.)
+2. **Use CALIBRATED models only.** The bench's preflight honesty guard marks any model NOT in `STATIC_CAPABILITIES` (`packages/llm-provider/src/capability.ts`) as `inconclusive` (2048 fallback ctx) and **refuses to score it** — you get 0 measured cells, 0 dishonest numbers (guard working as designed). Calibrated local set (verified 2026-07-22): `cogito:8b`, `cogito:14b`, `qwen3:4b`, `qwen3:14b`, `qwen3.5:latest`; frontier calibrated incl. `claude-haiku-4-5` / `-4-5-20251001`. **`gemma4:*` is NOT calibrated** — don't use it as an SUT (0 cells). Grep the file for the current list before a run; local availability is separate — `ollama list` shows what's pulled (a calibrated id you haven't pulled will fail at connect, not at the guard). (To bench an uncalibrated model intentionally: `RA_BENCH_ALLOW_FALLBACK=1` — scores at fallback ctx, flagged, not representative. Better: add it to `STATIC_CAPABILITIES` with its real `numCtx`.)
 
 **Run** a session (calibrated models, `bare-llm` + `ra-full` variants, `traceDir` set so `RunDiagnosis` is captured, **`runs≥3`** for the gate's variance/significance):
 ```bash
@@ -187,6 +191,27 @@ When the probe was an eval-bench run, the diagnosis is already in the report —
 - **Token overhead**: `ra-full` mean tokens vs `bare-llm` — the harness tax (the 14b sweep saw +200–900%). A lift that fails the ≤15%tok gate is a real cost finding, not just a win.
 
 THEN take a specific failing cell's `traceId` (from `RunScore.traceId`) and drill with `rax:diagnose replay` below.
+
+### For a `verifiable` task, read the CHECK EVIDENCE first — it names the defect
+
+`rax:diagnose replay` shows trace *events*, but for a deterministic `verifiable` task the highest-signal source is the report's per-run **dimension `evidence`** (the hidden-check's stdout), the run **`output`**, and the run **`trust`** field — the check tells you EXACTLY why the deliverable failed, in one line, without reading a single trace event:
+
+```bash
+# Per failing run: trust label + the check's own failure line + output head.
+python3 -c "
+import json; d=json.load(open('report.json'))
+tr=[t for t in d['taskReports'] if t['taskId']=='rw-1'][0]
+for i,r in enumerate(tr['runs']):
+    acc=[x for x in r['dimensions'] if x['dimension']=='accuracy'][0]
+    print(f'run {i}: trust={r.get(\"trust\")} | {acc[\"evidence\"].splitlines()[0][:80]}')
+    print('  output:', r.get('output','')[:100].replace(chr(10),' '))
+"
+```
+
+- **`trust`**: `verified-correct` (deliverable passed) · `claimed-but-wrong` (agent claimed success, deliverable failed — the honesty layer is working; the *deliverable* is the bug) · `unverified`.
+- **`dimension.evidence`**: the check's raw stdout — e.g. `exit 1: 0 pass … FAIL: databases.json exists and parses — JSON Parse error: Unrecognized token '\`'`. That single line located the 2026-07-22 file-write defect (models fence a `.json` deliverable → unparseable file) — a boundary fix, not a trace-spelunk. **When accuracy is 0 but `passRate` is 1, this is where the answer is: the run didn't crash; the deliverable is wrong.**
+
+Only drop to `rax:diagnose replay` when the check evidence + output don't explain it (the failure is in the *run's behavior*, not the *deliverable's content*).
 
 ### Default first move
 
@@ -244,6 +269,7 @@ The diff prints a stat table (iterations, tool calls, verifier rejections, harne
 | Multiple `harness-signal-injected` with same `origin` and same content | Harness nudge is firing repeatedly without effect. Either the nudge is wrong, the model can't parse it, or the kernel control flow ignores model compliance. |
 | `verifier-verdict.checks[].name = "synthesis-grounded" passed=false` | Output contains claims not present in tool observations — fabrication. |
 | `kernel-state-snapshot.outputLen > 0` while `status="failed"` | Output ownership invariant broken — kernel is letting a populated state.output ride past a failure transition. |
+| `verifiable` task: `passRate=1` but `accuracy=0`, and the dimension `evidence` shows a parse/format error on the deliverable file (e.g. `JSON Parse error: Unrecognized token '\`'`, `Expected '}'`) with `trust="claimed-but-wrong"` | The run didn't crash — the **deliverable is corrupted**. Common: the model fenced a structured answer (```` ```json ````) or added preamble and the write tool stored it verbatim (fixed at the write boundary 2026-07-22); or the JSON is truncated (token budget) — different class. The honesty layer is fine; fix the deliverable path, not the receipt. |
 | `intervention-suppressed` repeatedly with `reason="below-entropy-threshold"` on a stuck run | RI threshold too high for this model tier. |
 | Final `kernel-state-snapshot.terminatedBy = "dispatcher-strategy-switch"` and the next strategy never recovers | Strategy-switching escape hatch isn't actually escaping — investigate the sub-strategy. |
 
@@ -279,18 +305,13 @@ If you can't fill in (4), you don't have a falsifiable hypothesis yet — keep d
 
 Make the minimum coordinated set of edits that implements the hypothesis. Don't fold in adjacent cleanups — those are a separate commit.
 
-After editing, **rebuild every package whose dist a probe consumes**. The most painful diagnostic time-sink is "my edit isn't reaching the running code" because dist is stale:
+**Do NOT reflexively rebuild before re-probing.** Under Bun, the bench runner (`packages/benchmarks/src/run.ts`) and the probe scripts import workspace **src** via the `bun` exports condition (added to ~all packages 2026-04-28) — a src edit is LIVE in the next probe with **zero rebuild** (verified 2026-07-22: a `file-operations.ts` src fix moved rw-1 0%→33% on the very next bench run, no build). Rebuilding "just in case" wastes minutes per iteration.
 
-```bash
-cd packages/reasoning && bun run build
-cd packages/runtime   && bun run build
-cd packages/trace     && bun run build
-cd packages/diagnose  && bun run build
-```
+Rebuild ONLY when the probe consumes **dist** rather than src:
+- the `rax:diagnose` CLI after you changed `packages/diagnose` or its deps → `cd packages/diagnose && bun run build`;
+- a Node-runtime probe (no Bun) or an npm-publish / `.d.ts` validation.
 
-(Or just `bun run build` from the root — the turbo cache makes it cheap when nothing changed.)
-
-Then re-run the probe with the same model + scenario as Phase 2.
+Then re-run the probe with the same model + scenario as Phase 2. If you genuinely suspect stale code is masking your edit, confirm with `git diff` on the src file, not a blind rebuild.
 
 ---
 
