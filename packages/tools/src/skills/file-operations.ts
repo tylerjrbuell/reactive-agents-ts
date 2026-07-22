@@ -240,13 +240,64 @@ export const fileWriteTool: ToolDefinition = {
   produces: "file",
 };
 
+// Structured-data extensions whose files can NEVER legitimately begin with a
+// markdown code fence. Models routinely wrap a JSON/CSV/YAML answer in
+// ```json … ``` (or add a "Here is the file:" preamble) — writing that verbatim
+// produces a `.json` deliverable that fails to parse (probe rw-1, 2026-07-22:
+// `databases.json` → "Unrecognized token '`'"). This is a real production
+// defect: a user who asked for `data.json` gets an unparseable file.
+const STRUCTURED_EXT = new Set([
+  ".json", ".jsonl", ".ndjson", ".geojson",
+  ".csv", ".tsv", ".xml", ".yaml", ".yml", ".toml",
+]);
+const JSON_EXT = new Set([".json", ".jsonl", ".ndjson", ".geojson"]);
+const LONE_FENCE_RE = /^```[\w+-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/;
+const ANY_FENCE_RE = /```[\w+-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```/;
+
+/**
+ * Correct the near-universal LLM habit of fencing a structured-data answer
+ * before it becomes a durable, downstream-parsed artifact — a write-boundary
+ * net so every strategy/path that writes a file inherits it.
+ *
+ * Narrow + safe by construction:
+ *   - only structured-data extensions (a `.md`/`.txt` file legitimately holds
+ *     fences, so those are never touched);
+ *   - Case 1: the WHOLE content is one fenced block → unwrap it (a lone leading
+ *     fence is never valid in a structured file, so this can't corrupt);
+ *   - Case 2 (JSON only): content has preamble but contains a fenced block that
+ *     actually `JSON.parse`s → extract it (guarded by the parse, so we never
+ *     swap in something worse than what the model wrote).
+ */
+export function normalizeStructuredFileContent(filePath: string, content: string): string {
+  if (typeof content !== "string") return content;
+  const ext = path.extname(filePath).toLowerCase();
+  if (!STRUCTURED_EXT.has(ext)) return content;
+
+  const lone = LONE_FENCE_RE.exec(content.trim());
+  if (lone) return lone[1] ?? content;
+
+  if (JSON_EXT.has(ext)) {
+    const block = ANY_FENCE_RE.exec(content);
+    if (block?.[1]) {
+      try {
+        JSON.parse(block[1]);
+        return block[1];
+      } catch {
+        // Fenced block isn't valid JSON either — leave the model's content as
+        // written rather than guess.
+      }
+    }
+  }
+  return content;
+}
+
 export const fileWriteHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
       const filePath = args.path as string;
-      const content = args.content as string;
+      const content = normalizeStructuredFileContent(filePath, args.content as string);
       const encoding = (args.encoding as BufferEncoding) ?? "utf-8";
 
       // Guard: model passed a stored-result key instead of the actual content.

@@ -221,6 +221,65 @@ describe("fileWriteHandler — error cases", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+// file-write — structured-deliverable fence normalization (probe rw-1)
+// Models fence a JSON/CSV/YAML answer in ```json … ``` (or add a preamble);
+// writing that verbatim produces an unparseable `.json` deliverable. The write
+// boundary unwraps it. Cut normalizeStructuredFileContent → these go red.
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("fileWriteHandler — structured-deliverable fence normalization", () => {
+  const writeAndRead = async (name: string, content: string): Promise<string> => {
+    await setup();
+    const filePath = path.join(tmpDir, name);
+    const res = (await Effect.runPromise(
+      fileWriteHandler({ path: filePath, content }),
+    )) as { written: boolean };
+    expect(res.written).toBe(true);
+    return fs.readFile(filePath, "utf-8");
+  };
+
+  it("unwraps a lone ```json fence so a .json deliverable parses", async () => {
+    const out = await writeAndRead(
+      "databases.json",
+      '```json\n[{"name":"lancedb","wasmSupport":"yes"}]\n```',
+    );
+    expect(() => JSON.parse(out)).not.toThrow();
+    expect(JSON.parse(out)[0].name).toBe("lancedb");
+    expect(out).not.toContain("```");
+  });
+
+  it("extracts a parseable JSON block when the model adds preamble", async () => {
+    const out = await writeAndRead(
+      "result.json",
+      'Here is the file you asked for:\n```json\n{"ok":true}\n```\nDone.',
+    );
+    expect(JSON.parse(out)).toEqual({ ok: true });
+  });
+
+  it("unwraps a lone bare fence for other structured types (.csv)", async () => {
+    const out = await writeAndRead("data.csv", "```\na,b\n1,2\n```");
+    expect(out).toBe("a,b\n1,2");
+  });
+
+  it("leaves an already-clean .json file byte-identical", async () => {
+    const clean = '[{"name":"x"}]';
+    expect(await writeAndRead("clean.json", clean)).toBe(clean);
+  });
+
+  it("does NOT strip fences from a .md file (fences are valid there)", async () => {
+    const md = "# Title\n\n```json\n{\"x\":1}\n```\n";
+    expect(await writeAndRead("report.md", md)).toBe(md);
+  });
+
+  it("leaves non-parseable fenced JSON as written (never corrupts)", async () => {
+    // Preamble + a fenced block that is NOT valid JSON → don't guess; keep it.
+    const raw = "notes\n```json\nnot json at all\n```";
+    const out = await writeAndRead("x.json", raw);
+    expect(out).toBe(raw);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 // web-search handler
 // ═══════════════════════════════════════════════════════════════════════
 
