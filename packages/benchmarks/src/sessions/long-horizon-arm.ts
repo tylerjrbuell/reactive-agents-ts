@@ -72,8 +72,20 @@ export const longHorizonArmSession: BenchmarkSession = {
   // rank abstain above their own redirect/steer. This is the cell that measures
   // the seams. rw-9 is the deterministic no-regression control.
   taskIds: ["ab-trap-4", "ab-trap-5", "rw-9"],
+  // TWO tiers, deliberately: the lift gate's DEFAULT_LIFT_POLICY requires
+  // `minTiers: 2` (gate/types.ts). With a single local model this session could
+  // never return a `default-on`/`opt-in` verdict no matter how many runs it did
+  // — it was structurally ungateable (found 2026-07-22 when first gating it).
+  // qwen3.5:latest replaces cogito:8b as the local arm (cogito:8b is not pulled
+  // locally; both are calibrated in STATIC_CAPABILITIES).
   models: [
-    { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
+    { id: "qwen3.5", provider: "ollama", model: "qwen3.5:latest", contextTier: "local" },
+    {
+      id: "haiku-4.5",
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      contextTier: "frontier",
+    },
   ],
   harnessVariants: [
     { type: "internal", id: "ra-full", label: "RA Full (profile OFF)", config: { ...RA_FULL_CONFIG } },
