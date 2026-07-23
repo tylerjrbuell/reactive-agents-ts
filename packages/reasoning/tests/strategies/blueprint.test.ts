@@ -25,6 +25,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { ToolSchema } from "../../src/kernel/capabilities/attend/tool-formatting.js";
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 import { computeDeliverableReport } from "../../src/kernel/contract/deliverable-report.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // ── Counting LLM layer ───────────────────────────────────────────────────────
 //
@@ -156,11 +157,11 @@ describe("blueprint — happy path", () => {
       { text: "Here is the synthesized AI news summary." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     expect(result.strategy).toBe("blueprint");
     expect(result.status).toBe("completed");
@@ -198,11 +199,11 @@ describe("blueprint — happy path", () => {
       { text: "Synthesized answer." }, // solver
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(calls.map((c) => c.toolName)).toEqual(["web-search"]);
@@ -229,11 +230,11 @@ describe("blueprint — happy path", () => {
       { text: "1. commit-a\n2. commit-b" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // SOLVE ran — the synthesized list is the output, NOT the raw tool result.
@@ -251,11 +252,11 @@ describe("blueprint — happy path", () => {
       { text: "should-not-be-called" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(counts.completeStructured).toBe(1);
@@ -286,11 +287,11 @@ describe("blueprint — degrade to reactive on invalid plan", () => {
       { text: "FINAL ANSWER: reactive handled it." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput({ availableTools: [] })).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     // Degrade path runs reactive → result.strategy is "reactive", not blueprint.
     expect(result.strategy).toBe("reactive");
@@ -315,14 +316,14 @@ describe("blueprint — tier/capability concurrency branch", () => {
       { text: "combined summary" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(
         baseInput({
           modelId: "ollama:qwen3:4b",
           calibration: localSequentialCalibration,
         }),
       ).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // sequential-only calibration → concurrency 1 → the two searches never overlap.
@@ -339,11 +340,11 @@ describe("blueprint — tier/capability concurrency branch", () => {
       { text: "combined summary" },
     ]);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(
         baseInput({ modelId: "claude-sonnet-4" }),
       ).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
-    );
+    ));
 
     // No calibration cap + large tier → parallel fan-out; the two searches overlap.
     expect(getMaxInFlight()).toBeGreaterThanOrEqual(2);
@@ -363,7 +364,7 @@ describe("blueprint — required-tool repair", () => {
       { text: "done" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(
         baseInput({
           availableTools: ["web-search", "file-write"],
@@ -371,7 +372,7 @@ describe("blueprint — required-tool repair", () => {
           requiredTools: ["file-write"],
         }),
       ).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // The injected synthetic file-write step was actually dispatched.
@@ -430,11 +431,11 @@ describe("blueprint — execution-failure patch retry", () => {
       ]),
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     // Recovered — NOT an empty-output partial failure.
     expect(result.status).toBe("completed");
@@ -462,11 +463,11 @@ describe("blueprint — execution-failure patch retry", () => {
       { text: "FINAL ANSWER: reactive recovered." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(baseInput()).pipe(
         Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
       ),
-    );
+    ));
 
     // After bounded patch-retry produced nothing usable, degrade to reactive.
     expect(result.strategy).toBe("reactive");
@@ -508,7 +509,7 @@ describe("blueprint — canonical tool ledger (deliverable truth)", () => {
         { name: "content", type: "string", description: "file content", required: true },
       ],
     };
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeBlueprint(
         baseInput({
           taskDescription: task,
@@ -516,7 +517,7 @@ describe("blueprint — canonical tool ledger (deliverable truth)", () => {
           availableToolSchemas: [fileWriteSchema],
         }),
       ).pipe(Effect.provide(Layer.mergeAll(toolLayer, llmLayer))),
-    );
+    ));
 
     // The ledger pair: an action step carrying the structured toolCall…
     const action = result.steps.find(

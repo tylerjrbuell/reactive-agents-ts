@@ -13,6 +13,7 @@ import {
   executeAdaptive,
   defaultReasoningConfig,
   StrategyRegistryLive,
+  provideTestEnvelope,
 } from "@reactive-agents/reasoning";
 import type { ReasoningConfig, ReasoningResult } from "@reactive-agents/reasoning";
 import type { ReasoningStep } from "@reactive-agents/reasoning";
@@ -44,11 +45,11 @@ describe("Quality Regression: Strategy Step Types", () => {
       { text: "Thought: I need to answer the question directly.\nFINAL ANSWER: The answer is 42." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive(makeInput("What is the answer?")).pipe(
         Effect.provide(llmLayer),
       ),
-    );
+    ));
 
     expect(["completed", "partial", "max_iterations_reached"]).toContain(result.status);
     expect(result.steps.length).toBeGreaterThanOrEqual(1);
@@ -65,11 +66,11 @@ describe("Quality Regression: Strategy Step Types", () => {
       { text: "Initial response about quantum mechanics." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion(makeInput("Explain quantum mechanics")).pipe(
         Effect.provide(llmLayer),
       ),
-    );
+    ));
 
     expect(result.steps.length).toBeGreaterThanOrEqual(1);
     // Reflexion should produce at least a thought step (generation)
@@ -96,11 +97,11 @@ describe("Quality Regression: Strategy Step Types", () => {
       { match: "Synthesize", text: "AI safety research findings summarized successfully." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute(makeInput("Research AI safety")).pipe(
         Effect.provide(llmLayer),
       ),
-    );
+    ));
 
     expect(result.steps.length).toBeGreaterThanOrEqual(1);
     const types = stepTypes(result.steps);
@@ -119,11 +120,11 @@ describe("Quality Regression: Strategy Step Types", () => {
       { text: "Candidate thought: Approach the problem by breaking it into components." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought(makeInput("Design a data structure")).pipe(
         Effect.provide(llmLayer),
       ),
-    );
+    ));
 
     expect(result.steps.length).toBeGreaterThanOrEqual(1);
     const types = stepTypes(result.steps);
@@ -143,11 +144,11 @@ describe("Quality Regression: Strategy Step Types", () => {
 
     const strategyLayer = StrategyRegistryLive;
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive(makeInput("What is 2+2?", "adaptive")).pipe(
         Effect.provide(Layer.merge(llmLayer, strategyLayer)),
       ),
-    );
+    ));
 
     expect(result.steps.length).toBeGreaterThanOrEqual(1);
     expect(typeof result.output).toBe("string");
@@ -185,8 +186,10 @@ describe("Quality Regression: Strategy Step Types", () => {
 
     for (const { name, fn } of strategies) {
       const result = await Effect.runPromise(
-        fn(makeInput(`Test ${name}`)).pipe(
-          Effect.provide(makeLLMLayer()),
+        provideTestEnvelope(
+          fn(makeInput(`Test ${name}`)).pipe(
+            Effect.provide(makeLLMLayer()),
+          ),
         ),
       );
 

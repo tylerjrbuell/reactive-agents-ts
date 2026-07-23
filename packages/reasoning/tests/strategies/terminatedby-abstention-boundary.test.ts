@@ -34,6 +34,7 @@ import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { ReasoningResult, ReasoningStep } from "../../src/types/index.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const WEB_SEARCH_SCHEMA = {
   name: "web-search",
@@ -227,7 +228,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       { match: "Synthesize", text: "syn" },
       { match: "", text: "SATISFIED: complete." },
     ]);
-    const r = await Effect.runPromise(
+    const r = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription:
           "First search the web and then write the report to ./out.md, following these steps carefully now",
@@ -240,7 +241,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       } as Parameters<typeof executeAdaptive>[0]).pipe(
         Effect.provide(Layer.merge(scenario, layer)),
       ),
-    );
+    ));
 
     expect(meta(r).fallbackOccurred).toBe(true);
     // The plan-execute web-search action+observation pair survives the fallback.

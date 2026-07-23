@@ -1,7 +1,7 @@
 // File: src/strategies/reactive.ts
 //
-// Thin wrapper — delegates entirely to runKernel(reactKernel, ...) and maps the
-// result to ReasoningResult via buildStrategyResult.
+// Thin wrapper — delegates entirely to runKernel(reactKernel, ...) and mints the
+// terminal result through finalizeStrategyResult (the single judged-result mint).
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
@@ -13,7 +13,8 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
-import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import {
   honestPartialMetadata,
@@ -154,7 +155,7 @@ export const executeReactive = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const start = Date.now();
@@ -314,10 +315,19 @@ export const executeReactive = (
       timestamp: new Date(),
     });
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice: the judged verdict and the forwarded
+    // metadata must describe the same evidence.
+    const runLedger = state.ledger ?? [];
+
+    return yield* finalizeStrategyResult({
       strategy: "reactive",
       steps: pass.steps,
       output,
+      // Cascade terminal boundary — judgment inputs (Task 4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      // Reactive repairs per kernel iteration (redirect / nudge / re-plan).
+      repairCapabilities: { perIteration: true },
       // H5: `done` degrades to `partial` when the harness shipped output the
       // terminal verifier did not bless (harness-authored deliverable, or a
       // budget-terminal partial). `success` is derived from this downstream.
@@ -335,7 +345,7 @@ export const executeReactive = (
         // tool ledger so Slice 2's receipt re-base doesn't silently fall back
         // to step-scanning for this strategy (mirrors plan-execute/blueprint's
         // C8 forward).
-        runLedger: state.ledger ?? [],
+        runLedger,
         // H5: the honesty fields cross the result boundary. Empty on a clean run.
         ...honestPartialMetadata(state.meta),
         // Parallel open-string channel preserving raw kernel meta.

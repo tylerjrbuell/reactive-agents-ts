@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("AdaptiveStrategy", () => {
   it("should analyze task, select reactive strategy, and return completed result", async () => {
@@ -22,9 +23,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -55,9 +56,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -86,9 +87,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     expect(adaptiveStep?.content).toContain("reactive");
@@ -108,9 +109,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     expect(adaptiveStep?.content).toContain("reactive");
@@ -131,9 +132,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     // "compare" + "alternative" + "trade-offs" → tree-of-thought
@@ -193,9 +194,9 @@ describe("AdaptiveStrategy", () => {
       ],
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -217,9 +218,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Token usage should include both analysis and sub-strategy tokens
@@ -245,7 +246,7 @@ describe("AdaptiveStrategy", () => {
 
     // Task must be >15 words with no tools to bypass heuristic pre-classifier
     // and reach the LLM classification path that returns REFLEXION
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: "Analyze the following complex dataset and produce a comprehensive report that covers all key findings and anomalies detected",
         taskType: "query",
@@ -260,7 +261,7 @@ describe("AdaptiveStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");

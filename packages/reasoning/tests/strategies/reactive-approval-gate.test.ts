@@ -11,6 +11,7 @@ import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
 beforeAll(() => { process.env.RA_LAZY_TOOLS = "0"; });
@@ -68,9 +69,9 @@ describe("ReactiveStrategy — durable HITL approval gate forwarding", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const meta = result.metadata as {
       terminatedBy?: string;
@@ -107,9 +108,9 @@ describe("ReactiveStrategy — durable HITL approval gate forwarding", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const meta = result.metadata as { terminatedBy?: string };
     expect(meta.terminatedBy).not.toBe("awaiting-approval");

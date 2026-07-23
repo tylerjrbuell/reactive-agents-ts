@@ -21,7 +21,10 @@ import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
+import type { LedgerEntry } from "../kernel/ledger/run-ledger.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -107,7 +110,7 @@ export const executeAdaptive = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
@@ -340,12 +343,24 @@ export const executeAdaptive = (
     // final output (the fallback reactive on a fallback, else the sub-strategy).
     const subMeta = finalSubResult.metadata as Record<string, unknown>;
 
-    return buildStrategyResult({
+    // The relayed ledger, exactly as it has always been forwarded on metadata.
+    const relayedLedger: readonly unknown[] = Array.isArray(subMeta.runLedger)
+      ? subMeta.runLedger
+      : [];
+
+    return yield* finalizeStrategyResult({
       strategy: "adaptive",
       steps: allSteps,
       output: finalSubResult.output,
       status: finalSubResult.status,
       start,
+      // Cascade terminal boundary — judgment inputs (Task 4).
+      requiredTools: input.requiredTools ?? [],
+      // Same relayed ledger, narrowed for the typed judgment channel. The
+      // metadata forward below keeps the raw relay byte-for-byte.
+      runLedger: relayedLedger.filter(isLedgerEntry),
+      // Adaptive dispatches to a kernel-pass strategy, which repairs per iteration.
+      repairCapabilities: { perIteration: true },
       totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
       totalCost: finalSubResult.metadata.cost + analysisCost,
       error: finalSubResult.error,
@@ -363,7 +378,7 @@ export const executeAdaptive = (
         // above) already preserves the failed sub-strategy's real tool
         // evidence for deliverable verification; only the ledger view is
         // narrowed to the final sub-strategy on a fallback.
-        runLedger: Array.isArray(subMeta.runLedger) ? subMeta.runLedger : [],
+        runLedger: relayedLedger,
         ...(typeof subMeta.terminatedBy === "string"
           ? { terminatedBy: subMeta.terminatedBy }
           : {}),
@@ -391,6 +406,24 @@ export const executeAdaptive = (
   });
 
 // ─── Private Helpers ───
+
+/**
+ * Narrow one relayed metadata element back to a `LedgerEntry`.
+ *
+ * Adaptive re-emits the sub-strategy's result, and `ReasoningResult.metadata`
+ * is an open `Record<string, unknown>` at that seam — so the ledger arrives
+ * untyped. The entries were minted by the sub-strategy's own kernel, so this is
+ * a shape check for the type system (used only for the typed judgment channel),
+ * not a validation policy: the raw relay still rides `metadata.runLedger`.
+ */
+function isLedgerEntry(value: unknown): value is LedgerEntry {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { kind?: unknown }).kind === "string" &&
+    typeof (value as { seq?: unknown }).seq === "number"
+  );
+}
 
 function buildAnalysisPrompt(input: AdaptiveInput): string {
   let prompt = `Analyze this task and classify it:
@@ -454,7 +487,7 @@ function dispatchStrategy(
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > {
   switch (strategy) {
     case "reflexion":

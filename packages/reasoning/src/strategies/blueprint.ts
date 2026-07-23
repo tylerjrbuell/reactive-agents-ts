@@ -60,6 +60,7 @@ import { withEnvContext } from "../context/context-engine.js";
 import { executeBlueprintWorker } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
@@ -145,7 +146,7 @@ export const executeBlueprint = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;

@@ -18,6 +18,7 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // These tests pin the pre-lazy-tool-disclosure prompt contract (tools rendered
 // in system prompt, environment + rules sections always present). The lazy
@@ -207,7 +208,7 @@ describe("Model context verification", () => {
     it("sends clean task text without JSON wrapping", async () => {
       const { calls, layer } = createCapturingLLM();
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeReactive({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -215,7 +216,7 @@ describe("Model context verification", () => {
           availableTools: [],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       expect(calls.length).toBeGreaterThan(0);
       assertNoJsonWrapping(calls, "reactive");
@@ -227,7 +228,7 @@ describe("Model context verification", () => {
     it("includes tool schemas in context when tools are provided", async () => {
       const { calls, layer } = createCapturingLLM();
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeReactive({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -238,7 +239,7 @@ describe("Model context verification", () => {
           ],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // First call should mention the tool in the system prompt or user message
       const allText = calls.map((c) =>
@@ -253,7 +254,7 @@ describe("Model context verification", () => {
         "capital of France": "<think>I need to think about this...</think>\nFINAL ANSWER: Paris",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeReactive({
           taskDescription: "What is the capital of France?",
           taskType: "query",
@@ -261,7 +262,7 @@ describe("Model context verification", () => {
           availableTools: [],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // If there are subsequent calls (multi-turn), check <think> doesn't leak
       if (calls.length > 1) {
@@ -276,7 +277,7 @@ describe("Model context verification", () => {
         // No tool service, so it won't actually execute — but it should parse the action
       });
 
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executeReactive({
           taskDescription: "What is the capital of France?",
           taskType: "query",
@@ -290,7 +291,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // Strategy should have attempted to parse the action from thinking
       expect(result.steps.length).toBeGreaterThan(0);
@@ -480,7 +481,7 @@ describe("Model context verification", () => {
         "Classify the task": "REACTIVE",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeAdaptive({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -488,7 +489,7 @@ describe("Model context verification", () => {
           availableTools: [],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       expect(calls.length).toBeGreaterThan(0);
       assertNoJsonWrapping(calls, "adaptive");
@@ -502,7 +503,7 @@ describe("Model context verification", () => {
         "Classify the task": "<think>This is a simple query, best handled with reactive...</think>\nREACTIVE",
       });
 
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executeAdaptive({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -510,7 +511,7 @@ describe("Model context verification", () => {
           availableTools: [],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // Should select reactive despite <think> block
       expect(result.strategy).toBe("adaptive");

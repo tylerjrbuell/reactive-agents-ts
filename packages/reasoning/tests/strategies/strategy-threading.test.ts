@@ -11,6 +11,7 @@ import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /** Build a proper Stream stub from a response string */
 function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
@@ -112,11 +113,11 @@ describe("FM-I (#195) — harnessPipeline threads to the kernel in every strateg
 
   it("adaptive forwards harnessPipeline to the dispatched sub-strategy", async () => {
     const h = makeFiresPipeline();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
         Effect.provide(makeReflexionLLM()),
       ),
-    );
+    ));
     expect(h.fired()).toBeGreaterThan(0);
   });
 
@@ -429,11 +430,11 @@ describe("Kernel pass attribution", () => {
         Effect.succeed({ contextWindow: 8000, id: "test", provider: "test" }),
     } as any);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         ...baseInput,
       }).pipe(Effect.provide(Layer.merge(reactiveLLM, ebLayer))),
-    );
+    ));
     expect(result.status).toBe("completed");
 
     const reasoningEvents = captured.filter(

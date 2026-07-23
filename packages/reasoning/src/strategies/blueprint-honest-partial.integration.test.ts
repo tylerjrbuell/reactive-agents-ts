@@ -18,6 +18,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeBlueprint } from "./blueprint.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -72,7 +73,10 @@ const runBlueprint = (extra: Record<string, unknown>) =>
       availableToolSchemas: [GATHER_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("#40 (blueprint) — the budget-capped harness join never reads as completed", () => {

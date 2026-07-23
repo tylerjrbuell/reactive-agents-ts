@@ -6,6 +6,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { classifyTask } from "../../src/kernel/capabilities/comprehend/task-classification.js";
 import type { TaskClassification } from "../../src/kernel/capabilities/comprehend/task-classification.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // HS-cleanup-2 — TaskClassification threading invariants.
 //
@@ -129,7 +130,7 @@ describe("Adaptive threads classification to dispatched sub-strategy", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: "What is the capital of France?",
         taskType: "query",
@@ -138,7 +139,7 @@ describe("Adaptive threads classification to dispatched sub-strategy", () => {
         config: defaultReasoningConfig,
         taskClassification: injected,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     expect(md.selectedStrategy).toBe("reactive");

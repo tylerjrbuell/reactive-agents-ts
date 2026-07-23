@@ -26,7 +26,8 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
-import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import {
   resolveCompletionStatus,
@@ -101,7 +102,7 @@ export const executeDirect = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const start = Date.now();
@@ -210,10 +211,21 @@ export const executeDirect = (
       timestamp: new Date(),
     });
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = state.ledger ?? [];
+
+    return yield* finalizeStrategyResult({
       strategy: "direct",
       steps: state.steps,
       output,
+      // Cascade terminal boundary — judgment inputs (Task 4). DirectInput
+      // deliberately carries no requiredTools (single-turn: the required-tool
+      // gate is a multi-iteration concern, see the KernelInput comment above),
+      // so the grounding verdict has nothing to judge here.
+      requiredTools: [],
+      runLedger,
+      // Direct runs a react kernel (1-3 iterations) — per-iteration repair applies.
+      repairCapabilities: { perIteration: true },
       // H5: an unverified ship is `partial`, never `completed`.
       status: resolveCompletionStatus(state),
       start,
@@ -231,7 +243,7 @@ export const executeDirect = (
         // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
         // tool ledger so Slice 2's receipt re-base doesn't silently fall back
         // to step-scanning for this strategy (mirrors reactive/plan-execute).
-        runLedger: state.ledger ?? [],
+        runLedger,
         // Honesty markers cross the result boundary — empty on a clean run,
         // mirroring reactive's honestPartialMetadata.
         ...honestPartialMetadata(state.meta),

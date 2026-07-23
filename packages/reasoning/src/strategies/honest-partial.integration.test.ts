@@ -20,6 +20,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeReactive } from "./reactive.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -52,7 +53,10 @@ const runReactive = (extra: Record<string, unknown>) =>
       config: defaultReasoningConfig,
       maxIterations: 6,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("H5 — an unverified ship never reaches the caller as `completed`", () => {
@@ -100,11 +104,21 @@ describe("H5 — an unverified ship never reaches the caller as `completed`", ()
         Effect.provide(
           Layer.merge(TestLLMServiceLayer([{ text: "FINAL ANSWER: 4." }]), gatherToolLayer),
         ),
+        provideTestEnvelope,
       ),
     );
     expect(result.status).toBe("completed");
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.verificationWarning).toBeUndefined();
     expect(meta.budgetTerminalPartial).toBeUndefined();
+  });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult), so a verdict record is always
+  // present. Judgment stays INERT here (enforced:false) until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runReactive({});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 });

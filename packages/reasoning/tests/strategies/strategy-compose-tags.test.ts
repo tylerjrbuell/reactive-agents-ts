@@ -15,6 +15,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 interface ObsStepLike {
   readonly type: string;
@@ -65,7 +66,7 @@ describe("compose observation.tool-result fires through strategy orchestration",
       { text: "FINAL ANSWER: done" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "search and finish",
         taskType: "simple",
@@ -75,7 +76,7 @@ describe("compose observation.tool-result fires through strategy orchestration",
         config: defaultReasoningConfig,
         harnessPipeline: pipeline,
       }).pipe(Effect.provide(Layer.merge(llm, toolLayer()))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(observations.length).toBeGreaterThanOrEqual(1);

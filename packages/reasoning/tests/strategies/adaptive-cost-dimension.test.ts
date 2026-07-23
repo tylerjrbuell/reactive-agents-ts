@@ -16,6 +16,7 @@ import type { StrategyOutcome } from "../../src/strategies/adaptive.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const cheapHistory: StrategyOutcome[] = [
   { strategy: "reactive", success: true, durationMs: 1000, tokensUsed: 500, taskDescription: "x" },
@@ -94,7 +95,7 @@ describe("HS-111 — adaptive heuristic uses complexity classifier", () => {
     const layer = TestLLMServiceLayer([
       { match: "capital of France", text: "Paris is the capital of France." },
     ]);
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: "What is the capital of France?",
         taskType: "query",
@@ -102,7 +103,7 @@ describe("HS-111 — adaptive heuristic uses complexity classifier", () => {
         availableTools: [],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
     const md = result.metadata as Record<string, unknown>;
     // The trivial-task complexity gate forces reactive.
     expect(md.selectedStrategy).toBe("reactive");
@@ -120,7 +121,7 @@ describe("HS-111 — cost-aware downgrade integrates into adaptive flow", () => 
       { match: "compare", text: "Reactive answer to comparison." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription:
           "Compare the trade-offs between hash indexes and B-trees in terms of insertion speed, lookup performance, and storage overhead across modern databases.",
@@ -130,7 +131,7 @@ describe("HS-111 — cost-aware downgrade integrates into adaptive flow", () => 
         config: defaultReasoningConfig,
         pastExperience: [...cheapHistory, ...expensiveTotHistory],
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     expect(md.costAwareDowngrade).toBeDefined();
