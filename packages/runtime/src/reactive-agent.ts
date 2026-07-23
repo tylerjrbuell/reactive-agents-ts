@@ -2262,9 +2262,19 @@ export class ReactiveAgent<TOut = unknown> {
             result.metadata.tokensUsed,
             result.taskId
         )
+        // toolsUsed is memory-gated on `result.debrief` (only populated when
+        // `.withMemory()` is on — see debrief-synthesis.ts `shouldFinalize`).
+        // `metadata.toolCalls` is derived from reasoningSteps unconditionally,
+        // so it stays the primary source; debrief is only a fallback for any
+        // path that doesn't populate it.
+        const toolNamesFromMetadata = result.metadata.toolCalls?.map((t) => t.name)
+        const toolsUsed =
+            toolNamesFromMetadata && toolNamesFromMetadata.length > 0
+                ? [...new Set(toolNamesFromMetadata)]
+                : result.debrief?.toolsUsed.map((t) => t.name)
         return {
             message: result.output,
-            toolsUsed: result.debrief?.toolsUsed.map((t) => t.name),
+            toolsUsed,
             tokens: result.metadata.tokensUsed,
             steps: result.metadata.stepsCount,
             cost: result.metadata.cost,

@@ -113,27 +113,31 @@ export function buildContextSummary(
   lastDebrief?: AgentDebrief,
   observations?: readonly string[],
 ): string {
-  if (!lastDebrief) return "";
-  const parts = [
-    `## Last Run Results`,
-    `Outcome: ${lastDebrief.outcome} (confidence: ${lastDebrief.confidence})`,
-    `Summary: ${lastDebrief.summary}`,
-  ];
-  if (lastDebrief.keyFindings.length > 0) {
-    parts.push(`Key findings:\n${lastDebrief.keyFindings.map((f) => `- ${f}`).join("\n")}`);
-  }
-  if (lastDebrief.toolsUsed.length > 0) {
-    parts.push(`Tools used: ${lastDebrief.toolsUsed.map((t) => `${t.name} (${t.calls}x, ${t.successRate}% success)`).join(", ")}`);
-  }
-  if (lastDebrief.errorsEncountered.length > 0) {
-    parts.push(`Errors: ${lastDebrief.errorsEncountered.join("; ")}`);
-  }
-  if (lastDebrief.metrics) {
-    parts.push(`Metrics: ${lastDebrief.metrics.iterations} iterations, ${lastDebrief.metrics.tokens} tokens, ${(lastDebrief.metrics.duration / 1000).toFixed(1)}s`);
+  const hasObservations = observations !== undefined && observations.length > 0;
+  if (!lastDebrief && !hasObservations) return "";
+  const parts: string[] = [];
+  if (lastDebrief) {
+    parts.push(
+      `## Last Run Results`,
+      `Outcome: ${lastDebrief.outcome} (confidence: ${lastDebrief.confidence})`,
+      `Summary: ${lastDebrief.summary}`,
+    );
+    if (lastDebrief.keyFindings.length > 0) {
+      parts.push(`Key findings:\n${lastDebrief.keyFindings.map((f) => `- ${f}`).join("\n")}`);
+    }
+    if (lastDebrief.toolsUsed.length > 0) {
+      parts.push(`Tools used: ${lastDebrief.toolsUsed.map((t) => `${t.name} (${t.calls}x, ${t.successRate}% success)`).join(", ")}`);
+    }
+    if (lastDebrief.errorsEncountered.length > 0) {
+      parts.push(`Errors: ${lastDebrief.errorsEncountered.join("; ")}`);
+    }
+    if (lastDebrief.metrics) {
+      parts.push(`Metrics: ${lastDebrief.metrics.iterations} iterations, ${lastDebrief.metrics.tokens} tokens, ${(lastDebrief.metrics.duration / 1000).toFixed(1)}s`);
+    }
   }
 
   // Include actual tool results so the chat can reference specific data
-  if (observations && observations.length > 0) {
+  if (hasObservations) {
     // Cap total observation text to ~3000 chars to avoid blowing up context
     let totalChars = 0;
     const included: string[] = [];

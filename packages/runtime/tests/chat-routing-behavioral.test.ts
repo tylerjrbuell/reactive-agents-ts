@@ -113,6 +113,22 @@ describe("formatTaskContextForChat / buildChatSystemContext", () => {
     expect(merged).toContain("Did a thing");
     expect(merged).toContain("---");
   });
+
+  it("buildChatSystemContext surfaces observations even when no debrief exists (memory off)", () => {
+    // Regression: without .withMemory(), `_lastDebrief` is always undefined
+    // (debrief-synthesis.ts gates it on config.enableMemory). buildContextSummary
+    // used to early-return "" whenever lastDebrief was missing, discarding the
+    // `observations` array too — even though observations are captured
+    // unconditionally from reasoningSteps. Net effect: agent.chat() on the
+    // direct-LLM path had zero awareness of the prior .run(), no matter what
+    // the run actually did.
+    const merged = buildChatSystemContext(
+      undefined,
+      undefined,
+      ["[Tool result]: The current price of XRP is $1.12 USD."],
+    );
+    expect(merged).toContain("XRP is $1.12");
+  });
 });
 
 // ─── Integration tests: agent.chat() reply shape ─────────────────────────────
@@ -265,5 +281,39 @@ describe("ChatOptions.useTools override", () => {
     expect(reply.message.length).toBeGreaterThan(0);
     // Direct path never sets toolsUsed
     expect(reply.toolsUsed).toBeUndefined();
+  });
+
+  it("useTools: true populates toolsUsed even without .withMemory() (memory-independent)", async () => {
+    // Regression: ChatReply.toolsUsed used to read ONLY from `result.debrief`,
+    // which is memory-gated (see debrief-synthesis.ts `shouldFinalize`) and
+    // therefore undefined under the v0.12 memory-default-off contract. Tools
+    // actually ran (the scenario below calls "noop"), so toolsUsed must be
+    // reported regardless of whether `.withMemory()` was ever called.
+    const agent = await ReactiveAgents.create()
+      .withName("chat-tools-used-no-memory")
+      .withTestScenario([
+        { toolCalls: [{ name: "noop", args: { input: "x" } }] },
+        { text: "FINAL ANSWER: done" },
+      ])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTools({
+        tools: [
+          { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },
+        ],
+      })
+      // Suppresses the tool-relevance classifier's LLM call, which would
+      // otherwise consume the scripted `toolCalls` turn before the kernel
+      // ever sees it (test-provider scenario turns are consumed forward-only).
+      .withRequiredTools({ tools: ["noop"] })
+      .build();
+
+    let reply;
+    try {
+      reply = await agent.chat("search for something", { useTools: true });
+    } finally {
+      await agent.dispose();
+    }
+
+    expect(reply.toolsUsed).toContain("noop");
   });
 });
