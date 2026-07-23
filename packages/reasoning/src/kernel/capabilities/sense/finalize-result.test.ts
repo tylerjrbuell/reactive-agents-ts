@@ -7,7 +7,7 @@ import type { JudgedReasoningResult } from "./finalize-result.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../envelope/run-envelope.js";
 import type { ReasoningResult } from "../../../types/index.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
-import { makeStep } from "./step-utils.js";
+import { makeStep, buildStrategyResult } from "./step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 
 // @ts-expect-error — the brand symbol must stay module-private; exporting it
@@ -307,6 +307,198 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
       expect(r.metadata.verdict?.enforced).toBe(false);
       const meta = r.metadata as { awaitingApprovalFor?: { toolName: string } };
       expect(meta.awaitingApprovalFor?.toolName).toBe("file-write");
+    });
+
+    // ── The adaptive relay route (review fix 1) ──────────────────────────────
+    //
+    // `adaptive` re-mints its sub-strategy's result and relays the pause
+    // descriptors through `extraMetadata` ONLY — it passes neither `pause` nor
+    // `kernelMeta`. A fence reading `params` alone therefore did not fire, and a
+    // PAUSED adaptive run under `.withFabricationGuard("block")` was flipped to
+    // `status:"failed"` with the abstention sentinel replacing the pause
+    // message (reproduced 2026-07-22). That is the fe5dc93b defect class.
+    //
+    // Cutting the `base.metadata.awaiting*` reads in `finalize-result.ts` turns
+    // both of these red.
+    it("adaptive shape: pause relayed via extraMetadata ONLY is still fenced (not flipped)", async () => {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({
+            ...baseParams,
+            strategy: "adaptive",
+            output: "Run paused — awaiting human approval.",
+            requiredTools: ["file-write"],
+            steps: [], // paused BEFORE the gated call ran — by construction ungrounded
+            extraMetadata: {
+              selectedStrategy: "reactive",
+              fallbackOccurred: false,
+              terminatedBy: "end_turn",
+              rawTerminatedBy: "awaiting-approval",
+              awaitingApprovalFor: { gateId: "g1", toolName: "file-write", args: {} },
+            },
+          }),
+          buildRunEnvelope({ fabricationGuard: "block" }),
+        ),
+      );
+      expect(r.metadata.verdict?.enforced).toBe(false);
+      expect(r.status).toBe("completed");
+      expect(r.output).toBe("Run paused — awaiting human approval.");
+      expect(r.error).toBeUndefined();
+      // The resume rails survive — a paused run must stay resumable.
+      const meta = r.metadata as {
+        awaitingApprovalFor?: { gateId: string };
+        terminatedBy?: string;
+      };
+      expect(meta.awaitingApprovalFor?.gateId).toBe("g1");
+      expect(meta.terminatedBy).toBe("end_turn");
+    });
+
+    it("adaptive shape: an INTERACTION pause relayed via extraMetadata is fenced too", async () => {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({
+            ...baseParams,
+            strategy: "adaptive",
+            output: "Run paused — awaiting your input.",
+            requiredTools: ["file-write"],
+            steps: [],
+            extraMetadata: {
+              awaitingInteractionFor: {
+                interactionId: "i1",
+                kind: "text",
+                prompt: "Which file?",
+                schemaJson: "{}",
+              },
+            },
+          }),
+          buildRunEnvelope({ fabricationGuard: "block" }),
+        ),
+      );
+      expect(r.metadata.verdict?.enforced).toBe(false);
+      expect(r.status).toBe("completed");
+      expect(r.output).toBe("Run paused — awaiting your input.");
+    });
+
+    // ── Enforced terminal coherence (review fix 2) ───────────────────────────
+    //
+    // The enforced re-mint spreads `...params`, so a relayed
+    // `extraMetadata.terminatedBy: "final_answer"` used to survive the flip:
+    // `status:"failed"` beside `terminatedBy:"final_answer"`, which
+    // `resolveGoalAchieved` (runtime/src/builder/helpers.ts) maps to `true` and
+    // `local-learning.ts` counts as a non-failure. An enforced honest
+    // abstention reported SUCCESS downstream.
+    it("an ENFORCED result reports the honest terminal, never a success-shaped terminatedBy", async () => {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({
+            ...baseParams,
+            requiredTools: ["file-read"],
+            steps: [],
+            extraMetadata: {
+              selectedStrategy: "reactive",
+              terminatedBy: "final_answer",
+              rawTerminatedBy: "final_answer",
+            },
+          }),
+          buildRunEnvelope({ fabricationGuard: "block" }),
+        ),
+      );
+      expect(r.metadata.verdict?.enforced).toBe(true);
+      expect(r.status).toBe("failed");
+      const meta = r.metadata as {
+        terminatedBy?: string;
+        rawTerminatedBy?: string;
+        selectedStrategy?: string;
+      };
+      // `"abstained"` is the legal TerminatedBy literal deriveGoalAchieved maps
+      // to `false` — the run honestly declined.
+      expect(meta.terminatedBy).toBe("abstained");
+      expect(meta.terminatedBy).not.toBe("final_answer");
+      expect(meta.rawTerminatedBy).toBe("abstained");
+      // Everything else the strategy relayed is untouched.
+      expect(meta.selectedStrategy).toBe("reactive");
+    });
+
+    it("a NON-enforced result keeps its relayed terminatedBy verbatim", async () => {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({
+            ...baseParams,
+            requiredTools: ["file-read"],
+            steps: [],
+            extraMetadata: { terminatedBy: "final_answer", rawTerminatedBy: "final_answer" },
+          }),
+          buildRunEnvelope({ fabricationGuard: "warn" }),
+        ),
+      );
+      expect(r.metadata.verdict?.enforced).toBe(false);
+      const meta = r.metadata as { terminatedBy?: string; rawTerminatedBy?: string };
+      expect(meta.terminatedBy).toBe("final_answer");
+      expect(meta.rawTerminatedBy).toBe("final_answer");
+    });
+
+    // ── "off" is an opt-OUT, not a configuration (review fix 3) ──────────────
+    it("fabricationGuard 'off' records NOTHING on `failed` (an opt-out must not arm enforcement)", async () => {
+      const r = await Effect.runPromise(
+        provideTestEnvelope(
+          finalizeStrategyResult({
+            ...baseParams,
+            requiredTools: ["file-read"],
+            steps: [],
+          }),
+          buildRunEnvelope({ fabricationGuard: "off" }),
+        ),
+      );
+      // The observation is still computed (it is free and informational)…
+      expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
+      // …but `failed` is the ENFORCEMENT basis, so an opt-out records nothing.
+      expect(r.metadata.verdict?.failed).toEqual([]);
+      expect(r.metadata.verdict?.enforced).toBe(false);
+      expect(r.status).toBe(baseParams.status);
+      expect(r.output).toBe(baseParams.output);
+    });
+
+    // ── The load-bearing property, asserted STRUCTURALLY ─────────────────────
+    //
+    // The per-field checks above can only catch what they name. This one diffs
+    // the WHOLE metadata object against `buildStrategyResult`'s, so any future
+    // enforcement-path field (like Fix 2's `terminatedBy` override) that leaks
+    // into the zero-config path fails here even though no test mentions it.
+    // `duration` is wall-clock and `verdict` is the one sanctioned addition.
+    it("zero-config: the mint is byte-identical to buildStrategyResult (whole-metadata diff)", async () => {
+      const params = {
+        ...baseParams,
+        strategy: "adaptive" as const,
+        requiredTools: ["file-read"],
+        extraMetadata: {
+          selectedStrategy: "reactive",
+          terminatedBy: "final_answer",
+          rawTerminatedBy: "final_answer",
+        },
+      };
+      const plain = buildStrategyResult(params);
+      const strip = (m: Record<string, unknown>): Record<string, unknown> => {
+        const { verdict: _verdict, duration: _duration, ...rest } = m;
+        return rest;
+      };
+      // Both "no RunEnvelope in context" and "an envelope with nothing set".
+      for (const envelope of [undefined, buildRunEnvelope({})]) {
+        const judged = await Effect.runPromise(
+          provideTestEnvelope(finalizeStrategyResult(params), envelope),
+        );
+        expect(judged.status).toBe(plain.status);
+        expect(judged.output).toBe(plain.output);
+        expect(judged.error).toBe(plain.error);
+        expect(JSON.stringify(strip(judged.metadata as Record<string, unknown>))).toBe(
+          JSON.stringify(strip(plain.metadata as Record<string, unknown>)),
+        );
+        // Additive only, and inert: nothing recorded without a guard.
+        expect(judged.metadata.verdict).toEqual({
+          enforced: false,
+          groundedOnRequired: false,
+          failed: [],
+        });
+      }
     });
   });
 

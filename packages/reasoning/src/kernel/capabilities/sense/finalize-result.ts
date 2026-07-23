@@ -120,11 +120,14 @@ function judgeContractSatisfied(
   ledger: RunLedger | undefined,
   output: unknown,
 ): boolean {
-  // Defensive read: `prompt` is declared `string`, but contracts reach the
-  // envelope from config files, bench fixtures and JSON round-trips where a
-  // partial object is a live possibility. The compiler regexes the prose, so an
-  // absent prompt would throw INSIDE the terminal mint — the one place in the
-  // codebase that must never fail a run it is merely judging.
+  // Defensive read: `prompt` is declared `string` and every PRODUCTION producer
+  // does supply it — the reachable partial-contract sources are test fixtures
+  // that only compile because `packages/reasoning/tsconfig.json` excludes
+  // `tests/**` from typecheck. The guard stays anyway: `compileRunContract`
+  // regexes the prose, so an absent prompt would throw INSIDE the terminal mint
+  // — the one place in the codebase that must never fail a run it is merely
+  // judging — and the mint is also reachable from untyped JSON round-trips of a
+  // persisted envelope. Cost is one `typeof`; blast radius is a crashed run.
   const prompt = typeof taskContract.prompt === "string" ? taskContract.prompt : "";
   const compiled = compileRunContract(prompt, {
     ...(requiredTools !== undefined && requiredTools.length > 0 ? { requiredTools } : {}),
@@ -133,6 +136,35 @@ function judgeContractSatisfied(
   const outputText = typeof output === "string" ? output : "";
   const entries = ledger ?? [];
   return compiled.postConditions.every((c) => conditionMetByLedger(c, entries, outputText));
+}
+
+/**
+ * The terminal metadata an ENFORCED abstention must carry.
+ *
+ * The enforced re-mint spreads `...params`, so the pre-enforcement
+ * `extraMetadata.terminatedBy` survived it: a run flipped to `status:"failed"`
+ * still reported `terminatedBy: "final_answer"`, which
+ * `resolveGoalAchieved` (`runtime/src/builder/helpers.ts`) maps to `true` and
+ * `local-learning.ts` counts as a non-failure. An honest abstention would have
+ * surfaced downstream as an achieved goal.
+ *
+ * `"abstained"` is the existing legal `TerminatedBy` literal for exactly this
+ * terminal ("agent honestly declined — could not ground an answer"), and it is
+ * the value `deriveGoalAchieved` maps to `false`. `rawTerminatedBy` — the open
+ * string channel — is overridden only when the relayed metadata actually
+ * carried one, so nothing is invented on results that never had it.
+ *
+ * Non-enforced results never reach here: the caller passes `params.extraMetadata`
+ * through untouched.
+ */
+function enforcedTerminalMetadata(
+  extra: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  return {
+    ...extra,
+    terminatedBy: "abstained",
+    ...(extra?.rawTerminatedBy !== undefined ? { rawTerminatedBy: "abstained" } : {}),
+  };
 }
 
 export interface FinalizeExtras {
@@ -168,7 +200,13 @@ export function finalizeStrategyResult(
     let groundedOnRequired: boolean | undefined;
     if (requiredTools.length > 0) {
       groundedOnRequired = hasSuccessfulRequiredToolCall(params.steps, requiredTools);
-      if (!groundedOnRequired && guard !== undefined) {
+      // `"off"` is an explicit opt-OUT, not "configured". Recording under it
+      // was inert while the flip required `=== "block"`, but `failed` IS the
+      // enforcement basis now — leaving it would put an opt-out one predicate
+      // edit away from enforcing. The union is closed
+      // (`FabricationGuardMode = "off" | "warn" | "block"`), so naming the two
+      // recording modes keeps this exhaustive by construction.
+      if (!groundedOnRequired && (guard === "warn" || guard === "block")) {
         failed.push("grounding-on-required");
       }
     }
@@ -202,10 +240,27 @@ export function finalizeStrategyResult(
     //  3. `failed` empty. Covers "no wither configured" (nothing is ever pushed
     //     without a guard) AND "no requiredTools declared" (nothing to ground
     //     against) in one condition, so both stay untouched by construction.
+    //
+    // Fence 1 reads the BUILT result, not `params`. Reading `params.pause` /
+    // `params.kernelMeta` alone missed a live route: `adaptive` re-mints its
+    // sub-strategy's result and relays the pause descriptors through
+    // `extraMetadata` ONLY (adaptive.ts §"Durable pause rails"), passing
+    // neither. A paused adaptive run under `.withFabricationGuard("block")`
+    // was therefore flipped to `status:"failed"` with the abstention sentinel
+    // replacing the pause message — the fe5dc93b defect class this cascade
+    // exists to eliminate. `buildStrategyResult` merges `extraMetadata` AND
+    // `pauseRailMetadata(pause ?? kernelMeta)` into `metadata`, so one read of
+    // the built metadata covers all three routes and cannot be dropped by a
+    // future relay path. `params.pause` stays in the disjunction because a
+    // `KernelPause` may legitimately carry neither descriptor.
+    // `metadata` is statically the closed `ReasoningMetadata` struct; the pause
+    // rails ride the runtime object, so read them off a Record view (the same
+    // narrowing `adaptive.ts` and `execution-engine.ts` use).
+    const baseMetadata = base.metadata as Record<string, unknown>;
     const paused =
       params.pause !== undefined ||
-      params.kernelMeta?.awaitingApprovalFor !== undefined ||
-      params.kernelMeta?.awaitingInteractionFor !== undefined;
+      baseMetadata.awaitingApprovalFor !== undefined ||
+      baseMetadata.awaitingInteractionFor !== undefined;
     const enforced =
       guard === "block" && failed.length > 0 && !paused && base.status !== "failed";
 
@@ -228,6 +283,7 @@ export function finalizeStrategyResult(
           output: ENFORCED_ABSTENTION_OUTPUT,
           status: "failed",
           error: failed.join("; "),
+          extraMetadata: enforcedTerminalMetadata(params.extraMetadata),
         })
       : base;
 

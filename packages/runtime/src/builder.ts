@@ -1055,6 +1055,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * Also settable via the `RA_FABRICATION_GUARD` env var (this method wins).
      *
+     * TWO ENFORCEMENT SITES, different defaults — do not conflate them:
+     *  - the IN-LOOP verifier check described above is on by default (`"block"`,
+     *    env-settable);
+     *  - the TERMINAL grounding check (the strategy result mint) is OPT-IN ONLY.
+     *    It flips a run whose declared required tools never succeeded to
+     *    `status:"failed"` with an honest abstention, and it fires only when this
+     *    method was actually called with `"block"`. An unconfigured run is never
+     *    judged there and stays byte-identical — the env var does not arm it.
+     *
      * @param mode - `"block"` (default) | `"warn"` | `"off"`
      * @returns `this` for chaining
      */

@@ -113,7 +113,10 @@ describe("code-action tool-policy gate (P0-4 residual) — sandbox handlers enfo
       {},
       layer,
       buildRunEnvelope({
-        taskContract: { tools: [{ name: "search", kind: "forbidden" }] },
+        taskContract: {
+          prompt: "Answer without searching.",
+          tools: [{ name: "search", kind: "forbidden" as const }],
+        },
       }),
     );
     expect(executed).toEqual([]);

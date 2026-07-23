@@ -240,7 +240,10 @@ const stubLLM = Layer.succeed(LLMService, {
 describe("actor coverage — tool-surface:forbidden-deny", () => {
   it("a contract-declared forbidden tool that was in the surface records a deterministic tool-surface intervention — MUTATION PIN", async () => {
     const runContract = compileRunContract("Delete the logs.", {
-      taskContract: { tools: [{ kind: "forbidden", name: "shell-execute" }] },
+      taskContract: {
+        prompt: "Delete the logs.",
+        tools: [{ kind: "forbidden" as const, name: "shell-execute" }],
+      },
     } as never);
     const state: KernelState = {
       ...initialKernelState({ strategy: "reactive", kernelType: "reactive", maxIterations: 8 }),
