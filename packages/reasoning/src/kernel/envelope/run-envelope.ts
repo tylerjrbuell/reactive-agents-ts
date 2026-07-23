@@ -23,6 +23,30 @@ export interface RunEnvelopePolicy {
   readonly fabricationGuard?: FabricationGuardMode;
   /** Numeric evidence-grounding config (.withGrounding). Judgment side; redirect half lives in rails-consuming loop. */
   readonly grounding?: GroundingConfig;
+  /**
+   * This kernel pass is a FRAGMENT of a run, not the run's terminal.
+   *
+   * Some passes cannot ground themselves BY CONSTRUCTION: the verification
+   * THINK retry (`runtime/.../verification-think-retry.ts`) runs with
+   * `availableTools: []` + `maxIterations: 1`, and the post-think continuation
+   * passes (`runtime/.../reasoning-harness-hooks.ts`) refine prose against an
+   * answer an EARLIER pass already grounded. Their grounding evidence lives in a
+   * sibling pass, and the mint only ever sees `params.steps` of the pass in
+   * front of it.
+   *
+   * Judged as a terminal, such a pass looks exactly like a fabrication: zero
+   * successful required-tool calls. Under `fabricationGuard: "block"` that
+   * flipped a correct, tool-grounded answer to `status:"failed"` with the
+   * abstention sentinel — the run told the user "I could not ground an answer"
+   * about a run that did (review finding C1, 2026-07-23).
+   *
+   * When true the mint still COMPUTES and RECORDS the full verdict (so the
+   * observation is never hidden) but never enforces — see fence 4 in
+   * `finalizeStrategyResult`. It is set by the two pass BUILDERS, which are the
+   * only code that knows a pass is a fragment; a strategy cannot set it, and a
+   * genuine terminal pass never carries it.
+   */
+  readonly auxiliaryPass?: boolean;
 }
 
 export interface RunEnvelopeRails {
@@ -48,6 +72,8 @@ export interface BuildRunEnvelopeOptions {
   readonly taskContract?: TaskContract;
   readonly fabricationGuard?: FabricationGuardMode;
   readonly grounding?: GroundingConfig;
+  /** See `RunEnvelopePolicy.auxiliaryPass` — set by pass builders, never by a strategy. */
+  readonly auxiliaryPass?: boolean;
   readonly stallPolicy?: StallPolicy;
   readonly approvalPolicy?: KernelInput["approvalPolicy"];
   readonly approvalDecision?: KernelInput["approvalDecision"];
@@ -60,6 +86,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.taskContract !== undefined ? { taskContract: opts.taskContract } : {}),
       ...(opts.fabricationGuard !== undefined ? { fabricationGuard: opts.fabricationGuard } : {}),
       ...(opts.grounding !== undefined ? { grounding: opts.grounding } : {}),
+      ...(opts.auxiliaryPass !== undefined ? { auxiliaryPass: opts.auxiliaryPass } : {}),
     },
     rails: {
       ...(opts.stallPolicy !== undefined ? { stallPolicy: opts.stallPolicy } : {}),

@@ -228,7 +228,7 @@ export function finalizeStrategyResult(
 
     // ── Enforcement (the only behavior change in the cascade) ────────────────
     //
-    // Three fences, each one a case a naive `guard === "block" && !grounded`
+    // Four fences, each one a case a naive `guard === "block" && !grounded`
     // would get wrong:
     //
     //  1. PAUSED runs. A HITL/interaction pause has by construction not yet
@@ -240,6 +240,17 @@ export function finalizeStrategyResult(
     //  3. `failed` empty. Covers "no wither configured" (nothing is ever pushed
     //     without a guard) AND "no requiredTools declared" (nothing to ground
     //     against) in one condition, so both stay untouched by construction.
+    //  4. AUXILIARY passes (`envelope.policy.auxiliaryPass`). A pass whose
+    //     grounding evidence lives in a SIBLING pass — the verification THINK
+    //     retry (`availableTools: []`, so it cannot call a tool at all) and the
+    //     post-think continuation passes — is a fragment of a run, not its
+    //     terminal. Judging it as a terminal flips a correct, tool-grounded
+    //     answer to the abstention sentinel: the run reports an honest-sounding
+    //     "I could not ground an answer" for a run that did (review C1). The
+    //     verdict is still computed and recorded (`auxiliaryPass: true` names
+    //     WHY it did not bite); only the flip is fenced. Enforcement on genuine
+    //     terminal passes is untouched — no strategy can set this flag, only the
+    //     two builders that construct a fragment.
     //
     // Fence 1 reads the BUILT result, not `params`. Reading `params.pause` /
     // `params.kernelMeta` alone missed a live route: `adaptive` re-mints its
@@ -261,14 +272,20 @@ export function finalizeStrategyResult(
       params.pause !== undefined ||
       baseMetadata.awaitingApprovalFor !== undefined ||
       baseMetadata.awaitingInteractionFor !== undefined;
+    const auxiliary = envelope.policy.auxiliaryPass === true;
     const enforced =
-      guard === "block" && failed.length > 0 && !paused && base.status !== "failed";
+      guard === "block" &&
+      failed.length > 0 &&
+      !paused &&
+      !auxiliary &&
+      base.status !== "failed";
 
     const verdict = {
       enforced,
       ...(groundedOnRequired !== undefined ? { groundedOnRequired } : {}),
       ...(contractSatisfied !== undefined ? { contractSatisfied } : {}),
       failed,
+      ...(auxiliary ? { auxiliaryPass: true } : {}),
       ...(repairGaps ? { repairGaps } : {}),
     };
 

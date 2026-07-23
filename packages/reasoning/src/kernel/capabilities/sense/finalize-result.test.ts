@@ -458,6 +458,154 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
       expect(r.output).toBe(baseParams.output);
     });
 
+    // ── Auxiliary passes are fragments, not terminals (review C1) ────────────
+    //
+    // Two production builders emit passes whose grounding evidence lives in a
+    // DIFFERENT pass, and both carry the envelope:
+    //
+    //   1. `runtime/.../verification-think-retry.ts` — `availableTools: []`,
+    //      `maxIterations: 1`, no `requiredTools`. It CANNOT call a tool, so
+    //      `requiredToolsForJudgment` fell through to the declared contract's
+    //      required tools and found zero grounded calls in the retry's empty
+    //      steps.
+    //   2. `runtime/.../reasoning-harness-hooks.ts` — continuation passes that
+    //      DO pass `requiredTools: effectiveRequiredTools` and refine prose
+    //      without re-calling the tool (the normal case).
+    //
+    // In both, a run that wrote the file and answered correctly on pass 1 was
+    // flipped to `status:"failed"` with the abstention sentinel — an
+    // honest-sounding "I could not ground an answer" about a run that did.
+    //
+    // Cutting `!auxiliary` from the `enforced` conjunction in
+    // `finalize-result.ts` turns both of these red.
+    describe("auxiliaryPass fence — a fragment is never judged as the run's terminal", () => {
+      it("verification-retry shape (contract fallback): the revised answer survives", async () => {
+        const r = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({
+              ...baseParams,
+              // Exactly what `verification-think-retry.ts` produces: no steps
+              // (tool-less by construction) and no requiredTools of its own.
+              steps: [],
+              requiredTools: [],
+              output: "<the revised answer>",
+            }),
+            buildRunEnvelope({
+              fabricationGuard: "block",
+              taskContract: {
+                prompt: "Write the report to disk",
+                tools: [{ kind: "required", name: "file-write" }],
+                success: { type: "regex", pattern: "." },
+              },
+              auxiliaryPass: true,
+            }),
+          ),
+        );
+        expect(r.status).toBe("completed");
+        expect(r.output).toBe("<the revised answer>");
+        expect(r.error).toBeUndefined();
+        expect(r.metadata.verdict?.enforced).toBe(false);
+        // The observation is NOT hidden — it is recorded, and `auxiliaryPass`
+        // names why it did not bite.
+        expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
+        expect(r.metadata.verdict?.failed).toEqual(["grounding-on-required"]);
+        expect(r.metadata.verdict?.auxiliaryPass).toBe(true);
+      });
+
+      it("continuation shape (explicit requiredTools): the refined answer survives", async () => {
+        const r = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({
+              ...baseParams,
+              // `reasoning-harness-hooks.ts` DOES forward requiredTools, so no
+              // contract is needed to reproduce this half.
+              steps: [],
+              requiredTools: ["file-write"],
+              output: "The report is written and says X. (refined)",
+            }),
+            buildRunEnvelope({ fabricationGuard: "block", auxiliaryPass: true }),
+          ),
+        );
+        expect(r.status).toBe("completed");
+        expect(r.output).toBe("The report is written and says X. (refined)");
+        expect(r.metadata.verdict?.enforced).toBe(false);
+        expect(r.metadata.verdict?.auxiliaryPass).toBe(true);
+      });
+
+      it("the SAME fixtures WITHOUT the flag still enforce (the fence does not weaken terminals)", async () => {
+        // The control for both cases above. A terminal pass with the identical
+        // shape is still flipped — `auxiliaryPass` narrows nothing but the two
+        // fragment builders.
+        const contractCase = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({
+              ...baseParams,
+              steps: [],
+              requiredTools: [],
+              output: "<the revised answer>",
+            }),
+            buildRunEnvelope({
+              fabricationGuard: "block",
+              taskContract: {
+                prompt: "Write the report to disk",
+                tools: [{ kind: "required", name: "file-write" }],
+                success: { type: "regex", pattern: "." },
+              },
+            }),
+          ),
+        );
+        expect(contractCase.metadata.verdict?.enforced).toBe(true);
+        expect(contractCase.status).toBe("failed");
+        expect(contractCase.metadata.verdict?.auxiliaryPass).toBeUndefined();
+
+        const requiredToolsCase = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({
+              ...baseParams,
+              steps: [],
+              requiredTools: ["file-write"],
+            }),
+            buildRunEnvelope({ fabricationGuard: "block" }),
+          ),
+        );
+        expect(requiredToolsCase.metadata.verdict?.enforced).toBe(true);
+        expect(requiredToolsCase.status).toBe("failed");
+      });
+
+      it("an auxiliary pass that IS grounded is reported clean, not merely unjudged", async () => {
+        const groundedStep = makeStep("observation", "wrote the report", {
+          observationResult: makeObservationResult("file-write", true, "ok"),
+        });
+        const r = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({
+              ...baseParams,
+              steps: [groundedStep],
+              requiredTools: ["file-write"],
+            }),
+            buildRunEnvelope({ fabricationGuard: "block", auxiliaryPass: true }),
+          ),
+        );
+        expect(r.metadata.verdict?.groundedOnRequired).toBe(true);
+        expect(r.metadata.verdict?.failed).toEqual([]);
+        expect(r.metadata.verdict?.auxiliaryPass).toBe(true);
+        expect(r.metadata.verdict?.enforced).toBe(false);
+      });
+
+      it("zero-config is untouched by the flag (no guard ⇒ nothing recorded, nothing flipped)", async () => {
+        const r = await Effect.runPromise(
+          provideTestEnvelope(
+            finalizeStrategyResult({ ...baseParams, steps: [], requiredTools: ["file-write"] }),
+            buildRunEnvelope({ auxiliaryPass: true }),
+          ),
+        );
+        expect(r.metadata.verdict?.enforced).toBe(false);
+        expect(r.metadata.verdict?.failed).toEqual([]);
+        expect(r.status).toBe(baseParams.status);
+        expect(r.output).toBe(baseParams.output);
+      });
+    });
+
     // ── The load-bearing property, asserted STRUCTURALLY ─────────────────────
     //
     // The per-field checks above can only catch what they name. This one diffs

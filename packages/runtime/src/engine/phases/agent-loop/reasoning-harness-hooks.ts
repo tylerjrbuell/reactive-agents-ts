@@ -17,7 +17,6 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { buildRunEnvelope } from "@reactive-agents/reasoning";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
@@ -26,9 +25,11 @@ import type { ObsLike } from "../../runtime-context.js";
 import {
   briefResolvedSkillsFromMetadata,
   extractTaskText,
+  isEnforcedAbstention,
   normalizeReasoningResult,
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
+import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 
 /** Parameter shape accepted by ReasoningService.execute(). */
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
@@ -79,32 +80,27 @@ export const runReasoningHarnessHooks = (
     let ctx = initialCtx;
 
     // Cross-cutting cascade (2026-07-22) — the run-wide envelope for the
-    // continuation passes below. Built exactly as `reasoning-think.ts` builds
-    // the main think pass's, from the SAME config fields, so a
-    // `.withApprovalPolicy()` / `.withContract()` / `.withGrounding()` /
-    // `.withFabricationGuard()` / `.withStallPolicy()` run keeps its harness
-    // when a hook re-runs reasoning. Before this, `withCustomTermination` /
-    // `withMinIterations` retries ran with the approval gate DISARMED — a
-    // `requiresApproval` tool could execute unattended on a continuation.
+    // continuation passes below, built through the ONE config→envelope mapper
+    // (review I3), so a `.withApprovalPolicy()` / `.withContract()` /
+    // `.withGrounding()` / `.withFabricationGuard()` / `.withStallPolicy()` run
+    // keeps its harness when a hook re-runs reasoning. Before this,
+    // `withCustomTermination` / `withMinIterations` retries ran with the
+    // approval gate DISARMED — a `requiresApproval` tool could execute
+    // unattended on a continuation.
     //
     // The two resume rails (`approvalDecision` / `interactionResponse`) are
-    // deliberately absent: they are one-shot FiberRef values applied by the
-    // runner ONLY against a restored `state.meta.awaitingApprovalFor` /
-    // `awaitingInteractionFor`. A continuation pass starts from a fresh kernel
-    // state (no `resumeState`), so the re-entry block provably never fires and
-    // forwarding them would be dead weight.
-    const continuationEnvelope = buildRunEnvelope({
-      taskContract: config.taskContract,
-      fabricationGuard: config.fabricationGuard,
-      grounding: config.grounding,
-      stallPolicy: config.stallPolicy,
-      approvalPolicy: config.approvalPolicy
-        ? {
-            mode: config.approvalPolicy.mode,
-            tools: new Set(config.approvalPolicy.tools),
-            requireFor: config.approvalPolicy.requireFor,
-          }
-        : undefined,
+    // deliberately absent — see `RunEnvelopeExtras`.
+    //
+    // `auxiliaryPass: true` (review C1) — a continuation REFINES an answer an
+    // earlier pass already produced and grounded; it commonly re-states prose
+    // without re-calling the tool. Its `steps` therefore hold no required-tool
+    // evidence even on a perfectly grounded run, and judging it as the run's
+    // terminal made `.withFabricationGuard("block")` + required tools +
+    // `.withMinIterations()` / `.withCustomTermination()` /
+    // `.withOutputValidator()` replace a good answer with the abstention
+    // sentinel. The FIRST pass is the terminal, and it is judged as one.
+    const continuationEnvelope = buildRunEnvelopeFromConfig(config, {
+      auxiliaryPass: true,
     });
 
     // Common request builder for the three "continue working" style hooks.
@@ -157,6 +153,11 @@ export const runReasoningHarnessHooks = (
       const MAX_CUSTOM_RETRIES = 3;
       let customRetries = 0;
       while (customRetries < MAX_CUSTOM_RETRIES) {
+        // Review C1 mirror: never "continue working" past an ENFORCED honest
+        // abstention — the continuation is fenced from enforcement, so its
+        // ungrounded prose would silently replace the sentinel the terminal
+        // pass produced.
+        if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const currentOutput = String(ctx.metadata.lastResponse ?? "");
         if ((config.customTermination as (s: { output: string }) => boolean)({ output: currentOutput })) break;
         customRetries++;
@@ -194,6 +195,8 @@ export const runReasoningHarnessHooks = (
     if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
       let iterationsDone = ctx.iteration - 1;
       while (iterationsDone < config.minIterations) {
+        // Review C1 mirror — see withCustomTermination above.
+        if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const continuationOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
             { role: "user" as const, content: extractTaskText(task.input) },
@@ -222,7 +225,8 @@ export const runReasoningHarnessHooks = (
     // completeness; on a REVISE verdict, re-run once with the feedback injected.
     if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
       const outputToVerify = String(ctx.metadata.lastResponse ?? "");
-      if (outputToVerify) {
+      // Review C1 mirror — an honest abstention is not an output to "revise".
+      if (outputToVerify && !isEnforcedAbstention(ctx.metadata.reasoningResult)) {
         const verifyPrompt = config.verificationStep.prompt ??
           `Review this output against the task: "${extractTaskText(task.input).slice(0, 300)}"\n\nOutput:\n${outputToVerify.slice(0, 1500)}\n\nRespond PASS if the output fully addresses the task, or REVISE: [specific gap] if not.`;
         // Cross-cutting cascade (2026-07-22) — DELIBERATE EXEMPTION: this pass
@@ -249,6 +253,9 @@ export const runReasoningHarnessHooks = (
         // Do not "fix" by wiring the envelope here; the taskContract reason
         // above is the one that matters.
         const verifyOutcome = yield* Effect.exit(
+          // ENVELOPE-EXEMPT: judge pass — see the block comment above. The
+          // marker is what `scripts/check-cross-cutting.sh` check 4 reads; an
+          // execute request with neither an `envelope` nor this marker fails CI.
           reasoningOpt.value.execute({
             taskDescription: verifyPrompt,
             taskType: "analysis",
@@ -318,6 +325,8 @@ export const runReasoningHarnessHooks = (
       const maxRetries = (config.outputValidatorOptions?.maxRetries ?? 2);
       let validatorRetries = 0;
       while (validatorRetries < maxRetries) {
+        // Review C1 mirror — see withCustomTermination above.
+        if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const currentOutput = String(ctx.metadata.lastResponse ?? "");
         const validation = (config.outputValidator as (o: string) => { valid: boolean; feedback?: string })(currentOutput);
         if (validation.valid) break;

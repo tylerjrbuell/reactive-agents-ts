@@ -74,4 +74,78 @@ describe("harness hooks carry the RunEnvelope (cascade scope C)", () => {
     // the first pass would have — not executed unattended.
     expect(executions).toBe(0);
   }, 30_000);
+
+  // ── Review C1: the envelope's ENFORCEMENT half must not bite a fragment ────
+  //
+  // Carrying the envelope on a continuation pass (the fix above) armed more
+  // than the approval gate: it armed the terminal mint. A continuation refines
+  // prose against an answer an EARLIER pass grounded, so its own `steps` hold
+  // no required-tool evidence — judged as a terminal it looks exactly like a
+  // fabrication. Under `.withFabricationGuard("block")` a correct, tool-grounded
+  // run was flipped to `status:"failed"` and the answer replaced by the
+  // abstention sentinel.
+  //
+  // Cutting `auxiliaryPass: true` from `reasoning-harness-hooks.ts`'s
+  // `buildRunEnvelopeFromConfig` call turns this red.
+  it("continuation pass: a grounded run keeps its answer under fabricationGuard block", async () => {
+    let noteCalls = 0;
+
+    const agent = await ReactiveAgents.create()
+      .withName("hook-envelope-aux")
+      .withProvider("test")
+      .withTestScenario([
+        // Pass 1 GROUNDS the run: the required tool actually runs…
+        { toolCall: { name: "record-note", args: { text: "alpha" } } },
+        // …and answers.
+        { text: "Recorded the note: alpha." },
+        // The minIterations continuation refines prose only — no tool call.
+        { text: "Recorded the note: alpha. (refined)" },
+        { text: "Recorded the note: alpha. (refined again)" },
+        { text: "Recorded the note: alpha. (refined once more)" },
+      ] as never)
+      .withTools({
+        tools: [
+          {
+            definition: {
+              name: "record-note",
+              description: "Records a note.",
+              parameters: [
+                { name: "text", type: "string" as const, description: "Text", required: true },
+              ],
+              riskLevel: "low" as const,
+              requiresApproval: false,
+              timeoutMs: 5_000,
+              source: "function" as const,
+            },
+            handler: () =>
+              Effect.sync(() => {
+                noteCalls += 1;
+                return "recorded";
+              }),
+          },
+        ],
+      })
+      .withReasoning({ defaultStrategy: "reactive", enableStrategySwitching: false })
+      .withRequiredTools({ tools: ["record-note"], adaptive: false })
+      .withFabricationGuard("block")
+      // Never satisfied → the hook always re-runs reasoning, so a continuation
+      // pass provably happens (unlike `.withMinIterations`, whose floor the
+      // first pass can already satisfy).
+      .withCustomTermination(() => false)
+      .withMaxIterations(4)
+      .build();
+
+    const result = await agent.run("record a note about alpha");
+
+    // The run really was grounded — the required tool ran on pass 1.
+    expect(noteCalls).toBeGreaterThan(0);
+    // …so the user must NOT be told the agent could not ground an answer.
+    expect(String(result.output ?? "")).not.toContain("Could not complete the task");
+    // `AgentResultMetadata` (the public builder surface) does not declare
+    // `verdict` — the terminal judgment reaches `TaskResult.metadata` but is not
+    // projected onto `AgentResult`. Read it structurally; the projection gap is
+    // logged in DEBT-REGISTER §3.
+    const meta = result.metadata as { verdict?: { enforced?: boolean } };
+    expect(meta.verdict?.enforced).not.toBe(true);
+  }, 30_000);
 });

@@ -15,7 +15,8 @@ import { Effect, FiberRef } from "effect";
 import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { classifyTask, deserializeKernelState, buildRunEnvelope } from "@reactive-agents/reasoning";
+import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
+import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -340,18 +341,11 @@ export const runReasoningThink = (
       // Run-wide cross-cutting envelope (cascade design 2026-07-22) — as of
       // Task 5 the ONLY carrier for these seven fields. The per-field forwards
       // that used to sit alongside it are gone; strategies read the envelope.
-      envelope: buildRunEnvelope({
-        taskContract: config.taskContract,
-        fabricationGuard: config.fabricationGuard,
-        grounding: config.grounding,
-        stallPolicy: config.stallPolicy,
-        approvalPolicy: config.approvalPolicy
-          ? {
-              mode: config.approvalPolicy.mode,
-              tools: new Set(config.approvalPolicy.tools),
-              requireFor: config.approvalPolicy.requireFor,
-            }
-          : undefined,
+      // Built through the ONE config→envelope mapper (review I3): the three
+      // runtime builders used to re-enumerate this by hand, which is the
+      // cascade's own defect class at N=3. This is the TERMINAL pass of the
+      // run, so it carries no `auxiliaryPass` — judgment bites here.
+      envelope: buildRunEnvelopeFromConfig(config, {
         approvalDecision,
         interactionResponse,
       }),

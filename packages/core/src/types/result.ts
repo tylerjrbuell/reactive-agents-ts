@@ -94,6 +94,13 @@ export const ResultMetadataSchema = Schema.Struct({
        * empty array as proof the run was checked and passed.
        */
       failed: Schema.Array(Schema.String),
+      /**
+       * Present (and always `true`) when this pass was an AUXILIARY fragment of
+       * a run — a verification retry or a post-think continuation, whose
+       * grounding evidence lives in a sibling pass. Judgment is recorded but
+       * never enforced on such a pass.
+       */
+      auxiliaryPass: Schema.optional(Schema.Boolean),
       /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
       repairGaps: Schema.optional(Schema.Array(Schema.String)),
     }),

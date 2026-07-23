@@ -270,6 +270,8 @@ export interface ExecutionContextMetadata {
         readonly groundedOnRequired?: boolean;
         readonly contractSatisfied?: boolean;
         readonly failed: readonly string[];
+        /** Set when the pass was an auxiliary fragment (judged, never enforced). */
+        readonly auxiliaryPass?: boolean;
         readonly repairGaps?: readonly string[];
       };
       /**

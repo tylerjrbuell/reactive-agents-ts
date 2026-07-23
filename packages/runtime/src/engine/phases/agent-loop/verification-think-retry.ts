@@ -16,13 +16,13 @@
  */
 import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { buildRunEnvelope } from "@reactive-agents/reasoning";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
-import { extractTaskText, normalizeReasoningResult } from "../../util.js";
+import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
+import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 
@@ -44,6 +44,11 @@ export const runVerificationThinkRetry = (
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, task, reasoningOpt, taskCategory, resolvedCalibration, obs, eb } = deps;
   return Effect.gen(function* () {
+    // Review C1 mirror: the retry pass is fenced from enforcement (it cannot
+    // call a tool), so re-running it against an ENFORCED honest abstention
+    // would replace the sentinel with ungrounded prose. A run that honestly
+    // declined is not a run to "revise".
+    if (isEnforcedAbstention(c.metadata.reasoningResult)) return c;
     if (reasoningOpt._tag === "Some") {
       // ── Kernel-routed retry ──
       // availableTools: [] + maxIterations: 1 makes this
@@ -79,27 +84,21 @@ export const runVerificationThinkRetry = (
         // (`taskDescription` is the task, the verifier feedback rides
         // `initialMessages`) and its output becomes the user-visible answer, so
         // it must be judged under the same harness as the first pass. Built
-        // from the same config fields as `reasoning-think.ts`.
+        // through the ONE config→envelope mapper (review I3).
         //
         // The two resume rails (`approvalDecision` / `interactionResponse`) are
-        // deliberately absent — one-shot FiberRef values the runner applies only
-        // against a restored pause in `resumeState`, which this fresh pass has
-        // none of. `availableTools: []` also makes the approval gate moot here;
-        // it is carried anyway so the policy half never depends on the tool list
-        // happening to be empty.
-        envelope: buildRunEnvelope({
-          taskContract: config.taskContract,
-          fabricationGuard: config.fabricationGuard,
-          grounding: config.grounding,
-          stallPolicy: config.stallPolicy,
-          approvalPolicy: config.approvalPolicy
-            ? {
-                mode: config.approvalPolicy.mode,
-                tools: new Set(config.approvalPolicy.tools),
-                requireFor: config.approvalPolicy.requireFor,
-              }
-            : undefined,
-        }),
+        // deliberately absent — see `RunEnvelopeExtras`. `availableTools: []`
+        // also makes the approval gate moot here; the policy is carried anyway
+        // so it never depends on the tool list happening to be empty.
+        //
+        // `auxiliaryPass: true` (review C1) — this pass is a FRAGMENT: with
+        // `availableTools: []` and `maxIterations: 1` it cannot call a tool at
+        // all, so its `steps` can never contain the required-tool evidence.
+        // Judged as a terminal it looked like a fabrication, and
+        // `.withFabricationGuard("block")` replaced a correct, tool-grounded
+        // answer with the abstention sentinel. The evidence is in the FIRST
+        // pass, which was judged as the terminal it is.
+        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true }),
       });
       const retryOutcome = yield* Effect.exit(retryEffect);
       if (retryOutcome._tag === "Success") {

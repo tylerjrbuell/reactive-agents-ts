@@ -49,6 +49,14 @@ export const ReasoningMetadataSchema = Schema.Struct({
        * empty array as proof the run was checked and passed.
        */
       failed: Schema.Array(Schema.String),
+      /**
+       * Present (and always `true`) when this pass was an AUXILIARY fragment of
+       * a run — a verification retry or a post-think continuation, whose
+       * grounding evidence lives in a sibling pass. Judgment is recorded but
+       * never enforced on such a pass; this field is how a reader tells "clean"
+       * apart from "not judged as a terminal".
+       */
+      auxiliaryPass: Schema.optional(Schema.Boolean),
       /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
       repairGaps: Schema.optional(Schema.Array(Schema.String)),
     }),
