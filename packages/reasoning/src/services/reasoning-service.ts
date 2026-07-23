@@ -212,8 +212,8 @@ export const ReasoningServiceLive = (
               params.adaptiveHarness === true && params.modelRoutingPool !== undefined;
             // THE single production provision site (gate-enforced by
             // check-cross-cutting.sh). Every strategy effect runs with
-            // RunEnvelope provided — absent params.envelope ⇒ emptyRunEnvelope
-            // (zero behavior change; nothing reads the envelope yet).
+            // RunEnvelope provided — absent params.envelope ⇒ emptyRunEnvelope,
+            // so a zero-config run behaves exactly as it did before the cascade.
             const provided = Effect.provideService(
               strategyFn({
                 ...params,

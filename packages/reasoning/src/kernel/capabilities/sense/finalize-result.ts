@@ -134,7 +134,9 @@ export function finalizePausedStrategyResult(
   });
 }
 
-/** TEST-ONLY escape hatch for fixtures that need a judged result without a mint run. */
-export function __unsafeBrandJudgedForTest(r: ReasoningResult): JudgedReasoningResult {
-  return r as JudgedReasoningResult;
-}
+// NOTE: there is deliberately no test-only brand escape hatch here. An earlier
+// draft exported `__unsafeBrandJudgedForTest`; it ended up with zero call sites
+// (fixtures that need a judged result call the mint, which is cheap and pure),
+// so all it offered was a supported way to forge one — the exact bypass the
+// brand exists to prevent. If a fixture ever seems to need it, call
+// `finalizeStrategyResult` under `provideTestEnvelope` instead.
