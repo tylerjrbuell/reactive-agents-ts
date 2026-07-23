@@ -3,6 +3,7 @@ import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Pin the pre-lazy-tool-disclosure prompt contract (tools rendered eagerly in
 // the system prompt). Default flipped to lazy on 2026-04-26 (commit f51d7d87).
@@ -78,7 +79,7 @@ describe("Instruction-aware tool filtering", () => {
   it("primary tools shown with full schema when mentioned in task", async () => {
     const { layer, getCaptured } = await createCapturingLayer();
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Use github/list_commits to check recent commits",
         taskType: "git",
@@ -99,7 +100,7 @@ describe("Instruction-aware tool filtering", () => {
         ],
         config: testConfig,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const content = getCaptured();
     // Tool names should appear in the tool reference section
@@ -118,7 +119,7 @@ describe("Instruction-aware tool filtering", () => {
       ...Array.from({ length: 8 }, (_, i) => makeTool(`tool-${i}`, `Tool ${i} description`, [{ name: "input", type: "string", required: true }])),
     ];
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Use github/list_commits to check recent commits then send_message_to_user with results",
         taskType: "workflow",
@@ -140,7 +141,7 @@ describe("Instruction-aware tool filtering", () => {
           toolSchemaDetail: "names-only",
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const content = getCaptured();
     // names-only profile with required tools: required tool names appear in ref.
@@ -162,7 +163,7 @@ describe("Instruction-aware tool filtering", () => {
       makeTool("web-search", "Search the web", [{ name: "query", type: "string", required: true }]),
     ];
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Use github/list_commits to find recent activity",
         taskType: "git",
@@ -172,7 +173,7 @@ describe("Instruction-aware tool filtering", () => {
         config: testConfig,
         // No contextProfile — defaults to mid/full
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const content = getCaptured();
     // All tools appear in the tool reference section
@@ -189,7 +190,7 @@ describe("Instruction-aware tool filtering", () => {
       makeTool("web-search", "Search the web", [{ name: "query", type: "string", required: true }]),
     ];
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Do something interesting with the available tools",
         taskType: "general",
@@ -199,7 +200,7 @@ describe("Instruction-aware tool filtering", () => {
         config: testConfig,
         // No tool names mentioned in task — all secondary
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const content = getCaptured();
     // All tools appear in the tool reference section regardless of task keywords

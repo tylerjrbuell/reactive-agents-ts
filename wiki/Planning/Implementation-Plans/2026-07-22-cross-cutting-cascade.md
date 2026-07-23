@@ -555,9 +555,11 @@ export function __unsafeBrandJudgedForTest(r: ReasoningResult): JudgedReasoningR
 Export from `packages/reasoning/src/index.ts`:
 
 ```ts
-export { finalizeStrategyResult, __unsafeBrandJudgedForTest } from "./kernel/capabilities/sense/finalize-result.js";
+export { finalizeStrategyResult } from "./kernel/capabilities/sense/finalize-result.js";
 export type { JudgedReasoningResult, FinalizeExtras } from "./kernel/capabilities/sense/finalize-result.js";
 ```
+
+**`__unsafeBrandJudgedForTest` is deliberately NOT exported from the package index** (corrected 2026-07-22 after Task 3 review). It stays exported from `finalize-result.ts` so in-package tests can import it by module path. Exporting it from the index ships a zero-cast brand-forger to npm consumers, which defeats the mint's entire guarantee — any strategy author blocked by the Task 5 type flip could import it and erase the compile error.
 
 - [ ] **Step 5: Run tests to verify they pass**
 

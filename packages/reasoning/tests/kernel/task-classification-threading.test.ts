@@ -6,6 +6,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { classifyTask } from "../../src/kernel/capabilities/comprehend/task-classification.js";
 import type { TaskClassification } from "../../src/kernel/capabilities/comprehend/task-classification.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // HS-cleanup-2 — TaskClassification threading invariants.
 //
@@ -58,7 +59,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "What is 17 × 23?",
         taskType: "math",
@@ -67,7 +68,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
         config: defaultReasoningConfig,
         taskClassification: injectedComplex,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     // BFS was NOT skipped — proves ToT read the injected snapshot, not its own.
@@ -95,7 +96,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription:
           "Compare the trade-offs between eventual and strong consistency in distributed databases.",
@@ -105,7 +106,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
         config: defaultReasoningConfig,
         taskClassification: injectedTrivial,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     expect(md.bfsSkipped).toBe(true);
@@ -129,7 +130,7 @@ describe("Adaptive threads classification to dispatched sub-strategy", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: "What is the capital of France?",
         taskType: "query",
@@ -138,7 +139,7 @@ describe("Adaptive threads classification to dispatched sub-strategy", () => {
         config: defaultReasoningConfig,
         taskClassification: injected,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     expect(md.selectedStrategy).toBe("reactive");

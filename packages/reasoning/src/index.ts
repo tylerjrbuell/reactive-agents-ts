@@ -160,6 +160,16 @@ export { computeDeliverableReport } from "./kernel/contract/deliverable-report.j
 // action/observation ledger pairs the kernel act phase writes, so deliverable
 // receipts verify on the engine path too (2026-07-11 inline-loop fix).
 export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
+// `buildStrategyResult` is deliberately NOT re-exported here (cascade Task 5).
+// It stays a module-level export of `step-utils.ts` for exactly one consumer —
+// `finalize-result.ts`, which wraps it in the terminal mint. Publishing it would
+// hand callers an un-judged result constructor and reopen the bypass the brand
+// on `JudgedReasoningResult` exists to close.
+export { finalizeStrategyResult } from "./kernel/capabilities/sense/finalize-result.js";
+export type {
+  JudgedReasoningResult,
+  FinalizeExtras,
+} from "./kernel/capabilities/sense/finalize-result.js";
 export { makeObservationResult } from "./kernel/utils/observation-helpers.js";
 export { getRecoveryHint } from "./kernel/capabilities/act/tool-execution.js";
 export type {
@@ -284,6 +294,22 @@ export {
 // literals that silently drop {harnessPipeline, budgetLimits, calibration, …}.
 export { buildKernelInput } from "./kernel/state/build-kernel-input.js";
 export type { CrossCuttingInput, PerPassInput } from "./kernel/state/build-kernel-input.js";
+// ─── RunEnvelope — the run-wide cross-cutting carrier (cascade Task 1) ───
+// ONE service, two named sub-records (policy = judgment inputs, rails = repair
+// inputs) so strategies stop threading HITL/fabricationGuard/grounding/
+// stallPolicy by hand and can no longer silently drop them.
+export {
+  RunEnvelope,
+  buildRunEnvelope,
+  emptyRunEnvelope,
+  provideTestEnvelope,
+} from "./kernel/envelope/run-envelope.js";
+export type {
+  RunEnvelopeData,
+  RunEnvelopePolicy,
+  RunEnvelopeRails,
+  BuildRunEnvelopeOptions,
+} from "./kernel/envelope/run-envelope.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
 // Termination meta-tool name (NOT in META_TOOLS) — exported so runtime receipt
 // derivation (Arc 1 Task 8) can exclude it from grounding evidence without a

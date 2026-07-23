@@ -1,7 +1,7 @@
 // File: src/strategies/reactive.ts
 //
-// Thin wrapper — delegates entirely to runKernel(reactKernel, ...) and maps the
-// result to ReasoningResult via buildStrategyResult.
+// Thin wrapper — delegates entirely to runKernel(reactKernel, ...) and mints the
+// terminal result through finalizeStrategyResult (the single judged-result mint).
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
@@ -13,7 +13,11 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
-import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import {
   honestPartialMetadata,
@@ -104,12 +108,6 @@ interface ReactiveInput {
    *  When present, the runner uses it as base state instead of building fresh —
    *  forwarded into `kernelInput.resumeState`. */
   readonly resumeState?: KernelState;
-  /** Durable HITL (Phase D): resolved approval-gate policy → `kernelInput.approvalPolicy`. */
-  readonly approvalPolicy?: KernelInput["approvalPolicy"];
-  /** Durable HITL (Phase D): human's approve/deny decision → `kernelInput.approvalDecision`. */
-  readonly approvalDecision?: KernelInput["approvalDecision"];
-  /** Agentic-UI interaction rail (Task 10): human's response to a paused request_user_input → `kernelInput.interactionResponse`. */
-  readonly interactionResponse?: KernelInput["interactionResponse"];
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
@@ -130,14 +128,10 @@ interface ReactiveInput {
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
   /** Budget limits (HS-128 / Audit G-A). Threaded to KernelInput.budgetLimits. */
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
-  /** Opt-in numeric evidence-grounding config (.withGrounding) → KernelInput.grounding. */
-  readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
-  /** Fabrication-guard mode (.withFabricationGuard) → KernelInput.fabricationGuard. Absent ⇒ block. */
-  readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
-  /** Stall/no-progress policy (.withStallPolicy) → KernelInput.stallPolicy. Absent ⇒ defaults. */
-  readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
-  /** Declared TaskContract (.withContract) → KernelInput.taskContract → compileRunContract (C2). */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: the seven cross-cutting fields (approvalPolicy /
+  // approvalDecision / interactionResponse / grounding / fabricationGuard /
+  // stallPolicy / taskContract) are NOT declared here any more. They ride the
+  // RunEnvelope — a strategy cannot drop what it never carries.
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -152,9 +146,9 @@ interface ReactiveInput {
 export const executeReactive = (
   input: ReactiveInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const start = Date.now();
@@ -205,6 +199,11 @@ export const executeReactive = (
       metaTools: input.metaTools,
     });
 
+    // Cascade Task 6: the seven cross-cutting fields are NOT listed below. They
+    // ride the `RunEnvelope`, which `runKernel` merges onto the `KernelInput`
+    // at the single universal kernel entry — so reactive is now exactly as
+    // covered as every other strategy, by the same mechanism. A strategy cannot
+    // drop what it never carries.
     const kernelInput: KernelInput = {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
@@ -232,9 +231,6 @@ export const executeReactive = (
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       resumeState: input.resumeState,
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       auditRationale: input.auditRationale,
@@ -251,16 +247,6 @@ export const executeReactive = (
         (process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1" ? noopVerifier : undefined),
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
-      // Opt-in numeric evidence-grounding (.withGrounding) + always-on
-      // fabrication guard (.withFabricationGuard). Previously DROPPED here —
-      // ReactiveInput never declared them, so the runtime config never reached
-      // the terminal verifier gate. Now forwarded so both knobs take effect.
-      grounding: input.grounding,
-      fabricationGuard: input.fabricationGuard,
-      stallPolicy: input.stallPolicy,
-      // C2: declared TaskContract → compileRunContract (runner.ts) folds its
-      // required/forbidden tools + outputShape into the RunContract.
-      taskContract: input.taskContract,
     };
 
     const pass = yield* runPass(reactKernel, kernelInput, {
@@ -314,10 +300,19 @@ export const executeReactive = (
       timestamp: new Date(),
     });
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice: the judged verdict and the forwarded
+    // metadata must describe the same evidence.
+    const runLedger = state.ledger ?? [];
+
+    return yield* finalizeStrategyResult({
       strategy: "reactive",
       steps: pass.steps,
       output,
+      // Cascade terminal boundary — judgment inputs (Task 4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      // Reactive repairs per kernel iteration (redirect / nudge / re-plan).
+      repairCapabilities: { perIteration: true },
       // H5: `done` degrades to `partial` when the harness shipped output the
       // terminal verifier did not bless (harness-authored deliverable, or a
       // budget-terminal partial). `success` is derived from this downstream.
@@ -335,7 +330,7 @@ export const executeReactive = (
         // tool ledger so Slice 2's receipt re-base doesn't silently fall back
         // to step-scanning for this strategy (mirrors plan-execute/blueprint's
         // C8 forward).
-        runLedger: state.ledger ?? [],
+        runLedger,
         // H5: the honesty fields cross the result boundary. Empty on a clean run.
         ...honestPartialMetadata(state.meta),
         // Parallel open-string channel preserving raw kernel meta.
@@ -351,7 +346,7 @@ export const executeReactive = (
           : {}),
         // Durable HITL (Phase D) + interaction pause (Task 9): the paused-gate
         // and paused-interaction descriptors are forwarded by
-        // buildStrategyResult from `kernelMeta` below — ONE derivation site for
+        // the mint from `kernelMeta` below — ONE derivation site for
         // every strategy (2026-07-22: the inline spread that used to live here
         // was the only one in the codebase, so a pause under reflexion / ToT /
         // plan-execute reached the runtime with no descriptor at all).

@@ -10,15 +10,16 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
 import {
-  makeStep,
-  buildStrategyResult,
-} from "../kernel/capabilities/sense/step-utils.js";
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { emitToCompose } from "@reactive-agents/core";
@@ -33,12 +34,12 @@ import { formatObservationMessage } from "./code-action/code-action-observe.js";
 import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
-import { evaluateToolPolicy } from "../kernel/capabilities/act/tool-observe.js";
+import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
-export interface CodeActionInput extends StrategyHitlRails {
+export interface CodeActionInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -61,9 +62,8 @@ export interface CodeActionInput extends StrategyHitlRails {
    *  handlers previously called `toolSvc.execute()` with no policy check. */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** Declared TaskContract (spread from the reasoning-service params via
-   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
@@ -80,8 +80,11 @@ export interface CodeActionInput extends StrategyHitlRails {
 
 export const executeCodeAction = (
   input: CodeActionInput,
-): Effect.Effect<ReasoningResult, ExecutionError, LLMService> =>
+): Effect.Effect<JudgedReasoningResult, ExecutionError, LLMService | RunEnvelope> =>
   Effect.gen(function* () {
+    // Cascade Task 5: cross-cutting policy comes off the ONE run-wide carrier.
+    const envelope = yield* RunEnvelope;
+
     // Durable HITL (Phase D): code-action composes tool calls inside generated
     // TypeScript run by a Worker sandbox — there is no per-call kernel act
     // phase, so an approval gate cannot fire. Refuse LOUDLY rather than execute
@@ -89,7 +92,7 @@ export const executeCodeAction = (
     // code-action is never chosen by adaptive routing, so this can only be
     // reached by an explicit `defaultStrategy: "code-action"` — the caller can
     // pick a gate-capable strategy. (2026-07-22)
-    if (input.approvalPolicy?.mode === "detach") {
+    if (envelope.rails.approvalPolicy?.mode === "detach") {
       return yield* Effect.fail(
         new ExecutionError({
           strategy: "code-action",
@@ -128,12 +131,12 @@ export const executeCodeAction = (
     // ── Build tool handler map — bridges Worker calls to ToolService ────────
     // P0-4 — the deny-list the safety gate enforces: explicit override, else the
     // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    // `forbiddenToolsFromContract` is the ONE shared derivation (Cascade Task 7)
+    // — `executeToolAndObserve` itself now falls back to the same helper when a
+    // caller passes no policy at all, so this explicit pre-derivation here stays
+    // correct but is no longer the only line of defense.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (input.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     const toolPolicy = {
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
       forbiddenTools: forbiddenToolList,
@@ -426,16 +429,25 @@ export const executeCodeAction = (
     // a FAIL-verdict / iteration-cap / empty-output termination is NOT — it maps
     // to `end_turn` (goalAchieved defers to the deliverable scan) rather than
     // fabricating `final_answer` on a give-up (the DEFECT-3 lie). This ties the
-    // claim to the same evidence buildStrategyResult uses for `status`, so
+    // claim to the same evidence the mint uses for `status`, so
     // success and goalAchieved never contradict.
     const producedOutput = resultString.trim().length > 0;
     const terminatedBy: "final_answer" | "end_turn" =
       lastVerdict === "PASS" && producedOutput ? "final_answer" : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = projectStepsToLedger(undefined, steps, iteration);
+
+    return yield* finalizeStrategyResult({
       strategy: "code-action",
       steps,
       output: resultString,
+      // Cascade terminal boundary — judgment inputs (Task 4). code-action runs
+      // no kernel: its sandbox/verify loop is a coarse phase loop with no
+      // per-iteration repair hook (spec §3.4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      repairCapabilities: { perIteration: false },
       // #40: the verifier verdict is the deterministic completion evidence on
       // this kernel-less path — a FAIL-verdict termination (iteration cap
       // exhausted) ships the work honestly labeled `partial`, never
@@ -445,7 +457,7 @@ export const executeCodeAction = (
       totalTokens,
       totalCost,
       // Surface the real failure cause when the run died on sandbox errors —
-      // buildStrategyResult's M7 invariant will force `failed` on the empty
+      // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.
       ...(lastSandboxError !== null
         ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
@@ -461,7 +473,7 @@ export const executeCodeAction = (
         // transitionState chokepoint uses (kernel/ledger/step-projection.ts).
         // The action/observation pairs pushed above (the sandbox's canonical
         // ledger pairs) project to `tool-invocation`/`tool-result` entries.
-        runLedger: projectStepsToLedger(undefined, steps, iteration),
+        runLedger,
         codeLength: generatedCode.length,
         // H5/#40: name what stayed unmet — same channel reactive ships.
         ...(lastVerdict === "FAIL"

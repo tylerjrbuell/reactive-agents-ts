@@ -24,11 +24,17 @@
 
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
+import type { KernelStateLike } from "@reactive-agents/core";
+import type { TaskContract } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executePlanExecute } from "./plan-execute.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { mockToolServiceLayer } from "../testing/tool-service-mock.js";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
+import { executeToolAndObserve, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
+import { compileRunContract, forbiddenTools } from "../kernel/contract/run-contract.js";
+import type { MaybeService, ToolServiceInstance } from "../kernel/state/kernel-state.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -87,7 +93,10 @@ const runPlanExecute = (
       availableToolSchemas: [GATHER_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), recordingToolLayer(executed)))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), recordingToolLayer(executed))),
+      provideTestEnvelope,
+    ),
   );
 
 describe("B1 boundary — tool-policy gate (P0-4) is enforced inside executeToolAndObserve", () => {
@@ -135,5 +144,192 @@ describe("B1 boundary — RunLedger tool-entry minting (C8) happens inside execu
     // Mutation: cut the mint from the primitive → runLedger is empty → red.
     expect(invocations.some((e) => "toolName" in e && e.toolName === "gather")).toBe(true);
     expect(results.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Task 7 (cross-cutting cascade) — the SEAM derives policy from the ──────
+// envelope's taskContract when the caller threads NO explicit policy. Drives
+// `executeToolAndObserve` directly (not through a full strategy) so the
+// caller-supplies-nothing case is reachable: every wired strategy
+// (plan-execute.ts / code-action.ts / blueprint.ts) already pre-derives and
+// always threads an explicit (possibly empty) forbiddenTools, which would mask
+// this seam-level fallback. A hand-rolled or future caller that forgets to
+// derive-and-thread the deny-list is exactly the gap this closes.
+describe("Task 7 — executeToolAndObserve derives tool-policy from the envelope contract when unthreaded", () => {
+  const syntheticState: KernelStateLike = {
+    taskId: "t7",
+    strategy: "test",
+    kernelType: "react",
+    steps: [],
+    toolsUsed: new Set<string>(),
+    iteration: 0,
+    tokens: 0,
+    status: "acting",
+    output: null,
+    error: null,
+    meta: {},
+  };
+
+  const contractForbidding = (name: string): TaskContract => ({
+    prompt: "task",
+    tools: [{ kind: "forbidden", name }],
+    success: { type: "regex", pattern: ".*" },
+  });
+
+  const makeToolService = (executed: string[]): MaybeService<ToolServiceInstance> => ({
+    _tag: "Some",
+    value: {
+      execute: (input) => {
+        executed.push(input.toolName);
+        return Effect.succeed({ success: true, result: { ok: true } });
+      },
+      getTool: () => Effect.succeed({ parameters: [] }),
+      listTools: () => Effect.succeed([]),
+    },
+  });
+
+  const dispatch = (
+    executed: string[],
+    envelopeData: ReturnType<typeof buildRunEnvelope>,
+    config: Record<string, unknown> = {},
+  ) =>
+    Effect.runPromise(
+      provideTestEnvelope(
+        executeToolAndObserve(
+          makeToolService(executed),
+          { toolName: "shell-execute", args: {} },
+          {
+            iteration: 0,
+            phase: "act",
+            strategy: "test",
+            state: syntheticState,
+            callId: "call-1",
+          },
+          config,
+        ).pipe(Effect.provide(TestLLMServiceLayer())),
+        envelopeData,
+      ),
+    );
+
+  it("BLOCKS a tool the envelope's taskContract forbids when the caller passes NO explicit policy", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope({ taskContract: contractForbidding("shell-execute") });
+    const result = await dispatch(executed, envelopeData);
+
+    // Never reached the ToolService — the envelope-derived gate short-circuited.
+    expect(executed).not.toContain("shell-execute");
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("forbidden by contract");
+  });
+
+  it("an EXPLICIT (even permissive) config policy WINS over the envelope-derived deny-list", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope({ taskContract: contractForbidding("shell-execute") });
+    // Explicit forbiddenTools:[] means "the caller decided nothing is forbidden" —
+    // that decision must win over the contract's deny-list.
+    const result = await dispatch(executed, envelopeData, { forbiddenTools: [] });
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
+  });
+
+  it("no declared taskContract on the envelope: tool executes normally (byte-identical baseline)", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope();
+    const result = await dispatch(executed, envelopeData);
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
+  });
+
+  // ─── Coverage gap 1 (review Fix 3) — a fully-ABSENT RunEnvelope service ────
+  // Every other test in this file provides an envelope (even an empty one) via
+  // `provideTestEnvelope`. None exercises the seam with NO RunEnvelope in
+  // scope at all — the actual pre-Task-7 shape for a caller that never
+  // threads the service. `Effect.serviceOption(RunEnvelope)` must degrade to
+  // Option.none rather than requiring the tag in R (the primitive's R channel
+  // is documented to stay `LLMService` alone), so this must run WITHOUT
+  // `provideTestEnvelope` in the pipeline at all.
+  it("no RunEnvelope service provided at all: tool executes normally (pre-Task-7 behavior, no gate)", async () => {
+    const executed: string[] = [];
+    const result = await Effect.runPromise(
+      executeToolAndObserve(
+        makeToolService(executed),
+        { toolName: "shell-execute", args: {} },
+        {
+          iteration: 0,
+          phase: "act",
+          strategy: "test",
+          state: syntheticState,
+          callId: "call-1",
+        },
+        {},
+      ).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
+  });
+
+  // ─── Coverage gap 2 (review Fix 3) — allowedTools given, forbiddenTools NOT ─
+  // `explicitPolicyGiven` is all-or-nothing: it fires the moment EITHER field
+  // is defined, so a caller that supplies only `allowedTools` never triggers
+  // the envelope-derived fallback for `forbiddenTools` — even though the
+  // envelope declares a deny-list. This is the CURRENT intended behavior (an
+  // explicit policy, however partial, is the caller's own decision), pinned
+  // here so it cannot change silently.
+  it("caller supplies ONLY allowedTools (forbiddenTools left undefined): the envelope's deny-list is NOT merged in", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope({ taskContract: contractForbidding("shell-execute") });
+    // shell-execute is both contract-forbidden AND explicitly allowed here.
+    const result = await dispatch(executed, envelopeData, { allowedTools: ["shell-execute"] });
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
+  });
+});
+
+// ─── Fix 1 (review) — pin the "two derivations agree" invariant ────────────
+// The kernel act path (act.ts:878-928) calls `executeToolAndObserve` with
+// NEITHER `allowedTools` nor `forbiddenTools` — so the envelope-derived
+// fallback (`forbiddenToolsFromContract`) is LIVE on the framework's most
+// central tool-execution path, not just a hypothetical. It is harmless today
+// ONLY because it agrees with the independent derivation act.ts itself uses
+// upstream to gate the SAME call (act.ts:378, `forbiddenTools(state.meta
+// .runContract)`, compiled by `compileRunContract` from the same declared
+// `TaskContract.tools`). These are two derivations of ONE fact — the
+// contract's declared forbidden-tool deny-list — and must never be allowed
+// to drift apart. This test pins that invariant directly, independent of any
+// strategy or kernel wiring, so a change to either derivation that breaks
+// agreement fails loudly here.
+describe("Task 7 invariant — forbiddenToolsFromContract() and RunContract-derived forbiddenTools() must agree", () => {
+  it("produce the SAME forbidden-tool set for a representative TaskContract", () => {
+    const contract: TaskContract = {
+      prompt: "do the thing",
+      tools: [
+        { kind: "forbidden", name: "shell-execute" },
+        { kind: "forbidden", name: "web-search" },
+        { kind: "required", name: "file-read" },
+      ],
+      success: { type: "regex", pattern: ".*" },
+    };
+
+    // Derivation A — the tool-observe seam's envelope-derived fallback.
+    const fromHelper = new Set(forbiddenToolsFromContract(contract));
+
+    // Derivation B — the RunContract compiler's constraint projection, the
+    // SAME path act.ts:378 reads via `forbiddenTools(state.meta.runContract)`
+    // to gate the kernel act path upstream of this seam.
+    const runContract = compileRunContract("do the thing", { taskContract: contract });
+    const fromRunContract = new Set(forbiddenTools(runContract));
+
+    expect(fromHelper).toEqual(fromRunContract);
+    expect([...fromHelper].sort()).toEqual(["shell-execute", "web-search"]);
+  });
+
+  it("an undeclared contract → both derivations agree on an empty deny-list", () => {
+    expect(new Set(forbiddenToolsFromContract(undefined))).toEqual(
+      new Set(forbiddenTools(compileRunContract("do the thing"))),
+    );
   });
 });

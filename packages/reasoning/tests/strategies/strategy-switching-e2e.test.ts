@@ -33,6 +33,7 @@ import {
   type ThoughtKernel,
 } from "../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ describe("Strategy switching smoke test", () => {
       { match: "Think step-by-step", text: "FINAL ANSWER: smoke test passed." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Simple question requiring a direct answer",
         taskType: "query",
@@ -102,7 +103,7 @@ describe("Strategy switching smoke test", () => {
           fallbackStrategy: "plan-execute-reflect",
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Should complete successfully (either via FINAL ANSWER or maxIterations)
     expect(result.strategy).toBe("reactive");
@@ -233,7 +234,7 @@ describe("enableStrategySwitching affects outcomes on looping kernel", () => {
     // the config object is passed through (no error about unknown config).
     const layer = TestLLMServiceLayer(); // default: "Test response" — no FINAL ANSWER
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Test threading",
         taskType: "query",
@@ -252,7 +253,7 @@ describe("enableStrategySwitching affects outcomes on looping kernel", () => {
           fallbackStrategy: "plan-execute-reflect",
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // The test succeeds if executeReactive completes without throwing —
     // this proves the strategySwitching param is accepted and forwarded.

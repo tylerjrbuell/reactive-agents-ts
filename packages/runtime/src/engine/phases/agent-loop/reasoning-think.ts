@@ -16,6 +16,7 @@ import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef, Inte
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
+import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -301,15 +302,10 @@ export const runReasoningThink = (
       ),
       initialMessages,
       resumeState,
-      approvalDecision,
-      interactionResponse,
-      approvalPolicy: config.approvalPolicy
-        ? {
-            mode: config.approvalPolicy.mode,
-            tools: new Set(config.approvalPolicy.tools),
-            requireFor: config.approvalPolicy.requireFor,
-          }
-        : undefined,
+      // Cascade Task 5: the HITL rails (approvalDecision / interactionResponse /
+      // approvalPolicy) are no longer forwarded as execute params — they ride
+      // the `envelope` built below, which is the single carrier the strategies
+      // read from.
       synthesisConfig: resolveSynthesisConfigForStrategy(
         config.reasoningOptions,
         effectiveStrategyName,
@@ -329,16 +325,9 @@ export const runReasoningThink = (
       // in `strategies/reactive.ts`); the field is forwarded here so that
       // plumb arrives intact as soon as the reasoning leg lands.
       budgetLimits: config.budgetLimits,
-      // Opt-in numeric evidence-grounding. Propagated from `.withGrounding()`.
-      grounding: config.grounding,
-      // Fabrication guard mode. Propagated from `.withFabricationGuard()`.
-      fabricationGuard: config.fabricationGuard,
-      // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
-      stallPolicy: config.stallPolicy,
-      // Declared TaskContract (.withContract) → KernelInput.taskContract →
-      // compileRunContract (C2): declared required/forbidden tools + outputShape
-      // become RunContract requirements + constraints.
-      taskContract: config.taskContract,
+      // Cascade Task 5: `.withGrounding()` / `.withFabricationGuard()` /
+      // `.withStallPolicy()` / `.withContract()` are no longer forwarded as
+      // execute params either — same reason, same carrier (see `envelope`).
       // Long-horizon guard profile. Propagated from `.withLongHorizon()`. The
       // reasoning strategy forwards this to `KernelRunOptions.horizonProfile`.
       horizonProfile: config.horizonProfile,
@@ -349,6 +338,17 @@ export const runReasoningThink = (
       // The reasoning-service arms the ambient CurrentModelRouting FiberRef when
       // this is present, so the gateway routes gathering→cheap, synthesis→strong.
       modelRoutingPool,
+      // Run-wide cross-cutting envelope (cascade design 2026-07-22) — as of
+      // Task 5 the ONLY carrier for these seven fields. The per-field forwards
+      // that used to sit alongside it are gone; strategies read the envelope.
+      // Built through the ONE config→envelope mapper (review I3): the three
+      // runtime builders used to re-enumerate this by hand, which is the
+      // cascade's own defect class at N=3. This is the TERMINAL pass of the
+      // run, so it carries no `auxiliaryPass` — judgment bites here.
+      envelope: buildRunEnvelopeFromConfig(config, {
+        approvalDecision,
+        interactionResponse,
+      }),
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

@@ -207,6 +207,28 @@ export function buildAutoMaxCallsPerTool(input: {
 }
 
 /**
+ * Did the terminal mint ENFORCE an honest abstention on this result?
+ *
+ * Review C1 fenced enforcement OFF for auxiliary passes (verification retries,
+ * post-think continuations) — those passes cannot ground themselves and were
+ * destroying good answers. That fence has a mirror obligation: an auxiliary
+ * pass must not be allowed to OVERWRITE an abstention the terminal pass
+ * honestly produced. The continuation hooks and the verification retry
+ * unconditionally replace `metadata.lastResponse`, so without this predicate
+ * the C1 fix would trade a false abstention for a false answer: an ungrounded
+ * run under `.withFabricationGuard("block")` + `.withMinIterations(2)` would
+ * ship the continuation's ungrounded prose in place of the sentinel.
+ *
+ * Reads the ONE record the mint writes (`metadata.verdict.enforced`) rather
+ * than sniffing the sentinel text.
+ */
+export function isEnforcedAbstention(
+  result: { readonly metadata: { readonly verdict?: { readonly enforced: boolean } } } | undefined,
+): boolean {
+  return result?.metadata.verdict?.enforced === true;
+}
+
+/**
  * Normalized shape of a `ReasoningService.execute()` result, after defensive
  * validation. Hoisted from `execution-engine.ts:237` (W23 step 6a-2 prep)
  * so both the engine and inline-path modules can share the helper.
@@ -218,7 +240,12 @@ export type ExecutionReasoningResult = {
   /** Kernel failure detail (provider 413/400 message) carried through normalization. */
   error?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] } };
+  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] };
+    /** Cross-cutting cascade Task 9: terminal judgment record, preserved through normalization so the engine can forward it onto `TaskResult.metadata.verdict`. */
+    verdict?: { enforced: boolean; groundedOnRequired?: boolean; contractSatisfied?: boolean; failed: readonly string[]; auxiliaryPass?: boolean; repairGaps?: readonly string[] };
+    /** Cross-cutting cascade Task 9: the typed extension slot (DEBT-REGISTER §3), preserved through normalization so the engine can forward it onto `TaskResult.metadata.extensions` verbatim. */
+    extensions?: Readonly<Record<string, unknown>>;
+  };
 };
 
 export function normalizeReasoningResult(
@@ -280,6 +307,29 @@ export function normalizeReasoningResult(
       abstention:
         typeof md.abstention === "object" && md.abstention !== null
           ? (md.abstention as { reason: string; missing: readonly string[] })
+          : undefined,
+      // Cross-cutting cascade Task 9: preserve the terminal judgment record
+      // through normalization so it reaches `TaskResult.metadata.verdict`.
+      // Without this the whitelist rebuild silently drops it, same failure
+      // mode DEBT-REGISTER §3 tracks at the execution-engine.ts boundary.
+      verdict:
+        typeof md.verdict === "object" && md.verdict !== null
+          ? (md.verdict as {
+              enforced: boolean;
+              groundedOnRequired?: boolean;
+              contractSatisfied?: boolean;
+              failed: readonly string[];
+              auxiliaryPass?: boolean;
+              repairGaps?: readonly string[];
+            })
+          : undefined,
+      // Cross-cutting cascade Task 9: preserve the typed extension slot
+      // (DEBT-REGISTER §3) through normalization, verbatim, one level deep.
+      // Future strategy-contributed fields ride here with no normalize
+      // edit — only this ONE namespaced key crosses the whitelist rebuild.
+      extensions:
+        typeof md.extensions === "object" && md.extensions !== null
+          ? (md.extensions as Readonly<Record<string, unknown>>)
           : undefined,
     },
   };

@@ -21,7 +21,6 @@ import { gatewayComplete } from "../kernel/llm-gateway.js";
 import {
   buildKernelInput,
   type CrossCuttingInput,
-  type StrategyHitlRails,
 } from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import {
@@ -39,10 +38,14 @@ import {
 } from "../kernel/utils/service-utils.js";
 import {
   makeStep,
-  buildStrategyResult,
   kernelPause,
-  pausedStrategyResult,
 } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  finalizePausedStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -77,7 +80,7 @@ import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/to
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
 
-interface ReflexionInput extends StrategyHitlRails {
+interface ReflexionInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -146,9 +149,9 @@ interface ReflexionInput extends StrategyHitlRails {
 export const executeReflexion = (
   input: ReflexionInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
@@ -173,6 +176,10 @@ export const executeReflexion = (
     // silent runtime gap. `verifier` is intentionally absent: reflexion's own
     // critique loop is its verification; threading a terminal verifier into
     // each sub-pass would change behaviour.
+    // Cascade Task 6: the HITL rails + policy fields are NOT spread onto the
+    // sub-kernels below. `runKernel` merges them off the `RunEnvelope` at the
+    // kernel entry, so EVERY reflexion pass (generate, improve, and any future
+    // one) is covered by construction rather than by remembering to spread.
     const crossCutting: CrossCuttingInput = {
       resultCompression: input.resultCompression,
       agentId: input.agentId,
@@ -188,13 +195,6 @@ export const executeReflexion = (
       budgetLimits: input.budgetLimits,
       calibration: input.calibration,
       auditRationale: input.auditRationale,
-      // Durable HITL rails (Phase D) — every generate/improve sub-kernel must
-      // carry the gate, or a `requiresApproval` tool runs unattended inside a
-      // reflexion pass (2026-07-22 defect: reactive.ts was the only site that
-      // threaded these).
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
     };
 
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
@@ -217,14 +217,16 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genPass = yield* runPass(reactKernel, buildKernelInput(crossCutting, {
-      task: buildGenerationPrompt(input, null),
-      systemPrompt: genSystemPrompt,
-      priorContext: genPriorContext,
-      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-      allToolSchemas: capabilitySnapshot.allToolSchemas,
-      temperature: 0.7,
-    }), {
+    const genPass = yield* runPass(reactKernel, {
+      ...buildKernelInput(crossCutting, {
+        task: buildGenerationPrompt(input, null),
+        systemPrompt: genSystemPrompt,
+        priorContext: genPriorContext,
+        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+        allToolSchemas: capabilitySnapshot.allToolSchemas,
+        temperature: 0.7,
+      }),
+    }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
       kernelType: "react",
@@ -245,7 +247,7 @@ export const executeReflexion = (
     const genPause = kernelPause(genPass.state);
     if (genPause) {
       steps.push(...genPass.steps);
-      return pausedStrategyResult({
+      return yield* finalizePausedStrategyResult({
         strategy: "reflexion",
         steps,
         pause: genPause,
@@ -254,6 +256,16 @@ export const executeReflexion = (
         totalInputTokens: genPass.inputTokens,
         totalOutputTokens: genPass.outputTokens,
         totalCost: genPass.cost,
+        // Cascade terminal boundary — judgment inputs (Task 4). Same ledger
+        // rule as the terminal exit below: project over the steps returned.
+        requiredTools: input.requiredTools ?? [],
+        // The `0` here is real, not a stand-in for a dropped counter: this
+        // pause fires on the generate pass, BEFORE `iterateUntil` starts (no
+        // `attempt` variable exists yet at this point in the function), so
+        // zero reflect/improve iterations have elapsed — "iteration 0" is the
+        // honest count, not a placeholder.
+        runLedger: projectStepsToLedger(undefined, steps, 0),
+        repairCapabilities: { perIteration: true },
       });
     }
 
@@ -683,7 +695,7 @@ export const executeReflexion = (
     const finalPause = kernelPause(final.lastPassState);
     if (finalPause) {
       steps.push(...final.allSideEffectSteps);
-      return pausedStrategyResult({
+      return yield* finalizePausedStrategyResult({
         strategy: "reflexion",
         steps,
         pause: finalPause,
@@ -691,6 +703,10 @@ export const executeReflexion = (
         totalTokens: final.totalTokens,
         totalCost: final.totalCost,
         extraMetadata: { llmCalls, reflexionCritiques: final.previousCritiques },
+        // Cascade terminal boundary — judgment inputs (Task 4).
+        requiredTools: input.requiredTools ?? [],
+        runLedger: projectStepsToLedger(undefined, steps, iters),
+        repairCapabilities: { perIteration: true },
       });
     }
 
@@ -775,7 +791,11 @@ export const executeReflexion = (
       ),
     );
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice: the judged verdict and the forwarded
+    // metadata must describe the same evidence.
+    const runLedger = projectStepsToLedger(undefined, steps, iters);
+
+    return yield* finalizeStrategyResult({
       strategy: "reflexion",
       steps,
       output: gated.output,
@@ -783,6 +803,12 @@ export const executeReflexion = (
       start,
       totalTokens: finalTokens,
       totalCost: finalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). `runLedger` is
+      // the SAME projection the metadata forward below carries.
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      // Generate/improve run react sub-kernels, which repair per iteration.
+      repairCapabilities: { perIteration: true },
       // Terminal sub-kernel meta — carries the durable pause rails (a pause is
       // returned earlier, but the forward keeps every exit consistent).
       kernelMeta: final.lastPassState.meta,
@@ -804,7 +830,7 @@ export const executeReflexion = (
         // SAME merged steps[] array returned in this result, so runLedger ≡
         // projection(steps) — every pass's tool-invocation/tool-result
         // appears, with a single contiguous seq (no cross-pass collision).
-        runLedger: projectStepsToLedger(undefined, steps, iters),
+        runLedger,
         ...(lastPassTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
           : {}),

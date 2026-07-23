@@ -116,60 +116,6 @@ export function pauseRailMetadata(
 }
 
 /**
- * Terminal result for a strategy whose kernel pass PAUSED (approval gate or
- * `request_user_input`).
- *
- * Every multi-pass strategy needs the identical shape here — the pause sentinel
- * as output, the descriptor forwarded, `terminatedBy` naming the pause — so it
- * lives in one place rather than being re-derived (and re-forgotten) per
- * strategy. Callers pass whatever they have accumulated so far; the run stops
- * here and resumes from the durable checkpoint, not from this result.
- */
-export function pausedStrategyResult(params: {
-  strategy: ReasoningStrategy;
-  steps: readonly ReasoningStep[];
-  pause: KernelPause;
-  /** Date.now() captured at strategy start */
-  start: number;
-  totalTokens: number;
-  totalInputTokens?: number;
-  totalOutputTokens?: number;
-  totalCost: number;
-  /** Strategy-specific metadata to keep alongside the pause rails. */
-  extraMetadata?: Record<string, unknown>;
-}): ReasoningResult {
-  return buildStrategyResult({
-    strategy: params.strategy,
-    steps: params.steps,
-    // The kernel's pause sentinel (`Run paused — awaiting human approval.`),
-    // non-empty on every pause, so the output/status coherence guard in
-    // buildStrategyResult cannot downgrade this to "failed".
-    output: params.pause.output,
-    // A pause is a clean terminal, exactly as the reactive path reports it
-    // (kernel `status: "done"`, nothing shipped unverified).
-    status: "completed",
-    start: params.start,
-    ...(params.totalInputTokens !== undefined
-      ? { totalInputTokens: params.totalInputTokens }
-      : {}),
-    ...(params.totalOutputTokens !== undefined
-      ? { totalOutputTokens: params.totalOutputTokens }
-      : {}),
-    totalTokens: params.totalTokens,
-    totalCost: params.totalCost,
-    pause: params.pause,
-    extraMetadata: {
-      ...params.extraMetadata,
-      // The pause reason rides the raw open-string channel; the closed enum
-      // stays `end_turn` so `goalAchieved` is honestly unknown rather than
-      // claiming a final answer for a run that has not finished.
-      terminatedBy: "end_turn" as const,
-      rawTerminatedBy: params.pause.reason,
-    },
-  });
-}
-
-/**
  * Create a ReasoningStep with auto-generated ulid id and current timestamp.
  *
  * Replaces the repeated:
@@ -225,7 +171,7 @@ export function buildStrategyResult(params: {
   kernelMeta?: KernelMeta;
   /**
    * Explicit pause descriptor, for callers that hold a {@link KernelPause}
-   * instead of the kernel state (see {@link pausedStrategyResult}). Wins over
+   * instead of the kernel state (see `finalizePausedStrategyResult`). Wins over
    * `kernelMeta` — they describe the same terminal.
    */
   pause?: KernelPause;

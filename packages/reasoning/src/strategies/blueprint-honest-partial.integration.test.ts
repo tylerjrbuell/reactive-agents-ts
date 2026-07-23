@@ -18,6 +18,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeBlueprint } from "./blueprint.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -72,7 +73,10 @@ const runBlueprint = (extra: Record<string, unknown>) =>
       availableToolSchemas: [GATHER_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("#40 (blueprint) — the budget-capped harness join never reads as completed", () => {
@@ -99,5 +103,25 @@ describe("#40 (blueprint) — the budget-capped harness join never reads as comp
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.budgetTerminalPartial).toBeUndefined();
     expect(meta.harnessAuthoredOutput).toBeUndefined();
+  });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runBlueprint({});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
+  });
+
+  // Fix 3 (Task 4 review) — spec-owner ruling: blueprint's OWN terminal mint
+  // (this SOLVE path, not the `return executeReactive(input)` degrade paths)
+  // declares `repairCapabilities: { perIteration: false }`. Blueprint's SOLVE
+  // path is a 0-LLM DAG worker (executeBlueprintWorker) with no per-iteration
+  // repair hook — `true` would under-report a real repair gap. Pins the
+  // ruling as an observable "per-iteration" repair gap rather than a bare
+  // constant nobody re-checks.
+  it("blueprint's own SOLVE-path mint records the per-iteration repair gap", async () => {
+    const result = await runBlueprint({});
+    expect(result.metadata.verdict?.repairGaps).toContain("per-iteration");
   });
 });

@@ -1339,6 +1339,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           ? "medium"
                           : "low") as "high" | "medium" | "low",
                     } : {}),
+                    // Cross-cutting cascade Task 9: forward the terminal
+                    // judgment record so trust receipts can read it off
+                    // TaskResult. Enumerated (consumed by name) like
+                    // reasoningSteps/receiptToolCalls/runLedger above.
+                    ...(rr?.metadata?.verdict !== undefined ? { verdict: rr.metadata.verdict } : {}),
+                    // Cross-cutting cascade Task 9: the typed extension slot.
+                    // Future strategy-contributed fields ride here — no more
+                    // per-field enumeration (DEBT-REGISTER §3 row closed).
+                    // Top-level keys still never pass untyped.
+                    ...(rr?.metadata?.extensions !== undefined ? { extensions: rr.metadata.extensions } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
                     complexity: ctx.metadata.taskComplexity ?? classifyComplexity(

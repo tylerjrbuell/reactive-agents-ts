@@ -30,7 +30,7 @@ import {
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
 import { compileRunContract } from "../kernel/contract/run-contract.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
+import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -48,10 +48,14 @@ import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import {
   makeStep,
-  buildStrategyResult,
-  pausedStrategyResult,
   type KernelPause,
 } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  finalizePausedStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
@@ -90,7 +94,7 @@ import {
 } from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
 
-interface PlanExecuteInput extends StrategyHitlRails {
+interface PlanExecuteInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -167,26 +171,26 @@ interface PlanExecuteInput extends StrategyHitlRails {
    */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /**
-   * Declared TaskContract (spread from the reasoning-service params via
-   * `.withContract`). Its `forbidden` tools seed the deny-list above so the
-   * safety gate is production-real, not test-only.
-   */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
 }
 
 export const executePlanExecute = (
   input: PlanExecuteInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
     const { llm, toolService, eventBus } = services;
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/plan-execute.ts:emitLog");
+
+    // Cascade Task 5: cross-cutting policy + HITL rails come off the ONE
+    // run-wide carrier, never off `input`.
+    const envelope = yield* RunEnvelope;
 
     // Optional PlanStore for persistence (available when memory layer is enabled)
     const planStoreOpt = yield* Effect.serviceOption(PlanStoreService).pipe(
@@ -211,19 +215,21 @@ export const executePlanExecute = (
     const ledgerRef = yield* Ref.make<RunLedger>([]);
     // P0-4 — the deny-list the safety gate enforces: explicit override first,
     // else the declared TaskContract's forbidden tools (the production
-    // `.withContract` signal). Threaded into every dispatch via the primitive.
+    // `.withContract` signal), via the ONE shared derivation (Cascade Task 7)
+    // — `executeToolAndObserve` falls back to this same helper when a caller
+    // threads no policy at all, so this pre-derivation and that fallback can
+    // never drift apart. Threaded into every dispatch via the primitive.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (input.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     // The step-executor input, augmented with the policy + ledger sink the
     // canonical primitive reads. Built once; passed to every executeStep call.
     const stepExecutorInput: StepExecutorInput = {
       ...input,
       forbiddenTools: forbiddenToolList,
       ledgerSink: ledgerRef,
+      // Cascade Task 6: the HITL rails are NOT handed down. Kernel-backed
+      // branches get them from `runKernel`'s envelope merge; the `tool_call`
+      // branch reads the envelope itself (step-executor.ts). Nothing to drop.
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
     };
     let totalTokens = 0;
@@ -596,10 +602,18 @@ export const executePlanExecute = (
         timestamp: new Date(),
       });
 
-      return buildStrategyResult({
+      // ONE ledger value, read twice (verdict + forwarded metadata).
+      const shortCircuitLedger = yield* Ref.get(ledgerRef);
+
+      return yield* finalizeStrategyResult({
         strategy: "plan-execute-reflect",
         steps,
         output: scOutput,
+        // Cascade terminal boundary — judgment inputs (Task 4). plan-execute
+        // has only coarse phase loops, no per-iteration repair hook (spec §3.4).
+        requiredTools: input.requiredTools ?? [],
+        runLedger: shortCircuitLedger,
+        repairCapabilities: { perIteration: false },
         // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
         // LLM call + quality gate), so there is no envelope to join — the
         // status derives from this path's own deterministic evidence (output
@@ -617,7 +631,7 @@ export const executePlanExecute = (
           llmCalls: llmCallsTotal,
           // C8 — the run's canonical tool ledger (empty on this no-dispatch
           // short-circuit, but present for shape consistency).
-          runLedger: yield* Ref.get(ledgerRef),
+          runLedger: shortCircuitLedger,
         },
       });
     }
@@ -974,14 +988,21 @@ export const executePlanExecute = (
       // pause it has not, and narrating a completion here is exactly the lie the
       // approval gate exists to prevent.
       if (pendingPause !== undefined) {
-        return pausedStrategyResult({
+        const pauseLedger = yield* Ref.get(ledgerRef);
+        return yield* finalizePausedStrategyResult({
           strategy: "plan-execute-reflect",
           steps,
           pause: pendingPause,
           start,
           totalTokens,
           totalCost,
-          extraMetadata: { llmCalls: llmCallsTotal, runLedger: yield* Ref.get(ledgerRef) },
+          extraMetadata: { llmCalls: llmCallsTotal, runLedger: pauseLedger },
+          // Cascade terminal boundary — judgment inputs (Task 4).
+          requiredTools: input.requiredTools ?? [],
+          runLedger: pauseLedger,
+          // plan-execute has only coarse phase loops — no per-iteration repair
+          // hook (spec §3.4).
+          repairCapabilities: { perIteration: false },
         });
       }
 
@@ -1450,7 +1471,10 @@ export const executePlanExecute = (
         ? "final_answer"
         : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const finalLedger = yield* Ref.get(ledgerRef);
+
+    return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
       output: finalOutput,
@@ -1458,12 +1482,17 @@ export const executePlanExecute = (
       start,
       totalTokens,
       totalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). plan-execute has
+      // only coarse phase loops, no per-iteration repair hook (spec §3.4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger: finalLedger,
+      repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
         llmCalls: llmCallsTotal,
         // C8 — the run's canonical tool ledger (tool-invocation + tool-result
         // per direct dispatch), minted by the primitive into `ledgerRef`.
-        runLedger: yield* Ref.get(ledgerRef),
+        runLedger: finalLedger,
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(subKernelEnvelope),

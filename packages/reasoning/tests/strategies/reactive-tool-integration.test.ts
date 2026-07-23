@@ -8,6 +8,7 @@ import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Pin pre-lazy-tool-disclosure contract — see f51d7d87.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
@@ -122,9 +123,9 @@ describe("ReactiveStrategy — real tool execution", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
 
@@ -168,9 +169,9 @@ describe("ReactiveStrategy — real tool execution", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const observationSteps = result.steps.filter(
       (s) => s.type === "observation",
@@ -196,9 +197,9 @@ describe("ReactiveStrategy — real tool execution", () => {
     });
 
     // No toolsLayer provided — only LLM
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(testLLMLayer)),
-    );
+    ));
 
     const observationSteps = result.steps.filter(
       (s) => s.type === "observation",
@@ -236,9 +237,9 @@ describe("ReactiveStrategy — real tool execution", () => {
     });
 
     // Should NOT throw — error becomes an observation
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const observationSteps = result.steps.filter(
       (s) => s.type === "observation",
@@ -300,7 +301,7 @@ describe("ReactiveStrategy — real tool execution", () => {
       config: testConfig,
     });
 
-    await Effect.runPromise(program.pipe(Effect.provide(capturingLLMLayer)));
+    await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(capturingLLMLayer))));
 
     // The prompt should mention available tools and include RULES block
     expect(capturedPrompt).toContain("web-search");

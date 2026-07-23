@@ -25,8 +25,11 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
-import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import {
   resolveCompletionStatus,
@@ -37,7 +40,7 @@ import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
-export interface DirectInput extends StrategyHitlRails {
+export interface DirectInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -99,9 +102,9 @@ export interface DirectInput extends StrategyHitlRails {
 export const executeDirect = (
   input: DirectInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const start = Date.now();
@@ -164,12 +167,10 @@ export const executeDirect = (
       calibration: input.calibration,
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
-      // Durable HITL rails (Phase D) — direct can dispatch tools (up to 3
-      // iterations), so the gate must reach its kernel like every other
-      // strategy's (2026-07-22).
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
+      // Cascade Task 6: the HITL rails + policy fields are absent here on
+      // purpose. `runKernel` merges them off the `RunEnvelope`, so direct's
+      // kernel gets the approval gate (it can dispatch tools up to its 3-iter
+      // cap) without `DirectInput` ever carrying a cross-cutting field.
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
@@ -210,10 +211,21 @@ export const executeDirect = (
       timestamp: new Date(),
     });
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = state.ledger ?? [];
+
+    return yield* finalizeStrategyResult({
       strategy: "direct",
       steps: state.steps,
       output,
+      // Cascade terminal boundary — judgment inputs (Task 4). DirectInput
+      // deliberately carries no requiredTools (single-turn: the required-tool
+      // gate is a multi-iteration concern, see the KernelInput comment above),
+      // so the grounding verdict has nothing to judge here.
+      requiredTools: [],
+      runLedger,
+      // Direct runs a react kernel (1-3 iterations) — per-iteration repair applies.
+      repairCapabilities: { perIteration: true },
       // H5: an unverified ship is `partial`, never `completed`.
       status: resolveCompletionStatus(state),
       start,
@@ -224,14 +236,15 @@ export const executeDirect = (
       // hardcoded 0 — direct can call tools (up to 3 iters) and those cost money.
       totalCost: state.cost ?? 0,
       error: state.error,
-      // Durable pause rails forwarded centrally (see buildStrategyResult).
+      // Durable pause rails forwarded centrally (see buildStrategyResult,
+      // which the mint wraps).
       kernelMeta: state.meta,
       extraMetadata: {
         terminatedBy,
         // Wave C.1 task 4 (B2-class boundary): forward the run's canonical
         // tool ledger so Slice 2's receipt re-base doesn't silently fall back
         // to step-scanning for this strategy (mirrors reactive/plan-execute).
-        runLedger: state.ledger ?? [],
+        runLedger,
         // Honesty markers cross the result boundary — empty on a clean run,
         // mirroring reactive's honestPartialMetadata.
         ...honestPartialMetadata(state.meta),

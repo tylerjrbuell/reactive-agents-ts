@@ -5,6 +5,7 @@ import { executeTreeOfThought, parseBatchScores } from "../../src/strategies/tre
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn } from "@reactive-agents/llm-provider";
 import { EntropySensorService } from "@reactive-agents/core";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /** Wrap TestLLMService and record every request's stringified messages so a
  *  test can assert how many scoring calls were issued (batch vs per-candidate). */
@@ -58,7 +59,7 @@ describe("TreeOfThoughtStrategy", () => {
       { match: "Selected Approach", text: "FINAL ANSWER: done." },
     ]);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Pick the best approach",
         taskType: "query",
@@ -73,7 +74,7 @@ describe("TreeOfThoughtStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Scoring prompts carry the 0.0–1.0 rubric. Exactly ONE should fire for the
     // 3 candidates of the single parent — not three.
@@ -107,7 +108,7 @@ describe("TreeOfThoughtStrategy", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(layer)),
+      provideTestEnvelope(program.pipe(Effect.provide(layer))),
     );
 
     expect(result.strategy).toBe("tree-of-thought");
@@ -141,7 +142,7 @@ describe("TreeOfThoughtStrategy", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(layer)),
+      provideTestEnvelope(program.pipe(Effect.provide(layer))),
     );
 
     expect(result.strategy).toBe("tree-of-thought");
@@ -179,7 +180,7 @@ describe("TreeOfThoughtStrategy", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(layer)),
+      provideTestEnvelope(program.pipe(Effect.provide(layer))),
     );
 
     expect(result.status).toBe("completed");
@@ -198,7 +199,7 @@ describe("TreeOfThoughtStrategy", () => {
       { match: "Think step-by-step", text: "FINAL ANSWER: Recovered despite low scores." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Solve a difficult creative problem",
         taskType: "creative",
@@ -212,7 +213,7 @@ describe("TreeOfThoughtStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.steps.length).toBeGreaterThan(2);
@@ -232,7 +233,7 @@ describe("TreeOfThoughtStrategy", () => {
       { match: "Think step-by-step", text: "FINAL ANSWER: Completed via rescued path." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Find an unconventional solution",
         taskType: "creative",
@@ -247,7 +248,7 @@ describe("TreeOfThoughtStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     // The adaptive step message should contain the threshold numbers
@@ -267,7 +268,7 @@ describe("TreeOfThoughtStrategy", () => {
       { match: "Think step-by-step", text: "FINAL ANSWER: Answer from percentage-scored path." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Solve a problem",
         taskType: "query",
@@ -281,7 +282,7 @@ describe("TreeOfThoughtStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.status).toBe("completed");
@@ -384,7 +385,9 @@ describe("TreeOfThoughtStrategy", () => {
       },
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
+    const result = await Effect.runPromise(
+      provideTestEnvelope(program.pipe(Effect.provide(fullLayer))),
+    );
 
     // 1. Dispatcher fired at least once (BFS loop dispatch at depth 1).
     //    Phase 2 synthesis sub-kernel may also call dispatch independently,
@@ -419,7 +422,7 @@ describe("TreeOfThoughtStrategy", () => {
       { match: "Selected Approach", text: "FINAL ANSWER: The best approach uses iteration for O(n) complexity." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Find the most efficient sorting algorithm",
         taskType: "analysis",
@@ -433,7 +436,7 @@ describe("TreeOfThoughtStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.status).toBe("completed");

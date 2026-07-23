@@ -34,6 +34,7 @@ import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
 import type { ToolSummary } from "../planning/plan-prompts.js";
 import { executeReActKernel } from "../../kernel/loop/react-kernel.js";
+import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import type { CompletionEnvelope } from "../../kernel/state/completion-envelope.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
@@ -139,15 +140,11 @@ export interface StepExecutorInput {
   readonly budgetLimits?: import("../../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   readonly auditRationale?: boolean;
-  /**
-   * Durable HITL rails (Phase D) — composite steps call tools through the ReAct
-   * kernel, so the approval gate must travel with them. Omitted until
-   * 2026-07-22: a `requiresApproval` tool ran unattended on every plan-execute
-   * step (see `StrategyHitlRails`).
-   */
-  readonly approvalPolicy?: import("../../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
-  readonly approvalDecision?: import("../../kernel/state/kernel-state.js").KernelInput["approvalDecision"];
-  readonly interactionResponse?: import("../../kernel/state/kernel-state.js").KernelInput["interactionResponse"];
+  // Cascade Task 6: the HITL rails are NOT declared here. The analysis /
+  // composite branches reach a kernel, and `runKernel` merges them off the
+  // `RunEnvelope`; the `tool_call` branch dispatches OUTSIDE any kernel, so it
+  // reads the SAME envelope directly (see the gate in `executeStep`). Neither
+  // branch depends on plan-execute remembering to hand them down.
   /** #40: long-horizon guard profile — forwarded to each composite sub-kernel so
    *  the A2 pace bands (and thus the budget-terminal honest partial) can arm. */
   readonly horizonProfile?: "long";
@@ -181,7 +178,15 @@ export function executeStep(
   maxKernelIter: number,
   retryErrorContext: string | undefined,
   emitLog: (event: LogEvent) => Effect.Effect<void, never>,
-): Effect.Effect<StepExecResult, ExecutionError, LLMService> {
+  // Cascade Task 6 (scope B): the `tool_call` branch below dispatches OUTSIDE
+  // any kernel, so `runKernel`'s envelope merge cannot cover its approval gate.
+  // Rather than hand-carry the rails on `StepExecutorInput` (the exact
+  // drop-prone pattern this cascade exists to delete), the R channel is widened
+  // and the branch reads the ONE run-wide carrier itself. The sole caller
+  // (`plan-execute.ts`) already declares `RunEnvelope` in its own R channel, so
+  // this costs nothing at the call site and a future caller that forgets the
+  // envelope is a COMPILE error, not a silent unattended tool execution.
+): Effect.Effect<StepExecResult, ExecutionError, LLMService | RunEnvelope> {
   const { toolService } = services;
 
   if (step.type === "tool_call" && step.toolName && toolService._tag === "Some") {
@@ -197,7 +202,9 @@ export function executeStep(
       // this check a `requiresApproval` tool executes unattended whenever the
       // planner emits it as a `tool_call` step (2026-07-22). Same decision
       // function the kernel uses, so gating stays consistent across paths.
-      const gatePolicy = input.approvalPolicy;
+      // The policy comes off the run-wide envelope — the same value
+      // `runKernel` merges for the kernel-backed branches.
+      const gatePolicy = (yield* RunEnvelope).rails.approvalPolicy;
       const pauseSentinel = deliverableToContent({
         source: "sentinel",
         reason: "awaiting_approval",
@@ -472,10 +479,6 @@ export function executeStep(
     budgetLimits: input.budgetLimits,
     calibration: input.calibration,
     auditRationale: input.auditRationale,
-    // Durable HITL rails — see StepExecutorInput.
-    approvalPolicy: input.approvalPolicy,
-    approvalDecision: input.approvalDecision,
-    interactionResponse: input.interactionResponse,
     // #40: arm the sub-kernel's long-horizon pace bands (see StepExecutorInput).
     ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
   }).pipe(

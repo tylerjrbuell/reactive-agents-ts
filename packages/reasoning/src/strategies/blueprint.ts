@@ -49,7 +49,12 @@ import {
   makeStrategyEmitLog,
   emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
@@ -60,7 +65,7 @@ import { withEnvContext } from "../context/context-engine.js";
 import { executeBlueprintWorker } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
@@ -72,7 +77,7 @@ const STRATEGY = "blueprint" as const;
 // Mirrors PlanExecuteInput's shape (the registry widens via `as unknown as
 // StrategyFn`, so the extra fields beyond the base StrategyFn input are safe).
 
-interface BlueprintInput extends StrategyHitlRails {
+interface BlueprintInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -99,9 +104,8 @@ interface BlueprintInput extends StrategyHitlRails {
    *  primitive. `forbiddenTools` defaults to the declared `taskContract` deny-list. */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** Declared TaskContract (spread from the reasoning-service params via
-   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
 }
 
 // ── Concurrency tier/capability branch ───────────────────────────────────────
@@ -143,9 +147,9 @@ function resolveWorkerConcurrency(input: BlueprintInput): number {
 export const executeBlueprint = (
   input: BlueprintInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
@@ -153,13 +157,16 @@ export const executeBlueprint = (
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog");
 
+    // Cascade Task 5: cross-cutting policy comes off the ONE run-wide carrier.
+    const envelope = yield* RunEnvelope;
+
     // Durable HITL (Phase D): blueprint dispatches its plan through the 0-LLM
     // DAG worker, which calls tools directly — there is no kernel act phase, so
     // the approval gate CANNOT fire on this path. Executing a `requiresApproval`
     // tool unattended is not an acceptable degrade, and hard-failing would break
     // adaptive routing (which can pick blueprint), so route to the gate-capable
     // reactive strategy instead and say so in the trace. (2026-07-22)
-    if (input.approvalPolicy?.mode === "detach") {
+    if (envelope.rails.approvalPolicy?.mode === "detach") {
       yield* emitLog({
         _tag: "metric",
         name: "blueprint_degraded_to_reactive",
@@ -177,13 +184,13 @@ export const executeBlueprint = (
     // on `result.metadata.runLedger`.
     const ledgerRef = yield* Ref.make<RunLedger>([]);
     // P0-4 — the deny-list the safety gate enforces: explicit override, else the
-    // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    // declared TaskContract's forbidden tools (the production `.withContract`
+    // signal), via the ONE shared derivation (Cascade Task 7) —
+    // `executeToolAndObserve` falls back to this same helper when a caller
+    // threads no policy at all, so this pre-derivation and that fallback can
+    // never drift apart.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (input.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     let totalTokens = 0;
     let totalCost = 0;
     // Self-budget: blueprint makes at most plan(1) + solve(1) LLM calls — the
@@ -695,7 +702,10 @@ export const executeBlueprint = (
     const terminatedBy: "final_answer" | "end_turn" =
       finalStatus === "completed" ? "final_answer" : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = yield* Ref.get(ledgerRef);
+
+    return yield* finalizeStrategyResult({
       strategy: STRATEGY,
       steps,
       output: finalOutput,
@@ -703,6 +713,17 @@ export const executeBlueprint = (
       start,
       totalTokens,
       totalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). This is
+      // blueprint's OWN terminal mint (the SOLVE path) — NOT the degrade
+      // paths above, which `return executeReactive(input)` verbatim and so
+      // carry reactive's own `{ perIteration: true }` mint. Blueprint's own
+      // SOLVE path is a 0-LLM DAG worker (executeBlueprintWorker) with no
+      // per-iteration repair hook at all — declaring `true` here would
+      // under-report a real repair gap. Spec-owner ruling (Task 4 review,
+      // amendment 2026-07-22): `false` for blueprint's own mint.
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
         // The budget-capped join is a harness-authored terminal — surface the
@@ -715,7 +736,7 @@ export const executeBlueprint = (
         // llmCalls:0 beside 5 real calls in the trace.
         llmCalls,
         // C8 — the run's canonical tool ledger, minted by the primitive.
-        runLedger: yield* Ref.get(ledgerRef),
+        runLedger,
         ...(budgetCappedJoin
           ? {
               // H5/#40 honesty markers for the budget-capped harness join —

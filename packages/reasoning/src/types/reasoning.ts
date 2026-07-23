@@ -27,6 +27,52 @@ export const ReasoningMetadataSchema = Schema.Struct({
   confidence: Schema.Number, // 0-1
   effectiveness: Schema.optional(Schema.Number), // 0-1 (learned)
   selectedStrategy: Schema.optional(ReasoningStrategy), // for adaptive
+  /**
+   * Terminal judgment record (cross-cutting cascade, 2026-07-22). Computed by
+   * finalizeStrategyResult on EVERY result. `enforced: false` ⇒ informational
+   * (no wither configured, or judgment found nothing). Enforcement flips
+   * status/output at the mint — never anywhere else.
+   */
+  verdict: Schema.optional(
+    Schema.Struct({
+      /** Did judgment alter the result (status flip / output replacement)? */
+      enforced: Schema.Boolean,
+      /** Grounding verdict against required tools, when requiredTools were declared. */
+      groundedOnRequired: Schema.optional(Schema.Boolean),
+      /** Contract requirement outcomes, when a taskContract was declared. */
+      contractSatisfied: Schema.optional(Schema.Boolean),
+      /**
+       * Names of judgment checks that failed. Empty means clean OR
+       * unjudged — the mint only pushes "grounding-on-required" when
+       * `envelope.policy.fabricationGuard` is configured, so an ungrounded
+       * run with no guard set also reports `failed: []`. Do not read an
+       * empty array as proof the run was checked and passed.
+       */
+      failed: Schema.Array(Schema.String),
+      /**
+       * Present (and always `true`) when this pass was an AUXILIARY fragment of
+       * a run — a verification retry or a post-think continuation, whose
+       * grounding evidence lives in a sibling pass. Judgment is recorded but
+       * never enforced on such a pass; this field is how a reader tells "clean"
+       * apart from "not judged as a terminal".
+       */
+      auxiliaryPass: Schema.optional(Schema.Boolean),
+      /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
+      repairGaps: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
+  /**
+   * Namespaced, schema-typed extension slot (cross-cutting cascade Task 9,
+   * DEBT-REGISTER §3). Strategy-contributed metadata fields with no
+   * dedicated top-level forward at the `ExecutionEngine` boundary ride
+   * here — the engine literal forwards this ONE key verbatim into
+   * `TaskResult.metadata.extensions`, so future fields arrive with no
+   * engine edit. Deliberately NOT a deny-list pass-through of top-level
+   * `ReasoningMetadata` keys: an unenumerated top-level key still never
+   * reaches `TaskResult` (that would leak internal fields onto the public
+   * API surface instead of merely losing them).
+   */
+  extensions: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
 });
 export type ReasoningMetadata = typeof ReasoningMetadataSchema.Type;
 

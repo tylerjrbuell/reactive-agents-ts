@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("ReactiveStrategy", () => {
   it("should execute ReAct loop and return completed result", async () => {
@@ -19,9 +20,9 @@ describe("ReactiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("reactive");
     expect(result.status).toBe("completed");
@@ -49,9 +50,9 @@ describe("ReactiveStrategy", () => {
       },
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Mock returns empty text each turn → no FINAL ANSWER, no tools → loop detection
     // fires on consecutive thought steps. Post-W4 (single-owner Arbitrator), an
@@ -82,9 +83,9 @@ describe("ReactiveStrategy", () => {
       },
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Should have thought + action + observation steps in the first iteration
     // then a final answer thought in the second iteration
@@ -116,9 +117,9 @@ describe("ReactiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.metadata.tokensUsed).toBeGreaterThanOrEqual(0);
     expect(result.metadata.cost).toBeGreaterThanOrEqual(0);
@@ -138,9 +139,9 @@ describe("ReactiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(result.steps.length).toBe(1); // Just one thought step

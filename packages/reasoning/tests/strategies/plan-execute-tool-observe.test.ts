@@ -16,6 +16,7 @@ import { ToolService } from "@reactive-agents/tools";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /** Minimal ReasoningStep-ish shape the observation.tool-result tap receives. */
 interface ObsStepLike {
@@ -115,11 +116,11 @@ describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
     const { pipeline, observations } = recordingPipeline();
     const { layer: toolLayer } = makeRecordingToolService();
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({ ...baseInput, harnessPipeline: pipeline }).pipe(
         Effect.provide(Layer.merge(planExecuteTurns("web-search"), toolLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // BUG (#195): currently 0 — the tool_call branch never emits the tag.
@@ -134,11 +135,11 @@ describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
     const { pipeline } = recordingPipeline();
     const { executed, layer: toolLayer } = makeRecordingToolService();
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({ ...baseInput, harnessPipeline: pipeline }).pipe(
         Effect.provide(Layer.merge(planExecuteTurns("websearch"), toolLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Healing fuzzy-matches "websearch" → "web-search" before ToolService.execute.
@@ -151,11 +152,11 @@ describe("plan-execute tool_call → executeToolAndObserve (#195)", () => {
 
     // No MemoryService layer is provided; the run must resolve regardless
     // (semantic-memory store is OFF for plan-execute tool_call).
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({ ...baseInput, harnessPipeline: pipeline }).pipe(
         Effect.provide(Layer.merge(planExecuteTurns("web-search"), toolLayer)),
       ),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(observations.length).toBeGreaterThanOrEqual(1);

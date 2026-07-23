@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("AdaptiveStrategy", () => {
   it("should analyze task, select reactive strategy, and return completed result", async () => {
@@ -22,9 +23,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -38,6 +39,36 @@ describe("AdaptiveStrategy", () => {
     );
     expect(adaptiveStep).toBeDefined();
     expect(adaptiveStep!.content).toContain("reactive");
+  });
+
+  // Cross-cutting cascade Task 4 — adaptive builds ITS OWN terminal result
+  // via finalizeStrategyResult (never `return`s a sub-strategy's result
+  // verbatim), so every adaptive run — regardless of the dispatched
+  // sub-strategy — must carry adaptive's own verdict record. Judgment stays
+  // INERT (enforced:false) until Task 8. Reverting adaptive's return site to
+  // build the result via buildStrategyResult directly (bypassing the mint)
+  // must fail this test.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Classify the task", text: "REACTIVE" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: The capital of France is Paris." },
+    ]);
+
+    const program = executeAdaptive({
+      taskDescription: "What is the capital of France?",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      program.pipe(Effect.provide(layer)),
+    ));
+
+    expect(result.strategy).toBe("adaptive");
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 
   it("should default to reactive when analysis response is unrecognized", async () => {
@@ -55,9 +86,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -86,9 +117,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     expect(adaptiveStep?.content).toContain("reactive");
@@ -108,9 +139,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     expect(adaptiveStep?.content).toContain("reactive");
@@ -131,9 +162,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     const adaptiveStep = result.steps.find((s) => s.content.includes("[ADAPTIVE]"));
     // "compare" + "alternative" + "trade-offs" → tree-of-thought
@@ -193,9 +224,9 @@ describe("AdaptiveStrategy", () => {
       ],
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");
@@ -217,9 +248,9 @@ describe("AdaptiveStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Token usage should include both analysis and sub-strategy tokens
@@ -245,7 +276,7 @@ describe("AdaptiveStrategy", () => {
 
     // Task must be >15 words with no tools to bypass heuristic pre-classifier
     // and reach the LLM classification path that returns REFLEXION
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: "Analyze the following complex dataset and produce a comprehensive report that covers all key findings and anomalies detected",
         taskType: "query",
@@ -260,7 +291,7 @@ describe("AdaptiveStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.status).toBe("completed");

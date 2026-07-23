@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Helper to run reflexion with a TestLLM layer
 const run = (
@@ -22,7 +23,7 @@ const run = (
 
   const layer = TestLLMServiceLayer();
 
-  return Effect.runPromise(
+  return Effect.runPromise(provideTestEnvelope(
     executeReflexion({
       taskDescription: "Explain quantum entanglement briefly.",
       taskType: "explanation",
@@ -30,7 +31,7 @@ const run = (
       availableTools: [],
       config,
     }).pipe(Effect.provide(layer)),
-  );
+  ));
 };
 
 describe("ReflexionStrategy", () => {
@@ -61,7 +62,7 @@ describe("ReflexionStrategy", () => {
       { match: "Evaluate whether", text: "SATISFIED: The response is accurate and complete." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Test task",
         taskType: "query",
@@ -75,7 +76,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Steps: [ATTEMPT 1] thought + [CRITIQUE 1] observation
@@ -112,7 +113,7 @@ describe("ReflexionStrategy", () => {
     const layer = TestLLMServiceLayer([
       { match: "Evaluate whether", text: "SATISFIED: Great response." },
     ]);
-    const completed = await Effect.runPromise(
+    const completed = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Task",
         taskType: "query",
@@ -126,7 +127,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(completed.metadata.confidence).toBeGreaterThan(
       partial.metadata.confidence,
@@ -139,7 +140,7 @@ describe("ReflexionStrategy", () => {
     // but we can verify it runs without error when memory context is provided
     const layer = TestLLMServiceLayer([{ match: "memory", text: "Test response." }]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Test with memory",
         taskType: "query",
@@ -153,7 +154,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("reflexion");
     expect(result.steps.length).toBeGreaterThan(0);
@@ -176,7 +177,7 @@ describe("ReflexionStrategy", () => {
       { match: "Evaluate whether", text: "The response is missing detail about superposition." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Explain quantum entanglement",
         taskType: "explanation",
@@ -190,7 +191,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // With stagnation detection, should bail well before maxRetries
     const thoughtSteps = result.steps.filter((s) => s.type === "thought");
@@ -204,7 +205,7 @@ describe("ReflexionStrategy", () => {
       { text: "An improved response." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Explain quantum entanglement",
         taskType: "explanation",
@@ -218,7 +219,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("reflexion");
     expect(result.steps.length).toBeGreaterThan(0);
@@ -234,7 +235,7 @@ describe("ReflexionStrategy", () => {
       { match: "Evaluate whether", text: "SATISFIED: The response is thorough and well-researched." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Research and explain quantum computing",
         taskType: "research",
@@ -245,7 +246,7 @@ describe("ReflexionStrategy", () => {
         ],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("reflexion");
     expect(result.status).toBe("completed");
@@ -263,7 +264,7 @@ describe("ReflexionStrategy", () => {
       { match: "uniqueMarker99", text: "FINAL ANSWER: Improved explanation with superposition examples." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Explain quantum physics",
         taskType: "explanation",
@@ -277,7 +278,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // The improvement pass ran and produced a response with improved content
     expect(result.steps.length).toBeGreaterThanOrEqual(3); // initial + critique + improvement
@@ -301,7 +302,7 @@ describe("ReflexionStrategy", () => {
       { match: "Evaluate whether", text: "SATISFIED: complete and accurate." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Explain the offside rule in football.",
         taskType: "explanation",
@@ -315,7 +316,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Bug: result.output is "" (0 chars). Fix: synthesized fallback is non-empty.
     expect(result.output.trim().length).toBeGreaterThan(0);
@@ -328,7 +329,7 @@ describe("ReflexionStrategy", () => {
       { match: "Evaluate whether", text: "<think>UNSATISFIED: The response needs more detail.</think>" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Test thinking critique",
         taskType: "query",
@@ -342,7 +343,7 @@ describe("ReflexionStrategy", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Critique should NOT be empty — it should use thinking content
     const critiques = result.steps.filter(

@@ -8,6 +8,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { sanitizeAgentOutput } from "../../src/kernel/capabilities/verify/quality-utils.js";
 import { TOT_TIER_LIMITS, getToTDepthForTier } from "../../src/strategies/tree-of-thought.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // ── Phase 2.1: TOT_TIER_LIMITS config ────────────────────────────────────────
 
@@ -81,7 +82,7 @@ describe("ToT BFS convergence check", () => {
       { match: "Selected Approach", text: "FINAL ANSWER: Answer from stagnant tree." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Solve something",
         taskType: "query",
@@ -96,7 +97,7 @@ describe("ToT BFS convergence check", () => {
         },
         tier: "large",
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     // Should have a stagnation message in steps
@@ -129,7 +130,7 @@ describe("ToT BFS convergence check", () => {
       { match: "Selected Approach", text: "FINAL ANSWER: Full depth answer." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Progressive improvement task",
         taskType: "query",
@@ -144,7 +145,7 @@ describe("ToT BFS convergence check", () => {
         },
         tier: "frontier",
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     // No stagnation exit
@@ -165,7 +166,7 @@ describe("ToT tier-constrained Phase 2 iteration", () => {
       { match: "Selected Approach", text: "FINAL ANSWER: Tier constrained answer." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "Simple task",
         taskType: "query",
@@ -180,7 +181,7 @@ describe("ToT tier-constrained Phase 2 iteration", () => {
         },
         tier: "local",
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("tree-of-thought");
     expect(result.status).toBe("completed");

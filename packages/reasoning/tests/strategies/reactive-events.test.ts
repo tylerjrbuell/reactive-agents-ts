@@ -7,6 +7,7 @@ import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { makeObservableLLM } from "../../src/index.js";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 // Using the typed eb.on() overload — `event` is automatically narrowed to
@@ -21,7 +22,7 @@ const collectReasoningEvents = async (
   const captured: ReasoningStepEvent[] = [];
   const llmLayer = TestLLMServiceLayer(llmResponses);
 
-  return Effect.runPromise(
+  return Effect.runPromise(provideTestEnvelope(
     Effect.gen(function* () {
       const eb = yield* EventBus;
 
@@ -48,7 +49,7 @@ const collectReasoningEvents = async (
     }).pipe(
       Effect.provide(Layer.merge(llmLayer, EventBusLive)),
     ),
-  );
+  ));
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
 
     // Run WITHOUT EventBus — should not throw
     await expect(
-      Effect.runPromise(
+      Effect.runPromise(provideTestEnvelope(
         executeReactive({
           taskDescription: "no bus test",
           taskType: "query",
@@ -93,7 +94,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
           availableTools: [],
           config: defaultReasoningConfig,
         }).pipe(Effect.provide(llmLayer)),
-      ),
+      )),
     ).resolves.toBeDefined();
   });
 
@@ -121,7 +122,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
     const tracerWithBus = Layer.provideMerge(ThoughtTracerLive, EventBusLive);
     const testLayer = Layer.mergeAll(llmLayer, tracerWithBus);
 
-    const capturedSteps = await Effect.runPromise(
+    const capturedSteps = await Effect.runPromise(provideTestEnvelope(
       Effect.gen(function* () {
         yield* executeReactive({
           taskDescription: "tracer integration",
@@ -134,7 +135,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
         const tracer = yield* ThoughtTracerService;
         return yield* tracer.getThoughtChain("reactive");
       }).pipe(Effect.provide(testLayer)),
-    );
+    ));
 
     expect(capturedSteps.length).toBeGreaterThan(0);
   });
@@ -146,7 +147,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
       { text: "FINAL ANSWER: done." },
     ]);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       Effect.gen(function* () {
         const eb = yield* EventBus;
         // Typed on() — action field is directly accessible without cast
@@ -167,7 +168,7 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
           },
         });
       }).pipe(Effect.provide(Layer.merge(llmLayer, EventBusLive))),
-    );
+    ));
 
     const actionEvents = captured.filter((e) => !!e.action);
     // Regardless of whether tool service is available, action step may be published
@@ -226,7 +227,7 @@ describe("chokepoint emits ContextPressure for the context-window gauge", () => 
       Layer.provide(injectResolvedWindow(32_768).pipe(Layer.provide(TestLLMServiceLayer([{ text: "FINAL ANSWER: 42." }])))),
     );
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       Effect.gen(function* () {
         const eb = yield* EventBus;
         yield* eb.on("ContextPressure", (event) =>
@@ -246,7 +247,7 @@ describe("chokepoint emits ContextPressure for the context-window gauge", () => 
           },
         });
       }).pipe(Effect.provide(Layer.merge(llmLayer, EventBusLive))),
-    );
+    ));
 
     // Load-bearing: ≥1 ContextPressure reached the bus from the chokepoint.
     expect(captured.length).toBeGreaterThan(0);

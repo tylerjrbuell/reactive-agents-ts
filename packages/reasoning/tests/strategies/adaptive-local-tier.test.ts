@@ -11,6 +11,7 @@ import { Effect } from "effect";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const HEAVY_ROUTED_TASK =
   "Build a deployment pipeline step by step with logging and rollback and monitoring across stages";
@@ -24,7 +25,7 @@ describe("adaptive local-tier default (strategy honesty, v0.12)", () => {
       { text: "FINAL ANSWER: pipeline built." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: HEAVY_ROUTED_TASK,
         taskType: "query",
@@ -33,7 +34,7 @@ describe("adaptive local-tier default (strategy honesty, v0.12)", () => {
         config: defaultReasoningConfig,
         contextProfile: { tier: "local" },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("adaptive");
     expect(result.metadata.selectedStrategy).toBe("reactive");
@@ -49,7 +50,7 @@ describe("adaptive local-tier default (strategy honesty, v0.12)", () => {
       { text: "FINAL ANSWER: pipeline built." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeAdaptive({
         taskDescription: HEAVY_ROUTED_TASK,
         taskType: "query",
@@ -58,7 +59,7 @@ describe("adaptive local-tier default (strategy honesty, v0.12)", () => {
         config: defaultReasoningConfig,
         contextProfile: { tier: "mid" },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const honestStep = result.steps.find((s) => s.content.includes("Local tier"));
     expect(honestStep).toBeUndefined();

@@ -10,6 +10,7 @@ import { Effect } from "effect";
 import { executeDirect } from "../../src/strategies/direct.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("DirectStrategy", () => {
   it("returns ReasoningResult with strategy:'direct' on a single LLM call", async () => {
@@ -25,11 +26,34 @@ describe("DirectStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     expect(result.strategy).toBe("direct");
     expect(result.status).toBe("completed");
     expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  // Cross-cutting cascade Task 4 — direct's own terminal mint
+  // (finalizeStrategyResult) always records a verdict. Judgment stays INERT
+  // (enforced:false) until Task 8. Reverting direct to build its result via
+  // buildStrategyResult directly (bypassing the mint) must fail this test.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "What is", text: "FINAL ANSWER: Paris" },
+    ]);
+
+    const program = executeDirect({
+      taskDescription: "What is the capital of France?",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
+
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 
   it("defaults maxIterations to 1 (single turn)", async () => {
@@ -46,7 +70,7 @@ describe("DirectStrategy", () => {
       // maxIterations omitted — should default to 1
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     // Single iteration, no FINAL ANSWER → terminates non-success.
     // Steps count is small (1 turn = ~1 thought + ~1 observation).
@@ -69,7 +93,7 @@ describe("DirectStrategy", () => {
       maxIterations: 2,
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     expect(result.strategy).toBe("direct");
     // Up to 2 iterations allowed — but if FINAL ANSWER comes on turn 1 it stops
@@ -89,7 +113,7 @@ describe("DirectStrategy", () => {
       maxIterations: 99,
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     // Even with maxIterations:99 requested, kernel runs at most 3 iterations.
     // Steps from a 3-iter loop: ~3 thoughts + (maybe) observations = ≤6
@@ -109,7 +133,7 @@ describe("DirectStrategy", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     expect(result.strategy).toBe("direct");
     // Memory context flowed into the kernel — no failure on memory injection

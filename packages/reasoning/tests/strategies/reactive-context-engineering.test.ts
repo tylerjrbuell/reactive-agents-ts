@@ -14,6 +14,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-agents/tools";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Pin pre-lazy-tool-disclosure contract — see f51d7d87.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
@@ -92,7 +93,7 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Write a file",
         taskType: "file-operation",
@@ -110,7 +111,7 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
         ],
         config: testConfig,
       }).pipe(Effect.provide(capturingLLMLayer)),
-    );
+    ));
 
     // Verify the captured content includes tool name and parameter names
     expect(capturedContent).toContain("file-write");
@@ -148,7 +149,7 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Test task",
         taskType: "test",
@@ -157,7 +158,7 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
         // no availableToolSchemas
         config: testConfig,
       }).pipe(Effect.provide(capturingLLMLayer)),
-    );
+    ));
 
     // Should show tool name without schema details
     expect(capturedContent).toContain("my-tool");
@@ -194,9 +195,9 @@ describe("Sprint 0.2: Error messages enriched with tool schema", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     // Find the observation step after the failed tool call
     const observations = result.steps.filter((s) => s.type === "observation");
@@ -244,9 +245,9 @@ describe("Sprint 1C: Tool result summarization", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const observations = result.steps.filter((s) => s.type === "observation");
     if (observations.length > 0) {
@@ -289,9 +290,9 @@ describe("Sprint 1C: Tool result summarization", () => {
       });
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
-    );
+    ));
 
     const observations = result.steps.filter((s) => s.type === "observation");
     expect(observations.length).toBeGreaterThanOrEqual(1);
@@ -341,7 +342,7 @@ describe("Sprint 1B: Context compaction after N steps", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Multi-step task",
         taskType: "complex",
@@ -355,7 +356,7 @@ describe("Sprint 1B: Context compaction after N steps", () => {
           },
         },
       }).pipe(Effect.provide(steppingLLMLayer)),
-    );
+    ));
 
     // Should complete (via early termination or FINAL ANSWER)
     expect(result.status).toBe("completed");
@@ -395,7 +396,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Explain something in detail",
         taskType: "explanation",
@@ -409,7 +410,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
           },
         },
       }).pipe(Effect.provide(earlyTermLLMLayer)),
-    );
+    ));
 
     // Should exit on the very first call via LLMEndTurn
     expect(result.status).toBe("completed");
@@ -425,7 +426,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
     const layer = TestLLMServiceLayer();
     // Default response: "Test response" (13 chars) — below the 50-char threshold
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "An impossible task",
         taskType: "query",
@@ -439,7 +440,7 @@ describe("Sprint 2D: Early termination on end_turn", () => {
           },
         },
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     // Mock LLM has no capabilities() → text-based path → "Test response" (13 chars)
     // is below fast-path threshold → loop detection fires → graceful or partial
@@ -474,7 +475,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Test temperature override",
         taskType: "test",
@@ -502,7 +503,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
           temperature: 0.3,
         },
       }).pipe(Effect.provide(capturingLLMLayer)),
-    );
+    ));
 
     // Profile temperature (0.3) should override config temperature (0.7)
     expect(capturedTemperature).toBe(0.3);
@@ -533,7 +534,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Test maxIterations override",
         taskType: "test",
@@ -564,7 +565,7 @@ describe("Profile overrides for temperature and maxIterations", () => {
           temperature: 0.3,
         },
       }).pipe(Effect.provide(countingLLMLayer)),
-    );
+    ));
 
     // Profile maxIterations (3) should override config maxIterations (10)
     // Loop should stop at or before 3 iterations — loop detection may fire before max
@@ -610,7 +611,7 @@ describe("toolSchemaDetail from context profile", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Write a file",
         taskType: "file-operation",
@@ -640,7 +641,7 @@ describe("toolSchemaDetail from context profile", () => {
           toolSchemaDetail: "names-and-types",
         },
       }).pipe(Effect.provide(capturingLLMLayer)),
-    );
+    ));
 
     // New context engine: compact tool reference with param names and types
     // Required params marked with ★, no verbose descriptions
@@ -678,7 +679,7 @@ describe("toolSchemaDetail from context profile", () => {
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
     } as any);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Write a file and search the web",
         taskType: "multi-tool",
@@ -715,7 +716,7 @@ describe("toolSchemaDetail from context profile", () => {
           toolSchemaDetail: "names-only",
         },
       }).pipe(Effect.provide(capturingLLMLayer)),
-    );
+    ));
 
     // names-only format with no required tools: new context engine omits pinned ref
     // The prompt still includes task and RULES but tool names aren't in the ref block

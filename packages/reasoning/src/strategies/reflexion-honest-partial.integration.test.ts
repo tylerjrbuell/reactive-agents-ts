@@ -25,6 +25,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeReflexion } from "./reflexion.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -80,7 +81,10 @@ const runReflexion = (
       availableToolSchemas: [GATHER_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario, gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario, gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("#40 (reflexion) — a sub-kernel's unverified ship never reaches the caller as completed", () => {
@@ -111,5 +115,19 @@ describe("#40 (reflexion) — a sub-kernel's unverified ship never reaches the c
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.budgetTerminalPartial).toBeUndefined();
     expect(meta.harnessAuthoredOutput).toBeUndefined();
+  });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runReflexion(cleanScenario(), {
+      taskDescription: "What is 2 + 2?",
+      taskType: "qa",
+      memoryContext: "",
+      availableTools: [],
+      availableToolSchemas: [],
+    });
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 });

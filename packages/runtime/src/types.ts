@@ -258,6 +258,30 @@ export interface ExecutionContextMetadata {
         readonly path?: string;
         readonly op?: string;
       }>;
+      /**
+       * Terminal judgment record (cross-cutting cascade, 2026-07-22/23).
+       * Mirrors `ReasoningMetadataSchema.verdict` structurally (cross-package
+       * — same pattern as `runLedger` above). Forwarded verbatim onto
+       * `TaskResult.metadata.verdict` (Task 9) so trust receipts can read
+       * the terminal judgment.
+       */
+      verdict?: {
+        readonly enforced: boolean;
+        readonly groundedOnRequired?: boolean;
+        readonly contractSatisfied?: boolean;
+        readonly failed: readonly string[];
+        /** Set when the pass was an auxiliary fragment (judged, never enforced). */
+        readonly auxiliaryPass?: boolean;
+        readonly repairGaps?: readonly string[];
+      };
+      /**
+       * Namespaced, schema-typed extension slot (cross-cutting cascade
+       * Task 9, DEBT-REGISTER §3). Mirrors `ReasoningMetadataSchema.extensions`
+       * structurally. The engine forwards this ONE key verbatim onto
+       * `TaskResult.metadata.extensions` — future strategy-contributed
+       * fields ride here with no engine edit and no top-level leak.
+       */
+      extensions?: Readonly<Record<string, unknown>>;
     };
   };
   /** Flattened step array written after reasoning completes */
