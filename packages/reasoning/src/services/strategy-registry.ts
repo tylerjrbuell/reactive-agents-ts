@@ -1,6 +1,6 @@
 // File: src/services/strategy-registry.ts
 import { Context, Effect, Layer, Ref } from "effect";
-import type { ReasoningResult, ReasoningStrategy } from "../types/index.js";
+import type { ReasoningStrategy } from "../types/index.js";
 import type { ReasoningConfig } from "../types/config.js";
 import {
   StrategyNotFoundError,
@@ -23,6 +23,7 @@ import { executeCodeAction } from "../strategies/code-action.js";
 import { executeBlueprint } from "../strategies/blueprint.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { RunEnvelope } from "../kernel/envelope/run-envelope.js";
+import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 
 // ─── Strategy function type ───
 
@@ -93,7 +94,7 @@ export type StrategyFn = (input: {
    */
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
 }) => Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 >;

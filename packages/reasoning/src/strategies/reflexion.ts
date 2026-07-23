@@ -21,7 +21,6 @@ import { gatewayComplete } from "../kernel/llm-gateway.js";
 import {
   buildKernelInput,
   type CrossCuttingInput,
-  type StrategyHitlRails,
 } from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import {
@@ -29,7 +28,7 @@ import {
   continueWith,
   terminateWith,
 } from "../kernel/loop/iterate-until.js";
-import type { KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
+import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import {
   makeStrategyEmitLog,
   emitPhaseEnd,
@@ -44,6 +43,7 @@ import {
 import {
   finalizeStrategyResult,
   finalizePausedStrategyResult,
+  type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
@@ -80,7 +80,7 @@ import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/to
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
 
-interface ReflexionInput extends StrategyHitlRails {
+interface ReflexionInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -149,7 +149,7 @@ interface ReflexionInput extends StrategyHitlRails {
 export const executeReflexion = (
   input: ReflexionInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError,
   LLMService | RunEnvelope
 > =>
@@ -176,6 +176,20 @@ export const executeReflexion = (
     // silent runtime gap. `verifier` is intentionally absent: reflexion's own
     // critique loop is its verification; threading a terminal verifier into
     // each sub-pass would change behaviour.
+    // Cascade Task 5 — INTERIM. The HITL rails now come off the RunEnvelope
+    // (they are no longer declared on ReflexionInput). The kernel still reads
+    // them from `KernelInput`, so they are spread onto every kernel pass here;
+    // Task 6 makes `runKernel` merge the envelope itself and this block dies.
+    const envelope = yield* RunEnvelope;
+    const envelopeHitlRails: Pick<
+      KernelInput,
+      "approvalPolicy" | "approvalDecision" | "interactionResponse"
+    > = {
+      approvalPolicy: envelope.rails.approvalPolicy,
+      approvalDecision: envelope.rails.approvalDecision,
+      interactionResponse: envelope.rails.interactionResponse,
+    };
+
     const crossCutting: CrossCuttingInput = {
       resultCompression: input.resultCompression,
       agentId: input.agentId,
@@ -191,13 +205,6 @@ export const executeReflexion = (
       budgetLimits: input.budgetLimits,
       calibration: input.calibration,
       auditRationale: input.auditRationale,
-      // Durable HITL rails (Phase D) — every generate/improve sub-kernel must
-      // carry the gate, or a `requiresApproval` tool runs unattended inside a
-      // reflexion pass (2026-07-22 defect: reactive.ts was the only site that
-      // threaded these).
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
     };
 
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
@@ -220,14 +227,20 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genPass = yield* runPass(reactKernel, buildKernelInput(crossCutting, {
-      task: buildGenerationPrompt(input, null),
-      systemPrompt: genSystemPrompt,
-      priorContext: genPriorContext,
-      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-      allToolSchemas: capabilitySnapshot.allToolSchemas,
-      temperature: 0.7,
-    }), {
+    const genPass = yield* runPass(reactKernel, {
+      ...buildKernelInput(crossCutting, {
+        task: buildGenerationPrompt(input, null),
+        systemPrompt: genSystemPrompt,
+        priorContext: genPriorContext,
+        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+        allToolSchemas: capabilitySnapshot.allToolSchemas,
+        temperature: 0.7,
+      }),
+      // Durable HITL rails (Phase D) — every generate/improve sub-kernel must
+      // carry the gate, or a `requiresApproval` tool runs unattended inside a
+      // reflexion pass (2026-07-22 defect). INTERIM: see envelopeHitlRails.
+      ...envelopeHitlRails,
+    }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
       kernelType: "react",
@@ -609,6 +622,8 @@ export const executeReflexion = (
               allToolSchemas: capabilitySnapshot.allToolSchemas,
               temperature: 0.6,
             }),
+            // Durable HITL rails off the envelope (INTERIM — see above).
+            ...envelopeHitlRails,
             // Per-pass extra outside the cross-cutting/per-pass Picks; spread
             // AFTER the builder (not cross-cutting, so no drop risk).
             blockedTools,

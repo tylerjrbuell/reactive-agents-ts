@@ -12,6 +12,7 @@ import { defaultReasoningConfig } from "../types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { StrategyFn } from "./strategy-registry.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
 
 describe("ReasoningService provides RunEnvelope to strategy effects", () => {
   const llmLayer = TestLLMServiceLayer([
@@ -31,19 +32,17 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
     const probe: StrategyFn = () =>
       Effect.gen(function* () {
         const env = yield* RunEnvelope;
-        return {
-          strategy: "reflexion" as const,
+        // Task 5: StrategyFn returns the branded JudgedReasoningResult — even a
+        // probe strategy has to cross the terminal mint.
+        return yield* finalizeStrategyResult({
+          strategy: "reflexion",
           steps: [],
           output: env.policy.fabricationGuard ?? "none",
-          metadata: {
-            duration: 0,
-            tokensUsed: 0,
-            cost: 0,
-            stepsCount: 0,
-            confidence: 1,
-          },
-          status: "completed" as const,
-        };
+          status: "completed",
+          start: Date.now(),
+          totalTokens: 0,
+          totalCost: 0,
+        });
       });
 
     const program = Effect.gen(function* () {
@@ -70,19 +69,17 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
     const probe: StrategyFn = () =>
       Effect.gen(function* () {
         const env = yield* RunEnvelope;
-        return {
-          strategy: "reflexion" as const,
+        // Task 5: StrategyFn returns the branded JudgedReasoningResult — even a
+        // probe strategy has to cross the terminal mint.
+        return yield* finalizeStrategyResult({
+          strategy: "reflexion",
           steps: [],
           output: env.policy.fabricationGuard ?? "none",
-          metadata: {
-            duration: 0,
-            tokensUsed: 0,
-            cost: 0,
-            stepsCount: 0,
-            confidence: 1,
-          },
-          status: "completed" as const,
-        };
+          status: "completed",
+          start: Date.now(),
+          totalTokens: 0,
+          totalCost: 0,
+        });
       });
 
     const program = Effect.gen(function* () {

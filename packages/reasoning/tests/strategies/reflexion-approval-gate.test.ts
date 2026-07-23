@@ -1,8 +1,8 @@
 // reflexion-approval-gate.test.ts — Durable HITL (Phase D) forwarding into
 // reflexion's GENERATE sub-kernel, and the cascade Task 4 pause mint.
 //
-// Mirrors reactive-approval-gate.test.ts (executeReactive → kernelInput.
-// approvalPolicy → runner → act gate → PAUSE), but for reflexion's generate
+// Mirrors reactive-approval-gate.test.ts (RunEnvelope.rails.approvalPolicy →
+// kernelInput.approvalPolicy → runner → act gate → PAUSE), but for generate
 // pass — proving the gate reaches a sub-kernel strategy reaches, not just
 // reactive's own kernel.
 //
@@ -18,7 +18,7 @@ import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
 beforeAll(() => { process.env.RA_LAZY_TOOLS = "0"; });
@@ -58,13 +58,14 @@ describe("ReflexionStrategy — durable HITL approval gate forwarding into GENER
         memoryContext: "",
         availableTools: ["add"],
         config: defaultReasoningConfig,
-        // The gate under test — reaches reflexion's GENERATE sub-kernel.
-        approvalPolicy: { mode: "detach", tools: new Set(["add"]) },
       });
     });
 
     const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
+      // The gate under test — reaches reflexion's GENERATE sub-kernel. Cascade
+      // Task 5: the policy travels ONLY on the envelope now.
+      buildRunEnvelope({ approvalPolicy: { mode: "detach", tools: new Set(["add"]) } }),
     ));
 
     const meta = result.metadata as {

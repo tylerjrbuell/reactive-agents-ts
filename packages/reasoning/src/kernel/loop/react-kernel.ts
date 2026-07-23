@@ -157,16 +157,6 @@ export const executeReActKernel = (
           calibration: input.calibration,
           harnessPipeline: input.harnessPipeline,
           budgetLimits: input.budgetLimits,
-          grounding: input.grounding,
-          fabricationGuard: input.fabricationGuard,
-          stallPolicy: input.stallPolicy,
-          // Durable HITL rails (Phase D): the per-step ReAct kernel is where
-          // plan-execute actually calls tools, so the approval gate must ride
-          // with it. Dropped here until 2026-07-22 → a `requiresApproval` tool
-          // executed unattended on every plan-execute step.
-          approvalPolicy: input.approvalPolicy,
-          approvalDecision: input.approvalDecision,
-          interactionResponse: input.interactionResponse,
         },
         {
           task: input.task,
@@ -178,6 +168,22 @@ export const executeReActKernel = (
           temperature: input.temperature,
         },
       ),
+      // Cascade Task 5: the seven cross-cutting fields left `CrossCuttingInput`
+      // (they ride `RunEnvelope` now, and Task 6 merges them inside `runKernel`
+      // itself). This wrapper is NOT a strategy — it is the kernel-level
+      // backwards-compatible entry its callers hand a `ReActKernelInput` to —
+      // so it keeps forwarding whatever its caller passed, spread after the
+      // builder like the other non-Pick fields below.
+      grounding: input.grounding,
+      fabricationGuard: input.fabricationGuard,
+      stallPolicy: input.stallPolicy,
+      // Durable HITL rails (Phase D): the per-step ReAct kernel is where
+      // plan-execute actually calls tools, so the approval gate must ride
+      // with it. Dropped here until 2026-07-22 → a `requiresApproval` tool
+      // executed unattended on every plan-execute step.
+      approvalPolicy: input.approvalPolicy,
+      approvalDecision: input.approvalDecision,
+      interactionResponse: input.interactionResponse,
       blockedTools: input.blockedTools,
       strictToolDependencyChain: input.strictToolDependencyChain,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),

@@ -30,7 +30,6 @@ import {
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
 import { compileRunContract } from "../kernel/contract/run-contract.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -53,6 +52,7 @@ import {
 import {
   finalizeStrategyResult,
   finalizePausedStrategyResult,
+  type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
@@ -93,7 +93,7 @@ import {
 } from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
 
-interface PlanExecuteInput extends StrategyHitlRails {
+interface PlanExecuteInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -170,18 +170,14 @@ interface PlanExecuteInput extends StrategyHitlRails {
    */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /**
-   * Declared TaskContract (spread from the reasoning-service params via
-   * `.withContract`). Its `forbidden` tools seed the deny-list above so the
-   * safety gate is production-real, not test-only.
-   */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
 }
 
 export const executePlanExecute = (
   input: PlanExecuteInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 > =>
@@ -190,6 +186,10 @@ export const executePlanExecute = (
     const { llm, toolService, eventBus } = services;
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/plan-execute.ts:emitLog");
+
+    // Cascade Task 5: cross-cutting policy + HITL rails come off the ONE
+    // run-wide carrier, never off `input`.
+    const envelope = yield* RunEnvelope;
 
     // Optional PlanStore for persistence (available when memory layer is enabled)
     const planStoreOpt = yield* Effect.serviceOption(PlanStoreService).pipe(
@@ -217,7 +217,7 @@ export const executePlanExecute = (
     // `.withContract` signal). Threaded into every dispatch via the primitive.
     const forbiddenToolList: readonly string[] =
       input.forbiddenTools ??
-      (input.taskContract?.tools
+      (envelope.policy.taskContract?.tools
         ?.filter((t) => t.kind === "forbidden")
         .map((t) => t.name) ??
         []);
@@ -227,6 +227,13 @@ export const executePlanExecute = (
       ...input,
       forbiddenTools: forbiddenToolList,
       ledgerSink: ledgerRef,
+      // Durable HITL rails (Phase D) — INTERIM (Task 5 → Task 6): the per-step
+      // executor still receives them on its narrowed input (its `tool_call`
+      // branch dispatches OUTSIDE any kernel, so it gates for itself), but the
+      // values now come off the envelope rather than off `PlanExecuteInput`.
+      approvalPolicy: envelope.rails.approvalPolicy,
+      approvalDecision: envelope.rails.approvalDecision,
+      interactionResponse: envelope.rails.interactionResponse,
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
     };
     let totalTokens = 0;

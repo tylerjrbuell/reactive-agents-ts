@@ -1,7 +1,7 @@
 // reactive-approval-gate.test.ts — Durable HITL (Phase D) full-chain forwarding.
 //
 // Proves the approval policy threads ALL the way through the reactive strategy:
-// executeReactive(input.approvalPolicy) → kernelInput.approvalPolicy → runner →
+// RunEnvelope.rails.approvalPolicy → kernelInput.approvalPolicy → runner →
 // act gate → PAUSE (terminatedBy "awaiting-approval", tool NOT executed). This is
 // the chain the runtime live path uses; a forwarding gap here is why a real run
 // would execute a gated tool instead of pausing.
@@ -11,7 +11,7 @@ import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
 beforeAll(() => { process.env.RA_LAZY_TOOLS = "0"; });
@@ -64,13 +64,14 @@ describe("ReactiveStrategy — durable HITL approval gate forwarding", () => {
         // the gated call never "executes".
         requiredTools: ["add"],
         config: testConfig,
-        // The gate under test:
-        approvalPolicy: { mode: "detach", tools: new Set(["add"]) },
       });
     });
 
     const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(testLLMLayer, toolsLayer))),
+      // The gate under test — cascade Task 5: the policy reaches the strategy
+      // ONLY via the envelope; `ReactiveInput` no longer declares it.
+      buildRunEnvelope({ approvalPolicy: { mode: "detach", tools: new Set(["add"]) } }),
     ));
 
     const meta = result.metadata as {

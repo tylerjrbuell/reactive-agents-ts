@@ -160,6 +160,11 @@ export { computeDeliverableReport } from "./kernel/contract/deliverable-report.j
 // action/observation ledger pairs the kernel act phase writes, so deliverable
 // receipts verify on the engine path too (2026-07-11 inline-loop fix).
 export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
+// `buildStrategyResult` is deliberately NOT re-exported here (cascade Task 5).
+// It stays a module-level export of `step-utils.ts` for exactly one consumer —
+// `finalize-result.ts`, which wraps it in the terminal mint. Publishing it would
+// hand callers an un-judged result constructor and reopen the bypass the brand
+// on `JudgedReasoningResult` exists to close.
 export { finalizeStrategyResult } from "./kernel/capabilities/sense/finalize-result.js";
 export type {
   JudgedReasoningResult,

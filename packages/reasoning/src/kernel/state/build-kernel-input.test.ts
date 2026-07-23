@@ -46,12 +46,32 @@ const crossCutting: CrossCuttingInput = {
   calibration: { steeringCompliance: 0.8 } as never,
   harnessPipeline: { transform: () => undefined } as never,
   budgetLimits: { tokenLimit: 100_000, warningRatio: 0.9 },
-  // Durable HITL rails — REQUIRED keys on the bundle (2026-07-22): a strategy
-  // that omits them no longer compiles, because omitting `approvalPolicy` is a
-  // silent HITL bypass, not a degraded feature.
+};
+
+/**
+ * Cascade Task 5: the seven cross-cutting fields left `CrossCuttingInput` — a
+ * strategy no longer declares or forwards them. `reactive.ts` still puts them
+ * on its `KernelInput` literal (INTERIM, until Task 6 merges the envelope
+ * inside `runKernel`), but reads them off `RunEnvelope`. Modelled here so the
+ * key-set drop-guard below still pins reactive's FULL literal.
+ */
+const envelopeSourced: Pick<
+  KernelInput,
+  | "approvalPolicy"
+  | "approvalDecision"
+  | "interactionResponse"
+  | "grounding"
+  | "fabricationGuard"
+  | "stallPolicy"
+  | "taskContract"
+> = {
   approvalPolicy: { mode: "detach", tools: new Set(["risky-tool"]) },
   approvalDecision: undefined,
   interactionResponse: undefined,
+  grounding: undefined,
+  fabricationGuard: "block",
+  stallPolicy: undefined,
+  taskContract: undefined,
 };
 
 const basePerPass: Omit<PerPassInput, "verifier"> = {
@@ -102,11 +122,8 @@ function reactiveHandBuilt(verifier: Verifier | undefined): KernelInput {
     verifier,
     harnessPipeline: crossCutting.harnessPipeline,
     budgetLimits: crossCutting.budgetLimits,
-    // Durable HITL rails — reactive.ts sets all three on its literal; the
-    // builder must too, or a strategy migrated onto it loses the approval gate.
-    approvalPolicy: crossCutting.approvalPolicy,
-    approvalDecision: crossCutting.approvalDecision,
-    interactionResponse: crossCutting.interactionResponse,
+    // Envelope-sourced on reactive's literal (see `envelopeSourced`).
+    ...envelopeSourced,
   };
 }
 
@@ -128,7 +145,10 @@ describe("buildKernelInput — reactive.ts equivalence (FM-I #195)", () => {
   it("reconstructs the hand-built literal field-for-field (no explicit verifier, env off)", () => {
     delete process.env.REACTIVE_AGENTS_NOOP_VERIFIER;
     const verifier = resolveVerifier(undefined);
-    const built = buildKernelInput(crossCutting, { ...basePerPass, verifier });
+    const built = {
+      ...buildKernelInput(crossCutting, { ...basePerPass, verifier }),
+      ...envelopeSourced,
+    };
     expect(built).toEqual(reactiveHandBuilt(verifier));
     expect(built.verifier).toBeUndefined();
   });
@@ -136,7 +156,10 @@ describe("buildKernelInput — reactive.ts equivalence (FM-I #195)", () => {
   it("substitutes noopVerifier when REACTIVE_AGENTS_NOOP_VERIFIER=1 and no explicit verifier", () => {
     process.env.REACTIVE_AGENTS_NOOP_VERIFIER = "1";
     const verifier = resolveVerifier(undefined);
-    const built = buildKernelInput(crossCutting, { ...basePerPass, verifier });
+    const built = {
+      ...buildKernelInput(crossCutting, { ...basePerPass, verifier }),
+      ...envelopeSourced,
+    };
     expect(built).toEqual(reactiveHandBuilt(verifier));
     expect(built.verifier).toBe(noopVerifier);
   });
@@ -144,14 +167,20 @@ describe("buildKernelInput — reactive.ts equivalence (FM-I #195)", () => {
   it("an explicit verifier wins over the noop env branch", () => {
     process.env.REACTIVE_AGENTS_NOOP_VERIFIER = "1";
     const verifier = resolveVerifier(customVerifier);
-    const built = buildKernelInput(crossCutting, { ...basePerPass, verifier });
+    const built = {
+      ...buildKernelInput(crossCutting, { ...basePerPass, verifier }),
+      ...envelopeSourced,
+    };
     expect(built).toEqual(reactiveHandBuilt(verifier));
     expect(built.verifier).toBe(customVerifier);
   });
 
   it("pins the exact KernelInput key set reactive sets (drop-guard)", () => {
     const verifier = resolveVerifier(undefined);
-    const built = buildKernelInput(crossCutting, { ...basePerPass, verifier });
+    const built = {
+      ...buildKernelInput(crossCutting, { ...basePerPass, verifier }),
+      ...envelopeSourced,
+    };
     expect(new Set(Object.keys(built))).toEqual(
       new Set(Object.keys(reactiveHandBuilt(verifier))),
     );

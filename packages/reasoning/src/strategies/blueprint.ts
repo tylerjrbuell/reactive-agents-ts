@@ -50,7 +50,10 @@ import {
   emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
-import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
@@ -62,7 +65,6 @@ import { executeBlueprintWorker } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
@@ -74,7 +76,7 @@ const STRATEGY = "blueprint" as const;
 // Mirrors PlanExecuteInput's shape (the registry widens via `as unknown as
 // StrategyFn`, so the extra fields beyond the base StrategyFn input are safe).
 
-interface BlueprintInput extends StrategyHitlRails {
+interface BlueprintInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -101,9 +103,8 @@ interface BlueprintInput extends StrategyHitlRails {
    *  primitive. `forbiddenTools` defaults to the declared `taskContract` deny-list. */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** Declared TaskContract (spread from the reasoning-service params via
-   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
 }
 
 // ── Concurrency tier/capability branch ───────────────────────────────────────
@@ -145,7 +146,7 @@ function resolveWorkerConcurrency(input: BlueprintInput): number {
 export const executeBlueprint = (
   input: BlueprintInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 > =>
@@ -155,13 +156,16 @@ export const executeBlueprint = (
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog");
 
+    // Cascade Task 5: cross-cutting policy comes off the ONE run-wide carrier.
+    const envelope = yield* RunEnvelope;
+
     // Durable HITL (Phase D): blueprint dispatches its plan through the 0-LLM
     // DAG worker, which calls tools directly — there is no kernel act phase, so
     // the approval gate CANNOT fire on this path. Executing a `requiresApproval`
     // tool unattended is not an acceptable degrade, and hard-failing would break
     // adaptive routing (which can pick blueprint), so route to the gate-capable
     // reactive strategy instead and say so in the trace. (2026-07-22)
-    if (input.approvalPolicy?.mode === "detach") {
+    if (envelope.rails.approvalPolicy?.mode === "detach") {
       yield* emitLog({
         _tag: "metric",
         name: "blueprint_degraded_to_reactive",
@@ -182,7 +186,7 @@ export const executeBlueprint = (
     // declared TaskContract's forbidden tools (the production `.withContract` signal).
     const forbiddenToolList: readonly string[] =
       input.forbiddenTools ??
-      (input.taskContract?.tools
+      (envelope.policy.taskContract?.tools
         ?.filter((t) => t.kind === "forbidden")
         .map((t) => t.name) ??
         []);

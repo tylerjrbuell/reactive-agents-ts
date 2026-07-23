@@ -17,7 +17,12 @@ import { ToolService } from "@reactive-agents/tools";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import {
+  provideTestEnvelope,
+  buildRunEnvelope,
+  emptyRunEnvelope,
+  type RunEnvelopeData,
+} from "../../src/kernel/envelope/run-envelope.js";
 
 const TOOL_SCHEMA = {
   name: "search",
@@ -69,6 +74,7 @@ function recordingToolLayer() {
 const runCodeAction = (
   extra: Record<string, unknown>,
   toolLayer: Layer.Layer<ToolService>,
+  envelope: RunEnvelopeData = emptyRunEnvelope,
 ) =>
   Effect.runPromise(provideTestEnvelope(
     executeCodeAction({
@@ -84,6 +90,7 @@ const runCodeAction = (
         Layer.merge(TestLLMServiceLayer([{ text: CODE_CALLING_SEARCH }]), toolLayer),
       ),
     ),
+    envelope,
   ));
 
 describe("code-action tool-policy gate (P0-4 residual) — sandbox handlers enforce the contract", () => {
@@ -100,13 +107,14 @@ describe("code-action tool-policy gate (P0-4 residual) — sandbox handlers enfo
 
   it("taskContract deny-list seeds the gate (production .withContract signal)", async () => {
     const { layer, executed } = recordingToolLayer();
+    // Cascade Task 5: `.withContract` reaches the strategy on the envelope
+    // (`CodeActionInput` no longer declares `taskContract`).
     await runCodeAction(
-      {
-        taskContract: {
-          tools: [{ name: "search", kind: "forbidden" }],
-        },
-      },
+      {},
       layer,
+      buildRunEnvelope({
+        taskContract: { tools: [{ name: "search", kind: "forbidden" }] },
+      }),
     );
     expect(executed).toEqual([]);
   }, 15000);

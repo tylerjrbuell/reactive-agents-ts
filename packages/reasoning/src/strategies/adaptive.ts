@@ -15,14 +15,16 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { executeReactive } from "./reactive.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
-import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { LedgerEntry, LedgerEntryKind } from "../kernel/ledger/run-ledger.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
@@ -43,7 +45,7 @@ export interface StrategyOutcome {
   readonly taskDescription: string;
 }
 
-interface AdaptiveInput extends StrategyHitlRails {
+interface AdaptiveInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -108,7 +110,7 @@ type SubStrategy =
 export const executeAdaptive = (
   input: AdaptiveInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 > =>
@@ -513,7 +515,7 @@ function dispatchStrategy(
   strategy: SubStrategy,
   input: AdaptiveInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 > {

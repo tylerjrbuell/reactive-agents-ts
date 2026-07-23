@@ -141,9 +141,15 @@ export interface StepExecutorInput {
   readonly auditRationale?: boolean;
   /**
    * Durable HITL rails (Phase D) — composite steps call tools through the ReAct
-   * kernel, so the approval gate must travel with them. Omitted until
+   * kernel, so the approval gate must travel with them; the `tool_call` branch
+   * dispatches OUTSIDE any kernel and gates for itself below. Omitted until
    * 2026-07-22: a `requiresApproval` tool ran unattended on every plan-execute
-   * step (see `StrategyHitlRails`).
+   * step.
+   *
+   * Cascade Task 5: `plan-execute.ts` no longer READS these off its own input —
+   * it reads them off `RunEnvelope` and hands them to this narrowed executor
+   * input. This is the last strategy-side carrier of the rails; Task 6 makes
+   * `runKernel` merge the envelope, after which this executor reads it directly.
    */
   readonly approvalPolicy?: import("../../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
   readonly approvalDecision?: import("../../kernel/state/kernel-state.js").KernelInput["approvalDecision"];

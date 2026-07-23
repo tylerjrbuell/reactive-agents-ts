@@ -24,22 +24,17 @@
  */
 import type { KernelInput } from "./kernel-state.js";
 
-/**
- * Durable HITL rails (Phase D) as they arrive on a STRATEGY input.
+/*
+ * `StrategyHitlRails` lived here until cascade Task 5.
  *
- * Every strategy declares its own hand-rolled input interface, so a run-wide
- * field has to be re-declared 8× — which is exactly how the approval gate came
- * to be threaded by `reactive` alone. Strategy inputs `extends StrategyHitlRails`
- * so the rails are declared ONCE and stay type-identical to `KernelInput`'s.
+ * It was the second attempt at the same problem: declare the run-wide HITL
+ * rails ONCE so eight hand-rolled strategy input interfaces could not each
+ * forget them. It failed for the reason a shared optional bundle always fails —
+ * a strategy still had to remember to FORWARD what it declared. The rails (and
+ * the four wither-configured policy fields) now ride `RunEnvelope`, which no
+ * strategy declares, forwards, or can drop. See
+ * `kernel/envelope/run-envelope.ts`.
  */
-export interface StrategyHitlRails {
-  /** Durable HITL (Phase D): resolved approval-gate policy → `KernelInput.approvalPolicy`. */
-  readonly approvalPolicy?: KernelInput["approvalPolicy"];
-  /** Durable HITL (Phase D): human's approve/deny decision on a resumed run. */
-  readonly approvalDecision?: KernelInput["approvalDecision"];
-  /** Agentic-UI interaction rail: human's response to a paused `request_user_input`. */
-  readonly interactionResponse?: KernelInput["interactionResponse"];
-}
 
 /**
  * Run-wide fields — identical for every kernel pass of a single agent run.
@@ -69,32 +64,20 @@ export type CrossCuttingInput = Pick<
   | "calibration"
   | "harnessPipeline"
   | "budgetLimits"
-  | "grounding"
-  | "fabricationGuard"
-  | "stallPolicy"
-  | "taskContract"
-> & {
-  /**
-   * Durable HITL rails (Phase D) — REQUIRED keys whose types include
-   * `undefined`, deliberately not part of the `Pick` above.
-   *
-   * The `Pick`-derived fields are all OPTIONAL on `KernelInput`, so omitting one
-   * from a bundle is silently legal — the compile-error promise in this file's
-   * header only holds for fields a caller cannot leave out. The approval rails
-   * are the fields where a silent omission is a SECURITY defect, not a degraded
-   * feature: with `approvalPolicy` missing, `act.ts`'s detach gate never fires
-   * and a tool the caller declared `requiresApproval: true` executes with no
-   * human decision (2026-07-22: reflexion / tree-of-thought / plan-execute-per-step
-   * all bypassed the gate this way — reactive.ts was the only threading site).
-   *
-   * Declaring them REQUIRED-but-nullable forces every bundle to write
-   * `approvalPolicy: input.approvalPolicy` explicitly; forgetting is a compile
-   * error, passing `undefined` (no policy configured) stays free.
-   */
-  readonly approvalPolicy: KernelInput["approvalPolicy"];
-  readonly approvalDecision: KernelInput["approvalDecision"];
-  readonly interactionResponse: KernelInput["interactionResponse"];
-};
+>;
+
+/*
+ * Cascade Task 5 — the seven cross-cutting fields are GONE from this bundle:
+ *   policy: taskContract, fabricationGuard, grounding
+ *   rails:  stallPolicy, approvalPolicy, approvalDecision, interactionResponse
+ *
+ * Three of them (the HITL rails) used to be declared REQUIRED-but-nullable here
+ * so a bundle could not silently omit them. That guard is now redundant and
+ * strictly weaker than what replaced it: the fields do not travel through a
+ * strategy at all. They are read from `RunEnvelope`, whose provision is a
+ * compile-time requirement of every `StrategyFn` (`R = LLMService |
+ * RunEnvelope`). A strategy cannot drop what it never carries.
+ */
 
 /**
  * Per-pass fields — vary between sub-kernel invocations of the same run

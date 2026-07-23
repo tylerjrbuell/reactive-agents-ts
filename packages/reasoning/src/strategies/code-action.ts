@@ -10,13 +10,15 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
-import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
@@ -37,7 +39,7 @@ import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
-export interface CodeActionInput extends StrategyHitlRails {
+export interface CodeActionInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -60,9 +62,8 @@ export interface CodeActionInput extends StrategyHitlRails {
    *  handlers previously called `toolSvc.execute()` with no policy check. */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** Declared TaskContract (spread from the reasoning-service params via
-   *  `.withContract`) — its `forbidden` tools seed the deny-list. */
-  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  // Cascade Task 5: `taskContract` (and the HITL rails) are NOT declared here
+  // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
@@ -79,8 +80,11 @@ export interface CodeActionInput extends StrategyHitlRails {
 
 export const executeCodeAction = (
   input: CodeActionInput,
-): Effect.Effect<ReasoningResult, ExecutionError, LLMService | RunEnvelope> =>
+): Effect.Effect<JudgedReasoningResult, ExecutionError, LLMService | RunEnvelope> =>
   Effect.gen(function* () {
+    // Cascade Task 5: cross-cutting policy comes off the ONE run-wide carrier.
+    const envelope = yield* RunEnvelope;
+
     // Durable HITL (Phase D): code-action composes tool calls inside generated
     // TypeScript run by a Worker sandbox — there is no per-call kernel act
     // phase, so an approval gate cannot fire. Refuse LOUDLY rather than execute
@@ -88,7 +92,7 @@ export const executeCodeAction = (
     // code-action is never chosen by adaptive routing, so this can only be
     // reached by an explicit `defaultStrategy: "code-action"` — the caller can
     // pick a gate-capable strategy. (2026-07-22)
-    if (input.approvalPolicy?.mode === "detach") {
+    if (envelope.rails.approvalPolicy?.mode === "detach") {
       return yield* Effect.fail(
         new ExecutionError({
           strategy: "code-action",
@@ -129,7 +133,7 @@ export const executeCodeAction = (
     // declared TaskContract's forbidden tools (the production `.withContract` signal).
     const forbiddenToolList: readonly string[] =
       input.forbiddenTools ??
-      (input.taskContract?.tools
+      (envelope.policy.taskContract?.tools
         ?.filter((t) => t.kind === "forbidden")
         .map((t) => t.name) ??
         []);

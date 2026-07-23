@@ -108,12 +108,6 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint;
        *  spread through to the strategy's `resumeState`. */
       readonly resumeState?: import("../kernel/state/kernel-state.js").KernelState;
-      /** Durable HITL (Phase D): resolved approval-gate policy; spread through to the kernel. */
-      readonly approvalPolicy?: import("../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
-      /** Durable HITL (Phase D): human's approve/deny decision on a resumed run; spread through to the kernel. */
-      readonly approvalDecision?: import("../kernel/state/kernel-state.js").KernelInput["approvalDecision"];
-      /** Agentic-UI interaction rail (Task 10): human's response to a paused request_user_input; spread through to the kernel. */
-      readonly interactionResponse?: import("../kernel/state/kernel-state.js").KernelInput["interactionResponse"];
       readonly synthesisConfig?: SynthesisConfig;
       /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
       readonly observationSummary?: boolean | "auto";
@@ -143,15 +137,15 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        * when computed BudgetSignal crosses any declared limit.
        */
       readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
-      /** Opt-in numeric evidence-grounding (.withGrounding) — spread to the strategy → KernelInput.grounding. */
-      readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
-      /** Fabrication-guard mode (.withFabricationGuard) — spread to the strategy → KernelInput.fabricationGuard. */
-      readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
-      /** Stall/no-progress policy (.withStallPolicy) — spread to the strategy → KernelInput.stallPolicy. */
-      readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
-      /** Declared TaskContract (.withContract) — spread to the strategy → KernelInput.taskContract → compileRunContract (C2). */
-      readonly taskContract?: import("@reactive-agents/core").TaskContract;
-      /** Run-wide cross-cutting envelope (cascade design 2026-07-22). Absent ⇒ emptyRunEnvelope. */
+      /**
+       * Run-wide cross-cutting envelope (cascade design 2026-07-22) — the ONE
+       * carrier for `taskContract` / `fabricationGuard` / `grounding` (policy)
+       * and `stallPolicy` / `approvalPolicy` / `approvalDecision` /
+       * `interactionResponse` (rails). Cascade Task 5 deleted all seven as
+       * individual execute params: they used to be spread into the strategy
+       * input, where five of eight strategies silently dropped them. Absent ⇒
+       * `emptyRunEnvelope`.
+       */
       readonly envelope?: RunEnvelopeData;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 

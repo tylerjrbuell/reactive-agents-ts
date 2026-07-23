@@ -25,8 +25,10 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
-import type { StrategyHitlRails } from "../kernel/state/build-kernel-input.js";
-import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import {
+  finalizeStrategyResult,
+  type JudgedReasoningResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import {
@@ -38,7 +40,7 @@ import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
-export interface DirectInput extends StrategyHitlRails {
+export interface DirectInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -100,7 +102,7 @@ export interface DirectInput extends StrategyHitlRails {
 export const executeDirect = (
   input: DirectInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError | IterationLimitError,
   LLMService | RunEnvelope
 > =>
@@ -140,6 +142,10 @@ export const executeDirect = (
       metaTools: undefined,
     });
 
+    // Cascade Task 5 — INTERIM: HITL rails off the RunEnvelope, not the input.
+    // Task 6 makes `runKernel` merge the envelope and these lines die.
+    const envelope = yield* RunEnvelope;
+
     const kernelInput: KernelInput = {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
@@ -168,9 +174,9 @@ export const executeDirect = (
       // Durable HITL rails (Phase D) — direct can dispatch tools (up to 3
       // iterations), so the gate must reach its kernel like every other
       // strategy's (2026-07-22).
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
+      approvalPolicy: envelope.rails.approvalPolicy,
+      approvalDecision: envelope.rails.approvalDecision,
+      interactionResponse: envelope.rails.interactionResponse,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

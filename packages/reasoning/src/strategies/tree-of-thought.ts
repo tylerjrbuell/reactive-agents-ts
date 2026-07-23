@@ -24,8 +24,8 @@ import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js"
 import {
   buildKernelInput,
   type CrossCuttingInput,
-  type StrategyHitlRails,
 } from "../kernel/state/build-kernel-input.js";
+import type { KernelInput } from "../kernel/state/kernel-state.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -42,6 +42,7 @@ import {
 import {
   finalizeStrategyResult,
   finalizePausedStrategyResult,
+  type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
@@ -96,7 +97,7 @@ export function getToTDepthForTier(
   return Math.min(configDepth, limits.maxBfsDepth);
 }
 
-interface TreeOfThoughtInput extends StrategyHitlRails {
+interface TreeOfThoughtInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly memoryContext: string;
@@ -177,7 +178,7 @@ interface ThoughtNode {
 export const executeTreeOfThought = (
   input: TreeOfThoughtInput,
 ): Effect.Effect<
-  ReasoningResult,
+  JudgedReasoningResult,
   ExecutionError,
   LLMService | RunEnvelope
 > =>
@@ -196,6 +197,20 @@ export const executeTreeOfThought = (
     // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
     // branch kernel via buildKernelInput. Previously these branch kernels
     // dropped harnessPipeline/budgetLimits/calibration/auditRationale.
+    // Cascade Task 5 — INTERIM. The HITL rails now come off the RunEnvelope
+    // (they are no longer declared on TreeOfThoughtInput). The kernel still
+    // reads them from `KernelInput`, so they are spread onto every branch
+    // kernel here; Task 6 makes `runKernel` merge the envelope and this dies.
+    const envelope = yield* RunEnvelope;
+    const envelopeHitlRails: Pick<
+      KernelInput,
+      "approvalPolicy" | "approvalDecision" | "interactionResponse"
+    > = {
+      approvalPolicy: envelope.rails.approvalPolicy,
+      approvalDecision: envelope.rails.approvalDecision,
+      interactionResponse: envelope.rails.interactionResponse,
+    };
+
     const crossCutting: CrossCuttingInput = {
       resultCompression: input.resultCompression,
       agentId: input.agentId,
@@ -211,12 +226,6 @@ export const executeTreeOfThought = (
       budgetLimits: input.budgetLimits,
       calibration: input.calibration,
       auditRationale: input.auditRationale,
-      // Durable HITL rails (Phase D) — the execute-phase branch kernel is where
-      // ToT calls tools; without the policy the gate never fires and a
-      // `requiresApproval` tool runs unattended (2026-07-22 defect).
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
     };
     const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
@@ -273,13 +282,19 @@ export const executeTreeOfThought = (
       );
 
       const tierLimitsForSkip = TOT_TIER_LIMITS[input.tier ?? "mid"];
-      const skipExecState = yield* runKernel(reactKernel, buildKernelInput(crossCutting, {
-        task: input.taskDescription,
-        systemPrompt: input.systemPrompt,
-        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-        allToolSchemas: capabilitySnapshot.allToolSchemas,
-        temperature: 0.7,
-      }), {
+      const skipExecState = yield* runKernel(reactKernel, {
+        ...buildKernelInput(crossCutting, {
+          task: input.taskDescription,
+          systemPrompt: input.systemPrompt,
+          availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+          allToolSchemas: capabilitySnapshot.allToolSchemas,
+          temperature: 0.7,
+        }),
+        // Durable HITL rails (Phase D) — this branch kernel is where ToT calls
+        // tools; without the policy the gate never fires and a
+        // `requiresApproval` tool runs unattended (2026-07-22 defect).
+        ...envelopeHitlRails,
+      }, {
         maxIterations: tierLimitsForSkip.maxPhase2Iterations,
         strategy: "tree-of-thought",
         kernelType: "react",
@@ -807,16 +822,20 @@ export const executeTreeOfThought = (
 
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
-    const execState = yield* runKernel(reactKernel, buildKernelInput(crossCutting, {
-      task: input.taskDescription,
-      systemPrompt: input.systemPrompt
-        ? `${input.systemPrompt}\n\nYou are a systematic problem solver. Execute the given approach to produce a final answer.`
-        : "You are a systematic problem solver. Execute the given approach to produce a final answer.",
-      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-      allToolSchemas: capabilitySnapshot.allToolSchemas,
-      priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
-      temperature: 0.7,
-    }), {
+    const execState = yield* runKernel(reactKernel, {
+      ...buildKernelInput(crossCutting, {
+        task: input.taskDescription,
+        systemPrompt: input.systemPrompt
+          ? `${input.systemPrompt}\n\nYou are a systematic problem solver. Execute the given approach to produce a final answer.`
+          : "You are a systematic problem solver. Execute the given approach to produce a final answer.",
+        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+        allToolSchemas: capabilitySnapshot.allToolSchemas,
+        priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
+        temperature: 0.7,
+      }),
+      // Durable HITL rails off the envelope (INTERIM — see above).
+      ...envelopeHitlRails,
+    }, {
       maxIterations: tierLimits.maxPhase2Iterations,
       strategy: "tree-of-thought",
       kernelType: "react",
