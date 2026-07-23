@@ -9,12 +9,12 @@
  */
 import { Effect, Context } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
-import type { Task } from "@reactive-agents/core";
+import type { Task, TerminatedBy } from "@reactive-agents/core";
 import type { LearningResult } from "@reactive-agents/reactive-intelligence";
 import { ProceduralMemoryService, MemoryIdSchema } from "@reactive-agents/memory";
 import { skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { extractTaskText } from "../util.js";
+import { extractTaskText, deriveRunOutcome } from "../util.js";
 import { SkillStoreService } from "@reactive-agents/memory";
 import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
 
@@ -45,7 +45,7 @@ export interface LocalLearningDeps {
   readonly ctx: ExecutionContext;
   readonly task: Task;
   readonly config: ReactiveAgentsConfig;
-  readonly terminatedByRaw: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+  readonly terminatedByRaw: TerminatedBy;
   readonly errorsFromLoop: readonly string[];
   readonly entropyLog: readonly EntropyLogEntry[];
   readonly executionDurationMs: number;
@@ -78,9 +78,7 @@ export const runLocalLearning = (
               modelId,
               taskDescription: extractTaskText(task.input),
               strategy: ctx.selectedStrategy ?? "reactive",
-              outcome: terminatedByRaw === "max_iterations" ? "partial"
-                : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                : "success",
+              outcome: deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0),
               entropyHistory: entropyLog,
               totalTokens: ctx.tokensUsed,
               durationMs: executionDurationMs,
@@ -143,9 +141,12 @@ export const runLocalLearning = (
     {
       const appliedSkillId = ctx.metadata.appliedSkillId;
       if (appliedSkillId) {
-        const skillOutcome = terminatedByRaw === "max_iterations" ? "partial"
-          : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-          : "success";
+        // Feeds `recordOutcome(skillId, skillOutcome !== "failure")` below, so a
+        // misclassification here directly reinforces (or penalizes) a stored
+        // skill. Before `deriveRunOutcome` centralized this, an abstained run
+        // landed on "success" and CREDITED the skill that led the agent to
+        // decline. See DEBT-REGISTER §3 (2026-07-23).
+        const skillOutcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0);
 
         yield* Effect.serviceOption(ProceduralMemoryService).pipe(
           Effect.flatMap((svcOpt) => {

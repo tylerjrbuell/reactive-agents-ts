@@ -936,6 +936,46 @@ export interface AgentResultMetadata {
     }>
     /** `race()` only — how many agents competed. */
     readonly candidates?: number
+    /**
+     * Terminal judgment record (cross-cutting cascade, 2026-07-22/23) — what the
+     * result-boundary mint concluded about this answer's evidence.
+     *
+     * - `enforced` — the run was under `.withFabricationGuard("block")` AND failed
+     *   judgment, so the harness REPLACED the model's output with an honest
+     *   abstention. When `true`, `output` is a sentinel, not model prose.
+     * - `groundedOnRequired` — did a declared required tool actually succeed?
+     *   `undefined` when the run declared none (honestly unknown, not a pass).
+     * - `contractSatisfied` — did the run meet its `.withContract()` deliverables?
+     * - `failed` — named judgment checks that did not pass.
+     * - `auxiliaryPass` — this result was a FRAGMENT of a run (a verification
+     *   retry or post-think continuation) whose grounding evidence lives in a
+     *   sibling pass. Judged and recorded, never enforced. See DEBT-REGISTER §3.
+     * - `repairGaps` — repair capabilities this strategy does NOT have, e.g.
+     *   `"per-iteration"` for plan-execute/code-action/blueprint, which are
+     *   judged only at the terminal rather than mid-loop.
+     *
+     * NOT a truth certificate — like {@link AgentResult.receipt}, this grades the
+     * run's evidence trail, not the factual correctness of `output`.
+     */
+    readonly verdict?: {
+        readonly enforced: boolean
+        readonly groundedOnRequired?: boolean
+        readonly contractSatisfied?: boolean
+        readonly failed: readonly string[]
+        readonly auxiliaryPass?: boolean
+        readonly repairGaps?: readonly string[]
+    }
+    /**
+     * Namespaced extension slot (cross-cutting cascade Task 9). Strategy-authored
+     * metadata with no dedicated top-level field rides here and is forwarded
+     * verbatim, one level deep. Declared on the public surface so a consumer can
+     * READ the slot without casting — an extension slot nobody can reach through
+     * the published types is only half a mechanism.
+     *
+     * Values are `unknown` by design: the slot's contract is that the engine
+     * never interprets them. Narrow with a guard at the read site.
+     */
+    readonly extensions?: Readonly<Record<string, unknown>>
 }
 
 /**

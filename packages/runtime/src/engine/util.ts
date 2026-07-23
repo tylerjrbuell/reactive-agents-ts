@@ -1,3 +1,5 @@
+import type { TerminatedBy } from "@reactive-agents/core";
+
 /**
  * Shared utilities used across phase modules. Keep this file tiny — only put
  * helpers here that are used by 2+ phases. Single-phase helpers stay in their
@@ -207,6 +209,41 @@ export function buildAutoMaxCallsPerTool(input: {
 }
 
 /**
+ * Classify a finished run into the coarse outcome enum shared by the telemetry
+ * record and the procedural-learning loop (`"success" | "partial" | "failure"`).
+ *
+ * ONE definition because there were three hand-copied copies of this ternary
+ * (telemetry-emit, local-learning x2), and all three were wrong in the same way:
+ * written against a `terminatedBy` union that omitted `"abstained"`, they let an
+ * honest abstention fall through to `"success"` — teaching the learning loop
+ * that declining to answer is a win. See DEBT-REGISTER §3 (2026-07-23).
+ */
+export function deriveRunOutcome(
+  terminatedBy: TerminatedBy,
+  hadErrors: boolean,
+): "success" | "partial" | "failure" {
+  // Incomplete work, no provider fault.
+  if (terminatedBy === "max_iterations") return "partial";
+  // The agent honestly declined. Nothing was delivered, so it is not a success;
+  // it must never be reinforced as one. The honesty of the decline is carried by
+  // `AgentResult.abstention` + the trust receipt, not by this coarse enum.
+  //
+  // This is the ONLY member whose classification changes here — every branch
+  // below reproduces the previous ternary exactly, so runs that never abstain
+  // are byte-identical.
+  if (terminatedBy === "abstained") return "failure";
+  if (hadErrors && terminatedBy !== "final_answer_tool" && terminatedBy !== "final_answer") {
+    return "failure";
+  }
+  // NOTE: `llm_error` with an empty `errorsFromLoop` lands on "success" here.
+  // That looks wrong, and it is preserved deliberately — it is pre-existing
+  // behavior unrelated to the abstention fix, and changing it silently inside
+  // this extraction would be an unrequested behavior change riding along.
+  // Logged in DEBT-REGISTER §3 instead.
+  return "success";
+}
+
+/**
  * Did the terminal mint ENFORCE an honest abstention on this result?
  *
  * Review C1 fenced enforcement OFF for auxiliary passes (verification retries,
@@ -245,6 +282,26 @@ export type ExecutionReasoningResult = {
     verdict?: { enforced: boolean; groundedOnRequired?: boolean; contractSatisfied?: boolean; failed: readonly string[]; auxiliaryPass?: boolean; repairGaps?: readonly string[] };
     /** Cross-cutting cascade Task 9: the typed extension slot (DEBT-REGISTER §3), preserved through normalization so the engine can forward it onto `TaskResult.metadata.extensions` verbatim. */
     extensions?: Readonly<Record<string, unknown>>;
+    /**
+     * The append-only RunLedger (Wave C1 ledger-convergence), forwarded by every
+     * strategy via `extraMetadata.runLedger`. Structurally typed here to mirror
+     * the `ctx.metadata.reasoningResult` declaration in `runtime/src/types.ts`.
+     *
+     * DEBT-REGISTER §3 (2026-07-23): this field was MISSING from the whitelist
+     * rebuild below while `types.ts` declared it, so `rr.metadata.runLedger` was
+     * `undefined` on every real engine run and both of the engine's readers
+     * silently saw nothing. Two types describing one slot, one narrower in fact:
+     * no compile error, total data loss.
+     */
+    runLedger?: ReadonlyArray<{
+      readonly kind: string;
+      readonly toolName?: string;
+      readonly toolCallId?: string;
+      readonly success?: boolean;
+      readonly args?: Readonly<Record<string, unknown>>;
+      readonly path?: string;
+      readonly op?: string;
+    }>;
   };
 };
 
@@ -331,6 +388,15 @@ export function normalizeReasoningResult(
         typeof md.extensions === "object" && md.extensions !== null
           ? (md.extensions as Readonly<Record<string, unknown>>)
           : undefined,
+      // DEBT-REGISTER §3 (2026-07-23): preserve the RunLedger through the
+      // whitelist rebuild. `types.ts` declared this field on
+      // `ctx.metadata.reasoningResult` and two engine sites read it, but this
+      // rebuild never copied it — so the Wave-C1 "receipts read the ledger"
+      // guarantee held only for tests calling the receipt helpers directly,
+      // never for a strategy run through `ExecutionEngine`.
+      runLedger: Array.isArray(md.runLedger)
+        ? (md.runLedger as ExecutionReasoningResult["metadata"]["runLedger"])
+        : undefined,
     },
   };
 }

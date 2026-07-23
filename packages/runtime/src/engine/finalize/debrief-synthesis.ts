@@ -23,7 +23,7 @@
  */
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
-import type { Task } from "@reactive-agents/core";
+import type { Task, TerminatedBy } from "@reactive-agents/core";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import {
@@ -68,7 +68,7 @@ export interface DebriefSynthesisDeps {
   readonly config: ReactiveAgentsConfig;
   readonly eb: EbLike | null;
   readonly rr: RrLike;
-  readonly terminatedByRaw: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+  readonly terminatedByRaw: TerminatedBy;
   readonly sanitizedOutput: unknown;
   readonly outputForSuccess: string;
   readonly hasSubstantiveOutput: boolean;

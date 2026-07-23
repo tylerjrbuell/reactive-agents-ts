@@ -20,7 +20,7 @@ import {
 } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
-import type { Task, TaskResult } from "@reactive-agents/core";
+import type { Task, TaskResult, TerminatedBy } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { classifyToolRelevance, filterToolsByRelevance, ReasoningService } from "@reactive-agents/reasoning";
@@ -1124,9 +1124,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       : "";
                 const hasSubstantiveOutput = outputForSuccess.length > 0;
 
-                // Extract terminatedBy from reasoning metadata, with fallback inference
-                const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
-                  "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+                // Extract terminatedBy from reasoning metadata, with fallback inference.
+                //
+                // DEBT-REGISTER §3 (2026-07-23): this cast used to name a
+                // hand-written 5-value union that OMITTED "abstained" (and any
+                // future TerminatedBy member). The runtime value passed through
+                // fine — `ctx.metadata.terminatedBy` is assigned raw below — but
+                // every downstream typed read was told an abstention could not
+                // occur, months after `.withFabricationGuard()` made it a routine
+                // terminal. Now bound to core's canonical `TerminatedBy`, so a
+                // new member is a compile error here rather than a silent lie.
+                const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as TerminatedBy;
 
                 // Surface the parallel raw kernel termination reason on ctx so
                 // run-finalize can publish it as AgentCompleted.terminationReason.

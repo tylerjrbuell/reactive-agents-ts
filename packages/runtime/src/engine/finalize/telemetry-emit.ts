@@ -13,7 +13,7 @@
  */
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
-import type { Task } from "@reactive-agents/core";
+import type { Task, TerminatedBy } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
   TelemetryClient as TelemetryClientImpl,
@@ -43,7 +43,7 @@ import {
 import { diffClassifierAccuracy } from "../../classifier-accuracy.js";
 import { isSubagentCall } from "../../subagent-telemetry.js";
 import { computeArgValidityRate } from "../../arg-validity.js";
-import { extractTaskText } from "../util.js";
+import { extractTaskText, deriveRunOutcome } from "../util.js";
 
 // ─── Narrow service types (mirrors execution-engine.ts) ───
 
@@ -101,7 +101,7 @@ export interface TelemetryEmitDeps {
   readonly config: ReactiveAgentsConfig;
   readonly obs: ObsLike | null;
   readonly rr: RrLike;
-  readonly terminatedByRaw: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+  readonly terminatedByRaw: TerminatedBy;
   readonly errorsFromLoop: readonly string[];
   readonly executionDurationMs: number;
   readonly entropyLog: readonly EntropyLogEntry[];
@@ -164,9 +164,7 @@ export const emitTelemetryRunReport = (
           const strategySwitched = !!rr?.metadata?.strategyFallback;
 
           const outcome: "success" | "partial" | "failure" =
-            terminatedByRaw === "max_iterations" ? "partial"
-            : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-            : "success";
+            deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0);
 
           // ── Enrichment fields (see telemetry-enrichment.ts for logic + tests) ──
           const trajectoryFingerprint = buildTrajectoryFingerprint(entropyLog);
