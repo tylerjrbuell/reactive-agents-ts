@@ -350,7 +350,29 @@ export const executeAdaptive = (
     // strategy: "adaptive" preserved for API consumers.
     // selectedStrategy in metadata surfaces what actually ran (e.g. "reactive")
     // so strategyUsed in AgentResult shows the effective sub-strategy.
-    const activeStrategy = fallbackOccurred ? "reactive" : selectedStrategy;
+    //
+    // Derived from the result that actually SHIPPED, not from `fallbackOccurred`
+    // (review I5, 2026-07-23). `fallbackOccurred` only records that a fallback
+    // was ATTEMPTED. On a double failure the reactive attempt is caught by
+    // `Effect.catchAll(() => Effect.succeed(subResult))` above, so the ORIGINAL
+    // plan-execute / blueprint result is what ships — and hard-coding
+    // "reactive" here re-introduced the exact defect review I1 fixed: it fed
+    // `SUB_STRATEGY_REPAIR["reactive"]` = `{perIteration: true}` into the mint,
+    // erasing the `{perIteration: false}` gap the shipped result really has, and
+    // reported a `selectedStrategy` that never produced this output.
+    // `finalSubResult === subResult` is the only reliable discriminator: the
+    // catchAll hands back the SAME object, and a successful fallback cannot.
+    //
+    // NOT PINNED BY A TEST, deliberately (verified 2026-07-23): the catchAll
+    // branch is defensive-only and unreachable from the test seam. There is no
+    // `Effect.fail` anywhere in the reactive path — driving the fallback's LLM
+    // to throw produces a reactive RESULT with `status:"failed"` (a distinct
+    // object, so the "reactive" label is then correct), never an Effect
+    // failure. Reaching the branch would require injecting the dispatcher,
+    // i.e. a refactor of this function rather than a test. Contriving one was
+    // rejected over pinning nothing.
+    const activeStrategy: SubStrategy =
+      finalSubResult === subResult ? selectedStrategy : "reactive";
 
     yield* emitLog({
       _tag: "completion",

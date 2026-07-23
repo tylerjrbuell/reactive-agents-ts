@@ -85,8 +85,30 @@ describe("harness hooks carry the RunEnvelope (cascade scope C)", () => {
   // run was flipped to `status:"failed"` and the answer replaced by the
   // abstention sentinel.
   //
-  // Cutting `auxiliaryPass: true` from `reasoning-harness-hooks.ts`'s
-  // `buildRunEnvelopeFromConfig` call turns this red.
+  // ⚠ CORRECTED 2026-07-23 (adversarial review). This block previously claimed:
+  // "Cutting `auxiliaryPass: true` from `reasoning-harness-hooks.ts`'s
+  // `buildRunEnvelopeFromConfig` call turns this red." That claim was FALSE and
+  // is retracted. The cut was made and re-run: this file stayed GREEN (2 pass /
+  // 0 fail); the only assertions that went red were the two in
+  // `auxiliary-pass-wiring.test.ts` (lines 103 and 137). In this scenario the
+  // run's `verdict` comes back `{enforced: false}` and the output is the refined
+  // prose WITH and WITHOUT the flag — identical — so nothing here discriminates
+  // the fence. In this repo red-on-cut is the definition of done, and a false
+  // red-on-cut claim is worse than none: it invites a maintainer to delete the
+  // real pin and trust this one.
+  //
+  // What ACTUALLY pins `auxiliaryPass`, both red-on-cut:
+  //   - `packages/runtime/tests/auxiliary-pass-wiring.test.ts` — that the two
+  //     FRAGMENT-pass builders SET the flag on the request they emit (drives the
+  //     real `runReasoningHarnessHooks` against a recording ReasoningService).
+  //   - `packages/reasoning/src/kernel/capabilities/sense/finalize-result.test.ts`
+  //     ("auxiliaryPass fence") — that the terminal mint HONOURS it.
+  //
+  // What THIS test is, honestly: an end-to-end smoke that a tool-grounded run
+  // under `.withFabricationGuard("block")` with a continuation hook still ships
+  // its answer rather than the abstention sentinel. That is worth having — it is
+  // the only assertion of the property through the public builder — but it is
+  // not a pin of the flag, and must not be cited as one.
   it("continuation pass: a grounded run keeps its answer under fabricationGuard block", async () => {
     let noteCalls = 0;
 
@@ -141,10 +163,10 @@ describe("harness hooks carry the RunEnvelope (cascade scope C)", () => {
     expect(noteCalls).toBeGreaterThan(0);
     // …so the user must NOT be told the agent could not ground an answer.
     expect(String(result.output ?? "")).not.toContain("Could not complete the task");
-    // `AgentResultMetadata` (the public builder surface) does not declare
-    // `verdict` — the terminal judgment reaches `TaskResult.metadata` but is not
-    // projected onto `AgentResult`. Read it structurally; the projection gap is
-    // logged in DEBT-REGISTER §3.
+    // `verdict` IS present on `result.metadata` at runtime (verified 2026-07-23:
+    // `{"enforced":false,"grounded…}`), but `AgentResultMetadata` — the public
+    // builder surface — does not DECLARE it, so it has to be read structurally.
+    // The typing gap is logged in DEBT-REGISTER §3.
     const meta = result.metadata as { verdict?: { enforced?: boolean } };
     expect(meta.verdict?.enforced).not.toBe(true);
   }, 30_000);

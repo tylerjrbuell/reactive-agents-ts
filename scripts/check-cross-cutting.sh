@@ -10,7 +10,8 @@
 # depends on four things holding at once:
 #
 #   1. No strategy input interface re-declares an envelope field — by name, via
-#      `Pick<KernelInput, …>`, or by `extends`-ing a bundle that carries them.
+#      `Pick<KernelInput, …>` / `Omit<KernelInput, …>`, or by `extends`-ing a
+#      bundle that carries them.
 #   2. No `KernelInput` is hand-authored outside the canonical assembly module
 #      (kernel/state/build-kernel-input.ts) and the sanctioned sites below —
 #      neither as an annotated literal nor via an `as KernelInput` cast, which
@@ -23,18 +24,43 @@
 #      the ONE config→envelope mapper (runtime/src/engine/run-envelope-config.ts).
 #      A request without one runs with the harness disarmed.
 #
-# ── 2026-07-23 hardening (review finding I2) ────────────────────────────────
+# ── 2026-07-23 hardening #1 (review finding I2) ─────────────────────────────
 # A review demonstrated all three original checks passing on an 18-line file
 # that violated all three, and found one PRODUCTION site already evading check 2
 # (`react-kernel.ts` — a hand-authored literal closed with `as KernelInput`,
 # since rewritten to compose `buildKernelInput` + `mergeRunEnvelopeIntoKernelInput`
-# so no cast remains). Every pattern below now runs against COMMENT-STRIPPED
-# source, so prose describing a violation no longer trips (or masks) the gate.
+# so no cast remains). Every pattern below runs against COMMENT-STRIPPED source,
+# so prose describing a violation no longer trips (or masks) the gate.
+#
+# ── 2026-07-23 hardening #2 (adversarial review of THIS script) ─────────────
+# A second review got TWELVE violations past hardening #1. The root cause of
+# five of them was that the checks matched LINE BY LINE, so the repo's own
+# Prettier config (printWidth 80, singleQuote) was itself an evasion: wrapping
+# `extends Pick<KernelInput, …>` across five lines, or `} as\n  KernelInput;`,
+# made a violation the gate explicitly claims to catch invisible to it.
+#
+# Checks 1–3 therefore no longer see lines at all. Every pattern now runs
+# against the WHOLE comment-stripped file with `\s` free to cross newlines —
+# i.e. against whitespace-normalized source — and the offset of each match is
+# converted back to a real line number for the report, with the matched text
+# collapsed onto one line so the message stays readable. Formatting is no
+# longer semantically significant to this gate.
+#
+# The other seven closures are recorded at each check.
 #
 # This script fails CI if any of the four break. Mirrors check-ledger-writes.sh
 # / check-run-contract.sh; discovered + run by the CI "Enforce architectural
 # invariants" step (`for s in scripts/check-*.sh`) and by
 # packages/reasoning/tests/enforcement-scripts.test.ts.
+#
+# HONEST SCOPE: this is a shape gate, not a proof. It now matches on normalized
+# source rather than on formatting, and keys check 4 on an imported TYPE rather
+# than on an identifier's spelling, which removes whole classes of evasion
+# rather than individual spellings — but a sufficiently novel shape (an envelope
+# field re-declared under a computed key, a service reached through an untyped
+# `unknown` cast) can still slip. The compile-enforced terminal mint
+# (`JudgedReasoningResult`) is the load-bearing guarantee; this is the net that
+# catches the shapes a type cannot.
 #
 # Usage: bash scripts/check-cross-cutting.sh
 # Exit: 0 if all four invariants hold; 1 with the offending lines if violated.
@@ -47,42 +73,322 @@ STRATEGIES_DIR="packages/reasoning/src/strategies"
 REASONING_SRC="packages/reasoning/src"
 FIELDS='approvalPolicy|approvalDecision|interactionResponse|fabricationGuard|stallPolicy|grounding|taskContract'
 
-# Emit "file:line:text" for every COMMENT-STRIPPED line matching $1 across the
-# source roots in $2.. — test files, dist and node_modules excluded.
+# ── The scanner ─────────────────────────────────────────────────────────────
+# One Perl program, selected by $SCAN_MODE, run over a list of production .ts
+# files. Perl (not grep/awk) because every check here needs three things that
+# are line-oriented tools' blind spots:
+#   - matching ACROSS newlines (so Prettier's wrapping is not an evasion),
+#   - brace-matching (so a check can be scoped to a declaration body or to one
+#     call expression instead of to a fixed ± line window), and
+#   - reporting a real file:line for a match that began N lines earlier.
+# It prints `file:line: <collapsed match>` and always exits 0; the caller
+# decides what an emitted line means.
+SCAN_PL="$(
+  cat <<'PERL'
+use strict;
+use warnings;
+
+my $mode   = $ENV{SCAN_MODE}   // "";
+my $fields = $ENV{SCAN_FIELDS} // "__no_such_field__";
+
+# Strip comments while PRESERVING line numbering (block comments collapse to
+# their own newlines), so every file:line printed below is real.
 #
 # Comment stripping is what makes these patterns non-evadable in the other
-# direction too: the old check 2 false-positived on prose that merely quoted a
-# `const x: KernelInput = {` line.
-strip_and_grep() {
-  local pattern="$1"
-  shift
-  local out="" f hit
-  while IFS= read -r -d '' f; do
-    hit="$(sed -E -e 's#//.*$##' -e 's#/\*.*$##' -e 's#^[[:space:]]*\*.*$##' "$f" \
-      | grep -nE "$pattern" | sed "s#^#${f}:#" || true)"
-    if [ -n "$hit" ]; then out+="$hit"$'\n'; fi
-  done < <(find "$@" -name '*.ts' \
+# direction too: an earlier check 2 false-positived on prose that merely quoted
+# a `const x: KernelInput = {` line, and prose describing a violation must never
+# be able to MASK one either.
+sub strip_comments {
+  my ($src) = @_;
+  # Block comments, but only where one can actually begin — start of file, or
+  # after whitespace/an opening delimiter. Without that guard a glob string
+  # like "**/*.ts" opens a comment that swallows the rest of the file.
+  $src =~ s#((?:\A|(?<=[\s(,{;=\[]))/\*.*?\*/)# (my $m = $1) =~ s/[^\n]//g; $m #gse;
+  # Line comments, except the "//" of a URL inside a string literal.
+  $src =~ s#(?<!:)//[^\n]*##g;
+  return $src;
+}
+
+# Length- and newline-preserving blanking of string/template contents.
+#
+# Two jobs, both resting on the length preservation: every offset found in the
+# skeleton indexes the un-blanked text identically, so matching happens on the
+# skeleton and REPORTING happens on the real source.
+#   1. brace matching — a `{` inside a string must not move the depth count;
+#   2. false-positive suppression — a violation cannot LIVE inside a string
+#      literal, so prose in a string (`"never write: const x: KernelInput = {}"`)
+#      must not trip the gate any more than prose in a comment does.
+# The one check that must read INSIDE strings is check 1's Pick/Omit rule: the
+# field names it looks for are themselves string literals (`Pick<KernelInput,
+# "approvalPolicy">`). That rule alone runs on the un-blanked source, so a
+# prose string spelling out a complete Pick will trip it — a false positive
+# traded for never missing the real shape.
+sub blank_strings {
+  my ($src) = @_;
+  $src =~ s#("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)# (my $m = $1) =~ s/[^\n]/ /g; $m #gse;
+  return $src;
+}
+
+sub lineno { my ($src, $off) = @_; return 1 + (substr($src, 0, $off) =~ tr/\n//); }
+
+sub excerpt {
+  my ($t) = @_;
+  $t =~ s/\s+/ /g;
+  $t =~ s/^\s+|\s+$//g;
+  $t = substr($t, 0, 110) . " …" if length($t) > 110;
+  return $t;
+}
+
+# Index of the "}" closing the "{" at $open, or -1.
+sub match_brace {
+  my ($skel, $open) = @_;
+  my $depth = 0;
+  for (my $i = $open; $i < length($skel); $i++) {
+    my $c = substr($skel, $i, 1);
+    if    ($c eq "{") { $depth++ }
+    elsif ($c eq "}") { $depth--; return $i if $depth == 0 }
+  }
+  return -1;
+}
+
+for my $file (@ARGV) {
+  open(my $fh, "<", $file) or next;
+  my $raw = do { local $/; <$fh> };
+  close($fh);
+  next unless defined $raw;
+  my $src  = strip_comments($raw);
+  my $skel = blank_strings($src);
+
+  if ($mode eq "decl-fields") {
+    # Check 1 rule (a): a named envelope field on a declaration.
+    my %seen;
+    # (a1) the original line-anchored shape, kept verbatim so nothing this
+    #      already caught can be lost.
+    while ($skel =~ /^[ \t]*(?:readonly[ \t]+)?(?:$fields)[ \t]*\??[ \t]*:/mg) {
+      $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+    }
+    # (a2) ANY envelope field inside an interface / object-type-alias BODY,
+    #      wherever it sits on the line. (a1) anchors at `^\s*field`, so
+    #      `interface X { readonly approvalPolicy?: … }` — the field sharing a
+    #      line with the brace — was invisible to it; the prior fix wave's own
+    #      demo file contained exactly that shape and it was never reported.
+    #      Scoping to a declaration body (not just to a `{`) is what keeps this
+    #      off value positions like `redirectsSpent: { grounding: 0, … }`.
+    while ($skel =~ /\b(?:export\s+)?(?:declare\s+)?(?:interface\s+[A-Za-z0-9_\$]+[^{;]*|type\s+[A-Za-z0-9_\$]+[^={;]*=\s*)\{/g) {
+      my $open  = $+[0] - 1;
+      my $close = match_brace($skel, $open);
+      next if $close < 0;
+      my $body = substr($skel, $open, $close - $open + 1);
+      while ($body =~ /(?:^|[{;,])\s*(?:readonly\s+)?(?:$fields)\s*\??\s*:/g) {
+        my $off = $open + $-[0];
+        $seen{ lineno($src, $off) } = excerpt(substr($src, $off, $+[0] - $-[0]));
+      }
+    }
+    print "$file:$_: $seen{$_}\n" for sort { $a <=> $b } keys %seen;
+  }
+
+  elsif ($mode eq "picks") {
+    # Check 1 rule (b): a bundle carved out of KernelInput.
+    #   - `Pick<KernelInput, … "field" …>` — now also single-quoted (the repo's
+    #     Prettier writes singleQuote elsewhere), and `\s`/`[^>]` cross newlines
+    #     so a wrapped Pick inside a `type` alias is caught too.
+    #   - `Omit<KernelInput, …>` — ANY of them: an Omit re-declares every field
+    #     it does not name, so all seven ride it, and it matched neither the
+    #     Pick pattern nor `interface … extends`.
+    my %seen;
+    while ($src =~ /(?:\A|[^A-Za-z0-9_\$.])Pick\s*<\s*(?:[A-Za-z0-9_\$]+\.)?KernelInput\s*,[^>]*["'](?:$fields)["']/gs) {
+      $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+    }
+    while ($src =~ /(?:\A|[^A-Za-z0-9_\$.])Omit\s*<\s*(?:[A-Za-z0-9_\$]+\.)?KernelInput\b/gs) {
+      $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+    }
+    print "$file:$_: $seen{$_}\n" for sort { $a <=> $b } keys %seen;
+  }
+
+  elsif ($mode eq "extends") {
+    # Check 1 rule (c): ANY `interface X extends Y` in strategies/. `\s+` before
+    # `extends` crosses newlines, so Prettier's `export interface X\n  extends
+    # Bundle {` no longer slips past a one-line-only pattern.
+    while ($src =~ /^[ \t]*(?:export[ \t]+)?interface[ \t]+[A-Za-z0-9_\$]+\s+extends\s/mg) {
+      my $end = $+[0];
+      $end = $end + 60 > length($src) ? length($src) : $end + 60;
+      print $file . ":" . lineno($src, $-[0]) . ": " . excerpt(substr($src, $-[0], $end - $-[0])) . "\n";
+    }
+  }
+
+  elsif ($mode eq "kernel-input") {
+    # Check 2: a hand-authored KernelInput. Resolves per-file ALIASES first —
+    # `import type { KernelInput as KI }` followed by `as KI` defeated a
+    # name-bound pattern completely. Namespace-qualified uses
+    # (`import * as K` … `as K.KernelInput`) are covered by the optional
+    # qualifier. `\s*` crosses newlines, so Prettier's `const n: KernelInput =\n
+    # { … }` and `} as\n  KernelInput;` are both caught.
+    my @names = ("KernelInput");
+    while ($skel =~ /\bKernelInput\s+as\s+([A-Za-z0-9_\$]+)/g) { push @names, $1 }
+    my $nm = join("|", map { quotemeta } @names);
+    my %seen;
+    while ($skel =~ /:\s*(?:[A-Za-z0-9_\$]+\.)?(?:$nm)\s*=\s*\{/gs) {
+      $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+    }
+    while ($skel =~ /\b(?:as|satisfies)\s+(?:[A-Za-z0-9_\$]+\.)?(?:$nm)\b/gs) {
+      $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+    }
+    print "$file:$_: $seen{$_}\n" for sort { $a <=> $b } keys %seen;
+  }
+
+  elsif ($mode eq "provide") {
+    # Check 3: every way this codebase can bind RunEnvelope into a context.
+    #   - provideService(…, RunEnvelope, …) — the argument scan is `[^;]` and
+    #     not `[^)]`, because a `)` inside argument 1
+    #     (`Effect.provideService(Effect.map(e, f), RunEnvelope, env)`) ended
+    #     the old scan before it ever reached the tag.
+    #   - Context.make / Context.add — `Effect.provide(e, Context.make(
+    #     RunEnvelope, env))` provides just as hard as provideService.
+    #   - Layer.sync / Layer.effect / Layer.scoped, not only Layer.succeed.
+    #   - RunEnvelope.of(, and provideTestEnvelope( from production code.
+    # `\s*` throughout replaces the old ±6-line awk fallback for the wrapped
+    # `Layer.succeed(\n  RunEnvelope,` form.
+    my %seen;
+    my @pats = (
+      qr/provideService\s*\([^;]{0,300}?\bRunEnvelope\b/s,
+      qr/(?:[A-Za-z0-9_\$]+\.)?RunEnvelope\.of\s*\(/s,
+      qr/Layer\.(?:succeed|sync|effect|scoped|effectDiscard|scopedDiscard)\s*\(\s*RunEnvelope\b/s,
+      qr/Context\.(?:make|add|unsafeMake)\s*\(\s*RunEnvelope\b/s,
+      qr/(?:\A|[^A-Za-z0-9_\$.])provideTestEnvelope\s*\(/s,
+    );
+    for my $p (@pats) {
+      while ($skel =~ /$p/g) {
+        $seen{ lineno($src, $-[0]) } = excerpt(substr($src, $-[0], $+[0] - $-[0]));
+      }
+    }
+    print "$file:$_: $seen{$_}\n" for sort { $a <=> $b } keys %seen;
+  }
+
+  elsif ($mode eq "execute") {
+    # Check 4. Rule (a) — file level.
+    #
+    # Keyed on the imported TYPE, not on the spelling of the identifier the
+    # service is bound to. The old key was `[Rr]easoning[A-Za-z._]*\.execute\(`,
+    # so `const svc = …; svc.execute({…})` — or `const { execute } = svc` —
+    # made the ENTIRE file invisible, rule (b) included. A file that imports
+    # `ReasoningServiceLike` / `ReasoningService` and calls `.execute(` at all
+    # is now in scope however the callee is spelled — including the destructured
+    # `const { execute } = svc; execute({…})` form, which has no dot at all, so
+    # the call pattern is `\bexecute\s*\(` and not `\.execute\s*\(`.
+    # The identifier pattern is retained alongside it so nothing it caught is lost.
+    my $has_exec = $skel =~ /\bexecute\s*\(/s;
+    my $named    = $skel =~ /[Rr]easoning[A-Za-z._]*\.execute\s*\(/s;
+    my $typed    = $skel =~ /\bimport\b[^;]{0,400}?\bReasoningService(?:Like)?\b/s;
+    my $in_scope = $named || ($typed && $has_exec);
+    if ($in_scope && $raw !~ /buildRunEnvelopeFromConfig|ENVELOPE-EXEMPT/) {
+      print "$file: calls a reasoning execute() without using buildRunEnvelopeFromConfig\n";
+    }
+    # Rule (b) applies only inside those files — `toolService.execute({…})` and
+    # friends are not reasoning requests and must not be flagged.
+    next unless $in_scope;
+
+    # Rule (b) — each INLINE execute-request literal must carry `envelope:`.
+    #
+    # Scoped to the ENCLOSING call expression (brace-matched), not to a fixed
+    # line window. The old window was `n-6 … n+95`, i.e. asymmetric: an
+    # envelope-less `execute({…})` injected UPSTREAM of an existing `envelope:`
+    # line borrowed that line and the gate reported OK, while the identical
+    # injection downstream was caught. Any new continuation pass added within
+    # ~95 lines above an existing one shipped with the harness disarmed and CI
+    # green. The literal now answers for itself.
+    #
+    # An `ENVELOPE-EXEMPT:` marker is still honoured, read from the ORIGINAL
+    # (un-stripped) text — it is a comment — either inside the literal or in
+    # the 6 lines above the call.
+    my @lines = split(/\n/, $raw, -1);
+    while ($skel =~ /\bexecute\s*\(\s*\{/gs) {
+      my $open  = $+[0] - 1;
+      my $close = match_brace($skel, $open);
+      $close = length($skel) - 1 if $close < 0;
+      my $body  = substr($src, $open, $close - $open + 1);
+      next if $body =~ /\benvelope\s*:/s;
+      my $n     = lineno($src, $-[0]);
+      my $endn  = lineno($src, $close);
+      my $from  = $n - 6 < 1 ? 1 : $n - 6;
+      my $exempt = 0;
+      for my $i ($from .. $endn) {
+        next if $i > scalar(@lines);
+        if (defined $lines[$i - 1] && $lines[$i - 1] =~ /ENVELOPE-EXEMPT/) { $exempt = 1; last }
+      }
+      next if $exempt;
+      print "$file:$n: inline execute request without an envelope\n";
+    }
+  }
+}
+exit 0;
+PERL
+)"
+
+# Production .ts sources under the given roots — dist, node_modules and every
+# test file excluded.
+list_sources() {
+  find "$@" -name '*.ts' \
     ! -path '*/dist/*' ! -path '*/node_modules/*' \
     ! -name '*.test.ts' ! -path '*__tests__*' ! -path '*/tests/*' \
-    -print0 2>/dev/null)
-  printf '%s' "$out"
+    -print0 2>/dev/null
+}
+
+# scan <mode> <root>… — never fails; prints findings.
+#
+# Refuses to be vacuously green: a check whose roots match no file (a directory
+# renamed, a find predicate typo) is a check that CANNOT fail, which is the
+# exact degradation `enforcement-scripts.test.ts` exists to prevent one level up.
+scan() {
+  local mode="$1"
+  shift
+  local files=()
+  mapfile -d '' -t files < <(list_sources "$@")
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "SCAN-EMPTY: no source files under: $*" >&2
+    exit 1
+  fi
+  SCAN_MODE="$mode" SCAN_FIELDS="$FIELDS" perl -e "$SCAN_PL" -- "${files[@]}"
 }
 
 # ── Check 1/4: strategy input interfaces must not re-declare envelope fields ──
-# Three shapes, because a review evaded the first with the other two:
-#   (a) a named optional field         — `readonly approvalPolicy?: …`
-#   (b) a Pick bundle                  — `extends Pick<KernelInput, "approvalPolicy" | …>`
-#   (c) ANY `interface X extends Y`    — this is EXACTLY the pre-cascade
+# Three rules, because reviews evaded each of the earlier ones with the next:
+#   (a) a named field — `readonly approvalPolicy?: …`, anywhere in an interface
+#       or object-type-alias body (not only at the start of a line).
+#   (b) a bundle carved out of KernelInput — `Pick<KernelInput, "approvalPolicy"
+#       | …>` in either quote style, or ANY `Omit<KernelInput, …>`.
+#   (c) ANY `interface X extends Y` — this is EXACTLY the pre-cascade
 #       `StrategyHitlRails` pattern (a shared bundle a strategy still had to
 #       remember to forward), and the extended name is arbitrary, so it cannot
 #       be matched by name. No strategy interface extends anything today; if a
 #       genuinely unrelated base is ever needed, add it to
 #       ALLOWED_INTERFACE_BASES with a comment saying why it cannot carry a
 #       cross-cutting field.
+#
+# SCOPE (reviewed 2026-07-23). Rules (a) and (c) stay scoped to
+# `strategies/` and rule (b) is widened to all of `packages/reasoning/src`:
+#   - (c) is only SOUND in strategies/. "Any interface that extends anything" is
+#     a deliberate over-approximation that holds because no strategy input
+#     interface extends anything; across reasoning/src it would flag dozens of
+#     legitimate, unrelated inheritances, and a gate that cries wolf gets
+#     `|| true`-d into a no-op — a strictly worse outcome than a narrow scope.
+#   - (a) likewise: `KernelInput` itself, the envelope types and the builder
+#     bundles all legitimately DECLARE these fields — declaring them is only a
+#     violation on a strategy's own input type.
+#   - (b) has no such conflict. There is no legitimate `Pick`/`Omit` of
+#     `KernelInput` anywhere in the package (verified: zero outside comments),
+#     and a bundle type is exactly the thing that would be declared in
+#     `types/` and then `extends`-ed from `strategies/` — so widening (b) is
+#     what covers the "the bundle moved out of the scanned directory" escape
+#     that (c) alone could miss.
+# Residual, stated plainly: a strategy input interface MOVED out of
+# `strategies/` entirely would take rules (a)/(c) out of scope with it. What
+# stops that silently is `scan`'s SCAN-EMPTY guard plus the fact that the file
+# still has to be Pick/Omit-free (b) and still has to reach `runKernel`, which
+# merges the envelope regardless.
 ALLOWED_INTERFACE_BASES=()
-DECLS="$(strip_and_grep "^[[:space:]]*(readonly[[:space:]]+)?($FIELDS)\??:" "$STRATEGIES_DIR")"
-PICKS="$(strip_and_grep "Pick<[[:space:]]*KernelInput[[:space:]]*,[^>]*\"($FIELDS)\"" "$STRATEGIES_DIR")"
-EXTENDS="$(strip_and_grep "^[[:space:]]*(export[[:space:]]+)?interface[[:space:]]+[A-Za-z0-9_]+[[:space:]]+extends[[:space:]]" "$STRATEGIES_DIR")"
+DECLS="$(scan decl-fields "$STRATEGIES_DIR")"
+PICKS="$(scan picks "$REASONING_SRC")"
+EXTENDS="$(scan extends "$STRATEGIES_DIR")"
 if [ ${#ALLOWED_INTERFACE_BASES[@]} -gt 0 ]; then
   BASES_RE="$(IFS='|'; echo "${ALLOWED_INTERFACE_BASES[*]}")"
   EXTENDS="$(printf '%s' "$EXTENDS" | grep -E -v "extends[[:space:]]+($BASES_RE)\b" || true)"
@@ -96,12 +402,12 @@ if [ -n "$CHECK1" ]; then
   echo ""
   echo "Remove the field from the strategy's input interface — it rides RunEnvelope"
   echo "(packages/reasoning/src/kernel/envelope/run-envelope.ts) and is merged onto"
-  echo "KernelInput by runKernel. A re-declared field — named, Pick-ed, or inherited"
-  echo "from a shared 'rails' bundle — is exactly the 'silently dropped at one of N"
-  echo "boundaries' defect class this gate exists to end."
+  echo "KernelInput by runKernel. A re-declared field — named, Pick-ed, Omit-ed, or"
+  echo "inherited from a shared 'rails' bundle — is exactly the 'silently dropped at"
+  echo "one of N boundaries' defect class this gate exists to end."
   FAIL=1
 else
-  echo "OK (1/4): no strategy re-declares, Pick-s or inherits a cross-cutting field."
+  echo "OK (1/4): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
 fi
 
 # ── Check 2/4: no hand-authored KernelInput outside sanctioned sites ──
@@ -121,6 +427,9 @@ fi
 # because it silences the compiler on the very fields at issue. react-kernel.ts
 # was that site on the real tree until 2026-07-23; it now composes
 # `buildKernelInput` + `mergeRunEnvelopeIntoKernelInput` and needs no exemption.
+#
+# Import ALIASES are resolved per file (2026-07-23): `import type { KernelInput
+# as KI }` + `as KI` defeated the name-bound pattern outright.
 ALLOWED_KERNEL_INPUT_SITES=(
   "kernel/state/build-kernel-input.ts"
   "strategies/reactive.ts"
@@ -131,8 +440,7 @@ EXCLUDE=""
 for f in "${ALLOWED_KERNEL_INPUT_SITES[@]}"; do
   EXCLUDE+="${EXCLUDE:+|}$f"
 done
-LITERALS="$(strip_and_grep ':[[:space:]]*KernelInput[[:space:]]*=[[:space:]]*\{|(as|satisfies)[[:space:]]+KernelInput\b' \
-  "$REASONING_SRC" | grep -E -v "$EXCLUDE" || true)"
+LITERALS="$(scan kernel-input "$REASONING_SRC" | grep -E -v "$EXCLUDE" || true)"
 if [ -n "$LITERALS" ]; then
   echo "FAIL (2/4): hand-authored KernelInput outside the sanctioned assembly sites:"
   echo ""
@@ -154,39 +462,10 @@ fi
 #   - kernel/envelope/run-envelope.ts — provideTestEnvelope (the test seam).
 #   - services/reasoning-service.ts — the ONE production provision site, at the
 #     strategy-dispatch boundary.
-#
-# Four shapes, because a review evaded the original with the last three:
-#   (a) Effect.provideService(eff, RunEnvelope, …)          — same line
-#   (b) the same call once Prettier wraps `RunEnvelope,` onto its own line
-#   (c) Layer.succeed(RunEnvelope, …) / Layer.succeed(\n RunEnvelope, …)
-#       — the idiom this codebase uses elsewhere (reasoning-service.ts:173/182)
-#   (d) provideTestEnvelope(…) called from PRODUCTION code — it is exported
-#       from the package index, so it is reachable, and using it outside a test
-#       is a second production provision site wearing a test-helper's name.
-# `apps/` is scanned too: a provision site there was previously invisible.
+# Shapes matched are listed at the `provide` mode above. `apps/` is scanned too:
+# a provision site there was previously invisible.
 PROVIDE_ROOTS=(packages apps)
-PROVIDES_SAMELINE="$(strip_and_grep 'provideService\([^)]*RunEnvelope|RunEnvelope\.of\(|Layer\.succeed\([[:space:]]*RunEnvelope|(^|[^A-Za-z0-9_])provideTestEnvelope\(' \
-  "${PROVIDE_ROOTS[@]}")"
-
-PROVIDES_MULTILINE=""
-while IFS= read -r -d '' file; do
-  hit="$(awk -v file="$file" '
-    /provideService\(|Layer\.succeed\(/ { lastProvide = NR }
-    /^[ \t]*RunEnvelope,[ \t]*$/ {
-      if (lastProvide != "" && (NR - lastProvide) <= 6) {
-        print file ":" NR ": " $0
-      }
-    }
-  ' "$file" 2>/dev/null || true)"
-  if [ -n "$hit" ]; then
-    PROVIDES_MULTILINE+="$hit"$'\n'
-  fi
-done < <(find "${PROVIDE_ROOTS[@]}" -name '*.ts' \
-  ! -path '*/dist/*' ! -path '*/node_modules/*' \
-  ! -name '*.test.ts' ! -path '*__tests__*' ! -path '*/tests/*' \
-  -print0 2>/dev/null)
-
-PROVIDES="$(printf '%s\n%s\n' "$PROVIDES_SAMELINE" "$PROVIDES_MULTILINE" \
+PROVIDES="$(scan provide "${PROVIDE_ROOTS[@]}" \
   | grep -v '^$' \
   | grep -v 'kernel/envelope/run-envelope.ts' \
   | grep -v 'services/reasoning-service.ts' || true)"
@@ -212,42 +491,16 @@ fi
 # nothing about `envelope` (review I3). They now all call
 # `buildRunEnvelopeFromConfig` (runtime/src/engine/run-envelope-config.ts).
 #
-# Two rules:
-#   (a) a file that calls `<something>reasoning<something>.execute(` must
-#       reference the canonical mapper (or be entirely exempt);
-#   (b) each INLINE execute-request literal must carry `envelope:` — or an
-#       `ENVELOPE-EXEMPT:` marker within ±6 lines naming why not. The one
-#       exemption today is the verify JUDGE pass, whose "task" is a verdict
-#       prompt, not the user's deliverable.
+# Two rules, both re-scoped 2026-07-23 — see the `execute` mode above:
+#   (a) a file that imports the ReasoningService TYPE and calls `.execute(`
+#       (however the callee identifier is spelled) must reference the canonical
+#       mapper, or be entirely exempt;
+#   (b) each INLINE execute-request literal must carry `envelope:` within its
+#       OWN braces — or an `ENVELOPE-EXEMPT:` marker at the call site naming why
+#       not. The one exemption today is the verify JUDGE pass, whose "task" is a
+#       verdict prompt, not the user's deliverable.
 EXECUTE_ROOTS=(packages/runtime/src apps)
-EXEC_FAILS=""
-while IFS= read -r -d '' file; do
-  stripped="$(sed -E -e 's#//.*$##' -e 's#/\*.*$##' -e 's#^[[:space:]]*\*.*$##' "$file")"
-  if ! printf '%s' "$stripped" | grep -qE '[Rr]easoning[A-Za-z._]*\.execute\('; then continue; fi
-  if ! grep -q 'buildRunEnvelopeFromConfig\|ENVELOPE-EXEMPT' "$file"; then
-    EXEC_FAILS+="$file: calls a reasoning execute() without using buildRunEnvelopeFromConfig"$'\n'
-  fi
-  hit="$(awk -v file="$file" '
-    { line[NR] = $0 }
-    /\.execute\(\{/ { calls[NR] = 1 }
-    END {
-      for (n in calls) {
-        found = 0
-        for (i = n - 6; i <= n + 95 && i <= NR; i++) {
-          if (i < 1) continue
-          if (line[i] ~ /envelope:/ || line[i] ~ /ENVELOPE-EXEMPT/) { found = 1; break }
-        }
-        if (!found) print file ":" n ": inline execute request without an envelope"
-      }
-    }
-  ' "$file" 2>/dev/null || true)"
-  if [ -n "$hit" ]; then EXEC_FAILS+="$hit"$'\n'; fi
-done < <(find "${EXECUTE_ROOTS[@]}" -name '*.ts' \
-  ! -path '*/dist/*' ! -path '*/node_modules/*' \
-  ! -name '*.test.ts' ! -path '*__tests__*' ! -path '*/tests/*' \
-  -print0 2>/dev/null)
-
-EXEC_FAILS="$(printf '%s' "$EXEC_FAILS" | grep -v '^$' || true)"
+EXEC_FAILS="$(scan execute "${EXECUTE_ROOTS[@]}" | grep -v '^$' || true)"
 if [ -n "$EXEC_FAILS" ]; then
   echo "FAIL (4/4): a ReasoningService.execute request is built without a RunEnvelope:"
   echo ""
