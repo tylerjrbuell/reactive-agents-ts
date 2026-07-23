@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { FinalAnswerCapture } from "@reactive-agents/tools";
+import type { TerminatedBy } from "@reactive-agents/core";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export interface DebriefInput {
   /** Task identifier */
   taskId: string;
   /** How the agent loop terminated */
-  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
+  terminatedBy: TerminatedBy;
   /** Structured capture from the `final-answer` tool (if used) */
   finalAnswerCapture?: FinalAnswerCapture;
   /** Per-tool aggregated call statistics */
@@ -169,6 +170,18 @@ function deriveOutcome(
   // max_iterations — incomplete work without provider failure
   if (terminatedBy === "max_iterations") {
     return "partial";
+  }
+  // abstained — the agent honestly declined rather than fabricating. No answer
+  // was delivered, so this is NOT a success; it is also not a provider fault.
+  //
+  // DEBT-REGISTER §3 (2026-07-23): before this branch existed, "abstained" fell
+  // through to the clean-termination line below and every honest abstention was
+  // recorded as a SUCCESS. The 5-value `terminatedBy` union masked it — the
+  // member the code had to handle was not in the type it was written against.
+  // "failed" here means "did not deliver"; the honesty of the decline is carried
+  // by `AgentResult.abstention` and the trust receipt, not by this coarse enum.
+  if (terminatedBy === "abstained") {
+    return "failed";
   }
   // final_answer, final_answer_tool, end_turn — clean terminations
   return errorsFromLoop.length > 0 ? "partial" : "success";
