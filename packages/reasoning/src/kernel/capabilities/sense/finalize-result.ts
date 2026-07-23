@@ -7,17 +7,133 @@
 // paths, pause paths — must cross this function or fail to typecheck once
 // StrategyFn requires JudgedReasoningResult (Task 5).
 //
-// Judgment here is INERT in Task 3 (computed + recorded, enforced:false).
-// Task 8 adds enforcement for opt-in withers.
+// Judgment was INERT in Task 3 (computed + recorded, enforced:false). Task 8
+// makes it BITE — but only for a wither the user opted into:
+//
+//   fabricationGuard: "block" + a failed grounding verdict
+//     ⇒ status → "failed", output → the honest abstention sentinel,
+//       error → the failed-check list, verdict.enforced → true.
+//   fabricationGuard: "warn"  ⇒ record only, never flip.
+//   nothing configured        ⇒ enforced:false, result byte-identical.
+//
+// The zero-config invariant is the load-bearing property: `envelope.policy`
+// fields are read RAW here, never through `resolveFabricationGuardMode` (whose
+// default is "block"). An unconfigured run must not acquire a guard by way of
+// the mint.
 import { Effect } from "effect";
+import {
+  deliverableToContent,
+  sentinelDeliverable,
+  type TaskContract,
+} from "@reactive-agents/core";
 import type { ReasoningResult } from "../../../types/index.js";
-import type { RunLedger } from "../../ledger/run-ledger.js";
+import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { RunEnvelope } from "../../envelope/run-envelope.js";
+import { compileRunContract } from "../../contract/run-contract.js";
+import { writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 
 declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
+
+/**
+ * What an ENFORCED run ships instead of the model's ungrounded answer.
+ *
+ * Deliberately NOT a hand-written string: it is the canonical rendering of the
+ * `no_substantive_output` sentinel, whose exact text is pinned in
+ * `packages/core/tests/contracts/deliverable.test.ts`. Both abstention sentinels
+ * used to fall through to "Task complete." — a run that honestly could not
+ * ground an answer told the user it had succeeded. Reusing the renderer here
+ * means the enforcement path can never re-open that gap.
+ */
+const ENFORCED_ABSTENTION_OUTPUT: string = deliverableToContent(
+  sentinelDeliverable("no_substantive_output"),
+);
+
+/**
+ * Is a compiled contract condition satisfied by the run LEDGER?
+ *
+ * Ledger-only and pure, mirroring `verify()`'s DBC (no fs, no LLM) but reading
+ * the append-only fact store rather than re-scanning `steps[]`: at the terminal
+ * the ledger is the run's evidence of record.
+ */
+function conditionMetByLedger(
+  condition: PostCondition,
+  ledger: RunLedger,
+  output: string,
+): boolean {
+  switch (condition.kind) {
+    case "ToolCalled":
+      return entriesOfKind(ledger, "tool-result").some(
+        (e) => e.success === true && e.toolName === condition.tool,
+      );
+    case "ArtifactProduced":
+      return entriesOfKind(ledger, "artifact").some((e) =>
+        writtenPathSatisfies(e.path, condition.path),
+      );
+    case "OutputContains":
+      return output.includes(condition.pattern);
+  }
+}
+
+/**
+ * The required-tool set the grounding verdict judges against.
+ *
+ * The strategy's own declaration wins. When it carries NONE, the declared
+ * `TaskContract`'s `required` tools stand in — the same cascade law the rest of
+ * this design rests on: a strategy cannot drop what it never carries.
+ * `direct` is the concrete case (`DirectInput` deliberately has no
+ * `requiredTools`, so it hard-codes `[]` at the mint); without this fallback a
+ * user who declared `.withContract({tools:[{kind:"required",…}]})` AND
+ * `.withFabricationGuard("block")` would get enforcement on plan-execute and
+ * silence on direct, purely because of an input-interface omission.
+ *
+ * Zero-config is untouched: with no `.withContract()` this returns exactly what
+ * the strategy passed.
+ */
+function requiredToolsForJudgment(
+  declared: readonly string[] | undefined,
+  taskContract: TaskContract | undefined,
+): readonly string[] {
+  if (declared !== undefined && declared.length > 0) return declared;
+  return (taskContract?.tools ?? [])
+    .filter((t) => t.kind === "required" && typeof t.name === "string" && t.name.length > 0)
+    .map((t) => t.name);
+}
+
+/**
+ * Judge the declared TaskContract against the run's ledger evidence.
+ *
+ * Only the DETERMINISTIC side is judged — the contract's `postConditions` floor.
+ * The `answer` requirement (acceptance `self-critique`) carries no condition and
+ * is therefore not judged here; a checker/judge tier owns it.
+ *
+ * INFORMATIONAL in Task 8: the result lands on `verdict.contractSatisfied` and
+ * nothing else. It is deliberately NOT pushed onto `failed`, because `failed`
+ * is the enforcement basis under `fabricationGuard: "block"` and the contract
+ * wither must not acquire flip authority as a side effect of being recorded.
+ */
+function judgeContractSatisfied(
+  taskContract: TaskContract,
+  requiredTools: readonly string[] | undefined,
+  ledger: RunLedger | undefined,
+  output: unknown,
+): boolean {
+  // Defensive read: `prompt` is declared `string`, but contracts reach the
+  // envelope from config files, bench fixtures and JSON round-trips where a
+  // partial object is a live possibility. The compiler regexes the prose, so an
+  // absent prompt would throw INSIDE the terminal mint — the one place in the
+  // codebase that must never fail a run it is merely judging.
+  const prompt = typeof taskContract.prompt === "string" ? taskContract.prompt : "";
+  const compiled = compileRunContract(prompt, {
+    ...(requiredTools !== undefined && requiredTools.length > 0 ? { requiredTools } : {}),
+    taskContract,
+  });
+  const outputText = typeof output === "string" ? output : "";
+  const entries = ledger ?? [];
+  return compiled.postConditions.every((c) => conditionMetByLedger(c, entries, outputText));
+}
 
 export interface FinalizeExtras {
   /** Required tools for the grounding verdict (strategy already holds these). */
@@ -37,30 +153,87 @@ export function finalizeStrategyResult(
     const envelope = yield* RunEnvelope;
     const base = buildStrategyResult(params);
 
+    // RAW read — no `resolveFabricationGuardMode` here. That resolver defaults
+    // to "block" (and consults RA_FABRICATION_GUARD), which is correct for the
+    // in-loop verifier check but would silently arm the terminal on every
+    // zero-config run.
+    const guard = envelope.policy.fabricationGuard;
+
+    const requiredTools = requiredToolsForJudgment(
+      params.requiredTools,
+      envelope.policy.taskContract,
+    );
+
     const failed: string[] = [];
     let groundedOnRequired: boolean | undefined;
-    if (params.requiredTools && params.requiredTools.length > 0) {
-      groundedOnRequired = hasSuccessfulRequiredToolCall(params.steps, params.requiredTools);
-      if (!groundedOnRequired && envelope.policy.fabricationGuard !== undefined) {
+    if (requiredTools.length > 0) {
+      groundedOnRequired = hasSuccessfulRequiredToolCall(params.steps, requiredTools);
+      if (!groundedOnRequired && guard !== undefined) {
         failed.push("grounding-on-required");
       }
     }
+
+    const contractSatisfied =
+      envelope.policy.taskContract !== undefined
+        ? judgeContractSatisfied(
+            envelope.policy.taskContract,
+            requiredTools,
+            params.runLedger,
+            base.output,
+          )
+        : undefined;
 
     const repairGaps =
       params.repairCapabilities && !params.repairCapabilities.perIteration
         ? ["per-iteration"]
         : undefined;
 
+    // ── Enforcement (the only behavior change in the cascade) ────────────────
+    //
+    // Three fences, each one a case a naive `guard === "block" && !grounded`
+    // would get wrong:
+    //
+    //  1. PAUSED runs. A HITL/interaction pause has by construction not yet
+    //     called the required tool. Flipping it would turn every approval gate
+    //     under `.withFabricationGuard("block")` into a failed run and drop the
+    //     resume rails (the fe5dc93b defect class, from the other direction).
+    //  2. ALREADY-FAILED runs. The result is already honest; overwriting its
+    //     output/error would destroy the real provider cause and buy nothing.
+    //  3. `failed` empty. Covers "no wither configured" (nothing is ever pushed
+    //     without a guard) AND "no requiredTools declared" (nothing to ground
+    //     against) in one condition, so both stay untouched by construction.
+    const paused =
+      params.pause !== undefined ||
+      params.kernelMeta?.awaitingApprovalFor !== undefined ||
+      params.kernelMeta?.awaitingInteractionFor !== undefined;
+    const enforced =
+      guard === "block" && failed.length > 0 && !paused && base.status !== "failed";
+
     const verdict = {
-      enforced: false, // Task 8 flips this for opt-in withers
+      enforced,
       ...(groundedOnRequired !== undefined ? { groundedOnRequired } : {}),
+      ...(contractSatisfied !== undefined ? { contractSatisfied } : {}),
       failed,
       ...(repairGaps ? { repairGaps } : {}),
     };
 
+    // Re-mint through `buildStrategyResult` rather than patching `base`, so the
+    // enforced result picks up the SAME derivations every other result gets
+    // (output sanitation, the HS-106 output/status coherence guard, the
+    // status-derived confidence, the pause-rail forwarding). Patching would
+    // have left `confidence: 0.8` on a failed run.
+    const finalBase = enforced
+      ? buildStrategyResult({
+          ...params,
+          output: ENFORCED_ABSTENTION_OUTPUT,
+          status: "failed",
+          error: failed.join("; "),
+        })
+      : base;
+
     const judged: ReasoningResult = {
-      ...base,
-      metadata: { ...base.metadata, verdict },
+      ...finalBase,
+      metadata: { ...finalBase.metadata, verdict },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

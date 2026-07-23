@@ -26,6 +26,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { TaskContract } from "@reactive-agents/core";
+import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
 import { runKernel } from "../../src/kernel/loop/runner.js";
@@ -39,6 +40,7 @@ import type { RunEnvelopeData } from "../../src/kernel/envelope/run-envelope.js"
 import { executeDirect } from "../../src/strategies/direct.js";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executeReactive } from "../../src/strategies/reactive.js";
+import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
@@ -371,4 +373,152 @@ describe("cross-cutting cascade §2 — envelope withers reach non-reactive stra
       expect(result.metadata.verdict?.groundedOnRequired).toBe(false);
     }, 30_000);
   }
+});
+
+// ── §3 ENFORCEMENT — the judgment BITES (Task 8) ─────────────────────────────
+//
+// §2 proved judgment REACHES every strategy. This section proves it CHANGES the
+// outcome — the single user-visible behavior change in the whole cascade.
+//
+// `direct` and `plan-execute-reflect` are the two strategies picked on purpose:
+// before this plan they both shipped an ungrounded answer as a plain success.
+// `direct` additionally never carried ANY cross-cutting field (`DirectInput`
+// has no `requiredTools`), so its required-tool set can only come from the
+// envelope's declared contract — cutting either the enforcement branch or the
+// contract-derived required-tool fallback turns these red.
+//
+// Each case pairs an ENFORCED run with a zero-config CONTROL on the identical
+// script. The control is the invariant the plan is bound to: with no wither
+// configured, the run must behave exactly as it did before Task 8 — which is to
+// say it still "succeeds" ungrounded. That is not an endorsement of the old
+// behavior; it is the proof that nobody who opted into nothing gets a surprise.
+
+const ABSTENTION_OUTPUT = deliverableToContent(sentinelDeliverable("no_substantive_output"));
+
+/** A contract declaring `add` REQUIRED — the envelope-side grounding basis. */
+const REQUIRES_ADD: TaskContract = {
+  prompt: "Add the numbers 2 and 3 using the add tool",
+  tools: [{ kind: "required", name: "add" }],
+  success: { type: "regex", pattern: "5" },
+};
+
+/** The model answers straight from parametric memory; the tool is never called. */
+const UNGROUNDED_SCENARIO = [{ text: "FINAL ANSWER: 5." }];
+
+type JudgedShape = {
+  readonly status: string;
+  readonly output: unknown;
+  readonly error?: string;
+  readonly metadata: {
+    readonly verdict?: { enforced?: boolean; groundedOnRequired?: boolean };
+  };
+};
+
+function runUngroundedDirect(envelope: RunEnvelopeData | undefined): Promise<JudgedShape> {
+  const llmLayer = TestLLMServiceLayer(UNGROUNDED_SCENARIO as never);
+  const toolsLayer = createToolsLayer();
+  const program = Effect.gen(function* () {
+    const tools = yield* ToolService;
+    yield* tools.register(addToolDef, (args) =>
+      Effect.succeed((args.a as number) + (args.b as number)),
+    );
+    return yield* executeDirect({
+      taskDescription: "Add the numbers 2 and 3 using the add tool",
+      taskType: "computation",
+      memoryContext: "",
+      availableTools: ["add"],
+      maxIterations: 2,
+      config: defaultReasoningConfig,
+    });
+  }).pipe(Effect.provide(Layer.merge(llmLayer, toolsLayer)));
+
+  return Effect.runPromise(
+    provideTestEnvelope(program, envelope) as Effect.Effect<JudgedShape, never, never>,
+  );
+}
+
+/** A single-`analysis` plan — plan-execute's short-circuit terminal, no tools. */
+const ANALYSIS_PLAN = {
+  steps: [
+    {
+      title: "Answer directly",
+      instruction: "Add the two numbers and report the sum.",
+      type: "analysis",
+    },
+  ],
+};
+
+function runUngroundedPlanExecute(
+  envelope: RunEnvelopeData | undefined,
+): Promise<JudgedShape> {
+  const llmLayer = TestLLMServiceLayer([
+    { json: ANALYSIS_PLAN },
+    ...UNGROUNDED_SCENARIO,
+  ] as never);
+  const toolsLayer = createToolsLayer();
+  const program = Effect.gen(function* () {
+    const tools = yield* ToolService;
+    yield* tools.register(addToolDef, (args) =>
+      Effect.succeed((args.a as number) + (args.b as number)),
+    );
+    return yield* executePlanExecute({
+      taskDescription: "Add the numbers 2 and 3 using the add tool",
+      taskType: "computation",
+      memoryContext: "",
+      availableTools: ["add"],
+      requiredTools: ["add"],
+      config: defaultReasoningConfig,
+    } as never);
+  }).pipe(Effect.provide(Layer.merge(llmLayer, toolsLayer)));
+
+  return Effect.runPromise(
+    provideTestEnvelope(program, envelope) as Effect.Effect<JudgedShape, never, never>,
+  );
+}
+
+describe("cross-cutting cascade §3 — fabricationGuard 'block' fails an ungrounded run honestly", () => {
+  it("direct: CONTROL — zero config ⇒ the ungrounded answer still ships (byte-identical to pre-Task-8)", async () => {
+    const r = await runUngroundedDirect(undefined);
+    expect(r.status).not.toBe("failed");
+    expect(String(r.output)).toContain("5");
+    expect(r.output).not.toBe(ABSTENTION_OUTPUT);
+    expect(r.metadata.verdict?.enforced).toBe(false);
+  }, 30_000);
+
+  it("direct: envelope contract + fabricationGuard 'block' ⇒ the run FAILS with the honest abstention", async () => {
+    const r = await runUngroundedDirect(
+      buildRunEnvelope({ taskContract: REQUIRES_ADD, fabricationGuard: "block" }),
+    );
+    expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
+    expect(r.metadata.verdict?.enforced).toBe(true);
+    expect(r.status).toBe("failed");
+    expect(r.output).toBe(ABSTENTION_OUTPUT);
+    expect(String(r.output)).not.toContain("FINAL ANSWER");
+    expect(r.error).toContain("grounding-on-required");
+  }, 30_000);
+
+  it("direct: fabricationGuard 'warn' records the same finding and ships anyway", async () => {
+    const r = await runUngroundedDirect(
+      buildRunEnvelope({ taskContract: REQUIRES_ADD, fabricationGuard: "warn" }),
+    );
+    expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
+    expect(r.metadata.verdict?.enforced).toBe(false);
+    expect(r.status).not.toBe("failed");
+  }, 30_000);
+
+  it("plan-execute-reflect: CONTROL — zero config ⇒ the ungrounded answer still ships", async () => {
+    const r = await runUngroundedPlanExecute(undefined);
+    expect(r.status).not.toBe("failed");
+    expect(r.output).not.toBe(ABSTENTION_OUTPUT);
+    expect(r.metadata.verdict?.enforced).toBe(false);
+  }, 30_000);
+
+  it("plan-execute-reflect: fabricationGuard 'block' ⇒ the run FAILS with the honest abstention", async () => {
+    const r = await runUngroundedPlanExecute(buildRunEnvelope({ fabricationGuard: "block" }));
+    expect(r.metadata.verdict?.groundedOnRequired).toBe(false);
+    expect(r.metadata.verdict?.enforced).toBe(true);
+    expect(r.status).toBe("failed");
+    expect(r.output).toBe(ABSTENTION_OUTPUT);
+    expect(r.error).toContain("grounding-on-required");
+  }, 30_000);
 });
