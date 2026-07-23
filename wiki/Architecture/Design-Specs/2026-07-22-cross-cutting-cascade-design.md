@@ -181,7 +181,7 @@ Reuses `kernel/contract/run-contract.ts` and the existing `verifier.ts` groundin
 
 ### 4.2b Single provision site (amendment #2)
 
-`RunEnvelope` is provided in **exactly one place**: `reasoning-think.ts`. The gate script bans `provideService(RunEnvelope` / `RunEnvelope.of(` anywhere else. Seams declare the envelope in their Effect `R` channel, so a future execution path that calls a seam without provision is a compile error, not a runtime `Context` miss. The residual risk — a helper that erases `R` too early — is contained by the single-provision rule being grep-able.
+`RunEnvelope` is **constructed** in exactly one place (`reasoning-think.ts`, via `buildRunEnvelope(config)`) and **provided** in exactly one production place (`reasoning-service.ts`, at the strategy dispatch — the `ReasoningService.execute` interface erases the Effect `R` channel at the runtime/reasoning boundary, so provision cannot live upstream of it; planning recon 2026-07-22). The gate script bans `provideService(RunEnvelope` / `RunEnvelope.of(` anywhere else in production code. The terminal mint declares the envelope in its `R` channel, so a strategy path that skips provision is a compile error, not a runtime `Context` miss. The residual risk — a helper that erases `R` too early — is contained by the single-provision rule being grep-able.
 
 ### 4.3 Boundary 3 — typed metadata projection (amendment #4)
 
