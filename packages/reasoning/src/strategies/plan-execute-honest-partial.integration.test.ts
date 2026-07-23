@@ -150,4 +150,12 @@ describe("#40 (plan-execute) — a sub-kernel's unverified ship never reaches th
     expect(meta.budgetTerminalPartial).toBeUndefined();
     expect(meta.harnessAuthoredOutput).toBeUndefined();
   });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runPlanExecute(cleanScenario(), {});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
+  });
 });

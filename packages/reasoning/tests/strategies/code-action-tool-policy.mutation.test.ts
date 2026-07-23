@@ -17,6 +17,7 @@ import { ToolService } from "@reactive-agents/tools";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const TOOL_SCHEMA = {
   name: "search",
@@ -69,7 +70,7 @@ const runCodeAction = (
   extra: Record<string, unknown>,
   toolLayer: Layer.Layer<ToolService>,
 ) =>
-  Effect.runPromise(
+  Effect.runPromise(provideTestEnvelope(
     executeCodeAction({
       taskDescription: "search and finish",
       taskType: "simple",
@@ -83,7 +84,7 @@ const runCodeAction = (
         Layer.merge(TestLLMServiceLayer([{ text: CODE_CALLING_SEARCH }]), toolLayer),
       ),
     ),
-  );
+  ));
 
 describe("code-action tool-policy gate (P0-4 residual) — sandbox handlers enforce the contract", () => {
   it("forbiddenTools: the tool is NEVER executed and the policy message surfaces", async () => {

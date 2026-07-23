@@ -49,7 +49,8 @@ import {
   makeStrategyEmitLog,
   emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
-import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
@@ -696,7 +697,10 @@ export const executeBlueprint = (
     const terminatedBy: "final_answer" | "end_turn" =
       finalStatus === "completed" ? "final_answer" : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = yield* Ref.get(ledgerRef);
+
+    return yield* finalizeStrategyResult({
       strategy: STRATEGY,
       steps,
       output: finalOutput,
@@ -704,6 +708,12 @@ export const executeBlueprint = (
       start,
       totalTokens,
       totalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). Blueprint's
+      // degrade paths delegate to executeReactive (kernel passes), so the
+      // strategy is declared per-iteration repairable.
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      repairCapabilities: { perIteration: true },
       extraMetadata: {
         terminatedBy,
         // The budget-capped join is a harness-authored terminal — surface the
@@ -716,7 +726,7 @@ export const executeBlueprint = (
         // llmCalls:0 beside 5 real calls in the trace.
         llmCalls,
         // C8 — the run's canonical tool ledger, minted by the primitive.
-        runLedger: yield* Ref.get(ledgerRef),
+        runLedger,
         ...(budgetCappedJoin
           ? {
               // H5/#40 honesty markers for the budget-capped harness join —

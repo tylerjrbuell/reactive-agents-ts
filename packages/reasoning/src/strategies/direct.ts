@@ -236,7 +236,8 @@ export const executeDirect = (
       // hardcoded 0 — direct can call tools (up to 3 iters) and those cost money.
       totalCost: state.cost ?? 0,
       error: state.error,
-      // Durable pause rails forwarded centrally (see buildStrategyResult).
+      // Durable pause rails forwarded centrally (see buildStrategyResult,
+      // which the mint wraps).
       kernelMeta: state.meta,
       extraMetadata: {
         terminatedBy,

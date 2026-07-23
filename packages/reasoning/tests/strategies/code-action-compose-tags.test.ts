@@ -12,6 +12,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 interface ObsStepLike {
   readonly type: string;
@@ -61,7 +62,7 @@ describe("code-action emits observation.tool-result for sandbox tool calls (#195
       { text: "```typescript\n(async () => { return await search({ query: 'x' }); })()\n```" },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeCodeAction({
         taskDescription: "search and finish",
         taskType: "simple",
@@ -71,7 +72,7 @@ describe("code-action emits observation.tool-result for sandbox tool calls (#195
         config: defaultReasoningConfig,
         harnessPipeline: pipeline,
       }).pipe(Effect.provide(Layer.merge(llm, toolLayer()))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(observations.length).toBeGreaterThanOrEqual(1);

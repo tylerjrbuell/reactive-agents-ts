@@ -130,7 +130,7 @@ describe("strategy tool ledger — deliverable truth", () => {
       '(async () => { await file_write({ path: "./out.md", content: "the summary" }); return "done"; })()',
       "```",
     ].join("\n");
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeCodeAction({
         taskDescription: TASK,
         taskType: "general",
@@ -146,7 +146,7 @@ describe("strategy tool ledger — deliverable truth", () => {
           ),
         ),
       ),
-    ) as ReasoningResult;
+    )) as ReasoningResult;
     expectLedgerTruth(result);
   }, 20000);
 

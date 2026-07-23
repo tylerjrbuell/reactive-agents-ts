@@ -361,7 +361,7 @@ export const executeReactive = (
           : {}),
         // Durable HITL (Phase D) + interaction pause (Task 9): the paused-gate
         // and paused-interaction descriptors are forwarded by
-        // buildStrategyResult from `kernelMeta` below — ONE derivation site for
+        // the mint from `kernelMeta` below — ONE derivation site for
         // every strategy (2026-07-22: the inline spread that used to live here
         // was the only one in the codebase, so a pause under reflexion / ToT /
         // plan-execute reached the runtime with no descriptor at all).

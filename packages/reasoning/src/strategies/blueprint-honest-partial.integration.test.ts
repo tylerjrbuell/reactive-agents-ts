@@ -104,4 +104,12 @@ describe("#40 (blueprint) — the budget-capped harness join never reads as comp
     expect(meta.budgetTerminalPartial).toBeUndefined();
     expect(meta.harnessAuthoredOutput).toBeUndefined();
   });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runBlueprint({});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
+  });
 });

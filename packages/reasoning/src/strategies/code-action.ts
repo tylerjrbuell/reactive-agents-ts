@@ -15,10 +15,9 @@ import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import {
-  makeStep,
-  buildStrategyResult,
-} from "../kernel/capabilities/sense/step-utils.js";
+import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { emitToCompose } from "@reactive-agents/core";
@@ -80,7 +79,7 @@ export interface CodeActionInput extends StrategyHitlRails {
 
 export const executeCodeAction = (
   input: CodeActionInput,
-): Effect.Effect<ReasoningResult, ExecutionError, LLMService> =>
+): Effect.Effect<ReasoningResult, ExecutionError, LLMService | RunEnvelope> =>
   Effect.gen(function* () {
     // Durable HITL (Phase D): code-action composes tool calls inside generated
     // TypeScript run by a Worker sandbox — there is no per-call kernel act
@@ -426,16 +425,25 @@ export const executeCodeAction = (
     // a FAIL-verdict / iteration-cap / empty-output termination is NOT — it maps
     // to `end_turn` (goalAchieved defers to the deliverable scan) rather than
     // fabricating `final_answer` on a give-up (the DEFECT-3 lie). This ties the
-    // claim to the same evidence buildStrategyResult uses for `status`, so
+    // claim to the same evidence the mint uses for `status`, so
     // success and goalAchieved never contradict.
     const producedOutput = resultString.trim().length > 0;
     const terminatedBy: "final_answer" | "end_turn" =
       lastVerdict === "PASS" && producedOutput ? "final_answer" : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const runLedger = projectStepsToLedger(undefined, steps, iteration);
+
+    return yield* finalizeStrategyResult({
       strategy: "code-action",
       steps,
       output: resultString,
+      // Cascade terminal boundary — judgment inputs (Task 4). code-action runs
+      // no kernel: its sandbox/verify loop is a coarse phase loop with no
+      // per-iteration repair hook (spec §3.4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      repairCapabilities: { perIteration: false },
       // #40: the verifier verdict is the deterministic completion evidence on
       // this kernel-less path — a FAIL-verdict termination (iteration cap
       // exhausted) ships the work honestly labeled `partial`, never
@@ -445,7 +453,7 @@ export const executeCodeAction = (
       totalTokens,
       totalCost,
       // Surface the real failure cause when the run died on sandbox errors —
-      // buildStrategyResult's M7 invariant will force `failed` on the empty
+      // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.
       ...(lastSandboxError !== null
         ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
@@ -461,7 +469,7 @@ export const executeCodeAction = (
         // transitionState chokepoint uses (kernel/ledger/step-projection.ts).
         // The action/observation pairs pushed above (the sandbox's canonical
         // ledger pairs) project to `tool-invocation`/`tool-result` entries.
-        runLedger: projectStepsToLedger(undefined, steps, iteration),
+        runLedger,
         codeLength: generatedCode.length,
         // H5/#40: name what stayed unmet — same channel reactive ships.
         ...(lastVerdict === "FAIL"

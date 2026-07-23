@@ -341,7 +341,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
   }, 15000);
 
   it("code-action: forwards a steps-derived ledger with a tool-invocation entry", async () => {
-    const result = (await Effect.runPromise(
+    const result = (await Effect.runPromise(provideTestEnvelope(
       executeCodeAction({
         taskDescription: TASK_FILE,
         taskType: "general",
@@ -357,7 +357,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
           ),
         ),
       ),
-    )) as ReasoningResult;
+    ))) as ReasoningResult;
     expectRunLedgerForwarded(result);
   }, 15000);
 

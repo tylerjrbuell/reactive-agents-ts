@@ -5,6 +5,7 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn, type ProviderQuirk } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 /**
  * Wrap TestLLMService and record every request's stringified content so a test
@@ -146,9 +147,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("plan-execute-reflect");
     expect(result.status).toBe("completed");
@@ -240,9 +241,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     // The synthesis prompt is the one instructing the model to "Synthesize".
     const synthPrompt = prompts.find((p) => p.includes("Synthesize a clear"));
@@ -289,9 +290,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       },
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.strategy).toBe("plan-execute-reflect");
     // Should still produce output even after exhausting refinements
@@ -340,7 +341,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
 
     expect(result.status).toBe("completed");
     expect(result.output.length).toBeGreaterThan(0);
@@ -366,7 +367,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "Final answer." },
     ]);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Fetch and summarize",
         taskType: "research",
@@ -375,7 +376,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         config: defaultReasoningConfig,
         // auditRationale omitted → default OFF
       }).pipe(Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER))),
-    );
+    ));
 
     const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
     expect(issuedRetry).toBe(false);
@@ -388,7 +389,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "Final answer." },
     ]);
 
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Fetch and summarize",
         taskType: "research",
@@ -399,7 +400,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       }).pipe(
         Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER)),
       ),
-    );
+    ));
 
     const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
     expect(issuedRetry).toBe(true);
@@ -427,9 +428,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(result.metadata.tokensUsed).toBeGreaterThan(0);
@@ -497,9 +498,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // The tool_call step should have been dispatched directly
@@ -538,9 +539,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Should have executed the analysis steps via kernel
@@ -602,7 +603,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "Synthesized from full shell output." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Fetch commits",
         taskType: "research",
@@ -619,7 +620,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         ],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     const execStep = result.steps.find((s) => s.content.startsWith("[EXEC s1]"));
     expect(execStep).toBeDefined();
@@ -680,7 +681,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "Synthesized from full shell output." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Fetch commits",
         taskType: "research",
@@ -697,7 +698,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         ],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     const execStep = result.steps.find((s) => s.content.startsWith("[EXEC s1]"));
     expect(execStep).toBeDefined();
@@ -778,9 +779,9 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       config: defaultReasoningConfig,
     });
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       program.pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(toolCalls.length).toBe(2);
@@ -813,7 +814,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "The final synthesized answer: Quantum computing is advancing rapidly with key breakthroughs." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Research and summarize quantum computing",
         taskType: "research",
@@ -821,7 +822,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         availableTools: [],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(typeof result.output).toBe("string");
@@ -905,7 +906,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Get prices of XRP and ETH",
         taskType: "research",
@@ -922,7 +923,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         ],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Should have executed 2 tool calls: original + augmented
@@ -978,7 +979,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       { match: "Synthesize", text: "Prices: XRP, ETH, BTC." },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Get prices of XRP, ETH, and BTC",
         taskType: "research",
@@ -996,7 +997,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         requiredToolQuantities: { "web-search": 3 },
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     // Plan had 1 step + 2 injected synthetic = 3 web-search calls
@@ -1025,7 +1026,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
       },
     ]);
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription:
           "Render a markdown table with columns Commit Message, Author, Date from the commit data.",
@@ -1034,7 +1035,7 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
         availableTools: [],
         config: defaultReasoningConfig,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     expect(result.status).toBe("completed");
     expect(String(result.output)).toContain("| Commit Message | Author | Date |");
@@ -1072,7 +1073,7 @@ describe.each<ProviderQuirk | undefined>([undefined, "think-leak"])(
         quirk,
       );
 
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executePlanExecute({
           taskDescription: "Explain database indexing trade-offs",
           taskType: "explanation",
@@ -1080,7 +1081,7 @@ describe.each<ProviderQuirk | undefined>([undefined, "think-leak"])(
           availableTools: [],
           config: defaultReasoningConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // The <think>-leaked plan still parsed and the run completed.
       expect(result.status).toBe("completed");

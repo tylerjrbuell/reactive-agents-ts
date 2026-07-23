@@ -48,10 +48,12 @@ import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import {
   makeStep,
-  buildStrategyResult,
   type KernelPause,
 } from "../kernel/capabilities/sense/step-utils.js";
-import { finalizePausedStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import {
+  finalizeStrategyResult,
+  finalizePausedStrategyResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
@@ -597,10 +599,18 @@ export const executePlanExecute = (
         timestamp: new Date(),
       });
 
-      return buildStrategyResult({
+      // ONE ledger value, read twice (verdict + forwarded metadata).
+      const shortCircuitLedger = yield* Ref.get(ledgerRef);
+
+      return yield* finalizeStrategyResult({
         strategy: "plan-execute-reflect",
         steps,
         output: scOutput,
+        // Cascade terminal boundary — judgment inputs (Task 4). plan-execute
+        // has only coarse phase loops, no per-iteration repair hook (spec §3.4).
+        requiredTools: input.requiredTools ?? [],
+        runLedger: shortCircuitLedger,
+        repairCapabilities: { perIteration: false },
         // #40 rule 5: NO sub-kernel runs on this short-circuit path (one direct
         // LLM call + quality gate), so there is no envelope to join — the
         // status derives from this path's own deterministic evidence (output
@@ -618,7 +628,7 @@ export const executePlanExecute = (
           llmCalls: llmCallsTotal,
           // C8 — the run's canonical tool ledger (empty on this no-dispatch
           // short-circuit, but present for shape consistency).
-          runLedger: yield* Ref.get(ledgerRef),
+          runLedger: shortCircuitLedger,
         },
       });
     }
@@ -1458,7 +1468,10 @@ export const executePlanExecute = (
         ? "final_answer"
         : "end_turn";
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice (verdict + forwarded metadata).
+    const finalLedger = yield* Ref.get(ledgerRef);
+
+    return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect",
       steps,
       output: finalOutput,
@@ -1466,12 +1479,17 @@ export const executePlanExecute = (
       start,
       totalTokens,
       totalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). plan-execute has
+      // only coarse phase loops, no per-iteration repair hook (spec §3.4).
+      requiredTools: input.requiredTools ?? [],
+      runLedger: finalLedger,
+      repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
         llmCalls: llmCallsTotal,
         // C8 — the run's canonical tool ledger (tool-invocation + tool-result
         // per direct dispatch), minted by the primitive into `ledgerRef`.
-        runLedger: yield* Ref.get(ledgerRef),
+        runLedger: finalLedger,
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
         ...honestEnvelopeMetadata(subKernelEnvelope),

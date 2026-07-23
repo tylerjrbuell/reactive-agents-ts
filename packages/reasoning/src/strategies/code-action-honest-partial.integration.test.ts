@@ -16,6 +16,7 @@ import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeCodeAction } from "./code-action.js";
 import { defaultReasoningConfig } from "../types/config.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 import type {
   Verifier,
   VerificationContext,
@@ -64,6 +65,7 @@ const runCodeAction = (extra: Record<string, unknown>) =>
       ...extra,
     } as never).pipe(
       Effect.provide(Layer.merge(TestLLMServiceLayer([{ text: CODE_RESPONSE }]), Layer.empty)),
+      provideTestEnvelope,
     ),
   );
 
@@ -84,5 +86,13 @@ describe("#40 (code-action) — a failing verifier verdict never ships as comple
     expect(result.status).toBe("completed");
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.verificationWarning).toBeUndefined();
+  });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runCodeAction({});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 });
