@@ -27,6 +27,26 @@ export const ReasoningMetadataSchema = Schema.Struct({
   confidence: Schema.Number, // 0-1
   effectiveness: Schema.optional(Schema.Number), // 0-1 (learned)
   selectedStrategy: Schema.optional(ReasoningStrategy), // for adaptive
+  /**
+   * Terminal judgment record (cross-cutting cascade, 2026-07-22). Computed by
+   * finalizeStrategyResult on EVERY result. `enforced: false` ⇒ informational
+   * (no wither configured, or judgment found nothing). Enforcement flips
+   * status/output at the mint — never anywhere else.
+   */
+  verdict: Schema.optional(
+    Schema.Struct({
+      /** Did judgment alter the result (status flip / output replacement)? */
+      enforced: Schema.Boolean,
+      /** Grounding verdict against required tools, when requiredTools were declared. */
+      groundedOnRequired: Schema.optional(Schema.Boolean),
+      /** Contract requirement outcomes, when a taskContract was declared. */
+      contractSatisfied: Schema.optional(Schema.Boolean),
+      /** Names of judgment checks that failed (empty ⇒ clean). */
+      failed: Schema.Array(Schema.String),
+      /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
+      repairGaps: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
 });
 export type ReasoningMetadata = typeof ReasoningMetadataSchema.Type;
 
