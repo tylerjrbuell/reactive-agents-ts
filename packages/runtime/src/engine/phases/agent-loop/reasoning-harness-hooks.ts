@@ -228,14 +228,26 @@ export const runReasoningHarnessHooks = (
         // Cross-cutting cascade (2026-07-22) — DELIBERATE EXEMPTION: this pass
         // gets NO `envelope`. It is a JUDGE call, not a continuation: its
         // "task" is `verifyPrompt` and its output is a PASS / REVISE verdict
-        // that never ships as the user's deliverable. Judging a verdict string
-        // against the run's deliverable contract is the wrong artifact, and the
-        // numeric grounding / fabrication guards would fire on a legitimate
-        // "REVISE: the 42% figure is unsupported" (no tool observations exist
-        // on this pass to ground it against) — suppressing the very finding the
-        // hook exists to surface. `availableTools: []` makes the approval gate
-        // moot, so nothing is left unguarded. Reviewed with the merge in
-        // `runKernel`; do not "fix" by wiring the envelope here.
+        // that never ships as the user's deliverable. The reason that carries
+        // the exemption is `taskContract`: applying the run's deliverable
+        // requirements (`mustInclude`, `format`, tool coverage) to a verdict
+        // string judges the wrong artifact and produces coverage redirects on
+        // a pass that has no deliverable to cover. `availableTools: []` makes
+        // the approval gate moot here.
+        //
+        // KNOWN SIDE EFFECT of this exemption: `.withFabricationGuard("warn")`
+        // / `("off")` is honored on the think, continuation and retry passes
+        // but NOT here — the guard resolves to its always-on "block" default
+        // on this pass. (Wiring the envelope would LOOSEN the check, not
+        // tighten it; `resolveFabricationGuardMode` defaults to "block"
+        // regardless.) The numeric grounding guard is not a factor either way:
+        // its corpus is built only from observation steps, and a tool-less
+        // judge pass has none, so check 5 is skipped whether wired or not.
+        //
+        // The REVISE re-run below DOES carry the envelope via
+        // `buildExecuteRequest` — the deliverable-producing pass is covered.
+        // Do not "fix" by wiring the envelope here; the taskContract reason
+        // above is the one that matters.
         const verifyOutcome = yield* Effect.exit(
           reasoningOpt.value.execute({
             taskDescription: verifyPrompt,
