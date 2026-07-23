@@ -15,7 +15,7 @@ import { Effect, FiberRef } from "effect";
 import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
+import { classifyTask, deserializeKernelState, buildRunEnvelope } from "@reactive-agents/reasoning";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -349,6 +349,24 @@ export const runReasoningThink = (
       // The reasoning-service arms the ambient CurrentModelRouting FiberRef when
       // this is present, so the gateway routes gathering→cheap, synthesis→strong.
       modelRoutingPool,
+      // Run-wide cross-cutting envelope (cascade design 2026-07-22). Built
+      // alongside the legacy per-field forwards above (which a later task
+      // deletes) — zero behavior change, nothing reads the envelope yet.
+      envelope: buildRunEnvelope({
+        taskContract: config.taskContract,
+        fabricationGuard: config.fabricationGuard,
+        grounding: config.grounding,
+        stallPolicy: config.stallPolicy,
+        approvalPolicy: config.approvalPolicy
+          ? {
+              mode: config.approvalPolicy.mode,
+              tools: new Set(config.approvalPolicy.tools),
+              requireFor: config.approvalPolicy.requireFor,
+            }
+          : undefined,
+        approvalDecision,
+        interactionResponse,
+      }),
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

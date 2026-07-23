@@ -17,6 +17,8 @@ import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
+import { RunEnvelope, emptyRunEnvelope } from "../kernel/envelope/run-envelope.js";
+import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
 
 // ─── Service Tag ───
 
@@ -149,6 +151,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
       /** Declared TaskContract (.withContract) — spread to the strategy → KernelInput.taskContract → compileRunContract (C2). */
       readonly taskContract?: import("@reactive-agents/core").TaskContract;
+      /** Run-wide cross-cutting envelope (cascade design 2026-07-22). Absent ⇒ emptyRunEnvelope. */
+      readonly envelope?: RunEnvelopeData;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */
@@ -212,10 +216,19 @@ export const ReasoningServiceLive = (
             // configured model (byte-identical).
             const routingActive =
               params.adaptiveHarness === true && params.modelRoutingPool !== undefined;
-            const result = yield* strategyFn({
-              ...params,
-              config,
-            }).pipe(
+            // THE single production provision site (gate-enforced by
+            // check-cross-cutting.sh). Every strategy effect runs with
+            // RunEnvelope provided — absent params.envelope ⇒ emptyRunEnvelope
+            // (zero behavior change; nothing reads the envelope yet).
+            const provided = Effect.provideService(
+              strategyFn({
+                ...params,
+                config,
+              }),
+              RunEnvelope,
+              params.envelope ?? emptyRunEnvelope,
+            );
+            const result = yield* provided.pipe(
               Effect.provide(strategyLayer),
               params.taskId
                 ? Effect.locally(CurrentRunContext, { taskId: params.taskId })

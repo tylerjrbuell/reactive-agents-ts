@@ -22,6 +22,7 @@ import { executeDirect } from "../strategies/direct.js";
 import { executeCodeAction } from "../strategies/code-action.js";
 import { executeBlueprint } from "../strategies/blueprint.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import type { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 
 // ─── Strategy function type ───
 
@@ -94,7 +95,7 @@ export type StrategyFn = (input: {
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 >;
 
 // ─── Service Tag ───
