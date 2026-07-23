@@ -24,12 +24,16 @@
 
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
+import type { KernelStateLike } from "@reactive-agents/core";
+import type { TaskContract } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executePlanExecute } from "./plan-execute.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { mockToolServiceLayer } from "../testing/tool-service-mock.js";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
-import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
+import { executeToolAndObserve } from "../kernel/capabilities/act/tool-observe.js";
+import type { MaybeService, ToolServiceInstance } from "../kernel/state/kernel-state.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -139,5 +143,101 @@ describe("B1 boundary — RunLedger tool-entry minting (C8) happens inside execu
     // Mutation: cut the mint from the primitive → runLedger is empty → red.
     expect(invocations.some((e) => "toolName" in e && e.toolName === "gather")).toBe(true);
     expect(results.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Task 7 (cross-cutting cascade) — the SEAM derives policy from the ──────
+// envelope's taskContract when the caller threads NO explicit policy. Drives
+// `executeToolAndObserve` directly (not through a full strategy) so the
+// caller-supplies-nothing case is reachable: every wired strategy
+// (plan-execute.ts / code-action.ts / blueprint.ts) already pre-derives and
+// always threads an explicit (possibly empty) forbiddenTools, which would mask
+// this seam-level fallback. A hand-rolled or future caller that forgets to
+// derive-and-thread the deny-list is exactly the gap this closes.
+describe("Task 7 — executeToolAndObserve derives tool-policy from the envelope contract when unthreaded", () => {
+  const syntheticState: KernelStateLike = {
+    taskId: "t7",
+    strategy: "test",
+    kernelType: "react",
+    steps: [],
+    toolsUsed: new Set<string>(),
+    iteration: 0,
+    tokens: 0,
+    status: "acting",
+    output: null,
+    error: null,
+    meta: {},
+  };
+
+  const contractForbidding = (name: string): TaskContract => ({
+    prompt: "task",
+    tools: [{ kind: "forbidden", name }],
+    success: { type: "regex", pattern: ".*" },
+  });
+
+  const makeToolService = (executed: string[]): MaybeService<ToolServiceInstance> => ({
+    _tag: "Some",
+    value: {
+      execute: (input) => {
+        executed.push(input.toolName);
+        return Effect.succeed({ success: true, result: { ok: true } });
+      },
+      getTool: () => Effect.succeed({ parameters: [] }),
+      listTools: () => Effect.succeed([]),
+    },
+  });
+
+  const dispatch = (
+    executed: string[],
+    envelopeData: ReturnType<typeof buildRunEnvelope>,
+    config: Record<string, unknown> = {},
+  ) =>
+    Effect.runPromise(
+      provideTestEnvelope(
+        executeToolAndObserve(
+          makeToolService(executed),
+          { toolName: "shell-execute", args: {} },
+          {
+            iteration: 0,
+            phase: "act",
+            strategy: "test",
+            state: syntheticState,
+            callId: "call-1",
+          },
+          config,
+        ).pipe(Effect.provide(TestLLMServiceLayer())),
+        envelopeData,
+      ),
+    );
+
+  it("BLOCKS a tool the envelope's taskContract forbids when the caller passes NO explicit policy", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope({ taskContract: contractForbidding("shell-execute") });
+    const result = await dispatch(executed, envelopeData);
+
+    // Never reached the ToolService — the envelope-derived gate short-circuited.
+    expect(executed).not.toContain("shell-execute");
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("forbidden by contract");
+  });
+
+  it("an EXPLICIT (even permissive) config policy WINS over the envelope-derived deny-list", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope({ taskContract: contractForbidding("shell-execute") });
+    // Explicit forbiddenTools:[] means "the caller decided nothing is forbidden" —
+    // that decision must win over the contract's deny-list.
+    const result = await dispatch(executed, envelopeData, { forbiddenTools: [] });
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
+  });
+
+  it("no declared taskContract on the envelope: tool executes normally (byte-identical baseline)", async () => {
+    const executed: string[] = [];
+    const envelopeData = buildRunEnvelope();
+    const result = await dispatch(executed, envelopeData);
+
+    expect(executed).toContain("shell-execute");
+    expect(result.success).toBe(true);
   });
 });

@@ -34,7 +34,7 @@ import { formatObservationMessage } from "./code-action/code-action-observe.js";
 import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
-import { evaluateToolPolicy } from "../kernel/capabilities/act/tool-observe.js";
+import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
@@ -131,12 +131,12 @@ export const executeCodeAction = (
     // ── Build tool handler map — bridges Worker calls to ToolService ────────
     // P0-4 — the deny-list the safety gate enforces: explicit override, else the
     // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    // `forbiddenToolsFromContract` is the ONE shared derivation (Cascade Task 7)
+    // — `executeToolAndObserve` itself now falls back to the same helper when a
+    // caller passes no policy at all, so this explicit pre-derivation here stays
+    // correct but is no longer the only line of defense.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (envelope.policy.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     const toolPolicy = {
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
       forbiddenTools: forbiddenToolList,

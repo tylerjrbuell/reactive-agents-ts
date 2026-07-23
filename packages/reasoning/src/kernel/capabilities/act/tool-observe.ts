@@ -15,7 +15,7 @@
  * the canonical-tool-execution plan (they unify a pre-existing kernel
  * single/batch asymmetry as a separate, visible behavior change).
  */
-import { Effect, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runHealingPipeline, type ToolCallSpec } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -25,6 +25,7 @@ import {
   errorTag,
   type HarnessPipeline,
   type KernelStateLike,
+  type TaskContract,
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts } from "./tool-execution.js";
@@ -35,6 +36,7 @@ import { recordToolDispatch } from "../../ledger/emit.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { StrategyServices } from "../../utils/service-utils.js";
+import { RunEnvelope } from "../../envelope/run-envelope.js";
 import {
   contextFromObservation,
   type VerificationContext,
@@ -137,8 +139,12 @@ export interface ToolObserveConfig {
    * THE single choke point every hand-rolled strategy (plan-execute / blueprint
    * / any inline caller) inherits, so a forbidden or hallucinated tool arriving
    * via a planned step can no longer execute. META_TOOLS always bypass.
-   * BOTH absent ⇒ no policy check (byte-identical — the kernel act path enforces
-   * upstream via `evaluateToolPolicy` and passes no policy here).
+   * BOTH absent ⇒ the primitive soft-reads the RunEnvelope and derives a
+   * deny-list from its declared `taskContract` instead (Cascade Task 7 — see
+   * `forbiddenToolsFromContract`); an explicit field here always wins over
+   * that derivation. No envelope + no contract ⇒ no policy check, byte-
+   * identical to pre-Task-7 (the kernel act path enforces upstream via
+   * `evaluateToolPolicy` and passes no policy here).
    */
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
@@ -210,6 +216,20 @@ export type ToolPolicyDecision =
  * The `allowedTools` block message is BYTE-IDENTICAL to the legacy act.ts:375
  * text so the kernel path's observable behavior is unchanged.
  */
+/**
+ * Derive the deny-list a declared `TaskContract` implies (Cascade Task 7). Pure
+ * — the SAME derivation `code-action.ts` (and `plan-execute.ts`/`blueprint.ts`)
+ * compute inline from `envelope.policy.taskContract`, extracted here so it is
+ * ONE function instead of N copies. `executeToolAndObserve` calls this itself
+ * as an envelope-derived FALLBACK (see below) so a caller that forgets to
+ * derive-and-thread the deny-list still inherits the contract's forbidden
+ * tools, closing the gap on non-kernel tool paths (plan-execute `tool_call`
+ * leaves, the blueprint worker, and any future caller).
+ */
+export function forbiddenToolsFromContract(contract?: TaskContract): readonly string[] {
+  return contract?.tools?.filter((t) => t.kind === "forbidden").map((t) => t.name) ?? [];
+}
+
 export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPolicyDecision {
   if (META_TOOLS.has(toolName)) return { blocked: false };
   const forbidden = policy.forbiddenTools ?? [];
@@ -293,10 +313,37 @@ export function executeToolAndObserve(
     // error channel. Checked against the post-heal `toolName` (what would
     // actually run). The kernel act path blocks upstream via `evaluateToolPolicy`
     // and passes no policy, so a blocked tool never reaches here on that path.
-    if (config.allowedTools !== undefined || config.forbiddenTools !== undefined) {
+    //
+    // Cascade Task 7 — envelope-derived fallback: when the CALLER supplied no
+    // explicit policy at all (both fields undefined), soft-read the RunEnvelope
+    // and derive a deny-list from its declared `taskContract` via the same
+    // `forbiddenToolsFromContract` helper code-action.ts uses. This is what
+    // closes the gap for a non-kernel tool path that forgets to derive-and-
+    // thread the deny-list by hand (plan-execute `tool_call` leaves, blueprint
+    // worker, or any future caller) — the seam itself now enforces the
+    // contract instead of relying on every caller to remember to.
+    // An EXPLICIT config.allowedTools/forbiddenTools (even an empty array) is
+    // the caller's own decision and WINS outright — no envelope read happens.
+    // Soft read only (`Effect.serviceOption`): does NOT widen this function's
+    // R channel (stays `LLMService` alone) — a run with no envelope in scope
+    // degrades to today's behavior rather than failing to compile or throwing.
+    // No envelope + no declared contract ⇒ byte-identical to pre-Task-7.
+    const explicitPolicyGiven =
+      config.allowedTools !== undefined || config.forbiddenTools !== undefined;
+    let policyAllowedTools = config.allowedTools;
+    let policyForbiddenTools = config.forbiddenTools;
+    if (!explicitPolicyGiven) {
+      const envelopeOpt = yield* Effect.serviceOption(RunEnvelope);
+      const envelope = Option.getOrUndefined(envelopeOpt);
+      const derivedForbidden = forbiddenToolsFromContract(envelope?.policy.taskContract);
+      if (derivedForbidden.length > 0) {
+        policyForbiddenTools = derivedForbidden;
+      }
+    }
+    if (policyAllowedTools !== undefined || policyForbiddenTools !== undefined) {
       const decision = evaluateToolPolicy(toolName, {
-        ...(config.allowedTools !== undefined ? { allowedTools: config.allowedTools } : {}),
-        ...(config.forbiddenTools !== undefined ? { forbiddenTools: config.forbiddenTools } : {}),
+        ...(policyAllowedTools !== undefined ? { allowedTools: policyAllowedTools } : {}),
+        ...(policyForbiddenTools !== undefined ? { forbiddenTools: policyForbiddenTools } : {}),
       });
       if (decision.blocked) {
         const obsStep = makeStep("observation", decision.message, {
