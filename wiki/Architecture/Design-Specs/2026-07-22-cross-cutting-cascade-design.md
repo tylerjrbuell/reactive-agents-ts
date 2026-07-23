@@ -1,7 +1,7 @@
 # Cross-Cutting Cascade — design spec
 
 **Date:** 2026-07-22
-**Status:** DRAFT — awaiting owner approval
+**Status:** APPROVED direction (owner, 2026-07-22) — amended same day after adversarial self-review (§12); plan next
 **Authority:** subordinate to [[../Specs/09-UNIFIED-PROGRAM|09 — The Unified Program]]. Implements convergence ruling **C3 (one trust spine)** and consumes **C1 (one event store)**, which landed as Wave C.1 on 2026-07-22.
 **Supersedes:** nothing. Amends the open `CrossCuttingInput` enforcement gap noted in `kernel/state/build-kernel-input.ts:80`.
 
@@ -154,9 +154,9 @@ That inverts today's failure mode. Today, a missing field means the guard does n
 
 Stated so the register does not over-count:
 
-- `plan-execute` and `code-action` still get no mid-run grounding redirect or stall steering. They are judged at the terminal, not repaired in flight. This gap is **declared and tested**, not silent.
-- Terminal judgment can only reject, not repair. A run rejected at the terminal has already spent its tokens.
-- Ambient context is implicit: absent from call signatures, and tests must provide the layer.
+- `plan-execute` and `code-action` get no **per-iteration** repair (grounding redirect, stall steer). They are judged at the terminal, not repaired per-step. **The gap is narrower than "no loop to hook" (amendment #5):** both have coarser loops — plan-execute's refinement loop (`plan-execute.ts:632`) and wave loop (`:708`), code-action's plan→execute→reflect cycle — and repair checks can later be hosted at those phase boundaries without kernel absorption. Spec the gap as "per-iteration repair, narrowable via phase-boundary hooks," declared and tested — the test pins that the gap is *reported*, it does not defend the gap as permanent.
+- Terminal judgment can only reject, not repair. A run rejected at the terminal has already spent its tokens; on the two non-kernel strategies a guarded run can cost *more* than an unguarded one (full run + verdict) and still fail. That is the honest price of un-bypassable judgment — mitigated where the coarse loops allow phase-boundary early exit.
+- Ambient context is implicit: absent from call signatures, and tests must provide the layer (§4.2b contains the worst case).
 - Boundary 3 (`TaskResult.metadata`) is a *projection* problem, not a config problem. It gets a different fix (§4.3).
 
 ---
@@ -171,15 +171,23 @@ Strategy input interfaces **drop** these fields entirely. The `StrategyHitlRails
 
 `CrossCuttingInput` / `buildKernelInput` survive for genuinely kernel-shaped per-run input (task, prompts, tool schemas). Fields that move to the envelope are removed from it, shrinking it rather than making all 26 required.
 
-### 4.2 The terminal verdict
+### 4.2 The terminal verdict — structurally un-bypassable
 
 `buildStrategyResult` gains a verdict step: read the `RunContract` and `RunLedger` from the envelope + params, evaluate, and stamp the result. Existing invariants (HS-106 output/status coherence, pause-rail forwarding) become the first two entries in that verdict chain rather than ad-hoc code.
 
 Reuses `kernel/contract/run-contract.ts` and the existing `verifier.ts` grounding/fabrication logic — this relocates enforcement, it does not write a second implementation.
 
-### 4.3 Boundary 3 — metadata projection
+**Branded result (amendment #1).** "Un-bypassable" must be a compiler fact, not a grep-gate promise — a strategy has many exits (early `return executeReactive(...)`, catch paths, pause paths), and spot-checking that the primitive "is called somewhere" is exactly the shape of the original defect one level up. Therefore `ReasoningResult` is **branded**: its constructor is unexported and `buildStrategyResult` (plus its pause/failure siblings in `step-utils.ts`, which route through the same verdict chain) is the only mint. Any code path that builds a result literal fails to typecheck. Same move as `ValidatedObservation`'s `_validated` discriminator — already proven in this codebase.
 
-`ReasoningResult.metadata` → `TaskResult.metadata` becomes a **pass-through with an explicit deny-list** (strip internal-only keys) instead of a hand-enumerated allow-list. A new field then arrives by default; suppressing one is the deliberate act.
+### 4.2b Single provision site (amendment #2)
+
+`RunEnvelope` is provided in **exactly one place**: `reasoning-think.ts`. The gate script bans `provideService(RunEnvelope` / `RunEnvelope.of(` anywhere else. Seams declare the envelope in their Effect `R` channel, so a future execution path that calls a seam without provision is a compile error, not a runtime `Context` miss. The residual risk — a helper that erases `R` too early — is contained by the single-provision rule being grep-able.
+
+### 4.3 Boundary 3 — typed metadata projection (amendment #4)
+
+Neither allow-list nor deny-list. The hand-enumerated allow-list silently *loses* useful fields (`reasoningSteps`, `receiptToolCalls`, `confidence`, `runLedger` each had to be added by name); a naive pass-through-with-deny-list inverts that into silently *leaking* internal fields to the public API surface — a worse failure mode (API-stability + info-leak beats field loss).
+
+Instead: `TaskResultMetadata` becomes a **real schema** with an explicit, typed extension slot for strategy-contributed fields. A new field arrives by extending the type — visible in review, compile-checked, no silent loss, no silent leak. The engine's projection becomes a typed map, not a literal.
 
 Closes the `DEBT-REGISTER` §3 row directly.
 
@@ -187,10 +195,11 @@ Closes the `DEBT-REGISTER` §3 row directly.
 
 No fix is done without a gate (Program invariant §6).
 
-1. **`scripts/check-cross-cutting.sh`** — fails if any strategy input interface declares an envelope field, or if a raw `KernelInput` object literal appears outside `build-kernel-input.ts`.
-2. **Red-on-cut tests** — for each of the four withers, a test that runs a *non-reactive* strategy with the wither set and asserts behavior changes. Cutting the threading must turn the test red.
-3. **Declared-gap test** — asserts `plan-execute` / `code-action` report their loop-scoped gap, so the gap cannot become silent again.
-4. **Boundary-3 test** — a novel `extraMetadata` key set by a strategy must appear on `TaskResult.metadata` with no engine edit.
+1. **`scripts/check-cross-cutting.sh`** — fails if: any strategy input interface declares an envelope field; a raw `KernelInput` object literal appears outside `build-kernel-input.ts`; or `provideService(RunEnvelope` / `RunEnvelope.of(` appears outside `reasoning-think.ts` and test layers (§4.2b).
+2. **The branded type** (§4.2) — the primary gate. Constructing a `ReasoningResult` outside the terminal mint is a compile error; return-path coverage is total by construction, not by grep.
+3. **Red-on-cut tests** — for each of the four withers, a test that runs a *non-reactive* strategy with the wither set and asserts behavior changes. Cutting the threading must turn the test red.
+4. **Declared-gap test** — asserts `plan-execute` / `code-action` report their per-iteration-repair gap, so the gap cannot become silent again (it pins *reporting*, not permanence — §3.4).
+5. **Boundary-3 test** — a new typed metadata field contributed by a strategy must appear on `TaskResult.metadata` with no engine literal edit; an internal-only field must not.
 
 ---
 
@@ -256,34 +265,42 @@ Per `agent-tdd`: every behavioral change is red-on-cut before it is green.
 
 ## 8. Rollout risk
 
-This is a **behavior change, not a refactor**. Strategies that today silently skip the fabrication guard will begin failing runs they previously passed — which is the point, but it will move bench numbers.
+This is a **behavior change, not a refactor**. Strategies that today silently skip the fabrication guard will begin failing runs they previously passed — which is the point.
 
-Sequencing:
+**Enforcement sequencing (amendment #3 — the lift rule does not apply here).** The lift rule governs **default-on** changes. All four withers are **opt-in**: the user explicitly called `.withFabricationGuard("block")` / `.withGrounding(...)` / `.withStallPolicy(...)` / `.withContract(...)`. Honoring an explicitly requested guard is a **bug fix**, not a default change — it needs correctness probes, not a 150-run/arm lift campaign:
 
-1. Land the cascade with the judgment step **inert** (computed, recorded, not enforced).
-2. Measure: run the deterministic abstention/trap cells and compare verdict-vs-outcome across all 8 strategies.
-3. Enforce behind the lift rule, per-task-class, ablation-warden veto standing.
+1. Land the cascade with the verdict computed and recorded on every result.
+2. Verify mechanism with the deterministic trap cells (`scoreAbstention`, zero API tokens) per strategy: wither set ⇒ behavior changes; wiring cut ⇒ test red.
+3. **Enforce immediately for opt-in users on all 8 strategies.** No configured wither ⇒ verdict stays informational; zero behavior change for users who set nothing.
+4. Any future *default-on* proposal for a wither goes through the lift rule + ablation-warden veto as usual.
 
 Per `feedback_bench_bernoulli_underpowered`: a mechanism confirmation is not a lift claim, and no bench-scoring change lands mid-run.
 
 ---
 
-## 9. Open questions
+## 9. Open questions — RESOLVED (2026-07-22 review)
 
-None blocking. Two to settle during planning:
-
-- Whether `RunEnvelope` is one service or splits into `RunPolicy` (judgment inputs) and `RunRails` (repair inputs). Leaning one service with two named sub-records — a split invites a fifth instance of this class at the join.
-- Whether `direct.ts` (251 lines, deliberately minimal) opts out of the envelope. Leaning no: "minimal" is why it silently lost all four guards.
+- `RunEnvelope` is **one service** with two named sub-records (`policy` for judgment inputs, `rails` for repair inputs). A split into two services reinvents this defect class at the join.
+- `direct.ts` **opts in**. Minimalism is how it silently lost all four guards; "minimal" describes its per-pass features, not its safety surface.
 
 ---
 
 ## 10. Success criteria
 
 1. A new cross-cutting concern is added by editing the envelope and one seam. **Zero strategy files touched.** Verified by adding one during implementation.
-2. `.withFabricationGuard()`, `.withGrounding()`, `.withStallPolicy()`, `.withContract()` demonstrably change behavior on all 8 strategies, or report a declared, tested gap.
-3. `check-cross-cutting.sh` is wired into CI and fails on a reintroduced drop.
-4. A novel `extraMetadata` key reaches `TaskResult.metadata` with no engine edit.
-5. Suite green; `build --force` then `typecheck --force` green.
+2. `.withFabricationGuard()`, `.withGrounding()`, `.withStallPolicy()`, `.withContract()` demonstrably change behavior on all 8 strategies, or report a declared, tested gap — **enforced for opt-in users at ship time**, not deferred behind a bench campaign (§8).
+3. Constructing a `ReasoningResult` outside the terminal mint fails to compile (branded type verified by a `@ts-expect-error` witness test).
+4. `check-cross-cutting.sh` is wired into CI and fails on a reintroduced drop or a second envelope provision site.
+5. A new typed metadata field reaches `TaskResult.metadata` with no engine literal edit; internal-only fields do not leak.
+6. Suite green; `turbo run build --force` then `turbo run typecheck --force` green.
+
+---
+
+## 12. Why now — the Phase 7 connection
+
+09-UNIFIED-PROGRAM's finale is **Phase 7: Strategy→Policy** — strategies compiled into policies (C6's kernel-side movement). That is unreachable while a strategy is 1,100 lines of bespoke plumbing. After this work a strategy's only remaining content is composition logic — reflexion is "pass, critique, pass again"; ToT is "branch, score, execute best." Policies can only compile what plumbing-free strategies express. This spec is the structural prerequisite for the program's endgame, over and above closing the live defect class.
+
+Supporting evidence from the codebase's own natural experiment: the two strategies that never drifted through a month of defect waves are `adaptive` and `blueprint` — the two that *delegate* instead of re-implementing. Delegation-inheritance is the only pattern here that has survived contact with time; this design generalizes it. Independently, `plan-execute`'s step-executor converged on the same three leaf kinds (`tool_call` / `analysis` / `composite`) as the three universal seams — the algebra was already discovered in-code before it was named here.
 
 ---
 
