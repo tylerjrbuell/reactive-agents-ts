@@ -12,7 +12,7 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { Effect, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
@@ -32,6 +32,7 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
+import { RunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-envelope.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { gatewayComplete } from "../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
@@ -167,6 +168,27 @@ export function runKernel(
     const services = yield* resolveStrategyServices;
     const { toolService, eventBus, memoryService } = services;
 
+    // ── 1b. Cross-cutting cascade merge (2026-07-22) ─────────────────────────
+    // The RunEnvelope is the ONE run-wide carrier for the seven cross-cutting
+    // wither fields. Merging it HERE — at the single universal kernel entry —
+    // is what makes `.withGrounding()` / `.withFabricationGuard()` /
+    // `.withStallPolicy()` / `.withContract()` / the three HITL rails reach
+    // EVERY strategy, including the five that never threaded them to their
+    // sub-kernels (measured 2026-07-22: reactive was the only one that did).
+    //
+    // SOFT read (`Effect.serviceOption`) by design — the R channel of
+    // `runKernel` must stay `LLMService` alone, and repair degrades gracefully:
+    // a kernel run with no envelope in context behaves exactly as before. The
+    // HARD guarantee lives at the terminal mint (`finalizeStrategyResult`),
+    // which cannot be bypassed. Explicit `KernelInput` fields WIN over the
+    // envelope, so per-pass overrides remain possible.
+    // Design: wiki/Architecture/Design-Specs/2026-07-22-cross-cutting-cascade-design.md
+    const envelopeOpt = yield* Effect.serviceOption(RunEnvelope);
+    const envelope = Option.getOrUndefined(envelopeOpt);
+    const mergedInput: KernelInput = envelope
+      ? mergeRunEnvelopeIntoKernelInput(input, envelope)
+      : input;
+
     // ── Resolve provider capabilities ONCE ───────────────────────────────────
     // Both the ToolCallResolver injection (below) and the tool-calling driver
     // selection (step 4) key on `supportsToolCalling` so they cannot diverge.
@@ -176,7 +198,7 @@ export function runKernel(
     // were sent, and its `<tool_call>` text was never extracted (loop to
     // max-iterations). Capability is the single master signal.
     // See wiki/Architecture/Design-Specs/2026-06-03-tool-calling-driver-redesign.md.
-    let effectiveInput = input;
+    let effectiveInput = mergedInput;
     let providerSupportsToolCalling = true; // unknown ⇒ assume capable (native + think.ts no-resolver fallback handles it; pre-482c11e4 default)
     {
       const llmOpt = yield* Effect.serviceOption(LLMService);
@@ -185,9 +207,9 @@ export function runKernel(
           Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
         );
         providerSupportsToolCalling = caps.supportsToolCalling;
-        if (caps.supportsToolCalling && !input.toolCallResolver) {
+        if (caps.supportsToolCalling && !mergedInput.toolCallResolver) {
           const resolver = createToolCallResolver(caps);
-          effectiveInput = { ...input, toolCallResolver: resolver };
+          effectiveInput = { ...mergedInput, toolCallResolver: resolver };
         }
       }
     }

@@ -28,7 +28,7 @@ import {
   continueWith,
   terminateWith,
 } from "../kernel/loop/iterate-until.js";
-import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
+import type { KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import {
   makeStrategyEmitLog,
   emitPhaseEnd,
@@ -176,20 +176,10 @@ export const executeReflexion = (
     // silent runtime gap. `verifier` is intentionally absent: reflexion's own
     // critique loop is its verification; threading a terminal verifier into
     // each sub-pass would change behaviour.
-    // Cascade Task 5 — INTERIM. The HITL rails now come off the RunEnvelope
-    // (they are no longer declared on ReflexionInput). The kernel still reads
-    // them from `KernelInput`, so they are spread onto every kernel pass here;
-    // Task 6 makes `runKernel` merge the envelope itself and this block dies.
-    const envelope = yield* RunEnvelope;
-    const envelopeHitlRails: Pick<
-      KernelInput,
-      "approvalPolicy" | "approvalDecision" | "interactionResponse"
-    > = {
-      approvalPolicy: envelope.rails.approvalPolicy,
-      approvalDecision: envelope.rails.approvalDecision,
-      interactionResponse: envelope.rails.interactionResponse,
-    };
-
+    // Cascade Task 6: the HITL rails + policy fields are NOT spread onto the
+    // sub-kernels below. `runKernel` merges them off the `RunEnvelope` at the
+    // kernel entry, so EVERY reflexion pass (generate, improve, and any future
+    // one) is covered by construction rather than by remembering to spread.
     const crossCutting: CrossCuttingInput = {
       resultCompression: input.resultCompression,
       agentId: input.agentId,
@@ -236,10 +226,6 @@ export const executeReflexion = (
         allToolSchemas: capabilitySnapshot.allToolSchemas,
         temperature: 0.7,
       }),
-      // Durable HITL rails (Phase D) — every generate/improve sub-kernel must
-      // carry the gate, or a `requiresApproval` tool runs unattended inside a
-      // reflexion pass (2026-07-22 defect). INTERIM: see envelopeHitlRails.
-      ...envelopeHitlRails,
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
@@ -622,8 +608,6 @@ export const executeReflexion = (
               allToolSchemas: capabilitySnapshot.allToolSchemas,
               temperature: 0.6,
             }),
-            // Durable HITL rails off the envelope (INTERIM — see above).
-            ...envelopeHitlRails,
             // Per-pass extra outside the cross-cutting/per-pass Picks; spread
             // AFTER the builder (not cross-cutting, so no drop risk).
             blockedTools,

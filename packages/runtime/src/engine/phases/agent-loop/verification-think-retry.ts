@@ -16,6 +16,7 @@
  */
 import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { buildRunEnvelope } from "@reactive-agents/reasoning";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -74,6 +75,31 @@ export const runVerificationThinkRetry = (
         environmentContext: config.environmentContext as Record<string, string> | undefined,
         initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: string }[],
         calibration: resolvedCalibration,
+        // Cross-cutting cascade (2026-07-22) — this retry re-runs the REAL task
+        // (`taskDescription` is the task, the verifier feedback rides
+        // `initialMessages`) and its output becomes the user-visible answer, so
+        // it must be judged under the same harness as the first pass. Built
+        // from the same config fields as `reasoning-think.ts`.
+        //
+        // The two resume rails (`approvalDecision` / `interactionResponse`) are
+        // deliberately absent — one-shot FiberRef values the runner applies only
+        // against a restored pause in `resumeState`, which this fresh pass has
+        // none of. `availableTools: []` also makes the approval gate moot here;
+        // it is carried anyway so the policy half never depends on the tool list
+        // happening to be empty.
+        envelope: buildRunEnvelope({
+          taskContract: config.taskContract,
+          fabricationGuard: config.fabricationGuard,
+          grounding: config.grounding,
+          stallPolicy: config.stallPolicy,
+          approvalPolicy: config.approvalPolicy
+            ? {
+                mode: config.approvalPolicy.mode,
+                tools: new Set(config.approvalPolicy.tools),
+                requireFor: config.approvalPolicy.requireFor,
+              }
+            : undefined,
+        }),
       });
       const retryOutcome = yield* Effect.exit(retryEffect);
       if (retryOutcome._tag === "Success") {

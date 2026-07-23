@@ -142,10 +142,6 @@ export const executeDirect = (
       metaTools: undefined,
     });
 
-    // Cascade Task 5 — INTERIM: HITL rails off the RunEnvelope, not the input.
-    // Task 6 makes `runKernel` merge the envelope and these lines die.
-    const envelope = yield* RunEnvelope;
-
     const kernelInput: KernelInput = {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
@@ -171,12 +167,10 @@ export const executeDirect = (
       calibration: input.calibration,
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
-      // Durable HITL rails (Phase D) — direct can dispatch tools (up to 3
-      // iterations), so the gate must reach its kernel like every other
-      // strategy's (2026-07-22).
-      approvalPolicy: envelope.rails.approvalPolicy,
-      approvalDecision: envelope.rails.approvalDecision,
-      interactionResponse: envelope.rails.interactionResponse,
+      // Cascade Task 6: the HITL rails + policy fields are absent here on
+      // purpose. `runKernel` merges them off the `RunEnvelope`, so direct's
+      // kernel gets the approval gate (it can dispatch tools up to its 3-iter
+      // cap) without `DirectInput` ever carrying a cross-cutting field.
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

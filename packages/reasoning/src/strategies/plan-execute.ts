@@ -227,13 +227,9 @@ export const executePlanExecute = (
       ...input,
       forbiddenTools: forbiddenToolList,
       ledgerSink: ledgerRef,
-      // Durable HITL rails (Phase D) — INTERIM (Task 5 → Task 6): the per-step
-      // executor still receives them on its narrowed input (its `tool_call`
-      // branch dispatches OUTSIDE any kernel, so it gates for itself), but the
-      // values now come off the envelope rather than off `PlanExecuteInput`.
-      approvalPolicy: envelope.rails.approvalPolicy,
-      approvalDecision: envelope.rails.approvalDecision,
-      interactionResponse: envelope.rails.interactionResponse,
+      // Cascade Task 6: the HITL rails are NOT handed down. Kernel-backed
+      // branches get them from `runKernel`'s envelope merge; the `tool_call`
+      // branch reads the envelope itself (step-executor.ts). Nothing to drop.
       ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
     };
     let totalTokens = 0;

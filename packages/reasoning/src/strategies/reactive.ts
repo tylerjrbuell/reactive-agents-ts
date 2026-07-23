@@ -199,12 +199,11 @@ export const executeReactive = (
       metaTools: input.metaTools,
     });
 
-    // Cascade Task 5 — INTERIM. The kernel still reads the cross-cutting fields
-    // off `KernelInput`; Task 6 makes `runKernel` merge the envelope itself and
-    // the envelope-sourced lines below are deleted then. What is already true
-    // here: they come from the RunEnvelope, never from `input`.
-    const envelope = yield* RunEnvelope;
-
+    // Cascade Task 6: the seven cross-cutting fields are NOT listed below. They
+    // ride the `RunEnvelope`, which `runKernel` merges onto the `KernelInput`
+    // at the single universal kernel entry — so reactive is now exactly as
+    // covered as every other strategy, by the same mechanism. A strategy cannot
+    // drop what it never carries.
     const kernelInput: KernelInput = {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt,
@@ -232,9 +231,6 @@ export const executeReactive = (
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       resumeState: input.resumeState,
-      approvalPolicy: envelope.rails.approvalPolicy,
-      approvalDecision: envelope.rails.approvalDecision,
-      interactionResponse: envelope.rails.interactionResponse,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       auditRationale: input.auditRationale,
@@ -251,14 +247,6 @@ export const executeReactive = (
         (process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1" ? noopVerifier : undefined),
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
-      // Opt-in numeric evidence-grounding (.withGrounding) + always-on
-      // fabrication guard (.withFabricationGuard), read off the envelope.
-      grounding: envelope.policy.grounding,
-      fabricationGuard: envelope.policy.fabricationGuard,
-      stallPolicy: envelope.rails.stallPolicy,
-      // C2: declared TaskContract → compileRunContract (runner.ts) folds its
-      // required/forbidden tools + outputShape into the RunContract.
-      taskContract: envelope.policy.taskContract,
     };
 
     const pass = yield* runPass(reactKernel, kernelInput, {

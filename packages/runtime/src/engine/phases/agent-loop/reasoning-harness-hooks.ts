@@ -17,6 +17,7 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { buildRunEnvelope } from "@reactive-agents/reasoning";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
@@ -77,6 +78,35 @@ export const runReasoningHarnessHooks = (
   return Effect.gen(function* () {
     let ctx = initialCtx;
 
+    // Cross-cutting cascade (2026-07-22) — the run-wide envelope for the
+    // continuation passes below. Built exactly as `reasoning-think.ts` builds
+    // the main think pass's, from the SAME config fields, so a
+    // `.withApprovalPolicy()` / `.withContract()` / `.withGrounding()` /
+    // `.withFabricationGuard()` / `.withStallPolicy()` run keeps its harness
+    // when a hook re-runs reasoning. Before this, `withCustomTermination` /
+    // `withMinIterations` retries ran with the approval gate DISARMED — a
+    // `requiresApproval` tool could execute unattended on a continuation.
+    //
+    // The two resume rails (`approvalDecision` / `interactionResponse`) are
+    // deliberately absent: they are one-shot FiberRef values applied by the
+    // runner ONLY against a restored `state.meta.awaitingApprovalFor` /
+    // `awaitingInteractionFor`. A continuation pass starts from a fresh kernel
+    // state (no `resumeState`), so the re-entry block provably never fires and
+    // forwarding them would be dead weight.
+    const continuationEnvelope = buildRunEnvelope({
+      taskContract: config.taskContract,
+      fabricationGuard: config.fabricationGuard,
+      grounding: config.grounding,
+      stallPolicy: config.stallPolicy,
+      approvalPolicy: config.approvalPolicy
+        ? {
+            mode: config.approvalPolicy.mode,
+            tools: new Set(config.approvalPolicy.tools),
+            requireFor: config.approvalPolicy.requireFor,
+          }
+        : undefined,
+    });
+
     // Common request builder for the three "continue working" style hooks.
     const buildExecuteRequest = (
       initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[],
@@ -117,6 +147,7 @@ export const runReasoningHarnessHooks = (
       auditRationale: config.reasoningOptions?.auditRationale,
       calibration: resolvedCalibration,
       harnessPipeline: config.harnessPipeline,
+      envelope: continuationEnvelope,
       };
       return request as unknown as ReasoningExecuteRequest;
     };
@@ -194,6 +225,17 @@ export const runReasoningHarnessHooks = (
       if (outputToVerify) {
         const verifyPrompt = config.verificationStep.prompt ??
           `Review this output against the task: "${extractTaskText(task.input).slice(0, 300)}"\n\nOutput:\n${outputToVerify.slice(0, 1500)}\n\nRespond PASS if the output fully addresses the task, or REVISE: [specific gap] if not.`;
+        // Cross-cutting cascade (2026-07-22) — DELIBERATE EXEMPTION: this pass
+        // gets NO `envelope`. It is a JUDGE call, not a continuation: its
+        // "task" is `verifyPrompt` and its output is a PASS / REVISE verdict
+        // that never ships as the user's deliverable. Judging a verdict string
+        // against the run's deliverable contract is the wrong artifact, and the
+        // numeric grounding / fabrication guards would fire on a legitimate
+        // "REVISE: the 42% figure is unsupported" (no tool observations exist
+        // on this pass to ground it against) — suppressing the very finding the
+        // hook exists to surface. `availableTools: []` makes the approval gate
+        // moot, so nothing is left unguarded. Reviewed with the merge in
+        // `runKernel`; do not "fix" by wiring the envelope here.
         const verifyOutcome = yield* Effect.exit(
           reasoningOpt.value.execute({
             taskDescription: verifyPrompt,

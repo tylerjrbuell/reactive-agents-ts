@@ -25,7 +25,6 @@ import {
   buildKernelInput,
   type CrossCuttingInput,
 } from "../kernel/state/build-kernel-input.js";
-import type { KernelInput } from "../kernel/state/kernel-state.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -197,20 +196,10 @@ export const executeTreeOfThought = (
     // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
     // branch kernel via buildKernelInput. Previously these branch kernels
     // dropped harnessPipeline/budgetLimits/calibration/auditRationale.
-    // Cascade Task 5 — INTERIM. The HITL rails now come off the RunEnvelope
-    // (they are no longer declared on TreeOfThoughtInput). The kernel still
-    // reads them from `KernelInput`, so they are spread onto every branch
-    // kernel here; Task 6 makes `runKernel` merge the envelope and this dies.
-    const envelope = yield* RunEnvelope;
-    const envelopeHitlRails: Pick<
-      KernelInput,
-      "approvalPolicy" | "approvalDecision" | "interactionResponse"
-    > = {
-      approvalPolicy: envelope.rails.approvalPolicy,
-      approvalDecision: envelope.rails.approvalDecision,
-      interactionResponse: envelope.rails.interactionResponse,
-    };
-
+    // Cascade Task 6: the HITL rails + policy fields are NOT spread onto the
+    // branch kernels below. `runKernel` merges them off the `RunEnvelope` at the
+    // kernel entry, so every ToT sub-kernel (skip path, phase-2 execute, and
+    // any future branch) is covered by construction.
     const crossCutting: CrossCuttingInput = {
       resultCompression: input.resultCompression,
       agentId: input.agentId,
@@ -290,10 +279,6 @@ export const executeTreeOfThought = (
           allToolSchemas: capabilitySnapshot.allToolSchemas,
           temperature: 0.7,
         }),
-        // Durable HITL rails (Phase D) — this branch kernel is where ToT calls
-        // tools; without the policy the gate never fires and a
-        // `requiresApproval` tool runs unattended (2026-07-22 defect).
-        ...envelopeHitlRails,
       }, {
         maxIterations: tierLimitsForSkip.maxPhase2Iterations,
         strategy: "tree-of-thought",
@@ -833,8 +818,6 @@ export const executeTreeOfThought = (
         priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
         temperature: 0.7,
       }),
-      // Durable HITL rails off the envelope (INTERIM — see above).
-      ...envelopeHitlRails,
     }, {
       maxIterations: tierLimits.maxPhase2Iterations,
       strategy: "tree-of-thought",

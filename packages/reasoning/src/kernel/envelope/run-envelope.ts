@@ -76,6 +76,53 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
 export const emptyRunEnvelope: RunEnvelopeData = { policy: {}, rails: {} };
 
 /**
+ * Fold the run-wide envelope into a `KernelInput` — the cascade's REACH step
+ * (Task 6). `runKernel` calls this once per kernel pass so a wither configured
+ * on the agent applies on EVERY strategy, including the ones that never threaded
+ * these fields to their sub-kernels (reflexion critique passes, ToT branch
+ * kernels, plan-execute composite steps, direct).
+ *
+ * Precedence: an EXPLICIT `KernelInput` field always wins. Per-pass overrides
+ * stay possible (e.g. a strategy that deliberately narrows `requiredTools` or a
+ * sub-kernel handed a tighter policy), and the merge only ever FILLS holes.
+ *
+ * Absent-field discipline: a field the envelope does not carry is not written at
+ * all (conditional spread, not `?? undefined`), so `"grounding" in input` and
+ * `Object.keys(input)` are unchanged on a run with no envelope config — the
+ * no-config path is byte-identical to pre-cascade behavior.
+ */
+export function mergeRunEnvelopeIntoKernelInput(
+  input: KernelInput,
+  envelope: RunEnvelopeData,
+): KernelInput {
+  const { policy, rails } = envelope;
+  return {
+    ...input,
+    ...(input.taskContract === undefined && policy.taskContract !== undefined
+      ? { taskContract: policy.taskContract }
+      : {}),
+    ...(input.fabricationGuard === undefined && policy.fabricationGuard !== undefined
+      ? { fabricationGuard: policy.fabricationGuard }
+      : {}),
+    ...(input.grounding === undefined && policy.grounding !== undefined
+      ? { grounding: policy.grounding }
+      : {}),
+    ...(input.stallPolicy === undefined && rails.stallPolicy !== undefined
+      ? { stallPolicy: rails.stallPolicy }
+      : {}),
+    ...(input.approvalPolicy === undefined && rails.approvalPolicy !== undefined
+      ? { approvalPolicy: rails.approvalPolicy }
+      : {}),
+    ...(input.approvalDecision === undefined && rails.approvalDecision !== undefined
+      ? { approvalDecision: rails.approvalDecision }
+      : {}),
+    ...(input.interactionResponse === undefined && rails.interactionResponse !== undefined
+      ? { interactionResponse: rails.interactionResponse }
+      : {}),
+  };
+}
+
+/**
  * Test helper — the ONLY sanctioned provision site outside
  * `reasoning-service.ts` (enforced by scripts/check-cross-cutting.sh).
  */
