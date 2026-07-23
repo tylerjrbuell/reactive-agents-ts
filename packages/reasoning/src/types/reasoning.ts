@@ -53,6 +53,18 @@ export const ReasoningMetadataSchema = Schema.Struct({
       repairGaps: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
+  /**
+   * Namespaced, schema-typed extension slot (cross-cutting cascade Task 9,
+   * DEBT-REGISTER §3). Strategy-contributed metadata fields with no
+   * dedicated top-level forward at the `ExecutionEngine` boundary ride
+   * here — the engine literal forwards this ONE key verbatim into
+   * `TaskResult.metadata.extensions`, so future fields arrive with no
+   * engine edit. Deliberately NOT a deny-list pass-through of top-level
+   * `ReasoningMetadata` keys: an unenumerated top-level key still never
+   * reaches `TaskResult` (that would leak internal fields onto the public
+   * API surface instead of merely losing them).
+   */
+  extensions: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
 });
 export type ReasoningMetadata = typeof ReasoningMetadataSchema.Type;
 

@@ -71,6 +71,45 @@ export const ResultMetadataSchema = Schema.Struct({
   complexity: Schema.optional(Schema.String),
   /** Total LLM calls made across this execution. */
   llmCalls: Schema.optional(Schema.Number),
+  /**
+   * Terminal judgment record (cross-cutting cascade, 2026-07-22/23).
+   * Forwarded verbatim from `ReasoningMetadataSchema.verdict` (Task 9) so
+   * trust receipts can read the terminal judgment off `TaskResult` — see
+   * `ReasoningMetadataSchema` in `@reactive-agents/reasoning` for the
+   * canonical field documentation; kept identical here.
+   */
+  verdict: Schema.optional(
+    Schema.Struct({
+      /** Did judgment alter the result (status flip / output replacement)? */
+      enforced: Schema.Boolean,
+      /** Grounding verdict against required tools, when requiredTools were declared. */
+      groundedOnRequired: Schema.optional(Schema.Boolean),
+      /** Contract requirement outcomes, when a taskContract was declared. */
+      contractSatisfied: Schema.optional(Schema.Boolean),
+      /**
+       * Names of judgment checks that failed. Empty means clean OR
+       * unjudged — the mint only pushes "grounding-on-required" when
+       * `envelope.policy.fabricationGuard` is configured, so an ungrounded
+       * run with no guard set also reports `failed: []`. Do not read an
+       * empty array as proof the run was checked and passed.
+       */
+      failed: Schema.Array(Schema.String),
+      /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
+      repairGaps: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
+  /**
+   * Namespaced, schema-typed extension slot (cross-cutting cascade Task 9,
+   * DEBT-REGISTER §3). Strategy-contributed metadata fields that have no
+   * dedicated top-level forward ride here — closes the failure mode where
+   * a new field died silently at the engine boundary until someone
+   * enumerated it by name. Deliberately NOT a deny-list pass-through: an
+   * unenumerated TOP-LEVEL key on `ReasoningMetadata` still never reaches
+   * `TaskResult` (that would leak internal fields onto the public API
+   * surface). Only fields a strategy explicitly places under `extensions`
+   * are forwarded, verbatim, one level deep.
+   */
+  extensions: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
 });
 export type ResultMetadata = typeof ResultMetadataSchema.Type;
 
