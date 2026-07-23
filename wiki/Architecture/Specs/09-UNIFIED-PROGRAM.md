@@ -98,6 +98,11 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > Remaining register debt = 5 Wave-5-class instrument items + the owed bench re-baseline run (owner-gated).
 > **Wave C.1 (slices 1–3) SHIPPED 2026-07-22:** equivalence invariant + receipt re-base +
 > `LedgerEntryAppended` live tap. Wave C.2 (engine-side entries, replay re-base) is next.
+> **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
+> is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
+> the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
+> `scripts/check-cross-cutting.sh` gates it in CI. `plan-execute`/`code-action` per-iteration repair
+> gap and the `runLedger`-on-the-live-engine-path drop remain OPEN (see DEBT-REGISTER §3).
 
 ### Pre-release board (historical, 2026-07-12)
 
