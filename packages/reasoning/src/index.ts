@@ -284,6 +284,22 @@ export {
 // literals that silently drop {harnessPipeline, budgetLimits, calibration, …}.
 export { buildKernelInput } from "./kernel/state/build-kernel-input.js";
 export type { CrossCuttingInput, PerPassInput } from "./kernel/state/build-kernel-input.js";
+// ─── RunEnvelope — the run-wide cross-cutting carrier (cascade Task 1) ───
+// ONE service, two named sub-records (policy = judgment inputs, rails = repair
+// inputs) so strategies stop threading HITL/fabricationGuard/grounding/
+// stallPolicy by hand and can no longer silently drop them.
+export {
+  RunEnvelope,
+  buildRunEnvelope,
+  emptyRunEnvelope,
+  provideTestEnvelope,
+} from "./kernel/envelope/run-envelope.js";
+export type {
+  RunEnvelopeData,
+  RunEnvelopePolicy,
+  RunEnvelopeRails,
+  BuildRunEnvelopeOptions,
+} from "./kernel/envelope/run-envelope.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
 // Termination meta-tool name (NOT in META_TOOLS) — exported so runtime receipt
 // derivation (Arc 1 Task 8) can exclude it from grounding evidence without a
