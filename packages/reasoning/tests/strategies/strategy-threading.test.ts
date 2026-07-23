@@ -93,21 +93,21 @@ const makeFiresPipeline = () => {
 describe("FM-I (#195) — harnessPipeline threads to the kernel in every strategy", () => {
   it("reflexion fires before('think') hooks", async () => {
     const h = makeFiresPipeline();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReflexion({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
         Effect.provide(makeReflexionLLM()),
       ),
-    );
+    ));
     expect(h.fired()).toBeGreaterThan(0);
   });
 
   it("tree-of-thought fires before('think') hooks", async () => {
     const h = makeFiresPipeline();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
         Effect.provide(mockLLM),
       ),
-    );
+    ));
     expect(h.fired()).toBeGreaterThan(0);
   });
 
@@ -132,43 +132,43 @@ describe("FM-I (#195) — harnessPipeline threads to the kernel in every strateg
       { match: "Synthesize", text: "Final synthesized answer." },
     ]);
     const h = makeFiresPipeline();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
         Effect.provide(compositePlanLLM),
       ),
-    );
+    ));
     expect(h.fired()).toBeGreaterThan(0);
   });
 });
 
 describe("Strategy threading", () => {
   it("reflexion accepts resultCompression", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
       }).pipe(Effect.provide(makeReflexionLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("plan-execute accepts resultCompression", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
       }).pipe(Effect.provide(makePlanExecuteLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("tree-of-thought accepts resultCompression", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         ...baseInput,
         resultCompression: { budget: 400, previewItems: 2 },
       }).pipe(Effect.provide(mockLLM)),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
@@ -183,52 +183,52 @@ describe("Strategy threading", () => {
         },
       },
     };
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({ ...baseInput, config }).pipe(Effect.provide(makeReflexionLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("reflexion accepts agentId and sessionId", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
       }).pipe(Effect.provide(makeReflexionLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("plan-execute accepts agentId and sessionId", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
       }).pipe(Effect.provide(makePlanExecuteLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("tree-of-thought accepts agentId and sessionId", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         ...baseInput,
         agentId: "test-agent-123",
         sessionId: "test-session-456",
       }).pipe(Effect.provide(mockLLM)),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("reflexion seeds previousCritiques from priorCritiques input", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         ...baseInput,
         priorCritiques: ["Previous run found the answer lacked error handling"],
       }).pipe(Effect.provide(makeReflexionLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
     // Critiques should be stored in result metadata for downstream persistence
     expect(result.metadata.reflexionCritiques).toBeDefined();
@@ -236,11 +236,11 @@ describe("Strategy threading", () => {
   });
 
   it("reflexion without priorCritiques still works (backward compat)", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         ...baseInput,
       }).pipe(Effect.provide(makeReflexionLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
     expect(Array.isArray(result.metadata.reflexionCritiques)).toBe(true);
   });
@@ -254,7 +254,7 @@ describe("Strategy threading", () => {
   // smoke tests pin the input acceptance + runtime no-throw. Behavioral
   // bridge coverage lives in `dispatcher-compose-bridge.test.ts` (HS-112).
   it("plan-execute accepts harnessPipeline input (GH #127)", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         ...baseInput,
         // Real (empty) pipeline. A prior stub `{ transform }` only survived
@@ -263,17 +263,17 @@ describe("Strategy threading", () => {
         // which a stub lacks.
         harnessPipeline: new HarnessPipeline(),
       }).pipe(Effect.provide(makePlanExecuteLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
   it("tree-of-thought accepts harnessPipeline input (GH #127)", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         ...baseInput,
         harnessPipeline: new HarnessPipeline(),
       }).pipe(Effect.provide(mockLLM)),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 
@@ -288,9 +288,9 @@ describe("Strategy threading", () => {
         },
       },
     };
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({ ...baseInput, config }).pipe(Effect.provide(makePlanExecuteLLM())),
-    );
+    ));
     expect(result.status).toBe("completed");
   });
 });
@@ -335,11 +335,11 @@ function makeCapturingEventBus() {
 describe("Kernel pass attribution", () => {
   it("reflexion events carry kernelPass labels", async () => {
     const { captured, layer: ebLayer } = makeCapturingEventBus();
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         ...baseInput,
       }).pipe(Effect.provide(Layer.merge(makeReflexionLLM(), ebLayer))),
-    );
+    ));
     expect(result.status).toBe("completed");
 
     // Should have ReasoningStepCompleted events with kernelPass set
@@ -357,11 +357,11 @@ describe("Kernel pass attribution", () => {
 
   it("plan-execute events carry kernelPass labels for each step", async () => {
     const { captured, layer: ebLayer } = makeCapturingEventBus();
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         ...baseInput,
       }).pipe(Effect.provide(Layer.merge(makePlanExecuteLLM(), ebLayer))),
-    );
+    ));
     expect(result.status).toBe("completed");
 
     const reasoningEvents = captured.filter(
@@ -384,7 +384,7 @@ describe("Kernel pass attribution", () => {
 
   it("tree-of-thought events carry kernelPass labels for explore and execute", async () => {
     const { captured, layer: ebLayer } = makeCapturingEventBus();
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         ...baseInput,
         // HS-110 gate would skip BFS for the "Say hello" trivial task; disable
@@ -397,7 +397,7 @@ describe("Kernel pass attribution", () => {
           },
         },
       }).pipe(Effect.provide(Layer.merge(mockLLM, ebLayer))),
-    );
+    ));
     expect(result.status).toBe("completed");
 
     const reasoningEvents = captured.filter(

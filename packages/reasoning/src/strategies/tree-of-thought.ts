@@ -37,10 +37,13 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import {
   makeStep,
-  buildStrategyResult,
   kernelPause,
-  pausedStrategyResult,
 } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  finalizePausedStrategyResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
@@ -176,7 +179,7 @@ export const executeTreeOfThought = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
@@ -296,16 +299,24 @@ export const executeTreeOfThought = (
       // Durable pause (Phase D): the delegated kernel hit an approval gate. The
       // pause is the run's terminal state — return it verbatim so the runtime
       // persists it and surfaces `pendingApproval` to the caller.
+      // ONE ledger value per exit family: the judged verdict and the
+      // forwarded metadata must describe the same evidence.
+      const skipLedger = skipExecState.ledger ?? [];
+
       const skipPause = kernelPause(skipExecState);
       if (skipPause) {
-        return pausedStrategyResult({
+        return yield* finalizePausedStrategyResult({
           strategy: "tree-of-thought",
           steps,
           pause: skipPause,
           start,
           totalTokens,
           totalCost,
-          extraMetadata: { llmCalls, runLedger: skipExecState.ledger ?? [] },
+          extraMetadata: { llmCalls, runLedger: skipLedger },
+          // Cascade terminal boundary — judgment inputs (Task 4).
+          requiredTools: input.requiredTools ?? [],
+          runLedger: skipLedger,
+          repairCapabilities: { perIteration: true },
         });
       }
 
@@ -340,7 +351,7 @@ export const executeTreeOfThought = (
         timestamp: new Date(),
       });
 
-      return buildStrategyResult({
+      return yield* finalizeStrategyResult({
         strategy: "tree-of-thought",
         steps,
         output: skipFinalOutput || null,
@@ -348,13 +359,18 @@ export const executeTreeOfThought = (
         start,
         totalTokens,
         totalCost,
+        // Cascade terminal boundary — judgment inputs (Task 4). The skip path
+        // delegates to a react sub-kernel, which repairs per iteration.
+        requiredTools: input.requiredTools ?? [],
+        runLedger: skipLedger,
+        repairCapabilities: { perIteration: true },
         extraMetadata: {
           llmCalls,
           terminatedBy: skipTb.terminatedBy,
           // Wave C.1 task 4 (B2-class boundary): the skip path runs a real
           // react kernel — forward its canonical tool ledger (mirrors
           // reactive/direct).
-          runLedger: skipExecState.ledger ?? [],
+          runLedger: skipLedger,
           ...(skipTb.rawTerminatedBy !== undefined
             ? { rawTerminatedBy: skipTb.rawTerminatedBy }
             : {}),
@@ -757,7 +773,7 @@ export const executeTreeOfThought = (
     )[0];
 
     if (!bestLeaf) {
-      return buildStrategyResult({
+      return yield* finalizeStrategyResult({
         strategy: "tree-of-thought",
         steps,
         output: null,
@@ -765,6 +781,12 @@ export const executeTreeOfThought = (
         start,
         totalTokens,
         totalCost,
+        // Cascade terminal boundary — judgment inputs (Task 4). No kernel ran
+        // on this branch, so the judged ledger is the same honest empty one
+        // the metadata forward below carries.
+        requiredTools: input.requiredTools ?? [],
+        runLedger: [],
+        repairCapabilities: { perIteration: true },
         // Wave C.1 task 4 (B2-class boundary): degenerate no-bestLeaf branch —
         // BFS explore never ran Phase 2's react kernel, so there is no kernel
         // ledger to draw from. Empty is honest (shape consistency with the
@@ -812,16 +834,23 @@ export const executeTreeOfThought = (
     steps.push(...execState.steps);
 
     // Durable pause (Phase D) — same terminal treatment as the skip path above.
+    // ONE ledger value, read by every exit below.
+    const execLedger = execState.ledger ?? [];
+
     const execPause = kernelPause(execState);
     if (execPause) {
-      return pausedStrategyResult({
+      return yield* finalizePausedStrategyResult({
         strategy: "tree-of-thought",
         steps,
         pause: execPause,
         start,
         totalTokens,
         totalCost,
-        extraMetadata: { llmCalls, runLedger: execState.ledger ?? [] },
+        extraMetadata: { llmCalls, runLedger: execLedger },
+        // Cascade terminal boundary — judgment inputs (Task 4).
+        requiredTools: input.requiredTools ?? [],
+        runLedger: execLedger,
+        repairCapabilities: { perIteration: true },
       });
     }
 
@@ -849,7 +878,7 @@ export const executeTreeOfThought = (
       timestamp: new Date(),
     });
 
-    return buildStrategyResult({
+    return yield* finalizeStrategyResult({
       strategy: "tree-of-thought",
       steps,
       output: finalOutput || null,
@@ -857,13 +886,18 @@ export const executeTreeOfThought = (
       start,
       totalTokens,
       totalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). Phase 2 is a
+      // react sub-kernel, which repairs per iteration.
+      requiredTools: input.requiredTools ?? [],
+      runLedger: execLedger,
+      repairCapabilities: { perIteration: true },
       extraMetadata: {
         llmCalls,
         terminatedBy: execTb.terminatedBy,
         // Wave C.1 task 4 (B2-class boundary): Phase 2 is a real react kernel —
         // forward its canonical tool ledger (mirrors reactive/direct/the skip
         // path above).
-        runLedger: execState.ledger ?? [],
+        runLedger: execLedger,
         ...(execTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: execTb.rawTerminatedBy }
           : {}),

@@ -23,6 +23,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { compileRunContract } from "../../src/kernel/contract/run-contract.js";
 import { computeDeliverableReport } from "../../src/kernel/contract/deliverable-report.js";
 import type { ReasoningResult } from "../../src/types/index.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const TASK = "Research the topic and save the summary to local file ./out.md";
 
@@ -109,7 +110,7 @@ function expectLedgerTruth(result: ReasoningResult) {
 
 describe("strategy tool ledger — deliverable truth", () => {
   it("reflexion: sub-kernel file-write evidence reaches result.steps and verifies produced", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: TASK,
         taskType: "general",
@@ -118,7 +119,7 @@ describe("strategy tool ledger — deliverable truth", () => {
         availableToolSchemas: [FILE_WRITE_SCHEMA],
         config: defaultReasoningConfig,
       } as never).pipe(Effect.provide(Layer.mergeAll(makeToolCallingLLMLayer(), makeToolLayer()))),
-    );
+    ));
     expectLedgerTruth(result);
   }, 20000);
 
@@ -150,7 +151,7 @@ describe("strategy tool ledger — deliverable truth", () => {
   }, 20000);
 
   it("plan-execute: dispatched file-write evidence reaches result.steps and verifies produced", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: TASK,
         taskType: "general",
@@ -159,7 +160,7 @@ describe("strategy tool ledger — deliverable truth", () => {
         availableToolSchemas: [FILE_WRITE_SCHEMA],
         config: defaultReasoningConfig,
       } as never).pipe(Effect.provide(Layer.mergeAll(makePlanExecuteLLMLayer(), makeToolLayer()))),
-    );
+    ));
     expectLedgerTruth(result);
   }, 20000);
 });

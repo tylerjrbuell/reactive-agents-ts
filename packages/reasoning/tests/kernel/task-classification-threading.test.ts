@@ -59,7 +59,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "What is 17 × 23?",
         taskType: "math",
@@ -68,7 +68,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
         config: defaultReasoningConfig,
         taskClassification: injectedComplex,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     // BFS was NOT skipped — proves ToT read the injected snapshot, not its own.
@@ -96,7 +96,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
       intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
     };
 
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription:
           "Compare the trade-offs between eventual and strong consistency in distributed databases.",
@@ -106,7 +106,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
         config: defaultReasoningConfig,
         taskClassification: injectedTrivial,
       }).pipe(Effect.provide(layer)),
-    );
+    ));
 
     const md = result.metadata as Record<string, unknown>;
     expect(md.bfsSkipped).toBe(true);

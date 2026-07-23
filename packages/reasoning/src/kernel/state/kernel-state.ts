@@ -1373,7 +1373,7 @@ export interface ReActKernelResult {
   /**
    * Durable HITL (Phase D): present when this sub-kernel PAUSED at an approval
    * gate. The gated call has NOT executed. A consuming strategy must treat this
-   * as terminal for the whole run — see `isKernelPaused` / `pausedStrategyResult`.
+   * as terminal for the whole run — see `isKernelPaused` / `finalizePausedStrategyResult`.
    */
   awaitingApprovalFor?: KernelState["meta"]["awaitingApprovalFor"];
   /** Durable pause (Task 9): mirror of {@link awaitingApprovalFor} for `request_user_input`. */

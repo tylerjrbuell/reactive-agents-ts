@@ -26,6 +26,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executePlanExecute } from "./plan-execute.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -114,7 +115,10 @@ const runPlanExecute = (
       availableToolSchemas: [GATHER_SCHEMA, AUDIT_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario, gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario, gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("#40 (plan-execute) — a sub-kernel's unverified ship never reaches the caller as completed", () => {

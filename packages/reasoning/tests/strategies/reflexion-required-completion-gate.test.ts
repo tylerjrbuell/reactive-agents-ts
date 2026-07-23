@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
 beforeAll(() => { delete process.env.RA_LAZY_TOOLS; });
@@ -59,7 +60,7 @@ async function makeMockLayer() {
 describe("reflexion required-tools completion gate", () => {
   it("does NOT report success when a required tool was never called, despite SATISFIED critique", async () => {
     const layer = await makeMockLayer();
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Fetch data and create a markdown file (./out.md) summarizing it.",
         taskType: "general",
@@ -74,14 +75,14 @@ describe("reflexion required-tools completion gate", () => {
         requiredTools: ["file-write"],
         config: defaultReasoningConfig,
       } as any).pipe(Effect.provide(layer)),
-    );
+    ));
     // file-write never fired → must not be reported as a completed task.
     expect(result.status).not.toBe("completed");
   }, 20000);
 
   it("reports success normally when there are NO required tools (gate is scoped)", async () => {
     const layer = await makeMockLayer();
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "Summarize the concept of recursion in two sentences.",
         taskType: "general",
@@ -90,7 +91,7 @@ describe("reflexion required-tools completion gate", () => {
         availableToolSchemas: [],
         config: defaultReasoningConfig,
       } as any).pipe(Effect.provide(layer)),
-    );
+    ));
     expect(result.status).toBe("completed");
   }, 20000);
 });
@@ -115,7 +116,7 @@ describe("reflexion PostCondition spine gate (RA_POST_CONDITIONS=1)", () => {
       // The mock LLM never emits a tool call, so file-write never fires.
       // With RA_POST_CONDITIONS=1 the spine gate should block "satisfied".
       const layer = await makeMockLayer();
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executeReflexion({
           taskDescription:
             "Write a summary report and save it as a markdown file (./report.md).",
@@ -137,7 +138,7 @@ describe("reflexion PostCondition spine gate (RA_POST_CONDITIONS=1)", () => {
           // the condition derivation when RA_POST_CONDITIONS=1.
           config: defaultReasoningConfig,
         } as any).pipe(Effect.provide(layer)),
-      );
+      ));
       // file-write never fired → ArtifactProduced('./report.md') unmet
       // → spine gate must block "satisfied" → status must NOT be "completed".
       expect(result.status).not.toBe("completed");

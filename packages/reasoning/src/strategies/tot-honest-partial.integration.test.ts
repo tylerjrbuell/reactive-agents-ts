@@ -25,6 +25,7 @@ import { executeTreeOfThought } from "./tree-of-thought.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { succeedingToolLayer } from "../testing/tool-service-mock.js";
 import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -63,7 +64,10 @@ const runToT = (extra: Record<string, unknown>) =>
       config: defaultReasoningConfig,
       maxIterations: 6,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), gatherToolLayer))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), gatherToolLayer)),
+      provideTestEnvelope,
+    ),
   );
 
 describe("H5 (tree-of-thought) — an unverified ship never reaches the caller as completed", () => {
@@ -89,5 +93,13 @@ describe("H5 (tree-of-thought) — an unverified ship never reaches the caller a
     const result = await runToT({ budgetLimits: { tokenLimit: 1 } });
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.budgetTerminalPartial).toBeUndefined();
+  });
+
+  // Cross-cutting cascade Task 4 — every strategy exit crosses the single
+  // terminal mint (finalizeStrategyResult). Judgment stays INERT until Task 8.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const result = await runToT({});
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
   });
 });

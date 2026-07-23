@@ -49,9 +49,10 @@ import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import {
   makeStep,
   buildStrategyResult,
-  pausedStrategyResult,
   type KernelPause,
 } from "../kernel/capabilities/sense/step-utils.js";
+import { finalizePausedStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
@@ -180,7 +181,7 @@ export const executePlanExecute = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const services = yield* resolveStrategyServices;
@@ -974,14 +975,21 @@ export const executePlanExecute = (
       // pause it has not, and narrating a completion here is exactly the lie the
       // approval gate exists to prevent.
       if (pendingPause !== undefined) {
-        return pausedStrategyResult({
+        const pauseLedger = yield* Ref.get(ledgerRef);
+        return yield* finalizePausedStrategyResult({
           strategy: "plan-execute-reflect",
           steps,
           pause: pendingPause,
           start,
           totalTokens,
           totalCost,
-          extraMetadata: { llmCalls: llmCallsTotal, runLedger: yield* Ref.get(ledgerRef) },
+          extraMetadata: { llmCalls: llmCallsTotal, runLedger: pauseLedger },
+          // Cascade terminal boundary — judgment inputs (Task 4).
+          requiredTools: input.requiredTools ?? [],
+          runLedger: pauseLedger,
+          // plan-execute has only coarse phase loops — no per-iteration repair
+          // hook (spec §3.4).
+          repairCapabilities: { perIteration: false },
         });
       }
 

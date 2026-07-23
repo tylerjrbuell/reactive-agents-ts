@@ -280,7 +280,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
   }, 15000);
 
   it("reflexion: forwards the terminal pass's ledger with a tool-invocation entry", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: TASK_FILE,
         taskType: "general",
@@ -291,12 +291,12 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
       } as never).pipe(
         Effect.provide(Layer.mergeAll(makeReflexionToolCallingLLMLayer(), makeFileWriteToolLayer())),
       ),
-    );
+    ));
     expectRunLedgerForwarded(result);
   }, 15000);
 
   it("reflexion: MULTI-PASS runLedger stays complete — an earlier (generate) pass's tool-invocation is not lost when a later (improve) pass is terminal", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: TASK_FILE,
         taskType: "general",
@@ -309,7 +309,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
           Layer.mergeAll(makeReflexionMultiPassToolCallingLLMLayer(), makeFileWriteToolLayer()),
         ),
       ),
-    );
+    ));
     expectRunLedgerForwarded(result);
 
     // The review's defect, pinned directly: `runLedger`'s tool-invocation
@@ -327,7 +327,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
   }, 15000);
 
   it("tree-of-thought: forwards the skip-path kernel's ledger with a tool-invocation entry", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: TASK_TRIVIAL,
         taskType: "research",
@@ -336,7 +336,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
         availableToolSchemas: [GATHER_SCHEMA],
         config: defaultReasoningConfig,
       } as never).pipe(Effect.provide(Layer.merge(gatherScenario(), gatherToolLayer))),
-    );
+    ));
     expectRunLedgerForwarded(result);
   }, 15000);
 
@@ -381,7 +381,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
   }, 15000);
 
   it("plan-execute: already forwards runLedger (Wave C task C8) — unchanged by Task 4", async () => {
-    const result = await Effect.runPromise(
+    const result = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: TASK_FILE,
         taskType: "general",
@@ -390,7 +390,7 @@ describe("Task 4 — every strategy forwards extraMetadata.runLedger", () => {
         availableToolSchemas: [FILE_WRITE_SCHEMA],
         config: defaultReasoningConfig,
       } as never).pipe(Effect.provide(Layer.mergeAll(makePlanExecuteLLMLayer(), makeFileWriteToolLayer()))),
-    );
+    ));
     expectRunLedgerForwarded(result);
   }, 15000);
 

@@ -304,7 +304,7 @@ describe("Model context verification", () => {
         "Evaluate whether": "SATISFIED: The response is complete and accurate.",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeReflexion({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -318,7 +318,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       expect(calls.length).toBeGreaterThan(0);
       assertNoJsonWrapping(calls, "reflexion");
@@ -333,7 +333,7 @@ describe("Model context verification", () => {
         "Evaluate whether": "<think>UNSATISFIED: The response needs more detail about geography.</think>",
       });
 
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executeReflexion({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -347,7 +347,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // The critique should NOT be empty — it should fall back to thinking content
       const critiques = result.steps.filter((s) => s.type === "observation" && s.content.includes("[CRITIQUE"));
@@ -365,7 +365,7 @@ describe("Model context verification", () => {
         "Evaluate whether": "<think>Thinking deeply...</think>UNSATISFIED: Needs more detail.",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeReflexion({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -379,7 +379,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // Improvement calls should not contain <think> blocks from critique
       assertNoThinkBlocks(calls, "reflexion-improvement");
@@ -397,7 +397,7 @@ describe("Model context verification", () => {
         "Synthesize": "Paris is the capital of France.",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executePlanExecute({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -405,7 +405,7 @@ describe("Model context verification", () => {
           availableTools: [],
           config: baseConfig,
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       expect(calls.length).toBeGreaterThan(0);
       assertNoJsonWrapping(calls, "plan-execute");
@@ -423,7 +423,7 @@ describe("Model context verification", () => {
         "Selected Approach": "FINAL ANSWER: Paris is the capital of France.",
       });
 
-      await Effect.runPromise(
+      await Effect.runPromise(provideTestEnvelope(
         executeTreeOfThought({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -437,7 +437,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       expect(calls.length).toBeGreaterThan(0);
       assertNoJsonWrapping(calls, "tree-of-thought");
@@ -453,7 +453,7 @@ describe("Model context verification", () => {
         "Selected Approach": "FINAL ANSWER: Result via Approach A.",
       });
 
-      const result = await Effect.runPromise(
+      const result = await Effect.runPromise(provideTestEnvelope(
         executeTreeOfThought({
           taskDescription: SIMPLE_TASK,
           taskType: "query",
@@ -467,7 +467,7 @@ describe("Model context verification", () => {
             },
           },
         }).pipe(Effect.provide(layer)),
-      );
+      ));
 
       // Should still produce a valid result — thinking was stripped before parsing
       expect(result.status).toBe("completed");

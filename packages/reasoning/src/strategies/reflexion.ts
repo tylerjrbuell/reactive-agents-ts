@@ -39,10 +39,13 @@ import {
 } from "../kernel/utils/service-utils.js";
 import {
   makeStep,
-  buildStrategyResult,
   kernelPause,
-  pausedStrategyResult,
 } from "../kernel/capabilities/sense/step-utils.js";
+import {
+  finalizeStrategyResult,
+  finalizePausedStrategyResult,
+} from "../kernel/capabilities/sense/finalize-result.js";
+import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -148,7 +151,7 @@ export const executeReflexion = (
 ): Effect.Effect<
   ReasoningResult,
   ExecutionError,
-  LLMService
+  LLMService | RunEnvelope
 > =>
   Effect.gen(function* () {
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
@@ -245,7 +248,7 @@ export const executeReflexion = (
     const genPause = kernelPause(genPass.state);
     if (genPause) {
       steps.push(...genPass.steps);
-      return pausedStrategyResult({
+      return yield* finalizePausedStrategyResult({
         strategy: "reflexion",
         steps,
         pause: genPause,
@@ -254,6 +257,11 @@ export const executeReflexion = (
         totalInputTokens: genPass.inputTokens,
         totalOutputTokens: genPass.outputTokens,
         totalCost: genPass.cost,
+        // Cascade terminal boundary — judgment inputs (Task 4). Same ledger
+        // rule as the terminal exit below: project over the steps returned.
+        requiredTools: input.requiredTools ?? [],
+        runLedger: projectStepsToLedger(undefined, steps, 0),
+        repairCapabilities: { perIteration: true },
       });
     }
 
@@ -683,7 +691,7 @@ export const executeReflexion = (
     const finalPause = kernelPause(final.lastPassState);
     if (finalPause) {
       steps.push(...final.allSideEffectSteps);
-      return pausedStrategyResult({
+      return yield* finalizePausedStrategyResult({
         strategy: "reflexion",
         steps,
         pause: finalPause,
@@ -691,6 +699,10 @@ export const executeReflexion = (
         totalTokens: final.totalTokens,
         totalCost: final.totalCost,
         extraMetadata: { llmCalls, reflexionCritiques: final.previousCritiques },
+        // Cascade terminal boundary — judgment inputs (Task 4).
+        requiredTools: input.requiredTools ?? [],
+        runLedger: projectStepsToLedger(undefined, steps, iters),
+        repairCapabilities: { perIteration: true },
       });
     }
 
@@ -775,7 +787,11 @@ export const executeReflexion = (
       ),
     );
 
-    return buildStrategyResult({
+    // ONE ledger value, read twice: the judged verdict and the forwarded
+    // metadata must describe the same evidence.
+    const runLedger = projectStepsToLedger(undefined, steps, iters);
+
+    return yield* finalizeStrategyResult({
       strategy: "reflexion",
       steps,
       output: gated.output,
@@ -783,6 +799,12 @@ export const executeReflexion = (
       start,
       totalTokens: finalTokens,
       totalCost: finalCost,
+      // Cascade terminal boundary — judgment inputs (Task 4). `runLedger` is
+      // the SAME projection the metadata forward below carries.
+      requiredTools: input.requiredTools ?? [],
+      runLedger,
+      // Generate/improve run react sub-kernels, which repair per iteration.
+      repairCapabilities: { perIteration: true },
       // Terminal sub-kernel meta — carries the durable pause rails (a pause is
       // returned earlier, but the forward keeps every exit consistent).
       kernelMeta: final.lastPassState.meta,
@@ -804,7 +826,7 @@ export const executeReflexion = (
         // SAME merged steps[] array returned in this result, so runLedger ≡
         // projection(steps) — every pass's tool-invocation/tool-result
         // appears, with a single contiguous seq (no cross-pass collision).
-        runLedger: projectStepsToLedger(undefined, steps, iters),
+        runLedger,
         ...(lastPassTb.rawTerminatedBy !== undefined
           ? { rawTerminatedBy: lastPassTb.rawTerminatedBy }
           : {}),

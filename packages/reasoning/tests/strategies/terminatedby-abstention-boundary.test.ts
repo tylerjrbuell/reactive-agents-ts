@@ -122,7 +122,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       { match: "", text: "SATISFIED: complete." },
     ]);
 
-    const r = await Effect.runPromise(
+    const r = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Search the web then write the report to ./out.md for me now",
         taskType: "simple",
@@ -134,7 +134,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       } as Parameters<typeof executePlanExecute>[0]).pipe(
         Effect.provide(Layer.merge(scenario, layer)),
       ),
-    );
+    ));
 
     // The two fields projectAbstention (abstention-projection.ts) requires.
     expect(meta(r).terminatedBy).toBe("abstained");
@@ -159,7 +159,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
   // return → terminatedBy absent, abstention undefined → both fail.
   it("tree-of-thought abstention crosses the boundary (kernel-state path)", async () => {
     const scenario = TestLLMServiceLayer([{ match: "", text: "The answer is 4." }]);
-    const r = await Effect.runPromise(
+    const r = await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "What is 2+2?",
         taskType: "simple",
@@ -169,7 +169,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
         requiredTools: ["nonexistent-db"],
         config: defaultReasoningConfig,
       } as Parameters<typeof executeTreeOfThought>[0]).pipe(Effect.provide(scenario)),
-    );
+    ));
     expect(meta(r).terminatedBy).toBe("abstained");
     expect(meta(r).abstention).toBeDefined();
   });
@@ -191,7 +191,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       { match: "GOAL:", text: "SATISFIED: complete." },
       { match: "Synthesize", text: "Final synthesized answer." },
     ]);
-    const r = await Effect.runPromise(
+    const r = await Effect.runPromise(provideTestEnvelope(
       executePlanExecute({
         taskDescription: "Find test data",
         taskType: "simple",
@@ -202,7 +202,7 @@ describe("B2 — terminatedBy + abstention cross the strategy→engine boundary"
       } as Parameters<typeof executePlanExecute>[0]).pipe(
         Effect.provide(Layer.merge(scenario, layer)),
       ),
-    );
+    ));
     expect(r.status).toBe("completed");
     expect(meta(r).terminatedBy).toBe("final_answer");
     expect(meta(r).terminatedBy).not.toBe("end_turn");

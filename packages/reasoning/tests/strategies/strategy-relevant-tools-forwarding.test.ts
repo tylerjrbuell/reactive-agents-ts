@@ -13,6 +13,7 @@ import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
+import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Lazy disclosure is the default + the regime where the bug bites.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
@@ -69,7 +70,7 @@ const bigTool = {
 describe("strategy relevantTools forwarding (lazy disclosure)", () => {
   it("reflexion surfaces a classifier-relevant non-meta tool to the model", async () => {
     const { layer, getCaptured } = await createCapturingLayer();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeReflexion({
         taskDescription: "List the last 10 commits and summarize them.",
         taskType: "git",
@@ -79,7 +80,7 @@ describe("strategy relevantTools forwarding (lazy disclosure)", () => {
         relevantTools: ["github/list_commits"],
         config: defaultReasoningConfig,
       } as any).pipe(Effect.provide(layer)),
-    );
+    ));
     // Regression guard: without relevantTools forwarding, the tool is pruned
     // (not a meta-tool) and never reaches the model. Prompt shows the SANITIZED
     // name (prompt↔FC name-mismatch fix) — surfacing intent unchanged.
@@ -88,7 +89,7 @@ describe("strategy relevantTools forwarding (lazy disclosure)", () => {
 
   it("tree-of-thought surfaces a classifier-relevant non-meta tool to the model", async () => {
     const { layer, getCaptured } = await createCapturingLayer();
-    await Effect.runPromise(
+    await Effect.runPromise(provideTestEnvelope(
       executeTreeOfThought({
         taskDescription: "List the last 10 commits and summarize them.",
         taskType: "git",
@@ -98,7 +99,7 @@ describe("strategy relevantTools forwarding (lazy disclosure)", () => {
         relevantTools: ["github/list_commits"],
         config: defaultReasoningConfig,
       } as any).pipe(Effect.provide(layer)),
-    );
+    ));
     expect(getCaptured()).toContain("github_list_commits");
   }, 20000);
 

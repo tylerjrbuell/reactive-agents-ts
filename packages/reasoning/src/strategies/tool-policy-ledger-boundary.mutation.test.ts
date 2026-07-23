@@ -29,6 +29,7 @@ import { executePlanExecute } from "./plan-execute.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { mockToolServiceLayer } from "../testing/tool-service-mock.js";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+import { provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -87,7 +88,10 @@ const runPlanExecute = (
       availableToolSchemas: [GATHER_SCHEMA],
       config: defaultReasoningConfig,
       ...extra,
-    } as never).pipe(Effect.provide(Layer.merge(scenario(), recordingToolLayer(executed)))),
+    } as never).pipe(
+      Effect.provide(Layer.merge(scenario(), recordingToolLayer(executed))),
+      provideTestEnvelope,
+    ),
   );
 
 describe("B1 boundary — tool-policy gate (P0-4) is enforced inside executeToolAndObserve", () => {
