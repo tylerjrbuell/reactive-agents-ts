@@ -41,7 +41,13 @@ export const ReasoningMetadataSchema = Schema.Struct({
       groundedOnRequired: Schema.optional(Schema.Boolean),
       /** Contract requirement outcomes, when a taskContract was declared. */
       contractSatisfied: Schema.optional(Schema.Boolean),
-      /** Names of judgment checks that failed (empty ⇒ clean). */
+      /**
+       * Names of judgment checks that failed. Empty means clean OR
+       * unjudged — the mint only pushes "grounding-on-required" when
+       * `envelope.policy.fabricationGuard` is configured, so an ungrounded
+       * run with no guard set also reports `failed: []`. Do not read an
+       * empty array as proof the run was checked and passed.
+       */
       failed: Schema.Array(Schema.String),
       /** Declared repair gaps for this strategy (e.g. "per-iteration"). */
       repairGaps: Schema.optional(Schema.Array(Schema.String)),

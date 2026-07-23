@@ -160,10 +160,7 @@ export { computeDeliverableReport } from "./kernel/contract/deliverable-report.j
 // action/observation ledger pairs the kernel act phase writes, so deliverable
 // receipts verify on the engine path too (2026-07-11 inline-loop fix).
 export { makeStep } from "./kernel/capabilities/sense/step-utils.js";
-export {
-  finalizeStrategyResult,
-  __unsafeBrandJudgedForTest,
-} from "./kernel/capabilities/sense/finalize-result.js";
+export { finalizeStrategyResult } from "./kernel/capabilities/sense/finalize-result.js";
 export type {
   JudgedReasoningResult,
   FinalizeExtras,
