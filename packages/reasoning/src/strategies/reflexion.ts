@@ -260,6 +260,11 @@ export const executeReflexion = (
         // Cascade terminal boundary — judgment inputs (Task 4). Same ledger
         // rule as the terminal exit below: project over the steps returned.
         requiredTools: input.requiredTools ?? [],
+        // The `0` here is real, not a stand-in for a dropped counter: this
+        // pause fires on the generate pass, BEFORE `iterateUntil` starts (no
+        // `attempt` variable exists yet at this point in the function), so
+        // zero reflect/improve iterations have elapsed — "iteration 0" is the
+        // honest count, not a placeholder.
         runLedger: projectStepsToLedger(undefined, steps, 0),
         repairCapabilities: { perIteration: true },
       });

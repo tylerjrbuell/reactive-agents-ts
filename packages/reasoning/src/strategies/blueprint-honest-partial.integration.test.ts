@@ -112,4 +112,16 @@ describe("#40 (blueprint) — the budget-capped harness join never reads as comp
     expect(result.metadata.verdict).toBeDefined();
     expect(result.metadata.verdict?.enforced).toBe(false);
   });
+
+  // Fix 3 (Task 4 review) — spec-owner ruling: blueprint's OWN terminal mint
+  // (this SOLVE path, not the `return executeReactive(input)` degrade paths)
+  // declares `repairCapabilities: { perIteration: false }`. Blueprint's SOLVE
+  // path is a 0-LLM DAG worker (executeBlueprintWorker) with no per-iteration
+  // repair hook — `true` would under-report a real repair gap. Pins the
+  // ruling as an observable "per-iteration" repair gap rather than a bare
+  // constant nobody re-checks.
+  it("blueprint's own SOLVE-path mint records the per-iteration repair gap", async () => {
+    const result = await runBlueprint({});
+    expect(result.metadata.verdict?.repairGaps).toContain("per-iteration");
+  });
 });

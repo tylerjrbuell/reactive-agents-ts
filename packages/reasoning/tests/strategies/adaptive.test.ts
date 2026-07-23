@@ -41,6 +41,36 @@ describe("AdaptiveStrategy", () => {
     expect(adaptiveStep!.content).toContain("reactive");
   });
 
+  // Cross-cutting cascade Task 4 — adaptive builds ITS OWN terminal result
+  // via finalizeStrategyResult (never `return`s a sub-strategy's result
+  // verbatim), so every adaptive run — regardless of the dispatched
+  // sub-strategy — must carry adaptive's own verdict record. Judgment stays
+  // INERT (enforced:false) until Task 8. Reverting adaptive's return site to
+  // build the result via buildStrategyResult directly (bypassing the mint)
+  // must fail this test.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "Classify the task", text: "REACTIVE" },
+      { match: "Think step-by-step", text: "FINAL ANSWER: The capital of France is Paris." },
+    ]);
+
+    const program = executeAdaptive({
+      taskDescription: "What is the capital of France?",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      program.pipe(Effect.provide(layer)),
+    ));
+
+    expect(result.strategy).toBe("adaptive");
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
+  });
+
   it("should default to reactive when analysis response is unrecognized", async () => {
     // Default "Test response" won't match any strategy keyword,
     // so parseStrategySelection defaults to "reactive"

@@ -33,6 +33,29 @@ describe("DirectStrategy", () => {
     expect(result.steps.length).toBeGreaterThan(0);
   });
 
+  // Cross-cutting cascade Task 4 — direct's own terminal mint
+  // (finalizeStrategyResult) always records a verdict. Judgment stays INERT
+  // (enforced:false) until Task 8. Reverting direct to build its result via
+  // buildStrategyResult directly (bypassing the mint) must fail this test.
+  it("every result carries a terminal verdict record (cascade mint)", async () => {
+    const layer = TestLLMServiceLayer([
+      { match: "What is", text: "FINAL ANSWER: Paris" },
+    ]);
+
+    const program = executeDirect({
+      taskDescription: "What is the capital of France?",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(layer))));
+
+    expect(result.metadata.verdict).toBeDefined();
+    expect(result.metadata.verdict?.enforced).toBe(false);
+  });
+
   it("defaults maxIterations to 1 (single turn)", async () => {
     // Mock that never says FINAL ANSWER — would loop forever in reactive mode.
     // Direct must terminate after maxIter=1 with status="failed".

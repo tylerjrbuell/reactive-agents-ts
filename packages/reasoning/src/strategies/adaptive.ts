@@ -24,7 +24,7 @@ import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep 
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
 import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import type { LedgerEntry } from "../kernel/ledger/run-ledger.js";
+import type { LedgerEntry, LedgerEntryKind } from "../kernel/ledger/run-ledger.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -408,20 +408,48 @@ export const executeAdaptive = (
 // ─── Private Helpers ───
 
 /**
+ * Exhaustive `kind → true` map derived structurally from the real
+ * `LedgerEntry` union (`LedgerEntryKind = LedgerEntry["kind"]`) — not a
+ * hand-duplicated string list. Assigning this object literal to
+ * `Record<LedgerEntryKind, true>` makes both a missing kind (union grew, map
+ * didn't) and a stale/extra kind (union shrank, map didn't) a compile error,
+ * so the runtime membership check below can never silently drift from the
+ * type.
+ */
+const LEDGER_ENTRY_KINDS: Record<LedgerEntryKind, true> = {
+  "tool-invocation": true,
+  "tool-result": true,
+  artifact: true,
+  requirement: true,
+  claim: true,
+  verdict: true,
+  "harness-signal": true,
+  handoff: true,
+  "compaction-marker": true,
+};
+
+/**
  * Narrow one relayed metadata element back to a `LedgerEntry`.
  *
  * Adaptive re-emits the sub-strategy's result, and `ReasoningResult.metadata`
  * is an open `Record<string, unknown>` at that seam — so the ledger arrives
- * untyped. The entries were minted by the sub-strategy's own kernel, so this is
- * a shape check for the type system (used only for the typed judgment channel),
- * not a validation policy: the raw relay still rides `metadata.runLedger`.
+ * untyped. The entries were minted by the sub-strategy's own kernel via
+ * `appendEntry` (run-ledger.ts), which always stamps `seq`, `iteration`, and a
+ * `kind` drawn from the real union — so validating all three here means every
+ * genuine relayed entry is guaranteed to pass. This guard therefore does not
+ * "drop" real evidence: whatever fails it was never a `LedgerEntry` to begin
+ * with (a corrupt/foreign value on the untyped relay channel), and excluding
+ * it from the typed judgment channel is correct, not a loss. The raw relay
+ * still rides `metadata.runLedger` byte-for-byte regardless of this filter.
  */
 function isLedgerEntry(value: unknown): value is LedgerEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { kind?: unknown; seq?: unknown; iteration?: unknown };
   return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { kind?: unknown }).kind === "string" &&
-    typeof (value as { seq?: unknown }).seq === "number"
+    typeof candidate.kind === "string" &&
+    Object.prototype.hasOwnProperty.call(LEDGER_ENTRY_KINDS, candidate.kind) &&
+    typeof candidate.seq === "number" &&
+    typeof candidate.iteration === "number"
   );
 }
 

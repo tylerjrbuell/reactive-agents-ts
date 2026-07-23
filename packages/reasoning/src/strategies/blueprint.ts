@@ -708,12 +708,17 @@ export const executeBlueprint = (
       start,
       totalTokens,
       totalCost,
-      // Cascade terminal boundary — judgment inputs (Task 4). Blueprint's
-      // degrade paths delegate to executeReactive (kernel passes), so the
-      // strategy is declared per-iteration repairable.
+      // Cascade terminal boundary — judgment inputs (Task 4). This is
+      // blueprint's OWN terminal mint (the SOLVE path) — NOT the degrade
+      // paths above, which `return executeReactive(input)` verbatim and so
+      // carry reactive's own `{ perIteration: true }` mint. Blueprint's own
+      // SOLVE path is a 0-LLM DAG worker (executeBlueprintWorker) with no
+      // per-iteration repair hook at all — declaring `true` here would
+      // under-report a real repair gap. Spec-owner ruling (Task 4 review,
+      // amendment 2026-07-22): `false` for blueprint's own mint.
       requiredTools: input.requiredTools ?? [],
       runLedger,
-      repairCapabilities: { perIteration: true },
+      repairCapabilities: { perIteration: false },
       extraMetadata: {
         terminatedBy,
         // The budget-capped join is a harness-authored terminal — surface the
