@@ -30,6 +30,7 @@ import {
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
 import { compileRunContract } from "../kernel/contract/run-contract.js";
+import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -214,13 +215,12 @@ export const executePlanExecute = (
     const ledgerRef = yield* Ref.make<RunLedger>([]);
     // P0-4 — the deny-list the safety gate enforces: explicit override first,
     // else the declared TaskContract's forbidden tools (the production
-    // `.withContract` signal). Threaded into every dispatch via the primitive.
+    // `.withContract` signal), via the ONE shared derivation (Cascade Task 7)
+    // — `executeToolAndObserve` falls back to this same helper when a caller
+    // threads no policy at all, so this pre-derivation and that fallback can
+    // never drift apart. Threaded into every dispatch via the primitive.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (envelope.policy.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     // The step-executor input, augmented with the policy + ledger sink the
     // canonical primitive reads. Built once; passed to every executeStep call.
     const stepExecutorInput: StepExecutorInput = {

@@ -50,6 +50,7 @@ import {
   emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import {
   finalizeStrategyResult,
   type JudgedReasoningResult,
@@ -183,13 +184,13 @@ export const executeBlueprint = (
     // on `result.metadata.runLedger`.
     const ledgerRef = yield* Ref.make<RunLedger>([]);
     // P0-4 — the deny-list the safety gate enforces: explicit override, else the
-    // declared TaskContract's forbidden tools (the production `.withContract` signal).
+    // declared TaskContract's forbidden tools (the production `.withContract`
+    // signal), via the ONE shared derivation (Cascade Task 7) —
+    // `executeToolAndObserve` falls back to this same helper when a caller
+    // threads no policy at all, so this pre-derivation and that fallback can
+    // never drift apart.
     const forbiddenToolList: readonly string[] =
-      input.forbiddenTools ??
-      (envelope.policy.taskContract?.tools
-        ?.filter((t) => t.kind === "forbidden")
-        .map((t) => t.name) ??
-        []);
+      input.forbiddenTools ?? forbiddenToolsFromContract(envelope.policy.taskContract);
     let totalTokens = 0;
     let totalCost = 0;
     // Self-budget: blueprint makes at most plan(1) + solve(1) LLM calls — the
