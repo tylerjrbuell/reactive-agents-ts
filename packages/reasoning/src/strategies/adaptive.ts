@@ -107,6 +107,31 @@ type SubStrategy =
   | "tree-of-thought"
   | "blueprint";
 
+/**
+ * The repair capability each dispatch target DECLARES at its own terminal mint.
+ *
+ * `adaptive` is a router: it re-mints the result of whichever sub-strategy ran,
+ * so it must report that sub-strategy's repair capability, not its own. It used
+ * to hard-code `{ perIteration: true }` — true for the kernel-pass strategies,
+ * FALSE for `plan-execute-reflect` (`plan-execute.ts:1489`) and `blueprint`
+ * (`blueprint.ts:726`), both of which `dispatchStrategy` can select. The
+ * consequence was that on the default `adaptive` strategy routed to
+ * plan-execute — the path most users hit — `verdict.repairGaps` came back
+ * `undefined` and the declared gap was silently not reported (review I1).
+ *
+ * `Record<SubStrategy, …>` makes this exhaustive by construction: a new
+ * dispatch target is a compile error here until its repair capability is
+ * declared. The values MUST match what each strategy passes at its own mint —
+ * `adaptive-repair-capabilities.test.ts` pins that correspondence.
+ */
+const SUB_STRATEGY_REPAIR: Record<SubStrategy, { readonly perIteration: boolean }> = {
+  reactive: { perIteration: true },
+  reflexion: { perIteration: true },
+  "tree-of-thought": { perIteration: true },
+  "plan-execute-reflect": { perIteration: false },
+  blueprint: { perIteration: false },
+};
+
 export const executeAdaptive = (
   input: AdaptiveInput,
 ): Effect.Effect<
@@ -361,8 +386,10 @@ export const executeAdaptive = (
       // Same relayed ledger, narrowed for the typed judgment channel. The
       // metadata forward below keeps the raw relay byte-for-byte.
       runLedger: relayedLedger.filter(isLedgerEntry),
-      // Adaptive dispatches to a kernel-pass strategy, which repairs per iteration.
-      repairCapabilities: { perIteration: true },
+      // Adaptive relays the DISPATCHED strategy's declared repair capability
+      // (review I1) — `activeStrategy` is what actually produced this output,
+      // including the fallback-to-reactive case.
+      repairCapabilities: SUB_STRATEGY_REPAIR[activeStrategy],
       totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
       totalCost: finalSubResult.metadata.cost + analysisCost,
       error: finalSubResult.error,
