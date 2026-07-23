@@ -43,6 +43,10 @@ import type { ReActKernelInput, ReActKernelResult } from "../../kernel/state/ker
 export type { ReActKernelInput, ReActKernelResult };
 import { resolveExecutableToolCapabilities } from "../../kernel/capabilities/act/tool-capabilities.js";
 import { buildKernelInput } from "../../kernel/state/build-kernel-input.js";
+import {
+  buildRunEnvelope,
+  mergeRunEnvelopeIntoKernelInput,
+} from "../../kernel/envelope/run-envelope.js";
 
 // ── makeKernel / reactKernel ─────────────────────────────────────────────────
 
@@ -135,7 +139,7 @@ export const executeReActKernel = (
     // and `toolCallResolver` are not part of the cross-cutting/per-pass Picks;
     // they are spread AFTER the builder (no drop risk, same pattern reflexion
     // uses for `blockedTools`).
-    const state = yield* runKernel(reactKernel, {
+    const state = yield* runKernel(reactKernel, mergeRunEnvelopeIntoKernelInput({
       ...buildKernelInput(
         {
           resultCompression: input.resultCompression,
@@ -168,26 +172,29 @@ export const executeReActKernel = (
           temperature: input.temperature,
         },
       ),
-      // Cascade Task 5: the seven cross-cutting fields left `CrossCuttingInput`
-      // (they ride `RunEnvelope` now, and Task 6 merges them inside `runKernel`
-      // itself). This wrapper is NOT a strategy — it is the kernel-level
-      // backwards-compatible entry its callers hand a `ReActKernelInput` to —
-      // so it keeps forwarding whatever its caller passed, spread after the
-      // builder like the other non-Pick fields below.
-      grounding: input.grounding,
-      fabricationGuard: input.fabricationGuard,
-      stallPolicy: input.stallPolicy,
-      // Durable HITL rails (Phase D): the per-step ReAct kernel is where
-      // plan-execute actually calls tools, so the approval gate must ride
-      // with it. Dropped here until 2026-07-22 → a `requiresApproval` tool
-      // executed unattended on every plan-execute step.
-      approvalPolicy: input.approvalPolicy,
-      approvalDecision: input.approvalDecision,
-      interactionResponse: input.interactionResponse,
       blockedTools: input.blockedTools,
       strictToolDependencyChain: input.strictToolDependencyChain,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
-    } as KernelInput, {
+    },
+    // Cascade Task 5: the seven cross-cutting fields left `CrossCuttingInput`
+    // (they ride `RunEnvelope` now, and Task 6 merges them inside `runKernel`
+    // itself). This wrapper is NOT a strategy — it is the kernel-level
+    // backwards-compatible entry its callers hand a `ReActKernelInput` to — so
+    // it must keep forwarding whatever ITS caller passed.
+    //
+    // Review I2: that forward used to be six hand-written `field: input.field`
+    // lines followed by `as KernelInput`. Two problems, both real: `taskContract`
+    // was missing from the six (a silent drop, masked only because `runKernel`
+    // merges the run envelope afterwards), and the cast meant the compiler
+    // checked nothing about the literal — `scripts/check-cross-cutting.sh`
+    // check 2 could not see it either. Re-using the cascade's OWN two functions
+    // removes both: `buildRunEnvelope` reads exactly the seven fields it
+    // defines (a new one is picked up here for free) and
+    // `mergeRunEnvelopeIntoKernelInput` returns a checked `KernelInput`, so the
+    // cast is gone. `mergeRunEnvelopeIntoKernelInput` only ever FILLS holes,
+    // and none of these are set by `buildKernelInput`, so the caller's values
+    // still win exactly as before.
+    buildRunEnvelope(input)), {
       maxIterations: input.maxIterations ?? 10,
       strategy: input.parentStrategy ?? "react-kernel",
       kernelType: "react",
