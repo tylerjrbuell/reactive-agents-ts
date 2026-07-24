@@ -1,0 +1,95 @@
+# Wave C.2 — the ledger becomes run-scoped
+
+**Status:** slice 1 in progress (2026-07-24)
+**Program:** [[../../Architecture/Specs/09-UNIFIED-PROGRAM]] §7 — C1 "one event store"
+**Predecessor:** [[2026-07-22-wave-c1-ledger-convergence]] (slices 1–3 shipped 2026-07-22)
+**Register:** [[../../Architecture/DEBT-REGISTER]] §3
+
+## The gap C.2 closes
+
+C.1 made the RunLedger real inside ONE reasoning pass: steps ≡ ledger projection
+(red-on-cut), all 8 strategies forward `runLedger`, the receipt reads ledger
+queries, and appends publish live as `LedgerEntryAppended`.
+
+But a *run* is not a pass. The engine executes a reasoning pass up to three
+ways — the terminal pass (`reasoning-think.ts`), the verification retry
+(`verification-think-retry.ts`), and the post-think continuation
+(`reasoning-harness-hooks.ts`) — and **each is a separate kernel execution with
+its own `state.ledger` starting at `seq 0`.** Only one survives onto
+`result.metadata.runLedger`. Every fact a sibling pass recorded is discarded.
+
+Three open items are the same missing substrate:
+
+| Open item | What it actually needs |
+|---|---|
+| Auxiliary-pass fence has no run-level evidence store (register §3) | a ledger the mint can read ACROSS passes, so a fragment can be judged honestly instead of exempted |
+| Engine-side facts are not ledger entries (C.2 named scope) | somewhere run-scoped for a non-kernel actor to record into |
+| A sub-agent's work leaves no trace in its parent | the child's ledger merged into the parent's, attributed |
+
+The engine sits *outside* `KernelState`, so none of them can be built until the
+ledger outlives a single kernel call. That is slice 1.
+
+## Design
+
+### The accumulator lives in the ledger's home
+
+`check-ledger-writes.sh` pins the append primitives to
+`packages/reasoning/src/kernel/ledger/`. The merge is an append operation, so it
+lives there too — `run-scope.ts`, exporting one function. No caller outside the
+home ever hand-builds an entry or calls `appendEntry`.
+
+### Merging re-bases `seq`
+
+A pass ledger is `seq 0..n`; the run ledger already holds `m` entries. Merged
+entries are re-assigned `m..m+n`, preserving the append-only, dense, monotonic
+contract (DAG law). This is sound **today** because no production code writes a
+seq-based cross-reference — the only `evidenceRef` of the form `"seq:N"` in the
+tree is a test fixture (verified 2026-07-24), and nothing reads `.seq` outside
+the append primitives.
+
+That is a real constraint, not a happy accident, so it is pinned: a test asserts
+no production entry carries a `seq:`-shaped ref, and the merge is documented as
+the place that must grow a ref-remap if one is ever introduced.
+
+### Provenance, so a merged fact stays attributable
+
+Every entry gains an optional `pass` field naming which pass produced it
+(`"terminal" | "verification-retry" | "continuation" | "sub-agent:<name>"`).
+Absent on entries minted by the run's primary pass, so existing entries and
+their tests are byte-identical.
+
+### One seam, enforced
+
+The three pass sites each call `reasoningService.execute(...)` and read the
+result. Absorption must happen at every one or the ledger silently loses a pass
+— the exact defect class the cascade exists to end. So absorption is not a line
+each site remembers to write: the sites go through one runtime helper that
+builds the request *and* absorbs the result, and the gate tightens from
+"every execute request carries an envelope" to "no direct `.execute(` outside
+the helper".
+
+## Slices
+
+**Slice 1 — run-scoped ledger (this one).**
+`run-scope.ts` merge + `pass` provenance + the absorbing helper at all three
+pass sites + run-level `runLedger` on the result. Gate: `check-ledger-writes.sh`
+stays green; cross-cutting check tightens to the single execute seam.
+
+**Slice 2 — engine + sub-agent entries.**
+First non-kernel clients: sub-agent dispatch/result (the child's ledger merged
+into the parent's under `sub-agent:<name>`), then engine-phase facts (guardrail
+block, cost-route decision, verification outcome). `run_events` becomes a pure
+ledger journal.
+
+**Slice 3 — llm-exchange / replay re-base.**
+`packages/trace`, `packages/replay`, `packages/diagnose`, `packages/benchmarks`
+read ledger queries instead of their own event kinds. Byte-sensitive (golden
+fixtures) — kept last and behind its own equivalence pins.
+
+## Non-goals
+
+- steps[] becoming a ledger projection (that is C-final, not C.2).
+- Compaction / re-projection (C4).
+- Any change to how a pass is *judged* — slice 1 only makes sibling evidence
+  reachable; using it to retire the auxiliary-pass exemption is slice 2+ work,
+  and is a behaviour change that needs its own pins.

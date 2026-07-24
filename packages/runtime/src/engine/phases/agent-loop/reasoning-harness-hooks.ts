@@ -30,6 +30,7 @@ import {
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
 
 /** Parameter shape accepted by ReasoningService.execute(). */
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
@@ -179,6 +180,7 @@ export const runReasoningHarnessHooks = (
               ...ctx.metadata,
               lastResponse: String(retryResult.output ?? ""),
               reasoningResult: retryResult,
+              ...absorbedLedgerMetadata(ctx.metadata, retryResult, "continuation"),
             },
           };
         } else {
@@ -215,6 +217,7 @@ export const runReasoningHarnessHooks = (
             ...ctx.metadata,
             lastResponse: String(contResult.output ?? ""),
             reasoningResult: contResult,
+            ...absorbedLedgerMetadata(ctx.metadata, contResult, "continuation"),
           },
         };
         iterationsDone++;
@@ -311,6 +314,7 @@ export const runReasoningHarnessHooks = (
                     ...ctx.metadata,
                     lastResponse: String(revised.output ?? ""),
                     reasoningResult: revised,
+                    ...absorbedLedgerMetadata(ctx.metadata, revised, "continuation"),
                   },
                 };
               }
@@ -351,6 +355,7 @@ export const runReasoningHarnessHooks = (
               ...ctx.metadata,
               lastResponse: String(retryResult.output ?? ""),
               reasoningResult: retryResult,
+              ...absorbedLedgerMetadata(ctx.metadata, retryResult, "continuation"),
             },
           };
         } else {

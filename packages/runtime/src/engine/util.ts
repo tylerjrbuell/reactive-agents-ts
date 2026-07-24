@@ -292,16 +292,13 @@ export type ExecutionReasoningResult = {
      * `undefined` on every real engine run and both of the engine's readers
      * silently saw nothing. Two types describing one slot, one narrower in fact:
      * no compile error, total data loss.
+     *
+     * Wave C.2: it is now the REAL `RunLedger` rather than a hand-written
+     * structural mirror of it — the mirror was the drift the note above
+     * describes, waiting to happen a second time, and the run-scoped merge
+     * (`ledger/run-scope.ts`) needs the true entry union to be type-safe.
      */
-    runLedger?: ReadonlyArray<{
-      readonly kind: string;
-      readonly toolName?: string;
-      readonly toolCallId?: string;
-      readonly success?: boolean;
-      readonly args?: Readonly<Record<string, unknown>>;
-      readonly path?: string;
-      readonly op?: string;
-    }>;
+    runLedger?: import("@reactive-agents/reasoning").RunLedger;
   };
 };
 

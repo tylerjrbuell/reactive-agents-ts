@@ -18,6 +18,7 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from "../../util.js";
@@ -122,6 +123,12 @@ export const runVerificationThinkRetry = (
               reasoningResult: norm,
               stepsCount: norm.metadata.stepsCount,
               reasoningSteps: norm.steps ?? [],
+              // Wave C.2 — this retry is a separate kernel execution whose
+              // ledger starts at seq 0, and it overwrites `reasoningResult`
+              // above. Absorbing it re-bases the seqs onto the run's ledger and
+              // stamps the provenance, so the first pass's facts survive and
+              // this pass's are attributable rather than anonymous.
+              ...absorbedLedgerMetadata(c.metadata, norm, "verification-retry"),
             },
           };
         }

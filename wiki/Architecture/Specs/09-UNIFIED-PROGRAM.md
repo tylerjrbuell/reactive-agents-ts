@@ -97,7 +97,14 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > **The §4 sequence RESUMES: next program step = Wave C (4b RunLedger — Arc 1 log converges, C1).**
 > Remaining register debt = 5 Wave-5-class instrument items + the owed bench re-baseline run (owner-gated).
 > **Wave C.1 (slices 1–3) SHIPPED 2026-07-22:** equivalence invariant + receipt re-base +
-> `LedgerEntryAppended` live tap. Wave C.2 (engine-side entries, replay re-base) is next.
+> `LedgerEntryAppended` live tap.
+> **Wave C.2 slice 1 SHIPPED 2026-07-24:** the RunLedger is RUN-scoped, not pass-scoped — a run
+> executes reasoning up to three ways and each auxiliary pass overwrote the previous ledger, so
+> the terminal pass's facts never reached the receipt. `kernel/ledger/run-scope.ts` merges a pass
+> with seq re-base + `pass` provenance; `engine/run-ledger-scope.ts` is the engine seam; gated by
+> `check-cross-cutting.sh` Check 7. Plan: [[../../Planning/Implementation-Plans/2026-07-24-wave-c2-ledger-run-scope]].
+> **Next: C.2 slice 2** (engine-phase + sub-agent ledger entries — a child's ledger merges into its
+> parent's under `sub-agent:<name>`, the substrate is now in place), then slice 3 (llm-exchange/replay re-base).
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
