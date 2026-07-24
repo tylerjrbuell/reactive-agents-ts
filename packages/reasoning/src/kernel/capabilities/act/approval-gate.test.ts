@@ -8,10 +8,10 @@ import { Effect } from "effect";
 import {
   resolveBlockApproval,
   wrapApprovalDecider,
-  type BlockApprovalPolicy,
+  type ResolvedApprovalPolicy,
 } from "./approval-gate.js";
 
-const gatingPolicy = (over: Partial<BlockApprovalPolicy> = {}): BlockApprovalPolicy => ({
+const gatingPolicy = (over: Partial<ResolvedApprovalPolicy> = {}): ResolvedApprovalPolicy => ({
   mode: "block",
   tools: new Set(["danger"]),
   ...over,

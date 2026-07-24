@@ -523,27 +523,20 @@ export interface DurableRunsOptions {
  * into `tools` automatically at config assembly — you no longer have to list
  * those names by hand. `tools` / `requireFor` still add further tools on top.
  * (Auto-feed applies only when an approval policy is configured.)
+ *
+ * The author-stage form of the one approval-policy shape declared in
+ * `reasoning/kernel/capabilities/act/approval-gate.ts` — every field optional
+ * here, since the builder resolves `mode` and folds `requiresApproval` tools in.
+ *
+ * - `tools` — tool names whose calls must be approved.
+ * - `requireFor` — predicate; return true to require approval for this call.
+ * - `mode` — "detach" (durable pause) or "block" (in-process).
+ * - `onApprove` — in-process decider for block mode: return `true` /
+ *   `{ approve: true }` to run the call, `false` / `{ approve: false, reason }`
+ *   to refuse. May be async; a throw or rejection denies (fail-closed). Ignored
+ *   in `mode: "detach"`, which pauses instead.
  */
-export interface ApprovalPolicyConfig {
-    /** Tool names whose calls must pause for approval. */
-    readonly tools?: readonly string[];
-    /** Predicate: return true to require approval for this call. */
-    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
-    /** "detach" (durable, default when durable runs are on) or "block" (in-process). */
-    readonly mode?: "detach" | "block";
-    /**
-     * In-process approval decider for `mode: "block"`. Called for each gated
-     * call; return `true`/`{ approve: true }` to run it, `false`/`{ approve:
-     * false, reason }` to refuse. May be async. A throw/rejection denies
-     * (fail-closed). Ignored in `mode: "detach"` (which pauses instead). Absent
-     * in block mode ⇒ every gated call is denied.
-     *
-     * Distinct from `run()`'s `onApproval` option, which drives the DETACH
-     * pause→resume loop and receives a `runId`; this one is synchronous and
-     * in-loop.
-     */
-    readonly onApprove?: import('@reactive-agents/reasoning').ApprovalCallback;
-}
+export type ApprovalPolicyConfig = import('@reactive-agents/reasoning').AuthoredApprovalPolicy;
 
 /**
  * Options for `.withModelRouting()` — opt-in cost-aware model routing.
