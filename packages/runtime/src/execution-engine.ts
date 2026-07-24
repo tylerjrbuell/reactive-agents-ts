@@ -96,6 +96,8 @@ type ObsLike = {
   captureSnapshot: (agentId: string, state: Record<string, unknown>) => Effect.Effect<unknown, never>;
   debug: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
   info: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
+  warn: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
+  error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
   getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
   flush: () => Effect.Effect<void, never>;
   verbosity: () => string;
@@ -202,18 +204,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // Default: true when debug, false otherwise.
             const logModelIO = config.logModelIO ?? isDebug;
 
-            // Log prefix for visual nesting (sub-agents use "  │ " to indent).
-            // Wrap obs methods once to auto-prepend prefix to all log lines.
+            // Log prefix for visual nesting: a sub-agent's lines carry a
+            // depth-aware, name-tagged prefix (built in sub-agent-executor) so a
+            // reader can tell WHICH child — and at what nesting — every line came
+            // from, even when children run in parallel. Wrap ALL log methods, not
+            // just info/debug: a child's warn/error must indent + attribute the
+            // same, or it appears at the PARENT's level and reads as the parent
+            // failing (2026-07-23 — the prior wrap covered info/debug only).
             const lp = config.logPrefix ?? "";
             if (obs && lp) {
               const origInfo = obs.info.bind(obs);
               const origDebug = obs.debug.bind(obs);
+              const origWarn = obs.warn.bind(obs);
+              const origError = obs.error.bind(obs);
               const mutableObs = obs as {
                 info: (msg: string, meta?: Record<string, unknown>) => unknown;
                 debug: (msg: string, meta?: Record<string, unknown>) => unknown;
+                warn: (msg: string, meta?: Record<string, unknown>) => unknown;
+                error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => unknown;
               };
               mutableObs.info = (msg, meta) => origInfo(`${lp}${msg}`, meta);
               mutableObs.debug = (msg, meta) => origDebug(`${lp}${msg}`, meta);
+              mutableObs.warn = (msg, meta) => origWarn(`${lp}${msg}`, meta);
+              mutableObs.error = (msg, err, meta) => origError(`${lp}${msg}`, err, meta);
             }
 
             // ── Phase 0.2: Acquire EventBus optionally ──
