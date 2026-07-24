@@ -824,20 +824,11 @@ export interface KernelInput {
    *   `capabilities/act/approval-gate.ts`.
    *
    * `RunEnvelope.rails.approvalPolicy` is typed `KernelInput["approvalPolicy"]`,
-   * so this shape is the single source: adding a field here propagates to the
-   * envelope carrier and every reader by structural copy.
+   * so the resolved shape reaches the envelope carrier and every reader by
+   * structural copy. The shape itself is declared once, in `approval-gate.ts`,
+   * alongside the config- and author-stage forms derived from it.
    */
-  readonly approvalPolicy?: {
-    readonly mode: "detach" | "block";
-    readonly tools: ReadonlySet<string>;
-    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
-    /**
-     * Block-mode in-process decider (Effect-wrapped at config→envelope time from
-     * the public `onApprove` callback). Consulted only when `mode:"block"` and
-     * the call is gated. Absent ⇒ deny-by-default.
-     */
-    readonly decide?: import("../capabilities/act/approval-gate.js").BlockApprovalDecider;
-  };
+  readonly approvalPolicy?: import("../capabilities/act/approval-gate.js").ResolvedApprovalPolicy;
   /**
    * Output-synthesis configuration — consumed by the terminal output assembly
    * phase in `kernel/loop/runner.ts` (output-synthesis.ts), NOT by ICS guidance.

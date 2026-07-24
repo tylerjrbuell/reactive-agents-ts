@@ -395,7 +395,7 @@ if [ ${#ALLOWED_INTERFACE_BASES[@]} -gt 0 ]; then
 fi
 CHECK1="$(printf '%s\n%s\n%s\n' "$DECLS" "$PICKS" "$EXTENDS" | grep -v '^$' | sort -u || true)"
 if [ -n "$CHECK1" ]; then
-  echo "FAIL (1/5): strategy input interface re-declares (or re-bundles) a cross-cutting field"
+  echo "FAIL (1/6): strategy input interface re-declares (or re-bundles) a cross-cutting field"
   echo "(the RunEnvelope is the only carrier):"
   echo ""
   echo "$CHECK1"
@@ -407,7 +407,7 @@ if [ -n "$CHECK1" ]; then
   echo "one of N boundaries' defect class this gate exists to end."
   FAIL=1
 else
-  echo "OK (1/5): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
+  echo "OK (1/6): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
 fi
 
 # ── Check 2/4: no hand-authored KernelInput outside sanctioned sites ──
@@ -442,7 +442,7 @@ for f in "${ALLOWED_KERNEL_INPUT_SITES[@]}"; do
 done
 LITERALS="$(scan kernel-input "$REASONING_SRC" | grep -E -v "$EXCLUDE" || true)"
 if [ -n "$LITERALS" ]; then
-  echo "FAIL (2/5): hand-authored KernelInput outside the sanctioned assembly sites:"
+  echo "FAIL (2/6): hand-authored KernelInput outside the sanctioned assembly sites:"
   echo ""
   echo "$LITERALS"
   echo ""
@@ -454,7 +454,7 @@ if [ -n "$LITERALS" ]; then
   echo "script WITH a comment explaining why it cannot silently drop an envelope field."
   FAIL=1
 else
-  echo "OK (2/5): no hand-authored KernelInput outside the sanctioned sites."
+  echo "OK (2/6): no hand-authored KernelInput outside the sanctioned sites."
 fi
 
 # ── Check 3/4: RunEnvelope provided at exactly the two sanctioned seams ──
@@ -471,7 +471,7 @@ PROVIDES="$(scan provide "${PROVIDE_ROOTS[@]}" \
   | grep -v 'services/reasoning-service.ts' || true)"
 
 if [ -n "$PROVIDES" ]; then
-  echo "FAIL (3/5): RunEnvelope provided outside the two sanctioned seams:"
+  echo "FAIL (3/6): RunEnvelope provided outside the two sanctioned seams:"
   echo ""
   echo "$PROVIDES"
   echo ""
@@ -481,7 +481,7 @@ if [ -n "$PROVIDES" ]; then
   echo "second provision site is two competing sources of truth for the same run."
   FAIL=1
 else
-  echo "OK (3/5): RunEnvelope provided only at the two sanctioned seams."
+  echo "OK (3/6): RunEnvelope provided only at the two sanctioned seams."
 fi
 
 # ── Check 4/4: every reasoning execute request carries an envelope ──
@@ -502,7 +502,7 @@ fi
 EXECUTE_ROOTS=(packages/runtime/src apps)
 EXEC_FAILS="$(scan execute "${EXECUTE_ROOTS[@]}" | grep -v '^$' || true)"
 if [ -n "$EXEC_FAILS" ]; then
-  echo "FAIL (4/5): a ReasoningService.execute request is built without a RunEnvelope:"
+  echo "FAIL (4/6): a ReasoningService.execute request is built without a RunEnvelope:"
   echo ""
   echo "$EXEC_FAILS"
   echo ""
@@ -515,7 +515,7 @@ if [ -n "$EXEC_FAILS" ]; then
   echo "at the call site saying why."
   FAIL=1
 else
-  echo "OK (4/5): every reasoning execute request carries an envelope."
+  echo "OK (4/6): every reasoning execute request carries an envelope."
 fi
 
 # ── Check 5/5: sub-agents inherit the parent's judgment + safety constraints ──
@@ -566,7 +566,7 @@ for pair in \
   fi
 done
 if [ -n "$SUBAGENT_FAIL" ]; then
-  echo "FAIL (5/5): a sub-agent does NOT inherit a cross-cutting policy field:"
+  echo "FAIL (5/6): a sub-agent does NOT inherit a cross-cutting policy field:"
   echo -e "$SUBAGENT_FAIL"
   echo ""
   echo "Thread it: add the field to LightRuntimeOptions + map it in"
@@ -575,7 +575,48 @@ if [ -n "$SUBAGENT_FAIL" ]; then
   echo "A dropped field means a child runs UNJUDGED / UNGATED where the parent does not."
   FAIL=1
 else
-  echo "OK (5/5): sub-agents inherit the parent's judgment + safety constraints."
+  echo "OK (5/6): sub-agents inherit the parent's judgment + safety constraints."
+fi
+
+# ── Check 6: the approval policy is declared ONCE ────────────────────────────
+#
+# Same defect class as the cascade itself, one level up: the approval policy's
+# shape was hand-copied at FOUR sites (KernelInput, ReactiveAgentsConfig,
+# RuntimeOptions, ApprovalPolicyConfig). Adding block mode's `onApprove` had to
+# touch all four, and a site that misses a field silently drops it — which is
+# how `mode: "block"` shipped as an inert safety switch in the first place.
+#
+# The stage shapes now derive from one canonical declaration in approval-gate.ts
+# (resolved → configured → authored). The `"detach" | "block"` union is the
+# fingerprint of a hand-rolled copy: it appears exactly where the shape is
+# DECLARED. So it must occur in that one file and nowhere else in src.
+#
+# Tests are excluded — a test may legitimately spell a mode literal inline.
+APPROVAL_OWNER="packages/reasoning/src/kernel/capabilities/act/approval-gate.ts"
+APPROVAL_SITES="$(grep -rlF '"detach" | "block"' --include='*.ts' packages/*/src 2>/dev/null \
+  | grep -v '\.test\.ts$' | sort -u)"
+APPROVAL_STRAY="$(printf '%s\n' "$APPROVAL_SITES" | grep -v "^${APPROVAL_OWNER}$" | grep -v '^$' || true)"
+if [ ! -f "$APPROVAL_OWNER" ]; then
+  echo "FAIL (6/6): the canonical approval-policy declaration is missing:"
+  echo "  expected $APPROVAL_OWNER"
+  FAIL=1
+elif ! grep -qF 'export type ApprovalMode = "detach" | "block";' "$APPROVAL_OWNER"; then
+  echo "FAIL (6/6): $APPROVAL_OWNER no longer declares the canonical ApprovalMode union."
+  echo "  If it moved, update APPROVAL_OWNER here — do not delete the check."
+  FAIL=1
+elif [ -n "$APPROVAL_STRAY" ]; then
+  echo "FAIL (6/6): the approval-policy shape is re-declared outside its owner:"
+  echo "$APPROVAL_STRAY" | sed 's/^/  /'
+  echo ""
+  echo "Type these from the canonical stage shapes in approval-gate.ts instead:"
+  echo "  ResolvedApprovalPolicy   — kernel/envelope rails (tools Set, Effect decide)"
+  echo "  ConfiguredApprovalPolicy — agent config / RuntimeOptions (tools array, onApprove)"
+  echo "  AuthoredApprovalPolicy   — the public .withApprovalPolicy() argument"
+  echo "A hand-copied shape drops the next field added to it — that is how"
+  echo "mode:\"block\" shipped as a safety switch that gated nothing."
+  FAIL=1
+else
+  echo "OK (6/6): the approval policy is declared once, and each stage derives from it."
 fi
 
 if [ "$FAIL" -ne 0 ]; then

@@ -283,8 +283,14 @@ export { resolveBlockApproval, wrapApprovalDecider } from "./kernel/capabilities
 export type {
   ApprovalCallback,
   ApprovalDecision,
+  ApprovalMode,
   BlockApprovalDecider,
   BlockApprovalOutcome,
+  // The one approval-policy shape, in its three pipeline stages. The runtime
+  // types its author/config surfaces from these rather than re-declaring them.
+  AuthoredApprovalPolicy,
+  ConfiguredApprovalPolicy,
+  ResolvedApprovalPolicy,
 } from "./kernel/capabilities/act/approval-gate.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike, KernelState } from "./kernel/state/kernel-state.js";

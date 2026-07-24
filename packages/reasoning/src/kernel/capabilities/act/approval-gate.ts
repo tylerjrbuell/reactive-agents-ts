@@ -47,11 +47,63 @@ export type BlockApprovalDecider = (pending: {
   readonly iteration: number;
 }) => Effect.Effect<ApprovalDecision, never>;
 
-/** The block-mode slice of a resolved approval policy this module reads. */
-export interface BlockApprovalPolicy extends ApprovalGateConfig {
-  readonly mode?: "detach" | "block";
+// ── The approval policy, one shape per pipeline stage ─────────────────────────
+//
+// An approval policy crosses three boundaries on its way to the gate:
+//
+//   authored  .withApprovalPolicy({ ... })          — every field optional
+//   configured  ReactiveAgentsConfig/RuntimeOptions — mode resolved, tools an
+//               array (serialization-friendly), decider still a plain callback
+//   resolved  KernelInput / RunEnvelope.rails       — tools a Set, decider lifted
+//               into an Effect; what the pure kernel actually reads
+//
+// These differ only where they MUST: the tool container and the decider's
+// representation. Everything else (`mode`, `requireFor`) exists once, here, and
+// the two earlier stages are derived from the resolved shape — so a new field
+// reaches all three by construction. This file is the sole declaration site;
+// four hand-written copies of this shape had already drifted apart once
+// (DEBT-REGISTER §3), which is what `scripts/check-cross-cutting.sh` Check 6
+// now prevents by pinning the `"detach" | "block"` union to this file alone.
+
+/** Which half of Durable HITL a gated call goes through. */
+export type ApprovalMode = "detach" | "block";
+
+/**
+ * The resolved, kernel-facing approval policy — the CANONICAL shape. Both
+ * `KernelInput.approvalPolicy` and `RunEnvelope.rails.approvalPolicy` are typed
+ * as this, and the earlier stages below are derived from it.
+ */
+export interface ResolvedApprovalPolicy extends ApprovalGateConfig {
+  readonly mode: ApprovalMode;
+  /**
+   * Block-mode in-process decider, lifted from the public `onApprove` callback
+   * by `wrapApprovalDecider` at config→envelope time. Absent ⇒ deny-by-default.
+   */
   readonly decide?: BlockApprovalDecider;
 }
+
+/**
+ * Config stage: `tools` as a plain array and the decider in its unlifted public
+ * callback form, both so an agent config stays structurally serializable.
+ * `buildRunEnvelopeFromConfig` is the one seam that converts this to
+ * {@link ResolvedApprovalPolicy}.
+ */
+export type ConfiguredApprovalPolicy = Omit<ResolvedApprovalPolicy, "tools" | "decide"> & {
+  readonly tools: readonly string[];
+  /**
+   * In-process approval callback from `.withApprovalPolicy({ onApprove })`.
+   * Distinct from `run()`'s `onApproval` option, which drives the DETACH
+   * pause→resume loop and receives a `runId`; this one is in-loop and per-call.
+   */
+  readonly onApprove?: ApprovalCallback;
+};
+
+/**
+ * Author stage: the public `.withApprovalPolicy()` argument. Every field is
+ * optional — the builder resolves `mode` (from whether durable runs are on) and
+ * folds per-tool `requiresApproval` flags into `tools`.
+ */
+export type AuthoredApprovalPolicy = Partial<ConfiguredApprovalPolicy>;
 
 /**
  * Outcome of consulting the block-mode gate for one call.
@@ -84,7 +136,7 @@ const NO_DECIDER_MESSAGE = (toolName: string): string =>
 export function resolveBlockApproval(
   toolName: string,
   args: unknown,
-  policy: BlockApprovalPolicy | undefined,
+  policy: ResolvedApprovalPolicy | undefined,
   ctx: { readonly iteration: number },
 ): Effect.Effect<BlockApprovalOutcome, never> {
   return Effect.gen(function* () {
