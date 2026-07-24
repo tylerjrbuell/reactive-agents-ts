@@ -29,6 +29,19 @@ import {
   childContext,
 } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
+import { ObservabilityService } from "@reactive-agents/observability";
+
+/**
+ * Build the log prefix that makes a sub-agent's lines FOLLOWABLE: one "│ " per
+ * nesting level plus the child's name, e.g. depth 1 → `"  │ researcher · "`,
+ * depth 2 → `"  │ │ writer · "`. Prepended to EVERY log line (info/debug/warn/
+ * error) by the child's execution engine, so parallel or nested children no
+ * longer collapse into one indistinct, unattributable stream. Pure — pinned by
+ * `sub-agent-log-prefix.test.ts`.
+ */
+export function buildSubAgentLogPrefix(depth: number, name: string): string {
+  return `  ${"│ ".repeat(Math.max(1, depth))}${name} · `;
+}
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
 export interface SubAgentRuntimeShared {
@@ -308,6 +321,13 @@ export const buildSubAgentTask = (
       }
       const childCtx = childContext(spawningCtx, t.name);
 
+      // Depth- and name-aware log prefix so a sub-agent's lines are FOLLOWABLE.
+      // The old prefix was a flat "  │ " for every child at every depth: with
+      // parallel or nested children the lines interleaved into one indistinct
+      // stream — you could not tell which agent said what, nor how deep it was.
+      // execution-engine prepends this to EVERY log line (info/debug/warn/error).
+      const childLogPrefix = buildSubAgentLogPrefix(childCtx.depth, t.name);
+
       const agentId = `sub-${t.name}-${Date.now()}`;
       const persona: AgentPersona | undefined =
         t.role || t.instructions || t.tone
@@ -403,8 +423,8 @@ export const buildSubAgentTask = (
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
         observabilityOptions: parentObservabilityOptions
-          ? { ...parentObservabilityOptions, logPrefix: "  │ " }
-          : { logPrefix: "  │ " },
+          ? { ...parentObservabilityOptions, logPrefix: childLogPrefix }
+          : { logPrefix: childLogPrefix },
         contextProfile: parentContextProfile,
         enableCostTracking: parentEnableCostTracking,
         // Inherit the deterministic scenario so `test`-provider sub-agents are
@@ -527,15 +547,38 @@ export const buildSubAgentTask = (
         Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
       );
 
+      // Dispatch delimiters — the single biggest readability win for following
+      // a sub-agent run. Logged via the PARENT's logger (soft-resolved, so it is
+      // a no-op when observability is off), so they frame the child's indented
+      // block at the parent's level: a clear "▶ delegate → name" open and a
+      // "◀ name ✓/✗ …" close, instead of the child's lines just appearing and
+      // vanishing with no boundary. Depth marker mirrors the child's log prefix.
+      // Emitted through the PARENT's logger, which — when the parent is itself a
+      // nested child — is already wrapped with the parent's own depth prefix. So
+      // the delimiter needs no depth marker of its own; a bare 2-space indent
+      // sits it just outside the child's block at whatever level the parent is.
+      const parentObsOpt = yield* Effect.serviceOption(ObservabilityService);
+      const frame = (line: string): Effect.Effect<void, never> =>
+        parentObsOpt._tag === "Some"
+          ? parentObsOpt.value.info(`  ${line}`)
+          : Effect.void;
+      const taskPreview = t.task.length > 60 ? `${t.task.slice(0, 60)}…` : t.task;
+      yield* frame(`▶ delegate → ${t.name}: ${taskPreview}`);
+      const startedMs = Date.now();
+
       // Fork into the PARENT's fiber tree: parent interruption reaches the
       // child. `Fiber.await` returns an Exit, so a child FAILURE is contained
       // here and mapped to a structured result — it never cascades.
       const fiber = yield* Effect.forkScoped(childEffect);
       const exit = yield* fiber.await;
+      const elapsedMs = Date.now() - startedMs;
 
       if (Exit.isSuccess(exit)) {
         const result = exit.value;
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
+        yield* frame(
+          `◀ ${t.name} ${result.success ? "✓" : "✗"} — ${result.metadata.tokensUsed} tok, ${elapsedMs}ms`,
+        );
         const raw: SubAgentRawResult = {
           output: String(result.output ?? ""),
           success: result.success,
@@ -546,6 +589,10 @@ export const buildSubAgentTask = (
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }
+
+      yield* frame(
+        `◀ ${t.name} ✗ — ${Exit.isInterrupted(exit) ? "interrupted" : "failed"}, ${elapsedMs}ms`,
+      );
 
       // Failure or interruption — contained, never rethrown to the parent.
       const cause = exit.cause;
