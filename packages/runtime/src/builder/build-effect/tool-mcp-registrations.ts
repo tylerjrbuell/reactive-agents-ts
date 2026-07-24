@@ -57,6 +57,12 @@ export interface ToolMcpRegistrationsDeps {
   readonly parentEnableCostTracking: boolean;
   /** Inherited deterministic `test`-provider scenario (undefined for real providers). */
   readonly parentTestScenario?: TestTurn[];
+  // ── Cross-cutting inheritance (2026-07-23) — passed through to the sub-agent
+  //    executor so a child runs under the parent's judgment + safety constraints.
+  readonly parentTaskContract?: import("@reactive-agents/core").TaskContract;
+  readonly parentFabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
+  readonly parentGrounding?: import("../types.js").GroundingOptions;
+  readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
 }
 
 export interface ToolMcpRegistrationsOutput {
@@ -173,6 +179,13 @@ export const buildToolMcpRegistrations = (
               parentTestScenario: deps.parentTestScenario,
               parentAgentId: deps.agentId,
               getParentContext: deps.getParentContext,
+              // Cross-cutting inheritance (2026-07-23) — thread the parent's
+              // judgment + safety constraints to the child (approval coerced to
+              // block in createLightRuntime).
+              ...(deps.parentTaskContract !== undefined ? { parentTaskContract: deps.parentTaskContract } : {}),
+              ...(deps.parentFabricationGuard !== undefined ? { parentFabricationGuard: deps.parentFabricationGuard } : {}),
+              ...(deps.parentGrounding !== undefined ? { parentGrounding: deps.parentGrounding } : {}),
+              ...(deps.parentApprovalPolicy !== undefined ? { parentApprovalPolicy: deps.parentApprovalPolicy } : {}),
               toolsMod: {
                 createSubAgentExecutor: toolsMod.createSubAgentExecutor,
                 ALWAYS_INCLUDE_TOOLS: toolsMod.ALWAYS_INCLUDE_TOOLS,

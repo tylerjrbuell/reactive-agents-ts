@@ -2495,6 +2495,12 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             const parentObservabilityOptions = self._observabilityOptions
             const parentContextProfile = self._contextProfile
             const parentEnableCostTracking = self._enableCostTracking
+            // Cross-cutting inheritance (2026-07-23) — a sub-agent operates under
+            // the parent's judgment + safety constraints, not rubber-stamped.
+            const parentTaskContract = self._taskContract
+            const parentFabricationGuard = self._fabricationGuard
+            const parentGrounding = self._groundingConfig
+            const parentApprovalPolicy = self._approvalPolicy
 
             for (const hook of hooks) {
                 yield* engine.registerHook(hook)
@@ -2550,6 +2556,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     parentContextProfile,
                     parentEnableCostTracking,
                     parentTestScenario: self._testScenario,
+                    // Cross-cutting inheritance (2026-07-23) — judgment + safety
+                    // to the child. Undefined-spread so an unset field is absent,
+                    // not a written `undefined` (keeps createLightRuntime's
+                    // presence checks honest).
+                    ...(parentTaskContract !== undefined ? { parentTaskContract } : {}),
+                    ...(parentFabricationGuard !== undefined ? { parentFabricationGuard } : {}),
+                    ...(parentGrounding !== undefined ? { parentGrounding } : {}),
+                    ...(parentApprovalPolicy !== undefined ? { parentApprovalPolicy } : {}),
                 })
             let fullRuntime: Layer.Layer<unknown, unknown, unknown> = fullRuntimeAfterTools
 

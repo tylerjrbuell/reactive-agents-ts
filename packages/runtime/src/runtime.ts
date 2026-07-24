@@ -32,8 +32,9 @@ import {
   makeObservableLLM,
 } from "@reactive-agents/reasoning";
 import type { ReasoningConfig, KernelMetaToolsConfig, Verifier } from "@reactive-agents/reasoning";
-import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
+import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError, builtinTools } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import { foldApprovalRequiredTools } from "./builder/build-effect/approval-autofeed.js";
 import type { ObservabilityOptions } from "./builder.js";
 import type { ReasoningOptions } from "./types.js";
 import { withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
@@ -1058,13 +1059,26 @@ export const createRuntime = (options: RuntimeOptions) => {
  * @param options - Light runtime configuration
  * @returns A composed Effect-TS Layer with minimal services
  */
-export const createLightRuntime = (options: LightRuntimeOptions) => {
-  const resolvedModel =
-    options.model ||
-    process.env.LLM_DEFAULT_MODEL ||
-    (options.provider ? getProviderDefaultModel(options.provider) : undefined) ||
-    "claude-sonnet-4-6";
+/**
+ * Resolve the model a light runtime uses (explicit → env → provider default →
+ * fallback). Shared by `createLightRuntime` and `buildLightRuntimeConfig` so the
+ * config helper is pure + independently testable.
+ */
+export const resolveLightRuntimeModel = (options: LightRuntimeOptions): string =>
+  options.model ||
+  process.env.LLM_DEFAULT_MODEL ||
+  (options.provider ? getProviderDefaultModel(options.provider) : undefined) ||
+  "claude-sonnet-4-6";
 
+/**
+ * Build the child `ReactiveAgentsConfig` for a light (sub-agent) runtime. PURE —
+ * extracted from `createLightRuntime` so the cross-cutting inheritance mapping
+ * (taskContract / fabricationGuard / grounding, and the approval block-coercion +
+ * autofeed) is unit-testable without materializing layers. See
+ * `sub-agent-light-config.test.ts`.
+ */
+export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveAgentsConfig => {
+  const resolvedModel = resolveLightRuntimeModel(options);
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
     defaultModel: resolvedModel,
@@ -1116,7 +1130,39 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     enableExperienceLearning: false,
     enableMemoryConsolidation: false,
     reasoningOptions: options.reasoningOptions,
+    // ── Cross-cutting inheritance (2026-07-23) ──────────────────────────────
+    // A sub-agent operates under the parent's judgment + safety constraints.
+    // These build the child's own RunEnvelope (via buildRunEnvelopeFromConfig at
+    // execution time) exactly as they do for the parent — so a child's answer is
+    // judged against the same contract / fabrication guard / grounding.
+    taskContract: options.taskContract,
+    fabricationGuard: options.fabricationGuard,
+    grounding: options.grounding,
+    // Approval: COERCE to block. A light runtime has no durable store, so detach
+    // (pause + checkpoint) would strand the child. Block decides in process and
+    // denies by default — the child gates or refuses a gated tool, never pauses,
+    // never executes one unattended. The same F2 autofeed the parent runs folds
+    // the child's `requiresApproval` built-ins (shell/docker/code-execute/
+    // file-write) into the gated set, so robustness does not depend on the
+    // parent having named them.
+    approvalPolicy: options.approvalPolicy
+      ? {
+          mode: "block" as const,
+          tools: foldApprovalRequiredTools(
+            options.approvalPolicy.tools ?? [],
+            builtinTools.map((t) => t.definition),
+          ),
+          requireFor: options.approvalPolicy.requireFor,
+          onApprove: options.approvalPolicy.onApprove,
+        }
+      : undefined,
   };
+  return config;
+};
+
+export const createLightRuntime = (options: LightRuntimeOptions) => {
+  const resolvedModel = resolveLightRuntimeModel(options);
+  const config = buildLightRuntimeConfig(options);
 
   // ── Minimal required layers ──
   // Audit G1: when the parent threads its EventBus instance, the child's

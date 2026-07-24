@@ -959,4 +959,24 @@ export interface LightRuntimeOptions {
   modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' };
   observabilityOptions?: ObservabilityOptions;
   guardrailsOptions?: import("./builder.js").GuardrailsOptions;
+
+  // ── Cross-cutting inheritance (2026-07-23) — a sub-agent operates under the
+  //    parent's judgment + safety constraints, not rubber-stamped. These four
+  //    flow into the child's `ReactiveAgentsConfig`, which builds the child's
+  //    own `RunEnvelope` the same way the parent's does. See sub-agent-executor.
+  /** Parent's declared TaskContract — the child's answer is judged against it. */
+  taskContract?: import("@reactive-agents/core").TaskContract;
+  /** Parent's fabrication guard — the child's ungrounded answer is enforced, not shipped. */
+  fabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
+  /** Parent's evidence-grounding config — the child's claims are grounded too. */
+  grounding?: import("./builder/types.js").GroundingOptions;
+  /**
+   * Parent's approval policy. `createLightRuntime` COERCES this to `mode:"block"`
+   * unconditionally — a light runtime has no durable store, so `detach` (which
+   * pauses + checkpoints) would strand the child (a pause sentinel with no
+   * resume path). Block mode decides in process and denies by default, so a
+   * sub-agent inherits approval SAFELY: it gates or refuses a `requiresApproval`
+   * tool, never executes one unattended, and never pauses.
+   */
+  approvalPolicy?: import("./builder/types.js").ApprovalPolicyConfig;
 }

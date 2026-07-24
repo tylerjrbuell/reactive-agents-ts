@@ -395,7 +395,7 @@ if [ ${#ALLOWED_INTERFACE_BASES[@]} -gt 0 ]; then
 fi
 CHECK1="$(printf '%s\n%s\n%s\n' "$DECLS" "$PICKS" "$EXTENDS" | grep -v '^$' | sort -u || true)"
 if [ -n "$CHECK1" ]; then
-  echo "FAIL (1/4): strategy input interface re-declares (or re-bundles) a cross-cutting field"
+  echo "FAIL (1/5): strategy input interface re-declares (or re-bundles) a cross-cutting field"
   echo "(the RunEnvelope is the only carrier):"
   echo ""
   echo "$CHECK1"
@@ -407,7 +407,7 @@ if [ -n "$CHECK1" ]; then
   echo "one of N boundaries' defect class this gate exists to end."
   FAIL=1
 else
-  echo "OK (1/4): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
+  echo "OK (1/5): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
 fi
 
 # ── Check 2/4: no hand-authored KernelInput outside sanctioned sites ──
@@ -442,7 +442,7 @@ for f in "${ALLOWED_KERNEL_INPUT_SITES[@]}"; do
 done
 LITERALS="$(scan kernel-input "$REASONING_SRC" | grep -E -v "$EXCLUDE" || true)"
 if [ -n "$LITERALS" ]; then
-  echo "FAIL (2/4): hand-authored KernelInput outside the sanctioned assembly sites:"
+  echo "FAIL (2/5): hand-authored KernelInput outside the sanctioned assembly sites:"
   echo ""
   echo "$LITERALS"
   echo ""
@@ -454,7 +454,7 @@ if [ -n "$LITERALS" ]; then
   echo "script WITH a comment explaining why it cannot silently drop an envelope field."
   FAIL=1
 else
-  echo "OK (2/4): no hand-authored KernelInput outside the sanctioned sites."
+  echo "OK (2/5): no hand-authored KernelInput outside the sanctioned sites."
 fi
 
 # ── Check 3/4: RunEnvelope provided at exactly the two sanctioned seams ──
@@ -471,7 +471,7 @@ PROVIDES="$(scan provide "${PROVIDE_ROOTS[@]}" \
   | grep -v 'services/reasoning-service.ts' || true)"
 
 if [ -n "$PROVIDES" ]; then
-  echo "FAIL (3/4): RunEnvelope provided outside the two sanctioned seams:"
+  echo "FAIL (3/5): RunEnvelope provided outside the two sanctioned seams:"
   echo ""
   echo "$PROVIDES"
   echo ""
@@ -481,7 +481,7 @@ if [ -n "$PROVIDES" ]; then
   echo "second provision site is two competing sources of truth for the same run."
   FAIL=1
 else
-  echo "OK (3/4): RunEnvelope provided only at the two sanctioned seams."
+  echo "OK (3/5): RunEnvelope provided only at the two sanctioned seams."
 fi
 
 # ── Check 4/4: every reasoning execute request carries an envelope ──
@@ -502,7 +502,7 @@ fi
 EXECUTE_ROOTS=(packages/runtime/src apps)
 EXEC_FAILS="$(scan execute "${EXECUTE_ROOTS[@]}" | grep -v '^$' || true)"
 if [ -n "$EXEC_FAILS" ]; then
-  echo "FAIL (4/4): a ReasoningService.execute request is built without a RunEnvelope:"
+  echo "FAIL (4/5): a ReasoningService.execute request is built without a RunEnvelope:"
   echo ""
   echo "$EXEC_FAILS"
   echo ""
@@ -515,7 +515,67 @@ if [ -n "$EXEC_FAILS" ]; then
   echo "at the call site saying why."
   FAIL=1
 else
-  echo "OK (4/4): every reasoning execute request carries an envelope."
+  echo "OK (4/5): every reasoning execute request carries an envelope."
+fi
+
+# ── Check 5/5: sub-agents inherit the parent's judgment + safety constraints ──
+# A TRUE sub-agent runs under the same contract / fabrication guard / grounding /
+# approval policy as its parent — its answer is judged, not rubber-stamped, and a
+# gated tool it calls is refused rather than executed unattended (DEBT-REGISTER
+# §3, 2026-07-23). The child is built by `buildLightRuntimeConfig` (runtime.ts)
+# from options threaded through `SubAgentExecutorDeps`. This is the SAME defect
+# class one process boundary out: a new cross-cutting policy field added to the
+# envelope but NOT threaded here silently drops on every sub-agent.
+#
+# Guard both ends of the seam: the child config helper must MAP each inheritable
+# policy field, and the executor deps must DECLARE the parent-side carrier. The
+# three detach-only rails (approvalDecision / interactionResponse, plus the
+# durable-pause half of approvalPolicy) are deliberately NOT child-inheritable —
+# a light runtime has no durable store — so only the policy-half + approval are
+# checked. If you add a new inheritable field, add it here too.
+SUBAGENT_FAIL=""
+LIGHT_CONFIG_FILE="packages/runtime/src/runtime.ts"
+EXECUTOR_DEPS_FILE="packages/runtime/src/builder/build-effect/sub-agent-executor.ts"
+# Scope to the buildLightRuntimeConfig body ONLY. `createRuntime` (the FULL
+# runtime) in the same file maps the same fields for the PARENT, so a whole-file
+# grep would pass vacuously even if the child mapping were deleted. Extract from
+# the helper's declaration to its `return config;`.
+LIGHT_CONFIG_BODY="$(awk '/export const buildLightRuntimeConfig = /{f=1} f{print} f&&/^  return config;/{exit}' "$LIGHT_CONFIG_FILE")"
+if [ -z "$LIGHT_CONFIG_BODY" ]; then
+  SUBAGENT_FAIL="${SUBAGENT_FAIL}\n  could not locate buildLightRuntimeConfig body (runtime.ts) — did it move or get renamed?"
+fi
+for pair in \
+  "taskContract:parentTaskContract" \
+  "fabricationGuard:parentFabricationGuard" \
+  "grounding:parentGrounding" \
+  "approvalPolicy:parentApprovalPolicy"; do
+  child_field="${pair%%:*}"
+  parent_field="${pair##*:}"
+  # taskContract/fabricationGuard/grounding map directly (`X: options.X`);
+  # approvalPolicy is a block-coercion literal keyed on `options.approvalPolicy`.
+  if [ "$child_field" = "approvalPolicy" ]; then
+    child_pattern="options.approvalPolicy"
+  else
+    child_pattern="${child_field}: options.${child_field}"
+  fi
+  if ! printf '%s' "$LIGHT_CONFIG_BODY" | grep -qF "$child_pattern"; then
+    SUBAGENT_FAIL="${SUBAGENT_FAIL}\n  buildLightRuntimeConfig does not map '${child_field}' (runtime.ts)"
+  fi
+  if ! grep -qF "$parent_field" "$EXECUTOR_DEPS_FILE"; then
+    SUBAGENT_FAIL="${SUBAGENT_FAIL}\n  SubAgentExecutorDeps does not thread '${parent_field}' (sub-agent-executor.ts)"
+  fi
+done
+if [ -n "$SUBAGENT_FAIL" ]; then
+  echo "FAIL (5/5): a sub-agent does NOT inherit a cross-cutting policy field:"
+  echo -e "$SUBAGENT_FAIL"
+  echo ""
+  echo "Thread it: add the field to LightRuntimeOptions + map it in"
+  echo "buildLightRuntimeConfig (runtime.ts), declare parent<Field> on"
+  echo "SubAgentExecutorDeps, and pass it through tool-mcp-registrations + builder.ts."
+  echo "A dropped field means a child runs UNJUDGED / UNGATED where the parent does not."
+  FAIL=1
+else
+  echo "OK (5/5): sub-agents inherit the parent's judgment + safety constraints."
 fi
 
 if [ "$FAIL" -ne 0 ]; then
