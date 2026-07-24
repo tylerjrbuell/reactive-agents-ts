@@ -147,6 +147,17 @@ export interface SubAgentExecutorDeps {
   readonly parentAgentId: string;
   /** Lazy reader for the parent's execution context (tool results, task description). */
   readonly getParentContext: () => ParentContext | undefined;
+  // ── Cross-cutting inheritance (2026-07-23) — a sub-agent operates under the
+  //    parent's judgment + safety constraints. Threaded verbatim into the
+  //    child's `createLightRuntime`; approval is coerced to block there.
+  /** Parent's TaskContract — the child's answer is judged against it. */
+  readonly parentTaskContract?: import("@reactive-agents/core").TaskContract;
+  /** Parent's fabrication guard — the child's ungrounded answer is enforced. */
+  readonly parentFabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
+  /** Parent's evidence-grounding config. */
+  readonly parentGrounding?: import("../types.js").GroundingOptions;
+  /** Parent's approval policy (coerced to block in the child — see createLightRuntime). */
+  readonly parentApprovalPolicy?: import("../types.js").ApprovalPolicyConfig;
   /**
    * Resolver for the @reactive-agents/tools module — the call site
    * already imported it dynamically, so we receive it directly to avoid
@@ -280,6 +291,10 @@ export const buildSubAgentTask = (
         parentTestScenario,
         parentAgentId,
         getParentContext,
+        parentTaskContract,
+        parentFabricationGuard,
+        parentGrounding,
+        parentApprovalPolicy,
         toolsMod,
       } = deps;
       const sharedEventBus = runtimeShared?.sharedEventBus;
@@ -398,6 +413,17 @@ export const buildSubAgentTask = (
         // G1: join the parent's EventBus so this sub-agent's lifecycle events
         // are observable on the parent's bus + trace bridge.
         sharedEventBus,
+        // ── Cross-cutting inheritance (2026-07-23) — a TRUE sub-agent runs under
+        //    the parent's judgment + safety constraints, not rubber-stamped. The
+        //    child builds its OWN RunEnvelope from these, so its answer is judged
+        //    against the same contract / fabrication guard / grounding, and a
+        //    gated tool it calls is refused rather than executed unattended.
+        //    Approval is coerced to block INSIDE createLightRuntime (no durable
+        //    store here → detach would strand the child).
+        ...(parentTaskContract !== undefined ? { taskContract: parentTaskContract } : {}),
+        ...(parentFabricationGuard !== undefined ? { fabricationGuard: parentFabricationGuard } : {}),
+        ...(parentGrounding !== undefined ? { grounding: parentGrounding } : {}),
+        ...(parentApprovalPolicy !== undefined ? { approvalPolicy: parentApprovalPolicy } : {}),
       });
 
       // Register proxied MCP tools + execute in one Effect scope. This whole

@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+### Added — sub-agents inherit the parent's judgment + safety constraints
+
+- A delegated sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()` /
+  `spawn-agent`) now runs under the parent's **`taskContract`**,
+  **`fabricationGuard`**, **`grounding`**, and **`approvalPolicy`** — a true
+  sub-agent, not a rubber-stamped one. Its answer is judged against the same
+  contract and fabrication guard, its claims are grounded, and a
+  `requiresApproval` tool it calls is refused rather than executed unattended.
+  Previously a child inherited none of these: it could fabricate freely and
+  execute gated tools with no decision.
+- **Approval is coerced to block/deny-by-default in sub-agents.** A sub-agent has
+  no durable store, so it cannot pause for cross-process (`detach`) approval —
+  it decides in process and denies by default. A `detach` parent policy no
+  longer strands a child at a gate; the child denies the gated tool instead. The
+  same auto-feed folds the child's `requiresApproval` built-ins into the gate.
+
 ### Fixed — `.withApprovalPolicy({ mode: "block" })` now enforces (security)
 
 - **`mode: "block"` was an inert safety switch.** Every approval gate keyed on
