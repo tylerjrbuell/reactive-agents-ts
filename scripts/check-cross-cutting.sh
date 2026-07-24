@@ -395,7 +395,7 @@ if [ ${#ALLOWED_INTERFACE_BASES[@]} -gt 0 ]; then
 fi
 CHECK1="$(printf '%s\n%s\n%s\n' "$DECLS" "$PICKS" "$EXTENDS" | grep -v '^$' | sort -u || true)"
 if [ -n "$CHECK1" ]; then
-  echo "FAIL (1/6): strategy input interface re-declares (or re-bundles) a cross-cutting field"
+  echo "FAIL (1/7): strategy input interface re-declares (or re-bundles) a cross-cutting field"
   echo "(the RunEnvelope is the only carrier):"
   echo ""
   echo "$CHECK1"
@@ -407,7 +407,7 @@ if [ -n "$CHECK1" ]; then
   echo "one of N boundaries' defect class this gate exists to end."
   FAIL=1
 else
-  echo "OK (1/6): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
+  echo "OK (1/7): no strategy re-declares, Pick-s, Omit-s or inherits a cross-cutting field."
 fi
 
 # ── Check 2/4: no hand-authored KernelInput outside sanctioned sites ──
@@ -442,7 +442,7 @@ for f in "${ALLOWED_KERNEL_INPUT_SITES[@]}"; do
 done
 LITERALS="$(scan kernel-input "$REASONING_SRC" | grep -E -v "$EXCLUDE" || true)"
 if [ -n "$LITERALS" ]; then
-  echo "FAIL (2/6): hand-authored KernelInput outside the sanctioned assembly sites:"
+  echo "FAIL (2/7): hand-authored KernelInput outside the sanctioned assembly sites:"
   echo ""
   echo "$LITERALS"
   echo ""
@@ -454,7 +454,7 @@ if [ -n "$LITERALS" ]; then
   echo "script WITH a comment explaining why it cannot silently drop an envelope field."
   FAIL=1
 else
-  echo "OK (2/6): no hand-authored KernelInput outside the sanctioned sites."
+  echo "OK (2/7): no hand-authored KernelInput outside the sanctioned sites."
 fi
 
 # ── Check 3/4: RunEnvelope provided at exactly the two sanctioned seams ──
@@ -471,7 +471,7 @@ PROVIDES="$(scan provide "${PROVIDE_ROOTS[@]}" \
   | grep -v 'services/reasoning-service.ts' || true)"
 
 if [ -n "$PROVIDES" ]; then
-  echo "FAIL (3/6): RunEnvelope provided outside the two sanctioned seams:"
+  echo "FAIL (3/7): RunEnvelope provided outside the two sanctioned seams:"
   echo ""
   echo "$PROVIDES"
   echo ""
@@ -481,7 +481,7 @@ if [ -n "$PROVIDES" ]; then
   echo "second provision site is two competing sources of truth for the same run."
   FAIL=1
 else
-  echo "OK (3/6): RunEnvelope provided only at the two sanctioned seams."
+  echo "OK (3/7): RunEnvelope provided only at the two sanctioned seams."
 fi
 
 # ── Check 4/4: every reasoning execute request carries an envelope ──
@@ -502,7 +502,7 @@ fi
 EXECUTE_ROOTS=(packages/runtime/src apps)
 EXEC_FAILS="$(scan execute "${EXECUTE_ROOTS[@]}" | grep -v '^$' || true)"
 if [ -n "$EXEC_FAILS" ]; then
-  echo "FAIL (4/6): a ReasoningService.execute request is built without a RunEnvelope:"
+  echo "FAIL (4/7): a ReasoningService.execute request is built without a RunEnvelope:"
   echo ""
   echo "$EXEC_FAILS"
   echo ""
@@ -515,7 +515,7 @@ if [ -n "$EXEC_FAILS" ]; then
   echo "at the call site saying why."
   FAIL=1
 else
-  echo "OK (4/6): every reasoning execute request carries an envelope."
+  echo "OK (4/7): every reasoning execute request carries an envelope."
 fi
 
 # ── Check 5/5: sub-agents inherit the parent's judgment + safety constraints ──
@@ -566,7 +566,7 @@ for pair in \
   fi
 done
 if [ -n "$SUBAGENT_FAIL" ]; then
-  echo "FAIL (5/6): a sub-agent does NOT inherit a cross-cutting policy field:"
+  echo "FAIL (5/7): a sub-agent does NOT inherit a cross-cutting policy field:"
   echo -e "$SUBAGENT_FAIL"
   echo ""
   echo "Thread it: add the field to LightRuntimeOptions + map it in"
@@ -575,7 +575,7 @@ if [ -n "$SUBAGENT_FAIL" ]; then
   echo "A dropped field means a child runs UNJUDGED / UNGATED where the parent does not."
   FAIL=1
 else
-  echo "OK (5/6): sub-agents inherit the parent's judgment + safety constraints."
+  echo "OK (5/7): sub-agents inherit the parent's judgment + safety constraints."
 fi
 
 # ── Check 6: the approval policy is declared ONCE ────────────────────────────
@@ -597,15 +597,15 @@ APPROVAL_SITES="$(grep -rlF '"detach" | "block"' --include='*.ts' packages/*/src
   | grep -v '\.test\.ts$' | sort -u)"
 APPROVAL_STRAY="$(printf '%s\n' "$APPROVAL_SITES" | grep -v "^${APPROVAL_OWNER}$" | grep -v '^$' || true)"
 if [ ! -f "$APPROVAL_OWNER" ]; then
-  echo "FAIL (6/6): the canonical approval-policy declaration is missing:"
+  echo "FAIL (6/7): the canonical approval-policy declaration is missing:"
   echo "  expected $APPROVAL_OWNER"
   FAIL=1
 elif ! grep -qF 'export type ApprovalMode = "detach" | "block";' "$APPROVAL_OWNER"; then
-  echo "FAIL (6/6): $APPROVAL_OWNER no longer declares the canonical ApprovalMode union."
+  echo "FAIL (6/7): $APPROVAL_OWNER no longer declares the canonical ApprovalMode union."
   echo "  If it moved, update APPROVAL_OWNER here — do not delete the check."
   FAIL=1
 elif [ -n "$APPROVAL_STRAY" ]; then
-  echo "FAIL (6/6): the approval-policy shape is re-declared outside its owner:"
+  echo "FAIL (6/7): the approval-policy shape is re-declared outside its owner:"
   echo "$APPROVAL_STRAY" | sed 's/^/  /'
   echo ""
   echo "Type these from the canonical stage shapes in approval-gate.ts instead:"
@@ -616,7 +616,58 @@ elif [ -n "$APPROVAL_STRAY" ]; then
   echo "mode:\"block\" shipped as a safety switch that gated nothing."
   FAIL=1
 else
-  echo "OK (6/6): the approval policy is declared once, and each stage derives from it."
+  echo "OK (6/7): the approval policy is declared once, and each stage derives from it."
+fi
+
+# ── Check 7: every reasoning pass absorbs its ledger ─────────────────────────
+#
+# Wave C.2: a run executes reasoning up to three ways (terminal pass,
+# verification retry, post-think continuation), each a separate kernel execution
+# whose ledger starts at seq 0, and each auxiliary pass OVERWRITES
+# `ctx.metadata.reasoningResult`. A pass site that stores a result without
+# absorbing its ledger into the run-scoped one (engine/run-ledger-scope.ts)
+# silently discards every fact that pass recorded — the cascade's own defect
+# class, on the ledger.
+#
+# The fingerprint of a pass site is BOTH normalizing a reasoning result and
+# storing it as `reasoningResult:`. Every file that does both must also name one
+# of the two absorbers, so adding a fourth pass site fails here instead of
+# quietly losing a pass's evidence.
+#
+# Normalizing is what distinguishes a real pass from `cache-check.ts`, which
+# stores a SYNTHETIC result for a semantic-cache hit: no kernel pass ran, so
+# there is no ledger to absorb (and none to show — a cache hit returns an answer
+# with no run evidence at all, noted in DEBT-REGISTER §3).
+#
+# HONEST SCOPE: a future site that stores a raw, un-normalized result would slip
+# past this — but such a site is already broken for the other reasons
+# `normalizeReasoningResult` exists (it is the whitelist boundary that every
+# metadata field crosses).
+LEDGER_ABSORB_FAIL=""
+PASS_SITE_FILES="$(grep -rlE '^\s*reasoningResult: ' --include='*.ts' \
+  packages/runtime/src/engine 2>/dev/null | grep -v '\.test\.ts$' | sort -u \
+  | xargs -r grep -lF 'normalizeReasoningResult(' | sort -u)"
+if [ -z "$PASS_SITE_FILES" ]; then
+  LEDGER_ABSORB_FAIL="\n  found NO reasoning pass sites at all — did 'reasoningResult:' get renamed?"
+else
+  for f in $PASS_SITE_FILES; do
+    if ! grep -qE 'absorbedLedgerMetadata|seedRunLedger' "$f"; then
+      LEDGER_ABSORB_FAIL="${LEDGER_ABSORB_FAIL}\n  ${f} stores a reasoning result but never absorbs its ledger"
+    fi
+  done
+fi
+if [ -n "$LEDGER_ABSORB_FAIL" ]; then
+  echo "FAIL (7/7): a reasoning pass drops its RunLedger:"
+  echo -e "$LEDGER_ABSORB_FAIL"
+  echo ""
+  echo "Spread the absorber into the metadata the pass site returns:"
+  echo "  ...absorbedLedgerMetadata(ctx.metadata, <result>, \"continuation\")"
+  echo "(the run's PRIMARY pass seeds instead: [RUN_LEDGER_METADATA_KEY]: seedRunLedger(result))"
+  echo "A pass that is not absorbed loses every fact it recorded — its tool calls,"
+  echo "artifacts and verdicts never reach the receipt."
+  FAIL=1
+else
+  echo "OK (7/7): every reasoning pass absorbs its ledger into the run-scoped one."
 fi
 
 if [ "$FAIL" -ne 0 ]; then

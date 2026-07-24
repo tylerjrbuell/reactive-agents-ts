@@ -17,6 +17,7 @@ import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { RUN_LEDGER_METADATA_KEY, seedRunLedger } from "../../run-ledger-scope.js";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -404,6 +405,11 @@ export const runReasoningThink = (
         reasoningResult: result,
         stepsCount: result.metadata.stepsCount,
         reasoningSteps: result.steps ?? [],
+        // Wave C.2 — this is the run's PRIMARY pass, so its ledger seeds the
+        // run-scoped one that the auxiliary passes then merge into. Without a
+        // run-scoped home each later pass would overwrite `reasoningResult` and
+        // take this ledger with it.
+        [RUN_LEDGER_METADATA_KEY]: seedRunLedger(result),
       },
     };
   }) as unknown as Effect.Effect<ExecutionContext, never>;

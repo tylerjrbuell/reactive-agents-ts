@@ -198,6 +198,10 @@ export {
   nextSeq,
   ledgerSize,
 } from "./kernel/ledger/run-ledger.js";
+// Wave C.2 — a run outlives ONE kernel call: the engine's auxiliary passes and a
+// sub-agent's whole run merge into the run-scoped ledger through these.
+export { mergePassLedger, entriesOfPass } from "./kernel/ledger/run-scope.js";
+export type { LedgerPass } from "./kernel/ledger/run-scope.js";
 export type {
   RunLedger,
   LedgerEntry,

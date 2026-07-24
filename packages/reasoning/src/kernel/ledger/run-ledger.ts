@@ -42,6 +42,13 @@ interface LedgerEntryBase {
   readonly seq: number;
   /** The run iteration this fact was recorded at (advisory correlation). */
   readonly iteration: number;
+  /**
+   * Which pass of the run produced this fact (Wave C.2). Absent on the run's
+   * primary pass — stamped by `mergePassLedger` (ledger/run-scope.ts) when a
+   * sibling pass's ledger is absorbed, so a merged fact stays attributable to
+   * the verification retry / continuation / sub-agent that recorded it.
+   */
+  readonly pass?: import("./run-scope.js").LedgerPass;
 }
 
 /** A tool call was issued (grown from an `action` step; enriched by C2). */

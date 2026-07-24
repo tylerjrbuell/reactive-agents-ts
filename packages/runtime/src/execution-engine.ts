@@ -8,6 +8,7 @@ import {
   MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
+import { readRunLedger } from "./engine/run-ledger-scope.js";
 import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
@@ -1194,7 +1195,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // onto TaskResult.metadata below (task 5); a ledger
                     // `artifact` entry marks a declared deliverable produced
                     // without re-scanning reasoningSteps.
-                    runLedger: rr?.metadata?.runLedger,
+                    // Wave C.2 — run-scoped (all passes), not just the last one.
+                    runLedger: readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger,
                     output: "",
                   });
                   if (
@@ -1350,9 +1352,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // forwarding it there via `extraMetadata.runLedger`) — NOT
                     // `ctx.metadata.reasoningSteps`, which only ever held
                     // `result.steps`, never `result.metadata.runLedger`.
-                    ...(rr?.metadata?.runLedger && rr.metadata.runLedger.length > 0
-                      ? { runLedger: rr.metadata.runLedger } as Record<string, unknown>
-                      : {}),
+                    //
+                    // Wave C.2: prefer the RUN-scoped ledger. `rr` is whichever
+                    // pass finished LAST, so on a run with a verification retry
+                    // or a continuation it is an auxiliary pass and forwarding
+                    // its ledger alone discarded the terminal pass's facts. The
+                    // run-scoped ledger holds every pass, seq-rebased and
+                    // provenance-stamped (engine/run-ledger-scope.ts); it falls
+                    // back to `rr`'s for any path that never seeded it.
+                    ...(() => {
+                      const runScoped = readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger;
+                      return runScoped && runScoped.length > 0
+                        ? ({ runLedger: runScoped } as Record<string, unknown>)
+                        : {};
+                    })(),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"
