@@ -32,6 +32,7 @@ import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
 import { executeToolAndObserve, evaluateToolPolicy } from "./tool-observe.js";
+import { resolveBlockApproval } from "./approval-gate.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
@@ -578,6 +579,36 @@ export function handleActing(
                 !guardFailed,
               );
               allSteps = [...allSteps, blockedActionStep, blockedObsStep];
+              continue;
+            }
+
+            // Block-mode approval (Durable HITL, Phase D) — parity with the
+            // single/primitive path. This parallel-batch loop executes via
+            // executeNativeToolCall, bypassing the canonical primitive that
+            // gates block-approval elsewhere, so the gate must fire HERE too.
+            // Deny-by-default: a refused member is recorded + skipped, never run.
+            const batchApproval = yield* resolveBlockApproval(
+              batchCall.name,
+              batchCall.arguments,
+              input.approvalPolicy,
+              { iteration: state.iteration },
+            );
+            if (batchApproval.gated && !batchApproval.approved) {
+              const deniedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
+                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+                toolUsed: batchCall.name,
+              });
+              const deniedObsStep = makeStep("observation", batchApproval.message, {
+                toolCallId: batchCall.id,
+                observationResult: makeObservationResult(batchCall.name, false, batchApproval.message),
+              });
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
+              yield* hooks.onObservation(
+                transitionState(state, { steps: [...allSteps, deniedActionStep] }),
+                batchApproval.message,
+                false,
+              );
+              allSteps = [...allSteps, deniedActionStep, deniedObsStep];
               continue;
             }
 

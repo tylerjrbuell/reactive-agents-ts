@@ -294,6 +294,15 @@ export interface RuntimeOptions {
     readonly mode: "detach" | "block";
     readonly tools: readonly string[];
     readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+    /**
+     * Block-mode in-process approval callback (from `.withApprovalPolicy({
+     * onApprove })`). Passed through verbatim to `ReactiveAgentsConfig` by
+     * `createRuntime`; `buildRunEnvelopeFromConfig` Effect-wraps it onto the
+     * envelope rails as `decide`. (This is the 4th hand-copy of the
+     * approvalPolicy shape — see DEBT-REGISTER §3; a single shared type is the
+     * boundary-first fix, deferred to keep this change scoped.)
+     */
+    readonly onApprove?: import("@reactive-agents/reasoning").ApprovalCallback;
   };
 
   /**

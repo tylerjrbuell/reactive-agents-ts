@@ -87,17 +87,25 @@ export const executeCodeAction = (
 
     // Durable HITL (Phase D): code-action composes tool calls inside generated
     // TypeScript run by a Worker sandbox — there is no per-call kernel act
-    // phase, so an approval gate cannot fire. Refuse LOUDLY rather than execute
-    // a `requiresApproval` tool with no human decision. Unlike blueprint,
-    // code-action is never chosen by adaptive routing, so this can only be
-    // reached by an explicit `defaultStrategy: "code-action"` — the caller can
-    // pick a gate-capable strategy. (2026-07-22)
-    if (envelope.rails.approvalPolicy?.mode === "detach") {
+    // phase and its calls never flow through the canonical tool-observe
+    // primitive, so NEITHER the detach pause NOR the block-mode approval gate
+    // can fire. Refuse LOUDLY rather than execute a `requiresApproval` tool with
+    // no human decision — for BOTH modes (2026-07-23: block was previously
+    // unchecked here, but block is now an enforcing gate everywhere else, so
+    // silently executing past it on this one path would reopen the hole). Unlike
+    // blueprint, code-action is never chosen by adaptive routing, so this is
+    // only reached by an explicit `defaultStrategy: "code-action"` — the caller
+    // can pick a gate-capable strategy.
+    const approvalPolicy = envelope.rails.approvalPolicy;
+    const gatesSomeTool =
+      approvalPolicy !== undefined &&
+      ((approvalPolicy.tools?.size ?? 0) > 0 || approvalPolicy.requireFor !== undefined);
+    if (gatesSomeTool) {
       return yield* Effect.fail(
         new ExecutionError({
           strategy: "code-action",
           message:
-            "code-action cannot honor .withApprovalPolicy({ mode: \"detach\" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.",
+            `code-action cannot honor .withApprovalPolicy({ mode: "${approvalPolicy!.mode}" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.`,
         }),
       );
     }

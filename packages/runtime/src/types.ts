@@ -774,6 +774,13 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
     readonly mode: "detach" | "block";
     readonly tools: readonly string[];
     readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+    /**
+     * Block-mode in-process approval callback (from `.withApprovalPolicy({
+     * onApprove })`). A plain callback here (serialization-free, like
+     * `requireFor`); `buildRunEnvelopeFromConfig` lifts it into the kernel's
+     * Effect-returning `decide` on the envelope rails.
+     */
+    readonly onApprove?: import("@reactive-agents/reasoning").ApprovalCallback;
   };
   readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
   /**

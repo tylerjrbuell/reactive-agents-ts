@@ -16,7 +16,7 @@
  * `scripts/check-cross-cutting.sh` check 4 fails CI if a reasoning execute
  * request is built without going through it.
  */
-import { buildRunEnvelope } from "@reactive-agents/reasoning";
+import { buildRunEnvelope, wrapApprovalDecider } from "@reactive-agents/reasoning";
 import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
 
@@ -63,6 +63,13 @@ export function buildRunEnvelopeFromConfig(
           mode: config.approvalPolicy.mode,
           tools: new Set(config.approvalPolicy.tools),
           requireFor: config.approvalPolicy.requireFor,
+          // Block-mode in-process decider: lift the public `onApprove` callback
+          // into the kernel's Effect-returning `decide` HERE, the ONE config→
+          // envelope seam. `detach` ignores it (it pauses instead); absent in
+          // block mode ⇒ `resolveBlockApproval` denies by default.
+          ...(config.approvalPolicy.onApprove
+            ? { decide: wrapApprovalDecider(config.approvalPolicy.onApprove) }
+            : {}),
         }
       : undefined,
     ...extras,
