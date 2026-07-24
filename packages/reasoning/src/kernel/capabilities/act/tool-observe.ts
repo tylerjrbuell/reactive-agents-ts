@@ -29,6 +29,7 @@ import {
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts } from "./tool-execution.js";
+import { resolveBlockApproval } from "./approval-gate.js";
 import { makeStep } from "../sense/step-utils.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 import { type RunLedger } from "../../ledger/run-ledger.js";
@@ -328,13 +329,18 @@ export function executeToolAndObserve(
     // R channel (stays `LLMService` alone) — a run with no envelope in scope
     // degrades to today's behavior rather than failing to compile or throwing.
     // No envelope + no declared contract ⇒ byte-identical to pre-Task-7.
+    // Soft-read the ambient RunEnvelope ONCE — shared by the tool-policy
+    // fallback (below) and the block-mode approval gate (§1c). `serviceOption`
+    // does not widen this function's R channel: no envelope in scope degrades
+    // both to today's behavior rather than failing to compile.
+    const envelopeOpt = yield* Effect.serviceOption(RunEnvelope);
+    const envelope = Option.getOrUndefined(envelopeOpt);
+
     const explicitPolicyGiven =
       config.allowedTools !== undefined || config.forbiddenTools !== undefined;
     let policyAllowedTools = config.allowedTools;
     let policyForbiddenTools = config.forbiddenTools;
     if (!explicitPolicyGiven) {
-      const envelopeOpt = yield* Effect.serviceOption(RunEnvelope);
-      const envelope = Option.getOrUndefined(envelopeOpt);
       const derivedForbidden = forbiddenToolsFromContract(envelope?.policy.taskContract);
       if (derivedForbidden.length > 0) {
         policyForbiddenTools = derivedForbidden;
@@ -358,6 +364,35 @@ export function executeToolAndObserve(
           healed,
         } satisfies ToolObserveResult;
       }
+    }
+
+    // ── 1c. Block-mode approval gate (Durable HITL, Phase D) — THE choke point ─
+    // The in-process half of `.withApprovalPolicy()`. `detach` pauses the run
+    // UPSTREAM (act.ts / step-executor) and never reaches here as an un-approved
+    // call; `block` decides each gated call HERE. DENY-BY-DEFAULT: a gated call
+    // with no configured decider is refused (mirrors the tool-policy block
+    // above — a failed observation, never a widened error channel). Every tool
+    // path that flows through this primitive — kernel single, plan-execute,
+    // blueprint, any future caller — inherits the gate. The kernel PARALLEL-batch
+    // path bypasses this primitive (executeNativeToolCall) and gates in act.ts.
+    const approval = yield* resolveBlockApproval(
+      toolName,
+      args,
+      envelope?.rails.approvalPolicy,
+      { iteration: ctx.iteration },
+    );
+    if (approval.gated && !approval.approved) {
+      const obsStep = makeStep("observation", approval.message, {
+        toolCallId: ctx.callId,
+        observationResult: makeObservationResult(toolName, false, approval.message),
+      });
+      return {
+        obsStep,
+        content: approval.message,
+        success: false,
+        durationMs: 0,
+        healed,
+      } satisfies ToolObserveResult;
     }
 
     // ── 2. ToolService unavailable → failed observation (parity with act.ts) ─

@@ -813,15 +813,30 @@ export interface KernelInput {
   /**
    * Durable HITL (Phase D): resolved approval-gate policy. The runtime merges the
    * three feeders (per-tool `requiresApproval` flags, builder `tools` list,
-   * builder/compose predicate) into this single shape at config assembly. In
-   * `mode:"detach"` the act capability pauses the run (terminatedBy
-   * `awaiting-approval`) before executing any gated call. Absent / `mode:"block"`
-   * → no durable pause (the in-process gate handles approval). See `shouldGate`.
+   * builder/compose predicate) into this single shape at config assembly.
+   *
+   * - `mode:"detach"` — the act capability PAUSES the run (terminatedBy
+   *   `awaiting-approval`) before executing any gated call; resumed from any
+   *   process. Requires `.withDurableRuns()`.
+   * - `mode:"block"` — each gated call is decided IN PROCESS via `decide`
+   *   (`resolveBlockApproval`), no run pause. DENY-BY-DEFAULT: absent `decide`,
+   *   a gated call is refused, never silently executed. See `shouldGate` +
+   *   `capabilities/act/approval-gate.ts`.
+   *
+   * `RunEnvelope.rails.approvalPolicy` is typed `KernelInput["approvalPolicy"]`,
+   * so this shape is the single source: adding a field here propagates to the
+   * envelope carrier and every reader by structural copy.
    */
   readonly approvalPolicy?: {
     readonly mode: "detach" | "block";
     readonly tools: ReadonlySet<string>;
     readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+    /**
+     * Block-mode in-process decider (Effect-wrapped at config→envelope time from
+     * the public `onApprove` callback). Consulted only when `mode:"block"` and
+     * the call is gated. Absent ⇒ deny-by-default.
+     */
+    readonly decide?: import("../capabilities/act/approval-gate.js").BlockApprovalDecider;
   };
   /**
    * Output-synthesis configuration — consumed by the terminal output assembly

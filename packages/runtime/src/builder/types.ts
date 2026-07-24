@@ -510,8 +510,12 @@ export interface DurableRunsOptions {
  * when `.withDurableRuns()` is set) a gated call pauses the run, persists
  * `awaiting-approval`, and returns control so a human can approve/deny from any
  * process via `agent.approveRun`/`denyRun`. Detached pauses ride the `runStream()`
- * path (where durable persistence lives). In `mode: "block"` the in-process
- * approval gate handles it instead.
+ * path (where durable persistence lives). In `mode: "block"` (default when
+ * durable runs are off) a gated call is decided IN PROCESS via `onApprove`,
+ * without pausing. **Without `onApprove`, a gated call is DENIED** — the tool
+ * does not run and the model sees an honest refusal. (Before v0.14.x,
+ * `mode: "block"` silently executed gated tools with no decision — an inert
+ * safety switch; it now fails closed.)
  *
  * As of the v0.14 security hardening (F2), a registered tool whose definition
  * declares `requiresApproval: true` (built-ins like `code-execute`/`file-write`,
@@ -527,6 +531,18 @@ export interface ApprovalPolicyConfig {
     readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
     /** "detach" (durable, default when durable runs are on) or "block" (in-process). */
     readonly mode?: "detach" | "block";
+    /**
+     * In-process approval decider for `mode: "block"`. Called for each gated
+     * call; return `true`/`{ approve: true }` to run it, `false`/`{ approve:
+     * false, reason }` to refuse. May be async. A throw/rejection denies
+     * (fail-closed). Ignored in `mode: "detach"` (which pauses instead). Absent
+     * in block mode ⇒ every gated call is denied.
+     *
+     * Distinct from `run()`'s `onApproval` option, which drives the DETACH
+     * pause→resume loop and receives a `runId`; this one is synchronous and
+     * in-loop.
+     */
+    readonly onApprove?: import('@reactive-agents/reasoning').ApprovalCallback;
 }
 
 /**

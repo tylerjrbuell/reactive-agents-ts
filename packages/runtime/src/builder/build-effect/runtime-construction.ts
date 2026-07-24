@@ -554,6 +554,10 @@ export const buildBaseRuntimeAndEngine = (
               ...(state._toolsOptions?.tools ?? []).map((t) => t.definition),
             ]),
             requireFor: state._approvalPolicy.requireFor,
+            // Block-mode in-process decider. Carried as the raw callback here
+            // (serialization-free, like requireFor); the config→envelope mapper
+            // (buildRunEnvelopeFromConfig) Effect-wraps it onto the rails.
+            onApprove: state._approvalPolicy.onApprove,
           }
         : undefined,
       harnessPipeline,

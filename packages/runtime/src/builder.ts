@@ -1615,7 +1615,24 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * which resumes the run from its checkpoint to completion.
      *
      * `mode: "detach"` requires `.withDurableRuns()` (detached pauses need a
-     * durable store). `mode: "block"` falls back to the in-process approval gate.
+     * durable store).
+     *
+     * `mode: "block"` (the default when durable runs are OFF) decides each gated
+     * call IN PROCESS via the `onApprove` callback, without pausing. **Supply
+     * `onApprove`, or every gated call is DENIED** — the tool does not run and
+     * the model sees an honest refusal. (Through v0.14.0, `mode: "block"`
+     * silently executed gated tools with no decision — an inert safety switch;
+     * it now fails closed.)
+     *
+     * @example
+     * ```typescript
+     * agent.withApprovalPolicy({
+     *   tools: ["shell-execute"],
+     *   onApprove: async ({ toolName, args }) => ({
+     *     approve: await promptHuman(`Run ${toolName}?`, args),
+     *   }),
+     * })
+     * ```
      *
      * @returns `this` for chaining
      */

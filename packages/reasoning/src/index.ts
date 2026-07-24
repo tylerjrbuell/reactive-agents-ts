@@ -276,6 +276,16 @@ export type { TaskHorizon, TaskHorizonClassification } from "./kernel/capabiliti
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
 export { planNextMoveBatches } from "./kernel/capabilities/decide/tool-gating.js";
+// Block-mode approval gate (Durable HITL, Phase D). `wrapApprovalDecider` lifts
+// the runtime's `.withApprovalPolicy({ onApprove })` callback into the kernel's
+// Effect-returning decider; the types are the public surface the runtime maps.
+export { resolveBlockApproval, wrapApprovalDecider } from "./kernel/capabilities/act/approval-gate.js";
+export type {
+  ApprovalCallback,
+  ApprovalDecision,
+  BlockApprovalDecider,
+  BlockApprovalOutcome,
+} from "./kernel/capabilities/act/approval-gate.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike, KernelState } from "./kernel/state/kernel-state.js";
 

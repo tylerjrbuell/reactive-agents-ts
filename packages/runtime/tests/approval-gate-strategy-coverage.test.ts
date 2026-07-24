@@ -160,3 +160,132 @@ describe("durable HITL gate — every kernel-backed strategy", () => {
     expect(`${result.error ?? ""}${result.output}`).toContain("cannot honor");
   }, 30_000);
 });
+
+// ── Block mode (2026-07-23) ──────────────────────────────────────────────────
+// The detach coverage above pins the PAUSE path. `mode: "block"` is the OTHER
+// mode — in-process, no pause, no durable store — and it was an inert no-op
+// until this wave: every gate site keyed on `mode === "detach"`, so a gated
+// tool executed with no decision (DEBT-REGISTER §3). Block mode is the DEFAULT
+// when `.withDurableRuns()` is absent, i.e. the common configuration. These pin
+// that block now enforces deny-by-default across every strategy.
+
+/** Like makeAgent, but block mode (no durable runs) with an optional decider. */
+function makeBlockAgent(
+  strategy: string,
+  onExecute: () => void,
+  onApprove?: import("../src/builder/types.js").ApprovalPolicyConfig["onApprove"],
+  scenario: unknown[] = [{ toolCall: { name: "risky-tool", args: { input: "go" } } }],
+) {
+  return ReactiveAgents.create()
+    .withName(`hitl-block-${strategy}`)
+    .withProvider("test")
+    .withTestScenario(scenario as never)
+    .withTools({
+      tools: [
+        {
+          definition: {
+            name: "risky-tool",
+            description: "Mutates state — requires approval.",
+            parameters: [
+              { name: "input", type: "string" as const, description: "Input", required: true },
+            ],
+            riskLevel: "high" as const,
+            requiresApproval: true,
+            timeoutMs: 5_000,
+            source: "function" as const,
+          },
+          handler: () =>
+            Effect.sync(() => {
+              onExecute();
+              return "ran";
+            }),
+        },
+      ],
+    })
+    .withReasoning({ defaultStrategy: strategy as never, enableStrategySwitching: false })
+    .withRequiredTools({ adaptive: false })
+    .withMaxIterations(4)
+    .withApprovalPolicy({
+      tools: ["risky-tool"],
+      mode: "block",
+      ...(onApprove ? { onApprove } : {}),
+    })
+    .build();
+}
+
+describe("block-mode approval gate — every strategy (deny-by-default)", () => {
+  // blueprint routes to reactive when a policy is set; code-action refuses; both
+  // are asserted separately below. These reach a gate-capable path.
+  const BLOCK_STRATEGIES = ["reactive", "reflexion", "tree-of-thought", "adaptive"] as const;
+
+  for (const strategy of BLOCK_STRATEGIES) {
+    it(`${strategy}: block + no onApprove denies the gated tool (no execution, no pause)`, async () => {
+      let executions = 0;
+      const agent = await makeBlockAgent(strategy, () => {
+        executions += 1;
+      });
+      const result = await agent.run("do the risky thing");
+      try {
+        expect(executions).toBe(0);
+        // Block mode does NOT pause — it decides in-process.
+        expect(result.status).not.toBe("awaiting-approval");
+      } finally {
+        await agent.dispose();
+      }
+    }, 30_000);
+  }
+
+  it("reactive: block + onApprove→approve runs the gated tool", async () => {
+    let executions = 0;
+    let asked = 0;
+    const agent = await makeBlockAgent(
+      "reactive",
+      () => {
+        executions += 1;
+      },
+      () => {
+        asked += 1;
+        return true;
+      },
+    );
+    await agent.run("do the risky thing");
+    try {
+      expect(asked).toBeGreaterThan(0);
+      expect(executions).toBeGreaterThan(0);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30_000);
+
+  it("plan-execute-reflect: block + no onApprove denies the gated tool_call step", async () => {
+    let executions = 0;
+    const agent = await makeBlockAgent(
+      "plan-execute-reflect",
+      () => {
+        executions += 1;
+      },
+      undefined,
+      [{ text: PLAN_JSON }],
+    );
+    await agent.run("do the risky thing");
+    try {
+      expect(executions).toBe(0);
+    } finally {
+      await agent.dispose();
+    }
+  }, 30_000);
+
+  it("code-action: refuses on block mode too (its tools run past the gate)", async () => {
+    let executions = 0;
+    const agent = await makeBlockAgent("code-action", () => {
+      executions += 1;
+    });
+    const result = await agent.run("do the risky thing");
+    try {
+      expect(executions).toBe(0);
+      expect(`${result.error ?? ""}${result.output}`).toContain("cannot honor");
+    } finally {
+      await agent.dispose();
+    }
+  }, 30_000);
+});
