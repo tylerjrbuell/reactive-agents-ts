@@ -587,38 +587,24 @@ export const buildSubAgentTask = (
         Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
       );
 
-      // Dispatch delimiters — the single biggest readability win for following
-      // a sub-agent run. Logged via the PARENT's logger (soft-resolved, so it is
-      // a no-op when observability is off), so they frame the child's indented
-      // block at the parent's level: a clear "▶ delegate → name" open and a
-      // "◀ name ✓/✗ …" close, instead of the child's lines just appearing and
-      // vanishing with no boundary. Depth marker mirrors the child's log prefix.
-      // Emitted through the PARENT's logger, which — when the parent is itself a
-      // nested child — is already wrapped with the parent's own depth prefix. So
-      // the delimiter needs no depth marker of its own; a bare 2-space indent
-      // sits it just outside the child's block at whatever level the parent is.
-      const parentObsOpt = yield* Effect.serviceOption(ObservabilityService);
-      const frame = (line: string): Effect.Effect<void, never> =>
-        parentObsOpt._tag === "Some"
-          ? parentObsOpt.value.info(`  ${line}`)
-          : Effect.void;
-      const taskPreview = t.task.length > 60 ? `${t.task.slice(0, 60)}…` : t.task;
-      yield* frame(`▶ delegate → ${t.name}: ${taskPreview}`);
-      const startedMs = Date.now();
+      // Dispatch/completion framing — previously a logged "▶ delegate → name" /
+      // "◀ name ✓/✗ …" delimiter pair emitted via the PARENT's logger. That
+      // pair is now superseded by the live status renderer's collapsed
+      // sub-agent line (Task 7, observability unified run-tree): in TTY/status
+      // mode the renderer tracks the shared EventBus's AgentStarted/
+      // AgentCompleted events directly into a one-line, live-updating summary
+      // per sub-agent, rather than the parent's logger emitting a separate
+      // delimiter pair around the child's block.
 
       // Fork into the PARENT's fiber tree: parent interruption reaches the
       // child. `Fiber.await` returns an Exit, so a child FAILURE is contained
       // here and mapped to a structured result — it never cascades.
       const fiber = yield* Effect.forkScoped(childEffect);
       const exit = yield* fiber.await;
-      const elapsedMs = Date.now() - startedMs;
 
       if (Exit.isSuccess(exit)) {
         const { execResult: result, childDashboard } = exit.value;
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
-        yield* frame(
-          `◀ ${t.name} ${result.success ? "✓" : "✗"} — ${result.metadata.tokensUsed} tok, ${elapsedMs}ms`,
-        );
         // Record the child's dashboard into the SPAWNING agent's own ambient
         // registry — the same registry the root created (and threaded down to
         // every descendant via `sharedChildDashboardRegistry`, mirroring how
@@ -646,10 +632,6 @@ export const buildSubAgentTask = (
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }
-
-      yield* frame(
-        `◀ ${t.name} ✗ — ${Exit.isInterrupted(exit) ? "interrupted" : "failed"}, ${elapsedMs}ms`,
-      );
 
       // Failure or interruption — contained, never rethrown to the parent.
       const cause = exit.cause;

@@ -1594,9 +1594,31 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
-            // Create renderer (no-op when not in status mode)
+            // Create renderer (no-op when not in status mode). `eb` (acquired
+            // above, Phase 0.2) lets the renderer track sub-agent
+            // AgentStarted/AgentCompleted events into collapsed live lines
+            // (Task 7, observability unified run-tree).
+            //
+            // The cast below is required, not just defensive: `observability`
+            // cannot import this module's `EbLike` (runtime depends on
+            // observability, not the reverse — importing it would create a
+            // package cycle), so `status-renderer.ts` declares its own
+            // minimal, structurally-equivalent local `EbLike`. The two
+            // interfaces are runtime-compatible (both wrap the same
+            // `EventBus.on`), but TypeScript can't prove that: relating two
+            // independently-declared *generic* method signatures fails
+            // because one side's type-parameter constraint (`AgentEventTag`,
+            // the full closed union of event tags) doesn't unify with the
+            // other's necessarily looser constraint (`string`, since the
+            // narrower type can't reference `AgentEventTag` without the same
+            // import it's trying to avoid). Hence the explicit cast at this
+            // single boundary rather than a structural match.
             const renderer = isStatusMode
-              ? makeStatusRenderer(logger)
+              ? makeStatusRenderer(
+                  logger,
+                  process.stdout,
+                  eb as unknown as Parameters<typeof makeStatusRenderer>[2],
+                )
               : null;
 
             // Start status renderer before events flow

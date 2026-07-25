@@ -24,16 +24,75 @@ interface RendererState {
   active: boolean;
 }
 
+interface SubAgentLine {
+  readonly taskId: string;
+  readonly name: string;
+  status: "running" | "done" | "error";
+  startMs: number;
+  tokens: number;
+  currentTool: string | null;
+  expanded: boolean;
+}
+
+/**
+ * Minimal shape of an `AgentStarted` event this renderer needs — deliberately
+ * NOT the full event from `@reactive-agents/core`'s `event-bus.ts` (extra
+ * fields like `provider`/`model`/`rootRunId` are ignored; structural typing
+ * lets the real event satisfy this narrower shape).
+ */
+interface SubAgentStartedLike {
+  readonly taskId: string;
+  readonly agentId: string;
+  readonly parentAgentId?: string;
+  readonly agentDisplayName?: string;
+}
+
+/** Minimal shape of an `AgentCompleted` event this renderer needs. */
+interface SubAgentCompletedLike {
+  readonly taskId: string;
+  readonly agentId: string;
+  readonly success: boolean;
+  readonly totalTokens: number;
+  /** Present on the real event; not currently read (elapsed is computed from `startMs`). */
+  readonly durationMs?: number;
+}
+
+/**
+ * Narrow local view of the shared `EventBus`'s `.on()` method, scoped to the
+ * two agent-lifecycle events this renderer needs.
+ *
+ * Deliberately NOT imported from `@reactive-agents/runtime` (where the
+ * equivalent `EbLike` lives, in `engine/runtime-context.ts`): `runtime`
+ * depends on `observability` (see `packages/runtime/package.json`), not the
+ * other way around — `packages/observability/package.json` has no
+ * `@reactive-agents/runtime` dependency and must not gain one. Importing
+ * `EbLike` from `runtime` here would create a package dependency cycle. This
+ * local, minimal, structurally-compatible type is the correct fix: the real
+ * `EventBus.on` (defined in `@reactive-agents/core`) satisfies it without any
+ * runtime import.
+ */
+interface EbLike {
+  readonly on: <T extends string>(
+    tag: T,
+    handler: (event: { readonly _tag: T } & Record<string, unknown>) => Effect.Effect<void, never>,
+  ) => Effect.Effect<() => void, never>;
+}
+
 export interface StatusRenderer {
   readonly start: () => Effect.Effect<void, never>;
   readonly stop: () => void;
   /** Push a streaming think chunk — called per LLM text delta. */
   readonly pushThinkChunk: (text: string) => void;
+  /** Begin tracking a sub-agent's collapsed live line. */
+  readonly onAgentStarted: (event: SubAgentStartedLike) => void;
+  /** Freeze a sub-agent's collapsed line to its done/failed summary. */
+  readonly onAgentCompleted: (event: SubAgentCompletedLike) => void;
 }
 
 export function makeStatusRenderer(
   logger: ObservableLoggerService,
   out: NodeJS.WriteStream = process.stdout,
+  eb?: EbLike | null,
 ): StatusRenderer {
   const isTTY = Boolean(out.isTTY);
 
@@ -56,6 +115,10 @@ export function makeStatusRenderer(
 
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsub: (() => void) | null = null;
+  let ebUnsubs: Array<() => void> = [];
+
+  const subAgents = new Map<string, SubAgentLine>();
+  let allSubAgentsExpanded = false;
 
   // ─── Text helpers ────────────────────────────────────────────────────────────
 
@@ -199,7 +262,17 @@ export function makeStatusRenderer(
       process.kill(process.pid, "SIGINT");
       return;
     }
-    if ((key === "t" || key === "T") && s.active) togglePanel();
+    if ((key === "t" || key === "T") && s.active) {
+      togglePanel();
+      // Design simplification (documented, not a silent gap): this linear
+      // terminal renderer has no cursor/focus model, so `t` toggles every
+      // currently-tracked sub-agent line together rather than one at a time.
+      // With scratch.ts's typical one-sub-agent-at-a-time usage this is
+      // indistinguishable from per-line toggling; a follow-on task could add
+      // per-line focus navigation if concurrent dispatch becomes common.
+      allSubAgentsExpanded = !allSubAgentsExpanded;
+      for (const sa of subAgents.values()) sa.expanded = allSubAgentsExpanded;
+    }
   }
 
   function setupKeyboard(): void {
@@ -232,6 +305,75 @@ export function makeStatusRenderer(
     if (s.drawnLines > 0) collapsePanel();
     out.write(`\r\x1b[2K${line}\n`);
     writeStatus();
+  }
+
+  // ─── Sub-agent collapsed lines ────────────────────────────────────────────────
+
+  function subAgentLineText(sa: SubAgentLine): string {
+    const elapsed = `${((Date.now() - sa.startMs) / 1000).toFixed(1)}s`;
+    if (sa.status === "running") {
+      const tool = sa.currentTool ? `  ${sa.currentTool}…` : "";
+      return `├─ spawn-agent → ${sa.name}  ●  ${elapsed}${tool}`;
+    }
+    const icon = sa.status === "done" ? "✓" : "✗";
+    return `├─ spawn-agent → ${sa.name}  ${icon}  ${elapsed}  ${sa.tokens.toLocaleString()} tok`;
+  }
+
+  /**
+   * Hoisted to a named function (rather than a property on the object this
+   * factory returns) so the EventBus subscription set up in `start()` can
+   * reference it directly — self-referencing the not-yet-constructed return
+   * value from inside the constructor would require an awkward forward
+   * declaration. The returned `StatusRenderer.onAgentStarted` below is the
+   * same function, exposed for direct calls (e.g. by tests).
+   */
+  function onAgentStarted(event: SubAgentStartedLike): void {
+    // `AgentStarted` fires for EVERY agent execution on the shared EventBus,
+    // including the root run itself (`parentAgentId` undefined there) — this
+    // renderer only tracks actual sub-agents (spawned via `spawn-agent`/
+    // `spawn-agents`), never the root, which already has its own status line.
+    // Caught live via a real-TTY manual check (Step 10): without this guard,
+    // the root's own AgentStarted rendered a bogus "sub-agent" line for
+    // itself. `onAgentCompleted` needs no matching guard — it only ever acts
+    // on taskIds present in `subAgents`, and the root's taskId is never added.
+    if (event.parentAgentId === undefined) return;
+    subAgents.set(event.taskId, {
+      taskId: event.taskId,
+      name: event.agentDisplayName ?? event.agentId,
+      status: "running",
+      startMs: Date.now(),
+      tokens: 0,
+      currentTool: null,
+      expanded: false,
+    });
+    printLine(subAgentLineText(subAgents.get(event.taskId)!));
+  }
+
+  /**
+   * `EbLike.on` is intentionally generic-over-`string` (see the type's doc
+   * comment) so it stays assignable from the real `EventBus.on` without
+   * importing it. That widens the handler's event parameter to
+   * `{ _tag: T } & Record<string, unknown>`; this single helper narrows it
+   * back to the shape the renderer actually needs — safe because the tag
+   * literal passed to `.on` guarantees the real EventBus only ever invokes
+   * the handler with a genuine event of that tag. Consolidated into one
+   * helper (rather than one cast per call site) per the project's
+   * `as-unknown-as-ceiling` discipline (WS-5b) — one boundary cast, reused.
+   */
+  function narrowAgentEvent<T>(event: { readonly _tag: string } & Record<string, unknown>): T {
+    return event as unknown as T;
+  }
+
+  function onAgentCompleted(event: SubAgentCompletedLike): void {
+    const sa = subAgents.get(event.taskId);
+    if (!sa) return;
+    sa.status = event.success ? "done" : "error";
+    sa.tokens = event.totalTokens;
+    printLine(subAgentLineText(sa));
+    // Auto-expand on failure — nested detail already streamed via the root's
+    // own subscription (Task 5); `expanded` is surfaced for a future
+    // per-line detail view, out of scope here (see the `t`-key comment above).
+    if (!event.success) sa.expanded = true;
   }
 
   // ─── Event handler ────────────────────────────────────────────────────────────
@@ -311,19 +453,26 @@ export function makeStatusRenderer(
 
   return {
     start: (): Effect.Effect<void, never> =>
-      logger.subscribe((_event, _formatted) =>
-        Effect.sync(() => onEvent(_event)),
-      ).pipe(
-        Effect.flatMap((unsubscribeFn) =>
-          Effect.sync(() => {
-            unsub = unsubscribeFn;
-            s.active = true;
-            s.startMs = Date.now();
-            setupKeyboard();
-            timer = setInterval(() => { s.spinnerIdx++; redraw(); }, 100);
-          }),
-        ),
-      ),
+      Effect.gen(function* () {
+        const unsubscribeFn = yield* logger.subscribe((_event, _formatted) =>
+          Effect.sync(() => onEvent(_event)),
+        );
+        unsub = unsubscribeFn;
+        s.active = true;
+        s.startMs = Date.now();
+        setupKeyboard();
+        timer = setInterval(() => { s.spinnerIdx++; redraw(); }, 100);
+
+        if (eb) {
+          const unsubStarted = yield* eb.on("AgentStarted", (event) =>
+            Effect.sync(() => onAgentStarted(narrowAgentEvent<SubAgentStartedLike>(event))),
+          );
+          const unsubCompleted = yield* eb.on("AgentCompleted", (event) =>
+            Effect.sync(() => onAgentCompleted(narrowAgentEvent<SubAgentCompletedLike>(event))),
+          );
+          ebUnsubs.push(unsubStarted, unsubCompleted);
+        }
+      }),
 
     stop: (): void => {
       if (s.drawnLines > 0) collapsePanel();
@@ -331,6 +480,8 @@ export function makeStatusRenderer(
       if (timer) { clearInterval(timer); timer = null; }
       cleanupKeyboard();
       if (unsub) { unsub(); unsub = null; }
+      for (const fn of ebUnsubs) fn();
+      ebUnsubs = [];
       if (isTTY) out.write("\r\x1b[2K");
     },
 
@@ -341,5 +492,8 @@ export function makeStatusRenderer(
       if (s.drawnLines > 0) redrawPanel();
       else if (s.phase === "think") expandPanel();
     },
+
+    onAgentStarted,
+    onAgentCompleted,
   };
 }
