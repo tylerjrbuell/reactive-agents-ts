@@ -154,4 +154,26 @@ describe("builder observability opt-out", () => {
       console.log = origLog;
     }
   });
+
+  test("agent execution with minimal verbosity suppresses phase/tool log output", async () => {
+    const logCalls: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logCalls.push(args.map(String).join(" "));
+      origLog(...args);
+    };
+
+    let agent;
+    try {
+      agent = await buildAgent("minimal");
+      await agent.run("verbosity test");
+      // At minimal verbosity with live logging, no phase or tool logs should be printed
+      const logOutput = logCalls.join("\n");
+      expect(logOutput).not.toContain("phase");
+      expect(logOutput).not.toContain("tool");
+    } finally {
+      await agent?.dispose();
+      console.log = origLog;
+    }
+  });
 });

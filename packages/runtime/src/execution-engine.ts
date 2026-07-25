@@ -1575,6 +1575,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               // In status mode the renderer owns all output; logger stays buffered
               live: isStatusMode ? false : (config.logging?.live ?? true),
               minLevel: config.logging?.minLevel,
+              // Thread real VerbosityLevel through to ObservableLogger so "minimal"
+              // can actually suppress live console output (not just dashboard output).
+              // Only pass when observability is explicitly enabled.
+              ...(obs ? { verbosity } : {}),
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
