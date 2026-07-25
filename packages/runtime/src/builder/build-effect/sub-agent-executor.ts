@@ -423,8 +423,8 @@ export const buildSubAgentTask = (
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
         observabilityOptions: parentObservabilityOptions
-          ? { ...parentObservabilityOptions, logPrefix: childLogPrefix }
-          : { logPrefix: childLogPrefix },
+          ? { ...parentObservabilityOptions, logPrefix: childLogPrefix, emitConsole: false }
+          : { logPrefix: childLogPrefix, emitConsole: false },
         contextProfile: parentContextProfile,
         enableCostTracking: parentEnableCostTracking,
         // Inherit the deterministic scenario so `test`-provider sub-agents are

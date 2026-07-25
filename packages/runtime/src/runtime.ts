@@ -44,6 +44,7 @@ import {
   createObservabilityLayer,
   MetricsCollectorLive,
   TelemetryCollectorLive,
+  type ExporterConfig,
 } from "@reactive-agents/observability";
 import { createPromptLayer } from "@reactive-agents/prompts";
 import {
@@ -775,12 +776,13 @@ export const createRuntime = (options: RuntimeOptions) => {
   // ── Observability ──
   const observabilityOptLayer = options.enableObservability
     ? (() => {
-        const obsExporterConfig = {
+        const obsExporterConfig: ExporterConfig = {
           verbosity: options.observabilityOptions?.verbosity,
           live: options.observabilityOptions?.live,
           file: options.observabilityOptions?.file
             ? { filePath: options.observabilityOptions.file }
             : undefined,
+          ...(options.observabilityOptions?.emitConsole === false ? { console: false as const } : {}),
           ...(options.observabilityOptions?.redactors !== undefined
             ? { redactors: options.observabilityOptions.redactors }
             : {}),
@@ -1314,9 +1316,10 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
 
   const lightObservabilityOptLayer = options.enableObservability
     ? (() => {
-        const obsExporterConfig = {
+        const obsExporterConfig: ExporterConfig = {
           verbosity: options.observabilityOptions?.verbosity,
           live: options.observabilityOptions?.live,
+          ...(options.observabilityOptions?.emitConsole === false ? { console: false as const } : {}),
           ...(options.observabilityOptions?.redactors !== undefined
             ? { redactors: options.observabilityOptions.redactors }
             : {}),

@@ -647,6 +647,16 @@ export interface ObservabilityOptions {
      */
     readonly file?: string
     /**
+     * Suppress this agent's own console dashboard/log printing while still
+     * recording metrics/logs/spans. Used internally for sub-agents so only
+     * the root agent's `flush()` prints a dashboard — a sub-agent's data is
+     * rolled up into the parent's single dashboard instead (see
+     * `sub-agent-executor.ts`).
+     *
+     * Default: `true` (agent prints its own console output).
+     */
+    readonly emitConsole?: boolean
+    /**
      * Log full model prompts and responses.
      *
      * When `true`, full system/user prompts and untruncated model responses are logged
