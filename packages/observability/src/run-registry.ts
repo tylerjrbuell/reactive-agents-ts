@@ -22,13 +22,23 @@ export interface ChildDashboardEntry {
 }
 
 /**
- * Run-scoped registry that accumulates dashboard data from every sub-agent
- * dispatched during a run. Created ONCE by the root's runtime construction and
- * threaded down to every `createLightRuntime` call for sub-agents — mirroring
- * how `sharedEventBus` propagates (see `runtime.ts`'s `eventBusLayer` and
- * `sub-agent-executor.ts`'s `SubAgentRuntimeShared`) — so `record()` always
- * appends to ONE place regardless of nesting depth, and the root's `drain()`
- * (at `execution-engine.ts`, gated by `!lp` — root only) sees every descendant.
+ * Registry that accumulates dashboard data from every sub-agent dispatched
+ * during a run. Created ONCE per built agent (by the root's runtime
+ * construction) and threaded down to every `createLightRuntime` call for
+ * sub-agents — mirroring how `sharedEventBus` propagates (see `runtime.ts`'s
+ * `eventBusLayer` and `sub-agent-executor.ts`'s `SubAgentRuntimeShared`) — so
+ * `record()` always appends to ONE place regardless of nesting depth, and the
+ * root's `drain()` (at `execution-engine.ts`, gated by `!lp` — root only)
+ * sees every descendant and clears the list for the next run (`Ref.getAndSet`).
+ *
+ * NOT run-scoped: the backing `Ref` lives for the built agent's whole
+ * lifetime, not per-`run()`. Sequential `.run()` calls on one built agent are
+ * safe (each drain clears before the next run's entries accumulate) but
+ * concurrent/overlapping `.run()` calls on the SAME built agent share one
+ * registry — whichever root drains first claims both runs' entries, and the
+ * other's dashboard shows none. Not a regression (the pre-fix `Ref.get` had
+ * the opposite failure, over-reporting to both); flagged here rather than
+ * fixed because it needs a `rootRunId`-keyed registry to close properly.
  */
 export class ChildDashboardRegistry extends Context.Tag("ChildDashboardRegistry")<
   ChildDashboardRegistry,
