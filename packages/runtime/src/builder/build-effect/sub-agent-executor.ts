@@ -67,7 +67,9 @@ import type {
 } from "../types.js";
 import type {
   ContextProfile,
+  RunLedger,
 } from "@reactive-agents/reasoning";
+import { mergePassLedger } from "@reactive-agents/reasoning";
 import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
@@ -269,6 +271,17 @@ const extractDelegatedToolsUsed = (result: TaskResult): string[] => {
       return [...directTool, ...nestedDelegated];
     })
     .filter((toolName, index, arr) => arr.indexOf(toolName) === index);
+};
+
+/**
+ * The child's run-scoped RunLedger off its TaskResult (Wave C.2 slice 1 put it
+ * there). Guarded, not cast: a child that recorded nothing (or a shape drift)
+ * degrades to undefined rather than crossing a non-array into the parent's
+ * ledger merge.
+ */
+const extractChildRunLedger = (result: TaskResult): RunLedger | undefined => {
+  const ledger = (result.metadata as { runLedger?: unknown }).runLedger;
+  return Array.isArray(ledger) ? (ledger as RunLedger) : undefined;
 };
 
 /**
@@ -579,6 +592,17 @@ export const buildSubAgentTask = (
         yield* frame(
           `◀ ${t.name} ${result.success ? "✓" : "✗"} — ${result.metadata.tokensUsed} tok, ${elapsedMs}ms`,
         );
+        // Wave C.2 — carry the child's run-scoped ledger back to the parent,
+        // stamped `sub-agent:<name>` so the parent's kernel merges it under this
+        // child's provenance. `mergePassLedger` re-bases the child's seqs from 0
+        // and preserves any deeper `sub-agent:*` stamps a grandchild already set.
+        // Empty child ledger ⇒ omit the field (a `test`-provider child records
+        // nothing), so a childless run is byte-identical.
+        const childRunLedger = extractChildRunLedger(result);
+        const stampedChildLedger =
+          childRunLedger && childRunLedger.length > 0
+            ? mergePassLedger(undefined, childRunLedger, `sub-agent:${t.name}`)
+            : undefined;
         const raw: SubAgentRawResult = {
           output: String(result.output ?? ""),
           success: result.success,
@@ -586,6 +610,7 @@ export const buildSubAgentTask = (
           stepsCompleted: result.metadata.stepsCount ?? 0,
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
+          ...(stampedChildLedger ? { childRunLedger: stampedChildLedger } : {}),
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }

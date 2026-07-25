@@ -85,6 +85,7 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
         extractedFact?: string;
         toolUsed?: string;
         verification?: unknown;
+        subAgentLedger?: RunLedger;
       }
     | undefined;
 
@@ -155,6 +156,19 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
           verified: obs?.success ?? false,
           reason: step.content,
         });
+      }
+      // Wave C.2 — a sub-agent tool observation carries the child's ledger,
+      // already stamped `sub-agent:<name>` by the executor. Its entries merge
+      // into the parent's ledger right after the spawn call's own tool-result,
+      // so the child's tool calls / artifacts / verdicts become queryable facts
+      // of the parent run instead of dying as a summary string. `appendEntries`
+      // (via projectStepsToLedger / the ledgerSink) re-bases their seq into the
+      // parent's dense index; the `pass` stamp — innermost-wins for a grandchild
+      // — rides through untouched because it lives on the entry, not the seq.
+      if (meta?.subAgentLedger && meta.subAgentLedger.length > 0) {
+        for (const { seq: _childSeq, ...rest } of meta.subAgentLedger) {
+          entries.push(rest as LedgerEntryInput);
+        }
       }
       return entries;
     }

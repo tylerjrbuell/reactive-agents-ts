@@ -16,7 +16,8 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
-import { makeStep, makeObservationResult, getRecoveryHint, type ReasoningStep } from "@reactive-agents/reasoning";
+import { makeStep, makeObservationResult, getRecoveryHint, projectStepsToLedger, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
+import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
@@ -43,6 +44,18 @@ export interface InlineActDeps {
    */
   readonly exposedToolNames?: ReadonlySet<string>;
 }
+
+/**
+ * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
+ * RunLedger for the parent's merge. The executor already stamped every entry
+ * `sub-agent:<name>`; `subAgentChildLedgerEntries` handles both the single
+ * `spawn-agent` result and the batch `spawn-agents` wrapper (so parallel
+ * children all cross). Undefined for a non-delegation tool.
+ */
+const childRunLedgerOf = (result: unknown): RunLedger | undefined => {
+  const entries = subAgentChildLedgerEntries(result);
+  return entries.length > 0 ? (entries as RunLedger) : undefined;
+};
 
 export const runInlineAct = (
   c: ExecutionContext,
@@ -232,8 +245,19 @@ export const runInlineAct = (
         args?: Record<string, unknown>;
       };
       if (typeof r.toolName !== "string" || typeof r.toolCallId !== "string") return [];
+      // Serialize the display-trimmed result — the child's ledger crosses on
+      // `r.result` for the merge below, but must never bloat the model-visible
+      // observation content.
       const resultText =
-        typeof r.result === "string" ? r.result : JSON.stringify(r.result) ?? "";
+        typeof r.result === "string"
+          ? r.result
+          : JSON.stringify(subAgentResultForDisplay(r.result)) ?? "";
+      // Wave C.2 — a spawn-agent result carries the child's stamped ledger.
+      // Riding it on the observation step's metadata lets the SAME projection
+      // (`projectStepsToLedger` below) that mints this call's tool pair also
+      // merge the child's tool calls / artifacts under `sub-agent:<name>` — so a
+      // delegated run on the inline path stops leaving no trace in its parent.
+      const subAgentLedger = childRunLedgerOf(r.result);
       return [
         makeStep("action", `[ACT] ${r.toolName}`, {
           toolCall: { id: r.toolCallId, name: r.toolName, arguments: r.args ?? {} },
@@ -245,9 +269,19 @@ export const runInlineAct = (
             r.success === true,
             resultText.slice(0, 2000),
           ),
-        }),
+          ...(subAgentLedger ? { subAgentLedger } : {}),
+        } as ReasoningStep["metadata"]),
       ];
     });
+
+    // Wave C.2 — grow the run-scoped ledger from these steps. The inline agent
+    // loop previously built canonical action/observation STEPS but no LEDGER, so
+    // `TaskResult.metadata.runLedger` was empty for every default-path run and
+    // the receipt fell back to step-scanning. Projecting here (the same pure
+    // mapping the kernel's transitionState uses) makes the inline path a
+    // first-class ledger writer, and carries the sub-agent merge attached above.
+    const priorLedger = c.metadata.runLedger as RunLedger | undefined;
+    const runLedger = projectStepsToLedger(priorLedger, ledgerSteps, c.iteration);
 
     return {
       ...c,
@@ -258,6 +292,7 @@ export const runInlineAct = (
           ...((c.metadata.reasoningSteps as ReasoningStep[] | undefined) ?? []),
           ...ledgerSteps,
         ],
+        ...(runLedger.length > 0 ? { runLedger } : {}),
       },
     };
   }) as unknown as Effect.Effect<ExecutionContext, BehavioralContractViolationError>;

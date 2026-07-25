@@ -143,7 +143,80 @@ export interface SubAgentResult {
   readonly delegatedToolsUsed?: readonly string[];
   /** Scratchpad keys forwarded to the parent with a `sub:<agentName>:` prefix */
   readonly forwardedScratchpadKeys?: readonly string[];
+  /**
+   * The child's run-scoped RunLedger (Wave C.2), already stamped
+   * `sub-agent:<name>` by the executor, so the parent's kernel can merge the
+   * child's tool calls / artifacts / verdicts into its OWN ledger under that
+   * provenance. Before this a sub-agent's work left no trace in its parent
+   * beyond a summary string (DEBT-REGISTER §3).
+   *
+   * Typed `unknown` because `@reactive-agents/tools` must not depend on
+   * `@reactive-agents/reasoning`, where `RunLedger` is declared — tools is a
+   * pass-through CARRIER here; the kernel's ledger projection narrows it back to
+   * `RunLedger` (`kernel/ledger/step-projection.ts`). It never reads this field.
+   */
+  readonly childRunLedger?: unknown;
 }
+
+/** Drop the `childRunLedger` carrier from one result object (no-op if absent). */
+const stripChildLedger = (obj: Record<string, unknown>): Record<string, unknown> => {
+  if (!("childRunLedger" in obj)) return obj;
+  const { childRunLedger: _dropped, ...rest } = obj;
+  return rest;
+};
+
+/**
+ * A sub-agent tool result as the MODEL should see it — without the
+ * `childRunLedger` carrier (Wave C.2). That field exists only to cross the
+ * child's ledger into the parent's ledger merge; it is potentially large (every
+ * child tool call + preview) and pure noise in the parent model's context. The
+ * tool-observation builders serialize THIS, not the raw result, so the model
+ * reads the summary and delegated tools while the merge still gets the full
+ * ledger off the untrimmed result.
+ *
+ * Handles BOTH shapes a delegation tool returns: `spawn-agent`'s single
+ * `SubAgentResult`, and `spawn-agents`' batch `{ results: SubAgentResult[],
+ * summary }` — the carrier is stripped from each nested result too, so a
+ * parallel dispatch doesn't leak N child ledgers into the model. A non-object /
+ * non-delegation result passes through unchanged.
+ */
+export const subAgentResultForDisplay = (result: unknown): unknown => {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return result;
+  const obj = result as Record<string, unknown>;
+  // Batch shape: strip each nested result.
+  if (Array.isArray(obj.results)) {
+    return {
+      ...obj,
+      results: (obj.results as unknown[]).map((r) =>
+        typeof r === "object" && r !== null && !Array.isArray(r)
+          ? stripChildLedger(r as Record<string, unknown>)
+          : r,
+      ),
+    };
+  }
+  return stripChildLedger(obj);
+};
+
+/**
+ * Every child ledger a delegation tool result carries, flattened (Wave C.2).
+ * Each child's ledger is already provenance-stamped `sub-agent:<name>` by the
+ * executor, so concatenating a batch's children is safe — the parent's merge
+ * re-bases their seqs. Returns `[]` for a non-delegation result (or a batch
+ * whose children recorded nothing), so callers never special-case the shape.
+ *
+ * Typed `unknown[]` because the ledger's real type lives in
+ * `@reactive-agents/reasoning`, which tools must not depend on; the kernel /
+ * engine narrows the entries back to `RunLedger`.
+ */
+export const subAgentChildLedgerEntries = (result: unknown): readonly unknown[] => {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return [];
+  const obj = result as Record<string, unknown>;
+  if (Array.isArray(obj.results)) {
+    return (obj.results as unknown[]).flatMap((r) => subAgentChildLedgerEntries(r));
+  }
+  const ledger = obj.childRunLedger;
+  return Array.isArray(ledger) ? ledger : [];
+};
 
 /**
  * Directive prefix prepended to every sub-agent's system prompt to orient it as
@@ -167,6 +240,8 @@ export interface SubAgentRawResult {
   readonly stepsCompleted?: number;
   readonly delegatedToolsUsed?: readonly string[];
   readonly scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
+  /** The child's run-scoped, provenance-stamped RunLedger. See {@link SubAgentResult.childRunLedger}. */
+  readonly childRunLedger?: unknown;
 }
 
 /**
@@ -246,6 +321,7 @@ export const finalizeSubAgentResult = (
     stepsCompleted: raw.stepsCompleted,
     delegatedToolsUsed: raw.delegatedToolsUsed,
     forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
+    ...(raw.childRunLedger !== undefined ? { childRunLedger: raw.childRunLedger } : {}),
   };
 };
 

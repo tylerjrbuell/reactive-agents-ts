@@ -107,4 +107,55 @@ describe("step-projection — steps[] → ledger dual-emit", () => {
     const grown = projectStepsToLedger(base, [step("harness_signal", "b")], 1);
     expect(grown.map((e) => e.seq)).toEqual([0, 1]);
   });
+
+  // ── Wave C.2: a sub-agent's ledger merges through the observation step ──────
+  //
+  // A spawn-agent observation carries the child's stamped ledger on
+  // `metadata.subAgentLedger`. Its entries must merge into the parent's ledger
+  // right after the spawn call's own tool-result, seq re-based, with the child's
+  // `sub-agent:<name>` provenance intact — so the child's work becomes queryable
+  // facts of the PARENT run instead of dying as a summary string.
+  describe("sub-agent ledger merge", () => {
+    // A child ledger as it crosses: already stamped `sub-agent:worker`, seq'd
+    // from 0 (what `mergePassLedger(undefined, …, "sub-agent:worker")` produces).
+    const childLedger = [
+      { kind: "tool-invocation" as const, seq: 0, iteration: 0, toolName: "file-read", pass: "sub-agent:worker" as const },
+      { kind: "tool-result" as const, seq: 1, iteration: 0, toolName: "file-read", success: true, preview: "…", pass: "sub-agent:worker" as const },
+    ];
+
+    it("merges the child's entries after the spawn call's tool-result, seq re-based", () => {
+      const obs = step("observation", "delegated", {
+        toolUsed: "spawn-agent",
+        subAgentLedger: childLedger,
+      } as ReasoningStep["metadata"]);
+      const ledger = projectStepsToLedger([], [obs], 4);
+
+      // The spawn call's own tool-result first, then the two child entries.
+      expect(ledger.map((e) => e.kind)).toEqual(["tool-result", "tool-invocation", "tool-result"]);
+      // Dense, monotonic in the PARENT's index — the child's own 0,1 are gone.
+      expect(ledger.map((e) => e.seq)).toEqual([0, 1, 2]);
+      // The child's provenance rode through untouched; the parent's own entry is unstamped.
+      expect(ledger[0]?.pass).toBeUndefined();
+      expect(ledger[1]?.pass).toBe("sub-agent:worker");
+      expect(ledger[2]?.pass).toBe("sub-agent:worker");
+    });
+
+    it("re-bases onto a non-empty parent ledger without colliding seqs", () => {
+      const parent = projectStepsToLedger([], [step("harness_signal", "start")], 0);
+      const obs = step("observation", "delegated", {
+        toolUsed: "spawn-agent",
+        subAgentLedger: childLedger,
+      } as ReasoningStep["metadata"]);
+      const grown = projectStepsToLedger(parent, [obs], 1);
+      expect(grown.map((e) => e.seq)).toEqual([0, 1, 2, 3]);
+    });
+
+    it("is a no-op when the observation carries no sub-agent ledger", () => {
+      const obs = step("observation", "ordinary", {
+        toolUsed: "http-get",
+      } as ReasoningStep["metadata"]);
+      const ledger = projectStepsToLedger([], [obs], 0);
+      expect(ledger.map((e) => e.kind)).toEqual(["tool-result"]);
+    });
+  });
 });

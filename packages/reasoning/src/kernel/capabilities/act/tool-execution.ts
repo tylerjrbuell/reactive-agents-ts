@@ -24,9 +24,10 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
-import { ToolNotFoundError } from "@reactive-agents/tools";
+import { ToolNotFoundError, subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "../../utils/tool-parsing.js";
+import type { RunLedger } from "../../ledger/run-ledger.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
@@ -162,6 +163,20 @@ function extractDelegatedToolsUsed(result: unknown): readonly string[] | undefin
     typeof toolName === "string" && toolName.length > 0,
   );
   return toolNames.length > 0 ? [...new Set(toolNames)] : undefined;
+}
+
+/**
+ * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed back to a
+ * RunLedger for the parent's ledger merge. The entries are already
+ * provenance-stamped `sub-agent:<name>` by the executor. `subAgentChildLedgerEntries`
+ * (from the tools boundary, where the shape lives) handles BOTH the single
+ * `spawn-agent` result and the batch `spawn-agents` wrapper, so a parallel
+ * dispatch's children all cross. Empty ⇒ undefined, so nothing enters
+ * `stepToEntries` for an ordinary tool.
+ */
+function extractSubAgentLedger(result: unknown): RunLedger | undefined {
+  const entries = subAgentChildLedgerEntries(result);
+  return entries.length > 0 ? (entries as RunLedger) : undefined;
 }
 
 /**
@@ -714,7 +729,7 @@ export function executeNativeToolCall(
      */
     preprocess?: (raw: string) => string;
   },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; extractedFact?: string; fullContent?: string }, never> {
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; extractedFact?: string; fullContent?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -725,7 +740,13 @@ export function executeNativeToolCall(
     .pipe(
       Effect.map((r) => {
         const delegatedToolsUsed = extractDelegatedToolsUsed(r.result);
-        let content = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
+        // Wave C.2 — a sub-agent tool result carries the child's stamped ledger;
+        // pull it before the result is stringified so the parent's kernel can
+        // merge it into its own ledger under `sub-agent:<name>`.
+        const subAgentLedger = extractSubAgentLedger(r.result);
+        // The child ledger crossed on `r.result`, but the MODEL must not see it
+        // (large, noise); serialize the display-trimmed result instead.
+        let content = typeof r.result === "string" ? r.result : JSON.stringify(subAgentResultForDisplay(r.result));
         if (config?.preprocess) content = config.preprocess(content);
         const success = r.success !== false;
 
@@ -779,7 +800,7 @@ export function executeNativeToolCall(
           }
         }
 
-        return { content, success, storedKey, delegatedToolsUsed, extractedFact, fullContent };
+        return { content, success, storedKey, delegatedToolsUsed, ...(subAgentLedger ? { subAgentLedger } : {}), extractedFact, fullContent };
       }),
       // Fire-and-forget semantic memory store on successful tool results.
       // Uses Effect.forkDaemon inside storeToolObservationSemantic so this
