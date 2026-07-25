@@ -7,6 +7,7 @@ import { makeMetricsCollector, MetricsCollectorTag } from "./metrics/metrics-col
 import { makeStateInspector } from "./debugging/state-inspector.js";
 import { makeConsoleExporter, makeFileExporter, makeLiveLogWriter, setupOTLPExporter } from "./exporters/index.js";
 import type { ConsoleExporterOptions, FileExporterOptions, OTLPExporterConfig } from "./exporters/index.js";
+import { buildDashboardData, type DashboardData } from "./exporters/console-exporter.js";
 import { defaultRedactors } from "./redaction/index.js";
 import type { Redactor } from "./redaction/index.js";
 
@@ -431,6 +432,16 @@ export class ObservabilityService extends Context.Tag("ObservabilityService")<
      * ```
      */
     readonly verbosity: () => VerbosityLevel;
+
+    /**
+     * Build the current DashboardData snapshot from buffered metrics without
+     * printing anything. Used by a sub-agent's caller to roll its dashboard
+     * up into the parent's single end-of-run print, instead of the child
+     * printing its own.
+     *
+     * @returns DashboardData built from whatever metrics have been recorded so far
+     */
+    readonly getDashboardData: () => Effect.Effect<DashboardData, never>;
   }
 >() {}
 
@@ -555,6 +566,12 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         getSnapshots: (agentId, limit) => inspector.getSnapshots(agentId, limit),
 
         verbosity: () => verbosityLevel,
+
+        getDashboardData: () =>
+          Effect.gen(function* () {
+            const allMetrics = yield* metrics.getMetrics();
+            return buildDashboardData(allMetrics, metrics);
+          }),
 
         flush: () =>
           Effect.gen(function* () {
