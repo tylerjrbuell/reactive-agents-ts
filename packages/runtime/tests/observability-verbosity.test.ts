@@ -198,7 +198,9 @@ describe("composable API observabilityOptions threading", () => {
         provider: "test",
         observabilityOptions: { verbosity: "minimal" },
         // Note: NOT setting enableObservability: true
-        logging: { disableStatusMode: true },
+        // (no loggingConfig needed: status-mode only activates on a real TTY,
+        // and bun test's stdout is never a TTY, so the engine already takes
+        // the stream/non-status path here without forcing it)
         testScenario: [{ match: "test", text: "Done" }],
       });
 
