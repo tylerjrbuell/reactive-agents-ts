@@ -133,7 +133,95 @@ describe("nested dashboard rollup (sub-agent dashboard prints once, at the root)
 
     const boxCount = (all.match(/Agent Execution Summary/g) ?? []).length;
     expect(boxCount).toBe(1);
+    // mid-manager is a DIRECT child of the root -> flat heading, no lineage.
     expect(all).toContain("Sub-agent: mid-manager");
-    expect(all).toContain("Sub-agent: leaf-worker");
+    // leaf-worker was spawned BY mid-manager, not by the root. A depth-agnostic
+    // assertion (`toContain("Sub-agent: leaf-worker")`) would pass even if the
+    // root had spawned leaf-worker directly — it doesn't pin WHO spawned it.
+    // The lineage-aware heading does: it only appears if the grandchild's
+    // dashboard entry actually carried `parentName: "mid-manager"` through the
+    // registry, sub-agent-executor.ts, and the console exporter's render.
+    expect(all).toContain("Sub-agent: mid-manager › leaf-worker");
+    // The old flat (depth-agnostic) heading text must NOT appear on its own —
+    // it would if leaf-worker were rendered as a sibling instead of nested.
+    expect(all).not.toContain("Sub-agent: leaf-worker");
+  }, 30_000);
+
+  // Regression guard for a CRITICAL bug: `ChildDashboardRegistry` is minted
+  // ONCE per built agent (inside `createRuntime`, materialized once by
+  // `ManagedRuntime.make`) — NOT once per `.run()` call. Without an atomic
+  // drain-and-clear, run 2's dashboard would report BOTH run 1's and run 2's
+  // sub-agents, and a childless run 3 would still show run 2's stale children
+  // (because `attachChildren` was only called when `children.length > 0`).
+  it("a reused agent's dashboard only ever reports THIS run's own sub-agent, never a prior run's", async () => {
+    const reused = await ReactiveAgents.create()
+      .withName("reused-agent")
+      .withProvider("test")
+      .withModel("test-model")
+      .withDynamicSubAgents({ maxIterations: 2 })
+      .withTools()
+      .withObservability({ verbosity: "normal" })
+      // NOTE on ordering: `TestLLMService`'s scenario cursor is a single
+      // mutable index that only ever scans FORWARD and NEVER resets between
+      // `.run()` calls on the same built agent (it lives for the life of the
+      // root's `LLMService` layer, same lifetime class as the registry bug
+      // this test guards). So this scenario is laid out as ONE monotonic
+      // sequence spanning all 3 runs, in the exact order the ROOT's own LLM
+      // calls will consume them: [spawn researcher, done, spawn writer, done,
+      // done]. Each SPAWNED CHILD gets its OWN fresh cursor (a new
+      // `TestLLMService` instance per `createLightRuntime` call), so it scans
+      // this same array from index 0 independently — its task text ("look
+      // things up" / "write it up") never matches the "SPAWN_*" guards, so it
+      // falls through to the first unconditional entry ("Done.") as its own
+      // one-shot final answer.
+      .withTestScenario([
+        { match: "SPAWN_RESEARCHER", toolCall: { name: "spawn-agent", args: { task: "look things up", name: "researcher" } } },
+        { text: "Done." },
+        { match: "SPAWN_WRITER", toolCall: { name: "spawn-agent", args: { task: "write it up", name: "writer" } } },
+        { text: "Done." },
+        { text: "Done." },
+      ])
+      .build();
+
+    // Run 1: dispatches "researcher".
+    const lines1: string[] = [];
+    console.log = (...args: unknown[]) => {
+      lines1.push(args.map(String).join(" "));
+    };
+    await reused.run("SPAWN_RESEARCHER: delegate a research task.");
+    console.log = realLog;
+    const out1 = lines1.join("\n");
+    expect(out1).toContain("Sub-agent: researcher");
+    expect(out1).not.toContain("Sub-agent: writer");
+
+    // Run 2 on the SAME agent instance: dispatches "writer" only. Before the
+    // `getAndSet` fix, the registry still held run 1's "researcher" entry (the
+    // prior `Ref.get` drain never cleared it), so run 2's dashboard would show
+    // BOTH researcher and writer.
+    const lines2: string[] = [];
+    console.log = (...args: unknown[]) => {
+      lines2.push(args.map(String).join(" "));
+    };
+    await reused.run("SPAWN_WRITER: delegate a writing task.");
+    console.log = realLog;
+    const out2 = lines2.join("\n");
+    expect(out2).toContain("Sub-agent: writer");
+    expect(out2).not.toContain("Sub-agent: researcher");
+
+    // Run 3 on the SAME agent instance: dispatches NO sub-agent at all. Before
+    // the `if (children.length > 0)` guard removal, a childless run skipped
+    // `attachChildren` entirely, leaving `childrenRef` holding run 2's
+    // ("writer") stale list — so run 3 would still render "Sub-agent: writer"
+    // despite spawning nothing.
+    const lines3: string[] = [];
+    console.log = (...args: unknown[]) => {
+      lines3.push(args.map(String).join(" "));
+    };
+    await reused.run("Just answer directly, no delegation this time.");
+    console.log = realLog;
+    const out3 = lines3.join("\n");
+    expect(out3).not.toContain("Sub-agent:");
+
+    await reused.dispose();
   }, 30_000);
 });

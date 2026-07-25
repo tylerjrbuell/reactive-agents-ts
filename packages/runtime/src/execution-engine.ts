@@ -1663,9 +1663,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const childRegistryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
                 if (childRegistryOpt._tag === "Some") {
                   const children = yield* childRegistryOpt.value.drain();
-                  if (children.length > 0) {
-                    yield* obs.attachChildren(children);
-                  }
+                  // Always attach — even an empty array — so `childrenRef` is
+                  // RESET every run, not only when this particular run happened
+                  // to spawn sub-agents. `drain()` already cleared the registry
+                  // for the NEXT run; skipping attachChildren([]) here would
+                  // leave `attachChildren`'s Ref.set() holding whatever a PRIOR
+                  // run last set, so a childless run would still render the
+                  // previous run's stale sub-agent dashboards.
+                  yield* obs.attachChildren(children);
                 }
               }
               // Flush after the root span closes so spans are fully recorded

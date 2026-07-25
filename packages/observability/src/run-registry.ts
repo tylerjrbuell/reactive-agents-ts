@@ -10,6 +10,15 @@ export interface ChildDashboardEntry {
   /** Opaque `DashboardData` — kept `unknown` here to avoid a dependency cycle
    *  with the caller (runtime package); the console exporter knows the shape. */
   readonly data: unknown;
+  /**
+   * Name of the immediate parent sub-agent that spawned this one, when this
+   * dispatch happened FROM WITHIN a sub-agent's own execution (nesting depth
+   * >= 2). Undefined for a direct child of the root. Every descendant records
+   * into the same flat, root-level list (see class doc below), so without
+   * this field a grandchild renders as a misleading SIBLING of its parent in
+   * the console exporter instead of nested underneath it.
+   */
+  readonly parentName?: string;
 }
 
 /**
@@ -34,6 +43,13 @@ export const makeChildDashboardRegistry = Effect.gen(function* () {
   const ref = yield* Ref.make<ChildDashboardEntry[]>([]);
   return {
     record: (entry: ChildDashboardEntry) => Ref.update(ref, (xs) => [...xs, entry]),
-    drain: () => Ref.get(ref),
+    // `getAndSet` reads AND atomically clears in one step. This registry is
+    // minted ONCE per built agent (inside `createRuntime`, materialized once
+    // by `ManagedRuntime.make`) — NOT once per `run()` call — so it persists
+    // across every `.run()` on the same built agent instance. A plain
+    // `Ref.get` here would let run N's dashboard leak stale entries from
+    // run N-1 (or accumulate across every run ever executed on this agent).
+    // Draining must clear so every run starts the next drain from empty.
+    drain: () => Ref.getAndSet(ref, []),
   };
 });

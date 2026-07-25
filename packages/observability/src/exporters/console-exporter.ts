@@ -94,7 +94,13 @@ export interface DashboardData {
   readonly alerts: readonly DashboardAlert[];
   readonly entropyTrace?: readonly DashboardEntropyPoint[];
   /** Sub-agent dashboards dispatched during this run, rolled up so only the root prints. */
-  readonly children?: readonly { readonly name: string; readonly data: DashboardData }[];
+  readonly children?: readonly {
+    readonly name: string;
+    readonly data: DashboardData;
+    /** Immediate parent sub-agent's name, when this child is a grandchild (or
+     *  deeper) rather than a direct child of the root. Undefined otherwise. */
+    readonly parentName?: string;
+  }[];
 }
 
 // ─── Console Exporter ───
@@ -252,7 +258,11 @@ export const buildDashboardData = (
    * opaque payload on `SubAgentResult.childDashboard`) but is, by construction,
    * a `DashboardData` a child produced via its own `getDashboardData()`.
    */
-  childrenOverride?: readonly { readonly name: string; readonly data: unknown }[],
+  childrenOverride?: readonly {
+    readonly name: string;
+    readonly data: unknown;
+    readonly parentName?: string;
+  }[],
 ): DashboardData => {
   // Count total tokens from metrics
   let tokenCount = 0;
@@ -490,7 +500,13 @@ export const buildDashboardData = (
     alerts,
     entropyTrace,
     ...(childrenOverride && childrenOverride.length > 0
-      ? { children: childrenOverride.map((c) => ({ name: c.name, data: c.data as DashboardData })) }
+      ? {
+          children: childrenOverride.map((c) => ({
+            name: c.name,
+            data: c.data as DashboardData,
+            ...(c.parentName !== undefined ? { parentName: c.parentName } : {}),
+          })),
+        }
       : {}),
   };
 };
@@ -566,7 +582,11 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
   const exportMetrics = (
     metrics: readonly Metric[],
     metricsCollector?: MetricsCollector,
-    children?: readonly { readonly name: string; readonly data: unknown }[],
+    children?: readonly {
+      readonly name: string;
+      readonly data: unknown;
+      readonly parentName?: string;
+    }[],
   ): void => {
     if (!showMetrics || metrics.length === 0) return;
 
@@ -935,7 +955,16 @@ export const formatMetricsDashboard = (
   if (data.children && data.children.length > 0) {
     for (const child of data.children) {
       lines.push("");
-      lines.push(chalk.hex(C_CYAN).bold(`Sub-agent: ${child.name}`));
+      // Every descendant is recorded into the SAME flat, root-level list
+      // (see run-registry.ts), so a grandchild's heading alone would render
+      // as a misleading SIBLING of its parent. When `parentName` is present
+      // (this child was spawned BY another sub-agent, not the root), show
+      // the lineage in the heading instead of doing a full structural
+      // re-nesting of the box layout.
+      const heading = child.parentName
+        ? `Sub-agent: ${child.parentName} › ${child.name}`
+        : `Sub-agent: ${child.name}`;
+      lines.push(chalk.hex(C_CYAN).bold(heading));
       const childLines = formatMetricsDashboard(child.data, { nested: true }).split("\n");
       for (const line of childLines) lines.push(`  ${line}`);
     }

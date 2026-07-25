@@ -328,6 +328,17 @@ export const buildSubAgentTask = (
         return toolsMod.subAgentDepthRefusal(t.name, maxDepth);
       }
       const childCtx = childContext(spawningCtx, t.name);
+      // Lineage for the rolled-up dashboard: every descendant records into the
+      // SAME flat, root-level registry (see run-registry.ts), so without this
+      // a grandchild renders as a misleading SIBLING of its parent instead of
+      // nested underneath it. `spawningCtx` is the RunContext of the agent
+      // DOING this dispatch (resolved above); depth > 0 means that agent is
+      // itself a sub-agent (its `agentId` was set to its own `t.name` by
+      // `childContext` when IT was spawned — see line 330 below/above), so its
+      // `agentId` is exactly the display name to attribute as the parent. A
+      // direct child of the root (spawningCtx.depth === 0) gets no parentName.
+      const spawningAgentName =
+        spawningCtx.depth > 0 ? spawningCtx.agentId : undefined;
 
       // Depth- and name-aware log prefix so a sub-agent's lines are FOLLOWABLE.
       // The old prefix was a flat "  │ " for every child at every depth: with
@@ -610,7 +621,11 @@ export const buildSubAgentTask = (
         if (childDashboard !== undefined) {
           const registryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
           if (registryOpt._tag === "Some") {
-            yield* registryOpt.value.record({ name: t.name, data: childDashboard });
+            yield* registryOpt.value.record({
+              name: t.name,
+              data: childDashboard,
+              ...(spawningAgentName !== undefined ? { parentName: spawningAgentName } : {}),
+            });
           }
         }
         const raw: SubAgentRawResult = {

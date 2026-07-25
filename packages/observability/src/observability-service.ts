@@ -450,11 +450,18 @@ export class ObservabilityService extends Context.Tag("ObservabilityService")<
      * dashboard — instead of each sub-agent printing its own. Called once by
      * the ROOT's `execution-engine.ts`, right before its own `flush()`.
      *
-     * @param children - `{name, data}` pairs; `data` is the opaque
-     * `DashboardData` a sub-agent captured via its own `getDashboardData()`.
+     * @param children - `{name, data, parentName?}` entries; `data` is the
+     * opaque `DashboardData` a sub-agent captured via its own
+     * `getDashboardData()`. `parentName` (present for a grandchild or deeper)
+     * is the immediate parent sub-agent's name, so the console exporter can
+     * render lineage instead of a misleading flat sibling list.
      */
     readonly attachChildren: (
-      children: readonly { readonly name: string; readonly data: unknown }[],
+      children: readonly {
+        readonly name: string;
+        readonly data: unknown;
+        readonly parentName?: string;
+      }[],
     ) => Effect.Effect<void, never>;
   }
 >() {}
@@ -551,7 +558,7 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
       // populates this (execution-engine.ts, gated `!lp`); a plain/sub-agent
       // service just carries an always-empty ref.
       const childrenRef = yield* Ref.make<
-        readonly { readonly name: string; readonly data: unknown }[]
+        readonly { readonly name: string; readonly data: unknown; readonly parentName?: string }[]
       >([]);
 
       // Build exporters from config
