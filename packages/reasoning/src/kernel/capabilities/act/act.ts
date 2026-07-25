@@ -776,6 +776,13 @@ export function handleActing(
               extractedFact: result.execResult.extractedFact,
               observationResult: obsResult,
               verification,
+              // Wave C.2 — a sub-agent call riding in a parallel batch carries
+              // the child's stamped ledger too; attach it here (the batch path
+              // builds its own obs step, bypassing the tool-observe primitive)
+              // so `stepToEntries` merges it exactly as the single path does.
+              ...(result.execResult.subAgentLedger
+                ? { subAgentLedger: result.execResult.subAgentLedger }
+                : {}),
             });
 
             // Pass state with the action step as the last entry so

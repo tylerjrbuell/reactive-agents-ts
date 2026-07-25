@@ -172,6 +172,8 @@ export {
   computeEffectiveTools,
   subAgentDepthRefusal,
   finalizeSubAgentResult,
+  subAgentResultForDisplay,
+  subAgentChildLedgerEntries,
   resolveMaxRecursionDepth,
   SUB_AGENT_DIRECTIVE,
   MAX_RECURSION_DEPTH,

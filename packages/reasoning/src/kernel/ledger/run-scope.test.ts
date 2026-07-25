@@ -43,6 +43,19 @@ describe("mergePassLedger", () => {
     expect(entriesOfPass(both, "sub-agent:writer")).toHaveLength(1);
   });
 
+  it("preserves a grandchild's stamp when nesting (innermost provenance wins)", () => {
+    // A child's ledger already holds an entry from its OWN nested child. When
+    // that ledger merges into the grandparent, the grandchild entry must keep
+    // its `sub-agent:grandchild` attribution rather than being flattened to the
+    // immediate child — otherwise a two-level delegation reads as one.
+    const childOwn = pass(["child-tool"]); // the child's own primary work — unstamped
+    const withGrandchild = mergePassLedger(childOwn, pass(["grandchild-tool"]), "sub-agent:grandchild");
+    const merged = mergePassLedger([], withGrandchild, "sub-agent:child");
+
+    expect(entriesOfPass(merged, "sub-agent:child").map((e) => (e as { toolName?: string }).toolName)).toEqual(["child-tool"]);
+    expect(entriesOfPass(merged, "sub-agent:grandchild").map((e) => (e as { toolName?: string }).toolName)).toEqual(["grandchild-tool"]);
+  });
+
   it("is pure — neither input ledger is mutated, and prior entries keep identity", () => {
     const runLedger = pass(["a"]);
     const passLedger = pass(["b"]);

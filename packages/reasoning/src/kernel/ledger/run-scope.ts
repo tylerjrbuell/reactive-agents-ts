@@ -59,9 +59,17 @@ export function mergePassLedger(
   // `appendEntries` assigns the run-scoped seq; the pass's own seq is dropped
   // rather than preserved, because two passes both starting at 0 would otherwise
   // collide and break the dense-index contract.
+  //
+  // `pass ?? provenance` PRESERVES an already-stamped entry. A single kernel
+  // pass (verification-retry / continuation) carries no stamp, so every entry
+  // takes `provenance`. But a sub-agent's ledger may already hold entries from
+  // ITS OWN nested children (stamped `sub-agent:grandchild`); those keep their
+  // innermost attribution rather than being flattened to the immediate child.
   return appendEntries(
     runLedger,
-    incoming.map(({ seq: _passSeq, ...rest }) => ({ ...rest, pass }) as LedgerEntry),
+    incoming.map(
+      ({ seq: _passSeq, ...rest }) => ({ ...rest, pass: rest.pass ?? pass }) as LedgerEntry,
+    ),
   );
 }
 

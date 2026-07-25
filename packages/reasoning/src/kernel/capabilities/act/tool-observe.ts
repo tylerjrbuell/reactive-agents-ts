@@ -530,6 +530,13 @@ export function executeToolAndObserve(
       ...(exec.extractedFact ? { extractedFact: exec.extractedFact } : {}),
       observationResult: obsResult,
       ...(verification ? { verification } : {}),
+      // Wave C.2 — a sub-agent tool call carries the child's stamped ledger.
+      // Riding it on the step metadata lets `stepToEntries` merge the child's
+      // entries into the parent's ledger at the SAME projection chokepoint that
+      // mints this call's tool-result pair (both the transitionState path and
+      // the ledgerSink path below read the obs step), so no writer outside
+      // kernel/ledger/ ever appends — check-ledger-writes.sh still holds.
+      ...(exec.subAgentLedger ? { subAgentLedger: exec.subAgentLedger } : {}),
     });
 
     // ── 9b. RunLedger mint (C8) — config-gated sink ──────────────────────────
