@@ -81,10 +81,33 @@ into the parent's under `sub-agent:<name>`), then engine-phase facts (guardrail
 block, cost-route decision, verification outcome). `run_events` becomes a pure
 ledger journal.
 
-**Slice 3 — llm-exchange / replay re-base.**
-`packages/trace`, `packages/replay`, `packages/diagnose`, `packages/benchmarks`
-read ledger queries instead of their own event kinds. Byte-sensitive (golden
-fixtures) — kept last and behind its own equivalence pins.
+**Slice 3 — ledger onto the trace stream (SHIPPED 2026-07-25), then tool-call convergence.**
+
+_Premise correction (2026-07-25)._ The original framing — "`packages/trace`,
+`packages/replay`, `packages/diagnose`, `packages/benchmarks` read ledger queries
+instead of their own event kinds, re-basing **llm-exchange / replay**" — was
+false. Mapping the surface showed llm-exchange carries raw prompts/responses for
+**byte-exact golden replay**; that is genuinely NOT ledger data and must not be
+re-based onto a ledger query. The re-baseable surface is the **tool-call** events
+(diagnose/receipt reads), and that is gated on the ledger first *reaching* the
+trace stream at all — which it did not.
+
+Slice 3 therefore splits:
+
+- **3a (additive, shipped `TBD`).** Wire the existing C.1 `LedgerEntryAppended`
+  bus tap into the trace bridge as a new `ledger-entry` TraceEvent. Before this
+  the tap published on the EventBus but `toTraceEvent` returned `null` for it, so
+  the ledger was siloed from the trace JSONL. Now the run's append-only record
+  (tool-invocation / tool-result / artifact / requirement / claim / verdict, plus
+  merged `sub-agent:<name>` provenance) rides the same bridge every other trace
+  event uses. Files: `packages/trace/src/events.ts` (`LedgerEntryTraceEvent`),
+  `packages/trace/src/normalize.ts` (the `case`). Pinned unit (mapping +
+  iter-from-entries) and e2e (bus→bridge→recorder, red-on-cut). Non-behavioural
+  for replay/diagnose — purely adds a stream.
+- **3b (deferred).** tool-call convergence: diagnose/receipt read ledger queries
+  instead of their own tool-call event kinds. Byte-sensitive (golden fixtures) —
+  its own slice, behind equivalence pins. Replay's llm-exchange is explicitly
+  **out of scope** (not ledger data).
 
 ## Non-goals
 
