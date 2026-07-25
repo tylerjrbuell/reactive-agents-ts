@@ -164,30 +164,22 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   — `reasoning/src/testing/tool-service-mock.ts` — with a single sanctioned
 //   widening. Net −3 against the recorded pin; the 2026-07-08 (+1) bump above is
 //   retired by it. Design it out beats bumping it up.
-// 2026-07-25: bumped 75 → 77 for Task 7 (observability unified run-tree —
-//   live-updating collapsible sub-agent summary). Two LEGITIMATE package-
-//   boundary narrowings, both already consolidated to their minimum:
-//   • observability/src/logging/status-renderer.ts:355 (`narrowAgentEvent`
-//     helper, ONE cast reused by both AgentStarted/AgentCompleted handlers —
-//     collapsed from 2 call-site casts to 1 before this bump). `observability`
-//     cannot import `runtime`'s `EbLike` (runtime depends on observability,
-//     not the reverse — see runtime-context.ts), so it declares its own
-//     minimal `EbLike` with an intentionally generic-over-`string` `on()` to
-//     stay structurally assignable from the real `EventBus.on`. That widens
-//     the handler's event parameter to `{_tag: T} & Record<string, unknown>`;
-//     this helper narrows it back. Same category as the existing SDK/shim
-//     ingest-widening sites above (anthropic.ts, runtime-shim/database.ts).
-//   • runtime/src/execution-engine.ts:1620 — the mirror-image boundary cast
-//     at the one call site that constructs the renderer: TypeScript can't
-//     structurally relate the two independently-declared `EbLike` generic
-//     `on()` methods (one constrained to the full closed `AgentEventTag`
-//     union, the other to `string`, because the narrower type can't
-//     reference `AgentEventTag` without the same runtime import it exists to
-//     avoid) even though both wrap the same real `EventBus.on` at runtime.
-//     Single site, not foldable into an existing helper (`asBuilderState` /
-//     `getOriginalTaggedError` / `asToolServiceTag` / `asStrategyFn` are all
-//     unrelated shapes).
-const CEILING = 77;
+// 2026-07-25: Task 7 (observability unified run-tree — live sub-agent summary)
+//   briefly bumped this to 77 for two casts at the status-renderer/EventBus
+//   boundary. Both were DESIGNED OUT instead (ceiling back at 75). The premise
+//   of the bump was wrong: the reason given was that `observability` can't name
+//   `AgentEventTag` without depending on `@reactive-agents/runtime` — but
+//   `AgentEvent`/`AgentEventTag` are exported from `@reactive-agents/core`,
+//   which observability ALREADY depends on. Typing the local `EbLike.on`
+//   generic as `<T extends AgentEventTag>` with an
+//   `Extract<AgentEvent, {_tag: T}>` handler makes it structurally identical to
+//   the real `EventBus.on` AND to runtime's own `EbLike`, so:
+//     • status-renderer.ts's `narrowAgentEvent` helper is gone (handlers now
+//       receive properly narrowed events), and
+//     • execution-engine.ts's `makeStatusRenderer(logger, stdout, eb)` call
+//       needs no cast.
+//   Design it out beats bumping it up (same conclusion as 2026-07-09).
+const CEILING = 75;
 
 interface Hit {
   file: string;

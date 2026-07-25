@@ -763,6 +763,13 @@ export type ReasoningOptions = ReasoningOptionsEncoded & {
  * Runtime config: schema-decodable fields plus optional non-serializable ICS strategy on `synthesisConfig`.
  */
 export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & {
+  /**
+   * Human-facing name for this agent, published on `AgentStarted` as
+   * `agentDisplayName`. When absent the publisher (execution-engine.ts) falls
+   * back to `agentId`. Set explicitly for sub-agents, whose `agentId` is
+   * uniquified to `sub-<name>-<epoch>` and is not fit to render.
+   */
+  readonly agentDisplayName?: string;
   readonly reasoningOptions?: ReasoningOptions;
   /**
    * Durable HITL approval policy (Phase D). Resolved from `.withApprovalPolicy()`.

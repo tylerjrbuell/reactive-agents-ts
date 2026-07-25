@@ -1098,6 +1098,9 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
   const resolvedModel = resolveLightRuntimeModel(options);
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
+    // Sub-agent ids are uniquified (`sub-<name>-<epoch>`); carry the given name
+    // through so `AgentStarted.agentDisplayName` renders "researcher", not the id.
+    agentDisplayName: options.agentDisplayName,
     defaultModel: resolvedModel,
     provider: options.provider,
     thinking: options.thinking,

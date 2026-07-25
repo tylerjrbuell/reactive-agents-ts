@@ -47,6 +47,68 @@ describe("sub-agent observability (G1)", () => {
     expect(childEvents[0]!.parentAgentId).toContain("g1-parent");
   }, 30000);
 
+  // Regression for the "rendered sub-agent name is the raw internal agentId" defect
+  // (Task 7 review, finding 3). `AgentStarted.agentDisplayName` is what any UI (the
+  // status renderer's collapsed sub-agent line, Cortex's run tree) renders. It used
+  // to be derived SOLELY from `config.agentId` in execution-engine.ts — and a
+  // sub-agent's agentId is uniquified to `sub-<name>-<epoch>` by
+  // sub-agent-executor.ts, so the line read "sub-researcher-1753469999999" instead
+  // of "researcher".
+  //
+  // Red-on-cut: drop `agentDisplayName: t.name` from the child's
+  // `createLightRuntime({...})` call in sub-agent-executor.ts (or drop the
+  // `explicitDisplayName ??` preference in execution-engine.ts) — the child's
+  // AgentStarted falls back to the ugly id and this test fails.
+  it("a dispatched sub-agent's AgentStarted carries its GIVEN name, not the uniquified agentId", async () => {
+    const started: Array<{
+      agentId: string;
+      parentAgentId?: string;
+      agentDisplayName?: string;
+    }> = [];
+
+    const parent = await ReactiveAgents.create()
+      .withName("displayname-parent")
+      .withProvider("test")
+      .withModel("test-model")
+      .withDynamicSubAgents({ maxIterations: 2 })
+      .withTools()
+      .withTestScenario([
+        { toolCall: { name: "spawn-agent", args: { task: "research the topic", name: "researcher" } } },
+        { text: "Done." },
+      ])
+      .build();
+
+    await parent.subscribe((e: AgentEvent) => {
+      if (e._tag !== "AgentStarted") return;
+      started.push({
+        agentId: e.agentId,
+        parentAgentId: e.parentAgentId,
+        agentDisplayName: e.agentDisplayName,
+      });
+    });
+
+    await parent.run("Delegate a research task to a sub-agent.");
+    await parent.dispose();
+
+    const child = started.find((e) => e.parentAgentId !== undefined);
+    expect(child).toBeDefined();
+    // The correlation id stays uniquified — that is deliberate, and exactly why a
+    // separate display name is needed.
+    expect(child!.agentId).toMatch(/^sub-researcher-\d+$/);
+    // …and the RENDERED name is clean.
+    expect(child!.agentDisplayName).toBe("researcher");
+
+    // The root keeps the pre-existing agentId-derived fallback (no regression).
+    // NOTE: a top-level agent's own id is ALSO uniquified (`${name}-${Date.now()}`,
+    // builder.ts) so its display name still carries the epoch suffix. That is the
+    // same defect one level up, deliberately OUT of scope for this fix (the root
+    // never renders a sub-agent line, and changing it would bypass the
+    // `cortex-desk-\d+` placeholder filter in execution-engine.ts).
+    const root = started.find((e) => e.parentAgentId === undefined);
+    expect(root).toBeDefined();
+    expect(root!.agentDisplayName).toContain("displayname-parent");
+  }, 30000);
+
   // Regression for the "stale default verbosity leaks into sub-agents" defect
   // (D1 follow-up): `sub-agent-executor.ts` used to spread the parent builder's
   // `_observabilityOptions` (which defaults to `{ verbosity: 'minimal' }` even

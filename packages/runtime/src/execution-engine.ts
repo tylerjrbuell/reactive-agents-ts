@@ -613,12 +613,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 if (eb) {
+                  // An EXPLICIT display name always wins (sub-agents set it to
+                  // their given name — `agentId` there is the uniquified
+                  // `sub-<name>-<epoch>`, which is not fit to render). Only when
+                  // absent do we fall back to the agentId-derived desk name.
+                  const explicitDisplayName =
+                    typeof config.agentDisplayName === "string" &&
+                    config.agentDisplayName.trim().length > 0
+                      ? config.agentDisplayName.trim()
+                      : undefined;
                   const deskName =
                     typeof config.agentId === "string" && config.agentId.trim().length > 0
                       ? config.agentId.trim()
                       : "";
                   const agentDisplayName =
-                    deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName) ? deskName : undefined;
+                    explicitDisplayName ??
+                    (deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName)
+                      ? deskName
+                      : undefined);
                   // B8-T3b: lift the child's RunContext (rootRunId/parentRunId/
                   // depth) off the task metadata so the trace normalizer can
                   // correlate this run to its node in the delegation tree.
@@ -1608,26 +1620,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // AgentStarted/AgentCompleted events into collapsed live lines
             // (Task 7, observability unified run-tree).
             //
-            // The cast below is required, not just defensive: `observability`
-            // cannot import this module's `EbLike` (runtime depends on
-            // observability, not the reverse — importing it would create a
-            // package cycle), so `status-renderer.ts` declares its own
-            // minimal, structurally-equivalent local `EbLike`. The two
-            // interfaces are runtime-compatible (both wrap the same
-            // `EventBus.on`), but TypeScript can't prove that: relating two
-            // independently-declared *generic* method signatures fails
-            // because one side's type-parameter constraint (`AgentEventTag`,
-            // the full closed union of event tags) doesn't unify with the
-            // other's necessarily looser constraint (`string`, since the
-            // narrower type can't reference `AgentEventTag` without the same
-            // import it's trying to avoid). Hence the explicit cast at this
-            // single boundary rather than a structural match.
+            // No cast: `status-renderer.ts` declares its own minimal `EbLike`
+            // (only the `on` half) whose generic is constrained to the real
+            // `AgentEventTag` from `@reactive-agents/core`, so this module's
+            // `EbLike` (runtime-context.ts) is structurally assignable to it.
             const renderer = isStatusMode
-              ? makeStatusRenderer(
-                  logger,
-                  process.stdout,
-                  eb as unknown as Parameters<typeof makeStatusRenderer>[2],
-                )
+              ? makeStatusRenderer(logger, process.stdout, eb)
               : null;
 
             // Start status renderer before events flow

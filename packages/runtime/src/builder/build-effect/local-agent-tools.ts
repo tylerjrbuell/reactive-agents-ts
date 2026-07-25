@@ -160,6 +160,12 @@ export const createLocalAgentToolRegistration = (
 
         const subRuntime = createLightRuntime({
           agentId: childAgentId,
+          // Same boundary as the dynamic `spawn-agent` path (sub-agent-executor.ts):
+          // `childAgentId` is uniquified for correlation, so carry the given name
+          // separately for anything that RENDERS the child (status renderer line,
+          // run tree). Without it `AgentStarted.agentDisplayName` falls back to
+          // "sub-<name>-<epoch>".
+          agentDisplayName: subName,
           provider: (agentTool.agent!.provider ?? "test") as ProviderName,
           model: agentTool.agent!.model,
           maxIterations: agentTool.agent!.maxIterations,

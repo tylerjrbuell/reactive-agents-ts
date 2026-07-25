@@ -430,6 +430,12 @@ export const buildSubAgentTask = (
 
       const subRuntime = createLightRuntime({
         agentId,
+        // `agentId` is uniquified for correlation (`sub-<name>-<epoch>`), which is
+        // NOT fit to render. Thread the given name so the child's `AgentStarted`
+        // carries a clean `agentDisplayName` ("researcher") for the status
+        // renderer's collapsed sub-agent line — without this the line showed the
+        // raw id. Pinned by tests/subagent/child-observability.test.ts.
+        agentDisplayName: t.name,
         provider: parentProvider ?? "test",
         model: parentModel,
         maxIterations: defaultMaxIter,
