@@ -499,8 +499,12 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         ? setupOTLPExporter(exporterConfig.otlp)
         : undefined;
 
-      // Build live writer when live mode is enabled
-      const liveWriter = exporterConfig.live
+      // Build live writer when live mode is enabled — but never at "minimal",
+      // which promises no output except the final result. Without this gate,
+      // every obs.info/debug/warn/error call still prints live regardless of
+      // verbosity, since makeStructuredLogger's liveWriter has no verbosity
+      // concept of its own (it fires unconditionally per log entry).
+      const liveWriter = exporterConfig.live && verbosityLevel !== "minimal"
         ? makeLiveLogWriter(
             typeof exporterConfig.console === "object" ? exporterConfig.console : undefined,
           )
