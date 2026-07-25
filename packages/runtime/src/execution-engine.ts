@@ -744,9 +744,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   // Body extracted to engine/phases/agent-loop/reasoning-stream-logger.ts (W23 step 6a-7).
-                  const unsubscribeReasoningSteps = yield* subscribeReasoningStreamLogger({
-                    eb, obs, logModelIO, isVerbose, isDebug,
-                  });
+                  //
+                  // Gated to the ROOT execution only (config.logPrefix unset). The
+                  // EventBus is shared with every sub-agent (G1), so a single root
+                  // subscription already observes every descendant's reasoning
+                  // steps. Subscribing again per sub-agent caused each event to
+                  // fire twice — once via the still-active root listener
+                  // (unprefixed) and once via the child's own listener (prefixed) —
+                  // since neither filtered by taskId. Root-only fixes this by
+                  // construction: there is never more than one listener.
+                  const unsubscribeReasoningSteps = lp
+                    ? null
+                    : yield* subscribeReasoningStreamLogger({
+                        eb, obs, logModelIO, isVerbose, isDebug,
+                      });
 
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
