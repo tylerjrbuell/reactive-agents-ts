@@ -93,6 +93,8 @@ export interface DashboardData {
   readonly tools: readonly DashboardTool[];
   readonly alerts: readonly DashboardAlert[];
   readonly entropyTrace?: readonly DashboardEntropyPoint[];
+  /** Sub-agent dashboards dispatched during this run, rolled up so only the root prints. */
+  readonly children?: readonly { readonly name: string; readonly data: DashboardData }[];
 }
 
 // ─── Console Exporter ───
@@ -625,8 +627,18 @@ export const formatNumber = (n: number): string => {
 
 /**
  * Format a DashboardData object into a beautiful, scannable dashboard output.
+ *
+ * @param options.nested - When true, suppresses the boxed "Agent Execution
+ * Summary" title (keeping only the compact status/duration/tokens lines).
+ * Used when recursively rendering a sub-agent's dashboard underneath a
+ * "Sub-agent: <name>" heading, so a run with N delegated sub-agents still
+ * prints exactly ONE top-level box — the root's own — instead of N+1.
  */
-export const formatMetricsDashboard = (data: DashboardData): string => {
+export const formatMetricsDashboard = (
+  data: DashboardData,
+  options?: { readonly nested?: boolean },
+): string => {
+  const nested = options?.nested ?? false;
   const lines: string[] = [];
 
   // ── Header box ──────────────────────────────────────────────────────────
@@ -653,15 +665,22 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     headerLines.push(`Cost:     ~$${data.estimatedCost.toFixed(3)}`);
   }
 
-  lines.push(
-    boxen(headerLines.join("\n"), {
-      title: chalk.bold("Agent Execution Summary"),
-      titleAlignment: "left",
-      padding: { top: 0, bottom: 0, left: 1, right: 1 },
-      borderStyle: "round",
-      borderColor,
-    }),
-  );
+  if (nested) {
+    // No boxed title for a nested (sub-agent) render — the "Sub-agent: <name>"
+    // heading printed by the caller already identifies this block, and only
+    // the root's own box should ever say "Agent Execution Summary".
+    lines.push(...headerLines);
+  } else {
+    lines.push(
+      boxen(headerLines.join("\n"), {
+        title: chalk.bold("Agent Execution Summary"),
+        titleAlignment: "left",
+        padding: { top: 0, bottom: 0, left: 1, right: 1 },
+        borderStyle: "round",
+        borderColor,
+      }),
+    );
+  }
 
   // ── Execution Timeline ───────────────────────────────────────────────────
   if (data.phases.length > 0) {
@@ -896,6 +915,18 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
         : alert.level === "warning" ? "⚠️"
         : "ℹ️";
       lines.push(`${prefix} ${icon}  ${alert.message}`);
+    }
+  }
+
+  // ── Sub-agents ───────────────────────────────────────────────────────────
+  // Always rendered with { nested: true } so a delegated sub-agent's own
+  // "Agent Execution Summary" box never appears — the root's is the only one.
+  if (data.children && data.children.length > 0) {
+    for (const child of data.children) {
+      lines.push("");
+      lines.push(chalk.hex(C_CYAN).bold(`Sub-agent: ${child.name}`));
+      const childLines = formatMetricsDashboard(child.data, { nested: true }).split("\n");
+      for (const line of childLines) lines.push(`  ${line}`);
     }
   }
 
