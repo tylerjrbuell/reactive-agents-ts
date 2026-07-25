@@ -1,4 +1,4 @@
-import { Effect, Context, Layer } from "effect";
+import { Effect, Context, Layer, Ref } from "effect";
 import type { LogLevel, Metric, AgentStateSnapshot, Span, LogEntry, SpanStatus } from "./types.js";
 import { ExporterError } from "./errors.js";
 import { makeTracer } from "./tracing/tracer.js";
@@ -442,6 +442,20 @@ export class ObservabilityService extends Context.Tag("ObservabilityService")<
      * @returns DashboardData built from whatever metrics have been recorded so far
      */
     readonly getDashboardData: () => Effect.Effect<DashboardData, never>;
+
+    /**
+     * Attach sub-agent dashboard entries drained from the run's
+     * `ChildDashboardRegistry` so the NEXT `flush()` call prints them as
+     * nested "Sub-agent: <name>" sections underneath this service's own
+     * dashboard — instead of each sub-agent printing its own. Called once by
+     * the ROOT's `execution-engine.ts`, right before its own `flush()`.
+     *
+     * @param children - `{name, data}` pairs; `data` is the opaque
+     * `DashboardData` a sub-agent captured via its own `getDashboardData()`.
+     */
+    readonly attachChildren: (
+      children: readonly { readonly name: string; readonly data: unknown }[],
+    ) => Effect.Effect<void, never>;
   }
 >() {}
 
@@ -531,6 +545,14 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
         }),
       );
       const inspector = yield* makeStateInspector;
+      // Holds sub-agent dashboard entries attached via `attachChildren()` so
+      // the NEXT `flush()` can pass them through to `exportMetrics` →
+      // `buildDashboardData` → `DashboardData.children`. Only the ROOT ever
+      // populates this (execution-engine.ts, gated `!lp`); a plain/sub-agent
+      // service just carries an always-empty ref.
+      const childrenRef = yield* Ref.make<
+        readonly { readonly name: string; readonly data: unknown }[]
+      >([]);
 
       // Build exporters from config
       const consoleExp =
@@ -573,18 +595,21 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
             return buildDashboardData(allMetrics, metrics);
           }),
 
+        attachChildren: (children) => Ref.set(childrenRef, children),
+
         flush: () =>
           Effect.gen(function* () {
-            const [logs, spans, allMetrics] = yield* Effect.all([
+            const [logs, spans, allMetrics, children] = yield* Effect.all([
               logger.getLogs(),
               tracer.getSpans(),
               metrics.getMetrics(),
+              Ref.get(childrenRef),
             ]);
 
             if (consoleExp && verbosityLevel !== "minimal") {
               consoleExp.exportLogs(logs);
               consoleExp.exportSpans(spans);
-              consoleExp.exportMetrics(allMetrics, metrics);
+              consoleExp.exportMetrics(allMetrics, metrics, children);
             }
             if (fileExp) {
               yield* Effect.promise(() =>

@@ -28,3 +28,53 @@ describe("ObservabilityService.getDashboardData", () => {
     }
   });
 });
+
+describe("ObservabilityService.attachChildren + flush", () => {
+  test("flush() prints one dashboard containing the attached child", async () => {
+    const program = Effect.gen(function* () {
+      const obs = yield* ObservabilityService;
+      yield* obs.setGauge("execution.tokens_used", 100);
+      yield* obs.setGauge("execution.success", 1);
+      yield* obs.attachChildren([
+        { name: "bitcoin-price-finder", data: { status: "success", totalDuration: 500, stepCount: 1, tokenCount: 50, estimatedCost: 0, modelName: "m", provider: "test", phases: [], tools: [], alerts: [] } },
+      ]);
+      yield* obs.flush();
+    });
+
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => { lines.push(args.join(" ")); };
+    try {
+      await Effect.runPromise(
+        Effect.provide(program, makeObservabilityTestLayer({ verbosity: "normal" })),
+      );
+      const output = lines.join("\n");
+      const boxCount = (output.match(/Agent Execution Summary/g) ?? []).length;
+      expect(boxCount).toBe(1);
+      expect(output).toContain("bitcoin-price-finder");
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("flush() with no attached children behaves exactly as before", async () => {
+    const program = Effect.gen(function* () {
+      const obs = yield* ObservabilityService;
+      yield* obs.setGauge("execution.tokens_used", 100);
+      yield* obs.flush();
+    });
+
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => { lines.push(args.join(" ")); };
+    try {
+      await Effect.runPromise(
+        Effect.provide(program, makeObservabilityTestLayer({ verbosity: "normal" })),
+      );
+      const output = lines.join("\n");
+      expect(output).not.toContain("Sub-agent");
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});

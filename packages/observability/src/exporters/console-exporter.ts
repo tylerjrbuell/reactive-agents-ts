@@ -246,6 +246,13 @@ export const buildDashboardData = (
   metrics: readonly Metric[],
   metricsCollector?: MetricsCollector,
   entropyTraceOverride?: readonly DashboardEntropyPoint[],
+  /**
+   * Sub-agent dashboard entries attached via `ObservabilityService.attachChildren()`
+   * — `data` arrives `unknown` (it crossed the tools-package boundary as an
+   * opaque payload on `SubAgentResult.childDashboard`) but is, by construction,
+   * a `DashboardData` a child produced via its own `getDashboardData()`.
+   */
+  childrenOverride?: readonly { readonly name: string; readonly data: unknown }[],
 ): DashboardData => {
   // Count total tokens from metrics
   let tokenCount = 0;
@@ -482,6 +489,9 @@ export const buildDashboardData = (
     tools,
     alerts,
     entropyTrace,
+    ...(childrenOverride && childrenOverride.length > 0
+      ? { children: childrenOverride.map((c) => ({ name: c.name, data: c.data as DashboardData })) }
+      : {}),
   };
 };
 
@@ -556,10 +566,11 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
   const exportMetrics = (
     metrics: readonly Metric[],
     metricsCollector?: MetricsCollector,
+    children?: readonly { readonly name: string; readonly data: unknown }[],
   ): void => {
     if (!showMetrics || metrics.length === 0) return;
 
-    const dashboardData = buildDashboardData(metrics, metricsCollector);
+    const dashboardData = buildDashboardData(metrics, metricsCollector, undefined, children);
     const dashboard = formatMetricsDashboard(dashboardData);
     console.log(`\n${chalk.hex(C_CYAN).bold("═══ Metrics Summary ═══")}`);
     console.log(dashboard);

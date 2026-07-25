@@ -32,7 +32,7 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -102,6 +102,9 @@ type ObsLike = {
   getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
   flush: () => Effect.Effect<void, never>;
   verbosity: () => string;
+  attachChildren: (
+    children: readonly { readonly name: string; readonly data: unknown }[],
+  ) => Effect.Effect<void, never>;
 };
 
 type EbLike = {
@@ -1651,6 +1654,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 executeCoreWithLogger as unknown as Effect.Effect<TaskResult, RuntimeErrors>,
                 { taskId: task.id, agentId: task.agentId },
               );
+              // Roll up sub-agent dashboards BEFORE the root's own flush() —
+              // this is the fix for a sub-agent printing its own dashboard
+              // mid-stream: only the ROOT (config.logPrefix falsy, i.e. `!lp`)
+              // ever drains the registry and attaches, so a sub-agent never
+              // does this even though it shares the ExecutionEngine code path.
+              if (!lp) {
+                const childRegistryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
+                if (childRegistryOpt._tag === "Some") {
+                  const children = yield* childRegistryOpt.value.drain();
+                  if (children.length > 0) {
+                    yield* obs.attachChildren(children);
+                  }
+                }
+              }
               // Flush after the root span closes so spans are fully recorded
               yield* obs.flush().pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4198", tag: errorTag(err) })));
               return taskResult;
