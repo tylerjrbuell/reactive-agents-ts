@@ -29,7 +29,7 @@ import {
   childContext,
 } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { ObservabilityService } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
 /**
  * Build the log prefix that makes a sub-agent's lines FOLLOWABLE: one "│ " per
@@ -47,6 +47,13 @@ export function buildSubAgentLogPrefix(depth: number, name: string): string {
 export interface SubAgentRuntimeShared {
   /** Parent's EventBus instance — shared so child events reach the parent bus (G1). */
   readonly sharedEventBus?: Context.Tag.Service<typeof EventBus>;
+  /**
+   * The run's ChildDashboardRegistry instance — threaded down exactly like
+   * `sharedEventBus` so a child that itself spawns a grandchild resolves the
+   * SAME (root-originated) registry, not a fresh/absent one. Only the root's
+   * runtime construction creates this; every descendant just re-threads it.
+   */
+  readonly sharedChildDashboardRegistry?: Context.Tag.Service<typeof ChildDashboardRegistry>;
 }
 import type {
   ParentContext,
@@ -311,6 +318,7 @@ export const buildSubAgentTask = (
         toolsMod,
       } = deps;
       const sharedEventBus = runtimeShared?.sharedEventBus;
+      const sharedChildDashboardRegistry = runtimeShared?.sharedChildDashboardRegistry;
 
       // ── Depth guard (B8-T5) ── the spawning agent's RunContext drives the cap.
       const spawningCtx = yield* resolveSpawningContext(parentAgentId);
@@ -433,6 +441,11 @@ export const buildSubAgentTask = (
         // G1: join the parent's EventBus so this sub-agent's lifecycle events
         // are observable on the parent's bus + trace bridge.
         sharedEventBus,
+        // Thread the run's ChildDashboardRegistry down so that IF this child
+        // itself spawns a grandchild (registerChildSpawn below), the
+        // grandchild's dashboard is recorded into the SAME (root-originated)
+        // registry rather than being silently dropped. Mirrors sharedEventBus.
+        sharedChildDashboardRegistry,
         // ── Cross-cutting inheritance (2026-07-23) — a TRUE sub-agent runs under
         //    the parent's judgment + safety constraints, not rubber-stamped. The
         //    child builds its OWN RunEnvelope from these, so its answer is judged
@@ -539,7 +552,16 @@ export const buildSubAgentTask = (
           },
           createdAt: new Date(),
         };
-        return yield* subEngine.execute(taskObj);
+        const execResult = yield* subEngine.execute(taskObj);
+        // Capture the child's own dashboard data (console printing already
+        // suppressed via observabilityOptions.emitConsole:false above) so the
+        // PARENT can roll it up into its single end-of-run print instead of
+        // this child ever flushing/printing its own — this is the fix for the
+        // "sub-agent prints its own dashboard mid-stream" defect.
+        const childObsOpt = yield* Effect.serviceOption(ObservabilityService);
+        const childDashboard =
+          childObsOpt._tag === "Some" ? yield* childObsOpt.value.getDashboardData() : undefined;
+        return { execResult, childDashboard };
       }).pipe(
         Effect.provide(subRuntime),
         // Fallback-only ambient correlation for the child's own fiber, so a
@@ -574,11 +596,23 @@ export const buildSubAgentTask = (
       const elapsedMs = Date.now() - startedMs;
 
       if (Exit.isSuccess(exit)) {
-        const result = exit.value;
+        const { execResult: result, childDashboard } = exit.value;
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
         yield* frame(
           `◀ ${t.name} ${result.success ? "✓" : "✗"} — ${result.metadata.tokensUsed} tok, ${elapsedMs}ms`,
         );
+        // Record the child's dashboard into the SPAWNING agent's own ambient
+        // registry — the same registry the root created (and threaded down to
+        // every descendant via `sharedChildDashboardRegistry`, mirroring how
+        // `sharedEventBus` propagates). `Effect.serviceOption` degrades to a
+        // no-op when absent (e.g. observability off, or a test that doesn't
+        // wire the registry) rather than failing the spawn.
+        if (childDashboard !== undefined) {
+          const registryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
+          if (registryOpt._tag === "Some") {
+            yield* registryOpt.value.record({ name: t.name, data: childDashboard });
+          }
+        }
         const raw: SubAgentRawResult = {
           output: String(result.output ?? ""),
           success: result.success,
@@ -586,6 +620,7 @@ export const buildSubAgentTask = (
           stepsCompleted: result.metadata.stepsCount ?? 0,
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
+          ...(childDashboard !== undefined ? { childDashboard } : {}),
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }

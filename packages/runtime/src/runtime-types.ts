@@ -928,6 +928,22 @@ export interface LightRuntimeOptions {
     typeof import("@reactive-agents/core").EventBus
   >;
 
+  /**
+   * Shared parent `ChildDashboardRegistry` instance — the sub-agent-dashboard-
+   * rollup analog of `sharedEventBus` above. When present, the light runtime's
+   * services can resolve the SAME registry instance the root created, so a
+   * child that itself spawns a grandchild (nested delegation) records the
+   * grandchild's dashboard into the one registry the root drains at
+   * `execution-engine.ts` before its single end-of-run `flush()`. Absent =
+   * no registry is provided to this light runtime (its own recording of ITS
+   * children — done by the SPAWNING agent's outer scope in
+   * `sub-agent-executor.ts`, not inside this light runtime — degrades to a
+   * no-op via `Effect.serviceOption`).
+   */
+  sharedChildDashboardRegistry?: import("effect").Context.Tag.Service<
+    typeof import("@reactive-agents/observability").ChildDashboardRegistry
+  >;
+
   // Always-on for sub-agents
   enableReasoning?: boolean;
   enableTools?: boolean;

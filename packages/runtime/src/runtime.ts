@@ -44,6 +44,8 @@ import {
   createObservabilityLayer,
   MetricsCollectorLive,
   TelemetryCollectorLive,
+  ChildDashboardRegistry,
+  makeChildDashboardRegistry,
   type ExporterConfig,
 } from "@reactive-agents/observability";
 import { createPromptLayer } from "@reactive-agents/prompts";
@@ -796,6 +798,18 @@ export const createRuntime = (options: RuntimeOptions) => {
       })()
     : Layer.empty;
 
+  // ── Child dashboard registry (root-only) ──
+  // A run's ROOT is the only place that ever mints a `ChildDashboardRegistry`
+  // instance. It is threaded down to every sub-agent's `createLightRuntime`
+  // call via `sharedChildDashboardRegistry` (sub-agent-executor.ts), exactly
+  // as `EventBus` is shared for audit G1 — so no matter how deep a delegation
+  // chain gets, every `record()` call resolves to THIS one instance, and this
+  // root's `execution-engine.ts` `drain()` (gated by `!lp`, root-only) sees
+  // every descendant's dashboard before its single end-of-run `flush()`.
+  const childDashboardRegistryOptLayer = options.enableObservability
+    ? Layer.effect(ChildDashboardRegistry, makeChildDashboardRegistry)
+    : Layer.empty;
+
   // ── Telemetry ──
   const telemetryOptLayer = options.telemetryConfig
     ? TelemetryCollectorLive(options.telemetryConfig).pipe(
@@ -1032,6 +1046,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       skillStoreOptLayer,
       reasoningOptLayer,
       observabilityOptLayer,
+      childDashboardRegistryOptLayer,
       telemetryOptLayer,
       loggerTapOptLayer,
       healthOptLayer,
@@ -1173,6 +1188,17 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   const eventBusLayer = options.sharedEventBus
     ? Layer.succeed(EventBus, options.sharedEventBus)
     : EventBusLive;
+  // Sub-agent-dashboard-rollup analog of eventBusLayer above: when the parent
+  // threads its ChildDashboardRegistry down (so THIS child can itself record
+  // a grandchild's dashboard into the root's registry), join it via
+  // Layer.succeed. Absent = no registry provided — recording degrades to a
+  // no-op via Effect.serviceOption at the call site (sub-agent-executor.ts),
+  // never a missing-service failure. Light runtimes never mint a FRESH
+  // registry of their own — only the root's createRuntime() does that; a
+  // child with no shared registry simply has none to record into.
+  const childDashboardRegistryLayer = options.sharedChildDashboardRegistry
+    ? Layer.succeed(ChildDashboardRegistry, options.sharedChildDashboardRegistry)
+    : Layer.empty;
   const coreLayer = CoreServicesLive;
   const llmLayer = createLLMProviderLayer(
     options.provider ?? "test",
@@ -1335,6 +1361,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       // Mandatory
       coreLayer,
       eventBusLayer,
+      childDashboardRegistryLayer,
       llmLayer,
       memoryLayer,
       hookLayer,

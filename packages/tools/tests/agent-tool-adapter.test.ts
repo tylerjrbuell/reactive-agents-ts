@@ -8,6 +8,7 @@ import {
   createSubAgentExecutor,
   executeAgentTool,
   executeRemoteAgentTool,
+  finalizeSubAgentResult,
   MAX_RECURSION_DEPTH,
   type RemoteAgentClient,
 } from "../src/adapters/agent-tool-adapter.js";
@@ -302,5 +303,31 @@ describe("createSubAgentExecutor — maxIterations respected", () => {
     await executor("simple task");
 
     expect(capturedMaxIter).toBe(3);
+  });
+
+  describe("finalizeSubAgentResult", () => {
+    it("forwards childDashboard from the raw result onto SubAgentResult", () => {
+      const result = finalizeSubAgentResult(
+        { name: "x" },
+        {
+          output: "done",
+          success: true,
+          tokensUsed: 10,
+          childDashboard: { tokenCount: 1 },
+        },
+      );
+
+      expect(result.childDashboard).toBeDefined();
+      expect(result.childDashboard).toEqual({ tokenCount: 1 });
+    });
+
+    it("leaves childDashboard undefined when raw doesn't have one", () => {
+      const result = finalizeSubAgentResult(
+        { name: "x" },
+        { output: "done", success: true, tokensUsed: 10 },
+      );
+
+      expect(result.childDashboard).toBeUndefined();
+    });
   });
 });
