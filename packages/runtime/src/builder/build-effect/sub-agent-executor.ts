@@ -441,7 +441,14 @@ export const buildSubAgentTask = (
         reasoningOptions: parentReasoningOptions,
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
-        observabilityOptions: parentObservabilityOptions
+        // Only inherit the parent's observabilityOptions (e.g. `verbosity`) when
+        // the parent actually enabled observability — `parentObservabilityOptions`
+        // is populated from the builder's default `_observabilityOptions` even
+        // when `.withObservability()` was never called, so spreading it
+        // unconditionally would leak a stale default `verbosity: 'minimal'` into
+        // sub-agents whose parent never opted in, silently suppressing their own
+        // console output. Mirrors the guard in runtime-construction.ts.
+        observabilityOptions: parentEnableObservability && parentObservabilityOptions
           ? { ...parentObservabilityOptions, logPrefix: childLogPrefix, emitConsole: false }
           : { logPrefix: childLogPrefix, emitConsole: false },
         contextProfile: parentContextProfile,
