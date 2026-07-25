@@ -200,7 +200,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const obs: ObsLike | null = obsOpt._tag === "Some" ? (obsOpt.value as unknown as ObsLike) : null;
 
             // Verbosity helpers — read once per execution
-            const verbosity = (obs?.verbosity?.() ?? config.observabilityVerbosity) ?? "normal";
+            // ObsLike.verbosity() is typed `() => string` (a deliberately narrow/
+            // widened slice of ObservabilityService, see runtime-context.ts) — cast
+            // to the real 4-tier union here, matching the existing precedent at
+            // this file's other obs.verbosity() call site (progress-logger setup).
+            const verbosity = ((obs?.verbosity?.() as
+              | "minimal"
+              | "normal"
+              | "verbose"
+              | "debug"
+              | undefined) ?? config.observabilityVerbosity) ?? "normal";
             const isNormal = verbosity !== "minimal";
             const isVerbose = verbosity === "verbose" || verbosity === "debug";
             const isDebug = verbosity === "debug";
