@@ -1577,8 +1577,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               minLevel: config.logging?.minLevel,
               // Thread real VerbosityLevel through to ObservableLogger so "minimal"
               // can actually suppress live console output (not just dashboard output).
-              // Only pass when observability is explicitly enabled.
-              ...(obs ? { verbosity } : {}),
+              // Safe to pass unconditionally; verbosity defaults to "normal" when
+              // observability is not enabled, preserving original logging behavior.
+              verbosity,
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
