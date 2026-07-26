@@ -106,6 +106,15 @@ export function makeObservableLogger(config: {
   live: boolean;
   minLevel?: LogLevel;
   verbosity?: "minimal" | "normal" | "verbose" | "debug";
+  /**
+   * Depth/name-tagged prefix for sub-agent lines (e.g. `"  │ researcher · "`),
+   * built by `buildSubAgentLogPrefix` and threaded down from execution-engine's
+   * `config.logPrefix`. Without this, a sub-agent's arrow/DEBUG lines (this
+   * logger's own live-print path — separate from `ObservabilityService`'s
+   * `obs.info/debug` which already wrap `lp`) print unattributed, so parallel
+   * children's tool-call traces interleave into one indistinct stream.
+   */
+  logPrefix?: string;
 }): Effect.Effect<ObservableLoggerService, never, never> {
   const minLevel: LogLevel = config.minLevel ?? "debug";
   return Effect.gen(function* () {
@@ -135,7 +144,7 @@ export function makeObservableLogger(config: {
         // original behavior for tests that don't use observability).
         if (config.live && config.verbosity !== "minimal") {
           yield* Effect.sync(() => {
-            console.log(formatted);
+            console.log(config.logPrefix ? `${config.logPrefix}${formatted}` : formatted);
           });
         }
       });

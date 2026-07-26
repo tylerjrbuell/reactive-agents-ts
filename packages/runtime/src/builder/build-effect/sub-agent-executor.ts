@@ -31,17 +31,8 @@ import {
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
-/**
- * Build the log prefix that makes a sub-agent's lines FOLLOWABLE: one "│ " per
- * nesting level plus the child's name, e.g. depth 1 → `"  │ researcher · "`,
- * depth 2 → `"  │ │ writer · "`. Prepended to EVERY log line (info/debug/warn/
- * error) by the child's execution engine, so parallel or nested children no
- * longer collapse into one indistinct, unattributable stream. Pure — pinned by
- * `sub-agent-log-prefix.test.ts`.
- */
-export function buildSubAgentLogPrefix(depth: number, name: string): string {
-  return `  ${"│ ".repeat(Math.max(1, depth))}${name} · `;
-}
+import { buildSubAgentLogPrefix } from "./log-prefix.js";
+export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
 export interface SubAgentRuntimeShared {

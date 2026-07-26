@@ -37,3 +37,50 @@ describe("ObservableLogger minimal verbosity", () => {
     }
   });
 });
+
+describe("ObservableLogger sub-agent prefix", () => {
+  // Regression (2026-07-25 live E2E): a sub-agent's own ObservableLogger
+  // instance printed its arrow/DEBUG lines straight to console with no
+  // attribution — unlike ObservabilityService's `obs.info/debug`, which
+  // execution-engine.ts already wraps with `config.logPrefix`. Under
+  // concurrent sub-agents this made three children's tool-call traces
+  // interleave into one indistinguishable stream. Fixed by threading the
+  // same prefix into makeObservableLogger's live console.log.
+  test("prepends logPrefix to the live-printed line when set", async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => { lines.push(String(args[0])); };
+    try {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const logger = yield* makeObservableLogger({
+            live: true,
+            verbosity: "normal",
+            logPrefix: "  │ researcher · ",
+          });
+          yield* logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() });
+        }),
+      );
+      expect(lines[0]).toStartWith("  │ researcher · ");
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("root (no logPrefix) prints unprefixed", async () => {
+    const lines: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => { lines.push(String(args[0])); };
+    try {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const logger = yield* makeObservableLogger({ live: true, verbosity: "normal" });
+          yield* logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() });
+        }),
+      );
+      expect(lines[0]).not.toContain("│");
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});

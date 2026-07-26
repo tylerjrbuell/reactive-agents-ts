@@ -11,6 +11,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { EbLike, ObsLike } from "../../runtime-context.js";
+import { buildSubAgentLogPrefix } from "../../../builder/build-effect/log-prefix.js";
 
 export interface SubscribeReasoningStreamLoggerArgs {
   readonly eb: EbLike | null;
@@ -33,6 +34,32 @@ export const subscribeReasoningStreamLogger = (
     const capturedObs = obs;
     const capturedLogModelIO = logModelIO;
     const capturedIsDebug = isDebug;
+
+    // This subscription is root-only (one shared EventBus observes every
+    // descendant — see the caller's isRootExecution gate), so every child's
+    // ReasoningStepCompleted event was rendering through the ROOT's `obs`
+    // with no attribution: three parallel sub-agents' thought/action/obs
+    // lines interleaved into one indistinguishable stream (the same
+    // "difficult to follow" defect `buildSubAgentLogPrefix` already fixed
+    // for `obs.info/debug` calls made directly inside a child's own
+    // execution — this stream just never looked up the same prefix). Build
+    // the taskId → prefix map from AgentStarted (already flowing on the same
+    // shared bus for the status renderer) so each step can be attributed by
+    // its `taskId` without threading a prefix through the event schema.
+    const prefixByTaskId = new Map<string, string>();
+    const unsubscribeAgentStarted = yield* eb.on(
+      "AgentStarted",
+      (event) => {
+        if (event.depth && event.depth > 0) {
+          prefixByTaskId.set(
+            event.taskId,
+            buildSubAgentLogPrefix(event.depth, event.agentDisplayName ?? event.agentId),
+          );
+        }
+        return Effect.void;
+      },
+    );
+
     const unsubscribe = yield* eb.on(
       "ReasoningStepCompleted",
       (event) => {
@@ -48,8 +75,9 @@ export const subscribeReasoningStreamLogger = (
           capturedIsDebug || rawContent.length <= 180
             ? rawContent
             : rawContent.slice(0, 180) + "...";
+        const linePrefix = prefixByTaskId.get(event.taskId) ?? "";
         return capturedObs
-          .debug(`  ${prefix}  ${content}`)
+          .debug(`${linePrefix}  ${prefix}  ${content}`)
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-stream-logger.ts:log-step-content", tag: errorTag(err) })));
       },
     );
@@ -71,9 +99,10 @@ export const subscribeReasoningStreamLogger = (
           const sys = event.systemPrompt ?? "";
           const resp = event.response?.content ?? "";
           const tag = `direct-llm:${event.requestKind}:${event.provider}/${event.model}`;
+          const linePrefix = prefixByTaskId.get(event.taskId) ?? "";
           return capturedObs
             .debug(
-              `  ┄ [model-io:${tag}]\n    ── system ──\n    ${indent(sys)}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}\n    ── response ──\n    ${indent(resp)}`,
+              `${linePrefix}  ┄ [model-io:${tag}]\n    ── system ──\n    ${indent(sys)}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}\n    ── response ──\n    ${indent(resp)}`,
             )
             .pipe(
               Effect.catchAll((err) =>
@@ -88,6 +117,7 @@ export const subscribeReasoningStreamLogger = (
     }
 
     return () => {
+      unsubscribeAgentStarted();
       unsubscribe();
       if (unsubscribeExchange) unsubscribeExchange();
     };

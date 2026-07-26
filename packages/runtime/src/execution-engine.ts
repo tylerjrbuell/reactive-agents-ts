@@ -1624,6 +1624,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               // Safe to pass unconditionally; verbosity defaults to "normal" when
               // observability is not enabled, preserving original logging behavior.
               verbosity,
+              // Same depth/name-tagged prefix already wrapped onto `obs.info/debug`
+              // above — ObservableLogger is a SEPARATE live-print pipeline (its own
+              // emit()/console.log(), not routed through `obs`), so without this a
+              // sub-agent's arrow/DEBUG lines print unattributed even though its
+              // structured INFO lines correctly show "│ <name> ·".
+              logPrefix: lp || undefined,
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
