@@ -139,6 +139,24 @@ Slice 3 therefore splits:
   event-based (transport-level `calls`/`truncated`). Replay's llm-exchange is
   explicitly **out of scope** (not ledger data).
 
+**Close-out (2026-07-26) — the success authority reads ONE substrate.**
+Slice 3c converged the trace-side READER onto the ledger; the close-out converged
+the run's success authority, and closing the two residuals the delegated-deliverable
+fix had *named* surfaced two more defects rather than tidiness:
+
+| Defect | Fix |
+|---|---|
+| A DELEGATED deliverable was refused (`success:false`, file on disk) — `ArtifactProduced` judged from `steps`, which cannot contain a child's work | judge from the run-scoped ledger's `artifact` entries; generic over delegation depth, no sub-agent special-casing (`ec4880bb`) |
+| The ledger carried NO `artifact` facts on the inline (default) path — `deriveArtifactEntries` lived only in the kernel's `act.ts` | `inline-act` derives them and hands them to the announced seam (`growRunLedger` gained `extraEntries`), so the published delta stays the whole growth (`36665b8f`) |
+| The receipt could report a DELETED file as produced — the ledger was flattened to a path list, dropping `op` | pass the ledger WHOLE to the same `verify()` gate; the duplicate path-matching in `deliverable-report.ts` is deleted |
+| `ToolCalled` judged delegation from `delegatedToolsUsed`, which is one level deep by construction | read the ledger first (a grandchild's tools now count); steps scan kept as the no-ledger fallback — both are sound positive evidence, so the union cannot false-met |
+| The runtime's structural mirror of a ledger entry was hand-copied at FOUR sites, each with a different field subset | declared once in `runtime/src/types.ts`, imported |
+
+Residual left standing, deliberately: `isArtifactProduced` keeps its steps scan for
+callers with no ledger. With the inline path now minting artifacts, no ledger-bearing
+run depends on it; collapsing it entirely belongs to C-final, where `steps[]` itself
+becomes a projection.
+
 ### Method note (worth keeping)
 
 Both defects in this slice were found by **probe with a control arm**, not by
