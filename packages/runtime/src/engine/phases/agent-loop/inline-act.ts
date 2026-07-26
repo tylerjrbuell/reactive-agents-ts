@@ -16,7 +16,7 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
-import { makeStep, makeObservationResult, getRecoveryHint, projectStepsToLedger, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
+import { makeStep, makeObservationResult, getRecoveryHint, growRunLedger, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -280,38 +280,31 @@ export const runInlineAct = (
     // the receipt fell back to step-scanning. Projecting here (the same pure
     // mapping the kernel's transitionState uses) makes the inline path a
     // first-class ledger writer, and carries the sub-agent merge attached above.
-    const priorLedger = c.metadata.runLedger as RunLedger | undefined;
-    const runLedger = projectStepsToLedger(priorLedger, ledgerSteps, c.iteration);
-
-    // Wave C.2 slice 3b — publish this iteration's new entries to the ledger
-    // STREAM, mirroring what the kernel runner does via `hooks.onLedgerAppend`
-    // (`state.ledger.slice(publishedLedgerLen)`). Without this the ledger had
-    // two views that disagreed: the OBJECT view (`metadata.runLedger`, complete
-    // on both paths since slices 1–2) and the STREAM view (`LedgerEntryAppended`
-    // → the `ledger-entry` trace event), which only ever fired on the kernel
-    // path — so every default-path run wrote tool facts to the object ledger and
-    // nothing at all to the trace. Trace-side consumers (analyze, debrief,
-    // cohort) read serialized JSONL and cannot reach the object view, so they
-    // were structurally blind to inline runs.
+    // Wave C.2 slice 3b — grow the ledger through the ANNOUNCED seam, so this
+    // path's facts reach the stream as well as the result object. Before the
+    // seam the inline loop (the default path, and the one delegation runs on)
+    // grew a ledger that nothing published: trace-side consumers (analyze,
+    // debrief, cohort) read serialized JSONL and cannot reach the object view,
+    // so they were structurally blind to every default-path run.
     //
-    // No double-publish: the engine picks kernel XOR inline for a run
+    // No double-publish: the engine picks kernel XOR inline per run
     // (`execution-engine.ts` — `if (reasoningOpt._tag === "Some" && !cacheHit)`
-    // … `else if (!cacheHit)`), so exactly one of the two publishers is live.
-    const priorLen = priorLedger?.length ?? 0;
-    if (eb && runLedger.length > priorLen) {
-      yield* eb.publish({
-        _tag: "LedgerEntryAppended",
-        agentId: c.agentId,
-        taskId: c.taskId,
-        // Every concrete LedgerEntry variant structurally satisfies
-        // Record<string, unknown> (core's package-boundary shape — core cannot
-        // depend on reasoning's LedgerEntry union), but TS's structural check
-        // wants an explicit index signature. Same narrow widening the kernel's
-        // publisher does in `kernel-hooks.ts`.
-        entries: runLedger.slice(priorLen) as unknown as ReadonlyArray<Record<string, unknown>>,
-        timestamp: Date.now(),
-      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-ledger-entry-appended", tag: errorTag(err) })));
-    }
+    // … `else if (!cacheHit)`), so exactly one ledger factory is live.
+    const priorLedger = c.metadata.runLedger as RunLedger | undefined;
+    const runLedger = yield* growRunLedger(priorLedger, ledgerSteps, c.iteration, {
+      taskId: c.taskId,
+      agentId: c.agentId,
+      ...(eb
+        ? {
+            publish: (event) =>
+              eb.publish(event).pipe(
+                Effect.catchAll((err) =>
+                  emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-ledger-entry-appended", tag: errorTag(err) }),
+                ),
+              ),
+          }
+        : {}),
+    });
 
     return {
       ...c,

@@ -219,6 +219,12 @@ export type {
   CompactionMarkerEntry,
 } from "./kernel/ledger/run-ledger.js";
 export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
+// The ANNOUNCED ledger seam (Wave C.2 slice 3b-ii). Outside `kernel/ledger/`
+// this is the only sanctioned way to grow a run ledger: growth and publication
+// are one act, so a path cannot record facts the stream never sees. Enforced by
+// `check-ledger-writes.sh` (which confines `projectStepsToLedger` to the home).
+export { growRunLedger } from "./kernel/ledger/ledger-sink.js";
+export type { LedgerSinkTarget } from "./kernel/ledger/ledger-sink.js";
 export { deriveArtifactEntries, artifacts } from "./kernel/ledger/artifact-projection.js";
 export {
   recordTerminalVerdict,

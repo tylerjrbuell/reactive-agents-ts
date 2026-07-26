@@ -243,3 +243,22 @@ export function nextSeq(ledger: RunLedger | undefined): number {
 export function ledgerSize(ledger: RunLedger | undefined): number {
   return (ledger ?? []).length;
 }
+
+/**
+ * Widen ledger entries to the package-boundary shape `LedgerEntryAppendedEvent`
+ * carries. `@reactive-agents/core` cannot depend on reasoning's `LedgerEntry`
+ * union, so the event types `entries` as `Record<string, unknown>[]`; every
+ * concrete variant satisfies that structurally, but TS's structural check wants
+ * an explicit index signature.
+ *
+ * This exists so the widening is written ONCE. Both ledger publishers (the
+ * kernel tap in `kernel-hooks.ts` and the announced seam in `ledger-sink.ts`)
+ * route through here rather than each carrying its own `as unknown as` — the
+ * `as-unknown-as-ceiling` test's standing rule is to design a cast out, not to
+ * raise the ceiling for it.
+ */
+export function ledgerEntriesForEvent(
+  entries: RunLedger,
+): ReadonlyArray<Record<string, unknown>> {
+  return entries as unknown as ReadonlyArray<Record<string, unknown>>;
+}

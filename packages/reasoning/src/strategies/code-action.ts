@@ -8,8 +8,9 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+import { EventBus } from "@reactive-agents/core";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import type { KernelMessage } from "../kernel/state/kernel-state.js";
+import type { EventBusInstance, KernelMessage, MaybeService } from "../kernel/state/kernel-state.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -35,7 +36,7 @@ import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
-import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
+import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -114,6 +115,14 @@ export const executeCodeAction = (
     const steps: ReasoningStep[] = [];
     const llm = yield* LLMService;
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
+    // Wave C.2 slice 3b-ii — the bus the run ledger announces its growth on.
+    // Same narrowing `resolveStrategyServices` applies (service-utils.ts:184):
+    // Effect's `Option` and the kernel's `MaybeService` are the same two-case
+    // shape, and the kernel types against its own.
+    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+    );
+    const ebOpt = ebOptRaw as MaybeService<EventBusInstance>;
 
     const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
     const verifier = input.verifier ?? noopVerifier;
@@ -443,8 +452,17 @@ export const executeCodeAction = (
     const terminatedBy: "final_answer" | "end_turn" =
       lastVerdict === "PASS" && producedOutput ? "final_answer" : "end_turn";
 
-    // ONE ledger value, read twice (verdict + forwarded metadata).
-    const runLedger = projectStepsToLedger(undefined, steps, iteration);
+    // ONE ledger value, read twice (verdict + forwarded metadata). Grown through
+    // the ANNOUNCED seam (Wave C.2 slice 3b-ii): code-action runs no kernel, so
+    // before the seam its ledger reached the result object and nothing else —
+    // measured `object=[tool-invocation, tool-result×2]` against `stream=[]`,
+    // leaving every trace-side reader blind to a code-action run.
+    const runLedger = yield* growRunLedger(
+      undefined,
+      steps,
+      iteration,
+      ledgerSinkTarget(ebOpt, input.taskId ?? "code-action", input.agentId, "reasoning/src/strategies/code-action.ts:announce-ledger"),
+    );
 
     return yield* finalizeStrategyResult({
       strategy: "code-action",

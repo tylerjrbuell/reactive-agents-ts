@@ -94,5 +94,59 @@ if [ -n "$STEPS_MUTATIONS" ]; then
   exit 1
 fi
 
-echo "✅ RunLedger invariant holds — append API confined to kernel/ledger/ + the act.ts dual-emit seam."
+# ── Announced-seam tightening (Wave C.2 slice 3b-ii, 2026-07-25) ─────────────
+# 09 §3 C1's "no second store" has two halves: READER convergence and a SINGLE
+# WRITE PATH (ratified reading: wiki/Decisions/2026-07-22-c1-equivalence-invariant).
+# The write-path half had a hole. The append-API check above fences
+# appendEntry/appendEntries to the ledger home — but `projectStepsToLedger`,
+# which calls that API from INSIDE the fence, was itself callable from anywhere
+# and in either package. So four ledger factories existed where the invariant
+# assumes one, and three of them announced nothing. Measured on the real engine:
+#
+#   code-action  object=[tool-invocation, tool-result x2]   stream=[]
+#   reflexion    object=[tool-result x2]                    stream=[requirement, verdict] x2  (DISJOINT)
+#   inline-act   object=[tool-invocation, tool-result]      stream=[]
+#
+# That is GH #188's stream divergence, which C1 exists to kill. Outside the
+# ledger home, `growRunLedger` (kernel/ledger/ledger-sink.ts) is now the only
+# sanctioned way to grow a run ledger: it projects AND announces as one act, so
+# a caller cannot obtain the grown ledger without the delta being published.
+#
+# Note the search spans reasoning AND runtime — the engine's inline agent loop
+# is a ledger factory too, and the checks above only ever looked at reasoning.
+#
+# `kernel/state/kernel-state.ts` is exempt because it IS the sanctioned kernel
+# factory: `transitionState` is the steps[] chokepoint the check above already
+# pins, and its ledger growth is announced by the runner's C.1 tap
+# (`hooks.onLedgerAppend`, runner.ts:784/1511). It is announced by a different
+# mechanism, not unannounced. DO NOT add further exemptions — a new ledger
+# factory belongs behind `growRunLedger`.
+PROJECT_HITS="$(grep -rn -E 'projectStepsToLedger\(' \
+  --include='*.ts' "$ROOT/packages/reasoning/src" "$ROOT/packages/runtime/src" 2>/dev/null \
+  | grep -E -v 'kernel/ledger/' \
+  | grep -E -v 'kernel/state/kernel-state\.ts:' \
+  | grep -E -v '\.(test|spec)\.ts:' \
+  | awk -F: '{ code=$0; sub(/^[^:]*:[0-9]+:/, "", code); gsub(/^[ \t]+/, "", code);
+              if (code !~ /^(\/\/|\*|\/\*)/) print $0 }' \
+  || true)"
+
+if [ -n "$PROJECT_HITS" ]; then
+  echo "❌ RunLedger invariant violated. projectStepsToLedger called outside kernel/ledger/:"
+  echo ""
+  echo "$PROJECT_HITS"
+  echo ""
+  echo "Growing a run ledger outside the ledger home must go through the ANNOUNCED"
+  echo "seam so the facts reach the stream as well as the result object:"
+  echo ""
+  echo "  const ledger = yield* growRunLedger(prior, steps, iteration,"
+  echo "    ledgerSinkTarget(eventBus, taskId, agentId, \"<pkg>/<file>:announce-ledger\"))"
+  echo ""
+  echo "A path that projects without announcing records facts no trace-side reader"
+  echo "(analyze, debrief, cohort) can ever see — they read serialized JSONL and"
+  echo "cannot reach TaskResult.metadata. That is the C1 divergence, re-opened."
+  exit 1
+fi
+
+echo "✅ RunLedger invariant holds — append API confined to kernel/ledger/ + the act.ts dual-emit seam;"
+echo "   run-ledger growth outside the home goes through the announced seam (growRunLedger)."
 exit 0
