@@ -225,6 +225,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // same, or it appears at the PARENT's level and reads as the parent
             // failing (2026-07-23 — the prior wrap covered info/debug only).
             const lp = config.logPrefix ?? "";
+            /**
+             * "Am I the ROOT execution?" — a sub-agent always runs through this
+             * same ExecutionEngine, and `config.logPrefix` is set ONLY by
+             * `sub-agent-executor.ts` when it builds a child, so a falsy prefix
+             * is exactly "not a sub-agent". Named once here because three
+             * separate sites need this same discriminator, and every one of them
+             * guards a resource that is SHARED with every descendant (the
+             * EventBus, the ChildDashboardRegistry) — where subscribing or
+             * draining once per invocation instead of once per run produces
+             * duplicated/fan-out output. Cf. `669f6571`.
+             */
+            const isRootExecution = !lp;
             if (obs && lp) {
               const origInfo = obs.info.bind(obs);
               const origDebug = obs.debug.bind(obs);
@@ -774,11 +786,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // (unprefixed) and once via the child's own listener (prefixed) —
                   // since neither filtered by taskId. Root-only fixes this by
                   // construction: there is never more than one listener.
-                  const unsubscribeReasoningSteps = lp
-                    ? null
-                    : yield* subscribeReasoningStreamLogger({
+                  const unsubscribeReasoningSteps = isRootExecution
+                    ? yield* subscribeReasoningStreamLogger({
                         eb, obs, logModelIO, isVerbose, isDebug,
-                      });
+                      })
+                    : null;
 
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
@@ -1624,9 +1636,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // (only the `on` half) whose generic is constrained to the real
             // `AgentEventTag` from `@reactive-agents/core`, so this module's
             // `EbLike` (runtime-context.ts) is structurally assignable to it.
-            const renderer = isStatusMode
-              ? makeStatusRenderer(logger, process.stdout, eb)
-              : null;
+            //
+            // ROOT-ONLY (`isRootExecution`), same reason as the reasoning-stream
+            // subscription above: the renderer subscribes to AgentStarted/
+            // AgentCompleted on the SHARED EventBus, so one root renderer already
+            // observes every descendant. Constructing one per sub-agent too would
+            // make each child render a spurious `spawn-agent → <itself>` line and
+            // make N concurrent children each render all N siblings' lines.
+            const renderer =
+              isStatusMode && isRootExecution
+                ? makeStatusRenderer(logger, process.stdout, eb)
+                : null;
 
             // Start status renderer before events flow
             if (renderer) yield* renderer.start();
@@ -1701,10 +1721,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               );
               // Roll up sub-agent dashboards BEFORE the root's own flush() —
               // this is the fix for a sub-agent printing its own dashboard
-              // mid-stream: only the ROOT (config.logPrefix falsy, i.e. `!lp`)
-              // ever drains the registry and attaches, so a sub-agent never
-              // does this even though it shares the ExecutionEngine code path.
-              if (!lp) {
+              // mid-stream: only the ROOT ever drains the registry and attaches,
+              // so a sub-agent never does this even though it shares the
+              // ExecutionEngine code path.
+              if (isRootExecution) {
                 const childRegistryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
                 if (childRegistryOpt._tag === "Some") {
                   const children = yield* childRegistryOpt.value.drain();
