@@ -84,7 +84,8 @@ export interface VerifyOptions {
   /** The assembled deliverable output, consulted by OutputContains. */
   readonly output?: string;
   /**
-   * The run-scoped RunLedger, consulted by ArtifactProduced (2026-07-26).
+   * The run-scoped RunLedger — the canonical evidence substrate for BOTH
+   * state-grounded conditions (`ToolCalled`, `ArtifactProduced`).
    *
    * `steps` are the CURRENT agent's own steps. A delegated write therefore does
    * not appear in them: the parent's steps hold `spawn-agent`, and the child's
@@ -198,6 +199,37 @@ const PATH_ARG_KEYS: ReadonlySet<string> = new Set([
 
 function isPathArgKey(key: string): boolean {
   return PATH_ARG_KEYS.has(key.toLowerCase());
+}
+
+/**
+ * ToolCalled is met iff the tool completed SUCCESSFULLY at least once, anywhere
+ * in the run — including inside a sub-agent.
+ *
+ * Two evidence sources, unioned:
+ *
+ *   1. The run-scoped ledger's `tool-result` entries. This is the canonical one.
+ *      A sub-agent's ledger merges into its parent's (Wave C.2 slice 2), and a
+ *      grandchild's merges through that, so this sees delegated calls at ANY
+ *      depth without the parent having to carry a summary of them.
+ *   2. The steps scan, which additionally credits `delegatedToolsUsed` — the
+ *      older, hand-plumbed channel that carried a child's tool names up onto the
+ *      spawn observation. Kept because callers with no ledger (unit callers,
+ *      pre-ledger strategies) still depend on it, and because it costs nothing:
+ *      both sources are sound positive evidence, so their union cannot produce a
+ *      false-met.
+ *
+ * `delegatedToolsUsed` is one delegation level deep by construction (it comes
+ * off the child's own result); the ledger is not. That is why source 1 leads.
+ */
+function isToolCalled(
+  tool: string,
+  steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
+): boolean {
+  for (const entry of entriesOfKind(ledger, "tool-result")) {
+    if (entry.success === true && entry.toolName === tool) return true;
+  }
+  return getMissingRequiredToolsFromSteps(steps, [tool]).length === 0;
 }
 
 /**
@@ -318,10 +350,7 @@ export function verify(
     let satisfied = false;
     switch (condition.kind) {
       case "ToolCalled":
-        // Reuse the ledger-scan primitive — a tool is "called" iff it is NOT
-        // in the missing set for the singleton requirement [tool].
-        satisfied =
-          getMissingRequiredToolsFromSteps(steps, [condition.tool]).length === 0;
+        satisfied = isToolCalled(condition.tool, steps, opts?.ledger);
         break;
       case "ArtifactProduced":
         satisfied = isArtifactProduced(condition.path, steps, opts?.ledger);

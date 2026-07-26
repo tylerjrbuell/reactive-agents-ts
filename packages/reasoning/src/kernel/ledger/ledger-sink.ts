@@ -41,7 +41,12 @@ import type { LedgerEntryAppendedEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
 import type { EventBusInstance, MaybeService } from "../state/kernel-state.js";
-import { ledgerEntriesForEvent, type RunLedger } from "./run-ledger.js";
+import {
+  appendEntries,
+  ledgerEntriesForEvent,
+  type LedgerEntryInput,
+  type RunLedger,
+} from "./run-ledger.js";
 import { projectStepsToLedger } from "./step-projection.js";
 
 /** Matches `kernel-hooks.ts` so an un-named caller attributes identically. */
@@ -67,15 +72,28 @@ export interface LedgerSinkTarget {
  * reflection steps map to no entries by design — see `step-projection.ts`) the
  * prior ledger is returned unchanged and nothing is published, so a run that
  * records no facts stays byte-identical to what Wave C.1 shipped.
+ *
+ * `extraEntries` carries facts that are NOT step-derived — today the `artifact`
+ * entries `deriveArtifactEntries` mints from a tool's declared `produces:"file"`
+ * (artifact-projection.ts). They exist because the step→entry mapping is
+ * deliberately generic and cannot know a tool's artifact contract. Routing them
+ * through this same seam (rather than letting a caller append them itself) is
+ * what keeps the announcement invariant intact: the published delta is the WHOLE
+ * growth, so the stream never carries a subset of the object view. They land
+ * AFTER the step entries so the recorded order reads as it happened —
+ * invocation, result, then the artifact that resulted.
  */
 export function growRunLedger(
   prior: RunLedger | undefined,
   newSteps: readonly ReasoningStep[],
   iteration: number,
   target: LedgerSinkTarget,
+  extraEntries: readonly LedgerEntryInput[] = [],
 ): Effect.Effect<RunLedger, never> {
   return Effect.gen(function* () {
-    const grown = projectStepsToLedger(prior, newSteps, iteration);
+    const fromSteps = projectStepsToLedger(prior, newSteps, iteration);
+    const grown =
+      extraEntries.length > 0 ? appendEntries(fromSteps, extraEntries) : fromSteps;
     const priorLen = prior?.length ?? 0;
     if (grown.length <= priorLen) return grown;
 

@@ -102,3 +102,52 @@ describe("computeDeliverableReport — rw-8 partial (1 of 3)", () => {
     expect(computeDeliverableReport(contract, [], "Paris")).toEqual([]);
   });
 });
+
+// The ledger is now passed WHOLE (2026-07-26) rather than flattened to a list of
+// artifact paths. The flatten dropped `op`, so an `op: "delete"` entry's path
+// read as PRODUCED — a false-met on the receipt, the one direction a success
+// authority must never fail in. Reporting a file as delivered when the run
+// deleted it is exactly the "glowing summary, no deliverable" failure the
+// post-condition spine exists to block.
+//
+// RED-ON-CUT: pass `ledger` back as a path list (dropping `op`) and the delete
+// case below flips to produced:true while the CONTROL stays green.
+describe("computeDeliverableReport — ledger evidence carries `op`", () => {
+  const contract = compileRunContract("Write a summary file (summary.md)");
+
+  it("CONTROL: a ledger `write` of the path marks it produced", () => {
+    const report = computeDeliverableReport(contract, [], "", {
+      ledger: [
+        { kind: "artifact", seq: 0, iteration: 0, op: "write", path: "/abs/dir/summary.md" },
+      ],
+    });
+    expect(report).toHaveLength(1);
+    expect(report[0]?.produced).toBe(true);
+  });
+
+  it("a ledger `delete` of the path does NOT mark it produced", () => {
+    const report = computeDeliverableReport(contract, [], "", {
+      ledger: [
+        { kind: "artifact", seq: 0, iteration: 0, op: "delete", path: "/abs/dir/summary.md" },
+      ],
+    });
+    expect(report).toHaveLength(1);
+    expect(report[0]?.produced).toBe(false);
+  });
+
+  it("a DELEGATED write (merged under sub-agent:<name>) counts", () => {
+    const report = computeDeliverableReport(contract, [], "", {
+      ledger: [
+        {
+          kind: "artifact",
+          seq: 0,
+          iteration: 0,
+          op: "write",
+          path: "/abs/dir/summary.md",
+          pass: "sub-agent:writer",
+        },
+      ],
+    });
+    expect(report[0]?.produced).toBe(true);
+  });
+});

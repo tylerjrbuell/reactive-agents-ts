@@ -100,10 +100,72 @@ describe("ArtifactProduced credits a delegated write", () => {
   });
 });
 
-// The OTHER condition kind was already delegation-aware, through a different
-// (older, hand-plumbed) channel: `delegatedToolsUsed` on the spawn observation.
-// Pinned here so the spine's two halves stay in lockstep — if this regresses,
-// ToolCalled silently starts failing delegated runs the way ArtifactProduced did.
+// ToolCalled now reads the ledger FIRST (2026-07-26), which is what makes the
+// spine's two conditions read the same substrate. `delegatedToolsUsed` — the
+// older, hand-plumbed channel below — is one delegation level deep by
+// construction: it carries the names off the CHILD's own result, so a
+// grandchild's tools never reach the top-level parent through it. The merged
+// ledger has no such ceiling.
+//
+// RED-ON-CUT: drop the `entriesOfKind(ledger, "tool-result")` scan from
+// isToolCalled and the grandchild case below fails.
+describe("ToolCalled reads the run-scoped ledger", () => {
+  // The parent's own steps hold ONLY the spawn, with NO delegatedToolsUsed —
+  // the shape a two-level delegation actually produces at the top.
+  const parentStepsNoDelegationHint = [
+    makeStep("action", "[ACT] spawn-agent", {
+      toolCall: { id: "tc-1", name: "spawn-agent", arguments: {} },
+    }),
+    makeStep("observation", "ok", {
+      toolCallId: "tc-1",
+      observationResult: makeObservationResult("spawn-agent", true, "ok"),
+    }),
+  ];
+
+  const grandchildLedger = [
+    { kind: "tool-invocation", seq: 0, iteration: 0, toolName: "spawn-agent", toolCallId: "tc-1" },
+    { kind: "tool-result", seq: 1, iteration: 0, success: true, preview: "", toolName: "spawn-agent", toolCallId: "tc-1" },
+    {
+      kind: "tool-result", seq: 2, iteration: 0, success: true, preview: "",
+      toolName: "web-search", toolCallId: "tc-gc-1", pass: "sub-agent:researcher",
+    },
+  ] satisfies RunLedger;
+
+  it("CONTROL: unmet from the parent's steps alone (no delegation hint)", () => {
+    expect(verify([toolCalled("web-search")], parentStepsNoDelegationHint).unmet).toHaveLength(1);
+  });
+
+  it("credits a tool a NESTED sub-agent used", () => {
+    const r = verify([toolCalled("web-search")], parentStepsNoDelegationHint, {
+      ledger: grandchildLedger,
+    });
+    expect(r.unmet).toHaveLength(0);
+    expect(r.met).toHaveLength(1);
+  });
+
+  it("does NOT credit a tool absent from the ledger", () => {
+    expect(
+      verify([toolCalled("git-cli")], parentStepsNoDelegationHint, { ledger: grandchildLedger })
+        .unmet,
+    ).toHaveLength(1);
+  });
+
+  it("does NOT credit a FAILED ledger tool-result", () => {
+    const r = verify([toolCalled("web-search")], parentStepsNoDelegationHint, {
+      ledger: [
+        {
+          kind: "tool-result", seq: 0, iteration: 0, success: false, preview: "",
+          toolName: "web-search", toolCallId: "tc-x",
+        },
+      ] satisfies RunLedger,
+    });
+    expect(r.unmet).toHaveLength(1);
+  });
+});
+
+// The pre-ledger channel: `delegatedToolsUsed` on the spawn observation. Still
+// the fallback for callers that supply no ledger, so it stays pinned — if it
+// regresses, those callers silently start failing delegated runs.
 describe("ToolCalled credits a delegated call", () => {
   const spawnWithDelegatedTools = [
     makeStep("action", "[ACT] spawn-agent", {

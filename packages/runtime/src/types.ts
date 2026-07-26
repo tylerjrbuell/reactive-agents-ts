@@ -188,6 +188,42 @@ export const ExecutionContextSchema = Schema.Struct({
 });
 
 /**
+ * Structural mirror of the reasoning package's `RunLedger` entries
+ * (`kernel/ledger/run-ledger.ts`'s `LedgerEntry` union), kept structural rather
+ * than imported so `ExecutionContextMetadata` / `TaskResult.metadata` do not
+ * leak a reasoning-internal union into the public surface — the same convention
+ * `reasoningSteps` follows.
+ *
+ * DECLARED ONCE, on purpose. This shape was previously hand-copied at four
+ * sites (this metadata field, `builder/helpers.ts`, `engine/execute-stream.ts`,
+ * `reactive-agent.ts`), each with a DIFFERENT subset of the fields — so a
+ * consumer that needed `path` saw a copy that only declared `toolName`, and
+ * adding a field meant finding all four. That is the hand-copied-shape cascade
+ * the 2026-07-23 `RunEnvelope` work exists to end; one declaration, imported.
+ */
+export interface RunLedgerEntryShape {
+  readonly kind: string;
+  /** Dense, monotonic append index (the entry's stable address). */
+  readonly seq: number;
+  /** The run iteration the fact was recorded at. */
+  readonly iteration: number;
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly success?: boolean;
+  readonly args?: Readonly<Record<string, unknown>>;
+  /**
+   * Present on `kind: "artifact"` entries (Wave C1 task 6) — the declared write
+   * path. With `op`, consumed by `deriveReceiptDeliverables` to mark a declared
+   * deliverable produced without re-scanning `steps`.
+   */
+  readonly path?: string;
+  /** `"write" | "append" | "delete" | "unknown"` on `artifact` entries. */
+  readonly op?: string;
+  /** Which pass recorded the fact, e.g. `"sub-agent:<name>"` (Wave C.2). */
+  readonly pass?: string;
+}
+
+/**
  * Well-known fields written to / read from `ExecutionContext.metadata` by the
  * execution engine and its phase modules. The index signature `[key: string]:
  * unknown` preserves backward-compat for hooks and extensions that attach
@@ -244,20 +280,7 @@ export interface ExecutionContextMetadata {
        * `deriveReceiptToolCalls` (builder/helpers.ts) as the FIRST evidence
        * source, ahead of the `reasoningSteps` fallback.
        */
-      runLedger?: ReadonlyArray<{
-        readonly kind: string;
-        readonly toolName?: string;
-        readonly toolCallId?: string;
-        readonly success?: boolean;
-        readonly args?: Readonly<Record<string, unknown>>;
-        /**
-         * Present on `kind: "artifact"` entries (Wave C1 task 6) — the
-         * declared write path. Consumed by `deriveReceiptDeliverables` to
-         * mark a declared deliverable produced without re-scanning `steps`.
-         */
-        readonly path?: string;
-        readonly op?: string;
-      }>;
+      runLedger?: ReadonlyArray<RunLedgerEntryShape>;
       /**
        * Terminal judgment record (cross-cutting cascade, 2026-07-22/23).
        * Mirrors `ReasoningMetadataSchema.verdict` structurally (cross-package
