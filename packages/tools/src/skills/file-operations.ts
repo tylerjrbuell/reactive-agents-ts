@@ -291,6 +291,67 @@ export function normalizeStructuredFileContent(filePath: string, content: string
   return content;
 }
 
+/**
+ * Text the HARNESS authored and showed the model in an observation. A model
+ * passing one of these back as file CONTENT is always a mistake — these strings
+ * are produced by the framework, never by a user or a data source — which is
+ * what makes rejecting them exact rather than heuristic.
+ *
+ *   - `[Tool error: …]`            tool-execution.ts (4 sites), inline-act.ts
+ *   - `✓ <tool> completed successfully`   planning/plan-text.ts
+ *   - `_tool_result_N`             the scratchpad storage key (original guard)
+ *
+ * Live witness (bench rw-1, 2026-07-26): the agent wrote a correct
+ * `databases.json`, then wrote `'✓ file-write completed successfully'` to the
+ * same path, then `'[Tool error: Web search failed: …]'`. `file-write`
+ * overwrites, so the run destroyed its own finished deliverable and still
+ * reported it produced — the judge saw `JSON Parse error: Unexpected identifier
+ * "Tool"`. Refusing the write is what keeps the good artifact on disk.
+ */
+const HARNESS_ECHO_PATTERNS: ReadonlyArray<{ readonly re: RegExp; readonly what: string }> = [
+  { re: /^\[Tool error:/, what: "a tool ERROR message the harness showed you" },
+  { re: /^✓ .+ completed successfully$/, what: "a tool SUCCESS message the harness showed you" },
+  { re: /^_tool_result_\d+$/, what: "a scratchpad storage key" },
+];
+
+/**
+ * Why this content must not be written, or `undefined` when it is fine.
+ * Exported for the write-boundary tests; used by `fileWriteHandler` below.
+ */
+export function writeContentRejection(
+  filePath: string,
+  content: string,
+): string | undefined {
+  const trimmed = content.trim();
+  for (const { re, what } of HARNESS_ECHO_PATTERNS) {
+    if (re.test(trimmed)) {
+      return (
+        `Refusing to write ${what}, not content: ${JSON.stringify(trimmed.slice(0, 80))}. ` +
+        `Pass the actual text you want saved. If you meant to save a stored result, ` +
+        `recall() it first and pass the returned text.`
+      );
+    }
+  }
+  // A `.json` deliverable that does not parse is a guaranteed downstream
+  // failure, and writing it makes the run report a corrupt artifact as
+  // produced. JSON is the one structured family whose validity is cheaply and
+  // authoritatively checkable — `.csv`/`.yaml`/`.xml` are deliberately left
+  // alone rather than guessed at. Runs AFTER fence normalization, so a fenced
+  // block that parses is already unwrapped by here.
+  if (JSON_EXT.has(path.extname(filePath).toLowerCase())) {
+    try {
+      JSON.parse(trimmed);
+    } catch (e) {
+      return (
+        `Refusing to write ${path.basename(filePath)}: the content is not valid JSON ` +
+        `(${e instanceof Error ? e.message : String(e)}). ` +
+        `Write the JSON value itself — no prose, no explanation, no code fence.`
+      );
+    }
+  }
+  return undefined;
+}
+
 export const fileWriteHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown, ToolExecutionError> =>
@@ -300,13 +361,12 @@ export const fileWriteHandler = (
       const content = normalizeStructuredFileContent(filePath, args.content as string);
       const encoding = (args.encoding as BufferEncoding) ?? "utf-8";
 
-      // Guard: model passed a stored-result key instead of the actual content.
-      if (/^_tool_result_\d+$/.test(content?.trim?.())) {
-        throw new Error(
-          `"${content}" is a storage key, not a value. ` +
-          `Use recall("${content}") first, then pass the returned text as the content argument.`,
-        );
-      }
+      // Refuse content that cannot be the deliverable — a harness-authored echo,
+      // or unparseable JSON. Refusing leaves any correct earlier write intact;
+      // writing would silently destroy it.
+      const rejection =
+        typeof content === "string" ? writeContentRejection(filePath, content) : undefined;
+      if (rejection !== undefined) throw new Error(rejection);
 
       // Resolve RELATIVE paths against the active file root (default cwd; the
       // bench/sandbox sets a temp dir via withFileRoot) and confine writes to

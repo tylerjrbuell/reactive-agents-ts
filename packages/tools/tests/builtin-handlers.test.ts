@@ -10,6 +10,7 @@ import {
   fileWriteHandler,
   withFileRoot,
   getFileRoot,
+  normalizeStructuredFileContent,
 } from "../src/skills/file-operations.js";
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
@@ -271,11 +272,23 @@ describe("fileWriteHandler — structured-deliverable fence normalization", () =
     expect(await writeAndRead("report.md", md)).toBe(md);
   });
 
-  it("leaves non-parseable fenced JSON as written (never corrupts)", async () => {
-    // Preamble + a fenced block that is NOT valid JSON → don't guess; keep it.
+  // DECLARED BEHAVIOUR CHANGE (2026-07-26). This case previously asserted that
+  // non-parseable fenced JSON was WRITTEN AS-IS. The normalizer's half of that
+  // contract is unchanged and still pinned below: it must never GUESS a
+  // replacement block. What changed is the write itself — an unparseable
+  // `.json` deliverable is now REFUSED rather than written, because writing it
+  // produces an artifact that is guaranteed to fail downstream while the run
+  // reports it as produced (bench rw-1, 2026-07-26). Refusing also preserves a
+  // correct earlier write at the same path instead of destroying it.
+  // See packages/tools/tests/write-boundary-corruption.test.ts.
+  it("never GUESSES a replacement for non-parseable fenced JSON", () => {
     const raw = "notes\n```json\nnot json at all\n```";
-    const out = await writeAndRead("x.json", raw);
-    expect(out).toBe(raw);
+    expect(normalizeStructuredFileContent("x.json", raw)).toBe(raw);
+  });
+
+  it("REFUSES to write non-parseable JSON rather than corrupt the deliverable", async () => {
+    const raw = "notes\n```json\nnot json at all\n```";
+    await expect(writeAndRead("x.json", raw)).rejects.toThrow();
   });
 });
 
