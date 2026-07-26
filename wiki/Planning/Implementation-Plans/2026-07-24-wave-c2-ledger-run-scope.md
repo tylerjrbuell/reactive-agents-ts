@@ -152,3 +152,39 @@ so does every test written from one.
 - Any change to how a pass is *judged* — slice 1 only makes sibling evidence
   reachable; using it to retire the auxiliary-pass exemption is slice 2+ work,
   and is a behaviour change that needs its own pins.
+
+
+## End-to-end verification (2026-07-25)
+
+One real delegating run (nested `spawn-agent`, `test` provider, tracing on),
+checked across every view. 8 of 9 checks pass:
+
+| # | Check | Result |
+|---|---|---|
+| 1 | slice 1 — run-scoped ledger, seq dense + monotonic | PASS (`seqs 0..8`) |
+| 2 | slice 2 — child AND grandchild attributed | PASS (`sub-agent:child-one`, `sub-agent:child-two`) |
+| 3 | slice 2 control — parent's OWN call present, unstamped | PASS |
+| 4 | slice 3a — ledger reached the trace JSONL as `ledger-entry` | PASS (9 entries) |
+| 5 | slice 3b — `object ⊆ stream` (announced seam holds) | PASS (obj 9 / stream 9) |
+| 6 | slice 3b — no duplicate seq (single live publisher) | PASS |
+| 7 | slice 3c — analyzer sees MORE tool calls than direct events | PASS (`{spawn-agent: 2}` vs 1 direct event; the 2nd came from `sub-agent:child-one`) |
+| 8 | overall — run succeeded | PASS |
+| 9 | slice 3c — a LEAF (non-spawn) child tool reaches the analyzer | **NOT VERIFIED e2e** — see below |
+
+**Check 9 is a fixture limitation, not a defect.** Two attempts to make a
+delegated child execute a real tool (`scratchpad-write`) failed the CONTROL: the
+child terminated `end_turn` with no `[act]` phase at all and an empty ledger, so
+its scenario `match` guard never fired. This is the known
+`withTestScenario` behaviour where a delegated child's match guard is consumed
+against a truncated parent-context prefix / the tool-relevance classifier prompt
+— the same reason `ledger-merge.test.ts` deliberately pushes its trigger past
+char 200 and uses nested spawns rather than leaf tools.
+
+What check 7 *does* establish is the substance of 3c: a tool invocation that
+exists ONLY in the merged ledger (`spawn-agent` under `sub-agent:child-one`,
+absent from the parent's `tool-call-*` events) is counted by the analyzer. The
+leaf-tool case is covered by `ledger-tool-facts.test.ts` against a synthetic
+ledger, red-on-cut verified.
+
+Recorded rather than quietly dropped: an unverified check reported as passing is
+the failure mode this whole wave exists to prevent.
