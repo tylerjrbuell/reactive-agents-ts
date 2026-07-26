@@ -139,7 +139,32 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > [[../../Decisions/2026-07-25-c1-write-path-enforcement]].
 > NOTE: the original slice-3 framing of "llm-exchange/replay re-base" was a FALSE PREMISE — llm-exchange
 > carries raw prompts for byte-exact golden replay and is deliberately not ledger data; out of scope.
-> **Next program step: Wave D (4c Projector) ∥ Wave E (5a Assessment)** per §4.
+> **Wave C.2 CLOSE-OUT SHIPPED 2026-07-26 (`ec4880bb`, `36665b8f`) — the success authority reads ONE
+> substrate.** Closing the residuals the delegated-deliverable fix had NAMED surfaced two more defects.
+> A DELEGATED deliverable was refused (`success:false` while the file existed on disk) because
+> `ArtifactProduced` judged from `steps`, which structurally cannot hold a child's work — now judged from
+> the run-scoped ledger, generic over delegation depth. And the ledger carried NO `artifact` facts on the
+> INLINE (default) path at all: they are minted from a tool's declared `produces:"file"`, and that
+> derivation lived only in the kernel's `act.ts` — so the ledger-preferred readers landed by 3c were
+> reading an incomplete substrate. `inline-act` now derives them through the same announced seam
+> (`growRunLedger` gained `extraEntries`), keeping published delta ≡ whole growth. Also closed: the
+> receipt could report a DELETED file as produced (the ledger reached `computeDeliverableReport`
+> flattened to a path list, dropping `op`); `ToolCalled` now reads the ledger (a GRANDCHILD's tools
+> count — `delegatedToolsUsed` is one level deep by construction); and the runtime's ledger-entry
+> structural mirror, hand-copied at FOUR sites, is declared once.
+>
+> **Wave D ∥ E SCOPING FINDING (probe, 2026-07-26) — the meta-loop is KERNEL-ONLY.** Waves B/D/E/F
+> shipped structurally on 2026-07-08 (`6db0bf71`/`14351866`/`5c5fb778`/`a33409d5`), and `assess()` and
+> `project()` both already TAKE a ledger — so the sequence entry is not a build task. A two-arm trace
+> probe (control = `.withReasoning()`) shows what it actually is: the bare-builder DEFAULT path emits
+> `llm-exchange, run-started, tool-call-start/end, ledger-entry, verifier-verdict, run-completed` — 7
+> kinds. The kernel arm emits 12, adding **`contract-compiled`, `assessment`, `projection-rendered`,
+> `tool-surface-resolved`, `entropy-scored`, `kernel-state-snapshot`, `guard-fired`**. `_enableReasoning`
+> defaults to `false` (`builder.ts:360`), so a default run compiles no contract, computes no assessment,
+> renders no projection and fires no guards. Wave C's convergence work reached the default path (the
+> ledger now grows and announces there); Waves B/D/E/F did not. **Note §6: making the meta-loop
+> default-on is gated by the per-task-class lift rule + ablation-warden veto — it is a measurement
+> question, not a wiring decision.**
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
