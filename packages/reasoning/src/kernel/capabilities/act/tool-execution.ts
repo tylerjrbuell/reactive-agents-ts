@@ -573,7 +573,16 @@ export function executeToolCall(
       .pipe(
         Effect.map((r) => {
           const delegatedToolsUsed = extractDelegatedToolsUsed(r.result);
-          const raw = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
+          // Wave C.2 — same display-trimming as executeNativeToolCall below: a
+          // sub-agent tool result carries the child's stamped `childRunLedger`,
+          // which must never reach the model (large, noise, and — since the
+          // ledger's tool-invocation entries echo original task args verbatim —
+          // capable of spuriously re-matching an unrelated later scenario/guard
+          // on whatever consumes this text, e.g. a deterministic test provider's
+          // own pending pattern cursor). `executeNativeToolCall` was fixed for
+          // this; this sibling function serializes the same `SubAgentResult`
+          // shape and was missed.
+          const raw = typeof r.result === "string" ? r.result : JSON.stringify(subAgentResultForDisplay(r.result));
           const normalized = normalizeObservation(toolRequest.tool, raw);
 
           // Pipe transform — evaluate in-process, inject only transformed result

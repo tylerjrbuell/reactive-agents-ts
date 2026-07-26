@@ -32,7 +32,7 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -102,6 +102,9 @@ type ObsLike = {
   getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
   flush: () => Effect.Effect<void, never>;
   verbosity: () => string;
+  attachChildren: (
+    children: readonly { readonly name: string; readonly data: unknown }[],
+  ) => Effect.Effect<void, never>;
 };
 
 type EbLike = {
@@ -197,7 +200,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const obs: ObsLike | null = obsOpt._tag === "Some" ? (obsOpt.value as unknown as ObsLike) : null;
 
             // Verbosity helpers — read once per execution
-            const verbosity = (obs?.verbosity?.() ?? config.observabilityVerbosity) ?? "normal";
+            // ObsLike.verbosity() is typed `() => string` (a deliberately narrow/
+            // widened slice of ObservabilityService, see runtime-context.ts) — cast
+            // to the real 4-tier union here, matching the existing precedent at
+            // this file's other obs.verbosity() call site (progress-logger setup).
+            const verbosity = ((obs?.verbosity?.() as
+              | "minimal"
+              | "normal"
+              | "verbose"
+              | "debug"
+              | undefined) ?? config.observabilityVerbosity) ?? "normal";
             const isNormal = verbosity !== "minimal";
             const isVerbose = verbosity === "verbose" || verbosity === "debug";
             const isDebug = verbosity === "debug";
@@ -213,6 +225,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // same, or it appears at the PARENT's level and reads as the parent
             // failing (2026-07-23 — the prior wrap covered info/debug only).
             const lp = config.logPrefix ?? "";
+            /**
+             * "Am I the ROOT execution?" — a sub-agent always runs through this
+             * same ExecutionEngine, and `config.logPrefix` is set ONLY by
+             * `sub-agent-executor.ts` when it builds a child, so a falsy prefix
+             * is exactly "not a sub-agent". Named once here because three
+             * separate sites need this same discriminator, and every one of them
+             * guards a resource that is SHARED with every descendant (the
+             * EventBus, the ChildDashboardRegistry) — where subscribing or
+             * draining once per invocation instead of once per run produces
+             * duplicated/fan-out output. Cf. `669f6571`.
+             */
+            const isRootExecution = !lp;
             if (obs && lp) {
               const origInfo = obs.info.bind(obs);
               const origDebug = obs.debug.bind(obs);
@@ -601,12 +625,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 if (eb) {
+                  // An EXPLICIT display name always wins (sub-agents set it to
+                  // their given name — `agentId` there is the uniquified
+                  // `sub-<name>-<epoch>`, which is not fit to render). Only when
+                  // absent do we fall back to the agentId-derived desk name.
+                  const explicitDisplayName =
+                    typeof config.agentDisplayName === "string" &&
+                    config.agentDisplayName.trim().length > 0
+                      ? config.agentDisplayName.trim()
+                      : undefined;
                   const deskName =
                     typeof config.agentId === "string" && config.agentId.trim().length > 0
                       ? config.agentId.trim()
                       : "";
                   const agentDisplayName =
-                    deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName) ? deskName : undefined;
+                    explicitDisplayName ??
+                    (deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName)
+                      ? deskName
+                      : undefined);
                   // B8-T3b: lift the child's RunContext (rootRunId/parentRunId/
                   // depth) off the task metadata so the trace normalizer can
                   // correlate this run to its node in the delegation tree.
@@ -741,9 +777,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   // Body extracted to engine/phases/agent-loop/reasoning-stream-logger.ts (W23 step 6a-7).
-                  const unsubscribeReasoningSteps = yield* subscribeReasoningStreamLogger({
-                    eb, obs, logModelIO, isVerbose, isDebug,
-                  });
+                  //
+                  // Gated to the ROOT execution only (config.logPrefix unset). The
+                  // EventBus is shared with every sub-agent (G1), so a single root
+                  // subscription already observes every descendant's reasoning
+                  // steps. Subscribing again per sub-agent caused each event to
+                  // fire twice — once via the still-active root listener
+                  // (unprefixed) and once via the child's own listener (prefixed) —
+                  // since neither filtered by taskId. Root-only fixes this by
+                  // construction: there is never more than one listener.
+                  const unsubscribeReasoningSteps = isRootExecution
+                    ? yield* subscribeReasoningStreamLogger({
+                        eb, obs, logModelIO, isVerbose, isDebug,
+                      })
+                    : null;
 
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
@@ -1572,13 +1619,34 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               // In status mode the renderer owns all output; logger stays buffered
               live: isStatusMode ? false : (config.logging?.live ?? true),
               minLevel: config.logging?.minLevel,
+              // Thread real VerbosityLevel through to ObservableLogger so "minimal"
+              // can actually suppress live console output (not just dashboard output).
+              // Safe to pass unconditionally; verbosity defaults to "normal" when
+              // observability is not enabled, preserving original logging behavior.
+              verbosity,
             };
             const logger = yield* makeObservableLogger(loggerConfig);
 
-            // Create renderer (no-op when not in status mode)
-            const renderer = isStatusMode
-              ? makeStatusRenderer(logger)
-              : null;
+            // Create renderer (no-op when not in status mode). `eb` (acquired
+            // above, Phase 0.2) lets the renderer track sub-agent
+            // AgentStarted/AgentCompleted events into collapsed live lines
+            // (Task 7, observability unified run-tree).
+            //
+            // No cast: `status-renderer.ts` declares its own minimal `EbLike`
+            // (only the `on` half) whose generic is constrained to the real
+            // `AgentEventTag` from `@reactive-agents/core`, so this module's
+            // `EbLike` (runtime-context.ts) is structurally assignable to it.
+            //
+            // ROOT-ONLY (`isRootExecution`), same reason as the reasoning-stream
+            // subscription above: the renderer subscribes to AgentStarted/
+            // AgentCompleted on the SHARED EventBus, so one root renderer already
+            // observes every descendant. Constructing one per sub-agent too would
+            // make each child render a spurious `spawn-agent → <itself>` line and
+            // make N concurrent children each render all N siblings' lines.
+            const renderer =
+              isStatusMode && isRootExecution
+                ? makeStatusRenderer(logger, process.stdout, eb)
+                : null;
 
             // Start status renderer before events flow
             if (renderer) yield* renderer.start();
@@ -1651,6 +1719,25 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 executeCoreWithLogger as unknown as Effect.Effect<TaskResult, RuntimeErrors>,
                 { taskId: task.id, agentId: task.agentId },
               );
+              // Roll up sub-agent dashboards BEFORE the root's own flush() —
+              // this is the fix for a sub-agent printing its own dashboard
+              // mid-stream: only the ROOT ever drains the registry and attaches,
+              // so a sub-agent never does this even though it shares the
+              // ExecutionEngine code path.
+              if (isRootExecution) {
+                const childRegistryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
+                if (childRegistryOpt._tag === "Some") {
+                  const children = yield* childRegistryOpt.value.drain();
+                  // Always attach — even an empty array — so `childrenRef` is
+                  // RESET every run, not only when this particular run happened
+                  // to spawn sub-agents. `drain()` already cleared the registry
+                  // for the NEXT run; skipping attachChildren([]) here would
+                  // leave `attachChildren`'s Ref.set() holding whatever a PRIOR
+                  // run last set, so a childless run would still render the
+                  // previous run's stale sub-agent dashboards.
+                  yield* obs.attachChildren(children);
+                }
+              }
               // Flush after the root span closes so spans are fully recorded
               yield* obs.flush().pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4198", tag: errorTag(err) })));
               return taskResult;

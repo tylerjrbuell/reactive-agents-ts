@@ -8,6 +8,7 @@
 
 import { Effect, Option } from "effect";
 import { EventBus } from "@reactive-agents/core";
+import { ChildDashboardRegistry } from "@reactive-agents/observability";
 import type { SubAgentResult } from "@reactive-agents/tools";
 import type {
   SubAgentTaskArgs,
@@ -87,8 +88,15 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
     // degrades gracefully (undefined ⇒ today's isolated-bus behavior).
     Effect.gen(function* () {
       const busOpt = yield* Effect.serviceOption(EventBus);
+      // Resolve the run's ChildDashboardRegistry from ambient context — same
+      // pattern as EventBus above. For a root-level spawn this is the root's
+      // own registry; for a nested (recursive) spawn it's whatever registry
+      // was threaded into THIS agent's own light runtime, which — thanks to
+      // sub-agent-executor.ts always re-threading it — is still the root's.
+      const registryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
       const runtimeShared: SubAgentRuntimeShared = {
         sharedEventBus: Option.getOrUndefined(busOpt),
+        sharedChildDashboardRegistry: Option.getOrUndefined(registryOpt),
       };
       const task =
         typeof args.task === "string"
@@ -123,8 +131,15 @@ export const makeSpawnHandlers = (deps: SpawnHandlerDeps): SpawnHandlers => {
   const spawnAgentsHandler = (args: Record<string, unknown>) =>
     Effect.gen(function* () {
       const busOpt = yield* Effect.serviceOption(EventBus);
+      // Resolve the run's ChildDashboardRegistry from ambient context — same
+      // pattern as EventBus above. For a root-level spawn this is the root's
+      // own registry; for a nested (recursive) spawn it's whatever registry
+      // was threaded into THIS agent's own light runtime, which — thanks to
+      // sub-agent-executor.ts always re-threading it — is still the root's.
+      const registryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
       const runtimeShared: SubAgentRuntimeShared = {
         sharedEventBus: Option.getOrUndefined(busOpt),
+        sharedChildDashboardRegistry: Option.getOrUndefined(registryOpt),
       };
       const rawTasks = Array.isArray(args.tasks)
         ? (args.tasks as unknown[])

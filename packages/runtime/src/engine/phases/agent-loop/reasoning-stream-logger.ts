@@ -2,9 +2,8 @@
  * Live-stream debug logger for ReasoningStepCompleted events.
  *
  * Subscribes to the EventBus and renders thought/action/observation text at
- * verbose verbosity, with full prompt-trace support when `logModelIO` is on
- * (renders the FC messages array if present, falling back to legacy
- * system+user format).
+ * verbose verbosity. Model-io logging is handled exclusively by LLMExchangeEmitted
+ * (the single chokepoint at the LLMService layer).
  *
  * Extracted from `execution-engine.ts:981-1033` (W23 step 6a-7) to shrink
  * the engine module without changing behavior.
@@ -37,32 +36,6 @@ export const subscribeReasoningStreamLogger = (
     const unsubscribe = yield* eb.on(
       "ReasoningStepCompleted",
       (event) => {
-        // Prompt trace: log full conversation thread when logModelIO is enabled.
-        if (event.prompt && capturedLogModelIO) {
-          const pass = event.kernelPass ?? event.strategy;
-          const indent = (s: string) => s.replace(/\n/g, "\n    ");
-
-          // Prefer full FC messages array (role-labelled) over flat text
-          if (event.messages && event.messages.length > 0) {
-            const threadLines = event.messages.map((m) =>
-              `[${m.role.toUpperCase()}] ${m.content}`,
-            ).join("\n    ────\n    ");
-            const sysLine = `── system ──\n    ${indent(event.prompt.system)}`;
-            const rawLine = event.rawResponse
-              ? `\n    ── raw response ──\n    ${indent(event.rawResponse)}`
-              : "";
-            return capturedObs
-              .debug(`  ┄ [model-io:${pass}]\n    ${sysLine}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}${rawLine}`)
-              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-stream-logger.ts:log-model-io-thread", tag: errorTag(err) })));
-          }
-
-          // Fallback: legacy system+user flat format
-          const sysPreview = event.prompt.system;
-          const userPreview = event.prompt.user;
-          return capturedObs
-            .debug(`  ┄ [model-io:${pass}]\n    ── system ──\n    ${indent(sysPreview)}\n    ── user ──\n    ${indent(userPreview)}`)
-            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-stream-logger.ts:log-model-io-flat", tag: errorTag(err) })));
-        }
         const rawContent = event.thought ?? event.action ?? event.observation ?? "";
         // Skip events with no displayable content (e.g. prompt-only events when logModelIO is off)
         if (!rawContent) return Effect.void;

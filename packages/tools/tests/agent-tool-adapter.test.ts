@@ -8,6 +8,7 @@ import {
   createSubAgentExecutor,
   executeAgentTool,
   executeRemoteAgentTool,
+  finalizeSubAgentResult,
   MAX_RECURSION_DEPTH,
   type RemoteAgentClient,
 } from "../src/adapters/agent-tool-adapter.js";
@@ -302,5 +303,31 @@ describe("createSubAgentExecutor — maxIterations respected", () => {
     await executor("simple task");
 
     expect(capturedMaxIter).toBe(3);
+  });
+
+  describe("finalizeSubAgentResult", () => {
+    // SubAgentResult is JSON.stringify'd into the observation the MODEL reads
+    // (tool-execution.ts) and cached/stored as observation memory, so its key
+    // set is a context-budget contract — no telemetry blobs (e.g. the child's
+    // DashboardData, which travels via ChildDashboardRegistry instead).
+    it("emits only model-relevant keys — no telemetry payload rides along", () => {
+      const result = finalizeSubAgentResult(
+        { name: "x" },
+        { output: "done", success: true, tokensUsed: 10, stepsCompleted: 2 },
+      );
+
+      expect(Object.keys(result).sort()).toEqual(
+        [
+          "delegatedToolsUsed",
+          "forwardedScratchpadKeys",
+          "stepsCompleted",
+          "subAgentName",
+          "success",
+          "summary",
+          "tokensUsed",
+        ].sort(),
+      );
+      expect(JSON.stringify(result)).not.toContain("childDashboard");
+    });
   });
 });

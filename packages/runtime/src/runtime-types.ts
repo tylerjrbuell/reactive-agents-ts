@@ -899,6 +899,16 @@ export interface RuntimeOptions {
  */
 export interface LightRuntimeOptions {
   agentId: string;
+  /**
+   * Human-facing name for this runtime's agent, surfaced on its `AgentStarted`
+   * event (`agentDisplayName`) and thence to any UI that renders a run tree.
+   *
+   * A sub-agent's `agentId` is uniquified for correlation (`sub-<name>-<epoch>`,
+   * see `sub-agent-executor.ts`), so without this the status renderer showed the
+   * raw id — "sub-researcher-1753469999999" instead of "researcher". Set it to
+   * the sub-agent's given name (`spawn-agent`'s `name` argument).
+   */
+  agentDisplayName?: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
   model?: string;
   thinking?: boolean;
@@ -926,6 +936,22 @@ export interface LightRuntimeOptions {
    */
   sharedEventBus?: import("effect").Context.Tag.Service<
     typeof import("@reactive-agents/core").EventBus
+  >;
+
+  /**
+   * Shared parent `ChildDashboardRegistry` instance — the sub-agent-dashboard-
+   * rollup analog of `sharedEventBus` above. When present, the light runtime's
+   * services can resolve the SAME registry instance the root created, so a
+   * child that itself spawns a grandchild (nested delegation) records the
+   * grandchild's dashboard into the one registry the root drains at
+   * `execution-engine.ts` before its single end-of-run `flush()`. Absent =
+   * no registry is provided to this light runtime (its own recording of ITS
+   * children — done by the SPAWNING agent's outer scope in
+   * `sub-agent-executor.ts`, not inside this light runtime — degrades to a
+   * no-op via `Effect.serviceOption`).
+   */
+  sharedChildDashboardRegistry?: import("effect").Context.Tag.Service<
+    typeof import("@reactive-agents/observability").ChildDashboardRegistry
   >;
 
   // Always-on for sub-agents

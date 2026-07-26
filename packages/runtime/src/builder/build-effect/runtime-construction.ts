@@ -403,7 +403,7 @@ export const buildBaseRuntimeAndEngine = (
       enableReasoning: state._enableReasoning,
       enableTools: state._enableTools,
       enableObservability: state._enableObservability,
-      observabilityOptions: state._observabilityOptions,
+      observabilityOptions: state._enableObservability ? state._observabilityOptions : undefined,
       enablePrompts: state._enablePrompts,
       enableKillSwitch: state._enableKillSwitch,
       enableBehavioralContracts: state._enableBehavioralContracts,

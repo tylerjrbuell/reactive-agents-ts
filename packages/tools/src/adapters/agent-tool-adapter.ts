@@ -133,6 +133,13 @@ export interface SubAgentConfig {
   };
 }
 
+/**
+ * The `spawn-agent` tool's return value — i.e. what gets `JSON.stringify`'d into
+ * the observation the MODEL reads (and what the tool cache / observation memory
+ * stores). Keep it small and model-relevant: telemetry-shaped payloads must NOT
+ * ride here. The child's dashboard specifically travels out-of-band via
+ * `ChildDashboardRegistry.record()` in `sub-agent-executor.ts`, never on this shape.
+ */
 export interface SubAgentResult {
   readonly subAgentName: string;
   readonly success: boolean;

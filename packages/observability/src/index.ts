@@ -87,6 +87,10 @@ export type { ExporterConfig, VerbosityLevel } from "./observability-service.js"
 // ─── Runtime ───
 export { createObservabilityLayer } from "./runtime.js";
 
+// ─── Run Registry (sub-agent dashboard rollup) ───
+export { ChildDashboardRegistry, makeChildDashboardRegistry } from "./run-registry.js";
+export type { ChildDashboardEntry } from "./run-registry.js";
+
 export {
   CortexReporter,
   CortexReporterLive,
