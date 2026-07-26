@@ -339,6 +339,8 @@ Expected: PASS
 
 - [ ] **Step 5: Thread the child's dashboard back through `sub-agent-executor.ts`**
 
+> **Superseded (final whole-branch review, 2026-07-25):** the `childDashboard` field this step adds to `SubAgentRawResult`/`SubAgentResult` turned out to have zero consumers — the real transport is `ChildDashboardRegistry.record(...)` (Step 7), called before `raw` is built. Because `SubAgentResult` is the `spawn-agent` tool's return value, this dead field leaked the full `DashboardData` blob into the model's observation context. It was removed in commit `587b7cfa`. Keep the local `childDashboard` variable inside `childEffect` (it feeds `registry.record(...)`) — do not re-add it to `SubAgentRawResult`/`SubAgentResult`.
+
 In `packages/tools/src/adapters/agent-tool-adapter.ts`, add to `SubAgentRawResult` (after `childRunLedger`, line ~184):
 
 ```typescript
