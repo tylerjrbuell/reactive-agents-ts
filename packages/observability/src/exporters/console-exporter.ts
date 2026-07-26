@@ -254,8 +254,8 @@ export const buildDashboardData = (
   entropyTraceOverride?: readonly DashboardEntropyPoint[],
   /**
    * Sub-agent dashboard entries attached via `ObservabilityService.attachChildren()`
-   * — `data` arrives `unknown` (it crossed the tools-package boundary as an
-   * opaque payload on `SubAgentResult.childDashboard`) but is, by construction,
+   * — `data` arrives `unknown` (it crossed the package boundary as an opaque
+   * payload through `ChildDashboardRegistry.record()`) but is, by construction,
    * a `DashboardData` a child produced via its own `getDashboardData()`.
    */
   childrenOverride?: readonly {

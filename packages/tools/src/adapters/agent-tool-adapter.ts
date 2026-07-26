@@ -133,6 +133,13 @@ export interface SubAgentConfig {
   };
 }
 
+/**
+ * The `spawn-agent` tool's return value — i.e. what gets `JSON.stringify`'d into
+ * the observation the MODEL reads (and what the tool cache / observation memory
+ * stores). Keep it small and model-relevant: telemetry-shaped payloads must NOT
+ * ride here. The child's dashboard specifically travels out-of-band via
+ * `ChildDashboardRegistry.record()` in `sub-agent-executor.ts`, never on this shape.
+ */
 export interface SubAgentResult {
   readonly subAgentName: string;
   readonly success: boolean;
@@ -143,14 +150,6 @@ export interface SubAgentResult {
   readonly delegatedToolsUsed?: readonly string[];
   /** Scratchpad keys forwarded to the parent with a `sub:<agentName>:` prefix */
   readonly forwardedScratchpadKeys?: readonly string[];
-  /**
-   * The child's DashboardData, captured with console printing suppressed
-   * (emitConsole:false), rolled up into the parent's single end-of-run
-   * dashboard instead of the child printing its own. Opaque here (`unknown`)
-   * to avoid a dependency on `@reactive-agents/observability`'s DashboardData
-   * type — the runtime layer that consumes it knows the concrete shape.
-   */
-  readonly childDashboard?: unknown;
 }
 
 /**
@@ -175,12 +174,6 @@ export interface SubAgentRawResult {
   readonly stepsCompleted?: number;
   readonly delegatedToolsUsed?: readonly string[];
   readonly scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
-  /**
-   * The child's DashboardData, captured with console printing suppressed
-   * (emitConsole:false), rolled up into the parent's single end-of-run
-   * dashboard. See `SubAgentResult.childDashboard`.
-   */
-  readonly childDashboard?: unknown;
 }
 
 /**
@@ -260,7 +253,6 @@ export const finalizeSubAgentResult = (
     stepsCompleted: raw.stepsCompleted,
     delegatedToolsUsed: raw.delegatedToolsUsed,
     forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
-    childDashboard: raw.childDashboard,
   };
 };
 

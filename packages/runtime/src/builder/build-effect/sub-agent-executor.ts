@@ -634,7 +634,11 @@ export const buildSubAgentTask = (
           stepsCompleted: result.metadata.stepsCount ?? 0,
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
-          ...(childDashboard !== undefined ? { childDashboard } : {}),
+          // NOTE: `childDashboard` deliberately does NOT ride on `raw` — the
+          // registry `record()` above is its ONLY transport. `raw` becomes the
+          // `SubAgentResult` the model sees serialized in its observation, so a
+          // DashboardData blob here would leak phases/tools/alerts/entropyTrace
+          // straight into the LLM's context (and the tool cache) for free.
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }

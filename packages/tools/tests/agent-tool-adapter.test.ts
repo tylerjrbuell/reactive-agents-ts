@@ -306,28 +306,28 @@ describe("createSubAgentExecutor — maxIterations respected", () => {
   });
 
   describe("finalizeSubAgentResult", () => {
-    it("forwards childDashboard from the raw result onto SubAgentResult", () => {
+    // SubAgentResult is JSON.stringify'd into the observation the MODEL reads
+    // (tool-execution.ts) and cached/stored as observation memory, so its key
+    // set is a context-budget contract — no telemetry blobs (e.g. the child's
+    // DashboardData, which travels via ChildDashboardRegistry instead).
+    it("emits only model-relevant keys — no telemetry payload rides along", () => {
       const result = finalizeSubAgentResult(
         { name: "x" },
-        {
-          output: "done",
-          success: true,
-          tokensUsed: 10,
-          childDashboard: { tokenCount: 1 },
-        },
+        { output: "done", success: true, tokensUsed: 10, stepsCompleted: 2 },
       );
 
-      expect(result.childDashboard).toBeDefined();
-      expect(result.childDashboard).toEqual({ tokenCount: 1 });
-    });
-
-    it("leaves childDashboard undefined when raw doesn't have one", () => {
-      const result = finalizeSubAgentResult(
-        { name: "x" },
-        { output: "done", success: true, tokensUsed: 10 },
+      expect(Object.keys(result).sort()).toEqual(
+        [
+          "delegatedToolsUsed",
+          "forwardedScratchpadKeys",
+          "stepsCompleted",
+          "subAgentName",
+          "success",
+          "summary",
+          "tokensUsed",
+        ].sort(),
       );
-
-      expect(result.childDashboard).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain("childDashboard");
     });
   });
 });
