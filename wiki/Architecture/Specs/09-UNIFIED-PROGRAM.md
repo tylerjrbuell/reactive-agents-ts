@@ -103,13 +103,39 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > the terminal pass's facts never reached the receipt. `kernel/ledger/run-scope.ts` merges a pass
 > with seq re-base + `pass` provenance; `engine/run-ledger-scope.ts` is the engine seam; gated by
 > `check-cross-cutting.sh` Check 7. Plan: [[../../Planning/Implementation-Plans/2026-07-24-wave-c2-ledger-run-scope]].
-> **Next: C.2 slice 2** (engine-phase + sub-agent ledger entries — a child's ledger merges into its
-> parent's under `sub-agent:<name>`, the substrate is now in place), then slice 3 (llm-exchange/replay re-base).
+> **Wave C.2 slice 2 SHIPPED 2026-07-24 (`0ebd05de`):** a sub-agent's ledger merges into its parent's
+> under `sub-agent:<name>` (nested provenance innermost-wins). Load-bearing fix was `inline-act.ts` —
+> delegation runs the engine's INLINE loop, which built steps but no ledger.
+> **Wave C.2 slice 3 SHIPPED 2026-07-25 — C1's stream half, in three parts:**
+> - **3a (`416cfccd`)** — `ledger-entry` TraceEvent kind + `normalize.ts` case. The C.1 tap published on
+>   the EventBus but `toTraceEvent` returned `null` for it, so the ledger never reached the trace JSONL
+>   at all. Per the ratified reading's point 3 ("the ledger is CANONICAL for all new readers — receipt,
+>   **stream**, journal"), this is the stream reader landing.
+> - **3b-i (`ab6b3571`)** — the inline path publishes its ledger. Closes the registered
+>   `runLedger`-on-the-live-engine-path drop (below).
+> - **3b-ii (`c168ee57`) — the C1 WRITE-PATH hole closed.** C1's "no second store" has two halves;
+>   the single-write-path half was unenforced. `check-ledger-writes.sh` fenced the append API to
+>   `kernel/ledger/`, but `projectStepsToLedger` calls that API from INSIDE the fence and was callable
+>   from anywhere — and the script only searched `packages/reasoning`. Four ledger factories existed
+>   where the invariant assumes one; three announced nothing. Measured: `code-action` object=3/stream=0,
+>   `reflexion` object and stream **DISJOINT** (`[tool-result×2]` vs `[requirement, verdict]×2`),
+>   `inline-act` object=2/stream=0 — i.e. **GH #188's divergence was alive in the tree**, which C1
+>   exists to kill. Fixed with ONE announced seam (`kernel/ledger/ledger-sink.ts` `growRunLedger`):
+>   growth and publication are a single act, announced at CONSTRUCTION so the stream stays live.
+>   Gate extended to confine `projectStepsToLedger` to the ledger home across BOTH packages
+>   (`kernel-state.ts` exempt — it is the `transitionState` chokepoint, announced by the runner tap).
+>   Pinned per-strategy by `ledger-announced-seam.test.ts`, red-on-cut at gate and test.
+>
+> **Remaining for Wave C:** 3c — tool-call convergence (diagnose/receipt read ledger queries instead of
+> their own tool-call event kinds; byte-sensitive, needs equivalence pins). NOTE: the original slice-3
+> framing of "llm-exchange/replay re-base" was a FALSE PREMISE — llm-exchange carries raw prompts for
+> byte-exact golden replay and is deliberately not ledger data; it is explicitly out of scope.
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
 > `scripts/check-cross-cutting.sh` gates it in CI. `plan-execute`/`code-action` per-iteration repair
-> gap and the `runLedger`-on-the-live-engine-path drop remain OPEN (see DEBT-REGISTER §3).
+> gap remains OPEN (see DEBT-REGISTER §3); the `runLedger`-on-the-live-engine-path drop is **CLOSED**
+> (Wave C.2 slice 3b, 2026-07-25).
 
 ### Pre-release board (historical, 2026-07-12)
 

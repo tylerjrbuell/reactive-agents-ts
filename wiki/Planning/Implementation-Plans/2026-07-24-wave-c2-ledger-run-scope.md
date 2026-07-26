@@ -104,10 +104,46 @@ Slice 3 therefore splits:
   `packages/trace/src/normalize.ts` (the `case`). Pinned unit (mapping +
   iter-from-entries) and e2e (bus→bridge→recorder, red-on-cut). Non-behavioural
   for replay/diagnose — purely adds a stream.
-- **3b (deferred).** tool-call convergence: diagnose/receipt read ledger queries
+- **3b-i (shipped `ab6b3571`).** The inline path publishes its ledger. Closes the
+  registered `runLedger`-on-the-live-engine-path drop.
+- **3b-ii (shipped `c168ee57`) — the C1 write-path hole.** Investigating 3b-i's
+  scope surfaced that the defect was structural, not a missing call. C1's "no
+  second store" has two halves; only reader convergence was enforced.
+  `check-ledger-writes.sh` fenced the append API to `kernel/ledger/`, but
+  `projectStepsToLedger` calls that API from *inside* the fence and was callable
+  from anywhere — and the script only searched `packages/reasoning`, so the
+  engine's inline loop was never covered. Four ledger factories where the
+  invariant assumes one; three announced nothing. Measured on the real engine:
+
+  | path | object | stream |
+  |---|---|---|
+  | `code-action` | `[tool-invocation, tool-result×2]` | `[]` |
+  | `reflexion` | `[tool-result×2]` | `[requirement, verdict]×2` — **disjoint** |
+  | `inline-act` | `[tool-invocation, tool-result]` | `[]` |
+
+  That is GH #188's stream divergence, which C1 exists to kill, alive in the tree.
+  Fix: ONE announced seam, `kernel/ledger/ledger-sink.ts` `growRunLedger` — growth
+  and publication are a single act, so a caller cannot obtain the grown ledger
+  without the delta being published. Announced at CONSTRUCTION, keeping the stream
+  **live**; a terminal reconciler (considered and rejected) would have made trace
+  consumers wait for run end and re-introduced a second, lagging store.
+  Gate extended to fence `projectStepsToLedger` across both packages. Pinned
+  per-strategy (`ledger-announced-seam.test.ts`), red-on-cut at gate and test.
+- **3c (deferred).** tool-call convergence: diagnose/receipt read ledger queries
   instead of their own tool-call event kinds. Byte-sensitive (golden fixtures) —
   its own slice, behind equivalence pins. Replay's llm-exchange is explicitly
   **out of scope** (not ledger data).
+
+### Method note (worth keeping)
+
+Both defects in this slice were found by **probe with a control arm**, not by
+reading code. The structural read said "inline publishes nothing" and was right;
+it also said "reflexion's object view is lossy", which was **wrong** — the probe
+showed the two views were disjoint, a different defect needing a different fix.
+An earlier probe in this slice reported a clean-looking verdict that was actually
+a malformed arm (`toolcall=0` ⇒ the tool never ran) — the same trap that cost a
+long stretch in slice 2. Every ledger probe here carries a control assertion, and
+so does every test written from one.
 
 ## Non-goals
 
