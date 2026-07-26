@@ -126,10 +126,20 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 >   (`kernel-state.ts` exempt — it is the `transitionState` chokepoint, announced by the runner tap).
 >   Pinned per-strategy by `ledger-announced-seam.test.ts`, red-on-cut at gate and test.
 >
-> **Remaining for Wave C:** 3c — tool-call convergence (diagnose/receipt read ledger queries instead of
-> their own tool-call event kinds; byte-sensitive, needs equivalence pins). NOTE: the original slice-3
-> framing of "llm-exchange/replay re-base" was a FALSE PREMISE — llm-exchange carries raw prompts for
-> byte-exact golden replay and is deliberately not ledger data; it is explicitly out of scope.
+> - **3c (`27e81ca8`)** — the analyzer reads the ledger for tool facts. `tool-call-*` events record only
+>   what a run invoked DIRECTLY, so a delegating parent showed `[spawn-agent]` against a 9-entry ledger
+>   spanning two children — and `deliverableProduced` reported "no deliverable-file write seen" for a run
+>   whose delegate had written it. Ledger-preferred with an event fallback (historical JSONL + golden
+>   fixtures byte-stable), declining the ledger view when it holds no tool entries so a richer substrate
+>   can never regress. `tools[]` stays on the event view (transport-level `calls`/`truncated`).
+>
+> **WAVE C.2 COMPLETE.** C1's ruling is satisfied on both halves: the ledger is the substrate with a
+> single enforced write path (`growRunLedger` + gate) and it is canonical for the receipt (C.1 slice 2),
+> the stream (3a/3b) and the analyzer (3c). Write-path enforcement ratified:
+> [[../../Decisions/2026-07-25-c1-write-path-enforcement]].
+> NOTE: the original slice-3 framing of "llm-exchange/replay re-base" was a FALSE PREMISE — llm-exchange
+> carries raw prompts for byte-exact golden replay and is deliberately not ledger data; out of scope.
+> **Next program step: Wave D (4c Projector) ∥ Wave E (5a Assessment)** per §4.
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
