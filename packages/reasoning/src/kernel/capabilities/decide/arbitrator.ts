@@ -733,6 +733,14 @@ export interface ArbitrationContext {
   readonly maxIterations?: number;
   readonly task: string;
   readonly steps: readonly ReasoningStep[];
+  /**
+   * The run-scoped RunLedger. Carries facts `steps` structurally cannot: a
+   * sub-agent's tool calls and artifacts, merged under `sub-agent:<name>`
+   * (Wave C.2 slice 2). Read by the post-condition gate so a DELEGATED
+   * deliverable counts as produced. Populated once, in
+   * `arbitrationContextFromState`, so no call site can forget it.
+   */
+  readonly ledger?: import("../../ledger/run-ledger.js").RunLedger;
   readonly toolsUsed: ReadonlySet<string>;
   readonly requiredTools: readonly string[];
   /** Run-wide controller decision history (state.controllerDecisionLog). */
@@ -1013,6 +1021,7 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
   if (conditions.length === 0) return verdict; // fall back to prose, as today
 
   const result = verifyPostConditions(conditions, ctx.steps, {
+    ledger: ctx.ledger,
     output: verdict.output,
   });
   if (result.unmet.length === 0) return verdict; // state-grounded success
@@ -1684,6 +1693,10 @@ export function arbitrationContextFromState(
     maxIterations: state.meta.maxIterations as number | undefined,
     task: input.task,
     steps: state.steps,
+    // Wave C.2 — the run-scoped ledger, populated HERE (the one builder every
+    // arbitration call site goes through) rather than at each caller, so a new
+    // call site cannot silently drop the delegated-work evidence.
+    ledger: state.ledger,
     toolsUsed: state.toolsUsed,
     requiredTools: input.requiredTools ?? [],
     controllerDecisionLog: state.controllerDecisionLog,

@@ -24,6 +24,7 @@
 //     in the ledger, NOT from the real filesystem.
 
 import type { ReasoningStep } from "../../../types/index.js";
+import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { getMissingRequiredToolsFromSteps } from "./requirement-state.js";
 
 // ─── PostCondition union ────────────────────────────────────────────────────
@@ -82,6 +83,23 @@ export interface PostConditionResult {
 export interface VerifyOptions {
   /** The assembled deliverable output, consulted by OutputContains. */
   readonly output?: string;
+  /**
+   * The run-scoped RunLedger, consulted by ArtifactProduced (2026-07-26).
+   *
+   * `steps` are the CURRENT agent's own steps. A delegated write therefore does
+   * not appear in them: the parent's steps hold `spawn-agent`, and the child's
+   * `file-write` lives only in the run ledger, merged under `sub-agent:<name>`
+   * by Wave C.2 slice 2. Without this the gate failed a run whose sub-agent had
+   * demonstrably written the deliverable — observed live: an orchestrator that
+   * delegated the write got
+   * `Post-condition(s) unmet: You still must: write the file ./cryptos.md`
+   * while `./cryptos.md` existed on disk with the correct content, and
+   * `receipt.toolsUsed` already listed `file-write`.
+   *
+   * Optional so every existing caller and test keeps its exact behaviour; when
+   * absent the check is steps-only, as before.
+   */
+  readonly ledger?: RunLedger;
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -207,7 +225,25 @@ function isPathArgKey(key: string): boolean {
 function isArtifactProduced(
   path: string,
   steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
 ): boolean {
+  // ── Ledger `artifact` entries first (2026-07-26) ──────────────────────────
+  // An `artifact` entry is minted (artifact-projection.ts) ONLY from a
+  // SUCCESSFUL observation of a tool DECLARING `produces:"file"`, already linked
+  // by toolCallId to the action whose args named the path. That is the same
+  // no-false-met contract the steps scan below enforces by hand, on a broader
+  // vocabulary (declared `produces` covers code-execute / shell-execute writes
+  // that the 4-name WRITING_TOOL_NAMES set cannot see).
+  //
+  // Crucially the ledger is RUN-scoped: a sub-agent's entries are merged into
+  // its parent's (Wave C.2 slice 2, stamped `sub-agent:<name>`), so a DELEGATED
+  // write is visible here while it is structurally absent from `steps` — the
+  // parent's steps hold only `spawn-agent`. `op` is checked so a `delete` entry
+  // can never satisfy "produced".
+  for (const entry of entriesOfKind(ledger, "artifact")) {
+    if (entry.op === "delete") continue;
+    if (writtenPathSatisfies(entry.path, path)) return true;
+  }
   // Collect WRITING-tool action steps' (id -> raw path-args). Non-writing tools
   // (e.g. file-read) are excluded so a read of the path cannot satisfy
   // "produced". Keyed by toolCallId only — the union of all write paths is
@@ -288,7 +324,7 @@ export function verify(
           getMissingRequiredToolsFromSteps(steps, [condition.tool]).length === 0;
         break;
       case "ArtifactProduced":
-        satisfied = isArtifactProduced(condition.path, steps);
+        satisfied = isArtifactProduced(condition.path, steps, opts?.ledger);
         break;
       case "OutputContains":
         satisfied = output.includes(condition.pattern);
