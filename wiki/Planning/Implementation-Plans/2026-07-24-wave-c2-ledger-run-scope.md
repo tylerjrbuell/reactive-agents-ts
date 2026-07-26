@@ -1,6 +1,6 @@
 # Wave C.2 — the ledger becomes run-scoped
 
-**Status:** slice 1 in progress (2026-07-24)
+**Status:** WAVE C.2 COMPLETE (slices 1–3 shipped 2026-07-24/25)
 **Program:** [[../../Architecture/Specs/09-UNIFIED-PROGRAM]] §7 — C1 "one event store"
 **Predecessor:** [[2026-07-22-wave-c1-ledger-convergence]] (slices 1–3 shipped 2026-07-22)
 **Register:** [[../../Architecture/DEBT-REGISTER]] §3
@@ -94,7 +94,7 @@ trace stream at all — which it did not.
 
 Slice 3 therefore splits:
 
-- **3a (additive, shipped `TBD`).** Wire the existing C.1 `LedgerEntryAppended`
+- **3a (shipped `416cfccd`).** Wire the existing C.1 `LedgerEntryAppended`
   bus tap into the trace bridge as a new `ledger-entry` TraceEvent. Before this
   the tap published on the EventBus but `toTraceEvent` returned `null` for it, so
   the ledger was siloed from the trace JSONL. Now the run's append-only record
@@ -129,10 +129,15 @@ Slice 3 therefore splits:
   consumers wait for run end and re-introduced a second, lagging store.
   Gate extended to fence `projectStepsToLedger` across both packages. Pinned
   per-strategy (`ledger-announced-seam.test.ts`), red-on-cut at gate and test.
-- **3c (deferred).** tool-call convergence: diagnose/receipt read ledger queries
-  instead of their own tool-call event kinds. Byte-sensitive (golden fixtures) —
-  its own slice, behind equivalence pins. Replay's llm-exchange is explicitly
-  **out of scope** (not ledger data).
+- **3c (shipped `27e81ca8`).** tool-call convergence: `analyze.ts` reads the ledger
+  for tool facts. `tool-call-*` events record only what a run invoked DIRECTLY, so
+  a delegating parent showed `[spawn-agent]` against a 9-entry ledger spanning two
+  children — and `deliverableProduced` reported "no deliverable-file write seen"
+  for a run whose delegate HAD written it. Ledger-preferred with an event fallback
+  (historical JSONL + golden fixtures byte-stable), declining the ledger view when
+  it carries no tool entries so a richer substrate cannot regress. `tools[]` stays
+  event-based (transport-level `calls`/`truncated`). Replay's llm-exchange is
+  explicitly **out of scope** (not ledger data).
 
 ### Method note (worth keeping)
 
