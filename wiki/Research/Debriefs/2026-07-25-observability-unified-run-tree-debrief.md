@@ -4,7 +4,16 @@
 **Branch:** `worktree-observability-unified-run-tree` (off `wave-c2-subagent-ledger-merge` @ `145671e6`)
 **Plan:** `wiki/Planning/Implementation-Plans/2026-07-24-observability-unified-run-tree-plan.md`
 **Spec:** `wiki/Architecture/Design-Specs/2026-07-24-observability-unified-run-tree-design.md`
-**Method:** Subagent-driven development (fresh implementer + independent reviewer per task, controller-verified test counts, controller-run E2E against a live Ollama model)
+**Method:** Subagent-driven development (fresh implementer + independent reviewer per task, controller-verified test counts, controller-run E2E against a live Ollama model, final whole-branch review)
+
+## Whole-branch final review (post-Task-8)
+
+A whole-branch review (viewing all 20 task commits as one unit, something no single task's reviewer was positioned to do) found two real cross-task issues, both fixed and re-verified before merge:
+
+- **Critical — `SubAgentResult.childDashboard` was a dead field leaking a full metrics blob into the model's context.** Task 3's transport design evolved mid-task (Steps 5-6 added this field to carry dashboard data to the parent; Step 7 replaced it with `ChildDashboardRegistry`), but nobody deleted the now-redundant field. Since `SubAgentResult` is the `spawn-agent` tool's literal return value, and the kernel's tool-execution path does `JSON.stringify(r.result)` to build the model-visible observation, every successful sub-agent dispatch was serializing `phases[]`/`tools[]`/`alerts[]`/`entropyTrace[]` into the LLM's context (and the semantic tool-result cache, and observation memory). Fixed in `587b7cfa` by deleting the field from `SubAgentRawResult`/`SubAgentResult`/`finalizeSubAgentResult` while leaving the real registry-based transport untouched.
+- **Important — Task 7's TTY status renderer reintroduced the exact fan-out bug Task 5 fixed for a different subscription.** `makeStatusRenderer(...)`'s construction was gated only on `isStatusMode` (TTY check), not on root-vs-sub-agent — so under a real TTY, every sub-agent's own execution-engine invocation built its own renderer and subscribed to the shared EventBus, exactly the "subscribe once per invocation on a shared bus" shape `669f6571` had already removed for `subscribeReasoningStreamLogger`. Fixed in `202ef2fb` by applying the same root-only gate, and extracting one named `isRootExecution` local used at all 3 sites in `execution-engine.ts` that need this discriminator (previously three separate bare `!lp` checks).
+
+This is the strongest evidence in this project's history for keeping a whole-branch review step even when every task individually passed review — both issues required following code out of the task where it was introduced and into a consumer only a different task's reviewer had context on.
 
 ## What shipped
 
@@ -38,15 +47,17 @@ Four verified logging defects, plus one live-updating UX feature, in the observa
 
 1. **`builder/to-config.ts:184` + `agent-config.ts:642`** — a 4th instance of the "stale default leaks as if explicit" pattern (same class as the 3 fixed in Task 4), reachable via the `builder.toConfig()` → `ReactiveAgents.fromConfig()` config round-trip. Confirmed live: a round-tripped agent that never called `.withObservability()` silently loses ALL console output. Pre-existing, untouched by this plan's diffs, but made consequential by D1's fix (before D1, the flag corruption was cosmetic). **Recommend as an immediate fast-follow.**
 2. **`ChildDashboardRegistry` is per-built-agent, not per-run.** Sequential `.run()` calls on one built agent are safe (each drain clears state before the next run), but concurrent/overlapping `.run()` calls on the same built agent instance would share one registry and misattribute sub-agent entries. Not a regression (pre-fix behavior over-reported to both runs instead of dropping one). Would need a `rootRunId`-keyed registry to close properly.
-3. **Two Minor gaps in Task 7's sub-agent name fix:** the second dispatch site (`local-agent-tools.ts`'s static `.withSubAgent()` path) is fixed but unpinned by a test; and `execution-engine.ts`'s actual `eb` argument to `makeStatusRenderer()` is unpinned (a wiring test constructs the renderer directly rather than verifying the real call site passes `eb` — a silent-kill seam per the project's "wire it AND pin it" doctrine).
+3. **Two Minor gaps in Task 7's sub-agent name fix (the 2nd is now partially addressed by the whole-branch fix round, see below):** the second dispatch site (`local-agent-tools.ts`'s static `.withSubAgent()` path) is fixed but unpinned by a test; `execution-engine.ts`'s actual `eb` argument to `makeStatusRenderer()` was flagged as unpinned at Task 7's own review — the whole-branch fix round's `status-renderer-root-only.test.ts` now does source-anchor to the literal `makeStatusRenderer(logger, process.stdout, eb)` call site as part of pinning the root-gate, which narrows but may not fully close this gap (it confirms the text of the call, not a full runtime behavioral pin of `eb` flowing correctly).
 4. **Root agent's own display name still carries an epoch-timestamp suffix** (`builder.ts`, `${name}-${Date.now()}`) — same display-name defect class Task 7 fixed for sub-agents, one level up. Scoped out because routing the root through the explicit `agentDisplayName` field would bypass an existing `^cortex-desk-\d+$` placeholder filter; needs its own design decision, not a copy-paste of Task 7's fix.
 5. **A completed sub-agent's collapsed line leaves two permanent scrollback lines** (the running `●` line and the frozen `✓`/`✗` line), not one as originally specified — a consequence of the accepted "no per-line redraw region" simplification. Cosmetic.
+6. **D1 is not fixed in TTY/status mode.** Every verified minimal-mode fix (Task 4's two live-print gates, plus the 5th path found in Task 8) suppresses output through `ObservableLogger`/`ObservabilityService`'s live-print paths — but in status mode (`isStatusMode`, a real TTY), `loggerConfig.live` is forced `false` and the status renderer (`status-renderer.ts`) subscribes to the same event stream directly, ahead of those gates, with no verbosity parameter of its own. Under a real TTY with `verbosity: "minimal"`, the spinner status line and `printLine` output (tool results, warnings, completion, sub-agent lines) still print. This is genuinely in-scope per the design spec (§3.2 requires the verbosity filter to apply to the live renderer too) and was found by the whole-branch review, not deferred deliberately during the 8 tasks — flagged here rather than fixed, since closing it means threading `verbosity` into `makeStatusRenderer` and gating `printLine`/`redraw`, a real (if small) design decision better made deliberately than as a last-minute addition. All of this plan's own minimal-mode evidence (the debrief's before/after table, and every task's E2E checks) used piped/non-TTY output, where this gap doesn't apply.
 
-## Verification (final state)
+## Verification (final state, after the whole-branch review's 2 fixes)
 
 - `packages/observability`: 228 pass / 0 fail.
-- `packages/runtime`: 1374 pass / 1 skip / 0 fail.
-- `packages/tools`: 959 pass / 0 fail.
+- `packages/runtime`: 1377 pass / 1 skip / 0 fail.
+- `packages/tools`: 958 pass / 0 fail (net -1: 2 dead-field tests deleted, 1 stronger negative-assertion test added).
 - `bunx tsc --noEmit` clean on all three packages.
 - `bunx turbo run build` and `bunx turbo run typecheck`: all tasks successful.
 - Live E2E against `gemma4:latest` via Ollama, all four verbosity modes, run from inside the repo: all four defects confirmed fixed (see table above).
+- Whole-branch final review: **Ready to merge** (2 findings fixed and re-verified — see "Whole-branch final review" above).
