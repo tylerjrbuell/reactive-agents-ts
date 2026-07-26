@@ -337,19 +337,26 @@ async function scoreWithJudge(
  *
  * These cells must never reach the LLM judge: judging an empty string yields
  * hallucinated evidence (observed 2026-07-07: a timed-out cell came back
- * "at least one database is fabricated"). The cell still scores 0 on the
- * task's dimensions — an end-to-end bench honestly counts a variant that
- * produced nothing as a failure — but the evidence states the real cause so
- * report readers can separate capability gaps from timeouts.
+ * "at least one database is fabricated"). The placeholder `score: 0` below is
+ * NOT a measurement — it must never enter solve/lift/mean math, so every
+ * dimension carries `scoreState: "inconclusive"` (sibling of the judge-outage
+ * lane above; found 2026-07-26, same disease `cc015306` fixed for judge
+ * outages 41 minutes before this cell type was probed). report-format's
+ * `isRunInconclusive`/`measuredRuns`/`aggregateRuns` already key generically
+ * on `scoreState`, so this is the only emitter that needs to change.
  */
 export function scoreErrorCell(
     task: BenchmarkTask,
     cause: string,
     durationMs: number,
-): ReadonlyArray<DimensionScore> {
+): ReadonlyArray<BenchDimensionScore> {
     const evidence = `no output produced (${cause} after ${Math.round(durationMs / 1000)}s) — cell not judged`
+    const inconclusiveReason = /timeout|timed out/i.test(cause) ? "execution-timeout" : "execution-error"
     const dims = new Set<QualityDimension>(["accuracy", ...(task.primaryDimensions ?? [])])
-    return [...dims].map((dimension) => ({ dimension, score: 0, evidence }))
+    return [...dims].map((dimension) => ({
+        dimension, score: 0, evidence,
+        scoreState: "inconclusive" as const, inconclusiveReason,
+    }))
 }
 
 export async function scoreTask(

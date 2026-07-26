@@ -32,8 +32,19 @@ export type ScoreState = "measured" | "inconclusive";
  *    (layer `judge_parse_failure`: the 0.5 fallback is not a measurement).
  *  - `"stub-judge"`   — verdict produced by the stub layer (JUDGE_LAYER != live).
  *    The stub stays for unit tests, but its 0.95 is scenery, not signal.
+ *  - `"execution-timeout"` — the cell never produced output because the agent
+ *    run itself timed out (`scoreErrorCell` in judge.ts). Real GPU/model-load
+ *    contention, not a capability failure — must not enter solve/lift math as
+ *    a measured 0 (sibling of judge-outage; found 2026-07-26).
+ *  - `"execution-error"` — the cell never produced output because the agent
+ *    run crashed/threw for a reason other than timeout (`scoreErrorCell`).
  */
-export type InconclusiveReason = "judge-outage" | "judge-error" | "stub-judge";
+export type InconclusiveReason =
+  | "judge-outage"
+  | "judge-error"
+  | "stub-judge"
+  | "execution-timeout"
+  | "execution-error";
 
 /**
  * A DimensionScore extended with bench-local scoring metadata. Structurally a

@@ -16,7 +16,7 @@
 
 import { describe, it, expect, afterAll } from "bun:test";
 import type { Server } from "bun";
-import { computeReliability, scoreTask } from "../src/judge.js";
+import { computeReliability, scoreErrorCell, scoreTask } from "../src/judge.js";
 import {
   accuracyDimensionOf,
   INCONCLUSIVE_CELL_FRACTION,
@@ -30,7 +30,9 @@ import {
   solveRateOf,
   statusCell,
 } from "../src/report-format.js";
+import { aggregateRuns, computeAllAblation } from "../src/runner.js";
 import { evaluateLiftGate } from "../src/gate/index.js";
+import { getVariant } from "../src/session.js";
 import type {
   BenchDimensionScore,
   BenchmarkTask,
@@ -281,5 +283,74 @@ describe("lift gate under inconclusive runs", () => {
     const verdict = evaluateLiftGate(report([base, cand]), "bare-llm", "ra-full");
     expect(verdict.perTier[0]!.inconclusive).toBe(false);
     expect(verdict.perTier[0]!.candidateMetric).toBe(1);
+  });
+});
+
+// ── end-to-end: a real execution timeout, through the ACTUAL runner pipeline ─
+//
+// Found 2026-07-26 (live harness-warden bench, qwen3:4b, 2/2 reproductions):
+// scoreErrorCell stamped no scoreState, so a genuine execution timeout under
+// real GPU contention (not a model capability failure) was indistinguishable
+// from a measured accuracy=0 — it stayed in solveRate/lift-gate denominators
+// and produced a nonsensical -100% token-overhead reading (a timed-out cell
+// reports tokensUsed:0). This section proves the FULL chain — scoreErrorCell →
+// aggregateRuns → computeAllAblation — now correctly quarantines it, using the
+// real functions (no hand-built "inconclusive" fixture) end to end.
+
+describe("real execution-timeout cell, through scoreErrorCell → aggregateRuns → ablation", () => {
+  const timeoutTask: BenchmarkTask = {
+    id: "rw-2", tier: "real-world", name: "t", prompt: "p",
+    primaryDimensions: ["accuracy"],
+  } as unknown as BenchmarkTask;
+
+  const runFromRealTimeout = (i: number): RunScore => ({
+    runIndex: i,
+    dimensions: scoreErrorCell(timeoutTask, "timeout", 150_090),
+    tokensUsed: 0,
+    durationMs: 150_090,
+    status: "error",
+    output: "",
+  });
+
+  it("a session where EVERY run timed out yields an INCONCLUSIVE cell, not a measured 0", () => {
+    const runs = [runFromRealTimeout(0), runFromRealTimeout(1), runFromRealTimeout(2)];
+    const cellReport = aggregateRuns("rw-2", "qwen3-4b", getVariant("ra-full"), runs);
+
+    expect(cellReport.inconclusive).toBe("execution-timeout");
+    // The old defect: meanScores would carry a fabricated 0 for accuracy.
+    // Correct: accuracy is OMITTED entirely — nothing was measured to report.
+    expect(cellReport.meanScores.find((s) => s.dimension === "accuracy")).toBeUndefined();
+  });
+
+  it("that cell is excluded from computeAllAblation (never poisons a lift verdict)", () => {
+    const baseline = aggregateRuns("rw-2", "qwen3-4b", getVariant("bare-llm"), [
+      { runIndex: 0, dimensions: [{ dimension: "accuracy", score: 0, scoreState: "measured" }],
+        tokensUsed: 500, durationMs: 2000, status: "pass", output: "out" },
+    ]);
+    const candidateAllTimedOut = aggregateRuns("rw-2", "qwen3-4b", getVariant("ra-full"), [
+      runFromRealTimeout(0),
+    ]);
+
+    // measuredReports filtering (runner.ts:1428) is what the real session loop
+    // applies before ablation/verdicts — reproduce that gate here.
+    const measuredReports = [baseline, candidateAllTimedOut].filter((r) => !r.inconclusive);
+    expect(measuredReports).toEqual([baseline]);
+
+    const ablation = computeAllAblation(measuredReports);
+    expect(ablation).toEqual([]); // no paired baseline+candidate survives → no ablation row, not a fabricated one
+  });
+
+  it("a mixed cell (2 measured + 1 real timeout) stays measured, and the timeout run is excluded from the mean", () => {
+    const measuredRun = (score: number, i: number): RunScore => ({
+      runIndex: i,
+      dimensions: [{ dimension: "accuracy", score, scoreState: "measured" }],
+      tokensUsed: 400, durationMs: 5000, status: "pass", output: "out",
+    });
+    const runs = [measuredRun(1, 0), measuredRun(1, 1), runFromRealTimeout(2)];
+    const cellReport = aggregateRuns("rw-2", "qwen3-4b", getVariant("ra-full"), runs);
+
+    expect(cellReport.inconclusive).toBeUndefined();
+    expect(cellReport.meanScores.find((s) => s.dimension === "accuracy")?.score).toBe(1);
+    expect(measuredRuns(cellReport.runs)).toHaveLength(2);
   });
 });
