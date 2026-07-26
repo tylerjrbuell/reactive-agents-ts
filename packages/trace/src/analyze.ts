@@ -33,6 +33,7 @@ import type {
   InterventionSuppressedEvent,
   HarnessSignalInjectedEvent,
   LLMExchangeEvent,
+  LedgerEntryTraceEvent,
 } from "./events.js";
 
 export interface GuardStat {
@@ -93,6 +94,70 @@ const isSnapshot = (e: TraceEvent): e is KernelStateSnapshotEvent =>
   e.kind === "kernel-state-snapshot";
 const isToolStart = (e: TraceEvent): e is ToolCallEvent => e.kind === "tool-call-start";
 const isCompleted = (e: TraceEvent): e is RunCompletedEvent => e.kind === "run-completed";
+const isLedgerEntryEvent = (e: TraceEvent): e is LedgerEntryTraceEvent =>
+  e.kind === "ledger-entry";
+
+/**
+ * A tool invocation/result as this analyzer needs it, independent of which
+ * view it was recovered from.
+ */
+interface ToolFact {
+  readonly toolName: string;
+  /** Undefined on an invocation; on a result, false iff the tool failed. */
+  readonly ok?: boolean;
+}
+
+/**
+ * Tool facts for a run, preferring the LEDGER (Wave C.2 slice 3c).
+ *
+ * 09 §3 C1 makes the RunLedger the substrate and every other view a projection
+ * of it; the 2026-07-22 ratification's point 3 adds that "no new reader may scan
+ * [another view] when a ledger query answers the same question". `tool-call-*`
+ * events answer a NARROWER question than they appear to: they record only the
+ * tools THIS run invoked directly. A parent that delegates sees exactly one —
+ * `spawn-agent` — while its ledger carries the whole delegated tree, merged
+ * under `sub-agent:<name>` by slice 2. Measured on the real engine: parent
+ * tool-call events `[spawn-agent]` against a 9-entry ledger spanning two
+ * children.
+ *
+ * That gap was not cosmetic. `deliverableProduced` and `substantiveWorkDone`
+ * below drive the honesty verdict, so a run that correctly delegated all of its
+ * work was scored as having done none — reported as an unsupported success
+ * claim. Reading the ledger makes delegated work count as the work it is.
+ *
+ * FALLBACK, deliberately kept: a trace with no `ledger-entry` events (JSONL
+ * written before slice 3a, or a path that grows no ledger) still analyzes off
+ * `tool-call-*` exactly as before, so historical traces and golden fixtures are
+ * byte-stable. This mirrors the receipt re-base in C.1 slice 2, which kept its
+ * steps-derived fallback for the same reason.
+ */
+function toolFacts(events: readonly TraceEvent[]): {
+  readonly starts: readonly ToolFact[];
+  readonly ends: readonly ToolFact[];
+  readonly source: "ledger" | "events";
+} {
+  const entries = events.filter(isLedgerEntryEvent).flatMap((e) => e.entries);
+  if (entries.length > 0) {
+    const starts: ToolFact[] = [];
+    const ends: ToolFact[] = [];
+    for (const raw of entries) {
+      const kind = raw.kind;
+      const toolName = typeof raw.toolName === "string" ? raw.toolName : undefined;
+      if (toolName === undefined) continue;
+      if (kind === "tool-invocation") starts.push({ toolName });
+      else if (kind === "tool-result") ends.push({ toolName, ok: raw.success !== false });
+    }
+    // Only adopt the ledger view if it actually carries tool facts. A run whose
+    // ledger holds only requirement/verdict entries must not blank the
+    // event-derived counts — that would turn a richer substrate into a REGRESSION.
+    if (starts.length > 0 || ends.length > 0) return { starts, ends, source: "ledger" };
+  }
+  return {
+    starts: events.filter(isToolStart).map((e) => ({ toolName: e.toolName })),
+    ends: events.filter(isToolEnd).map((e) => ({ toolName: e.toolName, ok: e.ok !== false })),
+    source: "events",
+  };
+}
 
 export function analyzeInterventions(
   trace: Trace,
@@ -104,7 +169,10 @@ export function analyzeInterventions(
 
   const guards = trace.events.filter(isGuard);
   const snapshots = trace.events.filter(isSnapshot);
-  const toolStarts = trace.events.filter(isToolStart);
+  // Ledger-preferred (slice 3c): a delegating parent invokes one tool directly
+  // (`spawn-agent`) but its ledger carries the whole delegated tree, so the
+  // event view under-counts the run's real tool activity.
+  const toolStarts = toolFacts(trace.events).starts;
   const completed = trace.events.filter(isCompleted).at(-1);
 
   // ── Per-guard stats ──────────────────────────────────────────────────────
@@ -430,8 +498,17 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   const snapshots = ev.filter(isSnapshot);
   const lastSnap = snapshots.at(-1);
   const completed = ev.filter(isCompleted).at(-1);
+  // `tools[]` below stays on the EVENT view on purpose: `calls`/`truncated` are
+  // transport-level facts about what THIS run put on the wire, and
+  // `resultTruncated` has no ledger counterpart. The honesty checks use the
+  // ledger view instead — see `honestyEnds`.
   const toolStarts = ev.filter((e): e is ToolCallEvent => e.kind === "tool-call-start");
   const toolEnds = ev.filter(isToolEnd);
+  // Ledger-preferred (slice 3c). These drive the honesty verdict, where reading
+  // only direct invocations scored a fully-delegating run as having done no
+  // substantive work — i.e. reported an unsupported success claim for a run that
+  // did exactly what it was asked.
+  const honestyEnds = toolFacts(ev).ends;
 
   // ── Honesty (KEYSTONE) ─────────────────────────────────────────────────────
   // An ABSTENTION is an honest decline, not a success claim (2026-07-22).
@@ -454,7 +531,7 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
       (completed === undefined &&
         (lastSnap?.status === "done" ||
           (lastSnap?.terminatedBy ?? "").startsWith("final_answer"))));
-  const okEnds = toolEnds.filter((t) => t.ok !== false);
+  const okEnds = honestyEnds.filter((t) => t.ok !== false);
   const deliverableProduced = okEnds.some((t) => isDeliverableTool(t.toolName));
   const substantiveWorkDone = okEnds.some((t) => !INTROSPECTION_TOOLS.has(t.toolName));
   let label: HonestyCheck["label"];

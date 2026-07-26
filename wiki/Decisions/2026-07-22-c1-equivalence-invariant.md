@@ -50,3 +50,10 @@ invariant delivers both.
   (09 conflict rule: ratification event, not edit-in-passing).
 - The literal flip may be revisited ONLY with bench evidence that a reader
   needs lossless thought/plan history from the ledger.
+
+## Amendment (2026-07-25)
+This decision named "a single write path" as half of C1's goal but left it
+UNENFORCED — `projectStepsToLedger` calls the fenced append API from inside the
+fence, so three unannounced ledger factories accumulated. Enforcement is ratified
+in [[2026-07-25-c1-write-path-enforcement]]; point 3's "the ledger is CANONICAL
+for the stream reader" only became achievable there.

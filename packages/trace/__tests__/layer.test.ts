@@ -81,6 +81,40 @@ test("bridges EventBus StrategySwitched into TraceRecorder as strategy-switched"
   expect(result.some((e) => e.kind === "strategy-switched")).toBe(true)
 })
 
+// Wave C.2 slice 3 — the run ledger reaches the trace stream through the SAME
+// bridge, not a bespoke path. Red-on-cut: drop the `LedgerEntryAppended` case
+// from normalize.ts and this event falls to `default: null` — never recorded.
+test("bridges EventBus LedgerEntryAppended into TraceRecorder as ledger-entry", async () => {
+  const program = Effect.gen(function* () {
+    const bus = yield* EventBus
+    const recorder = yield* TraceRecorderService
+    yield* bus.publish({
+      _tag: "LedgerEntryAppended",
+      agentId: "agent-1",
+      taskId: "run-r4",
+      entries: [
+        { kind: "tool-invocation", seq: 0, iteration: 1, toolName: "file-read" },
+        { kind: "tool-result", seq: 1, iteration: 1, success: true, pass: "sub-agent:worker" },
+      ],
+      timestamp: Date.now(),
+    })
+    yield* Effect.sleep("50 millis")
+    return yield* recorder.snapshot("run-r4")
+  })
+
+  const layers = Layer.provideMerge(
+    TraceBridgeLayer,
+    Layer.mergeAll(EventBusLive, TraceRecorderServiceLive({ dir: null }))
+  )
+  const result = await Effect.runPromise(program.pipe(Effect.provide(layers)))
+  const ledgerEv = result.find((e) => e.kind === "ledger-entry") as
+    | { entries: ReadonlyArray<Record<string, unknown>> }
+    | undefined
+  expect(ledgerEv).toBeDefined()
+  expect(ledgerEv?.entries).toHaveLength(2)
+  expect(ledgerEv?.entries[1].pass).toBe("sub-agent:worker")
+})
+
 test("ignores unknown event types without crashing", async () => {
   const program = Effect.gen(function* () {
     const bus = yield* EventBus

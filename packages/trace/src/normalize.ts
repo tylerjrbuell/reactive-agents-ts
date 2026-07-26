@@ -32,6 +32,7 @@ import type {
   AssessmentEvent,
   ProjectionRenderedEvent,
   ControlResolutionEvent,
+  LedgerEntryTraceEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -413,6 +414,25 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         contentPreview: raw.contentPreview,
         contentLen: raw.contentLen,
         metadata: raw.metadata,
+      }
+      return ev
+    }
+
+    case "LedgerEntryAppended": {
+      // Wave C.2 slice 3 — the run ledger reaches the trace stream. The batch
+      // is published once per kernel iteration boundary; each entry carries its
+      // own ledger `seq` + `kind`, so we surface the whole batch and take this
+      // event's `iter` from the entries' shared `iteration` (they are appended
+      // within one transition). Trace `seq` is the caller's monotonic counter.
+      const first = raw.entries[0] as { iteration?: unknown } | undefined
+      const iter = typeof first?.iteration === "number" ? first.iteration : -1
+      const ev: LedgerEntryTraceEvent = {
+        kind: "ledger-entry",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter,
+        seq,
+        entries: raw.entries,
       }
       return ev
     }

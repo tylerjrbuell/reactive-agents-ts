@@ -138,6 +138,11 @@ function applyTerminalPostConditionGate(
 
   const result = verifyPostConditions(conditions, state.steps, {
     output: deliverableToContent(opts.deliverable),
+    // The run-scoped ledger carries a DELEGATED write (merged `sub-agent:<name>`,
+    // Wave C.2 slice 2); `state.steps` hold only this agent's own `spawn-agent`.
+    // Without it an orchestrator that delegated the deliverable was refused
+    // success while the file existed on disk.
+    ledger: state.ledger,
   });
   if (result.unmet.length === 0) return null; // state-grounded success — proceed
 

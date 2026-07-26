@@ -13,6 +13,7 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { subAgentResultForDisplay } from "@reactive-agents/tools";
 import type { ExecutionContext } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
@@ -96,7 +97,7 @@ export const runInlineObserve = (
         } else {
           const resultStr = typeof rResult === "string"
             ? rResult
-            : JSON.stringify(rResult);
+            : JSON.stringify(subAgentResultForDisplay(rResult));
           const preview = resultStr.length > 120 ? resultStr.slice(0, 120) + "..." : resultStr;
           const charCount = resultStr.length;
           yield* obs.debug(
@@ -111,10 +112,21 @@ export const runInlineObserve = (
       return {
         role: "tool" as const,
         toolCallId: tr.toolCallId,
+        // Wave C.2 — a sub-agent tool result carries the child's stamped
+        // `childRunLedger`, which must never reach the model: it's large,
+        // noise, and its ledger entries echo verbatim text from the child's
+        // OWN run (task args, verification-review prompts quoting the
+        // original task) that can spuriously re-match an unrelated LATER
+        // scenario/guard on whatever consumes this thread (e.g. a
+        // deterministic test provider's own pending pattern cursor, or a
+        // real model getting confused by leaked internal state). This is
+        // the actual LLM-visible message content for the inline path — the
+        // sibling strip in `inline-act.ts`'s own display-text/ledger-metadata
+        // build does not cover this separate observe-phase message builder.
         content:
           typeof tr.result === "string"
             ? tr.result
-            : JSON.stringify(tr.result),
+            : JSON.stringify(subAgentResultForDisplay(tr.result)),
       };
     });
 

@@ -93,6 +93,14 @@ export interface DashboardData {
   readonly tools: readonly DashboardTool[];
   readonly alerts: readonly DashboardAlert[];
   readonly entropyTrace?: readonly DashboardEntropyPoint[];
+  /** Sub-agent dashboards dispatched during this run, rolled up so only the root prints. */
+  readonly children?: readonly {
+    readonly name: string;
+    readonly data: DashboardData;
+    /** Immediate parent sub-agent's name, when this child is a grandchild (or
+     *  deeper) rather than a direct child of the root. Undefined otherwise. */
+    readonly parentName?: string;
+  }[];
 }
 
 // ─── Console Exporter ───
@@ -244,6 +252,17 @@ export const buildDashboardData = (
   metrics: readonly Metric[],
   metricsCollector?: MetricsCollector,
   entropyTraceOverride?: readonly DashboardEntropyPoint[],
+  /**
+   * Sub-agent dashboard entries attached via `ObservabilityService.attachChildren()`
+   * — `data` arrives `unknown` (it crossed the package boundary as an opaque
+   * payload through `ChildDashboardRegistry.record()`) but is, by construction,
+   * a `DashboardData` a child produced via its own `getDashboardData()`.
+   */
+  childrenOverride?: readonly {
+    readonly name: string;
+    readonly data: unknown;
+    readonly parentName?: string;
+  }[],
 ): DashboardData => {
   // Count total tokens from metrics
   let tokenCount = 0;
@@ -480,6 +499,15 @@ export const buildDashboardData = (
     tools,
     alerts,
     entropyTrace,
+    ...(childrenOverride && childrenOverride.length > 0
+      ? {
+          children: childrenOverride.map((c) => ({
+            name: c.name,
+            data: c.data as DashboardData,
+            ...(c.parentName !== undefined ? { parentName: c.parentName } : {}),
+          })),
+        }
+      : {}),
   };
 };
 
@@ -554,10 +582,15 @@ export const makeConsoleExporter = (options: ConsoleExporterOptions = {}) => {
   const exportMetrics = (
     metrics: readonly Metric[],
     metricsCollector?: MetricsCollector,
+    children?: readonly {
+      readonly name: string;
+      readonly data: unknown;
+      readonly parentName?: string;
+    }[],
   ): void => {
     if (!showMetrics || metrics.length === 0) return;
 
-    const dashboardData = buildDashboardData(metrics, metricsCollector);
+    const dashboardData = buildDashboardData(metrics, metricsCollector, undefined, children);
     const dashboard = formatMetricsDashboard(dashboardData);
     console.log(`\n${chalk.hex(C_CYAN).bold("═══ Metrics Summary ═══")}`);
     console.log(dashboard);
@@ -625,8 +658,18 @@ export const formatNumber = (n: number): string => {
 
 /**
  * Format a DashboardData object into a beautiful, scannable dashboard output.
+ *
+ * @param options.nested - When true, suppresses the boxed "Agent Execution
+ * Summary" title (keeping only the compact status/duration/tokens lines).
+ * Used when recursively rendering a sub-agent's dashboard underneath a
+ * "Sub-agent: <name>" heading, so a run with N delegated sub-agents still
+ * prints exactly ONE top-level box — the root's own — instead of N+1.
  */
-export const formatMetricsDashboard = (data: DashboardData): string => {
+export const formatMetricsDashboard = (
+  data: DashboardData,
+  options?: { readonly nested?: boolean },
+): string => {
+  const nested = options?.nested ?? false;
   const lines: string[] = [];
 
   // ── Header box ──────────────────────────────────────────────────────────
@@ -653,15 +696,22 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
     headerLines.push(`Cost:     ~$${data.estimatedCost.toFixed(3)}`);
   }
 
-  lines.push(
-    boxen(headerLines.join("\n"), {
-      title: chalk.bold("Agent Execution Summary"),
-      titleAlignment: "left",
-      padding: { top: 0, bottom: 0, left: 1, right: 1 },
-      borderStyle: "round",
-      borderColor,
-    }),
-  );
+  if (nested) {
+    // No boxed title for a nested (sub-agent) render — the "Sub-agent: <name>"
+    // heading printed by the caller already identifies this block, and only
+    // the root's own box should ever say "Agent Execution Summary".
+    lines.push(...headerLines);
+  } else {
+    lines.push(
+      boxen(headerLines.join("\n"), {
+        title: chalk.bold("Agent Execution Summary"),
+        titleAlignment: "left",
+        padding: { top: 0, bottom: 0, left: 1, right: 1 },
+        borderStyle: "round",
+        borderColor,
+      }),
+    );
+  }
 
   // ── Execution Timeline ───────────────────────────────────────────────────
   if (data.phases.length > 0) {
@@ -896,6 +946,27 @@ export const formatMetricsDashboard = (data: DashboardData): string => {
         : alert.level === "warning" ? "⚠️"
         : "ℹ️";
       lines.push(`${prefix} ${icon}  ${alert.message}`);
+    }
+  }
+
+  // ── Sub-agents ───────────────────────────────────────────────────────────
+  // Always rendered with { nested: true } so a delegated sub-agent's own
+  // "Agent Execution Summary" box never appears — the root's is the only one.
+  if (data.children && data.children.length > 0) {
+    for (const child of data.children) {
+      lines.push("");
+      // Every descendant is recorded into the SAME flat, root-level list
+      // (see run-registry.ts), so a grandchild's heading alone would render
+      // as a misleading SIBLING of its parent. When `parentName` is present
+      // (this child was spawned BY another sub-agent, not the root), show
+      // the lineage in the heading instead of doing a full structural
+      // re-nesting of the box layout.
+      const heading = child.parentName
+        ? `Sub-agent: ${child.parentName} › ${child.name}`
+        : `Sub-agent: ${child.name}`;
+      lines.push(chalk.hex(C_CYAN).bold(heading));
+      const childLines = formatMetricsDashboard(child.data, { nested: true }).split("\n");
+      for (const line of childLines) lines.push(`  ${line}`);
     }
   }
 

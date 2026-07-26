@@ -103,13 +103,74 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > the terminal pass's facts never reached the receipt. `kernel/ledger/run-scope.ts` merges a pass
 > with seq re-base + `pass` provenance; `engine/run-ledger-scope.ts` is the engine seam; gated by
 > `check-cross-cutting.sh` Check 7. Plan: [[../../Planning/Implementation-Plans/2026-07-24-wave-c2-ledger-run-scope]].
-> **Next: C.2 slice 2** (engine-phase + sub-agent ledger entries — a child's ledger merges into its
-> parent's under `sub-agent:<name>`, the substrate is now in place), then slice 3 (llm-exchange/replay re-base).
+> **Wave C.2 slice 2 SHIPPED 2026-07-24 (`0ebd05de`):** a sub-agent's ledger merges into its parent's
+> under `sub-agent:<name>` (nested provenance innermost-wins). Load-bearing fix was `inline-act.ts` —
+> delegation runs the engine's INLINE loop, which built steps but no ledger.
+> **Wave C.2 slice 3 SHIPPED 2026-07-25 — C1's stream half, in three parts:**
+> - **3a (`416cfccd`)** — `ledger-entry` TraceEvent kind + `normalize.ts` case. The C.1 tap published on
+>   the EventBus but `toTraceEvent` returned `null` for it, so the ledger never reached the trace JSONL
+>   at all. Per the ratified reading's point 3 ("the ledger is CANONICAL for all new readers — receipt,
+>   **stream**, journal"), this is the stream reader landing.
+> - **3b-i (`ab6b3571`)** — the inline path publishes its ledger. Closes the registered
+>   `runLedger`-on-the-live-engine-path drop (below).
+> - **3b-ii (`c168ee57`) — the C1 WRITE-PATH hole closed.** C1's "no second store" has two halves;
+>   the single-write-path half was unenforced. `check-ledger-writes.sh` fenced the append API to
+>   `kernel/ledger/`, but `projectStepsToLedger` calls that API from INSIDE the fence and was callable
+>   from anywhere — and the script only searched `packages/reasoning`. Four ledger factories existed
+>   where the invariant assumes one; three announced nothing. Measured: `code-action` object=3/stream=0,
+>   `reflexion` object and stream **DISJOINT** (`[tool-result×2]` vs `[requirement, verdict]×2`),
+>   `inline-act` object=2/stream=0 — i.e. **GH #188's divergence was alive in the tree**, which C1
+>   exists to kill. Fixed with ONE announced seam (`kernel/ledger/ledger-sink.ts` `growRunLedger`):
+>   growth and publication are a single act, announced at CONSTRUCTION so the stream stays live.
+>   Gate extended to confine `projectStepsToLedger` to the ledger home across BOTH packages
+>   (`kernel-state.ts` exempt — it is the `transitionState` chokepoint, announced by the runner tap).
+>   Pinned per-strategy by `ledger-announced-seam.test.ts`, red-on-cut at gate and test.
+>
+> - **3c (`27e81ca8`)** — the analyzer reads the ledger for tool facts. `tool-call-*` events record only
+>   what a run invoked DIRECTLY, so a delegating parent showed `[spawn-agent]` against a 9-entry ledger
+>   spanning two children — and `deliverableProduced` reported "no deliverable-file write seen" for a run
+>   whose delegate had written it. Ledger-preferred with an event fallback (historical JSONL + golden
+>   fixtures byte-stable), declining the ledger view when it holds no tool entries so a richer substrate
+>   can never regress. `tools[]` stays on the event view (transport-level `calls`/`truncated`).
+>
+> **WAVE C.2 COMPLETE.** C1's ruling is satisfied on both halves: the ledger is the substrate with a
+> single enforced write path (`growRunLedger` + gate) and it is canonical for the receipt (C.1 slice 2),
+> the stream (3a/3b) and the analyzer (3c). Write-path enforcement ratified:
+> [[../../Decisions/2026-07-25-c1-write-path-enforcement]].
+> NOTE: the original slice-3 framing of "llm-exchange/replay re-base" was a FALSE PREMISE — llm-exchange
+> carries raw prompts for byte-exact golden replay and is deliberately not ledger data; out of scope.
+> **Wave C.2 CLOSE-OUT SHIPPED 2026-07-26 (`ec4880bb`, `36665b8f`) — the success authority reads ONE
+> substrate.** Closing the residuals the delegated-deliverable fix had NAMED surfaced two more defects.
+> A DELEGATED deliverable was refused (`success:false` while the file existed on disk) because
+> `ArtifactProduced` judged from `steps`, which structurally cannot hold a child's work — now judged from
+> the run-scoped ledger, generic over delegation depth. And the ledger carried NO `artifact` facts on the
+> INLINE (default) path at all: they are minted from a tool's declared `produces:"file"`, and that
+> derivation lived only in the kernel's `act.ts` — so the ledger-preferred readers landed by 3c were
+> reading an incomplete substrate. `inline-act` now derives them through the same announced seam
+> (`growRunLedger` gained `extraEntries`), keeping published delta ≡ whole growth. Also closed: the
+> receipt could report a DELETED file as produced (the ledger reached `computeDeliverableReport`
+> flattened to a path list, dropping `op`); `ToolCalled` now reads the ledger (a GRANDCHILD's tools
+> count — `delegatedToolsUsed` is one level deep by construction); and the runtime's ledger-entry
+> structural mirror, hand-copied at FOUR sites, is declared once.
+>
+> **Wave D ∥ E SCOPING FINDING (probe, 2026-07-26) — the meta-loop is KERNEL-ONLY.** Waves B/D/E/F
+> shipped structurally on 2026-07-08 (`6db0bf71`/`14351866`/`5c5fb778`/`a33409d5`), and `assess()` and
+> `project()` both already TAKE a ledger — so the sequence entry is not a build task. A two-arm trace
+> probe (control = `.withReasoning()`) shows what it actually is: the bare-builder DEFAULT path emits
+> `llm-exchange, run-started, tool-call-start/end, ledger-entry, verifier-verdict, run-completed` — 7
+> kinds. The kernel arm emits 12, adding **`contract-compiled`, `assessment`, `projection-rendered`,
+> `tool-surface-resolved`, `entropy-scored`, `kernel-state-snapshot`, `guard-fired`**. `_enableReasoning`
+> defaults to `false` (`builder.ts:360`), so a default run compiles no contract, computes no assessment,
+> renders no projection and fires no guards. Wave C's convergence work reached the default path (the
+> ledger now grows and announces there); Waves B/D/E/F did not. **Note §6: making the meta-loop
+> default-on is gated by the per-task-class lift rule + ablation-warden veto — it is a measurement
+> question, not a wiring decision.**
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
 > `scripts/check-cross-cutting.sh` gates it in CI. `plan-execute`/`code-action` per-iteration repair
-> gap and the `runLedger`-on-the-live-engine-path drop remain OPEN (see DEBT-REGISTER §3).
+> gap remains OPEN (see DEBT-REGISTER §3); the `runLedger`-on-the-live-engine-path drop is **CLOSED**
+> (Wave C.2 slice 3b, 2026-07-25).
 
 ### Pre-release board (historical, 2026-07-12)
 

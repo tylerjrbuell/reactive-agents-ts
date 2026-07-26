@@ -29,24 +29,22 @@ import {
   childContext,
 } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { ObservabilityService } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/observability";
 
-/**
- * Build the log prefix that makes a sub-agent's lines FOLLOWABLE: one "│ " per
- * nesting level plus the child's name, e.g. depth 1 → `"  │ researcher · "`,
- * depth 2 → `"  │ │ writer · "`. Prepended to EVERY log line (info/debug/warn/
- * error) by the child's execution engine, so parallel or nested children no
- * longer collapse into one indistinct, unattributable stream. Pure — pinned by
- * `sub-agent-log-prefix.test.ts`.
- */
-export function buildSubAgentLogPrefix(depth: number, name: string): string {
-  return `  ${"│ ".repeat(Math.max(1, depth))}${name} · `;
-}
+import { buildSubAgentLogPrefix } from "./log-prefix.js";
+export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
 export interface SubAgentRuntimeShared {
   /** Parent's EventBus instance — shared so child events reach the parent bus (G1). */
   readonly sharedEventBus?: Context.Tag.Service<typeof EventBus>;
+  /**
+   * The run's ChildDashboardRegistry instance — threaded down exactly like
+   * `sharedEventBus` so a child that itself spawns a grandchild resolves the
+   * SAME (root-originated) registry, not a fresh/absent one. Only the root's
+   * runtime construction creates this; every descendant just re-threads it.
+   */
+  readonly sharedChildDashboardRegistry?: Context.Tag.Service<typeof ChildDashboardRegistry>;
 }
 import type {
   ParentContext,
@@ -324,6 +322,7 @@ export const buildSubAgentTask = (
         toolsMod,
       } = deps;
       const sharedEventBus = runtimeShared?.sharedEventBus;
+      const sharedChildDashboardRegistry = runtimeShared?.sharedChildDashboardRegistry;
 
       // ── Depth guard (B8-T5) ── the spawning agent's RunContext drives the cap.
       const spawningCtx = yield* resolveSpawningContext(parentAgentId);
@@ -333,6 +332,17 @@ export const buildSubAgentTask = (
         return toolsMod.subAgentDepthRefusal(t.name, maxDepth);
       }
       const childCtx = childContext(spawningCtx, t.name);
+      // Lineage for the rolled-up dashboard: every descendant records into the
+      // SAME flat, root-level registry (see run-registry.ts), so without this
+      // a grandchild renders as a misleading SIBLING of its parent instead of
+      // nested underneath it. `spawningCtx` is the RunContext of the agent
+      // DOING this dispatch (resolved above); depth > 0 means that agent is
+      // itself a sub-agent (its `agentId` was set to its own `t.name` by
+      // `childContext` when IT was spawned — see line 330 below/above), so its
+      // `agentId` is exactly the display name to attribute as the parent. A
+      // direct child of the root (spawningCtx.depth === 0) gets no parentName.
+      const spawningAgentName =
+        spawningCtx.depth > 0 ? spawningCtx.agentId : undefined;
 
       // Depth- and name-aware log prefix so a sub-agent's lines are FOLLOWABLE.
       // The old prefix was a flat "  │ " for every child at every depth: with
@@ -424,6 +434,12 @@ export const buildSubAgentTask = (
 
       const subRuntime = createLightRuntime({
         agentId,
+        // `agentId` is uniquified for correlation (`sub-<name>-<epoch>`), which is
+        // NOT fit to render. Thread the given name so the child's `AgentStarted`
+        // carries a clean `agentDisplayName` ("researcher") for the status
+        // renderer's collapsed sub-agent line — without this the line showed the
+        // raw id. Pinned by tests/subagent/child-observability.test.ts.
+        agentDisplayName: t.name,
         provider: parentProvider ?? "test",
         model: parentModel,
         maxIterations: defaultMaxIter,
@@ -435,9 +451,16 @@ export const buildSubAgentTask = (
         reasoningOptions: parentReasoningOptions,
         enableGuardrails: parentEnableGuardrails,
         enableObservability: parentEnableObservability,
-        observabilityOptions: parentObservabilityOptions
-          ? { ...parentObservabilityOptions, logPrefix: childLogPrefix }
-          : { logPrefix: childLogPrefix },
+        // Only inherit the parent's observabilityOptions (e.g. `verbosity`) when
+        // the parent actually enabled observability — `parentObservabilityOptions`
+        // is populated from the builder's default `_observabilityOptions` even
+        // when `.withObservability()` was never called, so spreading it
+        // unconditionally would leak a stale default `verbosity: 'minimal'` into
+        // sub-agents whose parent never opted in, silently suppressing their own
+        // console output. Mirrors the guard in runtime-construction.ts.
+        observabilityOptions: parentEnableObservability && parentObservabilityOptions
+          ? { ...parentObservabilityOptions, logPrefix: childLogPrefix, emitConsole: false }
+          : { logPrefix: childLogPrefix, emitConsole: false },
         contextProfile: parentContextProfile,
         enableCostTracking: parentEnableCostTracking,
         // Inherit the deterministic scenario so `test`-provider sub-agents are
@@ -446,6 +469,11 @@ export const buildSubAgentTask = (
         // G1: join the parent's EventBus so this sub-agent's lifecycle events
         // are observable on the parent's bus + trace bridge.
         sharedEventBus,
+        // Thread the run's ChildDashboardRegistry down so that IF this child
+        // itself spawns a grandchild (registerChildSpawn below), the
+        // grandchild's dashboard is recorded into the SAME (root-originated)
+        // registry rather than being silently dropped. Mirrors sharedEventBus.
+        sharedChildDashboardRegistry,
         // ── Cross-cutting inheritance (2026-07-23) — a TRUE sub-agent runs under
         //    the parent's judgment + safety constraints, not rubber-stamped. The
         //    child builds its OWN RunEnvelope from these, so its answer is judged
@@ -552,7 +580,16 @@ export const buildSubAgentTask = (
           },
           createdAt: new Date(),
         };
-        return yield* subEngine.execute(taskObj);
+        const execResult = yield* subEngine.execute(taskObj);
+        // Capture the child's own dashboard data (console printing already
+        // suppressed via observabilityOptions.emitConsole:false above) so the
+        // PARENT can roll it up into its single end-of-run print instead of
+        // this child ever flushing/printing its own — this is the fix for the
+        // "sub-agent prints its own dashboard mid-stream" defect.
+        const childObsOpt = yield* Effect.serviceOption(ObservabilityService);
+        const childDashboard =
+          childObsOpt._tag === "Some" ? yield* childObsOpt.value.getDashboardData() : undefined;
+        return { execResult, childDashboard };
       }).pipe(
         Effect.provide(subRuntime),
         // Fallback-only ambient correlation for the child's own fiber, so a
@@ -560,38 +597,24 @@ export const buildSubAgentTask = (
         Effect.locally(CurrentRunContextRef, childCtx as RunContext | null),
       );
 
-      // Dispatch delimiters — the single biggest readability win for following
-      // a sub-agent run. Logged via the PARENT's logger (soft-resolved, so it is
-      // a no-op when observability is off), so they frame the child's indented
-      // block at the parent's level: a clear "▶ delegate → name" open and a
-      // "◀ name ✓/✗ …" close, instead of the child's lines just appearing and
-      // vanishing with no boundary. Depth marker mirrors the child's log prefix.
-      // Emitted through the PARENT's logger, which — when the parent is itself a
-      // nested child — is already wrapped with the parent's own depth prefix. So
-      // the delimiter needs no depth marker of its own; a bare 2-space indent
-      // sits it just outside the child's block at whatever level the parent is.
-      const parentObsOpt = yield* Effect.serviceOption(ObservabilityService);
-      const frame = (line: string): Effect.Effect<void, never> =>
-        parentObsOpt._tag === "Some"
-          ? parentObsOpt.value.info(`  ${line}`)
-          : Effect.void;
-      const taskPreview = t.task.length > 60 ? `${t.task.slice(0, 60)}…` : t.task;
-      yield* frame(`▶ delegate → ${t.name}: ${taskPreview}`);
-      const startedMs = Date.now();
+      // Dispatch/completion framing — previously a logged "▶ delegate → name" /
+      // "◀ name ✓/✗ …" delimiter pair emitted via the PARENT's logger. That
+      // pair is now superseded by the live status renderer's collapsed
+      // sub-agent line (Task 7, observability unified run-tree): in TTY/status
+      // mode the renderer tracks the shared EventBus's AgentStarted/
+      // AgentCompleted events directly into a one-line, live-updating summary
+      // per sub-agent, rather than the parent's logger emitting a separate
+      // delimiter pair around the child's block.
 
       // Fork into the PARENT's fiber tree: parent interruption reaches the
       // child. `Fiber.await` returns an Exit, so a child FAILURE is contained
       // here and mapped to a structured result — it never cascades.
       const fiber = yield* Effect.forkScoped(childEffect);
       const exit = yield* fiber.await;
-      const elapsedMs = Date.now() - startedMs;
 
       if (Exit.isSuccess(exit)) {
-        const result = exit.value;
+        const { execResult: result, childDashboard } = exit.value;
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
-        yield* frame(
-          `◀ ${t.name} ${result.success ? "✓" : "✗"} — ${result.metadata.tokensUsed} tok, ${elapsedMs}ms`,
-        );
         // Wave C.2 — carry the child's run-scoped ledger back to the parent,
         // stamped `sub-agent:<name>` so the parent's kernel merges it under this
         // child's provenance. `mergePassLedger` re-bases the child's seqs from 0
@@ -603,6 +626,22 @@ export const buildSubAgentTask = (
           childRunLedger && childRunLedger.length > 0
             ? mergePassLedger(undefined, childRunLedger, `sub-agent:${t.name}`)
             : undefined;
+        // Record the child's dashboard into the SPAWNING agent's own ambient
+        // registry — the same registry the root created (and threaded down to
+        // every descendant via `sharedChildDashboardRegistry`, mirroring how
+        // `sharedEventBus` propagates). `Effect.serviceOption` degrades to a
+        // no-op when absent (e.g. observability off, or a test that doesn't
+        // wire the registry) rather than failing the spawn.
+        if (childDashboard !== undefined) {
+          const registryOpt = yield* Effect.serviceOption(ChildDashboardRegistry);
+          if (registryOpt._tag === "Some") {
+            yield* registryOpt.value.record({
+              name: t.name,
+              data: childDashboard,
+              ...(spawningAgentName !== undefined ? { parentName: spawningAgentName } : {}),
+            });
+          }
+        }
         const raw: SubAgentRawResult = {
           output: String(result.output ?? ""),
           success: result.success,
@@ -611,13 +650,14 @@ export const buildSubAgentTask = (
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
           ...(stampedChildLedger ? { childRunLedger: stampedChildLedger } : {}),
+          // NOTE: `childDashboard` deliberately does NOT ride on `raw` — the
+          // registry `record()` above is its ONLY transport. `raw` becomes the
+          // `SubAgentResult` the model sees serialized in its observation, so a
+          // DashboardData blob here would leak phases/tools/alerts/entropyTrace
+          // straight into the LLM's context (and the tool cache) for free.
         };
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }
-
-      yield* frame(
-        `◀ ${t.name} ✗ — ${Exit.isInterrupted(exit) ? "interrupted" : "failed"}, ${elapsedMs}ms`,
-      );
 
       // Failure or interruption — contained, never rethrown to the parent.
       const cause = exit.cause;

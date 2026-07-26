@@ -164,6 +164,21 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   — `reasoning/src/testing/tool-service-mock.ts` — with a single sanctioned
 //   widening. Net −3 against the recorded pin; the 2026-07-08 (+1) bump above is
 //   retired by it. Design it out beats bumping it up.
+// 2026-07-25: Task 7 (observability unified run-tree — live sub-agent summary)
+//   briefly bumped this to 77 for two casts at the status-renderer/EventBus
+//   boundary. Both were DESIGNED OUT instead (ceiling back at 75). The premise
+//   of the bump was wrong: the reason given was that `observability` can't name
+//   `AgentEventTag` without depending on `@reactive-agents/runtime` — but
+//   `AgentEvent`/`AgentEventTag` are exported from `@reactive-agents/core`,
+//   which observability ALREADY depends on. Typing the local `EbLike.on`
+//   generic as `<T extends AgentEventTag>` with an
+//   `Extract<AgentEvent, {_tag: T}>` handler makes it structurally identical to
+//   the real `EventBus.on` AND to runtime's own `EbLike`, so:
+//     • status-renderer.ts's `narrowAgentEvent` helper is gone (handlers now
+//       receive properly narrowed events), and
+//     • execution-engine.ts's `makeStatusRenderer(logger, stdout, eb)` call
+//       needs no cast.
+//   Design it out beats bumping it up (same conclusion as 2026-07-09).
 const CEILING = 75;
 
 interface Hit {

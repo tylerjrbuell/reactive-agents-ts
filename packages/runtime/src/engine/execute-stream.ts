@@ -26,7 +26,7 @@ import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import type { ReactiveAgentsConfig } from "../types.js";
+import type { ReactiveAgentsConfig, RunLedgerEntryShape } from "../types.js";
 import type { AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
@@ -637,15 +637,7 @@ export const makeExecuteStream =
               // ExecuteStreamDeps); execution-engine.ts forwards this from
               // `rr.metadata.runLedger`. deriveReceiptToolCalls prefers it
               // over reasoningSteps when non-empty.
-              runLedger?: ReadonlyArray<{
-                readonly kind: string
-                readonly toolName?: string
-                readonly toolCallId?: string
-                readonly success?: boolean
-                readonly args?: Readonly<Record<string, unknown>>
-                readonly path?: string
-                readonly op?: string
-              }>
+              runLedger?: ReadonlyArray<RunLedgerEntryShape>
             }
           };
           // B2 (meta-loop 4a): declared deliverables × produced-status, from the

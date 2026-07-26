@@ -1,10 +1,19 @@
 // Run: bun test packages/runtime/tests/subagent/dispatch-logging.test.ts --timeout 30000
 //
-// Sub-agent TUI logging (2026-07-23) — end-to-end capture. Proves the two
-// readability fixes reach real console output when a parent delegates:
-//   1. Dispatch delimiters frame the child's block ("▶ delegate → name" /
-//      "◀ name ✓/✗ …"), emitted via the PARENT's logger.
-//   2. The child's own lines carry the name-tagged prefix.
+// Sub-agent TUI logging (2026-07-23) — end-to-end capture. Originally proved
+// a dedicated "▶ delegate → name" / "◀ name ✓/✗ …" delimiter pair (emitted
+// via the PARENT's logger) framed the child's block in plain/verbose console
+// output.
+//
+// Task 7 (observability unified run-tree, 2026-07-25) removed that delimiter
+// pair from `sub-agent-executor.ts` — dispatch/completion framing is now the
+// live status renderer's collapsed sub-agent line (TTY/status mode only; see
+// `packages/observability/tests/status-renderer-subagent.test.ts`). Plain
+// buffered/verbose console output (this test's mode, no TTY) has no
+// delimiter replacement. This test now asserts the sub-agent's dispatch and
+// completion remain attributable to its name via the still-present
+// per-iteration action/observation lines, which the delimiter pair was
+// always somewhat redundant with.
 // Captures console.log for the run (live observability), then restores it.
 import { describe, expect, it, afterEach } from "bun:test";
 import { ReactiveAgents } from "../../src/index.js";
@@ -15,7 +24,7 @@ afterEach(() => {
 });
 
 describe("sub-agent dispatch logging", () => {
-  it("frames the child's block with delimiters and attributes the child's lines", async () => {
+  it("attributes dispatch and completion to the named sub-agent (delimiter pair removed, Task 7)", async () => {
     const lines: string[] = [];
     console.log = (...args: unknown[]) => {
       lines.push(args.map(String).join(" "));
@@ -40,8 +49,9 @@ describe("sub-agent dispatch logging", () => {
     console.log = realLog;
     const all = lines.join("\n");
 
-    // The open + close delimiters framing the child's block.
-    expect(all).toContain("▶ delegate → researcher");
-    expect(all).toMatch(/◀ researcher [✓✗]/);
+    // No dedicated delimiter pair anymore (removed, Task 7) — but the
+    // dispatch and completion lines still name the sub-agent explicitly.
+    expect(all).toContain("spawn-agent [researcher]");
+    expect(all).toMatch(/\[sub-agent: researcher\] [✓✗]/);
   }, 30_000);
 });

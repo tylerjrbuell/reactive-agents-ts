@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { ReactiveAgents } from "../src/index.js";
+import { ReactiveAgents, createRuntime } from "../src/index.js";
+import { ExecutionEngine } from "../src/execution-engine.js";
 import { ObservabilityService, ObservabilityServiceLive } from "@reactive-agents/observability";
 
 // ─── Helpers ───
@@ -150,6 +151,82 @@ describe("builder observability opt-out", () => {
         }).pipe(Effect.provide(layer)),
       );
       expect(output.join("\n")).not.toContain("Metrics Summary");
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  test("agent execution with minimal verbosity suppresses phase/tool log output", async () => {
+    const logCalls: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logCalls.push(args.map(String).join(" "));
+      origLog(...args);
+    };
+
+    let agent;
+    try {
+      agent = await buildAgent("minimal");
+      await agent.run("verbosity test");
+      // At minimal verbosity with live logging, no phase or tool logs should be printed
+      const logOutput = logCalls.join("\n");
+      expect(logOutput).not.toContain("phase");
+      expect(logOutput).not.toContain("tool");
+    } finally {
+      await agent?.dispose();
+      console.log = origLog;
+    }
+  });
+});
+
+// ─── Regression: composable API with observabilityOptions but no enableObservability ───
+
+describe("composable API observabilityOptions threading", () => {
+  test("createRuntime with observabilityOptions.verbosity='minimal' (no enableObservability) suppresses output", async () => {
+    const logCalls: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logCalls.push(args.map(String).join(" "));
+    };
+
+    try {
+      // Regression case: observabilityOptions set independently from enableObservability.
+      // The bug was that verbosity was gated on obs presence, so this config reachable
+      // via the composable API would not suppress output even with verbosity: "minimal".
+      const runtime = createRuntime({
+        agentId: "regression-test",
+        provider: "test",
+        observabilityOptions: { verbosity: "minimal" },
+        // Note: NOT setting enableObservability: true
+        // (no loggingConfig needed: status-mode only activates on a real TTY,
+        // and bun test's stdout is never a TTY, so the engine already takes
+        // the stream/non-status path here without forcing it)
+        testScenario: [{ match: "test", text: "Done" }],
+      });
+
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          // Minimal task shape for testing
+          const task = {
+            id: "test-task" as any,
+            agentId: "regression-test" as any,
+            type: "query" as const,
+            input: { question: "test" },
+            priority: "medium" as const,
+            status: "pending" as const,
+            metadata: { tags: [] },
+            createdAt: new Date(),
+          };
+
+          const engine = yield* ExecutionEngine;
+          yield* engine.execute(task);
+        }).pipe(Effect.provide(runtime)),
+      );
+
+      const logOutput = logCalls.join("\n");
+      // With minimal verbosity and live logging, no phase/tool output should appear
+      expect(logOutput).not.toContain("phase");
+      expect(logOutput).not.toContain("tool");
     } finally {
       console.log = origLog;
     }

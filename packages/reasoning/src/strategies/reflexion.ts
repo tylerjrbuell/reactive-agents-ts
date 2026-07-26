@@ -46,7 +46,7 @@ import {
   type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import { projectStepsToLedger } from "../kernel/ledger/step-projection.js";
+import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   evaluateTerminalGate,
@@ -159,6 +159,14 @@ export const executeReflexion = (
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reflexion.ts:emitLog");
 
+    // Wave C.2 slice 3b-ii — the announced ledger seam. Before it, reflexion's
+    // two views were DISJOINT: the kernel passes announced their
+    // requirement/verdict entries while this strategy's own step projection went
+    // only to result metadata (measured object=[tool-result x2] against
+    // stream=[requirement, verdict] x2). Neither view contained the other, so no
+    // reader could pick a more complete one.
+    const ledgerSink = ledgerSinkTarget(ebOpt, input.taskId ?? "reflexion", input.agentId, "reasoning/src/strategies/reflexion.ts:announce-ledger");
+
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -264,7 +272,7 @@ export const executeReflexion = (
         // `attempt` variable exists yet at this point in the function), so
         // zero reflect/improve iterations have elapsed — "iteration 0" is the
         // honest count, not a placeholder.
-        runLedger: projectStepsToLedger(undefined, steps, 0),
+        runLedger: yield* growRunLedger(undefined, steps, 0, ledgerSink),
         repairCapabilities: { perIteration: true },
       });
     }
@@ -705,7 +713,7 @@ export const executeReflexion = (
         extraMetadata: { llmCalls, reflexionCritiques: final.previousCritiques },
         // Cascade terminal boundary — judgment inputs (Task 4).
         requiredTools: input.requiredTools ?? [],
-        runLedger: projectStepsToLedger(undefined, steps, iters),
+        runLedger: yield* growRunLedger(undefined, steps, iters, ledgerSink),
         repairCapabilities: { perIteration: true },
       });
     }
@@ -793,7 +801,7 @@ export const executeReflexion = (
 
     // ONE ledger value, read twice: the judged verdict and the forwarded
     // metadata must describe the same evidence.
-    const runLedger = projectStepsToLedger(undefined, steps, iters);
+    const runLedger = yield* growRunLedger(undefined, steps, iters, ledgerSink);
 
     return yield* finalizeStrategyResult({
       strategy: "reflexion",

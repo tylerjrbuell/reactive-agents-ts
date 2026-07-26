@@ -16,8 +16,8 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
-import { makeStep, makeObservationResult, getRecoveryHint, projectStepsToLedger, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
-import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
+import { makeStep, makeObservationResult, getRecoveryHint, growRunLedger, deriveArtifactEntries, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
+import { subAgentResultForDisplay, subAgentChildLedgerEntries, resolveProduces } from "@reactive-agents/tools";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
@@ -280,8 +280,49 @@ export const runInlineAct = (
     // the receipt fell back to step-scanning. Projecting here (the same pure
     // mapping the kernel's transitionState uses) makes the inline path a
     // first-class ledger writer, and carries the sub-agent merge attached above.
+    // Wave C.2 slice 3b — grow the ledger through the ANNOUNCED seam, so this
+    // path's facts reach the stream as well as the result object. Before the
+    // seam the inline loop (the default path, and the one delegation runs on)
+    // grew a ledger that nothing published: trace-side consumers (analyze,
+    // debrief, cohort) read serialized JSONL and cannot reach the object view,
+    // so they were structurally blind to every default-path run.
+    //
+    // No double-publish: the engine picks kernel XOR inline per run
+    // (`execution-engine.ts` — `if (reasoningOpt._tag === "Some" && !cacheHit)`
+    // … `else if (!cacheHit)`), so exactly one ledger factory is live.
+    //
+    // `artifact` entries are NOT step-derived — they are minted from a tool's
+    // DECLARED `produces:"file"` contract, which the generic step→entry mapping
+    // cannot know. That derivation lived ONLY in the kernel's act.ts, so the
+    // inline path — the DEFAULT path, and the one delegation runs on — grew a
+    // ledger with tool-invocation/tool-result facts but no artifact facts at
+    // all. The ledger was incomplete on the path most runs take, which matters
+    // because the post-condition spine's success authority now reads artifact
+    // entries: a ledger-preferred reader is only sound if the ledger is
+    // path-complete. Derived here and handed to the SAME announced seam, so the
+    // published delta stays the whole growth.
     const priorLedger = c.metadata.runLedger as RunLedger | undefined;
-    const runLedger = projectStepsToLedger(priorLedger, ledgerSteps, c.iteration);
+    const artifactEntries = deriveArtifactEntries(ledgerSteps, resolveProduces, c.iteration);
+    const runLedger = yield* growRunLedger(
+      priorLedger,
+      ledgerSteps,
+      c.iteration,
+      {
+        taskId: c.taskId,
+        agentId: c.agentId,
+        ...(eb
+          ? {
+              publish: (event) =>
+                eb.publish(event).pipe(
+                  Effect.catchAll((err) =>
+                    emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-ledger-entry-appended", tag: errorTag(err) }),
+                  ),
+                ),
+            }
+          : {}),
+      },
+      artifactEntries,
+    );
 
     return {
       ...c,

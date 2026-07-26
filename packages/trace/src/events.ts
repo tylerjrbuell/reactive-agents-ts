@@ -43,6 +43,8 @@ export type TraceEvent =
   | ProjectionRenderedEvent
   // ─── Meta-loop Phase 5b (2026-07-08 — control plane / action selection) ───
   | ControlResolutionEvent
+  // ─── Wave C.2 slice 3 (2026-07-25 — run ledger onto the trace stream) ───
+  | LedgerEntryTraceEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -435,6 +437,26 @@ export interface ControlResolutionEvent extends TraceEventBase {
   readonly action: string
   readonly reason: string
   readonly proposals: readonly { readonly source: string; readonly action: string }[]
+}
+
+/**
+ * A batch of run-ledger entries appended at a kernel iteration boundary
+ * (Wave C.1 live tap → C.2 run-scoped ledger). Projects the `LedgerEntryAppended`
+ * bus event onto the trace stream so the ledger — the run's append-only record of
+ * tool invocations, results, artifacts, requirements, claims and verdicts — is no
+ * longer siloed from the trace JSONL.
+ *
+ * Each element of `entries` carries its OWN ledger `seq` (dense/monotonic within
+ * the run ledger) and `kind` (`tool-invocation` | `tool-result` | `artifact` |
+ * `requirement` | `claim` | `verdict` | …), distinct from this trace event's own
+ * `seq`/`iter`. A merged sub-agent entry additionally carries `pass:
+ * "sub-agent:<name>"` (Wave C.2). The batch is stamped `Record<string, unknown>`
+ * at the core package boundary (core cannot depend on reasoning's LedgerEntry
+ * union) and reaches the trace layer unchanged.
+ */
+export interface LedgerEntryTraceEvent extends TraceEventBase {
+  readonly kind: "ledger-entry"
+  readonly entries: ReadonlyArray<Record<string, unknown>>
 }
 
 /** Type-narrowing helper. */

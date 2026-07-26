@@ -29,7 +29,7 @@ import {
     startGateway,
     queryGatewayStatus,
 } from './agent/gateway-runner.js'
-import type { ExecutionContext } from './types.js'
+import type { ExecutionContext, RunLedgerEntryShape } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
@@ -1512,12 +1512,7 @@ export class ReactiveAgent<TOut = unknown> {
                           // reads below; a ledger `artifact` entry marks a declared
                           // deliverable produced without re-scanning reasoningSteps.
                           runLedger: (rawMetadata as {
-                              runLedger?: ReadonlyArray<{
-                                  kind: string
-                                  toolCallId?: string
-                                  path?: string
-                                  op?: string
-                              }>
+                              runLedger?: ReadonlyArray<RunLedgerEntryShape>
                           }).runLedger,
                           output: String(r.output ?? ''),
                       })
@@ -1536,13 +1531,7 @@ export class ReactiveAgent<TOut = unknown> {
                                   // from `rr.metadata.runLedger` (task 4's strategy
                                   // forwarding); deriveReceiptToolCalls prefers this
                                   // over reasoningSteps when non-empty.
-                                  runLedger?: ReadonlyArray<{
-                                      kind: string
-                                      toolName?: string
-                                      toolCallId?: string
-                                      success?: boolean
-                                      args?: Readonly<Record<string, unknown>>
-                                  }>
+                                  runLedger?: ReadonlyArray<RunLedgerEntryShape>
                               },
                           ),
                           ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),

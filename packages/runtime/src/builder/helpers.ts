@@ -11,9 +11,10 @@ import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
 import type { DeliverableReceipt, TaskContract, TerminatedBy } from '@reactive-agents/core'
 import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
-import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME, compileRunContract, computeDeliverableReport, type ReasoningStep } from '@reactive-agents/reasoning'
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME, compileRunContract, computeDeliverableReport, type ArtifactEntry, type ReasoningStep, type RunLedger } from '@reactive-agents/reasoning'
 import { REQUEST_USER_INPUT_TOOL_NAME } from '@reactive-agents/tools'
 import type { AgentPersona } from './types.js'
+import type { RunLedgerEntryShape } from '../types.js'
 
 /**
  * Resolve a Context.Tag from the surrounding Effect runtime, returning the
@@ -192,11 +193,12 @@ export function deriveReceiptDeliverables(args: {
         ...(args.taskContract ? { taskContract: args.taskContract } : {}),
     })
     if (contract.deliverables.length === 0) return undefined
-    const ledgerArtifacts = (args.runLedger ?? [])
-        .filter((e) => e.kind === 'artifact' && typeof e.path === 'string')
-        .map((e) => e.path as string)
+    // Hand the ledger's artifact facts WHOLE to the one artifact authority
+    // (`verify` → `isArtifactProduced`). The previous flatten to a path list
+    // dropped `op`, so a deleted file's path read as produced.
+    const ledgerArtifacts = liftArtifactEntries(args.runLedger)
     const report = computeDeliverableReport(contract, args.reasoningSteps ?? [], args.output, {
-        ...(ledgerArtifacts.length > 0 ? { artifactPaths: ledgerArtifacts } : {}),
+        ...(ledgerArtifacts.length > 0 ? { ledger: ledgerArtifacts } : {}),
     })
     return report.length > 0 ? report : undefined
 }
@@ -222,26 +224,43 @@ export function toolCallTarget(args: unknown): string | undefined {
     }
 }
 
+/** The `op` values `ArtifactEntry` declares; anything else degrades to `"unknown"`. */
+const ARTIFACT_OPS = ['write', 'append', 'delete', 'unknown'] as const
+type ArtifactOp = (typeof ARTIFACT_OPS)[number]
+
+/** Narrow an unknown `op` to the declared union without a cast. */
+function toArtifactOp(value: unknown): ArtifactOp {
+    return ARTIFACT_OPS.find((op) => op === value) ?? 'unknown'
+}
+
 /**
- * Structural mirror of `@reactive-agents/reasoning`'s `RunLedger` entries
- * (`kernel/ledger/run-ledger.ts`'s `LedgerEntry` union) — kept structural
- * rather than imported, matching the cross-package convention already used
- * for `reasoningSteps` above (runtime consumes the shape it needs, not the
- * reasoning package's internal type).
+ * Lift the structural mirror back to the reasoning package's typed
+ * `artifact` entries, so the receipt can hand a real ledger to the ONE
+ * artifact authority (`verify` → `isArtifactProduced`) instead of carrying its
+ * own path-matching copy.
+ *
+ * `op` is preserved rather than flattened away. The previous shape passed only
+ * a list of paths, which made an `op: "delete"` entry read as PRODUCED — a
+ * false-met on the receipt, the one direction a success authority must never
+ * fail in. An unrecognised `op` degrades to `"unknown"` (still not `"delete"`,
+ * so an unknown op is treated as production, matching the entry contract's own
+ * default) rather than being dropped.
  */
-type RunLedgerEntryShape = {
-    readonly kind: string
-    readonly toolName?: string
-    readonly toolCallId?: string
-    readonly success?: boolean
-    readonly args?: Readonly<Record<string, unknown>>
-    /**
-     * Present on `kind: "artifact"` entries (Wave C1 task 6, run-ledger.ts's
-     * `ArtifactEntry`) — the declared write path. Consumed by
-     * `deriveReceiptDeliverables` below; unused by `deriveReceiptToolCalls`.
-     */
-    readonly path?: string
-    readonly op?: string
+function liftArtifactEntries(
+    ledger: ReadonlyArray<RunLedgerEntryShape> | undefined,
+): RunLedger {
+    const out: ArtifactEntry[] = []
+    for (const e of ledger ?? []) {
+        if (e.kind !== 'artifact' || typeof e.path !== 'string') continue
+        out.push({
+            kind: 'artifact',
+            seq: e.seq,
+            iteration: e.iteration,
+            path: e.path,
+            op: toArtifactOp(e.op),
+        })
+    }
+    return out
 }
 
 export function deriveReceiptToolCalls(

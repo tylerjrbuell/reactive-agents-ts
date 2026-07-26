@@ -105,6 +105,16 @@ function passesLevel(event: LogEvent, minLevel: LogLevel): boolean {
 export function makeObservableLogger(config: {
   live: boolean;
   minLevel?: LogLevel;
+  verbosity?: "minimal" | "normal" | "verbose" | "debug";
+  /**
+   * Depth/name-tagged prefix for sub-agent lines (e.g. `"  │ researcher · "`),
+   * built by `buildSubAgentLogPrefix` and threaded down from execution-engine's
+   * `config.logPrefix`. Without this, a sub-agent's arrow/DEBUG lines (this
+   * logger's own live-print path — separate from `ObservabilityService`'s
+   * `obs.info/debug` which already wrap `lp`) print unattributed, so parallel
+   * children's tool-call traces interleave into one indistinct stream.
+   */
+  logPrefix?: string;
 }): Effect.Effect<ObservableLoggerService, never, never> {
   const minLevel: LogLevel = config.minLevel ?? "debug";
   return Effect.gen(function* () {
@@ -127,10 +137,14 @@ export function makeObservableLogger(config: {
           yield* sub(event, formatted).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "observability/src/logging/observable-logger.ts:124", tag: errorTag(err) })));
         }
 
-        // If live, print to console
-        if (config.live) {
+        // If live, print to console — but only if verbosity is not "minimal",
+        // which promises no output except the final result (the 4-tier
+        // VerbosityLevel this logger was previously unaware of).
+        // Note: if verbosity is undefined/not set, we still log (preserves
+        // original behavior for tests that don't use observability).
+        if (config.live && config.verbosity !== "minimal") {
           yield* Effect.sync(() => {
-            console.log(formatted);
+            console.log(config.logPrefix ? `${config.logPrefix}${formatted}` : formatted);
           });
         }
       });

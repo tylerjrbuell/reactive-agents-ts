@@ -14,7 +14,7 @@ import type { AgentEvent, LedgerEntryAppendedEvent } from "@reactive-agents/core
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
-import type { LedgerEntry } from "../ledger/run-ledger.js";
+import { ledgerEntriesForEvent, type LedgerEntry } from "../ledger/run-ledger.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -281,13 +281,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>, agent
           _tag: "LedgerEntryAppended",
           agentId: agentId ?? DEFAULT_LEDGER_TAP_AGENT_ID,
           taskId: state.taskId,
-          // Every concrete LedgerEntry variant structurally satisfies
-          // Record<string, unknown> (the core event's package-boundary
-          // shape — core cannot depend on reasoning's LedgerEntry union),
-          // but TS's structural check requires an explicit index signature
-          // for direct assignability. Narrow, unavoidable widening — not an
-          // `any` escape hatch.
-          entries: entries as unknown as ReadonlyArray<Record<string, unknown>>,
+          entries: ledgerEntriesForEvent(entries),
           timestamp: Date.now(),
         } satisfies LedgerEntryAppendedEvent,
       ),
