@@ -26,7 +26,6 @@
 // unwritten-deliverable cases below fail.
 import { describe, expect, it } from "bun:test";
 import { unproducedDeliverables } from "./deliverable.js";
-import { artifactProduced, outputContains } from "../../capabilities/verify/post-conditions.js";
 import { initialKernelState, transitionState, type KernelState } from "../../state/kernel-state.js";
 import { compileRunContract } from "../../contract/run-contract.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
@@ -37,79 +36,70 @@ import type { RunLedger } from "../../ledger/run-ledger.js";
  * the same state shape the loop does and cannot drift from it.
  */
 function stateWith(opts: {
-  readonly deliverablePaths?: readonly string[];
+  /** Task prose — the contract is COMPILED from it, as the runner does. */
+  readonly prompt: string;
   readonly ledger?: RunLedger;
-  readonly answerSection?: boolean;
+  /** Omit the contract entirely (the pre-contract / skipped-compile path). */
   readonly noContract?: boolean;
 }): KernelState {
-  const base = initialKernelState({ taskId: "t", strategy: "reactive", kernelType: "react" });
-  const contract = compileRunContract("probe task");
-  const deliverables = [
-    ...(opts.deliverablePaths ?? []).map((p, i) => ({
-      id: `d${i}`,
-      matcher: artifactProduced(p),
-    })),
-    ...(opts.answerSection ? [{ id: "ans", matcher: outputContains("SUMMARY") }] : []),
-  ];
+  const base = initialKernelState({
+    maxIterations: 5,
+    strategy: "reactive",
+    kernelType: "react",
+    taskId: "t",
+  });
   return transitionState(base, {
     ...(opts.ledger ? { ledger: opts.ledger } : {}),
     meta: opts.noContract
-      ? {}
-      : { runContract: { ...contract, deliverables, requirements: [] } },
+      ? base.meta
+      : { ...base.meta, runContract: compileRunContract(opts.prompt) },
   });
 }
 
 describe("unproducedDeliverables", () => {
   it("CONTROL: no contract → empty, so guards behave exactly as before", () => {
-    expect(unproducedDeliverables(stateWith({ noContract: true }))).toEqual([]);
+    expect(unproducedDeliverables(stateWith({ prompt: "Write output.ts", noContract: true }))).toEqual([]);
   });
 
   it("CONTROL: a contract with no FILE deliverable → empty", () => {
-    expect(unproducedDeliverables(stateWith({ answerSection: true }))).toEqual([]);
+    expect(unproducedDeliverables(stateWith({ prompt: "What is the capital of France?" }))).toEqual([]);
   });
 
   it("names a declared file that was never written", () => {
-    expect(unproducedDeliverables(stateWith({ deliverablePaths: ["./output.ts"] }))).toEqual([
-      "./output.ts",
-    ]);
+    expect(unproducedDeliverables(stateWith({ prompt: "Write a TypeScript module to output.ts" })))
+      .toEqual(["./output.ts"]);
   });
 
   it("is empty once the file IS written (ledger artifact)", () => {
     const s = stateWith({
-      deliverablePaths: ["./output.ts"],
-      ledger: [
-        { kind: "artifact", seq: 0, iteration: 0, op: "write", path: "/tmp/run/output.ts" },
-      ],
+      prompt: "Write a TypeScript module to output.ts",
+      ledger: [{ kind: "artifact", seq: 0, iteration: 0, op: "write", path: "/tmp/run/output.ts" }],
     });
     expect(unproducedDeliverables(s)).toEqual([]);
   });
 
   it("credits a deliverable written by a SUB-AGENT", () => {
     const s = stateWith({
-      deliverablePaths: ["./output.ts"],
-      ledger: [
-        {
-          kind: "artifact", seq: 0, iteration: 0, op: "write",
-          path: "/tmp/run/output.ts", pass: "sub-agent:writer",
-        },
-      ],
+      prompt: "Write a TypeScript module to output.ts",
+      ledger: [{
+        kind: "artifact", seq: 0, iteration: 0, op: "write",
+        path: "/tmp/run/output.ts", pass: "sub-agent:writer",
+      }],
     });
     expect(unproducedDeliverables(s)).toEqual([]);
   });
 
   it("does NOT credit a delete", () => {
     const s = stateWith({
-      deliverablePaths: ["./output.ts"],
-      ledger: [
-        { kind: "artifact", seq: 0, iteration: 0, op: "delete", path: "/tmp/run/output.ts" },
-      ],
+      prompt: "Write a TypeScript module to output.ts",
+      ledger: [{ kind: "artifact", seq: 0, iteration: 0, op: "delete", path: "/tmp/run/output.ts" }],
     });
     expect(unproducedDeliverables(s)).toEqual(["./output.ts"]);
   });
 
   it("reports only the files still missing on a multi-file contract", () => {
     const s = stateWith({
-      deliverablePaths: ["./a.ts", "./b.ts", "./c.ts"],
+      prompt: "Write a.ts, then write b.ts, then write c.ts",
       ledger: [{ kind: "artifact", seq: 0, iteration: 0, op: "write", path: "/tmp/run/b.ts" }],
     });
     expect(unproducedDeliverables(s)).toEqual(["./a.ts", "./c.ts"]);

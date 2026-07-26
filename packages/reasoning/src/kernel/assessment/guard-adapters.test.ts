@@ -138,3 +138,44 @@ describe("nextStalledCount — harness-takeover", () => {
     expect(count).toBe(4);
   });
 });
+
+// The ablation seam (2026-07-26). `REACTIVE_AGENTS_EVIDENCE_DELTA_RESET=1` is
+// how the bench builds the candidate arm for the low_delta_guard lift
+// measurement — a HarnessVariant sets it via `config.env` and runSession
+// applies/restores it per arm. It must behave exactly like the long-horizon
+// profile, and must be inert when unset (every production run and every other
+// test depends on that).
+describe("evidence-delta reset — the ablation env seam", () => {
+  const ENV = "REACTIVE_AGENTS_EVIDENCE_DELTA_RESET";
+  const gathering = { evidenceDelta: 2 } as Parameters<typeof nextLowDeltaCount>[3];
+
+  it("CONTROL: unset → profile-off counts up exactly as before", () => {
+    delete process.env[ENV];
+    let count = 0;
+    for (let i = 0; i < 3; i++) count = nextLowDeltaCount(count, true, false, gathering);
+    expect(count).toBe(3);
+  });
+
+  it("set → a new-evidence iteration resets the counter", () => {
+    process.env[ENV] = "1";
+    try {
+      let count = 0;
+      for (let i = 0; i < 3; i++) count = nextLowDeltaCount(count, true, false, gathering);
+      expect(count).toBe(0);
+    } finally {
+      delete process.env[ENV];
+    }
+  });
+
+  it("set but NO new evidence → still counts up (it is not a blanket disable)", () => {
+    process.env[ENV] = "1";
+    try {
+      const stalled = { evidenceDelta: 0 } as Parameters<typeof nextLowDeltaCount>[3];
+      let count = 0;
+      for (let i = 0; i < 3; i++) count = nextLowDeltaCount(count, true, false, stalled);
+      expect(count).toBe(3);
+    } finally {
+      delete process.env[ENV];
+    }
+  });
+});

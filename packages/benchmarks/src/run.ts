@@ -16,6 +16,7 @@ import { frontierSpotCheckSession } from "./sessions/frontier-spot-check.js"
 import { m3AblationSession } from "./sessions/m3-ablation.js"
 import { contextStressSession } from "./sessions/context-stress.js"
 import { adaptiveAblationSession } from "./sessions/adaptive-ablation.js"
+import { lowDeltaAblationSession } from "./sessions/low-delta-ablation.js"
 import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
@@ -156,6 +157,7 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "m3-ablation":           m3AblationSession,
   "context-stress":        contextStressSession,
   "adaptive-ablation":     adaptiveAblationSession,
+  "low-delta-ablation":    lowDeltaAblationSession,
   "cluster-a-gate":        clusterAGateSession,
   "cross-tier-stress":     crossTierStressSession,
   "thinking-ablation":     thinkingAblationSession(),

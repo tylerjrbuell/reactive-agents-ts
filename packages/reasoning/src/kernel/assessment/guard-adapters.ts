@@ -21,6 +21,30 @@
 import type { RunAssessment } from "./assess.js";
 
 /**
+ * ABLATION SEAM (2026-07-26). The evidence-delta reset is opt-in behind the
+ * long-horizon profile by design (see LIFT-GATE DISCIPLINE above) — promoting it
+ * to default-on requires the per-task-class lift rule, and the lift rule
+ * requires a measurement. This env var is how the bench builds the candidate
+ * arm: a `HarnessVariant` sets it via `config.env`, which `runSession` applies
+ * for the duration of that arm and restores after (the generalised VERIFIER_ENV
+ * pattern, `benchmarks/src/runner.ts`).
+ *
+ * Unset (every production run, every test) → `horizonActive` alone decides, so
+ * behaviour is byte-identical to before this seam existed. It is deliberately
+ * NOT a public wither: it exists to be measured, not shipped.
+ */
+const EVIDENCE_RESET_ENV = "REACTIVE_AGENTS_EVIDENCE_DELTA_RESET";
+
+/**
+ * Is the evidence-delta reset live for this run? The ONE place the gate is
+ * decided, so the profile flag and the ablation override cannot drift apart
+ * across the predicates below.
+ */
+function evidenceResetActive(horizonActive: boolean): boolean {
+  return horizonActive || process.env[EVIDENCE_RESET_ENV] === "1";
+}
+
+/**
  * Guard 1 (audit 02-#3, low_delta) + Guard 3 (stall-deliverable staleness):
  * a successful NEW gather is PROGRESS. When the profile is on and this
  * iteration produced new substantive evidence (`evidenceDelta > 0`), a low
@@ -32,7 +56,7 @@ export function assessmentShowsEvidenceProgress(
   horizonActive: boolean,
   assessment: RunAssessment | undefined,
 ): boolean {
-  return horizonActive && (assessment?.evidenceDelta ?? 0) > 0;
+  return evidenceResetActive(horizonActive) && (assessment?.evidenceDelta ?? 0) > 0;
 }
 
 /**

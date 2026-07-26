@@ -1177,15 +1177,10 @@ export async function runSession(
   // BEFORE the sweep, so nobody spends 40 minutes and real tokens to find out.
   // A warning rather than a throw: deterministic-only sessions legitimately
   // never call the judge, and must not be made to depend on one.
-  const resolvedJudgeUrl = session.judgeUrl ?? process.env.JUDGE_URL ?? DEFAULT_JUDGE_URL;
-  if (await judgeUnreachable(resolvedJudgeUrl)) {
-    console.warn(
-      `\n  ⚠ judge-server unreachable at ${resolvedJudgeUrl}.\n` +
-        `    Every llm-judge dimension will be INCONCLUSIVE (not a zero), the report\n` +
-        `    will be marked partialMeasurement, and the run will exit non-zero.\n` +
-        `    Start it with: cd packages/judge-server && JUDGE_LAYER=live bun run src/index.ts\n`,
-    );
-  }
+  // The probe itself runs AFTER task resolution and only when this session
+  // actually has judge-scored dimensions — see `needsJudge` below. A
+  // deterministic session (t0) must reach zero network, and an unconditional
+  // localhost fetch here violated that even though it failed fast.
   const judgeUrlForGuard = session.judgeUrl ?? process.env.JUDGE_URL;
   let probedJudgeModelSha: string | undefined;
   let probedJudgeCodeSha: string | undefined;
@@ -1251,6 +1246,35 @@ export async function runSession(
   // ──────────────────────────────────────────────────────────────────────────
 
   const tasks = resolveTasks(session, ALL_TASKS)
+
+  // Judge REACHABILITY warning. The Rule-4 guard above fires only when a judge
+  // URL is EXPLICITLY configured — but the judge CLIENT (`judge.ts`
+  // `resolveJudgeUrl`) always falls back to `DEFAULT_JUDGE_URL`. Two different
+  // notions of "is a judge configured": the guard's (explicit only) and the
+  // client's (always). That is how a full real-world sweep ran against a dead
+  // default judge on 2026-07-26, scoring every judge dimension as unmeasured.
+  // The aggregation fix makes that report honest; this warns BEFORE the sweep,
+  // so nobody spends 40 minutes and real tokens to find out.
+  //
+  // Gated on the session actually HAVING judge-scored dimensions (a task with
+  // `dimensionRubrics`). A deterministic session scores every cell from
+  // verifiable commands and must reach zero network — the first version of this
+  // probe fetched unconditionally and violated that, which t0-deterministic's
+  // "zero network access" case exists to catch. Warning, never a throw:
+  // judge-free sessions must not be made to depend on a judge.
+  const needsJudge = tasks.some((t) => (t.dimensionRubrics?.length ?? 0) > 0)
+  if (needsJudge) {
+    const resolvedJudgeUrl = session.judgeUrl ?? process.env.JUDGE_URL ?? DEFAULT_JUDGE_URL;
+    if (await judgeUnreachable(resolvedJudgeUrl)) {
+      console.warn(
+        `\n  ⚠ judge-server unreachable at ${resolvedJudgeUrl}.\n` +
+          `    Every llm-judge dimension will be INCONCLUSIVE (not a zero), the report\n` +
+          `    will be marked partialMeasurement, and the run will exit non-zero.\n` +
+          `    Start it with: cd packages/judge-server && JUDGE_LAYER=live bun run src/index.ts\n`,
+      );
+    }
+  }
+
   const gitSha = getGitSha()
   const allVariantReports: TaskVariantReport[] = []
   const abstentionInputs: Array<{ abstainExpected: boolean; abstained: boolean }> = []
