@@ -24,6 +24,7 @@ import {
   transitionState,
 } from "../../../kernel/state/kernel-state.js";
 import { artifacts } from "../../ledger/artifact-projection.js";
+import { verify as verifyPostConditions } from "../../capabilities/verify/post-conditions.js";
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import {
   type Deliverable,
@@ -311,4 +312,39 @@ export function buildEffectiveToolsUsed(state: KernelState): Set<string> {
     }
   }
   return effective;
+}
+
+/**
+ * The run contract's declared FILE deliverables that have not been produced yet.
+ *
+ * Read by the diminishing-returns guards before they terminate a run early. The
+ * guards already refuse to fire while a REQUIRED TOOL is still uncalled; a
+ * declared deliverable is the same class of "the run is not done" fact, and is
+ * the one the contract exists to state — but nothing consulted it, so a guard
+ * could end a run whose whole point was to write a file it had not written.
+ *
+ * Live witness (bench rw-4, 2026-07-26): the agent fetched the posts, fetched
+ * the comments, and computed the enriched 10-element array — four successful
+ * tool calls — and `low_delta_guard` terminated it at iteration 3 on
+ * `tokenDelta: 0` with `artifactsAvailable: 4`, before it ever wrote the
+ * required `output.ts`. The task then scored 0: "output.ts exports no array".
+ * The model had done the work; the harness ended the run one step early.
+ *
+ * Judged with the SAME `verify()` gate the terminal gate and the receipt use —
+ * including the run-scoped ledger, so a deliverable produced by a SUB-AGENT
+ * counts. Pure: no fs, no LLM. Empty (so guards behave exactly as before) when
+ * the run compiled no contract or the contract declares no file deliverables.
+ */
+export function unproducedDeliverables(state: KernelState): readonly string[] {
+  const declared = state.meta.runContract?.deliverables ?? [];
+  const out: string[] = [];
+  for (const d of declared) {
+    if (d.matcher.kind !== "ArtifactProduced") continue;
+    const { unmet } = verifyPostConditions([d.matcher], state.steps, {
+      output: state.output ?? "",
+      ...(state.ledger ? { ledger: state.ledger } : {}),
+    });
+    if (unmet.length > 0) out.push(d.matcher.path);
+  }
+  return out;
 }

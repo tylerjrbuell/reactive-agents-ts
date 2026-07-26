@@ -94,6 +94,37 @@ const PROSE_ABBREVIATIONS = new Set<string>([
   "p.m",
 ]);
 
+/**
+ * Technology names that LOOK like bare filenames (`<word>.<real-extension>`) but
+ * name an ecosystem, never a deliverable. "Generate a summary using Node.js"
+ * has a write verb in front of `Node.js`, so verb anchoring alone will not
+ * exclude it.
+ *
+ * These were previously excluded as a SIDE EFFECT of requiring a generic file
+ * noun somewhere in the task — a gate that also rejected precisely-named
+ * deliverables like rw-4's `output.ts` (see derive-bare-filename.test.ts). The
+ * class is now denied BY NAME, in the same idiom as PROSE_ABBREVIATIONS, so
+ * recall does not depend on the task happening to say the word "file".
+ */
+const TECH_NAME_TOKENS = new Set<string>([
+  "node.js",
+  "react.js",
+  "next.js",
+  "vue.js",
+  "nuxt.js",
+  "express.js",
+  "nest.js",
+  "d3.js",
+  "three.js",
+  "chart.js",
+  "socket.io",
+  "vite.js",
+  "ember.js",
+  "backbone.js",
+  "angular.js",
+  "jquery.js",
+]);
+
 function deriveDeliverablePath(task: string): string | undefined {
   // Bind the deliverable to a WRITE verb, never to a READ/fetch input. For the
   // common read-X-then-write-Y shape, the artifact is the path that FOLLOWS the
@@ -203,13 +234,21 @@ const ANCHOR_BACK_WINDOW = 80;
  */
 function passesPathPrecision(candidate: string, task: string): boolean {
   if (PROSE_ABBREVIATIONS.has(candidate.toLowerCase())) return false;
+  if (TECH_NAME_TOKENS.has(candidate.toLowerCase())) return false;
   const hasSeparator = candidate.includes("/") || candidate.startsWith("./");
-  const looksLikePath = hasSeparator || FILE_NOUN.test(task);
-  if (!looksLikePath) return false;
   if (!hasSeparator) {
+    // For a separator-less candidate the REAL extension is the precision gate.
+    // It used to ALSO require a generic file noun somewhere in the task
+    // (`FILE_NOUN.test(task)`), which bought no precision the extension check
+    // does not already provide and cost real recall: rw-4's "write a TypeScript
+    // module to output.ts" derived NOTHING, because the task says "module" and
+    // its only "json" is inside "JSONPlaceholder". A task that names its
+    // deliverable exactly should not have to name it twice. The prose class
+    // that gate incidentally covered is now denied by name (TECH_NAME_TOKENS).
     const ext = candidate.split(".").pop()?.toLowerCase() ?? "";
     if (!REAL_FILE_EXTENSIONS.has(ext)) return false;
   }
+  void task;
   if (/^\d+\.\d+$/.test(candidate)) return false;
   if (/https?:/i.test(candidate)) return false;
   if (candidate.startsWith("//")) return false;

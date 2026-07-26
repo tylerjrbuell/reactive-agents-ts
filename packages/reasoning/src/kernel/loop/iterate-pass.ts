@@ -166,6 +166,7 @@ import {
   buildEffectiveToolsUsed,
   commitDeliverable,
   passthroughOutputDeliverable,
+  unproducedDeliverables,
 } from "./runner-helpers/deliverable.js";
 
 /**
@@ -833,9 +834,20 @@ export function runIterationPass(
         // (if we're already at the last iteration, the loop exits naturally).
         const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
         const missingRequiredForLowDelta = missingRequiredToolsForInput(state.steps, currentInput);
+        // A declared deliverable that has not been produced is the same class of
+        // "the run is not done" fact as a required tool that has not been
+        // called — and it is the one the RunContract exists to state. Nothing
+        // consulted it, so this guard could end a run whose entire point was to
+        // write a file it had not written: bench rw-4 (2026-07-26) fetched the
+        // posts, fetched the comments and computed the enriched array, then was
+        // terminated on tokenDelta 0 with artifactsAvailable 4, before writing
+        // the required output.ts. maxIterations still bounds the run; this only
+        // declines the EARLY exit while the contract is demonstrably unmet.
+        const unproducedForLowDelta = unproducedDeliverables(state);
         if (
           hasRemainingIterations &&
           missingRequiredForLowDelta.length === 0 &&
+          unproducedForLowDelta.length === 0 &&
           state.status !== "done" &&
           state.status !== "failed" &&
           shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
