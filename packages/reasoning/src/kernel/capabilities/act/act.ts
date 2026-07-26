@@ -556,6 +556,39 @@ export function handleActing(
             const bHeal = healCall(rawBatchCall);
             const batchCall = bHeal.succeeded ? bHeal.call : rawBatchCall;
             healedByCallId.set(batchCall.id, bHeal.actions.length > 0);
+
+            // ── tool-policy execution gate (P0-4), batch-member parity ──────────
+            // The single-call path gates every call through this SAME predicate
+            // (`:377-380` above). Batch members were re-collected here without it
+            // — a forbidden/non-allowlisted tool riding as a non-leader member of
+            // a `nextMovesPlanning` batch executed uninspected. Mirrors the
+            // block-approval gate's placement immediately below (same reasoning:
+            // this loop bypasses the canonical primitive, so the gate must fire
+            // HERE too). Found in a framework quality audit, 2026-07-26.
+            const batchPolicyDecision = evaluateToolPolicy(batchCall.name, {
+              ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
+              forbiddenTools: forbiddenTools(state.meta.runContract),
+            });
+            if (batchPolicyDecision.blocked) {
+              const blockedMsg = batchPolicyDecision.message;
+              const blockedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
+                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
+                toolUsed: batchCall.name,
+              });
+              const blockedObsStep = makeStep("observation", blockedMsg, {
+                toolCallId: batchCall.id,
+                observationResult: makeObservationResult(batchCall.name, false, blockedMsg),
+              });
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
+              yield* hooks.onObservation(
+                transitionState(state, { steps: [...allSteps, blockedActionStep] }),
+                blockedMsg,
+                false,
+              );
+              allSteps = [...allSteps, blockedActionStep, blockedObsStep];
+              continue;
+            }
+
             const guardOutcome = guardCheck(
               batchCall,
               transitionState(state, { steps: allSteps, lastMetaToolCall, consecutiveMetaToolCount }),
