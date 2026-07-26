@@ -201,7 +201,16 @@ export type TrustVerdict =
 
 export interface RunScore {
   readonly runIndex: number;
-  readonly dimensions: ReadonlyArray<DimensionScore>;
+  /**
+   * Declared as {@link BenchDimensionScore}, the type the judge actually
+   * produces. It was `DimensionScore` — the base — so `scoreState` was
+   * invisible to every consumer reading this array, and the "an unmeasured
+   * score is not a zero" contract could only be honoured by code that already
+   * knew to narrow. Widening the declaration to the real shape is what lets
+   * `aggregateRuns` see the outage (2026-07-26). Structurally compatible: every
+   * added field is optional.
+   */
+  readonly dimensions: ReadonlyArray<BenchDimensionScore>;
   readonly tokensUsed: number;
   readonly durationMs: number;
   readonly status: "pass" | "fail" | "error";
@@ -245,12 +254,24 @@ export interface TaskVariantReport {
    */
   readonly passK?: ReadonlyArray<{ readonly k: number; readonly estimate: number }>;
   /**
-   * Set when the cell was NOT measured because a preflight contract was
-   * violated (today: capability source=fallback). An inconclusive cell carries
-   * `runs: []` and zeroed scores — it is excluded from aggregation, ablation,
-   * and equal-or-better verdicts. `BenchCellOutcome` per canonical-contracts §6.
+   * Set when the cell was NOT measured. Two lanes reach this, and they mean the
+   * same thing to every consumer — the cell is excluded from aggregation,
+   * ablation, and equal-or-better verdicts (`BenchCellOutcome`, canonical-
+   * contracts §6):
+   *
+   *   - {@link PreFlightViolation} — a preflight contract was violated (today:
+   *     capability source=fallback). The cell carries `runs: []`.
+   *   - {@link InconclusiveReason} — every run's ACCURACY went unmeasured
+   *     (judge outage / judge error / stub judge). The cell carries its runs,
+   *     but none of them observed the metric every downstream verdict reads.
+   *
+   * The second lane was declared at the RUN level (`ScoreState`) and emitted by
+   * the judge from the start, but nothing propagated it to the CELL: this field
+   * was typed `PreFlightViolation`, so `inconclusiveCells` was always `[]` and
+   * `partialMeasurement` always `false` however much went unmeasured. Widened
+   * 2026-07-26 after a live sweep rendered a judge outage as `reasoning 0%`.
    */
-  readonly inconclusive?: PreFlightViolation;
+  readonly inconclusive?: PreFlightViolation | InconclusiveReason;
 }
 
 export interface AblationResult {
@@ -330,7 +351,7 @@ export interface SessionReport extends MultiModelReport {
     readonly taskId: string;
     readonly modelVariantId: string;
     readonly variantId: string;
-    readonly reason: PreFlightViolation;
+    readonly reason: PreFlightViolation | InconclusiveReason;
   }>;
   /** True iff any cell is inconclusive. A report with this set is PARTIAL. */
   readonly partialMeasurement?: boolean;

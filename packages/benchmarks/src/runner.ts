@@ -20,14 +20,14 @@ import type {
   BenchmarkSession, HarnessVariant, ModelVariant,
   TaskVariantReport, AblationResult, SessionReport, RunScore,
   DimensionScore, QualityDimension, HarnessConfig, TaskRunResult,
-  SessionReproducibility,
+  SessionReproducibility, InconclusiveReason,
 } from "./types.js"
 import { REAL_WORLD_TASKS, ABSTENTION_TRAP_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs, assertNonEmptySelection } from "./session.js"
-import { completionRateOf, passKOf, PASS_K_VALUES, solveRateOf } from "./report-format.js"
+import { completionRateOf, passKOf, PASS_K_VALUES, solveRateOf, runInconclusiveReasonOf } from "./report-format.js"
 import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
@@ -46,7 +46,7 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
     }
   };
 }
-import { scoreTask, scoreErrorCell, computeReliability } from "./judge.js"
+import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
 import { diagnoseRun, formatDiagnosisLine, trustVerdict } from "./diagnose.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
@@ -960,15 +960,42 @@ export function aggregateRuns(
 
   const dims = [...new Set(runs.flatMap(r => r.dimensions.map(d => d.dimension)))] as QualityDimension[]
 
-  const meanScores: DimensionScore[] = dims.map(dim => {
-    const scores = runs.map(r => r.dimensions.find(d => d.dimension === dim)?.score ?? 0)
-    return { dimension: dim, score: scores.reduce((a, b) => a + b, 0) / scores.length }
+  // A dimension result the judge could not score carries `scoreState:
+  // "inconclusive"` and a placeholder `score: 0`. That 0 is NOT an observation,
+  // so it must never enter a mean — averaging it in turns a judge outage into a
+  // claim about the agent ("reasoning 0%"). Unmeasured results are dropped; a
+  // dimension NO run could measure is OMITTED from `meanScores` entirely, so a
+  // renderer has nothing to print rather than a fabricated 0%.
+  const measuredScores = (dim: QualityDimension): number[] =>
+    runs.flatMap(r => {
+      const d = r.dimensions.find(x => x.dimension === dim)
+      if (d === undefined || d.scoreState === "inconclusive") return []
+      return [d.score]
+    })
+
+  const meanScores: DimensionScore[] = dims.flatMap(dim => {
+    const scores = measuredScores(dim)
+    if (scores.length === 0) return []
+    return [{ dimension: dim, score: scores.reduce((a, b) => a + b, 0) / scores.length }]
   })
 
-  const accuracyScores = runs.map(r => r.dimensions.find(d => d.dimension === "accuracy")?.score ?? 0)
-  const mean = accuracyScores.reduce((a, b) => a + b, 0) / accuracyScores.length
-  const variance = accuracyScores.reduce((a, b) => a + (b - mean) ** 2, 0) / accuracyScores.length
+  const accuracyScores = measuredScores("accuracy")
+  const mean = accuracyScores.length > 0
+    ? accuracyScores.reduce((a, b) => a + b, 0) / accuracyScores.length
+    : 0
+  const variance = accuracyScores.length > 0
+    ? accuracyScores.reduce((a, b) => a + (b - mean) ** 2, 0) / accuracyScores.length
+    : 0
   const reliability = computeReliability(runs)
+
+  // The CELL is inconclusive when NO run measured accuracy — the metric every
+  // downstream verdict (isSolved, lift, drift) reads. Some-measured is still a
+  // measured cell: the outage runs are simply excluded above, exactly as the
+  // report-format helpers' doc contract describes.
+  const cellInconclusive: InconclusiveReason | undefined =
+    accuracyScores.length === 0
+      ? runs.map(runInconclusiveReasonOf).find((x): x is InconclusiveReason => x !== undefined)
+      : undefined
 
   if (!meanScores.find(s => s.dimension === "reliability")) {
     meanScores.push({ dimension: "reliability", score: reliability })
@@ -985,6 +1012,7 @@ export function aggregateRuns(
     passRate: completionRateOf(runs),
     solveRate: solveRateOf(runs),
     passK: passKOf(runs),
+    ...(cellInconclusive !== undefined ? { inconclusive: cellInconclusive } : {}),
   }
 }
 
@@ -1076,11 +1104,20 @@ export function summarizeDimensions(
     return {
       dimension: dim,
       byVariant: variantIds.map(variantId => {
-        const variantReports = reports.filter(r => r.variantId === variantId)
-        const scores = variantReports.map(r => r.meanScores.find(s => s.dimension === dim)?.score ?? 0)
+        // A cell that carries no entry for this dimension did not MEASURE it
+        // (aggregateRuns omits unmeasured dimensions). Skipping is the whole
+        // point: `?? 0` here averaged an unmeasured cell in as a real zero, so
+        // one judge outage dragged the session mean toward 0 for every
+        // judge-scored dimension.
+        const scores = reports
+          .filter(r => r.variantId === variantId)
+          .flatMap(r => {
+            const s = r.meanScores.find(x => x.dimension === dim)
+            return s === undefined ? [] : [s.score]
+          })
         return {
           variantId,
-          meanScore: scores.reduce((a, b) => a + b, 0) / (scores.length || 1),
+          meanScore: scores.length === 0 ? 0 : scores.reduce((a, b) => a + b, 0) / scores.length,
         }
       }),
     }
@@ -1128,6 +1165,27 @@ export async function runSession(
   // or JUDGE_URL env), probe /version and refuse to run if the judge model
   // matches any SUT model variant. When no judge URL is set, the guard skips
   // (existing bench behavior preserved for non-judge code paths).
+  //
+  // REACHABILITY (2026-07-26). The Rule-4 guard below fires only when a judge
+  // URL is EXPLICITLY configured — but the judge CLIENT (`judge.ts`
+  // `resolveJudgeUrl`) always falls back to `DEFAULT_JUDGE_URL`. Two different
+  // notions of "is a judge configured": the guard's (explicit only) and the
+  // client's (always). So a session with no JUDGE_URL set ran a full sweep
+  // against a dead default judge, scored every judge dimension as unmeasured,
+  // and reported it as zeros — observed live 2026-07-26 across all 10
+  // real-world tasks. The aggregation fix makes that report HONEST; this warns
+  // BEFORE the sweep, so nobody spends 40 minutes and real tokens to find out.
+  // A warning rather than a throw: deterministic-only sessions legitimately
+  // never call the judge, and must not be made to depend on one.
+  const resolvedJudgeUrl = session.judgeUrl ?? process.env.JUDGE_URL ?? DEFAULT_JUDGE_URL;
+  if (await judgeUnreachable(resolvedJudgeUrl)) {
+    console.warn(
+      `\n  ⚠ judge-server unreachable at ${resolvedJudgeUrl}.\n` +
+        `    Every llm-judge dimension will be INCONCLUSIVE (not a zero), the report\n` +
+        `    will be marked partialMeasurement, and the run will exit non-zero.\n` +
+        `    Start it with: cd packages/judge-server && JUDGE_LAYER=live bun run src/index.ts\n`,
+    );
+  }
   const judgeUrlForGuard = session.judgeUrl ?? process.env.JUDGE_URL;
   let probedJudgeModelSha: string | undefined;
   let probedJudgeCodeSha: string | undefined;

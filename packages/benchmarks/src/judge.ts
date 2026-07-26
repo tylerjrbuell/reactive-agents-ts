@@ -83,7 +83,23 @@ export function collectJudgeDeliverable(
  * Default judge-server URL when neither callsite nor env supplies one.
  * Matches the default port the server binds to in `src/index.ts`.
  */
-const DEFAULT_JUDGE_URL = "http://127.0.0.1:8910"
+export const DEFAULT_JUDGE_URL = "http://127.0.0.1:8910"
+
+/**
+ * Is the judge-server unreachable at `url`? Used by `runSession` to warn BEFORE
+ * a sweep rather than after — an outage otherwise costs a full run's tokens and
+ * wall-clock before it shows up as inconclusive dimensions.
+ *
+ * Never throws: a probe failure IS the answer.
+ */
+export async function judgeUnreachable(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/version`)
+    return !res.ok
+  } catch {
+    return true
+  }
+}
 
 /**
  * Options threaded down to the RPC layer. Currently just `judgeUrl`; future

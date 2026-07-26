@@ -330,6 +330,22 @@ async function main() {
       }
     }
 
+    // A PARTIAL sweep must not exit 0 (2026-07-26). `partialMeasurement` was
+    // written to the report and read by nobody: a run whose cells went
+    // unmeasured — judge outage, preflight violation — exited success, and the
+    // only trace was a field inside a JSON file no one opens on a green run.
+    // Naming the cells here is the point: "it passed" and "it did not measure"
+    // must not look the same from the outside.
+    if (report.partialMeasurement) {
+      const cells = report.inconclusiveCells ?? []
+      console.error(`\nINCOMPLETE MEASUREMENT: ${cells.length} cell(s) were not measured.`)
+      for (const c of cells) {
+        console.error(`  ${c.taskId} / ${c.modelVariantId} / ${c.variantId} — ${c.reason}`)
+      }
+      console.error(`These cells are excluded from every mean, lift and pass^k above.`)
+      process.exit(1)
+    }
+
     return
   }
 

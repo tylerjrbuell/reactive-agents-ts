@@ -255,7 +255,12 @@ export function statusCell(report: TaskVariantReport): string {
   // MEASURED must never render as a pass, a fail, or a percentage. The count
   // and reason are in the cell so the reader sees the outage, not a verdict.
   if (report.inconclusive !== undefined) {
-    return `INCONCLUSIVE (preflight: ${report.inconclusive.kind})`;
+    // Two lanes now reach this field (types.ts): a PreFlightViolation object and
+    // a judge-side InconclusiveReason string. Both mean "not measured"; the
+    // label names which so the reader can act on it.
+    return typeof report.inconclusive === "string"
+      ? `INCONCLUSIVE (${report.inconclusive})`
+      : `INCONCLUSIVE (preflight: ${report.inconclusive.kind})`;
   }
   if (isCellInconclusive(report)) {
     const counts = inconclusiveCountsOf(runs)
