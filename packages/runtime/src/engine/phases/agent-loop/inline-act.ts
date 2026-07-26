@@ -283,6 +283,36 @@ export const runInlineAct = (
     const priorLedger = c.metadata.runLedger as RunLedger | undefined;
     const runLedger = projectStepsToLedger(priorLedger, ledgerSteps, c.iteration);
 
+    // Wave C.2 slice 3b — publish this iteration's new entries to the ledger
+    // STREAM, mirroring what the kernel runner does via `hooks.onLedgerAppend`
+    // (`state.ledger.slice(publishedLedgerLen)`). Without this the ledger had
+    // two views that disagreed: the OBJECT view (`metadata.runLedger`, complete
+    // on both paths since slices 1–2) and the STREAM view (`LedgerEntryAppended`
+    // → the `ledger-entry` trace event), which only ever fired on the kernel
+    // path — so every default-path run wrote tool facts to the object ledger and
+    // nothing at all to the trace. Trace-side consumers (analyze, debrief,
+    // cohort) read serialized JSONL and cannot reach the object view, so they
+    // were structurally blind to inline runs.
+    //
+    // No double-publish: the engine picks kernel XOR inline for a run
+    // (`execution-engine.ts` — `if (reasoningOpt._tag === "Some" && !cacheHit)`
+    // … `else if (!cacheHit)`), so exactly one of the two publishers is live.
+    const priorLen = priorLedger?.length ?? 0;
+    if (eb && runLedger.length > priorLen) {
+      yield* eb.publish({
+        _tag: "LedgerEntryAppended",
+        agentId: c.agentId,
+        taskId: c.taskId,
+        // Every concrete LedgerEntry variant structurally satisfies
+        // Record<string, unknown> (core's package-boundary shape — core cannot
+        // depend on reasoning's LedgerEntry union), but TS's structural check
+        // wants an explicit index signature. Same narrow widening the kernel's
+        // publisher does in `kernel-hooks.ts`.
+        entries: runLedger.slice(priorLen) as unknown as ReadonlyArray<Record<string, unknown>>,
+        timestamp: Date.now(),
+      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-ledger-entry-appended", tag: errorTag(err) })));
+    }
+
     return {
       ...c,
       toolResults: [...c.toolResults, ...toolResults],
