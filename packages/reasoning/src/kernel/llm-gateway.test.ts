@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { TestLLMService } from "@reactive-agents/llm-provider";
+import type { CompletionRequest } from "@reactive-agents/llm-provider";
 import {
   resolveOutputBudget,
   gatewayComplete,
+  gatewayStream,
   applyModelRouting,
   CurrentModelRouting,
   type GatewayRequest,
@@ -185,5 +187,62 @@ describe("gatewayComplete — reads the ambient model-routing FiberRef", () => {
       ),
     );
     expect(res.content).toBe("ok");
+  });
+});
+
+// The gateway is the ONLY place a call's purpose reaches the wire. Everything
+// below it that needs to tell an agent turn from a harness-internal call reads
+// `request.purpose` — the deterministic test provider's channel split, most of
+// all, whose absence let the tool-relevance classifier eat scripted agent turns
+// and made the kernel look incapable of executing them.
+//
+// Cutting the stamp would not fail the provider's own tests, because those pass
+// `purpose` directly. It fails here.
+describe("the gateway stamps purpose onto the wire request", () => {
+  const POOL: ModelRoutingPool = { cheap: "cheap-model", strong: "strong-model" };
+
+  function capturing(): {
+    readonly llm: ReturnType<typeof TestLLMService>;
+    readonly seen: CompletionRequest[];
+  } {
+    const base = TestLLMService([{ text: "ok" }]);
+    const seen: CompletionRequest[] = [];
+    return {
+      seen,
+      llm: {
+        ...base,
+        complete: (request) => {
+          seen.push(request);
+          return base.complete(request);
+        },
+        stream: (request) => {
+          seen.push(request);
+          return base.stream(request);
+        },
+      },
+    };
+  }
+
+  test("gatewayComplete carries the call site's purpose", async () => {
+    const { llm, seen } = capturing();
+    await Effect.runPromise(gatewayComplete(llm, { purpose: "classify" }, { messages: [] }));
+    expect(seen[0]?.purpose).toBe("classify");
+  });
+
+  test("gatewayStream carries the call site's purpose", async () => {
+    const { llm, seen } = capturing();
+    await Effect.runPromise(gatewayStream(llm, { purpose: "think" }, { messages: [] }));
+    expect(seen[0]?.purpose).toBe("think");
+  });
+
+  test("purpose survives model routing", async () => {
+    // Routing rewrites the request; the stamp must not be the thing it drops.
+    const { llm, seen } = capturing();
+    await Effect.runPromise(
+      gatewayComplete(llm, { purpose: "verify" }, { messages: [] }).pipe(
+        Effect.locally(CurrentModelRouting, POOL),
+      ),
+    );
+    expect(seen[0]?.purpose).toBe("verify");
   });
 });

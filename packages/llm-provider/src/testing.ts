@@ -4,6 +4,7 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
+  LlmCallPurpose,
   TokenLogprob,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
@@ -88,21 +89,107 @@ function extractSearchText(
   return `${content} ${systemPrompt}`.trim();
 }
 
+/**
+ * Which caller a resolve is serving.
+ *
+ * - `"agent"` — the agent loop's own turn (kernel `think`, or the inline path).
+ *   Every turn kind is in scope, and consuming one advances the cursor.
+ * - `"harness"` — a harness-internal call the agent never sees: the
+ *   tool-relevance classifier, structured extraction, plan decomposition,
+ *   grounding checks.
+ *
+ * The distinction is not cosmetic. Harness-internal calls used to share the
+ * agent's cursor, and the tool-relevance classifier runs BEFORE the agent's
+ * first think and retries on a parse failure. Against a tool-calling scenario
+ * each attempt took a turn the agent had not consumed yet — the classifier
+ * cannot answer a `toolCall` turn (it reads as `empty content
+ * (stopReason=tool_use)`), so it burned the whole scenario and the run reached
+ * `think` with only the trailing text turn left. That terminated `end_turn` at
+ * one step having executed zero tools, and it looked exactly like "scripted tool
+ * calls cannot reach the kernel act phase" — a structural kernel defect that
+ * does not exist. The instrument was eating the script.
+ */
+type TurnChannel = "agent" | "harness";
+
+const isAgentOnly = (turn: TestTurn): boolean =>
+  "toolCall" in turn || "toolCalls" in turn;
+
+/**
+ * Resolve the turn that answers one LLM call.
+ *
+ * Agent calls behave exactly as they always have: scan forward from the cursor
+ * for the first turn whose `match` guard passes, consume it, advance.
+ *
+ * Harness calls differ in two ways, both of which exist to keep them from
+ * stealing the agent's script:
+ *
+ *  1. They skip `toolCall`/`toolCalls` turns, which are agent-only by
+ *     construction — a schema-constrained call has no way to answer one.
+ *  2. If reaching their turn required stepping OVER an agent-only turn, the
+ *     resolve is a PEEK: it returns the turn without moving the cursor. Moving
+ *     it would consume a turn the agent has not reached yet.
+ *
+ * When a harness call skips nothing — the ordinary case, e.g. a plan-execute
+ * scenario that opens with the `json` plan the decomposition call is meant to
+ * receive — it consumes and advances precisely as before. That keeps every
+ * non-interleaved scenario byte-identical.
+ */
 function resolveTurn(
   scenario: TestTurn[],
   callIndex: { value: number },
   searchText: string,
-): { turn: TestTurn; matchedIndex: number } {
+  channel: TurnChannel = "agent",
+): { turn: TestTurn; matchedIndex: number } | undefined {
+  let steppedOverAgentTurn = false;
   for (let i = callIndex.value; i < scenario.length; i++) {
     const turn = scenario[i];
+    if (channel === "harness" && isAgentOnly(turn)) {
+      steppedOverAgentTurn = true;
+      continue;
+    }
     const guard = turn.match;
     if (!guard || new RegExp(guard, "i").test(searchText)) {
-      callIndex.value = Math.min(i + 1, scenario.length - 1);
+      if (!steppedOverAgentTurn) {
+        callIndex.value = Math.min(i + 1, scenario.length - 1);
+      }
       return { turn, matchedIndex: i };
     }
   }
-  // Nothing matched from callIndex onward — repeat last turn
-  return { turn: scenario[scenario.length - 1], matchedIndex: scenario.length - 1 };
+  // Nothing matched from the cursor onward — repeat the last eligible turn,
+  // which is what makes single-turn scenarios work without special handling.
+  for (let i = scenario.length - 1; i >= 0; i--) {
+    const turn = scenario[i];
+    if (channel === "harness" && isAgentOnly(turn)) continue;
+    return { turn, matchedIndex: i };
+  }
+  // Harness call against a scenario that scripts only tool calls. Fail rather
+  // than invent a turn; callers of this path already degrade (the classifier
+  // logs and proceeds with an empty relevance set).
+  return undefined;
+}
+
+/**
+ * Which channel a request belongs to.
+ *
+ * `"think"` is the agent's own turn. An absent purpose means the call did not go
+ * through the kernel gateway at all — the inline execution path, or a direct
+ * `LLMService` call in a unit test — and those ARE the agent, so they keep the
+ * agent channel. Every other purpose is harness-internal.
+ */
+function channelOf(purpose: LlmCallPurpose | undefined): TurnChannel {
+  return purpose === undefined || purpose === "think" ? "agent" : "harness";
+}
+
+/** Agent channel resolve. Always succeeds: `scenario` is non-empty by construction. */
+function resolveAgentTurn(
+  scenario: TestTurn[],
+  callIndex: { value: number },
+  searchText: string,
+): { turn: TestTurn; matchedIndex: number } {
+  return resolveTurn(scenario, callIndex, searchText, "agent") as {
+    turn: TestTurn;
+    matchedIndex: number;
+  };
 }
 
 function buildToolCalls(
@@ -139,14 +226,38 @@ export const TestLLMService = (
   scenario: TestTurn[],
   quirk?: ProviderQuirk,
 ): typeof LLMService.Service => {
-  // Mutable cursor — safe because each build() creates a fresh Layer instance
+  // Mutable cursor — safe because each build() creates a fresh Layer instance.
+  // ONE cursor, shared across channels on purpose: a harness call that skips
+  // nothing must consume exactly as it always did, so non-interleaved scenarios
+  // stay byte-identical. See resolveTurn for the peek rule that protects
+  // interleaved ones.
   const callIndex = { value: 0 };
+
+  /** Harness resolves can come up empty; the caller turns that into a failure. */
+  const resolveFor = (
+    request: { readonly purpose?: LlmCallPurpose },
+    searchText: string,
+  ) => resolveTurn(scenario, callIndex, searchText, channelOf(request.purpose));
 
   return {
     complete: (request) =>
       Effect.gen(function* () {
         const searchText = extractSearchText(request.messages, request);
-        const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
+        const resolved = resolveFor(request, searchText);
+        if (resolved === undefined) {
+          // Scenario scripts agent tool calls only, so there is nothing for a
+          // harness-internal call to read. Answer empty rather than throw: that
+          // is byte-identical to what these callers used to receive when they
+          // consumed a `toolCall` turn (`empty content`) and already degrade on
+          // it — minus the theft of the agent's turn, which was the bug.
+          return {
+            content: "",
+            stopReason: "end_turn" as const,
+            usage: fakeUsage(searchText.length, 0),
+            model: "test-model",
+          } satisfies CompletionResponse;
+        }
+        const { turn, matchedIndex } = resolved;
 
         const delayMs = "delayMs" in turn ? (turn.delayMs ?? 0) : 0;
         if (delayMs > 0) {
@@ -193,7 +304,11 @@ export const TestLLMService = (
 
     stream: (request) => {
       const searchText = extractSearchText(request.messages, request);
-      const { turn, matchedIndex } = resolveTurn(scenario, callIndex, searchText);
+      // The streaming path is the agent's think turn; a harness call that lands
+      // here still resolves, it simply never skips (see resolveTurn).
+      const { turn, matchedIndex } =
+        resolveFor(request, searchText) ??
+        resolveAgentTurn(scenario, callIndex, searchText);
 
       const delayMs = "delayMs" in turn ? (turn.delayMs ?? 0) : 0;
       const delayStream: Stream.Stream<never, never> =
@@ -284,7 +399,15 @@ export const TestLLMService = (
     completeStructured: (request) =>
       Effect.gen(function* () {
         const searchText = extractSearchText(request.messages, request);
-        const { turn } = resolveTurn(scenario, callIndex, searchText);
+        // Schema-constrained by definition, so always the harness channel: it
+        // has no way to answer a `toolCall` turn and must never consume one.
+        const resolved = resolveTurn(scenario, callIndex, searchText, "harness");
+        if (resolved === undefined) {
+          throw new Error(
+            "test provider: scenario scripts only tool calls, so it has no structured turn to answer completeStructured",
+          );
+        }
+        const { turn } = resolved;
 
         if ("error" in turn) {
           throw new Error(turn.error);

@@ -22,32 +22,35 @@
 // var, but nothing proved the var changes LIVE kernel behaviour. Cutting the
 // wiring must fail a test, not just cutting the function.
 //
-// ── BLOCKED (2026-07-26): scripted tool calls never reach the KERNEL act phase.
+// ── Why this cell was blocked, and what unblocked it (2026-07-26)
 //
-// Measured with a paired probe, identical task + identical scenario, only the
-// path differing:
+// It first landed `describe.skip`, on a measurement that said the kernel path
+// executed zero scripted tool calls where the inline path executed them fine.
+// That measurement was real; the conclusion drawn from it ("structural to the
+// kernel path") was wrong.
 //
-//   inline (.withTools())                     tool-call-end: 1   ← fires
-//   kernel (.withReasoning({reactive}))       tool-call-end: 0
-//   kernel + .withRequiredTools({adaptive:false})  tool-call-end: 0
-//   kernel + .withLeanHarness()               tool-call-end: 0
+// The actual cause was in the instrument. Harness-internal LLM calls — above
+// all the tool-relevance classifier, which runs BEFORE the agent's first think
+// and retries on a parse failure — shared the deterministic provider's single
+// turn cursor with the agent. A classifier attempt cannot answer a `toolCall`
+// turn, so each one burned a turn the agent had not consumed yet. Against a
+// tool-calling scenario the classifier ate the script, `think` reached the
+// trailing text turn, and the run terminated `end_turn` at one step having
+// called nothing. The kernel was never at fault; the test provider was
+// answering the harness out of the agent's script.
 //
-// The kernel runs resolve tools (`tool-surface-resolved`), compile a contract,
-// compute an assessment, render a projection and fire a guard — everything
-// except execute the scripted call. So this is not the documented
-// classifier-consumption trap (suppressing the classifier changes nothing); it
-// is structural to the kernel path under the `test` provider.
-//
-// CONSEQUENCE, and it is bigger than this one cell: every harness mechanism
-// that lives in the kernel — the guards, RunAssessment, the Projector, the
-// control plane, i.e. all of Waves D/E/F — currently CANNOT be exercised by a
-// scripted deterministic cell. That is precisely why these defects only ever
-// surface on expensive, noisy, model-tier-dependent live runs. Closing this gap
-// is the highest-leverage instrument work available.
+// The provider now separates the two channels (llm-provider/src/testing.ts) and
+// the gateway stamps `purpose` on every mediated request so it can. Which is
+// why the scenario below opens with a `json` turn: that is the CLASSIFIER's
+// turn, consumed on the harness channel, naming the tool the agent is about to
+// use. Without it the classifier returns nothing relevant and the kernel's tool
+// surface prunes to empty — the agent then emits `file-write` and the act phase
+// has nothing to dispatch it to.
 import { describe, expect, it } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ReactiveAgents } from "../src/index.js";
 
 const EVIDENCE_RESET_ENV = "REACTIVE_AGENTS_EVIDENCE_DELTA_RESET";
@@ -76,11 +79,18 @@ const STEP_PATHS = STEP_KEYS.map((k) => `./.lowdelta-${k}.tmp.md`);
 // trigger outside the window the matcher actually sees, so nothing fired.)
 const TASK = "TERSE_TRIGGER: perform the multi-step write work, one file per step.";
 
-function terseWorkScenario(): ReadonlyArray<Record<string, unknown>> {
-  // Each turn: a SHORT assistant message (low token delta) issuing a SUCCESSFUL
-  // write to a DISTINCT path (new evidence). That combination is exactly what
-  // the guard cannot currently distinguish from a stall.
+function terseWorkScenario(): TestTurn[] {
   return [
+    // HARNESS channel — the tool-relevance classifier's turn. It must name
+    // file-write or the kernel prunes it out of the tool surface and the act
+    // phase has nothing to dispatch. Deliberately `relevant` and not
+    // `required`: a required tool blocks low_delta_guard outright
+    // (`missingRequiredForLowDelta`), which would make this measurement void.
+    { json: { required: [], relevant: ["file-write"] } },
+    // AGENT channel — each turn a SHORT assistant message (low token delta)
+    // issuing a SUCCESSFUL write to a DISTINCT path (new evidence). That
+    // combination is exactly what the guard cannot currently distinguish from
+    // a stall.
     ...STEP_PATHS.map((path, i) => ({
       match: i === 0 ? "TERSE_TRIGGER" : `.lowdelta-${STEP_KEYS[i - 1]}`,
       toolCall: { name: "file-write", args: { path, content: `${STEP_KEYS[i]} payload` } },
@@ -91,7 +101,7 @@ function terseWorkScenario(): ReadonlyArray<Record<string, unknown>> {
 
 async function runArm(evidenceReset: boolean): Promise<{
   readonly guards: readonly GuardEvent[];
-  readonly toolCalls: number;
+  readonly toolInvocations: number;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "ra-lowdelta-"));
   const prev = process.env[EVIDENCE_RESET_ENV];
@@ -102,15 +112,9 @@ async function runArm(evidenceReset: boolean): Promise<{
       .withName(evidenceReset ? "evidence-arm" : "legacy-arm")
       .withProvider("test")
       .withModel("test-model")
-      .withReasoning({ strategy: "reactive" })
+      .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(10)
       .withTools()
-      // Suppresses the adaptive tool-relevance CLASSIFIER, whose own LLM call
-      // otherwise consumes the scripted turns before the act phase ever runs —
-      // the documented withTestScenario trap. Deliberately NOT the
-      // `{ tools: [...] }` form: a required tool would block low_delta_guard
-      // outright (`missingRequiredForLowDelta`) and make this measurement void.
-      .withRequiredTools({ adaptive: false })
       .withObservability({ tracing: { dir } })
       .withTestScenario(terseWorkScenario())
       .build();
@@ -119,21 +123,28 @@ async function runArm(evidenceReset: boolean): Promise<{
     await agent.dispose();
 
     const guards: GuardEvent[] = [];
-    let toolCalls = 0;
+    let toolInvocations = 0;
     for (const f of (await readdir(dir)).filter((x) => x.endsWith(".jsonl"))) {
       for (const line of (await readFile(join(dir, f), "utf-8")).split("\n")) {
         if (!line.trim()) continue;
-        let ev: GuardEvent;
+        let ev: GuardEvent & { entries?: ReadonlyArray<{ kind?: string }> };
         try {
-          ev = JSON.parse(line) as GuardEvent;
+          ev = JSON.parse(line) as typeof ev;
         } catch {
           continue;
         }
         if (ev.kind === "guard-fired") guards.push(ev);
-        if (ev.kind === "tool-call-end") toolCalls += 1;
+        // The kernel path records tool execution on the RunLedger, not as the
+        // engine's `tool-call-end` event — reading the wrong one here is what
+        // made the kernel look inert in the first place.
+        if (ev.kind === "ledger-entry") {
+          for (const e of ev.entries ?? []) {
+            if (e.kind === "tool-invocation") toolInvocations += 1;
+          }
+        }
       }
     }
-    return { guards, toolCalls };
+    return { guards, toolInvocations };
   } finally {
     if (prev === undefined) delete process.env[EVIDENCE_RESET_ENV];
     else process.env[EVIDENCE_RESET_ENV] = prev;
@@ -145,16 +156,30 @@ async function runArm(evidenceReset: boolean): Promise<{
 const lowDeltaTerminations = (g: readonly GuardEvent[]): readonly GuardEvent[] =>
   g.filter((e) => e.guard === "low_delta_guard" && e.outcome === "terminate");
 
-// BLOCKED — see the header note. `describe.skip` rather than deletion: the cell
-// is correct and activates the moment scripted tool calls reach the kernel act
-// phase. Left failing it would be noise; left deleted the finding would be lost.
-describe.skip("low_delta_guard on a terse-but-progressing run", () => {
+describe("low_delta_guard on a terse-but-progressing run", () => {
   it("CONTROL: the scripted run actually executes tools", async () => {
     const legacy = await runArm(false);
     // Without this the arms below could agree for the trivial reason that no
     // work happened — the malformed-probe trap that cost this project a long
     // stretch twice. A guard comparison over two empty runs proves nothing.
-    expect(legacy.toolCalls).toBeGreaterThan(0);
+    expect(legacy.toolInvocations).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("CONTROL: the legacy arm still REPRODUCES the misfire", async () => {
+    const legacy = await runArm(false);
+    // The anchor that keeps the assertion below from rotting into a vacuous
+    // pass. "No misfires under the reset" proves nothing unless the arm without
+    // the reset actually misfires — if the guard stops firing here for some
+    // unrelated reason, this cell has quietly stopped measuring anything and
+    // must say so rather than stay green.
+    //
+    // Observed shape, which matches the live rw-4 trace almost exactly:
+    //   low_delta_guard terminate { tokenDelta: 0, consecutiveLowDeltaCount: 6,
+    //                               artifactsAvailable: 2 }
+    const misfires = lowDeltaTerminations(legacy.guards).filter(
+      (e) => (e.metadata?.artifactsAvailable ?? 0) > 0,
+    );
+    expect(misfires.length).toBeGreaterThan(0);
   }, 60_000);
 
   it("the evidence reset does not INCREASE low-delta terminations", async () => {

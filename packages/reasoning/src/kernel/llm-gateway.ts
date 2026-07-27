@@ -34,6 +34,7 @@ import { Effect, FiberRef, type Stream } from "effect";
 import type {
   CompletionRequest,
   CompletionResponse,
+  LlmCallPurpose,
   LLMService,
   LLMErrors,
   StreamEvent,
@@ -42,14 +43,23 @@ import { THINKING_SAFE_MIN_TOKENS } from "./utils/stream-parser.js";
 import type { PaceBand } from "./assessment/assess.js";
 import { resolveRoutedModel, type ModelRoutingPool } from "./policy/purpose-routing.js";
 
-/** What the call is FOR — drives the default budget class. */
-export type LlmPurpose =
-  | "think" // main-loop reasoning turn (tier-adaptive budget)
-  | "plan" // decompose a goal into steps
-  | "synthesize" // combine evidence into a final answer
-  | "extract" // pull structured data out of text
-  | "classify" // small routing/labelling decision
-  | "verify"; // critique / grounding check
+/**
+ * What the call is FOR — drives the default budget class, purpose→tier routing,
+ * and (below the gateway) the agent/harness channel split in the deterministic
+ * test provider.
+ *
+ * An ALIAS, not a second declaration: the union lives at the provider boundary
+ * because the wire request carries it, and a hand-copied union here would be one
+ * more cross-cutting field to drop.
+ *
+ *  - `think`      main-loop reasoning turn (tier-adaptive budget)
+ *  - `plan`       decompose a goal into steps
+ *  - `synthesize` combine evidence into a final answer
+ *  - `extract`    pull structured data out of text
+ *  - `classify`   small routing/labelling decision
+ *  - `verify`     critique / grounding check
+ */
+export type LlmPurpose = LlmCallPurpose;
 
 /**
  * How much room the answer needs.
@@ -213,19 +223,29 @@ export function applyModelRouting(
   return { ...request, model: resolveRoutedModel(pool, purpose) };
 }
 
-/** A CompletionRequest whose budget the gateway owns. */
-export type GatewayRequest = Omit<CompletionRequest, "maxTokens">;
+/**
+ * A CompletionRequest whose budget the gateway owns. `purpose` is owned here
+ * too — call sites state it as intent, the gateway is what puts it on the wire.
+ */
+export type GatewayRequest = Omit<CompletionRequest, "maxTokens" | "purpose">;
 
 type LLMServiceShape = LLMService["Type"];
 
-/** Finalize the wire request: apply the gateway-owned budget to a routed request. */
-function withBudget(
+/**
+ * Finalize the wire request: apply the gateway-owned budget and stamp the
+ * purpose the call site declared, so everything below the gateway can tell an
+ * agent-visible turn from a harness-internal call.
+ */
+function finalize(
   request: GatewayRequest,
   budget: number | undefined,
+  purpose: LlmPurpose,
 ): CompletionRequest {
-  return budget === undefined
-    ? (request as CompletionRequest)
-    : { ...request, maxTokens: budget };
+  return {
+    ...request,
+    purpose,
+    ...(budget === undefined ? {} : { maxTokens: budget }),
+  };
 }
 
 /**
@@ -240,7 +260,9 @@ export function gatewayComplete(
   const budget = resolveOutputBudget(intent);
   return FiberRef.get(CurrentModelRouting).pipe(
     Effect.flatMap((pool) =>
-      llm.complete(withBudget(applyModelRouting(request, intent.purpose, pool), budget)),
+      llm.complete(
+        finalize(applyModelRouting(request, intent.purpose, pool), budget, intent.purpose),
+      ),
     ),
   );
 }
@@ -257,7 +279,9 @@ export function gatewayStream(
   const budget = resolveOutputBudget(intent);
   return FiberRef.get(CurrentModelRouting).pipe(
     Effect.flatMap((pool) =>
-      llm.stream(withBudget(applyModelRouting(request, intent.purpose, pool), budget)),
+      llm.stream(
+        finalize(applyModelRouting(request, intent.purpose, pool), budget, intent.purpose),
+      ),
     ),
   );
 }

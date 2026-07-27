@@ -104,6 +104,7 @@ export type {
   ToolCall,
   CompletionRequest,
   CompletionResponse,
+  LlmCallPurpose,
   StreamEvent,
   StructuredCompletionRequest,
   TruncationStrategy,

@@ -778,9 +778,34 @@ export type TokenLogprob = {
  * };
  * ```
  */
+/**
+ * What a given LLM call is FOR.
+ *
+ * Declared here, at the provider boundary, because it is the one place every
+ * caller already passes through — the kernel gateway's `LlmPurpose` is an alias
+ * of this type rather than a second hand-maintained copy.
+ *
+ * Real providers ignore it; it exists so anything below the gateway can tell an
+ * agent-visible turn (`"think"`) apart from a harness-internal call the agent
+ * never sees. The deterministic test provider uses exactly that distinction to
+ * keep the classifier from consuming scripted agent turns.
+ */
+export type LlmCallPurpose =
+  | "think"
+  | "plan"
+  | "synthesize"
+  | "extract"
+  | "classify"
+  | "verify";
+
 export type CompletionRequest = {
   /** Conversation history (at least 1 message required) */
   readonly messages: readonly LLMMessage[];
+  /**
+   * What this call is for (see {@link LlmCallPurpose}). Set by the kernel LLM
+   * gateway on every mediated call. Absent on direct, un-mediated calls.
+   */
+  readonly purpose?: LlmCallPurpose;
   /** Model config (provider + model name + optional sampling params), or bare model-name string for routing overrides */
   readonly model?: ModelConfig | string;
   /** Maximum response tokens (optional, uses config default if omitted) */
