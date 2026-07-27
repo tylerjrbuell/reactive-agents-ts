@@ -1,0 +1,226 @@
+{
+  "generatedAt": "2026-07-27T13:01:36.062Z",
+  "runs": [],
+  "sessionId": "low-delta-ablation",
+  "sessionVersion": "1.0.0",
+  "gitSha": "090de878",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "haiku",
+      "variantId": "low-delta-legacy",
+      "variantLabel": "low_delta (token delta only)",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.25,
+              "evidence": "The agent does not demonstrate the use of code-execute to discover failures, only mentions running tests.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "evidence": "The response does not indicate any attempt to fix the bugs or adapt the approach after failing tests.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 11901,
+          "durationMs": 25103.896961,
+          "status": "pass",
+          "output": "Now let me run the tests to see which ones fail:",
+          "traceId": "01KYHTJ1F93JV87ASR3THPWSF5",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not indicate using code-execute to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response does not indicate a plan for adapting the approach if a fix attempt doesn't fully resolve a bug.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 11844,
+          "durationMs": 27090.489084999997,
+          "status": "pass",
+          "output": "Good! I've identified the bugs in the three files. Now let me create a comprehensive test suite to verify these bugs and then fix them.",
+          "traceId": "01KYHTJYXJJ6GF2FZJ86AWDR2P",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The agent mentions running tests to see which ones fail.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.4,
+              "evidence": "The response does not demonstrate adaptation in fixing the bugs; it only suggests running tests without specific plans for different fix attempts.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 13458,
+          "durationMs": 38591.95168399999,
+          "status": "pass",
+          "output": "Let me run the tests to see which ones fail and identify the bugs:",
+          "traceId": "01KYHTKX83HEZPY1BKY5HHA20B",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.4166666666666667
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.3
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 12401,
+      "meanDurationMs": 30262,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.4166666666666667
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.3
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1785157191059-02zerqah",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session low-delta-ablation --run-id run-1785157191059-02zerqah"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "low-delta-legacy",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

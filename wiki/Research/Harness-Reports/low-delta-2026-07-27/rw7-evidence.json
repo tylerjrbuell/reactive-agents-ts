@@ -1,0 +1,228 @@
+{
+  "generatedAt": "2026-07-27T13:04:43.961Z",
+  "runs": [],
+  "sessionId": "low-delta-ablation",
+  "sessionVersion": "1.0.0",
+  "gitSha": "090de878",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "haiku",
+      "variantId": "low-delta-evidence",
+      "variantLabel": "low_delta (+ evidence reset)",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response identifies bugs but does not demonstrate the execution of tests to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 1,
+              "evidence": "All identified bugs were addressed with appropriate fixes.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18762,
+          "durationMs": 54566.180665,
+          "status": "pass",
+          "output": "Great! The tests found the bugs. Now I can see the issues:\n\n1. **validator.ts**: The `!obj[field]` check rejects falsy-but-valid values (0, \"\", false). It should check if the field exists and is not undefined.\n2. **processor.ts**: The condition `items.length > 10` should be `items.length >= 10` (off-by-one error).\n3. **pipeline.ts**: The `Promise.all` runs both functions concurrently, so `processSecond` sees stale `state.count`. It should run sequentially.\n\nLet me fix these bugs:",
+          "traceId": "01KYHTP54RDFSBZ5EWYFEB2FMQ",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "The response does not explicitly mention using code-execute to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "evidence": "The response does not demonstrate any attempt to adapt the approach after a fix attempt fails.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 14473,
+          "durationMs": 46479.05420499999,
+          "status": "pass",
+          "output": "Let me use code-execute to write the files:",
+          "traceId": "01KYHTQZFKTFRSDS2YYK0YQ7BZ",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The tests are detecting the bugs.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate adaptation to the bug in validator.ts after the initial fix attempt.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 12570,
+          "durationMs": 42762.077441999994,
+          "status": "pass",
+          "output": "Good! The tests are detecting the bugs. Now I can see:\n\n1. **validator.ts**: The `!obj[field]` check rejects falsy-but-valid values (0, \"\", false). Need to fix to check if field exists and is not undefined.\n2. **processor.ts**: The tests all pass, so let me check if there's actually a bug here. Looking at the comment, it says \"off-by-one — should be >= 10, not > 10\". But the tests show it's working correctly for 10 items (returning all) and 11 items (filtering). Let me re-read the logic...\n\nActually, looking at the test results, the processor tests all pass! Let me verify the pipeline tests - they also pass. So the only bug found is in validator.ts.\n\nLet me fix the validator.ts bug:",
+          "traceId": "01KYHTSHW0DNZKZKSM0WZZTYEC",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.3333333333333333
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.3333333333333333
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.5
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 15268,
+      "meanDurationMs": 47936,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.3333333333333333
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.3333333333333333
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.5
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1785157325882-ltgclgpm",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session low-delta-ablation --run-id run-1785157325882-ltgclgpm"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "low-delta-evidence",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

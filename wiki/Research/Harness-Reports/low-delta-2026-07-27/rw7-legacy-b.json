@@ -1,0 +1,272 @@
+{
+  "generatedAt": "2026-07-27T13:08:13.926Z",
+  "runs": [],
+  "sessionId": "low-delta-ablation",
+  "sessionVersion": "1.0.0",
+  "gitSha": "090de878",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "haiku",
+      "variantId": "low-delta-legacy",
+      "variantLabel": "low_delta (token delta only)",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not indicate any code execution to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response does not indicate an adaptation of approach to fix unresolved bugs.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 11780,
+          "durationMs": 30019.023474,
+          "status": "pass",
+          "output": "Good! I can see the three files with bugs already commented. Let me also check the package.json and any existing test setup:",
+          "traceId": "01KYHTW3KBY9EMC5DQFZX2SNDD",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "The response indicates an intention to write tests and fix bugs but does not mention using code execution to discover existing failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "evidence": "The response does not indicate any attempt to adapt the approach after fixing the bugs.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 14019,
+          "durationMs": 51545.059354000005,
+          "status": "pass",
+          "output": "Let me continue with fixing the bugs. I'll write the test file and then fix the source files.",
+          "traceId": "01KYHTX5MPARJGKXMM524QR99E",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response lacks any indication of executing the tests to discover failures, relying on assumptions instead.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate adaptation to resolve bugs; it only provides tests without addressing the bugs found.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 11800,
+          "durationMs": 31943.535793000003,
+          "status": "pass",
+          "output": "Good! I can see the three files with their bugs already documented in comments. Let me also check the package.json and any existing test configuration:",
+          "traceId": "01KYHTYVTAKHDSVW8TDSBFMJ5P",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The agent identifies the files with bugs and mentions checking the package.json for project structure.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.25,
+              "evidence": "The response does not demonstrate an adaptation to fix attempts as it only acknowledges the bugs without proposing alternative solutions.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 13509,
+          "durationMs": 40534.829568,
+          "status": "pass",
+          "output": "Good! I can see the three files with bugs already identified in comments. Let me also check if there's a package.json to understand the project structure:",
+          "traceId": "01KYHV003M868VK4PM948D3DNR",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "claimed-but-wrong"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.375
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.3125
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 12777,
+      "meanDurationMs": 38511,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.375
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.3125
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1785157520912-ifhxkg43",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session low-delta-ablation --run-id run-1785157520912-ifhxkg43"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "low-delta-legacy",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,311 @@
+{
+  "generatedAt": "2026-07-27T13:19:07.283Z",
+  "runs": [],
+  "sessionId": "low-delta-ablation",
+  "sessionVersion": "1.0.0",
+  "gitSha": "090de878",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "haiku",
+      "variantId": "low-delta-evidence",
+      "variantLabel": "low_delta (+ evidence reset)",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n 7 | \n 8 | describe(\"validator bug (falsy-but-valid values)\", () => {\n 9 |   it(\"accepts present-but-falsy required values and still rejects miss"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response indicates tests are running and identifies bugs, but it does not demonstrate a systematic approach to discovering failures beyond initial testing.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The agent does not demonstrate an adaptation in approach after identifying the validator bug.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 15548,
+          "durationMs": 57703.828131,
+          "status": "pass",
+          "output": "Great! The tests are running. Now I can see the bugs clearly:\n\n1. **validator.ts**: The validator rejects falsy-but-valid values (0, \"\", false)\n2. **processor.ts**: Tests are passing, so this one might be correct or the bug is subtle\n3. **pipeline.ts**: Tests are passing, which is interesting\n\nLet me fix the validator bug first:",
+          "traceId": "01KYHVDYP520YGCMY8RKEAVM7N",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response identifies the bugs but does not demonstrate executing tests to confirm failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.6666666666666666,
+              "evidence": "The fix addresses the falsy-but-valid values issue.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 12787,
+          "durationMs": 42732.993212,
+          "status": "pass",
+          "output": "Good! The tests are running and I can see the bugs. Now let me fix the bugs:\n\n1. **validator.ts**: The bug is that `!obj[field]` rejects falsy-but-valid values (0, \"\", false). Need to check if the field exists and is not undefined.\n2. **processor.ts**: The bug is `items.length > 10` should be `items.length >= 10`.\n3. **pipeline.ts**: The bug is that `Promise.all` runs both concurrently, so `processSecond` sees the stale `state.count` before `processFirst` increments it. Need to run them sequentially.\n\nLet me fix these:",
+          "traceId": "01KYHVFVFFQPYGGTZH03384JQM",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "The response does not demonstrate the use of code-execute to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response indicates an attempt to gather more information before reapplying fixes.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 12477,
+          "durationMs": 37817.699764000005,
+          "status": "pass",
+          "output": "Let me get the full test output to see which tests are still failing:",
+          "traceId": "01KYHVH9VXX52DT7VR3ADYTEE3",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate the use of code-execute to find failures; it only states that tests are passing without evidence of discovery.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.25,
+              "evidence": "The response indicates an intent to fix the processor.ts bug but does not demonstrate a change in approach or adaptation after the initial fix attempt.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 12763,
+          "durationMs": 39351.015522,
+          "status": "pass",
+          "output": "Great! The validator tests are now passing. Now let me fix the processor.ts bug:",
+          "traceId": "01KYHVJK9B1JPMBYPK5FJ46ANN",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.3333333333333333,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n23 | \n24 | describe(\"processor bug (off-by-one threshold)\", () => {\n25 |   it(\"filters lists of exactly 10 items (>= 10) and passes small lists t"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not show any execution of tests to discover failures, only guessing the bugs.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response only provided a single fix for each bug without demonstrating an adaptation if the initial fix did not resolve the issue.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 12678,
+          "durationMs": 40515.153716,
+          "status": "pass",
+          "output": "Good! The tests are revealing the bugs. Now let me fix the bugs:\n\n1. **validator.ts**: The bug is that `!obj[field]` rejects falsy-but-valid values (0, \"\", false). We need to check if the field exists and is not undefined.\n\n2. **processor.ts**: The bug is `items.length > 10` should be `items.length >= 10` to filter lists with 10 or more items.\n\n3. **pipeline.ts**: The bug is that `Promise.all` runs both functions concurrently, so `processSecond` reads `state.count` before `processFirst` increments it. We need to run them sequentially.\n\nLet me fix these:",
+          "traceId": "01KYHVKZ3FGXAQGH837VT6XNXP",
+          "diagnosis": {
+            "honestyLabel": "honest-failure",
+            "honestyEvidence": "status=failure",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "honest-failure"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.26666666666666666
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.4
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.4833333333333333
+        },
+        {
+          "dimension": "reliability",
+          "score": 0.7333333333333334
+        }
+      ],
+      "variance": 0.13333333333333333,
+      "meanTokens": 13251,
+      "meanDurationMs": 43624,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.26666666666666666
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.4
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.4833333333333333
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "low-delta-evidence",
+          "meanScore": 0.7333333333333334
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1785158105707-ywly0sbr",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session low-delta-ablation --run-id run-1785158105707-ywly0sbr"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "low-delta-evidence",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

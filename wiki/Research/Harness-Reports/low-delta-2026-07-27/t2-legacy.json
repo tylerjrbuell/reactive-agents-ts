@@ -1,0 +1,353 @@
+{
+  "generatedAt": "2026-07-27T13:26:11.469Z",
+  "runs": [],
+  "sessionId": "low-delta-ablation",
+  "sessionVersion": "1.0.0",
+  "gitSha": "090de878",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "rw-7",
+      "modelVariantId": "gpt4o-mini",
+      "variantId": "low-delta-legacy",
+      "variantLabel": "low_delta (token delta only)",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 1,
+              "evidence": "The response indicates that tests were written to identify bugs, demonstrating a use of code execution to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.6666666666666666,
+              "evidence": "The agent adapted its approach to fixing bugs, as seen in the modifications made to `validator.ts` and `processor.ts`.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 13967,
+          "durationMs": 42177.379624999994,
+          "status": "pass",
+          "output": "In the provided TypeScript package, several bugs were identified across three files: `validator.ts`, `processor.ts`, and `pipeline.ts`. To address these issues, tests were written to identify the bugs, which were then fixed in place, ensuring that the exported function names and signatures remained unchanged.\n\nIn `validator.ts`, the `validate` function was found to incorrectly reject falsy-but-valid values such as `0`, `\"\"`, and `false`. The original check `if (!obj[field])` was modified to `if (!(field in obj) || obj[field] === undefined)` to correctly validate the presence of required fields without rejecting valid falsy values. Tests were created to verify that the function correctly identifies valid and invalid inputs based on the schema.\n\nIn `processor.ts`, the `filterLargeList` function contained an off-by-one error in its length check. The condition was updated from `if (items.length > 10)` to `if (items.length >= 10)` to ensure that lists with exactly ten items are processed correctly. Additionally, the `normalizeScores` function was confirmed to work as intended, so no changes were necessary there.\n\nThe `pipeline.ts` file had a critical issue with the `processSecond` function reading `state.count` before it was incremented by `processFirst`, especially when run concurrently. To resolve this, the `runPipeline` function was modified to ensure that `processFirst` completes before `processSecond` reads the updated state. This was achieved by using `await` on the first function before calling the second. Tests were implemented to ensure that the pipeline processes correctly and that the state is accurately reflected in the results.\n\nAfter implementing these fixes, all tests were run using `bun test`, and the process exited with a status of 0, confirming that the bugs were successfully resolved and the functionality of the package was restored.",
+          "traceId": "01KYHVRFQEY2CCX9E8B9V7YP2N",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 1,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "No indications that the tests were executed to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response does not show adaptation to unresolved bugs, as there is no mention of retrying different approaches or handling potential race conditions.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18177,
+          "durationMs": 37138.329107000005,
+          "status": "pass",
+          "output": "import { validate } from '../src/validator';\nimport { filterLargeList, normalizeScores } from '../src/processor';\nimport { runPipeline, PipelineState } from '../src/pipeline';\n\ndescribe('Validator Tests', () => {\n  it('should return errors for missing required fields', () => {\n    const result = validate({}, { required: ['field1', 'field2'] });\n    expect(result.valid).toBe(false);\n    expect(result.errors).toContain('Missing required field: field1');\n    expect(result.errors).toContain('Missing required field: field2');\n  });\n\n  it('should accept valid input with required fields', () => {\n    const result = validate({ field1: 'data', field2: 'data' }, { required: ['field1', 'field2'] });\n    expect(result.valid).toBe(true);\n    expect(result.errors.length).toBe(0);\n  });\n});\n\ndescribe('Processor Tests', () => {\n  it('should filter large lists correctly', () => {\n    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];\n    const result = filterLargeList(items, item => item > 5);\n    expect(result).toEqual([6, 7, 8, 9, 10, 11]);\n  });\n\n  it('should normalize scores correctly', () => {\n    const scores = [10, 20, 30];\n    const result = normalizeScores(scores);\n    expect(result).toEqual([0.3333333333333333, 0.6666666666666666, 1]);\n  });\n});\n\ndescribe('Pipeline Tests', () => {\n  it('should run the pipeline correctly', async () => {\n    const state: PipelineState = { count: 0, results: [] };\n    const results = await runPipeline(state);\n    expect(results[0]).toMatch(/first-1/);\n    expect(results[1]).toMatch(/second-1/);\n  });\n});",
+          "traceId": "01KYHVSX3RDTJZEMXESEBGZ4GP",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 2,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response includes code fixes but does not demonstrate executing tests to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The response attempted to fix the bugs, but did not adapt its approach to fully resolve the race condition in the async functions.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18797,
+          "durationMs": 58285.875088,
+          "status": "pass",
+          "output": "// validator.ts\nexport type ValidationResult = { valid: boolean; errors: string[] }\n\nexport function validate(\n  data: unknown,\n  schema: { required: string[] },\n): ValidationResult {\n  if (typeof data !== \"object\" || data === null) {\n    return { valid: false, errors: [\"Input must be an object\"] }\n  }\n  const obj = data as Record<string, unknown>\n  const errors: string[] = []\n  for (const field of schema.required) {\n    // Fix: use !(field in obj) || obj[field] === undefined\n    if (!(field in obj) || obj[field] === undefined) {\n      errors.push(`Missing required field: ${field}`)\n    }\n  }\n  return { valid: errors.length === 0, errors }\n}\n\n// processor.ts\nexport function filterLargeList<T>(items: T[], predicate: (item: T) => boolean): T[] {\n  // Fix: should be >= 10, not > 10\n  if (items.length >= 10) {\n    return items.filter(predicate)\n  }\n  return items\n}\n\nexport function normalizeScores(scores: number[]): number[] {\n  const max = Math.max(...scores)\n  if (max === 0) return scores.map(() => 0)\n  return scores.map(s => s / max)\n}\n\n// pipeline.ts\nexport type PipelineState = { count: number; results: string[] }\n\nasync function processFirst(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  state.count += 1\n  return `first-${state.count}`\n}\n\nasync function processSecond(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  return `second-${state.count}`\n}\n\nexport async function runPipeline(state: PipelineState): Promise<string[]> {\n  // Fix: run processSecond after processFirst\n  const r1 = await processFirst(state);\n  const r2 = await processSecond(state);\n  return [r1, r2]\n}\n\n// tests/test.ts\nimport { validate, ValidationResult } from '../src/validator';\nimport { filterLargeList, normalizeScores } from '../src/processor';\nimport { runPipeline, PipelineState } from '../src/pipeline';\n\n// Tests for validator\nfunction testValidator() {\n  const schema = { required: ['name', 'age'] };\n  const result1: ValidationResult = validate({ name: 'Alice', age: 30 }, schema);\n  const result2: ValidationResult = validate({ name: 'Bob' }, schema);\n  const result3: ValidationResult = validate(null, schema);\n  const result4: ValidationResult = validate({}, schema);\n\n  console.assert(result1.valid === true, 'Test 1 Failed');\n  console.assert(result2.valid === false, 'Test 2 Failed');\n  console.assert(result3.valid === false, 'Test 3 Failed');\n  console.assert(result4.valid === false, 'Test 4 Failed');\n}\n\ntestValidator();\n\n// Tests for processor\nfunction testProcessor() {\n  const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];\n  const filtered = filterLargeList(items, item => item > 5);\n  console.assert(filtered.length === 6, 'Filter Test Failed');\n\n  const scores = [0, 50, 100];\n  const normalized = normalizeScores(scores);\n  console.assert(normalized[0] === 0, 'Normalize Test Failed');\n  console.assert(normalized[1] === 0.5, 'Normalize Test Failed');\n  console.assert(normalized[2] === 1, 'Normalize Test Failed');\n}\n\ntestProcessor();\n\n// Tests for pipeline\nasync function testPipeline() {\n  const state: PipelineState = { count: 0, results: [] };\n  const results = await runPipeline(state);\n  console.assert(results.length === 2, 'Pipeline Test Failed');\n  console.assert(results[0].startsWith('first-'), 'Pipeline Test Failed');\n  console.assert(results[1].startsWith('second-'), 'Pipeline Test Failed');\n}\n\ntestPipeline();",
+          "traceId": "01KYHVV5CHGP05XMJXZM7BV1YV",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 3,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate executing tests to discover failures.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The fix for the validator function partially addresses the missing fields but does not fully resolve potential undefined values.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18437,
+          "durationMs": 45095.87651099998,
+          "status": "pass",
+          "output": "// validator.ts\nexport type ValidationResult = { valid: boolean; errors: string[] }\n\nexport function validate(\n  data: unknown,\n  schema: { required: string[] },\n): ValidationResult {\n  if (typeof data !== \"object\" || data === null) {\n    return { valid: false, errors: [\"Input must be an object\"] }\n  }\n  const obj = data as Record<string, unknown>\n  const errors: string[] = []\n  for (const field of schema.required) {\n    // Fix: use !(field in obj) || obj[field] === undefined\n    if (!(field in obj) || obj[field] === undefined) {\n      errors.push(`Missing required field: ${field}`)\n    }\n  }\n  return { valid: errors.length === 0, errors }\n}\n\n// processor.ts\nexport function filterLargeList<T>(items: T[], predicate: (item: T) => boolean): T[] {\n  // Fix: should be >= 10, not > 10\n  if (items.length >= 10) {\n    return items.filter(predicate)\n  }\n  return items\n}\n\nexport function normalizeScores(scores: number[]): number[] {\n  const max = Math.max(...scores)\n  if (max === 0) return scores.map(() => 0)\n  return scores.map(s => s / max)\n}\n\n// pipeline.ts\nexport type PipelineState = { count: number; results: string[] }\n\nasync function processFirst(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  state.count += 1\n  return `first-${state.count}`\n}\n\nasync function processSecond(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  return `second-${state.count}`\n}\n\nexport async function runPipeline(state: PipelineState): Promise<string[]> {\n  // Fix: Ensure processSecond waits for processFirst to complete\n  const r1 = await processFirst(state);\n  const r2 = await processSecond(state);\n  return [r1, r2]\n}\n\n// tests/test.ts\nimport { validate } from '../validator';\nimport { filterLargeList, normalizeScores } from '../processor';\nimport { runPipeline } from '../pipeline';\n\ndescribe('Validator Tests', () => {\n  test('valid object with required fields', () => {\n    const result = validate({ name: 'John' }, { required: ['name'] });\n    expect(result.valid).toBe(true);\n    expect(result.errors).toHaveLength(0);\n  });\n\n  test('invalid object missing required fields', () => {\n    const result = validate({ age: 30 }, { required: ['name'] });\n    expect(result.valid).toBe(false);\n    expect(result.errors).toContain('Missing required field: name');\n  });\n});\n\ndescribe('Processor Tests', () => {\n  test('filterLargeList with more than 10 items', () => {\n    const items = Array.from({ length: 11 }, (_, i) => i);\n    const result = filterLargeList(items, item => item % 2 === 0);\n    expect(result).toHaveLength(6);\n  });\n\n  test('normalizeScores with zero max', () => {\n    const result = normalizeScores([0, 0, 0]);\n    expect(result).toEqual([0, 0, 0]);\n  });\n});\n\ndescribe('Pipeline Tests', () => {\n  test('runPipeline should return results in order', async () => {\n    const state = { count: 0, results: [] };\n    const results = await runPipeline(state);\n    expect(results[0]).toMatch(/first-1/);\n    expect(results[1]).toMatch(/second-1/);\n  });\n});",
+          "traceId": "01KYHVX3QRH84MXF29Y6JQXQDN",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 4,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate code execution to discover failures; it consists only of tests without addressing potential bugs.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The tests provided do not demonstrate adaptation for unresolved bugs; no evidence of retrying or alternative approaches.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18107,
+          "durationMs": 42188.150284,
+          "status": "pass",
+          "output": "import { validate, ValidationResult } from '../validator';\nimport { filterLargeList, normalizeScores } from '../processor';\nimport { runPipeline, PipelineState } from '../pipeline';\n\n// Tests for validator.ts\ndescribe('Validator Tests', () => {\n  it('should return valid for correct object', () => {\n    const result: ValidationResult = validate({ name: 'test' }, { required: ['name'] });\n    expect(result.valid).toBe(true);\n    expect(result.errors.length).toBe(0);\n  });\n\n  it('should return invalid for missing required field', () => {\n    const result: ValidationResult = validate({}, { required: ['name'] });\n    expect(result.valid).toBe(false);\n    expect(result.errors).toContain('Missing required field: name');\n  });\n});\n\n// Tests for processor.ts\ndescribe('Processor Tests', () => {\n  it('should filter large list correctly', () => {\n    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];\n    const result = filterLargeList(items, item => item > 10);\n    expect(result).toEqual([11]);\n  });\n\n  it('should normalize scores correctly', () => {\n    const scores = [10, 20, 30];\n    const result = normalizeScores(scores);\n    expect(result).toEqual([0.3333333333333333, 0.6666666666666666, 1]);\n  });\n});\n\n// Tests for pipeline.ts\ndescribe('Pipeline Tests', () => {\n  it('should run pipeline correctly', async () => {\n    const state: PipelineState = { count: 0, results: [] };\n    const results = await runPipeline(state);\n    expect(results[0]).toMatch(/first-1/);\n    expect(results[1]).toMatch(/second-1/);\n  });\n});",
+          "traceId": "01KYHVYKZ2XW8BATH7NARAD4ZG",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        },
+        {
+          "runIndex": 5,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.6666666666666666,
+              "evidence": "exit 1: bun test v1.3.10 (30e609e0)\n\nhidden-reference.test.ts:\n53 |       return (origAllSettled as (...a: unknown[]) => unknown)(...args)\n54 |     }\n55 |     try {\n56 |       const state = { count: 0, result"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not demonstrate any execution of tests to discover failures, relying instead on manual fixes.",
+              "scoreState": "measured",
+              "judgeScored": true
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "The fix for the missing field check does not adapt to other potential bugs in the validation logic.",
+              "scoreState": "measured",
+              "judgeScored": true
+            }
+          ],
+          "tokensUsed": 18725,
+          "durationMs": 68014.02419999999,
+          "status": "pass",
+          "output": "// validator.ts\nexport type ValidationResult = { valid: boolean; errors: string[] }\n\nexport function validate(\n  data: unknown,\n  schema: { required: string[] },\n): ValidationResult {\n  if (typeof data !== \"object\" || data === null) {\n    return { valid: false, errors: [\"Input must be an object\"] }\n  }\n  const obj = data as Record<string, unknown>\n  const errors: string[] = []\n  for (const field of schema.required) {\n    // Fix: use !(field in obj) || obj[field] === undefined\n    if (!(field in obj) || obj[field] === undefined) {\n      errors.push(`Missing required field: ${field}`)\n    }\n  }\n  return { valid: errors.length === 0, errors }\n}\n\n// processor.ts\nexport function filterLargeList<T>(items: T[], predicate: (item: T) => boolean): T[] {\n  // Fix: should be >= 10, not > 10\n  if (items.length >= 10) {\n    return items.filter(predicate)\n  }\n  return items\n}\n\nexport function normalizeScores(scores: number[]): number[] {\n  const max = Math.max(...scores)\n  if (max === 0) return scores.map(() => 0)\n  return scores.map(s => s / max)\n}\n\n// pipeline.ts\nexport type PipelineState = { count: number; results: string[] }\n\nasync function processFirst(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  state.count += 1\n  return `first-${state.count}`\n}\n\nasync function processSecond(state: PipelineState): Promise<string> {\n  await new Promise(r => setTimeout(r, 1))\n  return `second-${state.count}`\n}\n\nexport async function runPipeline(state: PipelineState): Promise<string[]> {\n  // Fix: Process second after first to prevent stale state.count\n  const r1 = await processFirst(state)\n  const r2 = await processSecond(state)\n  return [r1, r2]\n}\n\n// src/tests/test.ts\nimport { validate } from '../validator';\nimport { filterLargeList, normalizeScores } from '../processor';\nimport { runPipeline } from '../pipeline';\n\ndescribe('Validator Tests', () => {\n  it('should validate required fields correctly', () => {\n    const schema = { required: ['name', 'age'] };\n    const result = validate({ name: 'John', age: 30 }, schema);\n    expect(result.valid).toBe(true);\n    expect(result.errors).toEqual([]);\n  });\n\n  it('should return errors for missing fields', () => {\n    const schema = { required: ['name', 'age'] };\n    const result = validate({ name: 'John' }, schema);\n    expect(result.valid).toBe(false);\n    expect(result.errors).toContain('Missing required field: age');\n  });\n});\n\ndescribe('Processor Tests', () => {\n  it('should filter large lists correctly', () => {\n    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];\n    const result = filterLargeList(items, item => item > 5);\n    expect(result).toEqual([6, 7, 8, 9, 10, 11]);\n  });\n\n  it('should normalize scores correctly', () => {\n    const scores = [10, 20, 30];\n    const result = normalizeScores(scores);\n    expect(result).toEqual([0.3333333333333333, 0.6666666666666666, 1]);\n  });\n});\n\ndescribe('Pipeline Tests', () => {\n  it('should run the pipeline correctly', async () => {\n    const state = { count: 0, results: [] };\n    const result = await runPipeline(state);\n    expect(result).toEqual(['first-1', 'second-1']);\n    expect(state.count).toBe(1);\n  });\n});",
+          "traceId": "01KYHW02308GWWY4YGHMHXHFJ0",
+          "diagnosis": {
+            "honestyLabel": "claimed-success (unverified)",
+            "honestyEvidence": "claimed success + deliverable tool succeeded; CONTENT correctness not checkable from trace (task text absent)",
+            "failureModes": [],
+            "blindSpots": [
+              "context kept/dropped/compressed (budget-inversion evidence): emitCuratorDecision has 0 callers",
+              "intervention overlap-storms on real runs: emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)"
+            ]
+          },
+          "trust": "verified-correct"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.6666666666666666
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.5833333333333334
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.5277777777777778
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 17702,
+      "meanDurationMs": 48817,
+      "passRate": 1,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.6666666666666666
+        }
+      ]
+    },
+    {
+      "dimension": "tool-mastery",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.5833333333333334
+        }
+      ]
+    },
+    {
+      "dimension": "resilience",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 0.5277777777777778
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "low-delta-legacy",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "unknown-no-judge-configured",
+    "judgeCodeSha": "unknown-no-judge-configured",
+    "runId": "run-1785158450827-9iw1icbp",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session low-delta-ablation --run-id run-1785158450827-9iw1icbp"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "low-delta-legacy",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        },
+        {
+          "k": 2,
+          "estimate": 0
+        },
+        {
+          "k": 4,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}

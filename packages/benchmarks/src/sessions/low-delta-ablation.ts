@@ -50,11 +50,27 @@
 // guard stop killing runs mid-progress, and does that change outcomes at all?"
 // — not to certify a marginal default-on.
 //
-// READ THE GUARD-FIRE RATE FIRST. The mechanism-level signal (how often
-// `low_delta_guard` terminates a run with artifacts already produced) is a
-// per-run observable, not a per-task one, so it is far better powered than the
-// accuracy delta. If the reset works, that rate must drop; if it does not drop,
-// the accuracy comparison is not worth reading at all.
+// ── THAT GUIDANCE WAS WRONG. Measured 2026-07-27, corrected here.
+//
+// This header used to say: read the guard-fire rate FIRST, because it is a
+// per-run observable and therefore better powered than the accuracy delta, and
+// if the rate does not drop the accuracy comparison is not worth reading.
+//
+// Both halves of that are false for this mechanism. On claude-haiku, n=12 per
+// arm, the fire rate barely moved — 11/12 → 7/12, Fisher two-tailed p = 0.155,
+// not significant — while graded accuracy went 0.000 → 0.417 at p = 0.00002.
+// Following the old instruction would have discarded a decisive result on the
+// strength of a null one.
+//
+// The reason is that the reset does not mainly PREVENT the guard firing; it
+// DELAYS it, so the run completes its work before the guard trips. Fire-rate is
+// a proxy for the mechanism engaging, not for the mechanism helping. Read the
+// OUTCOME.
+//
+// Fire rate is still worth reading for one thing: whether the mechanism ran at
+// all. Zero fires in both arms means the arm is inert and the comparison is
+// void — which is exactly what the local tier and gpt-4o-mini both turned out
+// to be. See wiki/Research/Harness-Reports/low-delta-2026-07-27/RESULT.md.
 
 import type { BenchmarkSession } from "../types.js"
 
@@ -68,8 +84,31 @@ export const lowDeltaAblationSession: BenchmarkSession = {
   name: "low_delta_guard evidence-delta reset (lift measurement)",
   version: "1.0.0",
   tiers: ["real-world"],
+  // RETARGETED 2026-07-27 after three VOID local arm-sets. The local tier
+  // cannot trip this guard at all: qwen3:4b and qwen3:14b both emit long
+  // per-iteration reasoning, so `tokenDelta` never approaches the 500
+  // threshold and `low_delta_guard` fired ZERO times in either arm — a
+  // measurement of nothing. The misfire is a TERSE-model tax, and the traces
+  // that found it were claude-haiku. Measuring where the defect does not occur
+  // was the original design error; this is the correction.
+  // TWO tiers because the lift rule (09 §6) requires it before any default-on,
+  // and because a one-provider result cannot separate the mechanism from an
+  // Anthropic-specific output shape. Both are TERSE frontier models: that is the
+  // population the misfire lives in, since the guard measures token delta and
+  // only fires when a model says little while doing much.
   models: [
-    { id: "qwen3-4b", provider: "ollama", model: "qwen3:4b", contextTier: "local" },
+    {
+      id: "haiku",
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      contextTier: "frontier",
+    },
+    {
+      id: "gpt4o-mini",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      contextTier: "frontier",
+    },
   ],
   harnessVariants: [
     {
@@ -85,8 +124,20 @@ export const lowDeltaAblationSession: BenchmarkSession = {
       config: { ...RA_FULL, env: { [EVIDENCE_RESET_ENV]: "1" } },
     },
   ],
-  taskIds: ["rw-4", "rw-6", "rw-7", "rw-8", "rw-10"],
-  runs: 2,
+  // rw-7 is the ONLY remaining exposure, and rw-4 is the control that proves it.
+  //
+  // Both traces originally showed the misfire. Since then the guard also
+  // declines to fire while a DECLARED deliverable is unproduced, which covers
+  // rw-4's shape (it must produce `output.ts`) — confirmed live 2026-07-27:
+  // rw-4 on haiku ran 34 iterations / 12 tool calls and `low_delta_guard` never
+  // fired, terminating on max_iterations instead. rw-7 declares no file
+  // deliverable (its criterion is `bun test` exit 0), so nothing shields it.
+  //
+  // Keeping rw-4 in is what makes this a measurement rather than a hope: if the
+  // guard fires on rw-4 too, the deliverable shield has regressed and the rw-7
+  // comparison is not what it appears to be.
+  taskIds: ["rw-7", "rw-4"],
+  runs: 3,
   traceDir: "benchmark-traces/low-delta-ablation",
   concurrency: 1,
   timeoutMs: 300_000,
