@@ -1550,6 +1550,10 @@ export class ReactiveAgent<TOut = unknown> {
                           ...((rawMetadata as { verifierVerdict?: string }).verifierVerdict !== undefined
                               ? { verifierVerdict: (rawMetadata as { verifierVerdict?: string }).verifierVerdict }
                               : {}),
+                          // A semantic-cache hit short-circuits the loop: no LLM
+                          // call, no tools, no steps. The receipt says so rather
+                          // than letting a replay read like an ordinary run.
+                          replayed: (rawMetadata as { cacheHit?: boolean }).cacheHit === true,
                           goalAchieved,
                           abstained: r.terminatedBy === 'abstained',
                           success: r.success,

@@ -674,6 +674,9 @@ export const makeExecuteStream =
                 ...((receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict !== undefined
                   ? { verifierVerdict: (receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict }
                   : {}),
+                // A semantic-cache hit ran nothing. Say so on the receipt —
+                // same source as the non-streaming site.
+                replayed: (receiptSource.metadata as { cacheHit?: boolean }).cacheHit === true,
                 // Deterministic upgrade over the terminatedBy heuristic — the
                 // declared-deliverable evidence resolves end_turn's "maybe"
                 // (resolveGoalAchieved JSDoc; single shared rule with run()).

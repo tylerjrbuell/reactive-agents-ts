@@ -76,8 +76,30 @@ export interface TrustReceipt {
   readonly interventions?: readonly InterventionReceipt[];
   /** Terminal reason (mirrors AgentResult.terminatedBy). */
   readonly terminatedBy?: string;
-  /** Verifier verdict when the terminal verifier ran. */
+  /**
+   * Verifier verdict when the terminal verifier ran.
+   *
+   * ABSENT means the verifier did NOT run — which is not the same as passing.
+   * A run with no evidence to examine (see {@link TrustReceipt.replayed}) leaves
+   * this unset rather than reporting `"pass"`, because every check the verifier
+   * performs detects a PROBLEM in the evidence: with no evidence there is
+   * nothing to detect and it would pass vacuously. Consumers gating on trust
+   * must treat absent as "unverified", never as "clean".
+   */
   readonly verifierVerdict?: string;
+  /**
+   * The answer was REPLAYED, not produced by this run — a semantic-cache hit.
+   * Absent on every ordinary run, so existing receipts are byte-identical.
+   *
+   * A cache hit short-circuits the agent loop: no LLM call, no tool dispatch,
+   * no steps, no ledger. Its `verdict` is therefore `"ungrounded"` and honest as
+   * far as it goes, but without this marker a caller cannot distinguish "the
+   * model answered from its own knowledge" from "no model ran at all" — and
+   * before this existed the replay also carried `verifierVerdict: "pass"`, so a
+   * consumer gating on that accepted the evidence-free answer while REJECTING
+   * the grounded run that had actually done the work and been escalated.
+   */
+  readonly replayed?: true;
   /** Fork lineage when this run was forked (Task 6). */
   readonly forkedFrom?: string;
   /** Model + config identity for provenance. */
@@ -214,6 +236,12 @@ export function computeTrustReceipt(input: {
    * receipt is byte-identical to v1.
    */
   readonly interventions?: readonly InterventionReceipt[];
+  /**
+   * True when the answer was REPLAYED from the semantic cache rather than
+   * produced by this run. Stamps {@link TrustReceipt.replayed}; omit on every
+   * ordinary run so the receipt stays byte-identical.
+   */
+  readonly replayed?: boolean;
   readonly now: number;
 }): TrustReceipt {
   const ok = input.toolCalls.filter((tc) => tc.ok).length;
@@ -292,6 +320,7 @@ export function computeTrustReceipt(input: {
     ...(input.interventions !== undefined && input.interventions.length > 0
       ? { interventions: input.interventions }
       : {}),
+    ...(input.replayed === true ? { replayed: true as const } : {}),
     modelId: input.modelId,
     ...(input.configHash !== undefined ? { configHash: input.configHash } : {}),
     computedAt: input.now,

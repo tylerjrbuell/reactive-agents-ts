@@ -1329,6 +1329,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ? { terminatedBy: String(ctx.metadata.rawTerminatedBy) }
                     : {}),
                   iteration: ctx.iteration,
+                  replayed: ctx.metadata.cacheHit === true,
                 });
                 if (boundaryVerification?.warning !== undefined) {
                   ctx.metadata.verificationWarning = boundaryVerification.warning;
@@ -1452,6 +1453,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       : {}),
                     ...(boundaryVerification?.warning !== undefined
                       ? ({ verificationWarning: boundaryVerification.warning } as Record<string, unknown>)
+                      : {}),
+                    // A semantic-cache HIT short-circuits the whole loop: no LLM
+                    // call, no tool dispatch, no steps, no ledger. The flag was
+                    // set on ctx by the cache check and read only by cost-track,
+                    // so the RESULT was indistinguishable from a real run — and
+                    // the receipt read like one. It rides to both receipt sites
+                    // now, exactly as the boundary verdict above does.
+                    ...(ctx.metadata.cacheHit === true
+                      ? ({ cacheHit: true } as Record<string, unknown>)
                       : {}),
                   },
                   completedAt: new Date(),

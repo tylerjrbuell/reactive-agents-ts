@@ -49,6 +49,11 @@ export interface ResultVerificationArgs {
   readonly terminatedBy?: string;
   /** Iteration count (for the trace event). */
   readonly iteration: number;
+  /**
+   * The answer was REPLAYED from the semantic cache — nothing executed. The
+   * verifier declines rather than passing vacuously; see the note at the guard.
+   */
+  readonly replayed?: boolean;
 }
 
 export interface ResultVerificationOutcome {
@@ -70,6 +75,28 @@ export const verifyResultBoundary = (
 ): Effect.Effect<ResultVerificationOutcome | undefined, never> =>
   Effect.gen(function* () {
     if (args.output.trim().length === 0) return undefined;
+
+    // A REPLAY IS NOT VERIFIABLE. Every check this verifier runs detects a
+    // PROBLEM in the run's own record — scaffold leak, harness parrot,
+    // mid-thought continuation, fabricated measurement. A semantic-cache hit
+    // short-circuits the agent loop (no LLM call, no tool dispatch, no steps),
+    // so the verifier finds no problem in a record that does not exist and
+    // returns `pass`. That is a vacuous pass: it certifies nothing was wrong
+    // with evidence it never had.
+    //
+    // Measured before the fix: the cache hit shipped `verifierVerdict: "pass"`
+    // at confidence 0.8 while the run that actually wrote the file shipped
+    // `escalate` at 0.6. A consumer gating on the verdict would accept the
+    // replay and reject the grounded run. Declining leaves `verifierVerdict`
+    // ABSENT, which the receipt documents as "unverified", never as "clean".
+    //
+    // Gated on the REPLAY signal specifically, not on `steps.length === 0`. An
+    // earlier draft used the empty ledger as the proxy and broke two legitimate
+    // cells: a bare-builder inline run answering from the model's own knowledge
+    // also reaches this boundary with no steps, and it genuinely was verified —
+    // a model did produce that answer and the lexical checks apply to it. Only
+    // a run where nothing executed at all is unverifiable.
+    if (args.replayed === true) return undefined;
 
     const result = defaultVerifier.verify({
       action: "final-answer",
