@@ -97,6 +97,28 @@ describe("statusCell — the tick means SOLVED, not 'did not crash'", () => {
     expect(statusCell(report([run(1), run(0)]))).toContain("50%");
   });
 
+  it("every rate carries its error and its n", () => {
+    // The table is what people actually read, and it used to render a rate with
+    // no indication of how much evidence was behind it. `50%` off two runs and
+    // `50%` off fifty were the same seven characters, which is how a gap of a
+    // few points on an n≤5 session gets read as a result.
+    expect(statusCell(report([run(1), run(0)]))).toContain("n=2");
+    expect(statusCell(report([run(1), run(1)]))).toContain("n=2");
+    expect(statusCell(report([run(0), run(0)]))).toContain("n=2");
+  });
+
+  it("more runs → a smaller stated error on the same rate", () => {
+    // The point of printing it: the number has to actually move with evidence,
+    // or it is decoration. Same 50% rate, four times the runs.
+    const thin = statusCell(report([run(1), run(0)]));
+    const thick = statusCell(
+      report([run(1), run(0), run(1), run(0), run(1), run(0), run(1), run(0)]),
+    );
+    const errOf = (s: string): number => Number(/±(\d+)pp/.exec(s)?.[1] ?? "-1");
+    expect(errOf(thin)).toBeGreaterThan(0);
+    expect(errOf(thick)).toBeLessThan(errOf(thin));
+  });
+
   it("a cell that CRASHED is distinguishable from one that merely failed to solve", () => {
     // Both score 0. They are not the same event, and a reader must be able to
     // tell "the harness broke" from "the model was wrong".

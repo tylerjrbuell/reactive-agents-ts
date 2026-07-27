@@ -1,5 +1,7 @@
 // File: src/gate/gate.ts
 import {
+  agrestiSpread,
+  agrestiStdErr,
   asBenchDimension,
   isCellInconclusive,
   isSolved,
@@ -50,16 +52,12 @@ function maxOf(xs: readonly number[]): number {
  * construction. It also converges toward the observed rate as n grows.
  */
 function cellSpread(r: TaskVariantReport, metric: string): number {
-  const n = measuredCountOf(r);
-  const p = metricScore(r, metric) ?? 0;
-  const pTilde = (p * n + 1) / (n + 2);
-  return Math.sqrt(pTilde * (1 - pTilde));
+  return agrestiSpread(metricScore(r, metric) ?? 0, measuredCountOf(r));
 }
 
 /** Standard error of one cell's mean: sd/√n. `n=0` (no runs) → treat as n=1. */
 function cellStdErr(r: TaskVariantReport, metric: string): number {
-  const n = Math.max(1, measuredCountOf(r));
-  return cellSpread(r, metric) / Math.sqrt(n);
+  return agrestiStdErr(metricScore(r, metric) ?? 0, measuredCountOf(r));
 }
 
 /** Runs whose accuracy was actually MEASURED — the only ones evidence may count. */

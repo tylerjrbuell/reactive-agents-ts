@@ -219,7 +219,11 @@ describe("inconclusive runs are excluded from aggregates and counted", () => {
   });
 
   it("statusCell: a measured cell is unaffected (tick still means solved)", () => {
-    expect(statusCell(cell([legacy(1, 0), legacy(1, 1)]))).toBe("✓");
+    // The verdict is unchanged; the cell now also carries the error on the rate
+    // it is reporting, so a ✓ from two runs cannot be read as a ✓ from fifty.
+    const rendered = statusCell(cell([legacy(1, 0), legacy(1, 1)]));
+    expect(rendered).toStartWith("✓");
+    expect(rendered).toContain("n=2");
   });
 });
 

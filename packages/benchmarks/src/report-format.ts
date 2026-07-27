@@ -163,6 +163,52 @@ export function completionRateOf(runs: readonly RunScore[]): number {
   return runs.filter((r) => r.status === "pass").length / runs.length;
 }
 
+// ── how much a rate is worth ─────────────────────────────────────────────────
+//
+// Declared HERE, not in the gate, because both need it and a second copy of a
+// statistic is a second thing to get wrong. The lift gate has always computed a
+// proper standard error; the summary TABLE never did, and the table is what
+// anyone actually reads. A cell rendering `50%` off two runs looked exactly
+// like a cell rendering `50%` off fifty, so the table invited findings it could
+// not support — this project has repeatedly had to catch itself reading a gap
+// of a few points off an n≤5 table as though it meant something.
+
+/**
+ * The spread (0..1 score units) of a rate `p` observed over `n` runs.
+ *
+ * Not the sample standard deviation: that is 0 whenever every run scored alike
+ * — trivially true at n=1 and common for saturated cells ([1,1,1]) — and a zero
+ * spread makes the noise floor zero, which makes any difference at all read as
+ * significant. Agresti-smoothed Bernoulli √(p̃(1−p̃)) with p̃ = (pn+1)/(n+2) is
+ * strictly positive for every n, upper-bounds the true variance of any graded
+ * score in [0,1] with the same mean, and converges to the observed rate as n
+ * grows.
+ */
+export function agrestiSpread(p: number, n: number): number {
+  const pTilde = (p * n + 1) / (n + 2);
+  return Math.sqrt(pTilde * (1 - pTilde));
+}
+
+/** Standard error of a rate `p` over `n` runs: spread/√n, treating n=0 as n=1. */
+export function agrestiStdErr(p: number, n: number): number {
+  return agrestiSpread(p, n) / Math.sqrt(Math.max(1, n));
+}
+
+/**
+ * The `±Xpp (n=N)` suffix a rate cell carries so it cannot be read as more
+ * certain than it is.
+ *
+ * Two cells differing by less than roughly the sum of their errors are not
+ * distinguishable, which at the n values these sessions actually run (2–5) means
+ * gaps well into the tens of points are noise. Printing the error next to the
+ * number is the cheapest way to make that visible at the moment of reading,
+ * rather than in a footnote nobody consults.
+ */
+export function uncertaintySuffix(p: number, n: number): string {
+  if (n === 0) return "";
+  return ` ±${Math.round(agrestiStdErr(p, n) * 100)}pp (n=${n})`;
+}
+
 // ── pass^k (tau-bench reliability) ───────────────────────────────────────────
 
 /** The k values every pass^k surface reports. Fixed so tables line up. */
@@ -275,7 +321,14 @@ export function statusCell(report: TaskVariantReport): string {
   if (completion === 0) return "ERR"; // nothing even finished
 
   const solve = solveRateOf(runs);
-  if (solve === 1) return "✓";
-  if (solve === 0) return completion < 1 ? `✗ (${Math.round((1 - completion) * 100)}% err)` : "✗";
-  return `${Math.round(solve * 100)}%`;
+  // Every rate carries its error. A ✓ off one run and a ✓ off ten are not the
+  // same claim, and until now the table rendered them identically.
+  const suffix = uncertaintySuffix(solve, measuredRuns(runs).length);
+  if (solve === 1) return `✓${suffix}`;
+  if (solve === 0) {
+    return completion < 1
+      ? `✗ (${Math.round((1 - completion) * 100)}% err)${suffix}`
+      : `✗${suffix}`;
+  }
+  return `${Math.round(solve * 100)}%${suffix}`;
 }
