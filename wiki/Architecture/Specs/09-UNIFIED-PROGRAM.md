@@ -165,6 +165,35 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > ledger now grows and announces there); Waves B/D/E/F did not. **Note §6: making the meta-loop
 > default-on is gated by the per-task-class lift rule + ablation-warden veto — it is a measurement
 > question, not a wiring decision.**
+>
+> **AMENDED 2026-07-26 — the reachability map is now PINNED, and there are THREE tiers, not two.**
+> The probe above was re-run against the fixed instrument (the deterministic provider had been
+> serving harness-internal LLM calls out of the agent's turn script, which is why earlier kernel
+> arms executed nothing — see DEBT-REGISTER, that row is CLOSED). Identical scripted work, three
+> configurations:
+>
+> | configuration | tool calls | meta-loop (contract/assessment/projection) | guards | control plane |
+> |---|---|---|---|---|
+> | default (bare builder) | ✓ | **none** | **none** | **none** |
+> | `.withReasoning()` | ✓ | ✓ | ✓ (incl. the `low_delta_guard` misfire) | **none** |
+> | `+ .withLongHorizon()` | ✓ | ✓ | misfire GONE | ✓ `decision-evaluated`, `intervention-dispatched` |
+>
+> So **Wave F's control plane is dark even on the kernel path** — enabling reasoning is not enough
+> to reach it, though "the kernel path" is routinely spoken of as though it ran everything the
+> kernel contains. And the long-horizon profile does two separable things at once: it gates the
+> control plane AND it gates the evidence-delta reset that suppresses the `low_delta_guard` misfire.
+> Cutting the reset alone darkens the control plane too, because the run no longer survives long
+> enough to reach it — they are COUPLED, which matters for any promotion that tries to take one
+> without the other.
+>
+> Pinned by `packages/runtime/tests/meta-loop-reachability.test.ts` (four cells, each with a
+> did-real-work control so an absence means "not reached" and not "nothing happened";
+> mutation-verified — cutting the horizon gate reddens both horizon claims). The map had been
+> re-derived by hand from live sweeps more than once; it is deterministic and costs about a second,
+> so a mechanism silently going dark now fails a test instead of surfacing later from a trace nobody
+> was reading. **The mechanism-level half of the lift question is therefore now FREE.** What still
+> needs live cross-tier arms is only the accuracy/token half.
+>
 > **Cross-cutting cascade SHIPPED 2026-07-23** (Tasks 1–10, `6813d973`..`c5d225cd`): `RunEnvelope`
 > is the one run-wide carrier for the seven cross-cutting fields; C3 terminal judgment is live at
 > the mint (opt-in enforcement only — `fabricationGuard:"block"` etc. must be explicitly requested);
