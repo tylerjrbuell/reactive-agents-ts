@@ -111,3 +111,32 @@ describe("deterministic provider: agent and harness channels", () => {
     expect(think.toolCalls?.[0]?.input).toEqual({ path: "./a.md", content: "alpha" });
   });
 });
+
+// ── A tool turn may also carry assistant text ────────────────────────────────
+//
+// Real providers emit both: Anthropic sends a text block and then a tool_use
+// block, and a reasoning model's preamble arrives the same way. This provider
+// used to force `content: ""` on every tool turn, which made anything keyed on
+// what the model SAID while calling a tool unscriptable — thought continuity
+// (`RA_THOUGHT_CONTINUITY`) read as inert for want of a thought to replay, not
+// because the mechanism was broken.
+describe("deterministic provider: text alongside a tool call", () => {
+  it("a tool turn's text reaches the response content", async () => {
+    const svc = TestLLMService([
+      { text: "Let me write the file first.", toolCall: { name: "file-write", args: { path: "./a.md" } } },
+    ]);
+
+    const res = await ask(svc, "think");
+    expect(res.content).toBe("Let me write the file first.");
+    expect(res.toolCalls?.[0]?.name).toBe("file-write");
+    expect(res.stopReason).toBe("tool_use");
+  });
+
+  it("a tool turn WITHOUT text is unchanged (every existing scenario is byte-identical)", async () => {
+    const svc = TestLLMService([{ toolCall: { name: "file-write", args: { path: "./a.md" } } }]);
+
+    const res = await ask(svc, "think");
+    expect(res.content).toBe("");
+    expect(res.toolCalls?.[0]?.name).toBe("file-write");
+  });
+});

@@ -58,8 +58,17 @@ export type TestTurn =
       delayMs?: number;
       logprobs?: readonly TokenLogprob[];
     }
-  | { toolCall: ToolCallSpec; match?: string; delayMs?: number }
-  | { toolCalls: ToolCallSpec[]; match?: string; delayMs?: number }
+  // A tool-calling turn MAY also carry assistant text. Real providers routinely
+  // emit both — Anthropic sends a text block and then a tool_use block, and a
+  // reasoning model's preamble arrives the same way — but this provider used to
+  // force `content: ""` on every tool turn. That silently made a whole class of
+  // harness behaviour unscriptable: anything keyed on what the model SAID while
+  // calling a tool. Thought continuity (`RA_THOUGHT_CONTINUITY`) is the
+  // clearest case — it renders the recorded thought on replayed assistant turns,
+  // so with no text on a tool turn there was nothing for it to render and the
+  // flag read as inert no matter what it did.
+  | { toolCall: ToolCallSpec; text?: string; match?: string; delayMs?: number }
+  | { toolCalls: ToolCallSpec[]; text?: string; match?: string; delayMs?: number }
   | { error: string; match?: string; delayMs?: number };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,8 +120,21 @@ function extractSearchText(
  */
 type TurnChannel = "agent" | "harness";
 
-const isAgentOnly = (turn: TestTurn): boolean =>
+/**
+ * A turn only the AGENT can consume. Also the narrowing the textual paths need:
+ * now that a tool turn may carry `text`, `"text" in turn` no longer implies the
+ * turn IS a text turn, so the remaining paths key on this instead.
+ */
+const isAgentOnly = (
+  turn: TestTurn,
+): turn is Extract<TestTurn, { toolCall: ToolCallSpec } | { toolCalls: ToolCallSpec[] }> =>
   "toolCall" in turn || "toolCalls" in turn;
+
+/** A turn the model answers with content rather than a call: `text` or `json`. */
+const isTextual = (
+  turn: TestTurn,
+): turn is Extract<TestTurn, { text: string } | { json: unknown }> =>
+  !isAgentOnly(turn) && !("error" in turn);
 
 /**
  * Resolve the turn that answers one LLM call.
@@ -269,20 +291,22 @@ export const TestLLMService = (
         }
 
         if ("toolCall" in turn) {
+          const content = quirkText(turn.text ?? "", quirk);
           return {
-            content: "",
+            content,
             stopReason: "tool_use" as const,
-            usage: fakeUsage(searchText.length, 0),
+            usage: fakeUsage(searchText.length, content.length),
             model: "test-model",
             toolCalls: buildToolCalls([turn.toolCall], matchedIndex, quirk),
           } satisfies CompletionResponse;
         }
 
         if ("toolCalls" in turn) {
+          const content = quirkText(turn.text ?? "", quirk);
           return {
-            content: "",
+            content,
             stopReason: "tool_use" as const,
-            usage: fakeUsage(searchText.length, 0),
+            usage: fakeUsage(searchText.length, content.length),
             model: "test-model",
             toolCalls: buildToolCalls(turn.toolCalls, matchedIndex, quirk),
           } satisfies CompletionResponse;
@@ -335,7 +359,15 @@ export const TestLLMService = (
             : null;
 
       if (specs) {
+        // Text FIRST, then the tool_use blocks — the order real providers use
+        // (Anthropic emits the assistant's text block before tool_use). A turn
+        // with no text emits no text_delta at all, so every existing scenario
+        // streams byte-identically.
+        const toolText = quirkText("text" in turn ? (turn.text ?? "") : "", quirk);
         const events: StreamEvent[] = [
+          ...(toolText.length > 0
+            ? [{ type: "text_delta" as const, text: toolText } satisfies StreamEvent]
+            : []),
           ...specs.flatMap((spec, i): StreamEvent[] => [
             {
               type: "tool_use_start" as const,
@@ -347,8 +379,8 @@ export const TestLLMService = (
               input: JSON.stringify(spec.args),
             },
           ]),
-          { type: "content_complete" as const, content: "" },
-          { type: "usage" as const, usage: fakeUsage(searchText.length, 0) },
+          { type: "content_complete" as const, content: toolText },
+          { type: "usage" as const, usage: fakeUsage(searchText.length, toolText.length) },
         ];
         return Effect.succeed(
           Stream.concat(
@@ -358,13 +390,13 @@ export const TestLLMService = (
         );
       }
 
-      const content = quirkText("json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "", quirk);
+      const content = quirkText(
+        isTextual(turn) ? ("json" in turn ? JSON.stringify(turn.json) : turn.text) : "",
+        quirk,
+      );
       const inputTokens = Math.ceil(searchText.length / 4);
       const outputTokens = Math.ceil(content.length / 4);
-      const streamLogprobs =
-        ("text" in turn || "json" in turn) && turn.logprobs
-          ? turn.logprobs
-          : undefined;
+      const streamLogprobs = isTextual(turn) ? turn.logprobs : undefined;
 
       const baseEvents: StreamEvent[] = [
         { type: "text_delta" as const, text: content },
@@ -418,8 +450,10 @@ export const TestLLMService = (
           return turn.json as any;
         }
 
-        // text turn — try JSON.parse then decode against schema
-        const responseContent = "text" in turn ? turn.text : "{}";
+        // text turn — try JSON.parse then decode against schema. A tool turn's
+        // optional `text` is prose for the AGENT, never a structured payload,
+        // so it is not a candidate here.
+        const responseContent = isTextual(turn) && "text" in turn ? turn.text : "{}";
         const parsed = JSON.parse(responseContent);
         return Schema.decodeUnknownSync(request.outputSchema)(parsed);
       }),
