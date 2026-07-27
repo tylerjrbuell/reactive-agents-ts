@@ -217,29 +217,57 @@ export function buildAutoMaxCallsPerTool(input: {
  * written against a `terminatedBy` union that omitted `"abstained"`, they let an
  * honest abstention fall through to `"success"` — teaching the learning loop
  * that declining to answer is a win. See DEBT-REGISTER §3 (2026-07-23).
+ *
+ * ── The debrief lane is now this function too (2026-07-27)
+ *
+ * `debrief.ts` carried a SECOND classifier over the same inputs, and enumerating
+ * the full cross product showed the two disagreed on FOUR of twelve cases — the
+ * register had logged only one of them:
+ *
+ *   terminatedBy         errors   engine     debrief
+ *   final_answer_tool    yes      success    partial
+ *   final_answer         yes      success    partial
+ *   end_turn             yes      failure    partial
+ *   llm_error            no       success    failure
+ *
+ * Resolved POINTWISE-CONSERVATIVE: wherever they disagreed, the harsher verdict
+ * wins. That direction is deliberate and matches the trust receipt's own rule —
+ * a shared honesty surface may move a run DOWN but never up, so unifying cannot
+ * manufacture a better-looking result than either lane already produced. Three
+ * of the four cells were genuine semantic splits where either reading was
+ * arguable; the fourth (`llm_error` → `"success"`) was simply a bug.
  */
 export function deriveRunOutcome(
   terminatedBy: TerminatedBy,
   hadErrors: boolean,
 ): "success" | "partial" | "failure" {
-  // Incomplete work, no provider fault.
-  if (terminatedBy === "max_iterations") return "partial";
   // The agent honestly declined. Nothing was delivered, so it is not a success;
   // it must never be reinforced as one. The honesty of the decline is carried by
   // `AgentResult.abstention` + the trust receipt, not by this coarse enum.
-  //
-  // This is the ONLY member whose classification changes here — every branch
-  // below reproduces the previous ternary exactly, so runs that never abstain
-  // are byte-identical.
   if (terminatedBy === "abstained") return "failure";
-  if (hadErrors && terminatedBy !== "final_answer_tool" && terminatedBy !== "final_answer") {
-    return "failure";
+
+  // A provider failure is not a success. This used to fall through to the
+  // trailing `return "success"` whenever the loop happened to collect no error
+  // strings — so a run whose LLM call died could be recorded as a clean win,
+  // and `recordOutcome(skillId, outcome !== "failure")` CREDITED the procedural
+  // skill that led there. The debrief lane had always classified `llm_error` as
+  // a failure; this is the two lanes agreeing.
+  if (terminatedBy === "llm_error") return "failure";
+
+  // Incomplete work, no provider fault.
+  if (terminatedBy === "max_iterations") return "partial";
+
+  // Errors occurred during the loop. An explicit finish (`final_answer` /
+  // `final_answer_tool`) means the agent recovered and delivered — "partial",
+  // not "success": something went wrong on the way and saying otherwise
+  // overstates the run. Anything else stopped without claiming an answer while
+  // errors were outstanding, which is a failure.
+  if (hadErrors) {
+    return terminatedBy === "final_answer_tool" || terminatedBy === "final_answer"
+      ? "partial"
+      : "failure";
   }
-  // NOTE: `llm_error` with an empty `errorsFromLoop` lands on "success" here.
-  // That looks wrong, and it is preserved deliberately — it is pre-existing
-  // behavior unrelated to the abstention fix, and changing it silently inside
-  // this extraction would be an unrequested behavior change riding along.
-  // Logged in DEBT-REGISTER §3 instead.
+
   return "success";
 }
 

@@ -31,25 +31,31 @@ describe("an abstained run is never classified as a success", () => {
     expect(deriveRunOutcome("abstained", true)).toBe("failure");
   });
 
-  it("preserves the prior classification for every non-abstained terminal", () => {
-    // The extraction must be behavior-preserving for runs that never abstain,
-    // so this pins the original ternary's full truth table.
-    expect(deriveRunOutcome("max_iterations", false)).toBe("partial");
-    expect(deriveRunOutcome("max_iterations", true)).toBe("partial");
+  it("a clean, error-free finish is still a success (the abstention fix changed nothing here)", () => {
+    // This cell used to carry the classifier's FULL truth table, to prove the
+    // abstention extraction was behavior-preserving. That table now lives in
+    // `run-outcome-one-classifier.test.ts`, which pins the engine and debrief
+    // lanes against each other — keeping a second copy here would be the exact
+    // duplication whose drift that file exists to prevent.
+    //
+    // What remains is what this file uniquely owns: abstention (below), plus a
+    // spot-check that the ordinary clean path was never disturbed.
     expect(deriveRunOutcome("final_answer", false)).toBe("success");
     expect(deriveRunOutcome("final_answer_tool", false)).toBe("success");
-    // A final answer WITH loop errors still counts as success — the agent
-    // recovered and delivered.
-    expect(deriveRunOutcome("final_answer", true)).toBe("success");
-    expect(deriveRunOutcome("final_answer_tool", true)).toBe("success");
     expect(deriveRunOutcome("end_turn", false)).toBe("success");
-    expect(deriveRunOutcome("end_turn", true)).toBe("failure");
-    expect(deriveRunOutcome("llm_error", true)).toBe("failure");
-    // Pre-existing quirk, deliberately preserved rather than fixed inside an
-    // unrelated extraction (see deriveRunOutcome's NOTE): an llm_error with no
-    // collected loop errors still lands on "success". Pinned so that if someone
-    // does fix it, they do so knowingly and update this line.
-    expect(deriveRunOutcome("llm_error", false)).toBe("success");
+    expect(deriveRunOutcome("max_iterations", false)).toBe("partial");
+
+    // DECLARED CHANGE (2026-07-27). Three cells moved when the engine and
+    // debrief classifiers were unified pointwise-conservative — the old line
+    // here asked whoever fixed the `llm_error` quirk to update it knowingly,
+    // and this is that update. A provider failure is no longer a success even
+    // when the loop collected no error strings, and an explicit finish WITH
+    // errors is now "partial" rather than "success" (the agent recovered and
+    // delivered — real, but not clean). Rationale + full table in
+    // run-outcome-one-classifier.test.ts.
+    expect(deriveRunOutcome("llm_error", false)).toBe("failure");
+    expect(deriveRunOutcome("final_answer", true)).toBe("partial");
+    expect(deriveRunOutcome("final_answer_tool", true)).toBe("partial");
   });
 
   it("the debrief reports an abstained run as failed, not success", () => {

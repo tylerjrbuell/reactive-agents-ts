@@ -3,6 +3,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { FinalAnswerCapture } from "@reactive-agents/tools";
 import type { TerminatedBy } from "@reactive-agents/core";
+import { deriveRunOutcome } from "./engine/util.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -160,32 +161,40 @@ export interface DebriefResult {
 
 // ─── Outcome derivation ────────────────────────────────────────────────────
 
+/**
+ * The debrief's outcome, derived from the ONE canonical run classifier.
+ *
+ * This used to be a second, independent implementation over the same two
+ * inputs. Enumerating the full (terminatedBy × hadErrors) cross product showed
+ * the two disagreed on FOUR of twelve cases — a run could be a `success` in
+ * telemetry and the learning loop while its own debrief recorded `partial`, and
+ * nothing compared them so nobody saw it. Reading the two functions side by
+ * side had surfaced only the `llm_error` case; the other three needed the table.
+ *
+ * All that remains here is vocabulary: this lane says `"failed"` where the
+ * canonical enum says `"failure"`. Same verdict, different word.
+ *
+ * (The abstention rule this function used to spell out is unchanged — it now
+ * lives in `deriveRunOutcome`, which maps `"abstained"` to `"failure"` for the
+ * same reason: nothing was delivered, so it must never be reinforced as a win.
+ * The honesty of the decline is carried by `AgentResult.abstention` and the
+ * trust receipt, not by this coarse enum.)
+ */
 function deriveOutcome(
   terminatedBy: DebriefInput["terminatedBy"],
   errorsFromLoop: string[],
 ): AgentDebrief["outcome"] {
-  if (terminatedBy === "llm_error") {
-    return "failed";
-  }
-  // max_iterations — incomplete work without provider failure
-  if (terminatedBy === "max_iterations") {
-    return "partial";
-  }
-  // abstained — the agent honestly declined rather than fabricating. No answer
-  // was delivered, so this is NOT a success; it is also not a provider fault.
-  //
-  // DEBT-REGISTER §3 (2026-07-23): before this branch existed, "abstained" fell
-  // through to the clean-termination line below and every honest abstention was
-  // recorded as a SUCCESS. The 5-value `terminatedBy` union masked it — the
-  // member the code had to handle was not in the type it was written against.
-  // "failed" here means "did not deliver"; the honesty of the decline is carried
-  // by `AgentResult.abstention` and the trust receipt, not by this coarse enum.
-  if (terminatedBy === "abstained") {
-    return "failed";
-  }
-  // final_answer, final_answer_tool, end_turn — clean terminations
-  return errorsFromLoop.length > 0 ? "partial" : "success";
+  const outcome = deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0);
+  return outcome === "failure" ? "failed" : outcome;
 }
+
+/**
+ * Test seam: the relabelling above, exposed so the shared truth table can pin
+ * BOTH lanes against one another. Exported rather than re-derived in the test,
+ * because a test that reimplements the mapping cannot catch this lane drifting
+ * away from the canonical classifier — which is the whole failure mode guarded.
+ */
+export const __testOnlyDeriveDebriefOutcome = deriveOutcome;
 
 // ─── LLM synthesis ────────────────────────────────────────────────────────
 
