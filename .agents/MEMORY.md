@@ -1256,16 +1256,27 @@ Affirmative evidence required for canonicalization. Mirrors M3 REWORK discipline
 
 ## Session Optimization Checklist (Token Cost Reduction)
 
-**Use these before every dev session to 60-90% token savings:**
+> **REVISED 2026-07-27 — the RTK and graphify items were REMOVED because they were
+> costing correctness, not saving tokens. Do not restore them.**
 
-- [ ] **RTK prefix on all CLI commands** — `rtk git log`, `rtk find .`, `rtk grep`, `rtk bun test` (saves ~200 tokens per command)
-- [ ] **Smart-search for symbol queries** — `claude-mem:smart-search "FunctionName"` instead of grep chains (saves 71% vs read+grep loops; ~820 tokens per lookup)
-- [ ] **Check wiki first** — `wiki:query "what do you know about X"` before deep dives (cached answers, 200-400 tokens saved per query)
-- [ ] **Batch independent queries** — 3+ parallel tool calls instead of sequential (reduces round-trip overhead)
+- [ ] **Use NATIVE `git` / `grep` / `find`** — bound output yourself with `| head`,
+      `| wc -l`, `-c`, `--include`. **Do NOT use `rtk`.** Measured 2026-07-27:
+      `rtk git log` returned 50 of 145 commits, `rtk find` 5 of 1510, `rtk git status`
+      dropped a file — all with no truncation marker, i.e. wrong answers that look
+      complete. The `rtk-rewrite.sh` hook was removed from `~/.claude/settings.json`.
+- [ ] **Grep before graphify for "where is X" questions** — measured on the same
+      question (`where is low_delta_guard evaluated`): grep 15ms and the exact hit
+      (`tier-guards.ts:62`); `graphify query` 572ms, 148 of 222 nodes truncated, and
+      **zero relevant nodes** (returned token-counter, providers, cost-resolution).
+      The graph is worth keeping for onboarding/architecture browsing; it is not a
+      symbol locator, and the MANDATORY-first hook taxed every tool call all session.
+- [ ] **Batch independent queries** — 3+ parallel tool calls instead of sequential.
 
-**This month's target:** 45% RTK adoption (was 18% May 3), 30%+ smart-search adoption; `rtk gain --history` tracks cumulative savings.
-
-**Detailed report:** See project memory dashboard for May 12 session (1,190 tokens freed, $11.58/month potential).
+**The general lesson:** a "token savings" metric measured by output size rewards
+deleting the answer. On a project whose entire discipline is counting and verifying
+(wither counts, orphan writers, fire rates, red-on-cut), a lossy-by-default tool is a
+fabricated-measurement generator. Cf. the register's long tail of "corrected: was a
+miscount of N" entries.
 
 ---
 

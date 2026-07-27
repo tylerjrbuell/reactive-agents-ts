@@ -38,6 +38,21 @@ export class WebhookChannelAdapter implements MessageChannel {
     this.onResponse = config.onResponse;
   }
 
+  /**
+   * True once {@link onMessage} has registered a handler — i.e. the adapter is
+   * wired to the gateway and {@link handleRequest} will deliver rather than
+   * silently drop.
+   *
+   * `agent.start()` registers adapters asynchronously, so an inbound request
+   * sent immediately after `start()` lands before the handler exists and is
+   * dropped with no error. Callers previously had no way to observe that, and
+   * the guidance was to "wait briefly" with an arbitrary sleep. Poll this
+   * instead. Registration is sub-tick in practice (measured ~16ms).
+   */
+  get isSubscribed(): boolean {
+    return this.handler !== undefined && !this.unsub;
+  }
+
   connect(): Effect.Effect<void, ChannelConnectionError> {
     return Effect.void;
   }

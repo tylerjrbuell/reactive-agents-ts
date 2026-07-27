@@ -57,16 +57,24 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
       .build();
 
     const handle = agent.start();
-    // HS-27 (GH #83): channel adapters register on the gateway loop's first
-    // tick. Poll for that tick rather than sleeping a fixed 150ms.
-    // Generous timeout — under suite load `gatewayStatus()` queues behind
-    // in-flight fibers.
+    // HS-27 (GH #83) originally polled for the gateway loop's first heartbeat
+    // tick, believing adapters registered on it. That wait was BOTH wrong and
+    // unsatisfiable: `heartbeat.intervalMs` is 999_999 here, so the first tick
+    // lands ~17min out. Measured 2026-07-27 — the loop ran its full 15s budget,
+    // exited on the deadline and never on the condition, with stats reading
+    // {heartbeatsFired: 0, heartbeatsSkipped: 0}. It was ~15s of the runtime
+    // suite's 47s (32%) spent waiting for an event that cannot occur.
+    //
+    // Registration IS async (a request sent immediately after start() is
+    // dropped), so the wait could not simply be deleted — the assertions below
+    // fail without one. It just has to be the RIGHT wait: `isSubscribed` is the
+    // actual readiness signal, and it flips in ~16ms.
     const startedAt = Date.now();
-    while (Date.now() - startedAt < 15000) {
-      const status = await agent.gatewayStatus();
-      if (status && status.stats.heartbeatsFired + status.stats.heartbeatsSkipped >= 1) break;
-      await new Promise((r) => setTimeout(r, 25));
+    while (!webhook.isSubscribed && Date.now() - startedAt < 5000) {
+      await new Promise((r) => setTimeout(r, 5));
     }
+    expect(webhook.isSubscribed).toBe(true);
+
     await Effect.runPromise(
       webhook.handleRequest({
         body: JSON.stringify({
