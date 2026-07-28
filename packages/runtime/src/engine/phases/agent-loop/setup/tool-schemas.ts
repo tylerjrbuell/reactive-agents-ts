@@ -57,6 +57,25 @@ export interface PrepareToolSchemasArgs {
 export interface PreparedToolSchemas {
   readonly availableToolSchemas: ToolSchema[];
   readonly availableToolNames: string[];
+  /**
+   * Everything this agent is PERMITTED to use — the run-level surface after the
+   * builtins opt-in, the `allowedTools` hard restriction and the contract's
+   * forbidden list, but BEFORE the prompt-narrowing passes (`focusedTools`,
+   * adaptive filtering, lazy disclosure).
+   *
+   * This is the correct catalog for `discover-tools`. F9 (2026-07-28): the
+   * kernel wired discovery to `allToolSchemas`, which the engine built as a
+   * snapshot of the RAW registry taken before any filtering — so a run
+   * configured `builtins: ["file-write"]` was told "10 tools available (now
+   * callable)" listing file-read, code-execute, git-cli and gh-cli, and could
+   * then call them. Least-privilege break, not a cost issue.
+   *
+   * Distinct from `availableToolSchemas` on purpose: discovery must still
+   * surface tools that are permitted but merely PRUNED from this iteration's
+   * view — that is the entire point of the lazy-disclosure escape hatch. A
+   * catalog narrowed to the visible set would make the tool useless.
+   */
+  readonly exposedToolSchemas: ToolSchema[];
 }
 
 export const prepareReasoningToolSchemas = (
@@ -115,6 +134,14 @@ export const prepareReasoningToolSchemas = (
       );
       availableToolNames = availableToolSchemas.map((t) => t.name);
     }
+
+    // Snapshot the PERMITTED surface here — after the builtins opt-in, before
+    // the prompt-narrowing passes below. `allowedTools` (a hard restriction)
+    // and the contract's forbidden list are applied to it at the end; the
+    // prompt-only narrowing (`focusedTools`, adaptive) deliberately is not, so
+    // discovery can still surface a permitted-but-pruned tool. See
+    // `PreparedToolSchemas.exposedToolSchemas`.
+    const exposedAfterBuiltins: readonly ToolSchema[] = [...availableToolSchemas];
 
     // ── Dynamic final-answer description (Path C(d), 2026-05-07) ──
     // Multi-signal composition: regex-classified output format
@@ -224,12 +251,22 @@ export const prepareReasoningToolSchemas = (
     // and the surfaced name set. This is the live consumer of the contract's
     // forbidden list (§4.4 — no dead field).
     const forbidden = config.forbiddenTools;
+    const forbiddenSet = new Set(forbidden ?? []);
     if (forbidden && forbidden.length > 0) {
-      const forbiddenSet = new Set(forbidden);
       availableToolSchemas = availableToolSchemas.filter((ts) => !forbiddenSet.has(ts.name));
       availableToolNames = availableToolNames.filter((n) => !forbiddenSet.has(n));
     }
 
-    return { availableToolSchemas, availableToolNames };
+    // The permitted surface: builtins opt-in (already applied) ∧ allowedTools
+    // (hard restriction) ∧ ¬forbidden. `focusedTools` is soft prompt guidance
+    // and must NOT restrict it — narrowing discovery by a prompt hint would
+    // hide tools the caller explicitly permitted.
+    const exposedToolSchemas = exposedAfterBuiltins.filter(
+      (ts) =>
+        !forbiddenSet.has(ts.name) &&
+        (effectiveAllowedTools.length === 0 || effectiveAllowedTools.includes(ts.name)),
+    );
+
+    return { availableToolSchemas, availableToolNames, exposedToolSchemas };
   });
 };

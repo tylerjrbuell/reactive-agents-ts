@@ -4,6 +4,7 @@ import { buildEnvironmentContext, buildToolReference, buildRules } from "../../c
 import { buildSystemPrompt } from "../../kernel/capabilities/attend/context-utils.js";
 import type { ToolSchema, ToolParamSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { renderStandingFrame, type StandingFrameSection } from "../standing-frame.js";
+import { verboseRulesEnabled } from "../../harness-flags.js";
 
 /**
  * Narrow an unknown schema list to `ToolSchema[]` without `any`. Schemas arrive
@@ -84,7 +85,7 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
     standingSections.push(s);
   }
   if (remaining.length) parts.push(`Remaining steps: ${remaining.join(", ")}`);
-  if (process.env.RA_LAZY_TOOLS === "0") {
+  if (verboseRulesEnabled()) {
     parts.push(buildRules(schemas, c.tools.requiredTools, c.capability.tier));
   }
   const systemPrompt = parts.join("\n");

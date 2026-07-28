@@ -753,8 +753,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }));
                   const initialToolNames = cachedToolDefs.map((t: any) => t.name as string);
 
-                  // Snapshot the full unfiltered schemas for the completion guard
-                  const allToolSchemas = [...initialToolSchemas];
 
                   // ── Tool schema preparation: built-ins opt-in + dynamic final-answer
                   // + allowedTools prompt filter + adaptive filter ──
@@ -774,6 +772,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   });
                   const availableToolSchemas = prepared.availableToolSchemas;
                   const availableToolNames = prepared.availableToolNames;
+                  // F9 (2026-07-28): the kernel's `discover-tools` catalog and
+                  // the blueprint planner both read `allToolSchemas`. It used to
+                  // be a snapshot of the RAW registry taken above, BEFORE the
+                  // builtins opt-in ran — so `builtins: ["file-write"]` was
+                  // advertised as "10 tools available (now callable)" and
+                  // file-read/code-execute/git-cli were reachable. Narrow it to
+                  // what the caller actually permitted. Discovery still surfaces
+                  // permitted-but-pruned tools (the escape hatch is intact);
+                  // it can no longer surface tools that were never exposed.
+                  const exposedToolSchemas = prepared.exposedToolSchemas;
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   // Body extracted to engine/phases/agent-loop/reasoning-stream-logger.ts (W23 step 6a-7).
@@ -800,7 +808,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       reasoningService: reasoningOpt.value,
                       availableToolNames,
                       availableToolSchemas,
-                      allToolSchemas,
+                      allToolSchemas: exposedToolSchemas,
                       effectiveAllowedTools,
                       effectiveRequiredTools,
                       effectiveRequiredToolQuantities,
@@ -826,7 +834,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     reasoningOpt,
                     availableToolNames,
                     availableToolSchemas,
-                    allToolSchemas,
+                    allToolSchemas: exposedToolSchemas,
                     effectiveRequiredTools,
                     effectiveRequiredToolQuantities,
                     classifiedRelevantTools,

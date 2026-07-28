@@ -97,6 +97,7 @@ import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
+import { lazyDisclosureEnabled } from "../../../harness-flags.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -293,7 +294,7 @@ export function handleThinking(
     // re-invoke tools it's already used). Pressure-narrowing-to-final-answer-
     // only induces panic dumps on local models when fired prematurely, so the
     // resolver applies it only on the non-lazy arm.
-    const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
+    const lazyMode = lazyDisclosureEnabled();
 
     // ── Tool surface resolution (Overhaul Phase 2) ───────────────────────────
     // One resolver computes the entire per-iteration surface — classification

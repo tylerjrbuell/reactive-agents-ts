@@ -449,3 +449,10 @@ export {
   type RoutingTier,
   type ModelRoutingPool,
 } from "./kernel/policy/purpose-routing.js";
+
+// Harness killswitch resolution — one place decides what each env flag means.
+export {
+  lazyDisclosureEnabled,
+  toolDiscoveryEnabled,
+  verboseRulesEnabled,
+} from "./harness-flags.js";

@@ -23,6 +23,7 @@ import {
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { toolDiscoveryEnabled } from "../../../harness-flags.js";
 
 type ToolCapabilitySnapshot = {
   readonly availableToolSchemas: readonly ToolSchema[];
@@ -125,7 +126,7 @@ export const resolveExecutableToolCapabilities = (input: {
       // wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
       // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
       // adapt.
-      if (process.env.RA_LAZY_TOOLS !== "0") {
+      if (toolDiscoveryEnabled()) {
         // Reset discovered-set at the start of each run (idempotent across
         // re-resolutions). The kernel calls resolveExecutableToolCapabilities
         // once per run, so this fires on initial wiring.

@@ -30,6 +30,44 @@ import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason } from "../params/stop-reason.js";
 
+/**
+ * The TRUE prompt size for an Anthropic response: base input plus both cache
+ * pools.
+ *
+ * Anthropic's `usage.input_tokens` counts only the UNCACHED remainder — the
+ * cached prefix is reported separately as `cache_read_input_tokens` /
+ * `cache_creation_input_tokens`. Reporting the remainder as `inputTokens` meant
+ * that the better a run cached, the cheaper it appeared, and by an enormous
+ * margin: a measured haiku run showed `in=6` on calls that carried ten tool
+ * schemas and a full conversation, against `in=3746` on the same call shape
+ * before the cache warmed.
+ *
+ * That is not a rounding error, it is a confound. Cost was already computed off
+ * the correct total (the call sites had re-added the pools locally), so only the
+ * TOKEN COUNTS were wrong — which is exactly what every harness-overhead
+ * ablation in this repo compares. Any two arms that cache differently were being
+ * compared on incomparable numbers; an arm whose prompt prefix is stable enough
+ * to cache would read as multiples cheaper than one that churns its tool block,
+ * independent of how much work either did.
+ *
+ * Cache hit/creation counts remain available separately as
+ * `cacheReadInputTokens` / `cacheCreationInputTokens`, so a caller that wants
+ * "X input tok (Y cached)" still can — it is now an explicit breakdown rather
+ * than a silent subtraction.
+ */
+export function totalInputTokens(usage: {
+  readonly input_tokens: number;
+  readonly cache_read_input_tokens?: number | null;
+  readonly cache_creation_input_tokens?: number | null;
+}): number {
+  return (
+    usage.input_tokens +
+    (usage.cache_read_input_tokens ?? 0) +
+    (usage.cache_creation_input_tokens ?? 0)
+  );
+}
+
+
 // ─── Anthropic Message Conversion Helpers ───
 
 type AnthropicRole = "user" | "assistant";
@@ -434,16 +472,17 @@ export const AnthropicProviderLive = Layer.effect(
               emit.single({
                 type: "usage",
                 usage: {
-                  inputTokens: msg.usage.input_tokens,
+                  // TRUE prompt size, cache pools INCLUDED. See the note on the
+                  // complete() path below — reporting the uncached remainder
+                  // here made a caching run look ~600x cheaper per call than it
+                  // was, and silently confounded every token ablation.
+                  inputTokens: totalInputTokens(msg.usage),
                   outputTokens: msg.usage.output_tokens,
-                  totalTokens:
-                    msg.usage.input_tokens + msg.usage.output_tokens,
+                  totalTokens: totalInputTokens(msg.usage) + msg.usage.output_tokens,
                   estimatedCost: calculateCost(
-                    // `input_tokens` excludes cache pools; re-add them so
-                    // calculateCost's base-token subtraction is correct.
-                    msg.usage.input_tokens +
-                      (msg.usage.cache_read_input_tokens ?? 0) +
-                      (msg.usage.cache_creation_input_tokens ?? 0),
+                    // Same total; calculateCost subtracts the cache pools back
+                    // out to price base / read / creation at their own rates.
+                    totalInputTokens(msg.usage),
                     msg.usage.output_tokens,
                     model,
                     {
@@ -758,17 +797,13 @@ const mapAnthropicResponse = (
     content: textContent,
     stopReason,
     usage: {
-      inputTokens: response.usage.input_tokens,
+      inputTokens: totalInputTokens(response.usage),
       outputTokens: response.usage.output_tokens,
-      totalTokens:
-        response.usage.input_tokens + response.usage.output_tokens,
+      totalTokens: totalInputTokens(response.usage) + response.usage.output_tokens,
       estimatedCost: calculateCost(
-        // Anthropic's `input_tokens` already EXCLUDES cache read/creation, but
-        // calculateCost expects the total input (it subtracts cache pools to get
-        // the base). Re-add them so the accounting is correct (not negative).
-        response.usage.input_tokens +
-          (response.usage.cache_read_input_tokens ?? 0) +
-          (response.usage.cache_creation_input_tokens ?? 0),
+        // Same total; calculateCost subtracts the cache pools back out to price
+        // base / read / creation at their own rates.
+        totalInputTokens(response.usage),
         response.usage.output_tokens,
         model,
         {
