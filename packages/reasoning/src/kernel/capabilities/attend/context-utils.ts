@@ -82,6 +82,27 @@ export function buildSystemPrompt(
   _task: string,
   systemPrompt?: string,
   tier?: "local" | "mid" | "large" | "frontier",
+  /**
+   * Whether this run has ANY tools. Defaults true so existing callers are
+   * byte-identical; the assembly stage passes the real value.
+   *
+   * F6 (2026-07-28): this function had no idea whether tools existed, so a
+   * zero-tool run still received the full tool doctrine — including a sentence
+   * teaching parallel tool-call batching — immediately followed by the tool
+   * reference block's "No tools available for this task." The prompt explained
+   * how to batch tool calls and then said there were none.
+   *
+   * Measured on "What is 17 × 23? Answer with just the number. Do not use any
+   * tools.": kernel prompt 461 chars vs the inline path's 88 (5.2×), and live
+   * that showed up as +449% tokens on haiku and +467% on qwen3.5 — the SAME
+   * multiplier on both tiers, i.e. a fixed structural tax rather than anything
+   * model-adaptive. Both arms answered correctly, so nothing was bought.
+   *
+   * "Think step by step" is deliberately KEPT in every branch: the reactive
+   * contract depends on that CoT instruction (see systemPromptStage's note),
+   * and it is not tool guidance.
+   */
+  hasTools = true,
 ): string {
   // Use custom system prompt if provided (no task appended — task is in messages[0])
   if (systemPrompt) return systemPrompt;
@@ -90,15 +111,21 @@ export function buildSystemPrompt(
   // The task is seeded as state.messages[0] by the execution engine.
   const t = tier ?? "mid";
   if (t === "local") {
-    return "You are a helpful assistant. Use the provided tools when needed to complete tasks.";
+    return hasTools
+      ? "You are a helpful assistant. Use the provided tools when needed to complete tasks."
+      : "You are a helpful assistant.";
   }
   const PARALLEL_HINT = " When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel.";
 
   if (t === "frontier" || t === "large") {
-    return `You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.${PARALLEL_HINT}`;
+    return hasTools
+      ? `You are an expert reasoning agent. Think step by step. Use tools precisely and efficiently. Prefer concise, direct answers once you have sufficient information.${PARALLEL_HINT}`
+      : "You are an expert reasoning agent. Think step by step. Prefer concise, direct answers once you have sufficient information.";
   }
   // mid tier
-  return `You are a reasoning agent. Think step by step and use available tools when needed.${PARALLEL_HINT}`;
+  return hasTools
+    ? `You are a reasoning agent. Think step by step and use available tools when needed.${PARALLEL_HINT}`
+    : "You are a reasoning agent. Think step by step.";
 }
 
 // ── toProviderMessage ─────────────────────────────────────────────────────────

@@ -53,9 +53,13 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
   const goal = c.log.byKind("goal").at(-1)?.text ?? "";
   const remaining = c.log.byKind("goal_state").at(-1)?.remaining ?? [];
   const parts = [buildEnvironmentContext(c.persona.environmentContext)];
-  // Persona: custom prompt if set, else tier-adaptive default (incl. CoT).
-  parts.push(buildSystemPrompt(goal, c.persona.system || undefined, c.capability.tier));
   const schemas = toToolSchemas(c.tools.schemas);
+  // Persona: custom prompt if set, else tier-adaptive default (incl. CoT).
+  // F6: pass real tool availability so a zero-tool run does not receive tool
+  // doctrine it cannot act on. Schemas are resolved first purely to feed this.
+  parts.push(
+    buildSystemPrompt(goal, c.persona.system || undefined, c.capability.tier, schemas.length > 0),
+  );
   parts.push(
     buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
   );
