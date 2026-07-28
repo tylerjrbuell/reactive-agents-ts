@@ -106,8 +106,13 @@ async function runArm(
       .withName(`cost-${arm}`)
       .withProvider(provider as never)
       .withModel(model)
-      .withTools({ builtins: ["file-write"], adaptive: false })
-      .withRequiredTools({ tools: ["file-write"] })
+      // Configurable so both arms can be given an IDENTICAL tool surface.
+      // Default was ["file-write"] only, which silently CRIPPLED the inline arm
+      // on any read task while the kernel reached file-read anyway via the
+      // `discover-tools` meta-tool it injects — confounding every arm
+      // comparison that involved reading. See RUNNING-CATALOGUE F9.
+      .withTools({ builtins: (process.env.RA_COST_TOOLS ?? "file-write").split(","), adaptive: false })
+      .withRequiredTools({ tools: (process.env.RA_COST_REQUIRED ?? "file-write").split(",") })
       .withMaxIterations(8)
       .withTracing({ dir });
     b = configure(b as never) as typeof b;

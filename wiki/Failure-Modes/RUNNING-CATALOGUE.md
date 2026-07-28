@@ -16,6 +16,36 @@ that produced it so it can be re-run. Ordered by leverage — cost × outcome da
 
 ---
 
+> ## ⚠ RETRACTION (2026-07-28, same day) — read before anything below
+>
+> **O1 "the inversion" is WITHDRAWN. It was a probe artifact and it was committed as a
+> finding (`64b3b4a9`) before being caught.**
+>
+> The claim was: the kernel makes the frontier model work (0/3 → 3/3) and breaks the local
+> one (3/3 → 1/3). **Cause: the harness registered only `file-write`, so the `inline` arm
+> could not read files at all** — while the `kernel` arm reached `file-read` anyway, via a
+> `discover-tools` meta-tool it injects beyond the configured set (**F9**). The comparison
+> was never kernel-vs-no-kernel; it was *crippled-tool-surface* vs *silently-widened*.
+>
+> Caught by the output text: inline said *"I don't have the ability to read files
+> directly"* — an honest refusal, not the "chat-tuned model answers in prose" story I
+> attached to it.
+>
+> **Re-run with an identical tool surface on both arms, n=3 per cell:**
+>
+> | tier | inline | kernel | kernel+RI |
+> |---|---|---|---|
+> | haiku | 3,710t · 4 iter · **3/3** | 7,354t (**+98%**) · 9 iter · 3/3 | 7,353t · 3/3 |
+> | qwen3.5 | 2,633t · 4 iter · **3/3** | 4,128t (**+57%**) · 9 iter · 3/3 | 3,683t · **2/3** |
+>
+> **Corrected finding, simpler and worse:** on this shape the kernel is **pure overhead on
+> both tiers** — +57%/+98%, 2.25× the iterations, identical outcome — and **RI introduces a
+> failure** (2/3 local). There is no inversion and no tier story here.
+>
+> Second confound, also mine: `deliverable` checks that the file EXISTS, not that its
+> contents are CORRECT. Every "3/3" above should be read as *produced something*, not
+> *produced the right number*.
+
 ## Leverage table
 
 | # | Mode | Worst observed | Outcome damage | Breadth |
@@ -28,6 +58,7 @@ that produced it so it can be re-run. Ordered by leverage — cost × outcome da
 | **F3** | `discover-tools` burn | 14 iters vs 2 | none directly | kernel only |
 | **F4** | RI cost non-linear | +225pp or 0% | sometimes recovers deliverable | unpredictable |
 | **F5** | `low_delta_guard` fires without being fatal | — | none | frontier + kernel |
+| **F9** | Kernel widens the tool surface beyond config | — | control-boundary; confounds arm studies | kernel only |
 
 ---
 
@@ -57,8 +88,16 @@ Notes:
 - The "5-stage healing pipeline" is supposed to own this shape. It converts a
   one-call answer into a 46k-token failure.
 
-**Why it is #1:** worst cost multiplier, worst outcome flip, and the triggering condition
-(a tool input that isn't there) is ubiquitous in real work.
+**Local tier does NOT thrash — it fails fast.** qwen3.5, same task, n=2: kernel 514t mean,
+1 iteration (one run `it=0`, 0 tokens), `status=failure`; inline 712t, `success`, 2/2.
+
+So the shared defect is **the kernel cannot handle a missing tool input while inline can —
+4/4 kernel runs failed across both tiers, 4/4 inline runs succeeded.** The cost profile is
+what differs: frontier *thrashes* (46k, 21 iters), local *bails* (0.5k, 1 iter). A fix must
+address both, and the 50× figure is frontier-specific.
+
+**Why it is #1:** worst cost multiplier, an outcome flip on both tiers, and the triggering
+condition (a tool input that isn't there) is ubiquitous in real work.
 
 ---
 
@@ -159,13 +198,41 @@ reading and is recorded in the low-delta session file.
 
 ---
 
+## F9 — The kernel silently widens the tool surface beyond what was configured
+
+**Cell:** deterministic provider · `withTools({ builtins: ["file-write"], adaptive: false })`
+on both arms · read `tool-surface-resolved` + `toolSchemaNames` from the trace.
+
+```
+inline   configured=[file-write]  actual=[file-write]
+kernel   configured=[file-write]  actual=[discover-tools, file-write]
+```
+
+The kernel injects `discover-tools`, which then lets the run **activate tools that were
+never registered** — live traces show kernel arms using `file-read`, `code-execute` and
+`recall` under a config that declared only `file-write`.
+
+Two consequences:
+
+1. **It is a control-boundary surprise.** Vision pillar #1 is *Control*. A user who writes
+   `builtins: ["file-write"]` gets an agent that can also read files and execute code. That
+   is a sandboxing and least-privilege concern independent of cost, and it deserves a
+   decision (declare it, gate it, or drop it) rather than being incidental.
+2. **It invalidated a whole comparison** — see the retraction at the top. Any arm study
+   that varies `.withReasoning()` is *also* varying the tool surface unless tools are
+   pinned explicitly. Pin them.
+
+Related but distinct from **F3** (`discover-tools` burn): F3 is the cost of the extra
+calls, F9 is the capability the injection grants.
+
+---
+
 ## Cross-cutting observations
 
-**O1 — The inversion.** The kernel is what makes the *frontier* model work on the
-tool-requiring task (0/3 → 3/3) and what *breaks* the local one (3/3 → 1/3). The predictive
-variable is **tool-call propensity**, not model tier: `qwen3.5` is tool-tuned and calls
-`file-write` unprompted; `haiku` is chat-tuned and answers in prose unless pressured. Any
-tier-scaling design should key on propensity, which calibration already observes.
+**O1 — WITHDRAWN.** See the retraction at the top of this file. The apparent inversion was
+F9 plus a crippled inline tool surface. On a fair comparison the kernel is pure overhead on
+both tiers on this shape. *Kept as an entry rather than deleted: the retraction is more
+useful than the claim was.*
 
 **O2 — Overhead is iterations and prompt size, not harness LLM calls.** Nearly every kernel
 token across all cells is `purpose: think`. `classify` appeared once (F8), `synthesize` once
