@@ -169,24 +169,65 @@ delegation; this is the **non-delegated** case.
 
 ---
 
-## F6 — Fixed kernel tax on tasks needing no tools
+## F6 — Fixed kernel tax on tasks needing no tools ✅ FIXED (`13dc6c80`, `228bf10e`)
 
-**Cell:** "What is 17 × 23? Answer with just the number. Do not use any tools." n=2 per tier.
+**Original cell:** "What is 17 × 23? Answer with just the number. Do not use any tools." n=2 per tier.
 
 ```
 haiku    inline   840t  it=2   |  kernel 4,608t  it=7   +449%
 qwen3.5  inline   709t  it=2   |  kernel 4,018t  it=7   +467%
 ```
 
-Both arms answer correctly. The kernel spends ~4.6× and 7 iterations on arithmetic, and the
-multiplier is **the same on both tiers** — so this is a *fixed structural* tax, not a
-model-adaptive one. Pure waste on this shape: nothing is bought.
+Both arms answered correctly, and the multiplier was **the same on both tiers** — a fixed
+structural tax rather than a model-adaptive one. Two distinct drivers, found in order:
+
+**Driver 1 — tool doctrine on a toolless run** (`13dc6c80`). `buildSystemPrompt` had no idea
+whether tools existed, so a zero-tool run received the full tool doctrine — including a
+sentence teaching parallel tool-call batching — immediately followed by the tool reference
+block's "No tools available for this task." 404 → 236 chars (−42%) on genuine zero-tool runs;
+with-tools control unchanged.
+
+**Driver 2 — the tool-relevance classifier** (`228bf10e`). One extra LLM round-trip per run,
+default-on for any agent with `.withReasoning()`. Cross-tier ablation
+(`packages/benchmarks/src/classifier-ablation.ts`), {1-tool, 21-tool} surfaces × {tool,
+no-tool, custom-tool} tasks:
+
+```
+cell               haiku-4.5   qwen3.5-9b   accuracy (on/off)
+small  tool        +25%        +32%         2/2  2/2
+small  no-tool    +127%       +167%         2/2  2/2
+small  custom      +75%        +60%         2/2  2/2
+large  tool         -3%         -5%         2/2  2/2
+large  no-tool    +134%       +166%         2/2  2/2
+large  custom      +29%        +28%         2/2  2/2
+```
+
+Same sign in all six cells on both tiers, zero accuracy difference anywhere. Against the lift
+rule (09 §6: ≥3pp lift AND ≤15% overhead) that is **0pp lift at +25%..+167%** → flipped to
+opt-in (`.withRequiredTools({ adaptive: true })`). Kept rather than deleted: it is still the
+better pruner on a wide surface (3 visible vs the heuristic's 12).
+
+**The root defect the ablation exposed.** The classifier's only apparent win — the custom-tool
+cell, 8–18% *cheaper* — was not better classification. Lazy disclosure's allow-set in
+`computePromptSchemas` was fed ONLY by classifier output, so an unclassified run hid every
+domain tool and burned an extra `discover-tools` round trip to reach a tool the task named
+outright (9 iterations vs 6). Compounding it, the `withTools({ builtins })` floor was unioned
+into `relevantTools`, making `hasClassification` — "did a classifier speak?" — true on runs
+where none had. Fixed: the heuristic seeds the allow-set when unclassified, and the floor now
+rides a dedicated `KernelInput.builtinFloorTools`. The custom cell then **inverts to
++75%/+60% against the classifier** (5,092t → 3,946t, 9 iterations → 6).
+
+**Two probe faults recorded rather than quietly fixed** — both produced real-looking numbers
+that measured nothing. (1) `builtins: [...]` is a prune FLOOR, so an early design that floored
+10 builtins made both arms identical (`vis=12` in each). (2) The first draft of the floor
+regression cell survived its own red-on-cut, because the never-prune-to-meta-only guard
+rescued the tool it was meant to prove was floored.
 
 ---
 
-## F7 — Honest abstention costs 7× and says less
+## F7 — Honest abstention: cost half RETRACTED, message + status halves FIXED (`60730287`)
 
-**Cell:** haiku · "population of the fictional city of Aetheria" · n=2.
+**Original cell:** haiku · "population of the fictional city of Aetheria" · n=2.
 
 ```
 inline   982t  1 call   → "I don't have access to information about a fictional city called Aetheria."
@@ -194,12 +235,52 @@ kernel 6,897t  5 calls, 10 iters, tools=[recall]
                         → "Could not complete the task — no grounded answer could be produced…"
 ```
 
-**Good news, recorded as such:** neither arm fabricates. Both decline honestly — the
-abstention chain works.
+**Good news, and it held up:** neither arm fabricates. Both decline honestly — the abstention
+chain works.
 
-**The cost:** +608% for a *more generic* message. The kernel also invokes `recall` (memory)
-against an unanswerable question. Both arms report `status=success` for a declining run,
-which is worth reconciling against `deriveRunOutcome`'s `abstained → failure` mapping.
+### ⚠️ RETRACTED — the "+608%" cost claim
+
+The cell compared a **toolless** inline arm against a kernel arm that **had tools** (its own
+trace shows `tools=[recall]`), so most of the gap was the cost of actually trying to ground the
+answer — correct behaviour, not overhead. **Fourth finding this session to fall to a
+tool-surface confound** (see the O1/F8/F2 retractions above). Re-measured with the missing
+`inline+tools` control:
+
+```
+inline           75t  1 call   model's own decline
+kernel          337t  1 call   model's own decline
+inline+tools  2,244t  2 calls  model's own decline
+kernel+tools  6,020t  4 calls  model's own decline
+```
+
+Residual kernel overhead at a **matched surface** is +168%, not +608% — and it is ordinary
+iteration overhead, not specific to abstention. New harness
+`packages/benchmarks/src/abstention-cost.ts` carries the `inline+tools` control so this cannot
+be misread the same way again.
+
+### ✅ FIXED — the message named no cause
+
+`decideForcedAbstention` had always computed a specific cause ("no successful tool call for
+required tools (web-search); could not ground an answer in available evidence") and stashed it
+in `meta.abstention.reason`, where nothing rendered it. Every forced abstention reached the
+user as one identical sentence. The sentinel now carries an optional `detail`, rendered as a
+`Cause: …` suffix; absent detail is byte-identical to the old text.
+
+**Deliberately not fixed by surfacing the model's own decline.** The two forced-abstention
+triggers are "a required tool was unavailable" and "the model's synthesis was REJECTED as
+ungrounded" — promoting the rejected synthesis to output would undo the rejection and re-open
+the dishonest-success hole closed 2026-07-22. A test pins that this path stays harness-authored.
+
+### ✅ FIXED — an abstention scored as a success
+
+The kernel reports `status: "completed"` for a forced abstention (the decline completed
+cleanly), which `execution-engine` read straight through — so a run that delivered nothing and
+said so published `AgentCompleted.success: true` and `run-completed.status: "success"`.
+`deriveRunOutcome` has mapped `abstained → failure` since 2026-07-23, but that governs only the
+debrief and learning lanes; the terminal status was a separate, disagreeing rule, so the gate
+lane (`testing/src/gate/runner.ts`) still scored abstentions as successes. **Same shape as F1,
+one lane over.** `terminatedBy` and the abstention descriptor are unchanged — only the coarse
+success bit moves.
 
 ---
 
