@@ -210,7 +210,8 @@ if (import.meta.main) {
           `${String(Math.round(r.durationMs / 100) / 10).padStart(6)}s file=${r.wroteFile ? "Y" : "n"} ` +
           `it=${r.iterations} ${r.status.padEnd(9)} ` +
           `tools=[${r.tools.join(",") || "-"}] ` +
-          `${r.guards.length ? `GUARDS=[${r.guards.join(",")}] ` : ""}| ${purposes}`,
+          `${r.guards.length ? `GUARDS=[${r.guards.join(",")}] ` : ""}| ${purposes}` +
+          (process.env.RA_COST_SHOW_OUTPUT ? `\n     OUT: ${r.output}` : ""),
       );
     }
   }
