@@ -166,13 +166,53 @@ of *"corrected: was a miscount of N"* rows is consistent with exactly that.
 
 ---
 
-## 7. Status
+## 7. First sweep — result, and what it actually proved
 
-- [x] Dev-loop instrumented and the waste removed
+`bun run packages/benchmarks/src/replay-ablate-sweep.ts` — 19 flags × 4 goldens,
+**~19s, zero tokens** (`3f2a3259`).
+
+| Bucket | n | Meaning |
+|---|---|---|
+| **LIVE** | 1 | `REACTIVE_AGENTS_EVIDENCE_DELTA_RESET` — diverges on exactly `terse-tool-loop` |
+| **no divergence** | 13 | toggled, code ran, nothing moved **on this corpus** |
+| **UNTESTABLE** | 5 | the code never ran — shadowed or unexercised |
+
+**The 13 are not 13 deletion candidates.** The corpus is four `reactive` runs with
+explicit tool config: most of those verdicts probably reflect corpus poverty, not
+mechanism inertness. Growing the corpus is a *prerequisite* for acting on any of them.
+
+**The sweep's first pass was wrong, and that is the reusable finding.** Setting every
+flag to `"1"` reported **18 of 19 INERT**. The tell was `MAX_ITERATIONS=1` coming back
+inert — a hard iteration cap cannot be. Three fault classes:
+
+1. **Wrong polarity** — `RA_LAZY_TOOLS` reads `!== "0"`, so it is ON by default and
+   `"1"` is a no-op.
+2. **Wrong literal** — `DISABLE_STATUS_MODE` wants `"true"`; `RA_SANDBOX` wants `"docker"`.
+3. **Shadowed / unexercised** — `MAX_ITERATIONS` is overridden by every sidecar
+   (`builder.ts:263` reads the env var only as a *default*); `MAX_RECURSION_DEPTH`,
+   `RA_TOT_EXPLORE_BUDGET_MS`, `RA_HTTP_ALLOW_PRIVATE`, `RA_SANDBOX` are unreachable
+   from a corpus with no delegation, no ToT and no network.
+
+**A wrong toggle produces a silent false INERT** — exactly the evidence someone would
+later cite to delete a working mechanism. Hence: the flag table carries the real
+comparison per row, and **UNTESTABLE is its own bucket**. *"The code never ran"* and
+*"the code ran and did nothing"* are different findings; only the second can justify a
+deletion. Same doctrine as [[../../..//.claude/memory|instrument-before-conclusion]] —
+caught here by an anomaly that could not be true, not by review.
+
+**The UNTESTABLE list is the corpus backlog**: sub-agent/delegation, a ToT run, a network
+call, a golden whose sidecar omits `maxIterations`.
+
+---
+
+## 8. Status
+
+- [x] Dev-loop instrumented and the waste removed (suite 127s → 86s)
 - [x] Tier 1 proven end to end, zero tokens
 - [x] Golden corpus seeded (4)
-- [ ] Step 1 — corpus grown to cover the mechanism surface
-- [ ] Step 2 — full flag/guard sweep → three-bucket triage
+- [x] Step 2 — sweep instrument built, controls green, first pass run + self-corrected
+- [ ] Step 1 — corpus grown (blocks acting on the 13; UNTESTABLE names the shapes)
+- [ ] Step 2b — re-sweep on the grown corpus → actionable triage
 - [ ] Step 3 — live arms for candidates only
 - [ ] Step 4 — composite ablation on HEAD
 - [ ] Step 5 — v0.15 cut (owner-gated)
