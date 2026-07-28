@@ -708,6 +708,20 @@ export interface KernelInput {
    */
   readonly relevantTools?: readonly string[];
   /**
+   * Consumer-intent visibility FLOOR — the explicit `withTools({ builtins: [...] })`
+   * list. Always visible, never pruned; it exists to keep the 2026-07-07 rw-9/rw-7
+   * fix (an opted-in builtin must not be hidden by lazy disclosure).
+   *
+   * Kept SEPARATE from `relevantTools` deliberately. It used to be unioned into
+   * it, which made `hasClassification` — literally "did a classifier speak?" —
+   * true on runs where no classifier ran at all. That silently disabled the
+   * unclassified-run heuristic fallback in `computePromptSchemas`, so an
+   * opt-out run hid every domain tool and paid an extra `discover-tools` round
+   * trip. A floor is not a classification; conflating them cost a real
+   * measurement (2026-07-28).
+   */
+  readonly builtinFloorTools?: readonly string[];
+  /**
    * Maximum number of times each tool may be called in a single run.
    * Enforced by the gate before any other logic.
    * Example: `{ "web-search": 3, "http-get": 4 }` bounds research loops.

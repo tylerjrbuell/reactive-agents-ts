@@ -276,19 +276,21 @@ export const runReasoningThink = (
       sessionId: c.taskId,
       requiredTools: effectiveRequiredTools,
       requiredToolQuantities: effectiveRequiredToolQuantities,
+      // Classifier output ONLY. Explicitly opted-in builtins used to be unioned
+      // in here; they now ride `builtinFloorTools` below. Same visibility
+      // guarantee, but `relevantTools` no longer claims a classifier spoke when
+      // none did — which is what `hasClassification` keys off in think.ts.
+      relevantTools: classifiedRelevantTools,
       // Explicitly opted-in builtins (withTools({builtins:[...]})) are
-      // consumer intent — union them into relevantTools so the kernel's
-      // lazy-disclosure prune (RA_LAZY_TOOLS visible set = required +
-      // relevant + used + meta) never hides them. Regression 2026-07-07
-      // (rw-9/rw-7): a minimal requiredTools grounding set of ["file-read"]
-      // plus an empty weak-tier classification left file-write invisible —
-      // the model could not write prices.md / test files at all (3/3 cells,
-      // was 100% when the wider requiredTools floor incidentally protected
-      // it). `builtins: true` (opt-in to everything) deliberately does not
-      // flood relevantTools.
-      relevantTools: Array.isArray(config.builtins)
-        ? [...new Set([...(classifiedRelevantTools ?? []), ...config.builtins])]
-        : classifiedRelevantTools,
+      // consumer intent — a visibility FLOOR the kernel's lazy-disclosure prune
+      // (RA_LAZY_TOOLS visible set = required + relevant + floor + used + meta)
+      // never hides. Regression 2026-07-07 (rw-9/rw-7): a minimal requiredTools
+      // grounding set of ["file-read"] plus an empty weak-tier classification
+      // left file-write invisible — the model could not write prices.md / test
+      // files at all (3/3 cells, was 100% when the wider requiredTools floor
+      // incidentally protected it). `builtins: true` (opt-in to everything)
+      // deliberately does not flood the floor.
+      builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
       maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,

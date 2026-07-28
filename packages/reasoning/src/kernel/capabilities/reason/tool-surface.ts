@@ -35,7 +35,7 @@
  *     Merging it is the follow-up wave of Phase 2.
  */
 
-import type { ToolSchema } from "../attend/tool-formatting.js";
+import { filterToolsByRelevance, type ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS as META_TOOL_SET } from "../../state/kernel-constants.js";
 
 /**
@@ -50,6 +50,21 @@ import { META_TOOLS as META_TOOL_SET } from "../../state/kernel-constants.js";
  *  - NEVER-PRUNE-TO-META-ONLY: if the pre-prune set had ≥1 non-META domain tool
  *    but the post-prune set has 0, the classifier stranded the model — fall back
  *    to the unpruned set. Does NOT fire for legitimately pure-META tasks.
+ *
+ * `heuristicRelevant` is the UNPAID fallback for the lazy allow-set. Without it,
+ * "no classification" was treated as "nothing is relevant", so lazy disclosure
+ * hid every domain tool and the model had to spend an iteration on
+ * `discover-tools` to reach a tool the task NAMED BY NAME. Measured 2026-07-28,
+ * haiku + qwen3.5, task "Use the sql-query tool …" against a 21-tool surface:
+ *
+ *   classifier on   iter0 visible = file-write, sql-query, sql-schema, …  6 iters
+ *   classifier off  iter0 visible = file-write, recall, discover-tools    9 iters
+ *
+ * The extra round trip is why the paid classifier appeared to "win" that cell by
+ * 8-18% — not superior classification, but being the ONLY thing that populated
+ * this set. The never-prune-to-meta-only guard does not catch it either: one
+ * floored builtin counts as a domain tool, so the guard sees a non-empty surface
+ * while twenty tools stay hidden.
  */
 export function computePromptSchemas(opts: {
   effectiveSchemas: readonly ToolSchema[];
@@ -62,6 +77,19 @@ export function computePromptSchemas(opts: {
   toolsUsed: Iterable<string>;
   discovered: Iterable<string>;
   pruneMinTools: number;
+  /**
+   * Free keyword-heuristic relevance, consulted ONLY when classification is
+   * absent. Empty (the default) reproduces the pre-2026-07-28 surface exactly,
+   * so every existing unit pin holds unchanged.
+   */
+  heuristicRelevant?: readonly string[];
+  /**
+   * Consumer-intent visibility floor (`withTools({ builtins: [...] })`).
+   * ALWAYS in the lazy allow-set — this is the rw-9/rw-7 guarantee, previously
+   * obtained by unioning these names into `classifiedRelevant`. Carried
+   * separately now so `hasClassification` keeps meaning "a classifier spoke".
+   */
+  floorTools?: readonly string[];
 }): readonly ToolSchema[] {
   const {
     effectiveSchemas,
@@ -74,6 +102,8 @@ export function computePromptSchemas(opts: {
     toolsUsed,
     discovered,
     pruneMinTools,
+    heuristicRelevant = [],
+    floorTools = [],
   } = opts;
 
   let promptSchemas: readonly ToolSchema[];
@@ -81,6 +111,10 @@ export function computePromptSchemas(opts: {
     const allowed = new Set<string>([
       ...classifiedRequired,
       ...classifiedRelevant,
+      ...floorTools,
+      // Only when the classifier said nothing — a live classification is the
+      // better signal and must not be widened by keyword noise.
+      ...(hasClassification ? [] : heuristicRelevant),
       ...toolsUsed,
       ...discovered,
       ...allowedTools,
@@ -149,6 +183,17 @@ export interface ToolSurfaceInputs {
    * from here — the catalog alone discloses nothing.
    */
   readonly catalog?: readonly ToolSchema[];
+  /**
+   * The task text, used to seed the lazy allow-set from the FREE keyword
+   * heuristic when no classification is available (see `computePromptSchemas`).
+   * Omitted → no heuristic seeding, i.e. the pre-2026-07-28 surface.
+   */
+  readonly taskText?: string;
+  /**
+   * Consumer-intent visibility floor (`KernelInput.builtinFloorTools`).
+   * See `computePromptSchemas`.
+   */
+  readonly floorTools?: readonly string[];
 }
 
 export interface ResolvedToolSurface {
@@ -180,11 +225,15 @@ function visibleReason(
   inputs: ToolSurfaceInputs,
   usedSet: ReadonlySet<string>,
   discoveredSet: ReadonlySet<string>,
+  heuristicSet: ReadonlySet<string>,
 ): string {
   if (inputs.requiredTools.includes(name)) return "required";
   if (META_TOOL_SET.has(name)) return "meta-floor";
   if (inputs.allowedTools.includes(name)) return "allowed-floor";
   if (inputs.relevantTools.includes(name)) return "relevant";
+  if ((inputs.floorTools ?? []).includes(name)) return "builtins-floor";
+  // Ranked below `relevant` so a classified run never reports this reason.
+  if (heuristicSet.has(name)) return "heuristic-relevant (unclassified run)";
   if (usedSet.has(name)) return "already-used";
   if (discoveredSet.has(name)) return "discovered";
   return inputs.lazyMode ? "lazy-fallback (never-prune-to-meta-only)" : "unpruned";
@@ -231,6 +280,15 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
       ? permitted([inputs.finalAnswerSchema])
       : augmented;
 
+  // Free keyword relevance over the SAME schema set the prune runs on. Computed
+  // only when it can be used (no classification, lazy mode, task text present)
+  // so the classified path pays nothing for it.
+  const heuristicRelevant: readonly string[] =
+    !inputs.hasClassification && inputs.lazyMode && inputs.taskText
+      ? filterToolsByRelevance(inputs.taskText, effectiveSchemas).primary.map((ts) => ts.name)
+      : [];
+  const heuristicSet = new Set(heuristicRelevant);
+
   // Stage 2 — lazy disclosure / classification pruning (+ floors + guard).
   const visible = computePromptSchemas({
     effectiveSchemas,
@@ -243,6 +301,8 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     toolsUsed: usedSet,
     discovered: discoveredSet,
     pruneMinTools: inputs.pruneMinTools,
+    heuristicRelevant,
+    floorTools: inputs.floorTools ?? [],
   });
 
   // Stage 3 — required-tools gate narrowing (previously buildToolSchemas):
@@ -284,7 +344,10 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
         `visible, gate-narrowed from FC: required tool(s) pending [${inputs.missingRequiredTools.join(", ")}]`,
       );
     } else {
-      reasons.set(name, `visible: ${visibleReason(name, inputs, usedSet, discoveredSet)}`);
+      reasons.set(
+        name,
+        `visible: ${visibleReason(name, inputs, usedSet, discoveredSet, heuristicSet)}`,
+      );
     }
   }
 

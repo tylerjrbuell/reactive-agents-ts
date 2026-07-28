@@ -345,6 +345,14 @@ export function handleThinking(
       // gate narrowing keys off the identical unsatisfied set.
       missingRequiredTools: missingRequiredForPressure,
       pruneMinTools: PRUNE_MIN_TOOLS,
+      // Seeds the FREE keyword heuristic for UNCLASSIFIED runs only. Without
+      // it, lazy disclosure read "no classification" as "nothing is relevant"
+      // and hid every domain tool — costing an extra `discover-tools` round
+      // trip to reach a tool the task named outright (tool-surface.ts).
+      taskText: input.task,
+      // Consumer-intent floor, carried separately from classifier relevance so
+      // `hasClassification` above stays honest.
+      floorTools: input.builtinFloorTools ?? [],
     });
     const promptSchemas = toolSurface.visible;
 

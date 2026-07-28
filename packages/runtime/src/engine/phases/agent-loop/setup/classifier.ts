@@ -79,28 +79,47 @@ export const classifyTools = (
 
     const classifierReliability = resolvedCalibration?.classifierReliability;
 
-    // Default-on when reasoning is enabled and the user hasn't explicitly opted
-    // out. The classifier is gate-protected by `classifierReliability` below —
-    // unreliable models fall through to the literal-mention fallback, so a
-    // single LLM round-trip ($small for frontier, free for local) becomes the
-    // standard pipeline for any agent that has tools.
+    // OPT-IN as of 2026-07-28. It was default-on for any agent with reasoning
+    // enabled, on the theory that one round-trip ($small for frontier, free for
+    // local) buys a narrower tool surface. Cross-tier ablation
+    // (`packages/benchmarks/src/classifier-ablation.ts`, haiku-4.5 n=2 and
+    // qwen3.5-9b n=1, {1-tool, 21-tool} surfaces × {tool, no-tool, custom-tool}
+    // tasks) says it does not:
     //
-    // Opt-out path (preserved): `.withRequiredTools({ adaptive: false })` or
-    // `.withAdaptiveToolFiltering(false)`. Static `tools: [...]` lists still
+    //   cell               haiku    qwen3.5     accuracy (on/off)
+    //   small  tool        +25%     +32%        2/2  2/2
+    //   small  no-tool    +127%    +167%        2/2  2/2
+    //   small  custom      +75%     +60%        2/2  2/2
+    //   large  tool         -3%      -5%        2/2  2/2
+    //   large  no-tool    +134%    +166%        2/2  2/2
+    //   large  custom      +29%     +28%        2/2  2/2
+    //
+    // Same sign in all six cells on BOTH tiers, zero accuracy difference
+    // anywhere, and the single negative cell is noise-level. Against the lift
+    // rule (09 §6: ≥3pp lift AND ≤15% token overhead to earn default-on) that
+    // is 0pp lift at +25%..+167% — a decisive fail.
+    //
+    // Its one apparent win — the custom-tool cell, where it looked 8-18%
+    // CHEAPER — was an artifact, not a benefit. Lazy disclosure's allow-set was
+    // fed only by classification, so an unclassified run hid every domain tool
+    // and burned an extra `discover-tools` round trip. The classifier was not
+    // classifying better; it was the only thing populating that set. With
+    // `tool-surface.ts` now seeding it from the free keyword heuristic, that
+    // cell inverts to +75%/+60% against the classifier.
+    //
+    // Kept rather than deleted because it remains the better pruner on a wide
+    // surface (`large tool`: 3 visible vs the heuristic's 12) — worth opting
+    // into for large MCP rosters where prompt bloat, not round-trips, dominates.
+    //
+    // Opt-in: `.withRequiredTools({ adaptive: true })` or
+    // `.withAdaptiveToolFiltering(true)`. Static `tools: [...]` lists still
     // suppress adaptive inference (caller stated their requirements).
-    const reasoningEnabled = Boolean(config.reasoningOptions);
-    const explicitlyOptedOut =
-      config.requiredTools?.adaptive === false ||
-      config.adaptiveToolFiltering === false;
     const hasStaticRequiredList =
       (config.requiredTools?.tools?.length ?? 0) > 0;
 
     const wantsClassification =
-      // Explicit opt-in (back-compat path)
       (config.requiredTools?.adaptive === true && !hasStaticRequiredList) ||
-      config.adaptiveToolFiltering === true ||
-      // Default-on when reasoning is enabled and nothing explicit overrides
-      (reasoningEnabled && !explicitlyOptedOut && !hasStaticRequiredList);
+      config.adaptiveToolFiltering === true;
 
     const needsClassification =
       classifierReliability !== "low" &&

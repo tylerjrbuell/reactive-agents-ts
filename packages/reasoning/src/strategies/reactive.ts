@@ -71,6 +71,8 @@ interface ReactiveInput {
   readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
   readonly relevantTools?: readonly string[];
+  /** Consumer-intent visibility floor (withTools({ builtins: [...] })). */
+  readonly builtinFloorTools?: readonly string[];
   /** Per-tool call budget — gate blocks calls that exceed their limit (e.g. `{ "web-search": 3 }`) */
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */
@@ -221,6 +223,7 @@ export const executeReactive = (
       requiredTools: input.requiredTools,
       requiredToolQuantities: input.requiredToolQuantities,
       relevantTools: input.relevantTools,
+      builtinFloorTools: input.builtinFloorTools,
       maxCallsPerTool: input.maxCallsPerTool,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,

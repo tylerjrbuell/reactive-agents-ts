@@ -152,6 +152,7 @@ export const executeReActKernel = (
           // Without this, plan-execute's per-step ReAct kernel pruned every non-meta
           // tool — see reflexion / spot-test GitHub-MCP regression.
           relevantTools: input.relevantTools,
+          builtinFloorTools: input.builtinFloorTools,
           maxRequiredToolRetries: input.maxRequiredToolRetries,
           metaTools: input.metaTools,
           synthesisConfig: input.synthesisConfig,

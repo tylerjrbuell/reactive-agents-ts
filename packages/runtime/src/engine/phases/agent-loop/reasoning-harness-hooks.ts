@@ -126,6 +126,10 @@ export const runReasoningHarnessHooks = (
       requiredTools: effectiveRequiredTools,
       requiredToolQuantities: effectiveRequiredToolQuantities,
       relevantTools: classifiedRelevantTools,
+      // Same consumer-intent floor the main dispatch path passes (see
+      // reasoning-think.ts) — kept in sync so both entry points give the kernel
+      // the same visibility guarantee.
+      builtinFloorTools: Array.isArray(config.builtins) ? config.builtins : undefined,
       maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       modelId: String(config.defaultModel ?? ""),

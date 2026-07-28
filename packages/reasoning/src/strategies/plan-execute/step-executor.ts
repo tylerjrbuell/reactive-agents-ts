@@ -130,6 +130,8 @@ export interface StepExecutorInput {
   /** Classifier-relevant tools — forwarded to each per-step kernel so lazy-
    *  disclosure pruning keeps planned MCP/user tools visible. */
   readonly relevantTools?: readonly string[];
+  /** Consumer-intent visibility floor (withTools({ builtins: [...] })). */
+  readonly builtinFloorTools?: readonly string[];
   readonly maxRequiredToolRetries?: number;
   readonly modelId?: string;
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
@@ -468,6 +470,7 @@ export function executeStep(
     sessionId: input.sessionId,
     requiredTools: input.requiredTools,
     relevantTools: input.relevantTools,
+    builtinFloorTools: input.builtinFloorTools,
     maxRequiredToolRetries: input.maxRequiredToolRetries,
     modelId: input.modelId,
     exitOnAllToolsCalled: true,

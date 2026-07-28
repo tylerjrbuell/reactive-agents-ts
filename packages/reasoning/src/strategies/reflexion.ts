@@ -106,6 +106,8 @@ interface ReflexionInput {
    *  relevant is dropped, MCP/user tools are pruned and the model is left blind
    *  (only meta-tools visible) — see spot-test GitHub-MCP regression. */
   readonly relevantTools?: readonly string[];
+  /** Consumer-intent visibility floor (withTools({ builtins: [...] })). */
+  readonly builtinFloorTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
@@ -194,6 +196,7 @@ export const executeReflexion = (
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
       relevantTools: input.relevantTools,
+      builtinFloorTools: input.builtinFloorTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,

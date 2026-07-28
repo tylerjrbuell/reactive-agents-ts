@@ -120,6 +120,8 @@ interface TreeOfThoughtInput {
    *  any tool not in required+relevant+used+discovered+meta, leaving the model
    *  blind to MCP/user tools (see reflexion / spot-test GitHub-MCP regression). */
   readonly relevantTools?: readonly string[];
+  /** Consumer-intent visibility floor (withTools({ builtins: [...] })). */
+  readonly builtinFloorTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Model identifier for routing/entropy scoring */
@@ -206,6 +208,7 @@ export const executeTreeOfThought = (
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
       relevantTools: input.relevantTools,
+      builtinFloorTools: input.builtinFloorTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
