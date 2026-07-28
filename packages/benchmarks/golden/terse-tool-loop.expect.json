@@ -1,0 +1,23 @@
+{
+  "name": "terse-tool-loop",
+  "task": "Write ./log.txt, then read log.txt back four times, then report done.",
+  "strategy": "reactive",
+  "builtins": [
+    "file-write",
+    "file-read"
+  ],
+  "requiredTools": [
+    "file-write",
+    "file-read"
+  ],
+  "maxIterations": 12,
+  "toolMode": "live",
+  "fileRoot": "/tmp/ra-bench-replay-fixroot",
+  "expectOutputIncludes": [
+    "done"
+  ],
+  "expectToolsUsed": [
+    "file-write",
+    "file-read"
+  ]
+}

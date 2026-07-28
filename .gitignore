@@ -93,3 +93,4 @@ qa-out/
 
 # docs:examples:check transient typecheck workspace
 .doc-examples-tmp-*/
+graphify-out

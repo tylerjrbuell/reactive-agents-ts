@@ -1,0 +1,11 @@
+{
+  "name": "abstain",
+  "task": "What is the population of Aetheria?",
+  "strategy": "reactive",
+  "maxIterations": 3,
+  "toolMode": "recorded",
+  "expectOutputIncludes": [
+    "cannot"
+  ],
+  "expectToolsUsed": []
+}

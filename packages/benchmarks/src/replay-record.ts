@@ -68,6 +68,73 @@ const SCENARIOS: readonly GoldenScenario[] = [
       { text: "FINAL ANSWER: wrote the note and it is done." },
     ],
   },
+  {
+    // ── THE ABLATION SHAPE (added 2026-07-27) ────────────────────────────────
+    // Many SHORT assistant turns against real tool results — the shape that
+    // trips `low_delta_guard`, because the guard measures TOKEN delta and a
+    // model emitting terse tool calls against large results has a delta near
+    // zero while doing real work. This is rw-7's signature (`tokenDelta` ~185,
+    // `artifactsAvailable` 4–5) reproduced deterministically.
+    //
+    // WHY THIS GOLDEN EXISTS. The low_delta_guard lift question cost a
+    // multi-hour live campaign (three VOID arm-sets first) to answer. Replayed,
+    // a terminating mechanism shows up as LLM-table UNDER-CONSUMPTION —
+    // `dispensed < tableSize` means the harness stopped before the recording
+    // did. That is the same signal, at zero tokens and ~100ms. Proven on
+    // tool-write: control 3/3, `maxIterations: 1` variant 1/3.
+    //
+    // A guard that fires here consumes fewer than the 9 recorded exchanges. Do
+    // not "fix" a drift failure by shortening the scenario — the length IS the
+    // instrument. It needs enough consecutive low-delta iterations to build the
+    // counter past its threshold.
+    sidecar: {
+      name: "terse-tool-loop",
+      // The task text MUST contain "log.txt": the first turn's `match` guard is
+      // tested against it, and a guard that never fires makes the provider skip
+      // the write turn — the reads then ENOENT and the golden records four tool
+      // errors as if they were the harness's behavior. Cost one bad recording.
+      task: "Write ./log.txt, then read log.txt back four times, then report done.",
+      strategy: "reactive",
+      builtins: ["file-write", "file-read"],
+      // Static list suppresses the tool-relevance classifier, which would
+      // otherwise consume a match-guarded turn (see tool-write above).
+      requiredTools: ["file-write", "file-read"],
+      maxIterations: 12,
+      toolMode: "live",
+      fileRoot: GOLDEN_FILE_ROOT,
+      expectOutputIncludes: ["done"],
+      expectToolsUsed: ["file-write", "file-read"],
+    },
+    scenario: [
+      {
+        match: "log\\.txt",
+        text: "Writing the log.",
+        toolCall: { name: "file-write", args: { path: "./log.txt", content: "line one\nline two\nline three\n" } },
+      },
+      { text: "Reading it back.", toolCall: { name: "file-read", args: { path: "./log.txt" } } },
+      { text: "Again.", toolCall: { name: "file-read", args: { path: "./log.txt" } } },
+      { text: "Once more.", toolCall: { name: "file-read", args: { path: "./log.txt" } } },
+      { text: "Last read.", toolCall: { name: "file-read", args: { path: "./log.txt" } } },
+      { text: "FINAL ANSWER: wrote and re-read the log, it is done." },
+    ],
+  },
+  {
+    // Honest decline. Pins the abstention rail end to end — the class of defect
+    // where an abstention was scored as a SUCCESS at four sites (register §3).
+    // A replay whose output stops containing the decline means the rail broke.
+    sidecar: {
+      name: "abstain",
+      task: "What is the population of Aetheria?",
+      strategy: "reactive",
+      maxIterations: 3,
+      toolMode: "recorded",
+      expectOutputIncludes: ["cannot"],
+      expectToolsUsed: [],
+    },
+    scenario: [
+      { text: "FINAL ANSWER: I cannot answer that — Aetheria is not a real place I have data for." },
+    ],
+  },
 ];
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}\.jsonl$/;
