@@ -906,7 +906,7 @@ export function runKernel(
         state = transitionState(state, { error: null });
         state = terminate(state, {
           reason: "abstained",
-          deliverable: sentinelDeliverable("no_substantive_output"),
+          deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
           extraMeta: {
             abstention: { reason: forced.reason, missing: forced.missing },
           },

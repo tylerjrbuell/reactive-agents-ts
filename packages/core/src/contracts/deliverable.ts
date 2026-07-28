@@ -124,6 +124,22 @@ export type Deliverable =
         | "awaiting_interaction"
         // O3: model honestly declined (Task 3 — model-initiated abstain path).
         | "model-abstained";
+      /**
+       * The specific cause, when the terminating site knows it — e.g.
+       * "no successful tool call for required tools (web-search); could not
+       * ground an answer in available evidence".
+       *
+       * F7 (2026-07-28): `decideForcedAbstention` has always computed exactly
+       * this string and stashed it in `meta.abstention.reason`, where nothing
+       * rendered it. Every forced abstention therefore reached the user as one
+       * identical sentence naming no cause. Carried here so the rendered text
+       * can say WHY without surfacing model-authored content — which the
+       * sentinel deliberately does not do, since the abstention triggers are
+       * "the model's synthesis was REJECTED as ungrounded" and "a required tool
+       * was unavailable". Surfacing the rejected synthesis would undo the
+       * rejection (the 2026-07-22 dishonest-success fix).
+       */
+      readonly detail?: string;
     };
 
 /**
@@ -156,10 +172,19 @@ export function deliverableToContent(d: Deliverable): string {
         // the task succeeded. The run's own diagnosis flagged it
         // `dishonest-success-suspected`. An abstention must never render as a
         // success claim; the specific cause rides `meta.abstention.reason`.
+        // The `detail` suffix is what turns one generic sentence into an
+        // auditable one. Absent detail reproduces the previous text exactly, so
+        // every existing pin on these strings still holds.
         case "no_substantive_output":
-          return "Could not complete the task — no grounded answer could be produced from the available tools.";
+          return (
+            "Could not complete the task — no grounded answer could be produced from the available tools." +
+            (d.detail ? ` Cause: ${d.detail}.` : "")
+          );
         case "model-abstained":
-          return "Declined to answer — the available evidence was insufficient to ground a response.";
+          return (
+            "Declined to answer — the available evidence was insufficient to ground a response." +
+            (d.detail ? ` Cause: ${d.detail}.` : "")
+          );
       }
   }
 }
@@ -217,6 +242,9 @@ export function sentinelDeliverable(
     | "awaiting_approval"
     | "awaiting_interaction"
     | "model-abstained",
+  /** Specific cause, rendered as a `Cause: …` suffix. Omit to keep the
+   *  historical generic text byte-identical. */
+  detail?: string,
 ): Deliverable {
-  return { source: "sentinel", reason };
+  return { source: "sentinel", reason, ...(detail ? { detail } : {}) };
 }

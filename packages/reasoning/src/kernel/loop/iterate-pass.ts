@@ -1085,7 +1085,7 @@ export function runIterationPass(
                   state = transitionState(state, { error: null });
                   state = terminate(state, {
                     reason: "abstained",
-                    deliverable: sentinelDeliverable("no_substantive_output"),
+                    deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
                     extraMeta: {
                       abstention: { reason: forced.reason, missing: forced.missing },
                     },
@@ -1233,7 +1233,7 @@ export function runIterationPass(
             state = transitionState(state, { error: null });
             state = terminate(state, {
               reason: "abstained",
-              deliverable: sentinelDeliverable("no_substantive_output"),
+              deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
               extraMeta: {
                 abstention: { reason: forced.reason, missing: forced.missing },
               },
@@ -1478,7 +1478,7 @@ export function runIterationPass(
                     state = transitionState(state, { error: null });
                     state = terminate(state, {
                       reason: "abstained",
-                      deliverable: sentinelDeliverable("no_substantive_output"),
+                      deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
                       extraMeta: {
                         abstention: { reason: forced.reason, missing: forced.missing },
                       },

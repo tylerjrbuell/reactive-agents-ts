@@ -1221,6 +1221,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         (rr.status === "partial" && hasSubstantiveOutput)
                     : Boolean(ctx.metadata.isComplete);
 
+                // F7 (2026-07-28): an ABSTENTION is not a success. The kernel
+                // reports `status: "completed"` for a forced abstention — the
+                // decline completed cleanly — so this landed on `true` and the
+                // run published `AgentCompleted.success: true` and a trace
+                // `run-completed.status: "success"` for a run that delivered
+                // nothing and said so.
+                //
+                // `deriveRunOutcome` has mapped `abstained -> "failure"` since
+                // 2026-07-23 precisely so the learning loop is not taught that
+                // declining is a win — but that classifier governs the debrief
+                // and learning lanes only. The terminal status was a separate,
+                // disagreeing rule, so the gate lane (testing/src/gate/runner.ts
+                // reads run-completed.status) still scored abstentions as
+                // successes. Same dishonest-success shape as F1, one lane over.
+                //
+                // The decline stays HONEST and machine-readable: `terminatedBy`
+                // is "abstained" and `result.abstention` carries reason +
+                // missing. Only the coarse success bit changes.
+                if (executionSucceeded && terminatedByRaw === "abstained") {
+                  executionSucceeded = false;
+                  ctx.metadata.abstainedNotSuccess = true;
+                }
+
                 // ── Engine-boundary output/success invariant (M7's engine
                 // mirror, 2026-07-11 probe fleet). The inline path derived
                 // success from isComplete alone, shipping success:true with
