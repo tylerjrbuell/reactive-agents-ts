@@ -1232,8 +1232,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // with a real cause. Deliverable flags come from the
                 // RunContract × step-ledger scan — no model judgment.
                 let emptyOutputCompletionNote: string | undefined;
-                if (executionSucceeded && !hasSubstantiveOutput) {
-                  const emptyOutputDeliverables = deriveReceiptDeliverables({
+                if (executionSucceeded) {
+                  const declaredDeliverables = deriveReceiptDeliverables({
                     task: String((task.input as { question?: unknown })?.question ?? task.id),
                     ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                     ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
@@ -1244,20 +1244,47 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // without re-scanning reasoningSteps.
                     // Wave C.2 — run-scoped (all passes), not just the last one.
                     runLedger: readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger,
-                    output: "",
+                    output: hasSubstantiveOutput ? outputForSuccess : "",
                   });
-                  if (
-                    emptyOutputDeliverables !== undefined &&
-                    emptyOutputDeliverables.length > 0 &&
-                    emptyOutputDeliverables.every((d) => d.produced)
-                  ) {
-                    emptyOutputCompletionNote = `Completed: ${emptyOutputDeliverables
-                      .map((d) => d.spec)
-                      .join("; ")}.`;
-                    ctx.metadata.harnessAuthoredOutput = true;
-                  } else {
+                  const declared = declaredDeliverables ?? [];
+                  const allProduced = declared.length > 0 && declared.every((d) => d.produced);
+
+                  if (!hasSubstantiveOutput) {
+                    // Empty output is honest ONLY when every declared deliverable
+                    // verifiably landed — the artifacts are the answer, and a
+                    // deterministic completion note (harness-authored, #40
+                    // channel) replaces the silence.
+                    if (allProduced) {
+                      emptyOutputCompletionNote = `Completed: ${declared.map((d) => d.spec).join("; ")}.`;
+                      ctx.metadata.harnessAuthoredOutput = true;
+                    } else {
+                      executionSucceeded = false;
+                      ctx.metadata.emptyOutputFailure = true;
+                    }
+                  } else if (declared.length > 0 && !allProduced) {
+                    // ── F1 (2026-07-28): TALKING IS NOT DOING. ──────────────
+                    // This check used to run ONLY when output was empty, so a
+                    // run that produced PROSE skipped deliverable verification
+                    // entirely and shipped `success`. Measured on the default
+                    // path, haiku, 3/3 runs plus a 4th confirmation: the agent
+                    // dispatched ZERO tools, wrote no file, replied
+                    // "I don't have the ability to read files directly", and the
+                    // run reported status=success with a declared deliverable
+                    // (./avg.txt) that never existed.
+                    //
+                    // That is the framework's own moat failing where most users
+                    // are — 08 §0 names in-runtime verification as the #1 unmet
+                    // need, and the trust spine returned success for a run that
+                    // did nothing. Same family as the abstention chain, where an
+                    // honest decline was scored success at four sites.
+                    //
+                    // A declared deliverable is a CONTRACT, and prose is not a
+                    // substitute for it. Blast radius is bounded by construction:
+                    // `deriveReceiptDeliverables` returns [] when nothing is
+                    // declared (no requiredTools, no taskContract, no artifact
+                    // phrasing), so tasks that declare nothing are untouched.
                     executionSucceeded = false;
-                    ctx.metadata.emptyOutputFailure = true;
+                    ctx.metadata.unproducedDeliverableFailure = true;
                   }
                 }
 
