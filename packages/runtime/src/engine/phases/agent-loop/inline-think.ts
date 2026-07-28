@@ -167,6 +167,29 @@ export const runInlineThink = (
       messages: messagesToSend,
       model: c.selectedModel,
       ...(llmTools ? { tools: llmTools } : {}),
+      // `traceContext` is the field `emitForRequest` (kernel/observable-llm.ts)
+      // actually reads to run-correlate an `llm-exchange` trace event. Without
+      // it the call falls back to the `llm-direct` PLACEHOLDER, and this is the
+      // DEFAULT path — so every default-path run's model I/O was landing in the
+      // global uncorrelated bucket instead of the run's own trace.
+      //
+      // Measured 2026-07-28, identical scripted work, `.withTracing()` on:
+      //   inline → <ULID>.jsonl {run-started, tool-call-*, ledger-entry,
+      //            verifier-verdict, run-completed}  and llm-exchange:2 in
+      //            llm-direct.jsonl
+      //   kernel → <ULID>.jsonl containing its llm-exchange:3, no placeholder
+      //
+      // Consequences this fixes: the run trace is not replayable (the replay
+      // lane needs `llm-exchange` to build the LLM table, so the zero-token
+      // ablation instrument only worked on kernel-path runs), per-run cost
+      // could not be attributed, and `rax diagnose <runId>` showed no model I/O.
+      // Same hazard `pipeline.ts` already documents for engine-phase calls
+      // ("a hidden per-run LLM call lived there for months").
+      //
+      // `taskId` below is NOT that field — `CompletionRequest` declares no
+      // `taskId`, so it rode as a stowaway past the `as` cast and nothing read
+      // it. Kept only because the streaming path passes the same object shape.
+      traceContext: { taskId: c.taskId },
       taskId: c.taskId,
     } as Parameters<typeof llm.complete>[0] & { taskId: string };
 

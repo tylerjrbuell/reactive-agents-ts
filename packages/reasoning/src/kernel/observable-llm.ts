@@ -148,6 +148,11 @@ function emitForRequestWith(
     systemPrompt: request.systemPrompt,
     messages: toExchangeMessages(request.messages),
     toolSchemaNames: request.tools?.map((t) => t.name),
+    // The gateway stamps `purpose` on every mediated request; carry it onto the
+    // trace so spend is attributable per SUBSYSTEM, not just per run. Before
+    // this, every `llm-exchange` in a real trace read UNSTAMPED and the harness
+    // could only be described as "expensive" with no composition.
+    ...(request.purpose ? { purpose: request.purpose } : {}),
     temperature: request.temperature,
     maxTokens: request.maxTokens,
     response: {

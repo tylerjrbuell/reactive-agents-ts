@@ -790,13 +790,17 @@ export type TokenLogprob = {
  * never sees. The deterministic test provider uses exactly that distinction to
  * keep the classifier from consuming scripted agent turns.
  */
-export type LlmCallPurpose =
-  | "think"
-  | "plan"
-  | "synthesize"
-  | "extract"
-  | "classify"
-  | "verify";
+/**
+ * MOVED to `@reactive-agents/core` (2026-07-28) and re-exported here so existing
+ * importers are unaffected. It had to move down: `core`'s EventBus and the
+ * `trace` package both need it to carry `purpose` onto `LLMExchangeEmitted` and
+ * the `llm-exchange` trace event, and neither may depend on `llm-provider`.
+ * `core` has zero workspace deps, so it is the only home all three can share.
+ * Re-exported rather than re-declared — a second copy is the drift class the
+ * debt register tracks.
+ */
+import type { LlmCallPurpose } from "@reactive-agents/core";
+export type { LlmCallPurpose };
 
 export type CompletionRequest = {
   /** Conversation history (at least 1 message required) */

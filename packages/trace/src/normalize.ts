@@ -238,6 +238,9 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         systemPromptTruncated: raw.systemPromptTruncated,
         messages: raw.messages,
         toolSchemaNames: raw.toolSchemaNames,
+        // Conditional: absent stays absent, so historical goldens and every
+        // trace recorded before 2026-07-28 stay byte-identical.
+        ...(raw.purpose ? { purpose: raw.purpose } : {}),
         temperature: raw.temperature,
         maxTokens: raw.maxTokens,
         response: raw.response,

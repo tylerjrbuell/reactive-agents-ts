@@ -1,5 +1,6 @@
 import { Effect, Context, Layer, Ref } from "effect";
 import type { Message } from "../types/message.js";
+import type { LlmCallPurpose } from "../types/llm-purpose.js";
 import type {
   SkillActivated,
   SkillRefined,
@@ -1240,6 +1241,13 @@ export type AgentEvent =
         readonly truncated?: boolean;
       }[];
       readonly toolSchemaNames: readonly string[];
+      /**
+       * What this call was FOR (see {@link LlmCallPurpose}). Set by the kernel
+       * LLM gateway on every mediated call; absent on direct, un-mediated ones.
+       * Carrying it here is what makes token spend attributable to a SUBSYSTEM
+       * ("synthesize is 40% of spend") rather than only to a run total.
+       */
+      readonly purpose?: LlmCallPurpose;
       readonly temperature?: number;
       readonly maxTokens?: number;
       readonly response: {

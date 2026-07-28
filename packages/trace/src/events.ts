@@ -1,7 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
-import type { RunContext } from "@reactive-agents/core"
+import type { RunContext, LlmCallPurpose } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -296,6 +296,13 @@ export interface LLMExchangeEvent extends TraceEventBase {
     readonly truncated?: boolean
   }[]
   readonly toolSchemaNames: readonly string[]
+  /**
+   * What this call was for. Absent on un-mediated calls (and on every trace
+   * recorded before 2026-07-28) — treat absence as "unknown", never as a tier.
+   * This is the field that turns "the harness costs 640%" into a per-subsystem
+   * breakdown.
+   */
+  readonly purpose?: LlmCallPurpose
   readonly temperature?: number
   readonly maxTokens?: number
   readonly response: {

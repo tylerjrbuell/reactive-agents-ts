@@ -18,7 +18,7 @@
 
 import { Effect } from "effect";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Rationale } from "@reactive-agents/core";
+import type { Rationale, LlmCallPurpose } from "@reactive-agents/core";
 import {
   truncateExchangeText,
   EXCHANGE_SYSTEM_PROMPT_MAX,
@@ -523,6 +523,8 @@ export function emitLLMExchange(args: {
   readonly systemPrompt?: string;
   readonly messages: readonly { readonly role: "system" | "user" | "assistant" | "tool"; readonly content: string }[];
   readonly toolSchemaNames?: readonly string[];
+  /** What this call was for — carried through so the trace can attribute spend per subsystem. */
+  readonly purpose?: LlmCallPurpose;
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly response: {
@@ -562,6 +564,9 @@ export function emitLLMExchange(args: {
         ...(sys.truncated ? { systemPromptTruncated: true } : {}),
         messages: msgs,
         toolSchemaNames: args.toolSchemaNames ?? [],
+        // Conditional spread: absent stays absent, so exchanges from
+        // un-mediated calls are byte-identical to before this field existed.
+        ...(args.purpose ? { purpose: args.purpose } : {}),
         temperature: args.temperature,
         maxTokens: args.maxTokens,
         response: {
