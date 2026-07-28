@@ -16,6 +16,38 @@ that produced it so it can be re-run. Ordered by leverage — cost × outcome da
 
 ---
 
+> ## ⚠⚠ SECOND RETRACTION PASS (2026-07-28) — F8 and F2 also fall
+>
+> Re-running every tool-dependent cell with a **pinned, identical tool surface** kills two
+> more entries. Both had the same root as O1: the harness registered only `file-write`, so
+> the kernel's injected `discover-tools` (**F9**) was the only reason the arms differed.
+>
+> | entry | claimed | with a fair tool surface | verdict |
+> |---|---|---|---|
+> | **F8** tool-error thrash | kernel 46,296t / 21 iters / FAILURE vs inline 932t / success | kernel **3,621t / 6 iters / success** vs inline 1,671t | **RETRACTED** — the 50× was the kernel hunting for a read capability it had not been given |
+> | **F2** terminal gate fails a produced deliverable | 3/3 `status=failure`, one with the file on disk | **2/3 success with `file=Y`**; the one failure produced no file (an honest failure) | **RETRACTED** |
+>
+> **F9 is the actual root defect, and it manufactured the others.** It fabricated O1, F8,
+> F2 and the local half of F4 by silently making the two arms non-comparable. An arm study
+> that varies `.withReasoning()` also varies the tool surface unless tools are pinned.
+>
+> **What survives, and why:**
+>
+> - **F1** — independently verified, control-validated, **now fixed** (`df04ae1e`). Never
+>   depended on the tool surface: the run declared a deliverable, produced prose, and was
+>   scored `success`.
+> - **F6** (+449%/+467% on a no-tool task) and **F7** (abstention costs 7×) — no tool is
+>   involved in either, so the confound cannot apply. The fair-surface F8 re-run
+>   independently reproduced F7's pattern: kernel **+117%** for a *less* informative message
+>   (*"Could not complete the task — no grounded answer"* vs inline's *"The file
+>   ./missing-input.json does not exist at the specified path"*).
+> - **F9** — verified deterministically on the test provider, no live model involved.
+> - **F5**, **F3** — observational; F3 is a *consequence* of F9.
+>
+> **Standing lesson, now paid for twice in one day:** pin every variable an arm study is not
+> deliberately varying. The tell both times was in the **output text**, never in a status
+> field or a token count.
+
 > ## ⚠ RETRACTION (2026-07-28, same day) — read before anything below
 >
 > **O1 "the inversion" is WITHDRAWN. It was a probe artifact and it was committed as a
@@ -48,17 +80,21 @@ that produced it so it can be re-run. Ordered by leverage — cost × outcome da
 
 ## Leverage table
 
-| # | Mode | Worst observed | Outcome damage | Breadth |
-|---|---|---|---|---|
-| **F8** | Tool-error thrash | **+4867%**, 21 iters | inline succeeds, kernel FAILS | any missing/failing tool input |
-| **F1** | Dishonest success (default path) | 1 call, 0 tools | reports `success`, produces nothing | frontier + inline |
-| **F2** | Terminal gate fails a produced deliverable | — | `status=failure` with file on disk | local + kernel |
-| **F6** | Fixed kernel tax on no-tool tasks | **+449%..+467%** | none (both correct) | every tier, every no-tool task |
-| **F7** | Abstention costs 7× for a worse message | +608% | message less informative | frontier + kernel |
-| **F3** | `discover-tools` burn | 14 iters vs 2 | none directly | kernel only |
-| **F4** | RI cost non-linear | +225pp or 0% | sometimes recovers deliverable | unpredictable |
-| **F5** | `low_delta_guard` fires without being fatal | — | none | frontier + kernel |
-| **F9** | Kernel widens the tool surface beyond config | — | control-boundary; confounds arm studies | kernel only |
+**Status after the second retraction pass. Read this table, not the prose below it, for
+current standing.**
+
+| # | Mode | Standing | Note |
+|---|---|---|---|
+| **F9** | Kernel widens the tool surface beyond config | **REAL — root defect** | control-boundary breach; manufactured O1/F8/F2 |
+| **F1** | Dishonest success (declared deliverable unproduced) | **REAL — FIXED `df04ae1e`** | control-validated |
+| **F6** | Fixed kernel tax on no-tool tasks (+449%/+467%) | **REAL** | tier-independent; no tools involved so no confound |
+| **F7** | Kernel pays 7× for a *worse* honest decline | **REAL** | independently reproduced at +117% on the F8 re-run |
+| **F5** | `low_delta_guard` fires without being fatal | REAL (observational) | guard-fire rate is not an outcome measure |
+| **F3** | `discover-tools` burn | REAL but derivative | a consequence of F9 |
+| **F4** | RI cost non-linear | **PARTIAL** | the local hard-task figure was confounded; the ~0%-vs-decisive spread stands |
+| ~~**F8**~~ | ~~Tool-error thrash +4867%~~ | **RETRACTED** | probe artifact — see second retraction pass |
+| ~~**F2**~~ | ~~Terminal gate fails a produced deliverable~~ | **RETRACTED** | probe artifact — see second retraction pass |
+| ~~**O1**~~ | ~~The inversion~~ | **RETRACTED** | probe artifact — see first retraction |
 
 ---
 
