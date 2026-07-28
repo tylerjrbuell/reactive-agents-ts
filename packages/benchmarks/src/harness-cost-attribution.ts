@@ -48,6 +48,16 @@ export interface ArmResult {
   readonly totalIn: number;
   readonly totalOut: number;
   readonly output: string;
+  // ─── Failure-mode fields. Tokens say a run was expensive; these say WHY it
+  // ended. Without them a 0/2 deliverable is a mystery rather than a diagnosis.
+  /** Terminal status from `run-completed`. */
+  readonly status: string;
+  /** Guards that fired, in order — `low_delta_guard` etc. */
+  readonly guards: readonly string[];
+  /** Distinct tools actually dispatched. */
+  readonly tools: readonly string[];
+  /** Highest iteration index observed on any event. */
+  readonly iterations: number;
 }
 
 /**
@@ -145,9 +155,31 @@ async function runArm(
   // day from the same root cause: the probe, not the system.
   const deliverable = process.env.RA_COST_DELIVERABLE ?? "report.md";
   const wroteFile = readdirSync(root).includes(deliverable);
+  const guards: string[] = [];
+  const tools = new Set<string>();
+  let status = "unknown";
+  let iterations = 0;
+  for (const f of readdirSync(dir)) {
+    for (const line of readFileSync(join(dir, f), "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const e = JSON.parse(line) as {
+          kind?: string; guard?: string; toolName?: string;
+          status?: string; error?: string; iter?: number;
+        };
+        if (typeof e.iter === "number" && e.iter > iterations) iterations = e.iter;
+        if (e.kind === "guard-fired" && e.guard) guards.push(e.guard);
+        if (e.kind === "tool-call-start" && e.toolName) tools.add(e.toolName);
+        if (e.kind === "run-completed") status = e.status ?? "unknown";
+      } catch { /* skip */ }
+    }
+  }
   rmSync(dir, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
-  return { arm, ok, durationMs, wroteFile, byPurpose, totalIn, totalOut, output };
+  return {
+    arm, ok, durationMs, wroteFile, byPurpose, totalIn, totalOut, output,
+    status, guards, tools: [...tools], iterations,
+  };
 }
 
 if (import.meta.main) {
@@ -175,7 +207,10 @@ if (import.meta.main) {
         .join(" ");
       console.log(
         `[${i + 1}] ${arm.padEnd(10)} ${String(r.totalIn + r.totalOut).padStart(7)}t ` +
-          `${String(Math.round(r.durationMs / 100) / 10).padStart(6)}s file=${r.wroteFile ? "Y" : "n"} | ${purposes}`,
+          `${String(Math.round(r.durationMs / 100) / 10).padStart(6)}s file=${r.wroteFile ? "Y" : "n"} ` +
+          `it=${r.iterations} ${r.status.padEnd(9)} ` +
+          `tools=[${r.tools.join(",") || "-"}] ` +
+          `${r.guards.length ? `GUARDS=[${r.guards.join(",")}] ` : ""}| ${purposes}`,
       );
     }
   }
