@@ -89,7 +89,39 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 - The meta-loop DAG is one-directional; control re-enters as ledger entries only.
 - Falsified levers stay dead (no LATS/GoT, no resurfaced levers); non-goals in 08 §9 carried.
 
-## 7. Status board (updated 2026-07-22)
+## 7. Status board (updated 2026-07-27)
+
+> **AMENDED 2026-07-27 — the active program is now SIMPLIFICATION, and §4's "next = Wave C
+> consumers / Arc 2" is SUSPENDED until the composite ablation exists.** Plan:
+> [[../../Planning/Implementation-Plans/2026-07-27-simplification-and-feedback-loop]].
+>
+> **Why.** An audit of the measurement record, not an impression: **6 lift measurements in
+> two months, 0 of which cleared the promotion bar**; the full harness costs **555–640%**
+> more tokens than a bare LLM against this document's own **15%** ceiling, i.e. applied to
+> itself `ra-full` fails §6 by ~40×; **~7 of 83 withers** have any lift evidence; and the
+> only guard ever measured (`low_delta_guard`) was killing 11 of 12 runs mid-progress, so
+> the measured base rate for "a guard is a misfire" is **1 of 1**. Meanwhile `pass^8` is
+> **0% on all three real-world tasks** — reliability, not capability, is the binding axis.
+>
+> **The root cause is the loop, not the mechanisms.** Measurement had two modes — free
+> deterministic cells (does it FIRE?) and multi-hour live arms (does it HELP?) — with
+> nothing between, so every promotion question cost a campaign. `low_delta_guard` cost one
+> plus three VOID arm-sets.
+>
+> **Tier 1 now exists and is proven** (`62213316`): the replay lane rebuilds a real agent
+> over a recorded LLM table with no provider, and table consumption is the effect signal
+> (`dispensed < tableSize` = terminated early = the guard-misfire detector). Measured on
+> the new `terse-tool-loop` golden, legacy `4/4 ok` vs `EVIDENCE_DELTA_RESET=1` table
+> exhausted — **the low_delta result, at zero tokens in ~300ms**. Scope limit: replay
+> measures CONTROL FLOW, not accuracy; prompt-altering mechanisms still need live arms.
+>
+> **Consequence for §6.** The lift rule stands unchanged, but it now has a cheap
+> pre-filter: a mechanism showing zero divergence across the golden corpus is INERT and is
+> deleted or demoted **without** spending a live arm on it. Only divergent mechanisms earn
+> tier 2. The composite (`bare` vs `lean` vs `full` on HEAD) is the gate on any honest
+> claim and on the next release.
+
+### Board (as of 2026-07-22)
 
 > **v0.14.0 RELEASED 2026-07-22** (npm live, 34 pkgs; GitHub Release published; main synced with origin).
 > The §4 amendment is DISCHARGED: debt burndown Waves 0–5 complete (lies removed, 7-boundary spine
