@@ -16,7 +16,7 @@ import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ToolService } from "@reactive-agents/tools";
 import { BehavioralContractService } from "@reactive-agents/guardrails";
-import { makeStep, makeObservationResult, getRecoveryHint, growRunLedger, deriveArtifactEntries, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
+import { makeStep, makeObservationResult, getRecoveryHint, growRunLedger, deriveArtifactEntries, evaluateToolPolicy, forbiddenToolsFromContract, META_TOOLS, type ReasoningStep, type RunLedger } from "@reactive-agents/reasoning";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries, resolveProduces } from "@reactive-agents/tools";
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -130,6 +130,64 @@ export const runInlineAct = (
           }
 
           const startMs = Date.now();
+
+          // ── F9 (2026-07-28): THE DEFAULT PATH HAD NO TOOL GATE. ───────────
+          // This loop called `toolService.execute()` directly, bypassing
+          // `executeToolAndObserve` — the canonical primitive where B1 (P0-4)
+          // put `evaluateToolPolicy`. So the inline path, which is the DEFAULT
+          // path (`_enableReasoning` is false), inherited NO policy and NO
+          // surface check and would run any tool the model named.
+          //
+          // Measured: configured `builtins: ["file-write"]`, scripted a
+          // `file-read` call against a sandbox file containing a marker.
+          //   inline  → EXECUTED, marker LEAKED into the result
+          //   kernel  → blocked correctly
+          // `withTools({builtins})` prunes the VISIBLE SCHEMA; it does not
+          // restrict the ToolService registry, so an unexposed builtin is
+          // still resolvable by name. On the kernel path the surface gate is
+          // what stops it. Inline had nothing.
+          //
+          // `exposedToolNames` was already threaded to this function and used
+          // only to phrase a recovery hint — declared, threaded, never
+          // enforced. It is the correct gate and is now the gate.
+          //
+          // Fail-OPEN when the set is absent (some callers do not populate it):
+          // this must not silently break paths that never had a surface, and
+          // the policy check below still applies. META_TOOLS bypass mirrors
+          // `evaluateToolPolicy`'s own first rule so the two cannot drift.
+          const exposed = deps.exposedToolNames;
+          const offSurface =
+            exposed !== undefined && exposed.size > 0 && !exposed.has(toolName) && !META_TOOLS.has(toolName);
+          const policyDecision = evaluateToolPolicy(toolName, {
+            ...(config.allowedTools ? { allowedTools: config.allowedTools } : {}),
+            forbiddenTools: forbiddenToolsFromContract(config.taskContract),
+          });
+          if (offSurface || policyDecision.blocked) {
+            const message = offSurface
+              ? `[Tool "${toolName}" was not exposed to this agent — blocked.]`
+              : (policyDecision as { message: string }).message;
+            const durationMs = Date.now() - startMs;
+            if (eb) {
+              yield* eb.publish({
+                _tag: "ToolCallCompleted",
+                taskId: c.taskId,
+                toolName,
+                callId,
+                durationMs,
+                success: false,
+                args,
+                error: message,
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-blocked", tag: errorTag(err) })));
+            }
+            return {
+              toolCallId: callId,
+              toolName,
+              result: message,
+              durationMs,
+              success: false,
+              args,
+            };
+          }
 
           // Phase 0.2: Publish ToolCallStarted
           if (eb) {

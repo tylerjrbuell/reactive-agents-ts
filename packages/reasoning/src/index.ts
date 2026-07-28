@@ -337,6 +337,11 @@ export type {
   BuildRunEnvelopeOptions,
 } from "./kernel/envelope/run-envelope.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
+// The single tool-policy gate (P0-4 / boundary B1). Exported so the ENGINE's
+// inline agent loop can delegate to the same decision the kernel act path uses,
+// instead of running an independent allow/deny implementation — or, as was the
+// case until 2026-07-28, none at all.
+export { evaluateToolPolicy, forbiddenToolsFromContract, type ToolPolicy, type ToolPolicyDecision } from "./kernel/capabilities/act/tool-observe.js";
 // Termination meta-tool name (NOT in META_TOOLS) — exported so runtime receipt
 // derivation (Arc 1 Task 8) can exclude it from grounding evidence without a
 // hardcoded copy that could drift.
