@@ -1,0 +1,306 @@
+{
+  "provider": "ollama",
+  "model": "granite4:tiny-h",
+  "runs": 3,
+  "generatedAt": "2026-07-29T09:01:09.016Z",
+  "cells": [
+    {
+      "arm": "inline",
+      "tokens": 15957,
+      "calls": 6,
+      "iterations": 7,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 5448,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 15712
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 15616,
+      "calls": 9,
+      "iterations": 8,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "list-directory",
+        "final-answer"
+      ],
+      "status": "failure",
+      "terminatedBy": "unknown",
+      "durationMs": 4441,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 15237
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 8506,
+      "calls": 6,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "final-answer"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 2853,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 8267
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 30641,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 6074,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 30184
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 31808,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 6094,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 31336
+    },
+    {
+      "arm": "inline",
+      "tokens": 5017,
+      "calls": 2,
+      "iterations": 1,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read"
+      ],
+      "status": "failure",
+      "terminatedBy": "unknown",
+      "durationMs": 908,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 4922
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 15721,
+      "calls": 9,
+      "iterations": 8,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "list-directory",
+        "final-answer"
+      ],
+      "status": "failure",
+      "terminatedBy": "unknown",
+      "durationMs": 4302,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 15346
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 14789,
+      "calls": 9,
+      "iterations": 8,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "list-directory"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 3449,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 14486
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 30567,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 5179,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 30077
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 31751,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 5014,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 31304
+    },
+    {
+      "arm": "inline",
+      "tokens": 5041,
+      "calls": 2,
+      "iterations": 1,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read"
+      ],
+      "status": "failure",
+      "terminatedBy": "unknown",
+      "durationMs": 1007,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 4922
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 18304,
+      "calls": 10,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "list-directory"
+      ],
+      "status": "failure",
+      "terminatedBy": "dispatcher-early-stop",
+      "durationMs": 4601,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 17937
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 12998,
+      "calls": 8,
+      "iterations": 7,
+      "discoverCalls": 0,
+      "wroteFile": false,
+      "correct": false,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "final-answer"
+      ],
+      "status": "failure",
+      "terminatedBy": "unknown",
+      "durationMs": 4100,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 12553
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 30676,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 5107,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 30184
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 31764,
+      "calls": 12,
+      "iterations": 14,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 4982,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 31304
+    }
+  ]
+}
