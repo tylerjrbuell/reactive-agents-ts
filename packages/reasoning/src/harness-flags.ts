@@ -77,3 +77,31 @@ export function verboseRulesEnabled(): boolean {
   if (explicit !== undefined) return !isOff(explicit);
   return readFlag("RA_LAZY_TOOLS") === "0";
 }
+
+/**
+ * Stable tool surface — the FC `tools` array and the in-prompt tool reference
+ * both stay fixed for the whole run instead of being narrowed per iteration.
+ *
+ * Default OFF. `RA_STABLE_TOOL_SURFACE=1` turns it on.
+ *
+ * WHY IT EXISTS. Anthropic caches by exact prefix and `tools` is position zero
+ * of that prefix, so per-iteration narrowing invalidates every cache breakpoint
+ * on every turn. Measured on haiku: the pruning arm spends 39,174 tokens for
+ * $0.04518 with cacheRead 0; the non-pruning arm spends 66,719 tokens for
+ * $0.03871 with cacheRead 40,277. Pruning wins 41% of tokens and loses 17% of
+ * the money.
+ *
+ * WHY IT IS NOT THE DEFAULT. That is one measurement, one tier, one task shape.
+ * Promotion goes through the 09 §6 lift rule on rungs 2 and 3 of the ladder.
+ *
+ * NOTE ON "LOGIT MASKING". The industry rule is that tool availability should be
+ * controlled by masking rather than list mutation. The Anthropic API exposes no
+ * per-tool masking — `tool_choice` is auto/any/tool(name)/none only — so that
+ * rule cannot be applied literally here. Availability is instead enforced at
+ * execution: the schema stays in the list and a call to a withheld tool returns
+ * a corrective observation. Building a masking abstraction over an API that
+ * cannot mask would be the over-engineering this program exists to stop.
+ */
+export function stableToolSurfaceEnabled(): boolean {
+  return readFlag("RA_STABLE_TOOL_SURFACE") === "1";
+}
