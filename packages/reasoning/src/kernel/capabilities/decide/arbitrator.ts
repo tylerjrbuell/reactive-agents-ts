@@ -871,6 +871,24 @@ function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; read
     const toolName = obs.toolName;
     // Drop meta-tool rejections — they're not concrete tool failures.
     if (typeof toolName === "string" && META_TOOLS.has(toolName)) return false;
+    // ...and drop the synthetic `system` pseudo-tool for exactly the same
+    // reason. These are the HARNESS's own steering injections ("Review your
+    // answer: does it fully address ...?"), recorded as failed observations.
+    // Counting them as "the agent's claim contradicts reality" evidence means
+    // the harness reads its own nudges as proof that the agent's tools are
+    // failing.
+    //
+    // Measured 2026-07-28, haiku, multi-step task (read ./data.json, sum it,
+    // write ./sum.txt). Every REAL tool succeeded:
+    //   file-read true, code-execute true, file-write true  (x2 rounds)
+    //   system false x6                                     <- steering only
+    // The correct file was on disk in 6 of 6 runs across three arms, and every
+    // one reported status=failure / terminatedBy=controller_signal_veto. The
+    // inline path reported success for identical work.
+    //
+    // This is F1's defect on the opposite rail: F1 stopped talking from passing
+    // as doing; this stops doing from being recorded as failing.
+    if (toolName === "system") return false;
     return true;
   });
   if (!hasFailedToolObservation) {

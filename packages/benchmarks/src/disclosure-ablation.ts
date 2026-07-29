@@ -60,6 +60,9 @@ interface Cell {
   readonly tools: readonly string[];
   readonly status: string;
   readonly terminatedBy: string;
+  readonly costUsd: number;
+  readonly cacheRead: number;
+  readonly freshIn: number;
   readonly durationMs: number;
 }
 
@@ -142,6 +145,13 @@ async function runArm(spec: ArmSpec, provider: string, model: string): Promise<C
   let discoverCalls = 0;
   let status = "unknown";
   let terminatedBy = "unknown";
+  // Once prompt caching works, TOKENS STOP BEING THE COST. Anthropic discounts a
+  // cache hit ~90%, so an arm with more total tokens but a stable, cacheable
+  // prefix can be materially cheaper than a leaner arm that re-sends a fresh
+  // prefix every call. Measuring only tokens would pick the wrong winner.
+  let costUsd = 0;
+  let cacheRead = 0;
+  let freshIn = 0;
   const tools = new Set<string>();
   for (const f of readdirSync(dir)) {
     for (const line of readFileSync(join(dir, f), "utf8").split("\n")) {
@@ -151,7 +161,10 @@ async function runArm(spec: ArmSpec, provider: string, model: string): Promise<C
           kind?: string; status?: string; iter?: number; toolName?: string;
           terminationReason?: string; guard?: string;
           metadata?: { terminatedBy?: string };
-          response?: { tokensIn?: number; tokensOut?: number };
+          response?: {
+            tokensIn?: number; tokensOut?: number; costUsd?: number;
+            cacheReadTokensIn?: number; cacheCreationTokensIn?: number;
+          };
         };
         if (typeof e.iter === "number" && e.iter > iterations) iterations = e.iter;
         if (e.kind === "run-completed") {
@@ -170,6 +183,12 @@ async function runArm(spec: ArmSpec, provider: string, model: string): Promise<C
         }
         if (e.kind !== "llm-exchange") continue;
         tokens += (e.response?.tokensIn ?? 0) + (e.response?.tokensOut ?? 0);
+        costUsd += e.response?.costUsd ?? 0;
+        cacheRead += e.response?.cacheReadTokensIn ?? 0;
+        freshIn +=
+          (e.response?.tokensIn ?? 0) -
+          (e.response?.cacheReadTokensIn ?? 0) -
+          (e.response?.cacheCreationTokensIn ?? 0);
         calls++;
       } catch {
         /* skip malformed line */
@@ -194,6 +213,7 @@ async function runArm(spec: ArmSpec, provider: string, model: string): Promise<C
   return {
     arm: spec.name, tokens, calls, iterations, discoverCalls,
     wroteFile, correct, tools: [...tools], status, terminatedBy, durationMs,
+    costUsd, cacheRead, freshIn,
   };
 }
 
@@ -211,26 +231,28 @@ if (import.meta.main) {
         `[${i + 1}] ${c.arm.padEnd(15)} ${String(c.tokens).padStart(6)}t ${String(c.calls).padStart(2)}call ` +
           `it=${String(c.iterations).padStart(2)} disc=${c.discoverCalls} ` +
           `${c.correct ? "CORRECT" : c.wroteFile ? "wrong  " : "NO-FILE"} ` +
-          `${c.status.padEnd(7)} ${c.terminatedBy.padEnd(16)} ${(c.durationMs / 1000).toFixed(1)}s [${c.tools.join(",") || "-"}]`,
+          `$${c.costUsd.toFixed(5)} cache=${c.cacheRead} ${c.status.padEnd(7)} ${c.terminatedBy.padEnd(16)} ${(c.durationMs / 1000).toFixed(1)}s [${c.tools.join(",") || "-"}]`,
       );
     }
   }
 
   console.log(`\n── ${provider}/${model} · n=${runs} ──`);
-  console.log("arm             mean tokens  vs inline  mean iters  correct  discover calls");
+  console.log("arm             mean tokens   mean $USD  vs inline$  cacheRead  correct");
   const base = all.filter((c) => c.arm === "inline");
   const baseT = base.reduce((s, c) => s + c.tokens, 0) / Math.max(base.length, 1);
+  const baseCost = base.reduce((s, c) => s + c.costUsd, 0) / Math.max(base.length, 1);
+  void baseT;
   for (const spec of ARMS) {
     const cs = all.filter((c) => c.arm === spec.name);
     if (!cs.length) continue;
     const t = cs.reduce((s, c) => s + c.tokens, 0) / cs.length;
-    const it = cs.reduce((s, c) => s + c.iterations, 0) / cs.length;
-    const disc = cs.reduce((s, c) => s + c.discoverCalls, 0);
-    const over = baseT > 0 ? `${(((t - baseT) / baseT) * 100).toFixed(0)}%` : "—";
+    const cost = cs.reduce((s, c) => s + c.costUsd, 0) / cs.length;
+    const cr = cs.reduce((s, c) => s + c.cacheRead, 0) / cs.length;
+    const over = baseCost > 0 ? `${(((cost - baseCost) / baseCost) * 100).toFixed(0)}%` : "—";
     console.log(
-      `${spec.name.padEnd(15)} ${Math.round(t).toString().padStart(11)} ${over.padStart(10)} ` +
-        `${it.toFixed(1).padStart(11)}  ${cs.filter((c) => c.correct).length}/${cs.length}` +
-        `      ${disc}`,
+      `${spec.name.padEnd(15)} ${Math.round(t).toString().padStart(11)} ${cost.toFixed(5).padStart(11)} ` +
+        `${over.padStart(10)} ${Math.round(cr).toString().padStart(10)}  ` +
+        `${cs.filter((c) => c.correct).length}/${cs.length}`,
     );
   }
   console.log(
