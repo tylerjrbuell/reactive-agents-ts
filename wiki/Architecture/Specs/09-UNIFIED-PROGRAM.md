@@ -132,6 +132,70 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 > **Consequence for the record.** Do not cite 555–640% anywhere. The corrected
 > composite re-baseline is Phase 3 of the plan; until it lands, the honest
 > statement is "harness overhead is being re-measured after an instrument fault."
+>
+> ---
+>
+> **RE-BASELINE LANDED 2026-07-29 (plan Task 13).** Report:
+> [[../../Research/Harness-Reports/2026-07-28-corrected-composite-rebaseline]].
+> The "being re-measured" placeholder above is now discharged.
+>
+> **The corrected harness overhead.** `full` (prune+discover, the shipped kernel
+> default) vs `bare` (inline, no kernel), rung 2 = `claude-haiku-4-5`, n=3, all
+> 15 cells delivered:
+>
+> | | tokens | cost (USD) |
+> |---|---:|---:|
+> | overhead of `full` over `bare` | **2.41× = +141.1%** | **2.56× = +156.1%** |
+>
+> Both are reported because F10 is precisely the finding that they diverge —
+> here they happen to track, because `prune+discover` caches nothing; on the
+> caching arms they part by 6.3% at identical token counts.
+>
+> **This REPLACES 555–640%. It does not exonerate.** At +141% tokens the full
+> harness still fails this document's own 15% ceiling by ~9.4× — down from ~40×,
+> same sign, same verdict. **The simplification program's conclusion survives its
+> evidence being retracted; only the magnitude changes.** Scope: one composite
+> task, one model, n=3, and `bare` is RA's inline tool loop rather than a raw API
+> loop, so +141%/+156% is a FLOOR. Rung 3 (Ollama) produces no usable overhead
+> figure — arms terminated at different points, and an arm that crashes early
+> looks token-efficient.
+>
+> **`RA_STABLE_TOOL_SURFACE` verdict: FAILS the §6 lift rule as written →
+> STAYS OPT-IN. Not promoted.** Token leg fails on every tier and every baseline:
+> +33.3% vs the current default at haiku (the cleanest cell — both arms delivered
+> 3/3), +92.0% at granite4, +221.4% against `inline`. The ceiling is 15%.
+> Accuracy leg is not established cross-tier: rung 3 shows +66.7pp / +100.0pp but
+> rung 2 measures 0.0pp and *cannot* measure otherwise — every arm including the
+> baseline scored 3/3, so the billed tier is at ceiling. The rule is an AND; the
+> token leg alone is dispositive. No change to `harness-flags.ts`.
+>
+> **A-tier gate 1 remains OPEN. Seven lift measurements, zero passes.**
+>
+> **§6 was NOT reinterpreted to fit the result.** `stable-surface` costs 4.4%
+> LESS money than the mechanism it would replace and is the only arm that caches
+> by construction — and it still fails, because the rule says tokens, in prose
+> and in `gate/types.ts:101`. Deciding the rule "really meant cost all along"
+> would be metric-gaming, a named failure in this project's history. Instead a
+> **PROPOSED amendment** is filed for owner ratification at
+> [[../../Decisions/2026-07-29-lift-rule-cost-vs-tokens-amendment]]: the gate has
+> **no USD field at all** (`gate.ts:286` computes a variable named `costOk`
+> entirely from token counts; even the long-horizon exemption is tokens ÷
+> pass-rate), so a rule written before prompt caching cannot express "costs less
+> money at more tokens." **§6 is unedited and unchanged; the proposal is not in
+> force; ratifying it would promote nothing** — `stable-surface` would still fail
+> the accuracy leg.
+>
+> **Two open items this measurement surfaced.** (1) The composite bench runs ONE
+> task (`disclosure-ablation.ts:40`), so `T=1` and the gate's between-task
+> clustering term is structurally unavailable — every verdict above is the rule
+> applied by hand, not `evaluateLiftGate` run. Fixing this is the highest-value
+> follow-up: the billed tier can currently measure cost but not accuracy. (2)
+> Lazy pruning correlates with deliverable failure on small local tool-callers —
+> pruning-ON arms 2/12 vs full-surface arms 11/12, p ≈ 3.2 × 10⁻⁴, same sign on
+> both models, nothing of the sort at haiku. Half of it is `llm_error`-confounded
+> and undiagnosed. **Filed as a lead, not a verdict**; it is the first live
+> evidence on the `RA_LAZY_TOOLS` demotion question the ablatability audit left
+> open.
 
 > **AMENDED 2026-07-27 — the active program is now SIMPLIFICATION, and §4's "next = Wave C
 > consumers / Arc 2" is SUSPENDED until the composite ablation exists.** Plan:
