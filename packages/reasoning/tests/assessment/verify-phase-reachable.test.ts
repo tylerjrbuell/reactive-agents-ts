@@ -192,9 +192,20 @@ describe("step-projection — mid-loop gate rejections become in-loop verdicts",
 //   assess()           — the perception node
 //   fromKernelState/project() — the renderer that builds the system prompt
 //
-// The terminal observable is `request.systemPrompt`: the string the LLM receives.
+// The terminal observable is the RENDERED WINDOW: systemPrompt plus the message
+// tail — everything the LLM receives. (F10 moved the standing frame, and with it
+// the phase emphasis, out of the cached system prompt into the message tail; the
+// invariant is that the emphasis REACHES the model, not where it sits.)
 // Cut ANY link (stop minting the verdict, revert assess to reading only `.gate`,
 // drop the assessment from the projector) and these go RED.
+
+/** systemPrompt + every message body — the full text the model receives. */
+function renderedWindow(request: {
+  systemPrompt: string;
+  messages: ReadonlyArray<{ content: string }>;
+}): string {
+  return [request.systemPrompt, ...request.messages.map((m) => m.content)].join("\n");
+}
 
 const longHorizonState = (steps: readonly ReasoningStep[], ledger: RunLedger): KernelState =>
   ({
@@ -229,7 +240,7 @@ describe("WIRING: a completion-guard rejection reaches the ledger, the assessmen
     expect(assess(contract(), next.ledger ?? [], budget(2)).phase).toBe("verify");
   });
 
-  it("and the verify phase changes the SYSTEM PROMPT the model reads", () => {
+  it("and the verify phase changes the WINDOW the model reads", () => {
     // PHASE_PROFILES.verify was dead render code: no production ledger could
     // produce phase "verify", so this emphasis had never once been rendered.
     const next = afterStep(guardStep("completion-guard", false));
@@ -241,7 +252,7 @@ describe("WIRING: a completion-guard rejection reaches the ledger, the assessmen
     const { request } = project(
       fromKernelState(withAssessment, PROFILE, { system: "" }, { schemas: [] }, "research and report"),
     );
-    expect(request.systemPrompt).toContain("Verify each outstanding requirement");
+    expect(renderedWindow(request)).toContain("Verify each outstanding requirement");
   });
 
   it("an ordinary observation leaves the run out of verify (the phase is caused by the GUARD)", () => {

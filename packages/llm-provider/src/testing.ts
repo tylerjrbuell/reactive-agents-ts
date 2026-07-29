@@ -86,11 +86,21 @@ function extractSearchText(
   messages: readonly LLMMessage[],
   request: { systemPrompt?: string },
 ): string {
-  const lastMessage = messages[messages.length - 1];
-  const content =
-    lastMessage && typeof lastMessage.content === "string"
-      ? lastMessage.content
-      : "";
+  // The CURRENT turn's observation: every message after the last assistant
+  // turn, not just the final one. Reading only the final message made the
+  // instrument sensitive to how many messages a turn happens to be split into
+  // — F10 moved per-iteration content into a trailing user turn, which pushed
+  // the tool_result out of the window and silently stopped scripted `match`
+  // guards from firing (the run then fell through to the last turn and looked
+  // inert). Everything before the last assistant turn is still excluded, so a
+  // guard can never match an earlier turn's text.
+  const start =
+    messages.findLastIndex((m) => m.role === "assistant") + 1;
+  const content = messages
+    .slice(start)
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .filter((t) => t.length > 0)
+    .join("\n");
   const systemPrompt =
     typeof request.systemPrompt === "string"
       ? request.systemPrompt

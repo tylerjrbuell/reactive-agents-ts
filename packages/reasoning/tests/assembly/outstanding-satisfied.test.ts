@@ -143,8 +143,19 @@ describe("standing frame — outstanding must reflect what the run ACTUALLY fini
 //
 // The tests above pin `renderStandingFrame`. They would still pass if the
 // projector stopped handing it the assessment. This one drives the real
-// `fromKernelState → project` chain and asserts on the assembled systemPrompt —
-// the string the LLM receives.
+// `fromKernelState → project` chain and asserts on the assembled WINDOW —
+// systemPrompt plus the message tail, i.e. everything the LLM receives. F10
+// moved the standing frame out of the system prompt into the tail (it changes
+// per iteration, so it cannot sit inside the cached system block); the
+// invariant under test is "the model is told", not "the model is told HERE".
+
+/** systemPrompt + every message body — the full text the model receives. */
+function renderedWindow(request: {
+  systemPrompt: string;
+  messages: ReadonlyArray<{ content: string }>;
+}): string {
+  return [request.systemPrompt, ...request.messages.map((m) => m.content)].join("\n");
+}
 
 const PROFILE = { maxTokens: 32_768, tier: "mid" } as never;
 
@@ -159,8 +170,8 @@ const stateWith = (a: RunAssessment): KernelState =>
     meta: { horizonProfile: "long", runContract: C, assessment: a, maxIterations: 40 },
   }) as unknown as KernelState;
 
-describe("WIRING: a finished requirement disappears from the real system prompt", () => {
-  it("the prompt names only what is still outstanding", () => {
+describe("WIRING: a finished requirement disappears from the real rendered window", () => {
+  it("the window names only what is still outstanding", () => {
     const { request } = project(
       fromKernelState(
         stateWith(assessment({ satisfied: ["r2"], outstanding: ["r1"] })),
@@ -170,13 +181,14 @@ describe("WIRING: a finished requirement disappears from the real system prompt"
         "research and report",
       ),
     );
-    expect(request.systemPrompt).toContain("Outstanding requirements:");
-    expect(request.systemPrompt).toContain("gather the six sources");
+    const window = renderedWindow(request);
+    expect(window).toContain("Outstanding requirements:");
+    expect(window).toContain("gather the six sources");
     // The model must NOT be told to write a report it already wrote.
-    expect(request.systemPrompt).not.toContain("write report.md");
+    expect(window).not.toContain("write report.md");
   });
 
-  it("with nothing satisfied, the prompt still names both", () => {
+  it("with nothing satisfied, the window still names both", () => {
     const { request } = project(
       fromKernelState(
         stateWith(assessment({ outstanding: ["r1", "r2"] })),
@@ -186,7 +198,8 @@ describe("WIRING: a finished requirement disappears from the real system prompt"
         "research and report",
       ),
     );
-    expect(request.systemPrompt).toContain("gather the six sources");
-    expect(request.systemPrompt).toContain("write report.md");
+    const window = renderedWindow(request);
+    expect(window).toContain("gather the six sources");
+    expect(window).toContain("write report.md");
   });
 });

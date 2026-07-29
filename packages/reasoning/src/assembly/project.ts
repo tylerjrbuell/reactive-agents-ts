@@ -11,6 +11,7 @@ import { systemPromptStage } from "./stages/system-prompt.js";
 import { selectToolsStage } from "./stages/select-tools.js";
 import { projectResultsStage } from "./stages/project-results.js";
 import { compactHistoryStage } from "./stages/compact-history.js";
+import { volatileTailStage } from "./stages/volatile-tail.js";
 import { finalizeStage } from "./stages/finalize.js";
 
 export interface AssemblyInput {
@@ -23,7 +24,9 @@ export interface AssemblyInput {
    * kernel pass — strategy-switch handoffs, ToT selected-approach summaries,
    * reflexion param hints, memory bootstrap. Composed by every strategy but
    * WRITE-ONLY since the APC deletion removed its only renderer; the model
-   * restarted blind after every switch. systemPromptStage now renders it.
+   * restarted blind after every switch. `volatileTailStage` now renders it —
+   * it moved out of systemPromptStage in F10 because it changes per pass and
+   * so cannot live inside the cached system prefix.
    */
   readonly priorContext?: string;
   /**
@@ -54,8 +57,9 @@ export interface AssemblyCtx extends AssemblyInput {
   messages: ProviderRequest["messages"];
   toolSchemas: readonly unknown[];
   trace: AssemblyTrace;
-  /** Standing-frame sections rendered by systemPromptStage (D1). finalizeStage
-   *  reads these to build the `projection` trace (section provenance). */
+  /** Standing-frame sections rendered by volatileTailStage (D1; moved there
+   *  from systemPromptStage by F10). finalizeStage reads these to build the
+   *  `projection` trace (section provenance). */
   standingSections?: readonly StandingFrameSection[];
 }
 
@@ -69,6 +73,10 @@ const STAGES = [
   selectToolsStage,
   projectResultsStage,
   compactHistoryStage,
+  // F10: volatile content goes AFTER history compaction (so it is never
+  // compacted away) and BEFORE finalize (which reads standingSections for the
+  // projection trace).
+  volatileTailStage,
   finalizeStage,
 ];
 

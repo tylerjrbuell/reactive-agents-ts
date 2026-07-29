@@ -8,6 +8,22 @@ import type { RunContract } from "../../src/kernel/contract/run-contract.js";
 
 const cap = resolveCapability({ window: 1000, outputBudget: 2000, dialect: "native-fc", tier: "local" });
 
+/**
+ * systemPrompt + every message body — the whole window the model receives.
+ *
+ * F10 moved the standing frame (handoff included) out of the system prompt into
+ * the message tail: it changes every iteration, so inside Anthropic's cached
+ * system block it invalidated the prefix on every turn. The switch-blindness
+ * invariant is "the handoff REACHES the model", so it is asserted over the whole
+ * window rather than over the location F10 had to change.
+ */
+function renderedWindow(request: {
+  systemPrompt: string;
+  messages: ReadonlyArray<{ content: string }>;
+}): string {
+  return [request.systemPrompt, ...request.messages.map((m) => m.content)].join("\n");
+}
+
 // ── Switch-blindness: the D1 witness (kills audit 03-F5) ─────────────────────
 
 describe("Projector — switch-blindness (handoff renders from the ledger)", () => {
@@ -25,14 +41,17 @@ describe("Projector — switch-blindness (handoff renders from the ledger)", () 
   it("BEFORE (no ledger): the post-switch handoff summary is ABSENT from the window", () => {
     const log = new EventLog().append({ kind: "goal", text: "continue the task" });
     const { request } = project({ log, capability: cap, store: new ResultStore(), persona: { system: "P" }, tools: { schemas: [] } });
-    expect(request.systemPrompt).not.toContain("ZEBRA-9");
+    expect(renderedWindow(request)).not.toContain("ZEBRA-9");
   });
 
   it("AFTER (ledger carries the handoff): the summary is PRESENT in the window", () => {
     const log = new EventLog().append({ kind: "goal", text: "continue the task" });
     const { request } = project({ log, capability: cap, store: new ResultStore(), persona: { system: "P" }, tools: { schemas: [] }, ledger });
-    expect(request.systemPrompt).toContain("crawl found the sentinel token ZEBRA-9");
-    expect(request.systemPrompt).toContain("reactive → reflexion");
+    const window = renderedWindow(request);
+    expect(window).toContain("crawl found the sentinel token ZEBRA-9");
+    expect(window).toContain("reactive → reflexion");
+    // F10: present, but NOT in the cached prefix.
+    expect(request.systemPrompt).not.toContain("ZEBRA-9");
   });
 });
 

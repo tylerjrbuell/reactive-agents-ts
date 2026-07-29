@@ -5,13 +5,16 @@ import { ResultStore } from "../../src/assembly/result-store.js";
 import { resolveCapability } from "../../src/assembly/capability.js";
 import { emptyTrace } from "../../src/assembly/trace.js";
 
-it("renders persona + goal + remaining post-conditions", () => {
+it("renders persona + goal, and NOT the remaining post-conditions (F10)", () => {
   const cap = resolveCapability({ window: 15360, outputBudget: 2000, dialect: "native-fc", tier: "local" });
   const log = new EventLog().append({ kind: "goal", text: "fetch and write" }).append({ kind: "goal_state", remaining: ["write_file"] });
   const c = systemPromptStage({ log, capability: cap, store: new ResultStore(), persona: { system: "You are an agent." }, tools: { schemas: [] }, systemPrompt: "", messages: [], toolSchemas: [], trace: emptyTrace(cap) });
   expect(c.systemPrompt).toContain("You are an agent.");
   expect(c.systemPrompt).toContain("fetch and write");
-  expect(c.systemPrompt).toContain("write_file");
+  // F10: `Remaining steps:` changes every iteration, so it may not live inside
+  // the cached system block. volatileTailStage renders it into the message tail
+  // instead — pinned end-to-end by tests/assembly/volatile-placement.test.ts.
+  expect(c.systemPrompt).not.toContain("write_file");
 });
 
 it("Environment block + persona when no goal/goal_state events", () => {
@@ -58,15 +61,34 @@ function makeH1State(task: string): KernelState {
 
 const H1_PROFILE = { maxTokens: 32_768, tier: "mid" } as never;
 
-describe("H1 — priorContext renders into the system prompt", () => {
+/**
+ * The whole rendered request — systemPrompt PLUS the message tail.
+ *
+ * H1's invariant is "priorContext reaches the model", not "priorContext sits in
+ * the system prompt". F10 moved the render to the message tail (it changes per
+ * pass, so it cannot live inside Anthropic's cached system block); asserting on
+ * the full window keeps H1 pinned across that move instead of pinning the
+ * location F10 had to change.
+ */
+function renderedWindow(request: {
+  systemPrompt: string;
+  messages: ReadonlyArray<{ content: string }>;
+}): string {
+  return [request.systemPrompt, ...request.messages.map((m) => m.content)].join("\n");
+}
+
+describe("H1 — priorContext renders into the window the model receives", () => {
   it("renders a fenced prior-context block when supplied", () => {
     const state = makeH1State("summarize the findings");
     const { request } = project(
       fromKernelState(state, H1_PROFILE, { system: "" }, { schemas: [] }, "summarize the findings",
         "HANDOFF: web-search already succeeded; key fact: X is 42."),
     );
-    expect(request.systemPrompt).toContain("Prior context (from earlier work on this task):");
-    expect(request.systemPrompt).toContain("key fact: X is 42");
+    const window = renderedWindow(request);
+    expect(window).toContain("Prior context (from earlier work on this task):");
+    expect(window).toContain("key fact: X is 42");
+    // F10: and NOT in the cached prefix.
+    expect(request.systemPrompt).not.toContain("Prior context");
   });
 
   it("no block when priorContext absent or blank", () => {
@@ -74,6 +96,6 @@ describe("H1 — priorContext renders into the system prompt", () => {
     const { request } = project(
       fromKernelState(state, H1_PROFILE, { system: "" }, { schemas: [] }, "task", "   "),
     );
-    expect(request.systemPrompt).not.toContain("Prior context");
+    expect(renderedWindow(request)).not.toContain("Prior context");
   });
 });

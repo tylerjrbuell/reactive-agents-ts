@@ -14,9 +14,11 @@ describe("project — pure total assembler", () => {
     expect(JSON.stringify(a.request)).toBe(JSON.stringify(b.request));
     expect(a.request.systemPrompt).toContain("P");
   });
-  it("returns a populated trace with all 5 stages in order", () => {
+  it("returns a populated trace with all 6 stages in order", () => {
     const log = new EventLog().append({ kind: "goal", text: "do X" });
     const { trace } = project({ log, capability: cap, store: new ResultStore(), persona: { system: "P" }, tools: { schemas: [] } });
-    expect(trace.stages.map((s) => s.name)).toEqual(["systemPrompt", "selectTools", "projectResults", "compactHistory", "finalize"]);
+    // F10: `volatileTail` sits between compaction (so per-iteration content is
+    // never compacted away) and finalize (which reads standingSections).
+    expect(trace.stages.map((s) => s.name)).toEqual(["systemPrompt", "selectTools", "projectResults", "compactHistory", "volatileTail", "finalize"]);
   });
 });
