@@ -11,13 +11,15 @@
 // pruning ON, discovery OFF — was inexpressible. `harness-flags.ts` split them;
 // this measures the resulting cells.
 //
-//   bun run packages/benchmarks/src/disclosure-ablation.ts <provider> <model> [runs]
+//   bun run packages/benchmarks/src/disclosure-ablation.ts <provider> <model> [runs] [outPath]
 //
 // Arms:
 //   inline          the default path — no pruning, no discovery, no kernel
 //   prune+discover  kernel default: lazy disclosure + the escape hatch
 //   prune-only      lazy disclosure with NO escape hatch (RA_TOOL_DISCOVERY=0)
 //   no-prune        every permitted tool visible every iteration
+//   stable-surface  F10: stable FC tool array + volatile content in the message
+//                   tail. Distinct from no-prune — see its ARMS comment.
 //
 // `prune-only` is the load-bearing arm. If it matches `prune+discover` on the
 // deliverable, discovery is buying nothing on this shape and its round trips are
@@ -77,6 +79,13 @@ const ARMS: readonly ArmSpec[] = [
   { name: "prune+discover", reasoning: true, env: {} },
   { name: "prune-only", reasoning: true, env: { RA_TOOL_DISCOVERY: "0" } },
   { name: "no-prune", reasoning: true, env: { RA_LAZY_TOOLS: "0", RA_VERBOSE_RULES: "0" } },
+  // F10: the arm this program exists to test. Stable FC tool array (Task 9) plus
+  // volatile content in the message tail (Task 8). Distinct from `no-prune`,
+  // which stabilises the tool array but still ships the standing frame and the
+  // remaining-steps line inside the cached system block -- so it caches only on
+  // tasks that happen to have neither, which is why the first measurement of it
+  // looked better than it should generalise.
+  { name: "stable-surface", reasoning: true, env: { RA_STABLE_TOOL_SURFACE: "1", RA_VERBOSE_RULES: "0" } },
 ];
 
 async function runArm(spec: ArmSpec, provider: string, model: string): Promise<Cell> {
@@ -221,6 +230,7 @@ if (import.meta.main) {
   const provider = process.argv[2] ?? "anthropic";
   const model = process.argv[3] ?? "claude-haiku-4-5-20251001";
   const runs = Number(process.argv[4] ?? "1");
+  const outPath = process.argv[5];
 
   const all: Cell[] = [];
   for (let i = 0; i < runs; i++) {
@@ -248,6 +258,18 @@ if (import.meta.main) {
     const t = cs.reduce((s, c) => s + c.tokens, 0) / cs.length;
     const cost = cs.reduce((s, c) => s + c.costUsd, 0) / cs.length;
     const cr = cs.reduce((s, c) => s + c.cacheRead, 0) / cs.length;
+    // Manipulation check. An arm claiming a caching win with cacheRead 0 measured
+    // nothing -- that is the disclosure-ablation trap that already cost this repo
+    // a retracted finding (`builtins: [...]` floored both arms to the same visible
+    // set, so the token deltas compared two identical configurations).
+    if (spec.name === "stable-surface" && cr === 0) {
+      console.error(
+        `MANIPULATION CHECK FAILED: stable-surface reported cacheRead=0. ` +
+        `Either the prefix is still churning or the prompt is below the ` +
+        `per-model cache minimum (Sonnet 1024 tok, Haiku 2048 tok). ` +
+        `Do NOT read a cost conclusion off this run.`,
+      );
+    }
     const over = baseCost > 0 ? `${(((cost - baseCost) / baseCost) * 100).toFixed(0)}%` : "—";
     console.log(
       `${spec.name.padEnd(15)} ${Math.round(t).toString().padStart(11)} ${cost.toFixed(5).padStart(11)} ` +
@@ -260,4 +282,21 @@ if (import.meta.main) {
       "hatch bought nothing on this shape. Compare BOTH against no-prune before blaming\n" +
       "discovery — pruning is what creates the need for it.",
   );
+
+  // A bench run that persists nothing cannot be re-read, re-checked, or cited.
+  // Writing the CELLS (not just the summary) is deliberate: the summary averages
+  // away the per-run variance that decides whether a gap is signal or noise.
+  if (outPath) {
+    await Bun.write(
+      outPath,
+      JSON.stringify(
+        { provider, model, runs, generatedAt: new Date().toISOString(), cells: all },
+        null,
+        2,
+      ),
+    );
+    console.log(`\nwrote ${all.length} cells to ${outPath}`);
+  } else {
+    console.warn("\nWARNING: no output path given — this run persists nothing.");
+  }
 }

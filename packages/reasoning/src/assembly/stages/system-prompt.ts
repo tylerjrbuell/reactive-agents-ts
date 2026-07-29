@@ -63,8 +63,8 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
     buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
   );
   if (goal) parts.push(`\nGoal: ${goal}`);
-  // F10: the standing frame and `Remaining steps:` used to be pushed here.
-  // They change every iteration, and everything in this string is inside
+  // F10: the standing frame and the remaining-steps line used to be pushed
+  // here. They change every iteration, and everything in this string is inside
   // Anthropic's cached system block, so emitting them here invalidated the
   // system cache breakpoint (and both breakpoints after it) on every turn —
   // measured cacheRead 0 on the default kernel path. They now render in
