@@ -14,7 +14,7 @@
 // a mechanism whose effect is on the PROMPT (see replay-ablate.ts scope limit).
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import type { AblationResult } from "./replay-ablate.js";
+import type { AblationCell, AblationResult } from "./replay-ablate.js";
 
 /**
  * Behavioural flags only. Infrastructure (hosts, tokens, URLs, trace dirs,
@@ -45,6 +45,13 @@ const BEHAVIOURAL: readonly (readonly [string, string])[] = [
   ["REACTIVE_AGENTS_NOOP_VERIFIER", "1"], // === "1"
   ["REACTIVE_AGENTS_LAZY_VALIDATION", "1"], // === '1'
   ["RA_LAZY_TOOLS", "0"], // !== "0"  — default ON, so "0" is the ablation
+  // Split out of RA_LAZY_TOOLS in 2f97ca1e. Until now the compound flag was
+  // swept and its three constituents were not, so "RA_LAZY_TOOLS is live" said
+  // nothing about WHICH of the three mechanisms was doing the work.
+  ["RA_TOOL_DISCOVERY", "0"], // !== "0" — default ON, so "0" is the ablation
+  ["RA_VERBOSE_RULES", "1"], // === "1" — default OFF, so "1" is the ablation
+  // F10, added in Task 9. Default OFF, so "1" is the ablation.
+  ["RA_STABLE_TOOL_SURFACE", "1"],
   ["RA_THOUGHT_CONTINUITY", "1"], // === "1"
   ["RA_TOOL_OBSERVE_SYMMETRY", "1"], // === "1"
   ["RA_RATIONALE_AUDIT", "1"], // === "1"
@@ -73,6 +80,24 @@ const UNTESTABLE: readonly (readonly [string, string])[] = [
 
 const WORKER = join(import.meta.dir, "replay-ablate.ts");
 
+/**
+ * Known-bad on EVERY arm for a reason that has nothing to do with any flag —
+ * see wiki/Architecture/DEBT-REGISTER.md D-2026-07-28-D. `planned-tool-loop`
+ * (a plan-execute golden) diverges against its own trace on pre/post-heal
+ * `argsHash` regardless of env, the same root cause
+ * `replay-lane.test.ts`'s `KNOWN_ARGS_HASH_DIVERGENCE` skips it for. Excluded
+ * here from the baseline check and every per-flag cell set so that ONE
+ * pre-existing, flag-independent bug doesn't make every verdict in this sweep
+ * unattributable. This does not touch `step-executor.ts` / `replay-agent.ts` —
+ * fixing the underlying argsHash reconciliation is the debt entry's own,
+ * separately-scoped task.
+ */
+const KNOWN_ARGS_HASH_DIVERGENCE = new Set(["planned-tool-loop"]);
+
+function attributableCells(r: AblationResult): readonly AblationCell[] {
+  return r.cells.filter((c) => !KNOWN_ARGS_HASH_DIVERGENCE.has(c.golden));
+}
+
 function runOne(flag: string, value?: string): AblationResult | undefined {
   const args = value === undefined ? [WORKER, "--baseline"] : [WORKER, flag, value];
   const p = spawnSync("bun", ["run", ...args], { encoding: "utf8", timeout: 120_000 });
@@ -86,12 +111,17 @@ if (baseline === undefined) {
   console.error("sweep: baseline produced no result — the worker is broken, not the flags");
   process.exit(1);
 }
+const excludedFromBaseline = baseline.cells.filter((c) => KNOWN_ARGS_HASH_DIVERGENCE.has(c.golden));
+const baselineCells = attributableCells(baseline);
 // A baseline that does not fully match its own recordings makes every
 // downstream verdict meaningless: divergence could not be attributed to a flag.
-const baselineClean = baseline.cells.every((c) => c.ok);
+const baselineClean = baselineCells.every((c) => c.ok);
 console.log(
-  `baseline: ${baseline.cells.filter((c) => c.ok).length}/${baseline.cells.length} goldens match` +
-    (baselineClean ? "" : "  ← NOT CLEAN, verdicts below are unattributable"),
+  `baseline: ${baselineCells.filter((c) => c.ok).length}/${baselineCells.length} goldens match` +
+    (baselineClean ? "" : "  ← NOT CLEAN, verdicts below are unattributable") +
+    (excludedFromBaseline.length > 0
+      ? `  (excluded ${excludedFromBaseline.map((c) => c.golden).join(", ")} — known argsHash divergence, D-2026-07-28-D)`
+      : ""),
 );
 if (!baselineClean) process.exit(1);
 
@@ -104,13 +134,14 @@ for (const [flag, value] of BEHAVIOURAL) {
     console.log(`  ?? ${flag} — worker produced no result (skipped, NOT counted inert)`);
     continue;
   }
-  const diverged = r.cells.filter((c) => !c.ok);
+  const attributable = attributableCells(r);
+  const diverged = attributable.filter((c) => !c.ok);
   if (diverged.length === 0) {
     inert.push(flag);
-    console.log(`  ·  ${flag}=${value} — no divergence on ${r.cells.length} goldens`);
+    console.log(`  ·  ${flag}=${value} — no divergence on ${attributable.length} goldens`);
   } else {
     live.push(flag);
-    console.log(`  ✦  ${flag}=${value} — LIVE on ${diverged.length}/${r.cells.length}`);
+    console.log(`  ✦  ${flag}=${value} — LIVE on ${diverged.length}/${attributable.length}`);
     for (const c of diverged) {
       console.log(`       ${c.golden}: ${c.dispensed}/${c.tableSize} ${c.failure ?? ""}`);
     }
@@ -125,7 +156,8 @@ console.log(`INERT      (${inert.length}): ${inert.join(", ") || "—"}`);
 console.log(`UNTESTABLE (${UNTESTABLE.length}): ${UNTESTABLE.map(([f]) => f).join(", ")}`);
 console.log(
   `\nINERT = the flag was toggled, the code ran, and nothing diverged across ` +
-    `${baseline.cells.length} goldens. It is a deletion CANDIDATE, not a deletion order: ` +
+    `${baselineCells.length} goldens (${excludedFromBaseline.length} of ${baseline.cells.length} committed goldens ` +
+    `excluded as known argsHash divergence, D-2026-07-28-D — see report). It is a deletion CANDIDATE, not a deletion order: ` +
     `grow the corpus first, and never delete a prompt-altering mechanism on this ` +
     `signal alone (replay fixes the model's trajectory — see replay-ablate.ts).`,
 );
