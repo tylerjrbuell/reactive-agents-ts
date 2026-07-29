@@ -91,6 +91,48 @@ Conflict rule: lower documents defer upward; a needed change to a higher documen
 
 ## 7. Status board (updated 2026-07-27)
 
+> **AMENDED 2026-07-28 — the simplification program's motivating number is
+> RETRACTED, and the active program is A-TIER GAP CLOSURE.** Plan:
+> [[../../Planning/Implementation-Plans/2026-07-28-a-tier-gap-closure]].
+>
+> **What changed.** The 2026-07-27 amendment below rests on "the full harness
+> costs 555–640% more tokens than a bare LLM." That figure was computed with a
+> broken instrument. Anthropic's `usage.input_tokens` counts only the uncached
+> remainder of a prompt; both provider paths reported it as the total while
+> computing cost off the real total (fixed `2f97ca1e`). **Every token-overhead
+> measurement in this repository predating that commit is unverified.** The
+> harness may cost more or less than stated. It is not known.
+>
+> **What does NOT change.** The lift rule (§6) stands. The tier-1 replay lane
+> stands and is now the FIRST rung of the measurement ladder, not an
+> alternative to it. "0 of 6 lift measurements cleared the bar" stands — that
+> was an accuracy finding, unaffected by token accounting. The suspension of
+> "next = Wave C consumers / Arc 2" stands.
+>
+> **What is added — the A-tier bar.** Three gates, none of them features:
+> 1. **One mechanism clears the lift rule.** Six attempts, zero passes. The
+>    best candidate is [[F10]] (cache-aware prefix), because it is a COST win
+>    with no accuracy risk — the cheapest possible way to clear a bar that has
+>    never been cleared.
+> 2. **An external, third-party benchmark.** Self-built benches are internal
+>    tooling and cannot carry a public claim. Target ratified 2026-07-28:
+>    **τ-bench** — tool-calling agent tasks with a pass^k metric, which matches
+>    the pass^8 reliability framing this document already uses.
+> 3. **Every default-on mechanism independently ablatable, with a gate.** The
+>    `harness-flags.ts` split started this. A mechanism that cannot be turned
+>    off alone cannot be shown to earn its place.
+>
+> **The measurement ladder (ratified by owner, 2026-07-28).** Rung 1:
+> deterministic replay over the golden corpus — prove the machinery does what it
+> should, at zero tokens. Rung 2: haiku composite — fast, cheap, directional.
+> Rung 3: fast local tool-calling models, non-reasoning (thinking models are
+> excluded — their variance swamps a cost signal). Cross-tier promotion decisions
+> require rungs 2 and 3 to agree in SIGN.
+>
+> **Consequence for the record.** Do not cite 555–640% anywhere. The corrected
+> composite re-baseline is Phase 3 of the plan; until it lands, the honest
+> statement is "harness overhead is being re-measured after an instrument fault."
+
 > **AMENDED 2026-07-27 — the active program is now SIMPLIFICATION, and §4's "next = Wave C
 > consumers / Arc 2" is SUSPENDED until the composite ablation exists.** Plan:
 > [[../../Planning/Implementation-Plans/2026-07-27-simplification-and-feedback-loop]].
