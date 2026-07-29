@@ -1,0 +1,23 @@
+{
+  "name": "planned-tool-loop",
+  "task": "Read ./input.txt, then write the line count to ./count.txt and report the number.",
+  "strategy": "plan-execute-reflect",
+  "builtins": [
+    "file-read",
+    "file-write"
+  ],
+  "requiredTools": [
+    "file-read",
+    "file-write"
+  ],
+  "maxIterations": 6,
+  "toolMode": "live",
+  "fileRoot": "/tmp/ra-bench-replay-fixroot",
+  "expectOutputIncludes": [
+    "2"
+  ],
+  "expectToolsUsed": [
+    "file-read",
+    "file-write"
+  ]
+}

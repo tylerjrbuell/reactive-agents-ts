@@ -279,6 +279,66 @@ the §6 lift rule on rungs 2 and 3 of the ladder.
 
 **Gate:** `scripts/check-volatile-placement.sh` (Task 10).
 
+### D-2026-07-28-C — `goal_state` is write-only in production
+
+**Class:** dead-signal defect, same family as the H1 composed-but-never-rendered
+regression already fixed once in this codebase.
+
+`packages/reasoning/src/assembly/stages/system-prompt.ts:55` reads
+`c.log.byKind("goal_state").at(-1)?.remaining`. The sole live adapter that
+builds a real run's `AssemblyInput.log` — `assembly/from-kernel-state.ts`,
+consumed by both the reactive kernel and every plan-execute sub-kernel — never
+appends a `goal_state` event. Confirmed by exhaustive grep: the only four
+occurrences of the literal string in `packages/` are the type definition, the
+read site above, and two hand-authored unit-test fixtures
+(`system-prompt.test.ts`, `volatile-placement.test.ts`) that construct
+`AssemblyInput` directly rather than going through a live kernel run.
+
+**Consequence:** the `Remaining steps:` line has likely never fired on a real
+run. F10's cache-churn analysis is unaffected for the standing-frame/
+`priorContext` volatility (confirmed live, via the H1 strategy-switch handoff
+path) — only the `goal_state` half of that analysis is unverified in practice.
+
+**Found while adding** `packages/benchmarks/golden/planned-tool-loop.jsonl`
+(gap-closure plan Task 5) — a golden built specifically to exercise
+`goal_state` recorded zero occurrences of it despite forcing a full
+`plan-execute-reflect` decomposition.
+
+**Discharge:** wire `goal_state` through `step-executor.ts` → kernel state →
+`from-kernel-state.ts`, or delete the dead read path if it is truly
+unreachable. Separate task — out of scope for the gap-closure plan, which does
+not touch kernel state population.
+
+### D-2026-07-28-D — plan-execute replay-lane `argsHash` divergence
+
+**Class:** latent correctness bug in the replay/observability boundary, not in
+the kernel itself.
+
+`step-executor.ts`'s `ledgerSteps` action-step stores PRE-heal (relative) tool
+args in `metadata.toolCall.arguments` — the plan's declared intent, by design;
+only `isArtifactProduced` reconciles relative-vs-absolute at match time. The
+observability trace records POST-heal (absolute) paths for the same call.
+`packages/benchmarks/src/replay-agent.ts`'s `toolCallsFromResult` hashes the
+pre-heal args with no reconciliation, so a plan-execute golden with
+path-taking tools diverges from its own trace on every tool call.
+`reactive`-strategy goldens never hit this — the ReAct kernel's action-step
+construction has no pre/post-heal asymmetry.
+
+**Measured:** `planned-tool-loop` (3 tool calls, all path-taking) diverges on
+all 3 — confirmed via `bun test packages/benchmarks/tests/replay-lane.test.ts`,
+`tool-sequence divergence` on `file-write`/`file-read`/`file-write`.
+
+**Current handling:** skipped, not fixed, in
+`packages/benchmarks/tests/replay-lane.test.ts` (`KNOWN_ARGS_HASH_DIVERGENCE`),
+so the corpus stays green without silently losing this golden's other
+coverage (recorder determinism, sidecar shape) or misrepresenting the gap as
+resolved.
+
+**Discharge:** reconcile in `replay-agent.ts` (or store post-heal args in
+`step-executor.ts`) — separate task, requires its own review since it touches
+the replay/observability boundary rather than the assembly pipeline this plan
+is scoped to.
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)

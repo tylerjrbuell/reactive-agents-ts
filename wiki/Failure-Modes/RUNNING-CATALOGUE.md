@@ -406,6 +406,17 @@ tail *extends* caching to plan-bearing tasks is **untested**, and the golden
 corpus cannot currently test it (no golden populates `goal_state.remaining`).
 Task 5 of the gap-closure plan exists to build that golden first.
 
+**Update (Task 5, 2026-07-28/29).** The golden was built — `planned-tool-loop`,
+forcing a full `plan-execute-reflect` decomposition — and it recorded **zero**
+`goal_state` occurrences. Not a task-shape problem: `goal_state` is write-only
+in production (see [[../Architecture/DEBT-REGISTER#D-2026-07-28-C|D-2026-07-28-C]]).
+The `Remaining steps:` half of this defect has therefore likely never fired on
+a real run; the standing-frame/`priorContext` half is still confirmed live and
+is what Task 8's fix actually addresses. The golden itself surfaced a second,
+unrelated defect in the replay/observability boundary
+([[../Architecture/DEBT-REGISTER#D-2026-07-28-D|D-2026-07-28-D]]), filed
+separately rather than fixed in-scope.
+
 **Fix plan.** [[../Planning/Implementation-Plans/2026-07-28-a-tier-gap-closure]]
 Phase 2. Enforcement is by rejection, not by list mutation — the Anthropic API
 exposes no per-tool logit masking, so the industry "masking" rule cannot be

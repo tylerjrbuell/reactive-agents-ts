@@ -135,6 +135,76 @@ const SCENARIOS: readonly GoldenScenario[] = [
       { text: "FINAL ANSWER: I cannot answer that — Aetheria is not a real place I have data for." },
     ],
   },
+  {
+    // F10: the only golden that populates `goal_state.remaining` and renders a
+    // standing frame. Without it, nothing in the corpus can detect a change in
+    // WHERE volatile content sits, so the volatile-placement gate would be
+    // guarding a case no golden exercises.
+    //
+    // plan-execute dispatches `tool_call` steps DIRECTLY via
+    // executeToolAndObserve (strategies/plan-execute/step-executor.ts) — no
+    // per-step LLM call, no assembly/project() involvement for those steps.
+    // The three LLM calls this scenario answers are the OUTER strategy calls:
+    // plan generation (completeStructured, matched on the PLANNER_PERSONA
+    // string "You are a planning agent..."), reflection (runCritiquePass,
+    // matched on the reflection prompt's leading "GOAL:" line), and synthesis
+    // (gatewayComplete, matched on "Synthesize a clear, complete answer...").
+    // The scripted plan writes ./input.txt itself (2 lines) before reading it
+    // back, since nothing else seeds that fixture for a live-mode golden.
+    sidecar: {
+      name: "planned-tool-loop",
+      task: "Read ./input.txt, then write the line count to ./count.txt and report the number.",
+      // Registered strategy key is "plan-execute-reflect", NOT "plan-execute" —
+      // verified against strategy-registry.ts:159. Using "plan-execute" throws
+      // StrategyNotFoundError before any LLM call, recording a failure trace.
+      strategy: "plan-execute-reflect",
+      builtins: ["file-read", "file-write"],
+      // Static required list, for the SAME reason tool-write carries one: it
+      // suppresses the tool-relevance classifier, whose prompt contains the task
+      // text and would otherwise consume this scenario's match-guarded toolCall
+      // turns, and its quota forces both tools to fire before the terminal.
+      requiredTools: ["file-read", "file-write"],
+      maxIterations: 6,
+      toolMode: "live",
+      fileRoot: GOLDEN_FILE_ROOT,
+      expectOutputIncludes: ["2"],
+      expectToolsUsed: ["file-read", "file-write"],
+    },
+    scenario: [
+      {
+        match: "planning agent",
+        json: {
+          steps: [
+            {
+              title: "Create the input file",
+              instruction: "Write two lines to ./input.txt so a real file exists to read.",
+              type: "tool_call",
+              toolName: "file-write",
+              toolArgs: { path: "./input.txt", content: "line one\nline two\n" },
+            },
+            {
+              title: "Read the input file",
+              instruction: "Read ./input.txt to determine its line count.",
+              type: "tool_call",
+              toolName: "file-read",
+              toolArgs: { path: "./input.txt" },
+              dependsOn: ["s1"],
+            },
+            {
+              title: "Write the line count",
+              instruction: "Write the line count (2) to ./count.txt.",
+              type: "tool_call",
+              toolName: "file-write",
+              toolArgs: { path: "./count.txt", content: "2" },
+              dependsOn: ["s2"],
+            },
+          ],
+        },
+      },
+      { match: "GOAL:", text: "SATISFIED: all steps completed successfully; the file has 2 lines." },
+      { match: "Synthesize", text: "FINAL ANSWER: The input file has 2 lines, and the count 2 was written to count.txt." },
+    ],
+  },
 ];
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}\.jsonl$/;
