@@ -49,6 +49,7 @@ import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
+import { treeOfThoughtExploreBudgetMs } from "../harness-flags.js";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ export const executeTreeOfThought = (
     // external timeout kills the run with 0 output. Bounding explore on the
     // wall-clock leaves room for Phase 2 to always emit a best-so-far answer.
     // Env-overridable; default 120s sits comfortably under typical run timeouts.
-    const exploreBudgetMs = Number(process.env.RA_TOT_EXPLORE_BUDGET_MS ?? 120_000);
+    const exploreBudgetMs = treeOfThoughtExploreBudgetMs();
     let totalTokens = 0;
     let totalCost = 0;
     // Honest call accounting (2026-07-11 probe p9: llmCalls:0 on every ToT

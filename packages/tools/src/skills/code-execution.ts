@@ -9,6 +9,7 @@ import type { SpawnResult } from "@reactive-agents/runtime-shim";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox } from "../execution/docker-sandbox.js";
+import { sandboxDockerEnabled } from "../flags.js";
 
 /** Wrap user code so `return` works and CJS `require()` is available in ESM. */
 function wrapCode(rawCode: string): string {
@@ -152,7 +153,7 @@ export const codeExecuteHandler = (
       // ── Opt-in Docker sandbox (F1b) ──
       // RA_SANDBOX=docker runs the code inside a hardened throwaway container
       // (no network, non-root, read-only rootfs) instead of a host subprocess.
-      if (process.env.RA_SANDBOX === "docker") {
+      if (sandboxDockerEnabled()) {
         const dockerResult = await Effect.runPromise(
           makeDockerSandbox({ timeoutMs }).execute(wrapped, "bun").pipe(
             Effect.catchAll((err) =>

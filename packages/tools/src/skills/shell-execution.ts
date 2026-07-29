@@ -9,6 +9,7 @@ import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 import { makeDockerSandbox } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
+import { sandboxDockerEnabled } from "../flags.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -717,8 +718,7 @@ export function shellExecuteHandler(
   // When enabled (config.sandbox: "docker" or RA_SANDBOX=docker), the validated
   // command runs inside a hardened throwaway container instead of on the host.
   const useDockerSandbox =
-    (config?.sandbox ??
-      (process.env.RA_SANDBOX === "docker" ? "docker" : "host")) === "docker";
+    (config?.sandbox ?? (sandboxDockerEnabled() ? "docker" : "host")) === "docker";
   const shellDockerSandbox = useDockerSandbox
     ? makeDockerSandbox({ timeoutMs, maxOutputChars, ...dockerEscalation?.config })
     : null;

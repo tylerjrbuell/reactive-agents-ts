@@ -1,5 +1,6 @@
 import type { AssemblyCtx } from "../project.js";
 import { pushStage, recordMessage } from "../trace.js";
+import { thoughtContinuityEnabled } from "../../harness-flags.js";
 
 /**
  * Build the provider-valid conversation thread and project each tool result.
@@ -64,7 +65,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   // so accumulated prose cannot crowd out tool results. A trailing thought
   // with no following tool call is NOT rendered — that is the terminal
   // answer, which reaches the caller by its own path.
-  const renderThoughts = process.env.RA_THOUGHT_CONTINUITY === "1";
+  const renderThoughts = thoughtContinuityEnabled();
   const THOUGHT_CAP = 600;
   let pendingThought: string | undefined;
   const flush = () => {

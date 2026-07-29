@@ -10,4 +10,5 @@ export { discoverAgent, discoverMultipleAgents } from "./client/discovery.js";
 export { matchCapabilities, findBestAgent, type MatchResult } from "./client/capability-matcher.js";
 export { generateAgentCard, toolsToSkills, type AgentCardGeneratorConfig } from "./agent-card.js";
 export { A2AService, A2AServiceLive } from "./a2a-service.js";
+export { agentStrictEgressEnabled } from "./flags.js";
 export { createA2AServerLayer, createA2AClientLayer, A2AServerLive, A2AClientLive } from "./runtime.js";

@@ -12,6 +12,7 @@
 
 import { Effect } from "effect";
 import { assertPublicUrl } from "@reactive-agents/runtime-shim";
+import { agentStrictEgressEnabled } from "@reactive-agents/a2a";
 import type {
   RemoteAgentClient,
   TaskResult,
@@ -23,9 +24,14 @@ import type {
  * local peers (loopback / RFC-1918) are a legitimate multi-agent pattern, so
  * private targets are allowed by default; cloud-metadata / link-local is always
  * blocked. Set RA_AGENT_STRICT_EGRESS=1 to also refuse private targets.
+ *
+ * Resolver lives in `@reactive-agents/a2a` (`flags.ts`), not here — this is
+ * the SAME flag `client/discovery.ts` reads, and `packages/runtime` already
+ * depends on `packages/a2a`, so importing its resolver closes the two-site
+ * direct-read gap (Task 15 ablatability audit) without a new package edge.
  */
 const agentEgressGuard = () => ({
-  allowPrivate: process.env.RA_AGENT_STRICT_EGRESS !== "1",
+  allowPrivate: !agentStrictEgressEnabled(),
 });
 
 export interface RemoteAgentToolRegistration {

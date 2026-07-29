@@ -5,13 +5,14 @@ import { Effect } from "effect";
 import { assertPublicUrl } from "@reactive-agents/runtime-shim";
 import type { AgentCard } from "../types.js";
 import { DiscoveryError } from "../errors.js";
+import { agentStrictEgressEnabled } from "../flags.js";
 
 // F15: A2A discovery peers are operator-configured; local peers (loopback /
 // RFC-1918) are legitimate, so private targets are allowed by default while
 // cloud-metadata / link-local is always blocked. RA_AGENT_STRICT_EGRESS=1 also
 // refuses private targets.
 const agentEgressGuard = () => ({
-  allowPrivate: process.env.RA_AGENT_STRICT_EGRESS !== "1",
+  allowPrivate: !agentStrictEgressEnabled(),
 });
 
 export const discoverAgent = (baseUrl: string): Effect.Effect<AgentCard, DiscoveryError> =>

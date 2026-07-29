@@ -67,6 +67,7 @@ import { assembleConversation } from "./conversation-assembly.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
+import { toolObserveSymmetryEnabled } from "../../../harness-flags.js";
 
 /** Tool names that operate on the filesystem — HealingPipeline will resolve relative paths. */
 const FILE_TOOL_NAMES = new Set(["file-read", "file-write", "code-execute", "shell-execute"]);
@@ -163,7 +164,7 @@ export function handleActing(
     // (sync + pure) and forks the daemon semantic-memory store — matching the batch
     // path. This is a HOT-PATH behavior change, gated so it can be benched live
     // before any default-on decision (project lift rule + no-metric-gaming doctrine).
-    const symmetry = process.env.RA_TOOL_OBSERVE_SYMMETRY === "1";
+    const symmetry = toolObserveSymmetryEnabled();
 
     // ── ACTING BRANCH ──────────────────────────────────────────────────────────
     // For text-parse mode: extract tool calls from the last assistant message text

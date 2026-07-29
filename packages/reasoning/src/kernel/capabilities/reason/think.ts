@@ -97,7 +97,12 @@ import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
-import { lazyDisclosureEnabled } from "../../../harness-flags.js";
+import {
+  lazyDisclosureEnabled,
+  assemblyDebugEnabled,
+  promptDumpPathPrefix,
+  rationaleAuditEnabled,
+} from "../../../harness-flags.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -517,14 +522,15 @@ export function handleThinking(
       });
     }
 
-    if (process.env.RA_ASSEMBLY_DEBUG === "1") {
+    if (assemblyDebugEnabled()) {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }
 
     // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
     // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-iter{N}.json
-    if (process.env.RA_PROMPT_DUMP) {
-      const path = `${process.env.RA_PROMPT_DUMP}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
+    const promptDumpPrefix = promptDumpPathPrefix();
+    if (promptDumpPrefix) {
+      const path = `${promptDumpPrefix}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const fs = require("node:fs") as typeof import("node:fs");
@@ -623,7 +629,7 @@ export function handleThinking(
     // When ON, this reduces to the prior `hasReachableTools ? [...] : ""`, so the
     // emitted prompt is byte-identical to the old default.
     const auditRationaleOn =
-      input.auditRationale === true || process.env.RA_RATIONALE_AUDIT === "1";
+      input.auditRationale === true || rationaleAuditEnabled();
     const hasReachableTools = gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools && auditRationaleOn
       ? [

@@ -27,6 +27,7 @@ import type {
   ContextProfile,
   KernelMetaToolsConfig,
 } from "@reactive-agents/reasoning";
+import { overhaulEnabled } from "@reactive-agents/reasoning";
 import type { ReasoningOptions, CalibrationMode } from "../../types.js";
 import type { TestTurn, LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -336,7 +337,7 @@ export const buildBaseRuntimeAndEngine = (
         // Overhaul A/B (branch overhaul/agentic-core): register write_result_to_file
         // when RA_OVERHAUL=1 so the model can materialize a deliverable by reference
         // instead of transcribing / copying the [STORED:] marker.
-        writeResultToFile: process.env.RA_OVERHAUL === "1",
+        writeResultToFile: overhaulEnabled(),
         staticBriefInfo: {
           indexedDocuments: [],
           availableSkills: [],

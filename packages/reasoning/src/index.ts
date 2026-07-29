@@ -456,4 +456,13 @@ export {
   stableToolSurfaceEnabled,
   toolDiscoveryEnabled,
   verboseRulesEnabled,
+  recencyBudgetCharsOverride,
+  toolResultBudgetCharsOverride,
+  thoughtContinuityEnabled,
+  toolObserveSymmetryEnabled,
+  rationaleAuditEnabled,
+  treeOfThoughtExploreBudgetMs,
+  assemblyDebugEnabled,
+  promptDumpPathPrefix,
+  overhaulEnabled,
 } from "./harness-flags.js";

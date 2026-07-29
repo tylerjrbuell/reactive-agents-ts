@@ -3,6 +3,7 @@ import { assertPublicUrl } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { httpAllowPrivateEnabled } from "../flags.js";
 
 /** Max redirect hops to follow while re-validating each against the egress guard. */
 const MAX_REDIRECTS = 5;
@@ -62,7 +63,7 @@ export const httpGetHandler = (
       // and every redirect hop — is public before fetching, so a prompt-injected
       // agent cannot reach cloud metadata (169.254.169.254) or internal hosts.
       // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets.
-      const guard = { allowPrivate: process.env.RA_HTTP_ALLOW_PRIVATE === "1" };
+      const guard = { allowPrivate: httpAllowPrivateEnabled() };
       let current = (await assertPublicUrl(url, guard)).toString();
       let response = await fetch(current, { method: "GET", headers, redirect: "manual" });
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
