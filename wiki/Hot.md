@@ -10,19 +10,23 @@ updated: 2026-07-12
 
 ---
 
-## Latest Session (2026-07-12) — state-of-the-framework audit + doc-truth restoration
+## Active program (2026-07-28)
 
-**Version: v0.14.0 (release-ready, tag OWNER-GATED)** as of 2026-07-21. `main` pushed (origin/main `8158c757`+). The debt burndown (Waves 0–5) closed the audit façade: tool-policy enforced on every strategy incl. code-action sandbox, abstention across all 8 strategies, sub-agent cancellation/recursion, trust receipt + process model shipped, ~9 lying withers removed/wired, orchestration+scenarios packages unpublished, CHANGELOG `[Unreleased]` complete. Docs fully synced to 0.14 (README/whats-new/ROADMAP/AGENTS/skills). Only remaining before cut: owner tags `v0.14.0` (retitle `[Unreleased]`→`## 0.14.0`) + optional bench re-baseline. Canonical debt state: `wiki/Architecture/DEBT-REGISTER.md`.
+**A-TIER GAP CLOSURE** — [[Planning/Implementation-Plans/2026-07-28-a-tier-gap-closure]].
+Supersedes the simplification program as the WIP=1 item; the simplification
+program's motivating figure (555–640% harness overhead) was **retracted** on
+2026-07-28 because the instrument was broken (`2f97ca1e`).
 
-**Canonical snapshot (read this before any July plan/audit doc):**
-[`wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`](Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md) — full map of shipped vs open programs, the live built-never-wired register, the 226-commit process-failure analysis, corrective doctrine, and the deduped open-work list.
+**Highest open defect:** [[Failure-Modes/RUNNING-CATALOGUE#F10]] — the request
+prefix churns every iteration, so the prompt cache never hits. Lazy tool
+disclosure saves 41% of tokens and costs 17% MORE money.
 
-**July program status (detail + hashes in the snapshot):**
-- ✅ SHIPPED: Arc 1 (`3c9c15fa`); adaptive-harness overhaul (Phase-6 gate unmet, ablation INCONCLUSIVE); meta-loop Waves A–G **in full** (07-08); strategy ledger/receipt truth; stream tool events + guard reachability; dual API (spec `a0eb5755`).
-- ◐ PARTIAL: capability measurement (llm-judge→graded remainder); goal-reliability (open: #44 spine, #39 per-entity, #38 thought-continuity); root-cause closure (Tier 1–3 open list = canonical backlog); probe fleet QA (residue: success+empty-output, ToT cost floor, reflexion budget collision).
-- ⬜ DRAFT: subagents-and-logging plan (07-11, awaiting RATIFY) — detached-dispatch boundary still broken (`spawn-handlers.ts:140,163`).
+**Do not cite** any token-overhead figure predating `2f97ca1e`.
 
-**New H-risk findings (2026-07-12 audit):** 3/7 provider-adapter hooks orphaned by APC deletion `279b61fb` (`taskFraming`/`toolGuidance`/`systemPromptPatch`, calibration writes nothing reads); CompletionEnvelope not consumed by blueprint + code-action; RA_RECITE ablation arms byte-identical (measures noise).
+**Measurement ladder:** deterministic replay → haiku → fast non-reasoning local
+tool-callers. Promotion requires rungs 2 and 3 to agree in sign.
+
+**External gate:** τ-bench (ratified 2026-07-28).
 
 ## What's Next
 
