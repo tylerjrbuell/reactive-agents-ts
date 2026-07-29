@@ -1,0 +1,9 @@
+# sierra-research/tau-bench @ 59a200c6d575d595120f1cb70fea53cef0632f6b
+# Domain databases are fetched, not committed (~7.3 MB). Verify with:
+#   sha256sum -c --ignore-missing data-checksums.txt
+2598a12586d28f2d6bd16bc86f4c800029b6af18e0abb5c475ef5c869c11ced1  tau_bench/envs/retail/data/orders.json
+a9eabcc1a9742c5f5288c2779acce52b9308423383ed24706bbaf0889f762a0f  tau_bench/envs/retail/data/products.json
+6f4fd104cc5e80b92166c4035315c31532c6cea52a90dcdf18425ee7f87c2b82  tau_bench/envs/retail/data/users.json
+444d7565c68434a3e3fb72efd717f9f9cd5c56dce227f6f56e078f1cb0ed233a  tau_bench/envs/airline/data/flights.json
+1cf0bbc58ad984be9de7c24dba6dd27393f94cdbd482d8524f6a54db1f561a8c  tau_bench/envs/airline/data/reservations.json
+bd264e2a31e0fa35cdfef8987e70a0dd3776828b582fe90e7a44823a12eb4cea  tau_bench/envs/airline/data/users.json

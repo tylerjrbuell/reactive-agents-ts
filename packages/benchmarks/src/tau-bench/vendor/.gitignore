@@ -1,0 +1,5 @@
+# The domain databases (~7.3 MB) are pinned by SHA-256 in data-checksums.txt and
+# fetched by fetch-vendor.py, not committed. Keeping them out of the tree keeps a
+# checkout small without loosening reproducibility: the checksums pin the exact
+# upstream bytes any run consumed.
+data/
