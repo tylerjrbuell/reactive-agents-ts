@@ -1,0 +1,365 @@
+{
+  "generatedAt": "2026-07-26T19:14:44.140Z",
+  "runs": [],
+  "sessionId": "local-models-narrow-v2",
+  "sessionVersion": "1.0.0-probe",
+  "gitSha": "adbb75d5",
+  "ablation": [
+    {
+      "taskId": "rw-2",
+      "taskName": "Data investigation with red herring",
+      "modelVariantId": "qwen3-4b",
+      "variants": [
+        {
+          "taskId": "rw-2",
+          "modelVariantId": "qwen3-4b",
+          "variantId": "bare-llm",
+          "variantLabel": "Bare LLM",
+          "runs": [
+            {
+              "runIndex": 0,
+              "dimensions": [
+                {
+                  "dimension": "accuracy",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                },
+                {
+                  "dimension": "reasoning",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                },
+                {
+                  "dimension": "loop-intelligence",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                }
+              ],
+              "tokensUsed": 0,
+              "durationMs": 150077.03450399998,
+              "status": "error",
+              "output": ""
+            }
+          ],
+          "meanScores": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            },
+            {
+              "dimension": "reasoning",
+              "score": 0
+            },
+            {
+              "dimension": "loop-intelligence",
+              "score": 0
+            },
+            {
+              "dimension": "reliability",
+              "score": 1
+            }
+          ],
+          "variance": 0,
+          "meanTokens": 0,
+          "meanDurationMs": 150077,
+          "passRate": 0,
+          "solveRate": 0,
+          "passK": [
+            {
+              "k": 1,
+              "estimate": 0
+            }
+          ]
+        },
+        {
+          "taskId": "rw-2",
+          "modelVariantId": "qwen3-4b",
+          "variantId": "ra-full",
+          "variantLabel": "RA Full Harness",
+          "runs": [
+            {
+              "runIndex": 0,
+              "dimensions": [
+                {
+                  "dimension": "accuracy",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                },
+                {
+                  "dimension": "reasoning",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                },
+                {
+                  "dimension": "loop-intelligence",
+                  "score": 0,
+                  "evidence": "no output produced (timeout after 150s) — cell not judged"
+                }
+              ],
+              "tokensUsed": 0,
+              "durationMs": 150112.008928,
+              "status": "error",
+              "output": ""
+            }
+          ],
+          "meanScores": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            },
+            {
+              "dimension": "reasoning",
+              "score": 0
+            },
+            {
+              "dimension": "loop-intelligence",
+              "score": 0
+            },
+            {
+              "dimension": "reliability",
+              "score": 1
+            }
+          ],
+          "variance": 0,
+          "meanTokens": 0,
+          "meanDurationMs": 150112,
+          "passRate": 0,
+          "solveRate": 0,
+          "passK": [
+            {
+              "k": 1,
+              "estimate": 0
+            }
+          ]
+        }
+      ],
+      "harnessLift": 0,
+      "perDimensionLift": [
+        {
+          "dimension": "accuracy",
+          "lift": 0
+        },
+        {
+          "dimension": "reasoning",
+          "lift": 0
+        },
+        {
+          "dimension": "loop-intelligence",
+          "lift": 0
+        },
+        {
+          "dimension": "reliability",
+          "lift": 0
+        }
+      ],
+      "bestVariantId": "bare-llm",
+      "baselineVariantId": "bare-llm"
+    }
+  ],
+  "taskReports": [
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "qwen3-4b",
+      "variantId": "bare-llm",
+      "variantLabel": "Bare LLM",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            },
+            {
+              "dimension": "reasoning",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            },
+            {
+              "dimension": "loop-intelligence",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150077.03450399998,
+          "status": "error",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reasoning",
+          "score": 0
+        },
+        {
+          "dimension": "loop-intelligence",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 150077,
+      "passRate": 0,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    },
+    {
+      "taskId": "rw-2",
+      "modelVariantId": "qwen3-4b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            },
+            {
+              "dimension": "reasoning",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            },
+            {
+              "dimension": "loop-intelligence",
+              "score": 0,
+              "evidence": "no output produced (timeout after 150s) — cell not judged"
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 150112.008928,
+          "status": "error",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reasoning",
+          "score": 0
+        },
+        {
+          "dimension": "loop-intelligence",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 150112,
+      "passRate": 0,
+      "solveRate": 0,
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "bare-llm",
+          "meanScore": 0
+        },
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reasoning",
+      "byVariant": [
+        {
+          "variantId": "bare-llm",
+          "meanScore": 0
+        },
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "loop-intelligence",
+      "byVariant": [
+        {
+          "variantId": "bare-llm",
+          "meanScore": 0
+        },
+        {
+          "variantId": "ra-full",
+          "meanScore": 0
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "bare-llm",
+          "meanScore": 1
+        },
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "gemma3:12b",
+    "judgeCodeSha": "dev",
+    "runId": "run-1785092683950-tebo8m4w",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session local-models-narrow-v2 --run-id run-1785092683950-tebo8m4w --judge-url http://127.0.0.1:8911"
+  },
+  "inconclusiveCells": [],
+  "partialMeasurement": false,
+  "passKByVariant": [
+    {
+      "variantId": "bare-llm",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    },
+    {
+      "variantId": "ra-full",
+      "passK": [
+        {
+          "k": 1,
+          "estimate": 0
+        }
+      ]
+    }
+  ]
+}
