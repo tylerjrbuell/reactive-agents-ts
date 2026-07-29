@@ -284,12 +284,28 @@ success bit moves.
 
 ---
 
-## F3 — `discover-tools` burn is kernel-only
+## F3 — `discover-tools` burn ⚠️ PREMISE DOES NOT REPRODUCE (2026-07-28)
 
-Present in **every** kernel trace, **no** inline trace. On the multi-step task haiku's kernel
-arm takes 14 iterations (`discover-tools, file-read, code-execute, file-write`) to do what
-inline attempts in 2. The kernel spends model calls discovering tools the inline path simply
-uses.
+**Original claim.** The kernel spends model calls discovering tools that the
+inline path simply uses.
+
+**Measured.** `discover-tools` was called **zero times in every arm** of the
+disclosure ablation (`packages/benchmarks/src/disclosure-ablation.ts`, haiku,
+4 arms). The premise as stated does not reproduce on this task shape.
+
+**What is true instead, and it is smaller.** The `discover-tools` schema rides
+every prompt whether or not it is ever called, for a measured ~6% cost
+(prune+discover $0.04766 vs prune-only $0.04518). That is a schema-weight cost,
+not a model-call cost — a different defect, an order of magnitude less severe
+than the one filed.
+
+**Why this could not be measured before.** `RA_LAZY_TOOLS` gated three
+independent mechanisms at three sites, two of them in opposite directions, so
+"pruning on, discovery off" was inexpressible. Split in `2f97ca1e`; the arm now
+exists as `RA_TOOL_DISCOVERY=0`.
+
+**Status.** Downgraded from a cost defect to a schema-weight question, folded
+into [[#F10]]. Do not cite the original framing.
 
 ---
 
@@ -315,7 +331,7 @@ reading and is recorded in the low-delta session file.
 
 ---
 
-## F9 — The kernel silently widens the tool surface beyond what was configured
+## F9 — The kernel silently widens the tool surface beyond what was configured ✅ FIXED (`9d1252d3`, `2f97ca1e`)
 
 **Cell:** deterministic provider · `withTools({ builtins: ["file-write"], adaptive: false })`
 on both arms · read `tool-surface-resolved` + `toolSchemaNames` from the trace.
@@ -341,6 +357,61 @@ Two consequences:
 
 Related but distinct from **F3** (`discover-tools` burn): F3 is the cost of the extra
 calls, F9 is the capability the injection grants.
+
+**Fixed.** Two halves. The engine half (`9d1252d3`) — `execution-engine.ts` now
+hands the kernel `exposedToolSchemas` (the post-`builtins`, post-forbidden,
+post-allowlist set) instead of `initialToolSchemas`. The capability half
+(`2f97ca1e`) — `discover-tools` now builds its catalogue from the permitted
+surface, so it can no longer advertise "10 tools available (now callable)" under
+`builtins: ["file-write"]` and then successfully execute a withheld `file-read`.
+
+**Pinned by** `packages/runtime/tests/discover-tools-respects-surface.test.ts`
+(3 cells, red-on-cut verified).
+
+---
+
+## F10 — The request prefix churns, so the prompt cache never hits *(new, 2026-07-28)*
+
+**Severity: highest open item.** It is a pure cost defect with no accuracy risk,
+and it inverts the sign of the harness's flagship token optimisation.
+
+**Measured** (haiku, corrected accounting, `disclosure-ablation`):
+
+| arm | tokens | cost | cacheRead |
+|---|---|---|---|
+| inline | 14,008 | $0.01530 | 0 |
+| prune-only | 39,174 | $0.04518 | 0 |
+| prune+discover | 41,555 | $0.04766 | 0 |
+| no-prune | 66,719 | **$0.03871** | 40,277 |
+
+Lazy tool disclosure saves **41% of raw tokens** and costs **17% more money**.
+
+**Mechanism.** Anthropic caches by exact prefix, ordered `tools` → `system` →
+`messages`. Three `cache_control` breakpoints are set correctly
+(`anthropic.ts:117` last tool_result, `:147` last tool, `:189` system). They
+never hit on the default path because per-iteration lazy disclosure mutates the
+`tools` array — position zero of the prefix — invalidating all three every turn.
+
+**Compounding, in the system block itself.** `assembly/stages/system-prompt.ts`
+puts the standing frame (`:75-86`) and `Remaining steps:` (`:87`) *inside* the
+cached system prompt. Volatile per-iteration content at the front of the prefix.
+This is backwards on two axes at once: it breaks the cache, and it puts the
+recitation target in the low-attention middle of the context rather than the
+tail where leading harnesses put it.
+
+**Caveat the fix must respect.** `no-prune` already achieves cacheRead>0 on the
+measured task, which had no plan and no standing frame — i.e. its system prompt
+happened to be stable anyway. The prediction that moving volatile content to the
+tail *extends* caching to plan-bearing tasks is **untested**, and the golden
+corpus cannot currently test it (no golden populates `goal_state.remaining`).
+Task 5 of the gap-closure plan exists to build that golden first.
+
+**Fix plan.** [[../Planning/Implementation-Plans/2026-07-28-a-tier-gap-closure]]
+Phase 2. Enforcement is by rejection, not by list mutation — the Anthropic API
+exposes no per-tool logit masking, so the industry "masking" rule cannot be
+applied literally here.
+
+**Status.** OPEN.
 
 ---
 
@@ -376,3 +447,15 @@ standing prior when a result surprises: indict the probe first.
 **Statistical honesty:** n=2–3 per cell. These resolve *large* effects — a 50× cost blowup
 and a 0/3-vs-3/3 outcome flip are not subtle. They do **not** resolve a 3pp lift, and no
 entry here should be quoted as a lift verdict. Promotion still goes through 09 §6.
+
+**Fifth consecutive session in which the instrument, not the system, was the bug**
+(2026-07-28). `usage.input_tokens` on Anthropic counts only the uncached
+remainder. Both provider paths reported it as the total while computing cost off
+the real total, so the better a run cached, the cheaper it looked. This inverted
+a finding that was one commit from publication: lazy disclosure appeared to cost
+2.2× when it in fact saves 41% of tokens. Caught by an impossibility check —
+`in=6` for a call carrying ten tool schemas cannot be true. Fixed `2f97ca1e`;
+pinned by `packages/llm-provider/tests/cached-input-tokens-are-counted.test.ts`.
+
+**Every token-overhead number in this repository predating `2f97ca1e` is
+unverified**, including the 555–640% harness-cost figure in 09 §7.
