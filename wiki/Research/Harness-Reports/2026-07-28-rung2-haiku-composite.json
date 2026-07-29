@@ -1,0 +1,308 @@
+{
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "runs": 3,
+  "generatedAt": "2026-07-29T09:09:50.998Z",
+  "cells": [
+    {
+      "arm": "inline",
+      "tokens": 13986,
+      "calls": 4,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 5673,
+      "costUsd": 0.015254,
+      "cacheRead": 0,
+      "freshIn": 13669
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 29738,
+      "calls": 13,
+      "iterations": 19,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 19673,
+      "costUsd": 0.03438599999999999,
+      "cacheRead": 0,
+      "freshIn": 28576
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 39411,
+      "calls": 17,
+      "iterations": 28,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "controller_early_stop:dispatcher_early_stop",
+      "durationMs": 28695,
+      "costUsd": 0.046235000000000005,
+      "cacheRead": 0,
+      "freshIn": 37705
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 43470,
+      "calls": 12,
+      "iterations": 16,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 21973,
+      "costUsd": 0.0494227,
+      "cacheRead": 4312,
+      "freshIn": 16894
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 45076,
+      "calls": 12,
+      "iterations": 16,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 21485,
+      "costUsd": 0.051227650000000007,
+      "cacheRead": 4469,
+      "freshIn": 17522
+    },
+    {
+      "arm": "inline",
+      "tokens": 14001,
+      "calls": 4,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 6042,
+      "costUsd": 0.015305,
+      "cacheRead": 0,
+      "freshIn": 13675
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 29758,
+      "calls": 13,
+      "iterations": 19,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 22370,
+      "costUsd": 0.034486,
+      "cacheRead": 0,
+      "freshIn": 28576
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 28022,
+      "calls": 13,
+      "iterations": 19,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 17714,
+      "costUsd": 0.032714,
+      "cacheRead": 0,
+      "freshIn": 26849
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 48190,
+      "calls": 13,
+      "iterations": 19,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 20440,
+      "costUsd": 0.0459154,
+      "cacheRead": 12504,
+      "freshIn": 17110
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 44949,
+      "calls": 12,
+      "iterations": 16,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 17421,
+      "costUsd": 0.025394999999999997,
+      "cacheRead": 26380,
+      "freshIn": 17522
+    },
+    {
+      "arm": "inline",
+      "tokens": 14007,
+      "calls": 4,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 4557,
+      "costUsd": 0.015319000000000001,
+      "cacheRead": 0,
+      "freshIn": 13679
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 41759,
+      "calls": 17,
+      "iterations": 28,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "controller_early_stop:dispatcher_early_stop",
+      "durationMs": 26321,
+      "costUsd": 0.048610999999999994,
+      "cacheRead": 0,
+      "freshIn": 40046
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 27939,
+      "calls": 13,
+      "iterations": 18,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 20929,
+      "costUsd": 0.033407000000000006,
+      "cacheRead": 0,
+      "freshIn": 26572
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 43351,
+      "calls": 12,
+      "iterations": 16,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 25097,
+      "costUsd": 0.024532800000000004,
+      "cacheRead": 25438,
+      "freshIn": 16894
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 44960,
+      "calls": 12,
+      "iterations": 16,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "failure",
+      "terminatedBy": "harness_synthesis",
+      "durationMs": 19889,
+      "costUsd": 0.03573675,
+      "cacheRead": 17435,
+      "freshIn": 17522
+    }
+  ]
+}
