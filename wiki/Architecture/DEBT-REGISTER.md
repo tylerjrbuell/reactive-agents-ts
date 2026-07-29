@@ -245,6 +245,40 @@ New rows (open):
 2. ✅ RESOLVED Wave 2 B2 — **`direct` drops honesty markers entirely** (`direct.ts:194`) — no `extraMetadata`, hardcodes `totalCost: 0`, can report `completed` on an unverified ship. *Fix: forwards real cost/tokens + `honestPartialMetadata` + `terminatedBy`/`abstention`/`error`.*
 3. ✅ RESOLVED Wave 2 B4 (2026-07-20) — **Two verifiers, one receipt field, no linkage.** `runner.ts`'s comment claiming the kernel verdict lands on `receipt.verifierVerdict` was **false**; the receipt's verdict is authored by the result-boundary verifier (`runtime/engine/finalize/result-verification.ts`), which runs on EVERY path BY DESIGN. Disposition = option (b): the boundary verifier owns the receipt; the in-kernel verifier owns control flow (status/error) + the honesty markers that cross via the `CompletionEnvelope` (`verificationWarning`, `harnessAuthoredOutput`). Deleted the false comment + the dead write-only `meta.verifierVerdict`/`verifierRejected`/`verifierEscalation` writes and declarations. `result-boundary-verification.test.ts` pins boundary-owns-receipt (works on strategy paths with no in-kernel verifier); `b4-envelope-boundary.test.ts` pins in-kernel honesty crossing via the envelope.
 
+### D-2026-07-28-A — every pre-`2f97ca1e` token figure is unverified
+
+**Class:** instrument fault, already fixed; the DEBT is the contaminated record.
+
+Anthropic `usage.input_tokens` counts only the uncached remainder. Both provider
+paths reported it as `inputTokens`/`totalTokens` while computing `estimatedCost`
+off the correct total, so cost was right and tokens were wrong, and the error
+scaled with cache effectiveness.
+
+**Blast radius:** every token-overhead comparison in `wiki/Research/`, the
+555–640% figure in 09 §7 (retracted 2026-07-28), and any arm-vs-arm token delta
+where the arms cached differently. Cost figures are unaffected.
+
+**Discharge:** the corrected composite re-baseline (gap-closure plan Phase 3).
+Until then, no document may cite a pre-`2f97ca1e` token overhead.
+
+**Gate:** `packages/llm-provider/tests/cached-input-tokens-are-counted.test.ts`
+(4 cells, red-on-cut) prevents recurrence.
+
+### D-2026-07-28-B — the request prefix churns, so the cache never hits
+
+See [[../Failure-Modes/RUNNING-CATALOGUE#F10]]. Per-iteration mutation of the
+`tools` array sits at position zero of Anthropic's cache prefix and invalidates
+all three `cache_control` breakpoints every turn; the system prompt compounds it
+by carrying the standing frame and `Remaining steps:` inside the cached block.
+
+**Measured:** cacheRead=0 on the default kernel path; the non-pruning arm costs
+17% LESS money despite 1.7× the tokens.
+
+**Discharge:** gap-closure plan Phase 2, promoted to default only if it clears
+the §6 lift rule on rungs 2 and 3 of the ladder.
+
+**Gate:** `scripts/check-volatile-placement.sh` (Task 10).
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)
