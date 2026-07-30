@@ -16,18 +16,24 @@ function firstLine(s: string): string {
   return nl >= 0 ? s.slice(0, nl) : s;
 }
 
-function pickSalient(item: Record<string, unknown>): string | undefined {
-  for (const f of SALIENT_FIELDS) {
-    const v = item[f];
-    if (typeof v === "string" && v.length > 0) return firstLine(v);
+/**
+ * NDJSON (one JSON value per line, no wrapping `[...]`) parsed as an array —
+ * or undefined if any non-empty line fails to parse or fewer than 2 lines
+ * are present. `gh ... --jq '.[] | {...}'` and similar CLI filters emit this
+ * shape natively; without recognizing it, a stored NDJSON string reads as an
+ * opaque blob and falls through to a blind character-slice truncation with
+ * no per-item boundary awareness (2026-07-30 — root cause of a live run
+ * losing most of 25 requested commits across TWO independent truncation
+ * layers that shared this same gap).
+ */
+function parseNdjson(text: string): unknown[] | undefined {
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length < 2) return undefined;
+  try {
+    return lines.map((l) => JSON.parse(l));
+  } catch {
+    return undefined;
   }
-  for (const v of Object.values(item)) {
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      const nested = pickSalient(v as Record<string, unknown>);
-      if (nested) return nested;
-    }
-  }
-  return undefined;
 }
 
 /** Coerce common array wrappers ({items|data|results|commits|value}) to an array. */
@@ -39,14 +45,76 @@ export function asArray(value: unknown): unknown[] | undefined {
       if (Array.isArray(v)) return v;
     }
   }
+  if (typeof value === "string") return parseNdjson(value);
   return undefined;
 }
 
-function compactObject(item: Record<string, unknown>): string {
-  return Object.entries(item)
-    .filter(([, v]) => v !== null && typeof v !== "object")
+/**
+ * Flatten nested plain-object fields into dot-notation keys (up to `depth`
+ * levels) — e.g. `{sha, commit: {message}}` → `{sha, "commit.message"}`.
+ * `compactObject`/`renderTable` previously excluded any key whose value was
+ * an object, silently dropping fields like a raw `gh api` commit's
+ * `commit.message`/`commit.author.name`/`.date` (only `pickSalient`'s ad hoc
+ * recursion saw them, and only the first match). Arrays stop recursion at
+ * that key — they're rendered as-is, not flattened further.
+ */
+function flattenRecord(
+  item: Record<string, unknown>,
+  depth = 2,
+  prefix = "",
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(item)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object" && !Array.isArray(v) && depth > 0) {
+      Object.assign(out, flattenRecord(v as Record<string, unknown>, depth - 1, key));
+    } else {
+      out[key] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * The flattened key/value best representing this record's "headline" — the
+ * first `SALIENT_FIELDS` name matched either exactly or as a dot-suffix
+ * (e.g. `commit.message`).
+ */
+function findSalient(flat: Record<string, unknown>): { key: string; value: string } | undefined {
+  for (const f of SALIENT_FIELDS) {
+    for (const [k, v] of Object.entries(flat)) {
+      if ((k === f || k.endsWith(`.${f}`)) && typeof v === "string" && v.length > 0) {
+        return { key: k, value: firstLine(v) };
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Every scalar field (dot-flattened) rendered compactly — `k=v | k=v`. */
+function compactObject(item: Record<string, unknown>, exceptKey?: string): string {
+  return Object.entries(flattenRecord(item))
+    .filter(([k, v]) => k !== exceptKey && v !== null && typeof v !== "object")
     .map(([k, v]) => `${k}=${String(v)}`)
     .join(" | ");
+}
+
+/**
+ * One line per record: salient headline first, every OTHER scalar field
+ * compactly appended after it — never silently drops a field the way
+ * picking just the single top-priority salient value used to. A task
+ * asking for sha + author + message previously saw only the message text;
+ * the model then fabricated plausible-looking values for the rest
+ * (2026-07-30, live gh-cli run — the general failure mode: any "bullets"
+ * caller on any multi-field record loses every field but one).
+ */
+function renderRecordLine(item: Record<string, unknown>): string {
+  const flat = flattenRecord(item);
+  const salient = findSalient(flat);
+  const rest = compactObject(item, salient?.key);
+  if (salient && rest) return `${salient.value} (${rest})`;
+  if (salient) return salient.value;
+  return rest || "{}";
 }
 
 function renderTable(arr: unknown[]): string {
@@ -54,15 +122,16 @@ function renderTable(arr: unknown[]): string {
     (i): i is Record<string, unknown> => !!i && typeof i === "object" && !Array.isArray(i),
   );
   if (objs.length === 0) return arr.map(String).join("\n");
+  const flat = objs.map((o) => flattenRecord(o));
   const cols = Array.from(
-    objs.reduce<Set<string>>((set, o) => {
+    flat.reduce<Set<string>>((set, o) => {
       for (const k of Object.keys(o)) if (typeof o[k] !== "object") set.add(k);
       return set;
     }, new Set()),
   );
   const head = `| ${cols.join(" | ")} |`;
   const sep = `| ${cols.map(() => "---").join(" | ")} |`;
-  const rows = objs.map((o) => `| ${cols.map((c) => String(o[c] ?? "")).join(" | ")} |`);
+  const rows = flat.map((o) => `| ${cols.map((c) => String(o[c] ?? "")).join(" | ")} |`);
   return [head, sep, ...rows].join("\n");
 }
 
@@ -80,8 +149,7 @@ export function renderValue(value: unknown, format: ResultFormat): string {
   return arr
     .map((item) => {
       if (item && typeof item === "object" && !Array.isArray(item)) {
-        const salient = pickSalient(item as Record<string, unknown>);
-        return prefix + (salient ?? compactObject(item as Record<string, unknown>));
+        return prefix + renderRecordLine(item as Record<string, unknown>);
       }
       return prefix + String(item);
     })
