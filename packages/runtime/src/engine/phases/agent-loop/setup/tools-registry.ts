@@ -82,13 +82,22 @@ export const fetchToolsRegistry = (
       }
     }
 
-    // Log strategy-select summary (capability tools only, hides framework)
+    // Log strategy-select summary (capability tools only, hides framework).
+    // NOTE: this is the full ToolService registry, not what the model can
+    // actually see this turn — lazy disclosure (tool-surface.ts) prunes the
+    // per-iteration visible set down from this list based on required/
+    // relevant/floor/discovered/already-used tools, and can legitimately show
+    // far fewer. Labelled "registered" (not "tools") so this doesn't read as
+    // a promise about turn-1 visibility — that was a real point of user
+    // confusion (2026-07-29): the only tool-list line printed at normal
+    // verbosity was this one, and it answered "what's registered", not "what
+    // can the model call right now".
     if (obs && isNormal) {
       const toolNames = cachedToolDefs
         .map((t: any) => t.name as string)
         .filter((n) => !FRAMEWORK_TOOL_NAMES.has(n))
         .join(", ");
-      const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
+      const toolsInfo = toolNames ? ` | tools registered: ${toolNames}` : "";
       yield* obs
         .info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
         .pipe(
