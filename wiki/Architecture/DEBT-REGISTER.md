@@ -339,6 +339,48 @@ resolved.
 the replay/observability boundary rather than the assembly pipeline this plan
 is scoped to.
 
+### D-2026-07-29-E — root cause unconfirmed: real agent showed empty tool surface the isolated heuristic doesn't predict
+
+**Class:** unconfirmed — filed with evidence rather than guessed at, per this
+project's standing rule against publishing findings that weren't checked
+against a real run.
+
+Live run (`scratch.ts`, ollama/gemma4:e4b, task never literally names a tool)
+showed `tool-surface-resolved.visible = [recall, discover-tools]` only — no
+domain tool visible on iteration 0, discovered via the new
+`tool-surface-reporter.ts` console line (`75feee6a`). Working hypothesis
+going in: `filterToolsByRelevance`'s literal/near-literal keyword heuristic
+(`packages/reasoning/src/kernel/capabilities/attend/tool-formatting.ts`) is
+too weak for natural-language task phrasing, and — post-TE-1 (`0f4476ab`,
+classifier no longer default-on) — this heuristic is now the ONLY thing that
+can populate the lazy-disclosure allow-set for an unclassified run, so its
+weakness has real teeth it didn't have before.
+
+**That hypothesis did NOT survive a direct check.** Probed
+`filterToolsByRelevance` in isolation with the exact task text and realistic
+full-description schemas for `file-write`/`file-read`/`web-search`/`gh-cli`
+(in-repo probe, `bun packages/reasoning/tmp-probe/heuristic-probe.ts`,
+deleted after use): all 4 came back `primary`. The word-matching itself is
+NOT obviously broken on this input.
+
+**What's left unexplained:** why the live run's visible set was empty
+despite the heuristic (in isolation) matching. Candidate causes, none
+confirmed: (a) local-tier's compact `toolSchemaDetail` profile
+("names-and-types") stripping tool `description` before the heuristic sees
+the schemas, rather than only after tool-surface resolution as think.ts's
+comments claim; (b) `lazyMode` or `hasClassification` resolving unexpectedly
+for this run, short-circuiting the heuristic branch in
+`computePromptSchemas` (tool-surface.ts:118) entirely; (c) `taskText` not
+actually reaching `resolveToolSurface` with the full string in this code
+path despite `think.ts:358` passing `input.task` directly.
+
+**Discharge:** instrument `computePromptSchemas` (or re-run scratch.ts with
+`RA_VERBOSE_RULES=1` / a temporary in-repo probe, never `/tmp`) to capture
+the REAL `effectiveSchemas` descriptions, `lazyMode`, and `hasClassification`
+values on this exact run, before attempting a fix. Do not patch the
+heuristic's word-matching based on the isolated-probe result above — it
+already showed that surface isn't where the gap is.
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)
