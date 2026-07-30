@@ -16,7 +16,7 @@ import type {
   ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy } from "../retry.js";
+import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
@@ -465,7 +465,7 @@ export const GeminiProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
-          return Stream.async<StreamEvent, LLMErrors>((emit) => {
+          return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             void (async () => {
               try {
                 const client = await getClient();
@@ -653,7 +653,7 @@ export const GeminiProviderLive = Layer.effect(
                 emit.fail(mapProviderError(error, "gemini", model));
               }
             })();
-          });
+          }));
         }),
 
       completeStructured: (request) =>

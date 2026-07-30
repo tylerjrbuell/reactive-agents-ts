@@ -17,7 +17,7 @@ import type {
   ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy } from "../retry.js";
+import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { resolveCapability } from "../capability-resolver.js";
@@ -359,7 +359,7 @@ export const AnthropicProviderLive = Layer.effect(
             },
           );
 
-          return Stream.async<StreamEvent, LLMErrors>((emit) => {
+          return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = client.messages.stream({
               model,
               // F1: clamp the final wire value — mirrors complete().
@@ -510,7 +510,7 @@ export const AnthropicProviderLive = Layer.effect(
               // err.message shape provider-error.ts was built to kill.
               emit.fail(mapProviderError(error, "anthropic", model));
             });
-          });
+          }));
         }),
 
       completeStructured: (request) =>

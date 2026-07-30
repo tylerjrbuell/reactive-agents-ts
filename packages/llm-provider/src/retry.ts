@@ -1,5 +1,6 @@
-import { Schedule } from "effect";
+import { Effect, Schedule, Stream } from "effect";
 import type { LLMErrors } from "./errors.js";
+import type { StreamEvent } from "./types.js";
 
 /**
  * Retry policy for LLM calls — exponential backoff, up to 3 retries.
@@ -19,6 +20,43 @@ export const retryPolicy = Schedule.intersect(
       error._tag === "LLMRateLimitError" || error._tag === "LLMTimeoutError",
   ),
 );
+
+/**
+ * `retryPolicy`'s streaming counterpart (EH-1, 2026-07-29 systems audit,
+ * root cause #3). `complete()` is wired to `Effect.retry(retryPolicy)` on all
+ * 5 providers; `stream()` — which is 100% of what the kernel's `think` calls
+ * use — was not, so a single transient rate-limit/timeout/5xx during a stream
+ * ended the entire run with zero retry.
+ *
+ * A bare `Stream.retry(retryPolicy)` is UNSAFE here: Effect restarts a failed
+ * stream by re-invoking its producer from scratch, and if the first attempt
+ * had already emitted some deltas before failing, the caller would see those
+ * deltas followed by a second attempt's deltas from the beginning — duplicated
+ * or corrupted output. `complete()` has no such risk (one response, not
+ * incremental chunks), which is exactly why it was safe to wire directly.
+ *
+ * This wrapper is retryable ONLY up to the first emitted event. Once anything
+ * has been emitted, `emittedAny` latches true for the rest of this stream's
+ * lifetime (across any further retry attempts) and the schedule's predicate
+ * permanently returns false — a failure after partial output always surfaces
+ * to the caller rather than risking a silent restart mid-response.
+ */
+export function retryStreamBeforeFirstEmission<E extends LLMErrors, R>(
+  stream: Stream.Stream<StreamEvent, E, R>,
+): Stream.Stream<StreamEvent, E, R> {
+  let emittedAny = false;
+  const guardedPolicy = retryPolicy.pipe(
+    Schedule.whileInput<LLMErrors>(
+      (error) =>
+        !emittedAny &&
+        (error._tag === "LLMRateLimitError" || error._tag === "LLMTimeoutError"),
+    ),
+  );
+  return stream.pipe(
+    Stream.tap(() => Effect.sync(() => { emittedAny = true; })),
+    Stream.retry(guardedPolicy),
+  );
+}
 
 // ─── Circuit Breaker ───
 

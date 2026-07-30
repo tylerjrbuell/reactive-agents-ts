@@ -17,7 +17,7 @@ import type {
   ToolCall,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy } from "../retry.js";
+import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { resolveCapability } from "../capability-resolver.js";
@@ -347,7 +347,7 @@ export const LiteLLMProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
-          return Stream.async<StreamEvent, LLMErrors>((emit) => {
+          return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
               try {
                 const headers: Record<string, string> = {
@@ -593,7 +593,7 @@ export const LiteLLMProviderLive = Layer.effect(
               }
             };
             void doStream();
-          });
+          }));
         }),
 
       completeStructured: (request) =>

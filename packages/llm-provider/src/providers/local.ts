@@ -14,7 +14,7 @@ import type {
     TokenLogprob,
 } from '../types.js'
 import { estimateTokenCount } from '../token-counter.js'
-import { retryPolicy } from '../retry.js'
+import { retryPolicy, retryStreamBeforeFirstEmission } from '../retry.js'
 import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
@@ -638,7 +638,7 @@ export const LocalProviderLive = Layer.effect(
                             ? request.model
                             : request.model?.model ?? defaultModel
 
-                    return Stream.async<StreamEvent, LLMErrors>((emit) => {
+                    return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
                         // Track the abortable iterator so stream interruption
                         // (consumer cancels / scope closes) tears down the
                         // in-flight Ollama request instead of leaving the server
@@ -879,7 +879,7 @@ export const LocalProviderLive = Layer.effect(
                             aborted = true
                             ollamaStream?.abort()
                         })
-                    })
+                    }))
                 }),
 
             completeStructured: (request) =>

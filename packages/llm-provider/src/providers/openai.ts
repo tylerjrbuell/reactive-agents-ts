@@ -20,7 +20,7 @@ import type {
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
-import { retryPolicy } from "../retry.js";
+import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
@@ -416,7 +416,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
           });
           const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium");
 
-          return Stream.async<StreamEvent, LLMErrors>((emit) => {
+          return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
               try {
                 const stream = (await client.chat.completions.create({
@@ -605,7 +605,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
               }
             };
             void doStream();
-          });
+          }));
         }),
 
       completeStructured: (request) =>
