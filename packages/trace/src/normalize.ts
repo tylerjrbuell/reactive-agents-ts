@@ -387,6 +387,12 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         refs: raw.refs,
         droppedRefs: raw.droppedRefs,
         chars: raw.chars,
+        // R4: carry the capability window + per-result compression detail so the
+        // budget-inversion class is visible via `rax diagnose replay`, not just
+        // the live console line.
+        ...(raw.window !== undefined ? { window: raw.window } : {}),
+        ...(raw.tier !== undefined ? { tier: raw.tier } : {}),
+        ...(raw.compressions !== undefined ? { compressions: raw.compressions } : {}),
       }
       return ev
     }

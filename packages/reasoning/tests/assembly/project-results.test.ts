@@ -58,6 +58,9 @@ describe("projectResults — full | preview+ref | cleared", () => {
     // model actually saw (the whole point of the signal).
     expect(tr!.rawChars).toBeGreaterThan(tr!.chars);
     expect(tr!.budget).toBeGreaterThan(0);
+    // ref = the curator-decision targetRef (think.ts emits CuratorDecision from it).
+    expect(typeof tr!.ref).toBe("string");
+    expect(tr!.ref!.length).toBeGreaterThan(0);
   });
 
   it("FITTING result → present full", () => {

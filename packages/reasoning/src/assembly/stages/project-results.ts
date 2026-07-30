@@ -130,6 +130,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
         tool: call?.tool ?? stored.tool ?? "tool",
         rawChars: fullText.length,
         budget,
+        ref: e.ref,
       });
       resultSeen++;
     }

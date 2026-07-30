@@ -430,6 +430,17 @@ export interface ProjectionRenderedEvent extends TraceEventBase {
   readonly refs: readonly string[]
   readonly droppedRefs: readonly string[]
   readonly chars: number
+  /** R4 (2026-07-30): the resolved capability window the per-result budgets came
+   *  from (the budget/wire divergence signal), and each result the projector
+   *  replaced with a preview+ref. Optional — absent on pre-R4 replays. */
+  readonly window?: number
+  readonly tier?: string
+  readonly compressions?: readonly {
+    readonly tool: string
+    readonly rawChars: number
+    readonly shownChars: number
+    readonly budget: number
+  }[]
 }
 
 /**

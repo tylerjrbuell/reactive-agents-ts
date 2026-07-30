@@ -24,7 +24,7 @@ import {
 } from "../attend/context-utils.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
-import { emitToolSurfaceResolved, emitProjectionRendered } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision } from "../../utils/diagnostics.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
@@ -541,6 +541,49 @@ export function handleThinking(
         tier: trace.capability.tier,
         ...(compressions.length > 0 ? { compressions } : {}),
       });
+
+      // Curator-decision events — the emit side of a pipeline that was fully
+      // built (event → execution-engine rationaleLog consumer → trace normalize
+      // → diagnose debrief) but had ZERO callers, so trace/analyze.ts's blindspot
+      // detector flagged "context kept/dropped/compressed (budget-inversion
+      // evidence): emitCuratorDecision has 0 callers" on EVERY run. This is the
+      // trace-side twin of the R4 console line: the projector's per-result
+      // keep-vs-compress decision (the exact budget-inversion class fixed in
+      // 838935cb) now reaches the debrief. Emit each COMPRESSED result (the
+      // budget-relevant evidence); when a render compressed nothing, emit one
+      // "kept" for the last projected result so a clean tool-using run still
+      // clears the blindspot instead of tripping a false positive.
+      const toolResults = trace.messages.filter(
+        (m): m is typeof m & { ref: string } => m.role === "tool_result" && typeof m.ref === "string",
+      );
+      const compressedRefs = new Set<string>();
+      for (const m of toolResults) {
+        if (m.projection !== "preview+ref") continue;
+        compressedRefs.add(m.ref);
+        yield* emitCuratorDecision({
+          taskId: state.taskId,
+          iteration: state.iteration,
+          action: "compressed",
+          targetRef: m.ref,
+          rationale: {
+            why: `overflow: ${m.rawChars ?? m.chars} chars > budget ${m.budget ?? 0} (window ${trace.capability.window}, ${trace.capability.tier}) — projected as preview+ref`,
+            refs: [m.ref],
+          },
+        });
+      }
+      const lastKept = [...toolResults].reverse().find((m) => !compressedRefs.has(m.ref));
+      if (compressedRefs.size === 0 && lastKept) {
+        yield* emitCuratorDecision({
+          taskId: state.taskId,
+          iteration: state.iteration,
+          action: "kept",
+          targetRef: lastKept.ref,
+          rationale: {
+            why: `fit: ${lastKept.chars} chars <= budget ${lastKept.budget ?? trace.capability.window} — kept full`,
+            refs: [lastKept.ref],
+          },
+        });
+      }
     }
 
     if (assemblyDebugEnabled()) {

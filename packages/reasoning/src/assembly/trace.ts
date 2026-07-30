@@ -10,6 +10,8 @@ export interface MessageTrace {
   readonly rawChars?: number;
   /** R4: the per-result budget the projection decision was made against. */
   readonly budget?: number;
+  /** R4: the result_ref this message projects — the curator-decision target. */
+  readonly ref?: string;
 }
 
 /**
