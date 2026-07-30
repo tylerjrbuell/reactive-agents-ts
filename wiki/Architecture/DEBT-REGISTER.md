@@ -520,6 +520,40 @@ diagnostic probes must import workspace src by relative path
 and never run from outside the repo.** Not code debt — a pin for future
 diagnosis so a probe never lies again.
 
+### D-2026-07-30-K — `emitCuratorDecision` + `emitGuardFired` + `llm-exchange` observability gaps — ✅ RESOLVED (harness-improvement hunt)
+
+**✅ RESOLVED 2026-07-30** via the harness-improvement loop (real bench runs,
+qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
+- **`emitCuratorDecision` had 0 callers** despite a full consumer chain (event →
+  execution-engine rationaleLog → normalize → diagnose debrief → blindspot
+  detector). Wired at the projection boundary (`think.ts`); budget-inversion
+  evidence (the 838935cb class) now reaches the debrief. `a8bdc606`.
+- **normalize.ts dropped the projection event's window/tier/compressions** — R4
+  (`c6572c8c`) reached the console but not `rax diagnose replay`. Fixed:
+  `events.ts` + `normalize.ts` carry them. `a8bdc606`.
+- **analyze.ts blindspot detector lied**: reasons claimed "emitCuratorDecision 0
+  callers", "emitGuardFired wired at terminal only" (actually ~9 loop sites),
+  "llm-exchange does not fire on live path" (fires — 881 events/trace). Reasons
+  rewritten to per-run facts; `emitCuratorDecision` removed from
+  KNOWN_DEAD_EMITTERS. `db5cd724`.
+
+### D-2026-07-30-L — open catalog from the 2026-07-30 hunt (not yet fixed)
+
+**Class:** cataloged, lower priority.
+- **`emitAlternativesConsidered` is genuinely dead** (0 callers, verified) — the
+  counterfactual/alternatives signal is blind. Delete (event + normalize case +
+  helper) OR wire at the decision/arbitration site. Clean §4 candidate.
+- **Weak-model (qwen3:4b) file-deliverable thrash:** on rw-2, qwen3:4b burned
+  16.7K tokens / 69s, called `final-answer` 3× but never `file-write`, and the
+  harness assembled a fallback the verifier correctly rejected
+  (`terminatedBy=harness_deliverable`). cogito:8b (8K/67%) and haiku (10.5K/83%)
+  succeed on the SAME task, so it's model weakness, NOT a harness bug — BUT the
+  harness spends the MOST tokens on the run most likely to fail (no early-abort
+  for a doomed weak-model trajectory). Possible `budget-guard`/early-terminate
+  opportunity; risky (could cut recoverable runs) — needs an ablation, do NOT
+  spot-fix. The harness is otherwise clean on capable models (haiku rw-2 = 3
+  iterations, 3 tools, 0 harness signals, no waste).
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)
