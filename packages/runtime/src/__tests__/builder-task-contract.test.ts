@@ -191,7 +191,13 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { window: 1000, nativeFC: true },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, false, {
+    // cogito:8b, not qwen3:14b (2026-07-30 CT-4/CT-5 fix, commit 71946619):
+    // qwen3:14b's own calibration file measured toolCallDialect "none",
+    // contradicting the static table's stale "native-fc" guess — reconciling
+    // that means qwen3:14b now correctly FAILS a nativeFC:true floor, so it
+    // no longer fits this positive-path fixture. cogito:8b is still
+    // native-fc per its own calibration.
+    const res = validateBuild("ollama", "cogito:8b", "cogito:8b", true, false, {
       contract,
       exposedToolNames: exposed,
     });
