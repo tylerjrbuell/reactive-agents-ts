@@ -476,7 +476,10 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: false,
     supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
+    // Reconciled 2026-07-30 to match calibrations/cogito-14b.json (3 runs
+    // averaged, "none") — see the qwen3:14b entry below for why this is a
+    // data-correctness fix with no current routing effect.
+    toolCallDialect: "none",
     source: "static-table",
   },
   "ollama/qwen3:14b": {
@@ -491,7 +494,17 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
+    // Was "native-fc" (a hand-authored guess), contradicting this model's own
+    // empirical calibration file (calibrations/qwen3-14b.json, 3 runs
+    // averaged, toolCallDialect: "none") — reconciled 2026-07-30 in favor of
+    // the measured value (2026-07-29 systems audit, root cause #4). Currently
+    // has NO behavioral effect: select-driver.ts's `_dialect` param is
+    // unused (Stage A, text-parse routing not yet built) and every provider
+    // hardcodes `supportsToolCalling: true` regardless of dialect — this is
+    // a data-correctness fix, not a routing change. See
+    // calibration-static-consistency.test.ts for the guard against this
+    // recurring silently.
+    toolCallDialect: "none",
     source: "static-table",
   },
   // Smaller local-tier siblings used by the public `local-models` bench
@@ -511,7 +524,10 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    toolCallDialect: "native-fc",
+    // Reconciled 2026-07-30 to match calibrations/qwen3-4b.json (measured
+    // "none") — see the qwen3:14b entry above for why this is a
+    // data-correctness fix with no current routing effect.
+    toolCallDialect: "none",
     source: "static-table",
   },
   "ollama/cogito:8b": {
