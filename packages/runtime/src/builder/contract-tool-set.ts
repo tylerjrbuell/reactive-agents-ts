@@ -100,10 +100,14 @@ export interface RequiredToolsConfig {
  * `requiredTools` config; calling this here keeps the union in one place rather
  * than duplicating it at every downstream KernelInput construction site.
  *
- * Semantics mirror the prior inline expression exactly when there is no
- * contract:
- *   `priorConfig ?? (reasoningEnabled && toolsEnabled ? { adaptive: true } : undefined)`
- * A contract with required tools always produces an explicit `tools` list
+ * With no contract, the caller's own `priorConfig` (if any) is authoritative
+ * and nothing is invented: this seam used to default to `{ adaptive: true }`
+ * whenever reasoning + tools were both enabled, which silently re-enabled the
+ * tool-relevance classifier for every `.withReasoning()+.withTools()` caller
+ * that never called `.withRequiredTools()` — defeating classifier.ts:82-116's
+ * 2026-07-28 opt-in fix (cross-tier ablation: 0pp accuracy lift at
+ * +25%..+167% token cost) for the overwhelmingly common builder pattern. A
+ * contract with required tools always produces an explicit `tools` list
  * (which, per classifier.ts:95-103, also suppresses adaptive inference — the
  * caller has declared their requirements, matching the existing static-list
  * semantic).
@@ -117,19 +121,15 @@ export interface RequiredToolsConfig {
 export function mergeContractRequiredTools(
   priorConfig: RequiredToolsConfig | undefined,
   contract: TaskContract | undefined,
-  reasoningEnabled: boolean,
-  toolsEnabled: boolean,
 ): RequiredToolsConfig | undefined {
   const contractRequired = (contract?.tools ?? [])
     .filter((t) => t.kind === "required")
     .map((t) => t.name);
 
-  // No contract-required tools → preserve the prior inline default semantics.
+  // No contract-required tools → the caller's own config, unmodified. Do NOT
+  // invent an adaptive default here (see doc comment above).
   if (contractRequired.length === 0) {
-    return (
-      priorConfig ??
-      (reasoningEnabled && toolsEnabled ? { adaptive: true } : undefined)
-    );
+    return priorConfig;
   }
 
   // Union contract-required names into the existing static list, deduped,

@@ -114,7 +114,7 @@ describe("contractForbiddenTools — derives forbidden names from a contract", (
       tools: [{ kind: "forbidden", name: "shell-execute" }],
       success: successOracle,
     };
-    const required = mergeContractRequiredTools(undefined, contract, false, false);
+    const required = mergeContractRequiredTools(undefined, contract);
     expect(required?.tools ?? []).not.toContain("shell-execute");
   });
 });

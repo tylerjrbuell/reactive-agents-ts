@@ -40,12 +40,15 @@
 // answering the harness out of the agent's script.
 //
 // The provider now separates the two channels (llm-provider/src/testing.ts) and
-// the gateway stamps `purpose` on every mediated request so it can. Which is
-// why the scenario below opens with a `json` turn: that is the CLASSIFIER's
-// turn, consumed on the harness channel, naming the tool the agent is about to
-// use. Without it the classifier returns nothing relevant and the kernel's tool
-// surface prunes to empty — the agent then emits `file-write` and the act phase
-// has nothing to dispatch it to.
+// the gateway stamps `purpose` on every mediated request so it can.
+//
+// The tool-relevance classifier is opt-in (2026-07-28) and its config-layer
+// default was removed 2026-07-29 (TE-1 — `mergeContractRequiredTools` used to
+// silently re-enable it for any `.withReasoning()+.withTools()` caller), so
+// this scenario no longer scripts a classifier turn. `file-write` is instead
+// floored into the visible tool surface directly via `allowedTools`, which
+// sits above the classifier's "relevant" tier in tool-surface.ts's precedence
+// — the same effect, without depending on an LLM round-trip that may not run.
 import { describe, expect, it } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -81,12 +84,6 @@ const TASK = "TERSE_TRIGGER: perform the multi-step write work, one file per ste
 
 function terseWorkScenario(): TestTurn[] {
   return [
-    // HARNESS channel — the tool-relevance classifier's turn. It must name
-    // file-write or the kernel prunes it out of the tool surface and the act
-    // phase has nothing to dispatch. Deliberately `relevant` and not
-    // `required`: a required tool blocks low_delta_guard outright
-    // (`missingRequiredForLowDelta`), which would make this measurement void.
-    { json: { required: [], relevant: ["file-write"] } },
     // AGENT channel — each turn a SHORT assistant message (low token delta)
     // issuing a SUCCESSFUL write to a DISTINCT path (new evidence). That
     // combination is exactly what the guard cannot currently distinguish from
@@ -114,7 +111,10 @@ async function runArm(evidenceReset: boolean): Promise<{
       .withModel("test-model")
       .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(10)
-      .withTools()
+      // `allowedTools`, not `required`: a required tool blocks low_delta_guard
+      // outright (`missingRequiredForLowDelta`), which would make this
+      // measurement void. allowedTools floors visibility without enforcement.
+      .withTools({ allowedTools: ["file-write"] })
       .withObservability({ tracing: { dir } })
       .withTestScenario(terseWorkScenario())
       .build();

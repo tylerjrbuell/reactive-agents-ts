@@ -37,7 +37,7 @@ describe("mergeContractRequiredTools — required names reach requiredTools conf
       tools: [{ kind: "required", name: "file-read" }],
       success: successOracle,
     };
-    const merged = mergeContractRequiredTools(undefined, contract, false, false);
+    const merged = mergeContractRequiredTools(undefined, contract);
     expect(merged?.tools).toContain("file-read");
   });
 
@@ -50,8 +50,6 @@ describe("mergeContractRequiredTools — required names reach requiredTools conf
     const merged = mergeContractRequiredTools(
       { tools: ["file-read"], maxRetries: 2 },
       contract,
-      false,
-      false,
     );
     expect(merged?.tools).toEqual(
       expect.arrayContaining(["file-read", "web-search"]),
@@ -69,8 +67,6 @@ describe("mergeContractRequiredTools — required names reach requiredTools conf
     const merged = mergeContractRequiredTools(
       { tools: ["file-read"] },
       contract,
-      false,
-      false,
     );
     expect(merged?.tools?.filter((t) => t === "file-read")).toHaveLength(1);
   });
@@ -85,7 +81,7 @@ describe("mergeContractRequiredTools — required names reach requiredTools conf
       ],
       success: successOracle,
     };
-    const merged = mergeContractRequiredTools(undefined, contract, false, false);
+    const merged = mergeContractRequiredTools(undefined, contract);
     expect(merged?.tools).toContain("file-read");
     expect(merged?.tools).not.toContain("find");
     expect(merged?.tools).not.toContain("shell-execute");
@@ -98,18 +94,23 @@ describe("mergeContractRequiredTools — required names reach requiredTools conf
       success: successOracle,
     };
     const prior = { adaptive: true as const };
-    const merged = mergeContractRequiredTools(prior, contract, false, false);
+    const merged = mergeContractRequiredTools(prior, contract);
     expect(merged).toEqual(prior);
   });
 
-  it("falls back to the reasoning+tools adaptive default when no contract and no config", () => {
-    const merged = mergeContractRequiredTools(undefined, undefined, true, true);
-    expect(merged).toEqual({ adaptive: true });
+  it("returns undefined when no contract and no prior config — does NOT invent an adaptive default", () => {
+    // Regression pin for 2026-07-29: this seam used to default to
+    // `{ adaptive: true }` whenever reasoning+tools were enabled, silently
+    // re-enabling the opt-in tool-relevance classifier (classifier.ts:82-116)
+    // for every caller that never called `.withRequiredTools()`.
+    const merged = mergeContractRequiredTools(undefined, undefined);
+    expect(merged).toBeUndefined();
   });
 
-  it("returns undefined when no contract, no config, and reasoning/tools off", () => {
-    const merged = mergeContractRequiredTools(undefined, undefined, false, false);
-    expect(merged).toBeUndefined();
+  it("returns the prior config unchanged when no contract, even if it opted into adaptive", () => {
+    const prior = { adaptive: true as const };
+    const merged = mergeContractRequiredTools(prior, undefined);
+    expect(merged).toEqual(prior);
   });
 });
 
@@ -117,8 +118,8 @@ describe("withContract — required tools bind to the construction-read state", 
   it(".withContract({required}) stores _taskContract on the SAME view runtime-construction.ts reads", () => {
     // `runtime-construction.ts` reads builder state via
     // `self as unknown as BuilderRuntimeStateView` and passes `_taskContract`
-    // (+ `_requiredToolsConfig`, `_enableReasoning`, `_enableTools`) into
-    // `mergeContractRequiredTools` at the `requiredTools:` config-assembly site.
+    // (+ `_requiredToolsConfig`) into `mergeContractRequiredTools` at the
+    // `requiredTools:` config-assembly site.
     // `asBuilderState` widens to a SUPERSET of that view, so a passing assertion
     // here proves the helper receives this contract at run time. The helper's
     // union semantics are pinned by the unit suite above; classifier.ts:73-74
@@ -148,8 +149,6 @@ describe("withContract — required tools bind to the construction-read state", 
     const resolved = mergeContractRequiredTools(
       state._requiredToolsConfig,
       state._taskContract,
-      state._enableReasoning,
-      state._enableTools,
     );
     expect(resolved?.tools).toContain("file-read");
   });

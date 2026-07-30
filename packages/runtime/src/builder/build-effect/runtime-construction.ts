@@ -462,17 +462,16 @@ export const buildBaseRuntimeAndEngine = (
       costTrackingOptions: state._costTrackingOptions,
       circuitBreakerConfig: state._circuitBreakerConfig,
       rateLimiterConfig: state._rateLimiterConfig,
-      // Auto-enable adaptive required tools when reasoning + tools are both active
-      // and the user hasn't explicitly configured required tools. This ensures the
-      // kernel's completion guard can enforce that task-critical tools are called.
-      // A `.withContract()` declaring `kind: "required"` tools unions those names
-      // into this config (P2b execute-time enforcement) so they reach
-      // KernelInput.requiredTools via classifier.ts:73-74 → pre-loop-dispatch.ts:149.
+      // The user's own `.withRequiredTools()` config, unmodified unless a
+      // `.withContract()` declares `kind: "required"` tools, which are unioned
+      // in (P2b execute-time enforcement) so they reach KernelInput.requiredTools
+      // via classifier.ts:73-74 → pre-loop-dispatch.ts:149. Does NOT auto-enable
+      // adaptive classification for reasoning+tools callers — that default was
+      // removed 2026-07-29: it silently defeated classifier.ts:82-116's opt-in
+      // fix (0pp accuracy lift at +25%..+167% token cost, cross-tier ablation).
       requiredTools: mergeContractRequiredTools(
         state._requiredToolsConfig,
         state._taskContract,
-        state._enableReasoning,
-        state._enableTools,
       ),
       allowedTools: state._toolsOptions?.allowedTools,
       focusedTools: state._toolsOptions?.focusedTools,

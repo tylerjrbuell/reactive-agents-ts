@@ -42,18 +42,16 @@ const agentTurns = (): TestTurn[] => [
 ];
 
 /**
- * The KERNEL scenario additionally scripts the tool-relevance classifier. Without
- * it the classifier finds nothing relevant, the kernel's tool surface prunes to
- * empty, and the act phase has nothing to dispatch to — the arm would then look
- * inert for a reason that has nothing to do with the meta-loop.
- *
- * The inline path runs no classifier through the gateway, so it gets the agent's
- * turns alone; handing it the `json` turn would feed it to the agent as text.
+ * The KERNEL arms float `file-write` into the visible tool surface via
+ * `allowedTools` (see the `observe()` calls below) rather than scripting the
+ * tool-relevance classifier: the classifier is opt-in (2026-07-28) and its
+ * config-layer default was removed 2026-07-29 (TE-1), so a run with no
+ * explicit `.withRequiredTools()` no longer calls it. Without SOME source of
+ * visibility the kernel's tool surface would prune to empty and the act phase
+ * would have nothing to dispatch to — the arm would then look inert for a
+ * reason that has nothing to do with the meta-loop.
  */
-const kernelScenario = (): TestTurn[] => [
-  { json: { required: [], relevant: ["file-write"] } },
-  ...agentTurns(),
-];
+const kernelScenario = (): TestTurn[] => agentTurns();
 
 interface ArmObservation {
   readonly kinds: ReadonlySet<string>;
@@ -141,7 +139,7 @@ describe("meta-loop reachability, per configuration", () => {
 
   it("the KERNEL path runs the meta-loop but NOT the control plane", async () => {
     const kernel = await observe("kernel", kernelScenario(), (b) =>
-      b.withReasoning({ defaultStrategy: "reactive" }),
+      b.withReasoning({ defaultStrategy: "reactive" }).withTools({ allowedTools: ["file-write"] }),
     );
 
     expect(kernel.toolInvocations).toBeGreaterThan(0);
@@ -156,7 +154,7 @@ describe("meta-loop reachability, per configuration", () => {
 
   it("LONG-HORIZON is what turns the control plane on", async () => {
     const horizon = await observe("kernel-long-horizon", kernelScenario(), (b) =>
-      b.withReasoning({ defaultStrategy: "reactive" }).withLongHorizon(),
+      b.withReasoning({ defaultStrategy: "reactive" }).withLongHorizon().withTools({ allowedTools: ["file-write"] }),
     );
 
     expect(horizon.toolInvocations).toBeGreaterThan(0);
@@ -170,10 +168,10 @@ describe("meta-loop reachability, per configuration", () => {
     // powered than an accuracy delta, and here it is free and deterministic
     // instead of a multi-hour tier-dependent sweep.
     const kernel = await observe("kernel-cmp", kernelScenario(), (b) =>
-      b.withReasoning({ defaultStrategy: "reactive" }),
+      b.withReasoning({ defaultStrategy: "reactive" }).withTools({ allowedTools: ["file-write"] }),
     );
     const horizon = await observe("horizon-cmp", kernelScenario(), (b) =>
-      b.withReasoning({ defaultStrategy: "reactive" }).withLongHorizon(),
+      b.withReasoning({ defaultStrategy: "reactive" }).withLongHorizon().withTools({ allowedTools: ["file-write"] }),
     );
 
     // Control: both arms did the same real work, so the guard difference is

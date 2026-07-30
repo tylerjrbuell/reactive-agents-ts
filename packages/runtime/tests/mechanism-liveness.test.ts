@@ -50,7 +50,6 @@ const TASK = "TERSE_TRIGGER: perform the multi-step write work, one file per ste
  * has nothing to act on.
  */
 const scenario = (): TestTurn[] => [
-  { json: { required: [], relevant: ["file-write"] } },
   ...STEP_PATHS.map((path, i) => ({
     match: i === 0 ? "TERSE_TRIGGER" : `.liveness-${STEP_KEYS[i - 1]}`,
     text: `Deriving the plan for step ${i}: I will write ${path} next.`,
@@ -85,7 +84,10 @@ async function observe(
       .withProvider("test")
       .withModel("test-model")
       .withMaxIterations(10)
-      .withTools()
+      // allowedTools floors file-write into the visible surface without
+      // depending on the (opt-in, as of 2026-07-28/29) tool-relevance
+      // classifier — see low-delta-guard-misfire.test.ts for the same fix.
+      .withTools({ allowedTools: ["file-write"] })
       .withReasoning({ defaultStrategy: "reactive" })
       .withObservability({ tracing: { dir } })
       .withTestScenario(scenario())
