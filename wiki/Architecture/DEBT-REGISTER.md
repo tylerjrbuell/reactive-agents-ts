@@ -448,24 +448,31 @@ conversation-assembly) patched these superseded/dead paths — its
 budget helpers + their tests (§4 dead-code move), OR wire it and prove lift —
 but ResultStore already owns this seam, so deletion is the honest move.
 
-### D-2026-07-30-H — profile `tier` resolves `mid` while the Ollama probe reports `local`
+### D-2026-07-30-H — tuning inversion: `mid` old-result preserve budget (1200) < `local` (4000)
 
-**Class:** confirmed divergence — same family as the window divergence fixed
-`838935cb`, lower severity.
+**Class:** tuning smell — NOT a bug. Filed to prevent a wrong-layer spot-fix.
 
-Live gemma4 run: OLD tool results compress to 1,200 chars =
-`CONTEXT_PROFILES.mid.toolResultMaxChars` (`toolResultPreserveBudget` in
-`assembly/capability.ts`), but `probeOllamaCapability` returns `tier:"local"`
-(local-probe.ts `tierFromParameterSize`), whose preserve budget is 4,000.
-`runner.ts:221` (`defaultTier` = ollama probe tier, else `"mid"`) and
-`fromKernelState` tier plumbing don't carry the probed `local` tier into the
-profile, so older results are crushed 3.3× harder than the tier intends. The
-window fix corrected `maxTokens` (drives the LATEST-result recency budget); the
-`tier` (drives OLD-result preserve budget) is a separate leak on the same path.
+**First read (WRONG, corrected here):** "profile tier resolves `mid` while the
+Ollama probe says `local` — a divergence like the window bug." **Checked:** it
+is NOT a divergence. `resolveProfile` DELIBERATELY maps capable local models
+(8B+: gemma4, cogito:14b, qwen3.5:27b → `mid`; only small ones like
+llama3.2:3b → `local`), and the probe's `tier` field is explicitly
+"informational" (local-probe.ts `tierFromParameterSize` comment). The budget
+correctly uses the PROFILE tier. So `mid` for gemma4 is intended — do NOT
+"fix" the tier to `local`.
 
-**Discharge:** thread the probed capability tier into the resolved profile;
-gate with a deterministic profile-resolution test (tier follows probe) + a
-live run showing an older result retains `local`'s 4,000-char budget.
+**The actual (minor) smell:** `CONTEXT_PROFILES` sets `local.toolResultMaxChars
+= 4000` (bumped 2026-05-28 for filter tasks) but `mid = 1200` (legacy). So a
+CAPABLE model (mid) preserves LESS of an OLD tool result than a TINY model
+(local, 4000), despite equal/larger windows — an inverted budget. Whether 1200
+causes real harm (extra recall/re-fetch churn when the model needs an older
+result) is UNMEASURED.
+
+**Discharge:** owner-gated tuning. Do NOT change budgets speculatively — first
+produce evidence (a multi-iteration task where an old result's compression to
+1200 forces a recall the 4000 budget would have avoided), then run a cross-tier
+ablation on the `mid` preserve value. Absent that evidence this stays a note,
+not a fix.
 
 ### D-2026-07-30-I — `predictNumCtx` + `BUCKETS` designed but never wired (demand-driven num_ctx)
 
