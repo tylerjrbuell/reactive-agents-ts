@@ -82,24 +82,23 @@ export const fetchToolsRegistry = (
       }
     }
 
-    // Log strategy-select summary (capability tools only, hides framework).
+    // Log strategy-select summary + registered-tools summary as SEPARATE
+    // lines under separate tags — they used to share one `[strategy]` line,
+    // which conflated "which strategy is running" with "what's registered"
+    // (2026-07-29 user feedback). The tools line is its own `[tools]` tag,
+    // matching tool-surface-reporter.ts's live `[tools] visible: ...` line
+    // so both read as one concept.
+    //
     // NOTE: this is the full ToolService registry, not what the model can
     // actually see this turn — lazy disclosure (tool-surface.ts) prunes the
     // per-iteration visible set down from this list based on required/
     // relevant/floor/discovered/already-used tools, and can legitimately show
-    // far fewer. Labelled "registered" (not "tools") so this doesn't read as
-    // a promise about turn-1 visibility — that was a real point of user
-    // confusion (2026-07-29): the only tool-list line printed at normal
-    // verbosity was this one, and it answered "what's registered", not "what
-    // can the model call right now".
+    // far fewer. Labelled "registered" so it doesn't read as a promise about
+    // turn-1 visibility; see tool-surface-reporter.ts's `[tools] visible:`
+    // line for the actual per-turn answer.
     if (obs && isNormal) {
-      const toolNames = cachedToolDefs
-        .map((t: any) => t.name as string)
-        .filter((n) => !FRAMEWORK_TOOL_NAMES.has(n))
-        .join(", ");
-      const toolsInfo = toolNames ? ` | tools registered: ${toolNames}` : "";
       yield* obs
-        .info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
+        .info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}`)
         .pipe(
           Effect.catchAll((err) =>
             emitErrorSwallowed({
@@ -108,6 +107,22 @@ export const fetchToolsRegistry = (
             }),
           ),
         );
+      const toolNames = cachedToolDefs
+        .map((t: any) => t.name as string)
+        .filter((n) => !FRAMEWORK_TOOL_NAMES.has(n))
+        .join(", ");
+      if (toolNames) {
+        yield* obs
+          .info(`◉ [tools]      registered: ${toolNames}`)
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "runtime/src/engine/phases/agent-loop/setup/tools-registry.ts:tools-summary",
+                tag: errorTag(err),
+              }),
+            ),
+          );
+      }
     }
 
     return cachedToolDefs;
