@@ -383,6 +383,126 @@ already showed that surface isn't where the gap is.
 
 ---
 
+### D-2026-07-30-F — `renderValue("bullets")` explodes nested user-objects into ~20 URL noise fields
+
+**Class:** confirmed correctness/waste — measured against workspace src (NOT
+the `~/.bun/install/cache` published v0.14.0; see the probe-resolution note
+in D-2026-07-30-J).
+
+The active tool-result renderer (`packages/tools/src/skills/render-result.ts`,
+used live via `assembly/ResultStore.preview`/`materialize`) leads each record
+with its salient field (`9e36b78d`) but `compactObject` then appends EVERY
+other flattened scalar. For a GitHub commit whose `author`/`committer` is the
+full REST user object, that is ~20 navigation-URL fields per record
+(`author.avatar_url`, `.events_url`, `.followers_url`, …). **Measured: a
+25-commit `--jq '{sha, message, author: .author}'` result renders to 30,266
+chars vs 2,043 for message-only — ~93% is data the model never needs to
+reason about (it acts on the full data by `result_ref`).** Pure token waste on
+every tier; on overflow it also buries the salient fields the model DOES need.
+
+**Verdict:** SILENT — works (no crash) but wastes context every structured-API
+call with nested objects.
+
+**Do NOT bandaid with a `*_url` keyword blocklist** (measured only 51%
+reduction, and it's fragile — hides fields a task may need). Principled fix:
+a nested object field should render its OWN salient identity
+(`author={login,…20 fields}` → `author=HarperZ9`) via recursive `findSalient`,
+not a full flatten. Design tension to resolve first: `renderValue` is shared
+by `ResultStore.preview` (lean is fine — full data is recoverable by ref) AND
+`materialize` (the actual `write-result-to-file` deliverable — must not lose
+columns the user asked for). Likely a preview-only compact mode.
+
+**Discharge:** before/after token measurement on ≥2 shapes (nested-user-object
++ nested `commit.author`) AND a live gemma4 run confirming the model still gets
+author identity; red-on-cut render-result test.
+
+### D-2026-07-30-G — `applyAgeAwareCuration` is dead code (zero callers, "DEFAULT-ON" comment lies) — ✅ RESOLVED (deleted 2026-07-30)
+
+**✅ RESOLVED 2026-07-30:** deleted `applyAgeAwareCuration` + `curationAgeAware`
++ `recentCharBudget`/`agedCharBudget` + the fraction/floor consts
+(tool-formatting.ts) and `age-aware-curation.test.ts`. Confirmed zero
+production callers + not exported before deleting. Reasoning suite 2582/0.
+
+**Class:** ORPHAN / FALSE.
+
+`applyAgeAwareCuration` + `curationAgeAware` +
+`recentCharBudget`/`agedCharBudget` (`kernel/capabilities/attend/tool-formatting.ts`
+~L549–700) carry an extensive "DEFAULT-ON (opt-out via RA_CURATION_AGEAWARE=0)…
+the kernel calls applyAgeAwareCuration whenever curationAgeAware() is true"
+doctrine. **Grep: zero non-test callers repo-wide.** The live tool-result
+compression path is `assembly/ResultStore` via `think.ts:201`
+`fromKernelState`→`project()` (unconditional). The legacy
+`compressToolResult` still runs at `tool-execution.ts:623` but only to POPULATE
+the scratchpad (full value → ResultStore); its `[STORED:]` preview text is a
+fallback used only when a result has no `storedKey` — superseded for anything
+large. `conversation-assembly.ts`'s `TOOL_RESULT_INLINE_CAP` choice is
+re-materialized away by `fromKernelState`.
+
+**Impact on recent fixes:** `e204ab49` (compressToolResult NDJSON +
+conversation-assembly) patched these superseded/dead paths — its
+"live-verified end to end" claim is not credible for the mechanism described.
+`9e36b78d` (render-result bullets) DOES reach the live path but is incomplete
+(see D-2026-07-30-F).
+
+**Discharge:** DELETE `applyAgeAwareCuration` + `curationAgeAware` + the two
+budget helpers + their tests (§4 dead-code move), OR wire it and prove lift —
+but ResultStore already owns this seam, so deletion is the honest move.
+
+### D-2026-07-30-H — profile `tier` resolves `mid` while the Ollama probe reports `local`
+
+**Class:** confirmed divergence — same family as the window divergence fixed
+`838935cb`, lower severity.
+
+Live gemma4 run: OLD tool results compress to 1,200 chars =
+`CONTEXT_PROFILES.mid.toolResultMaxChars` (`toolResultPreserveBudget` in
+`assembly/capability.ts`), but `probeOllamaCapability` returns `tier:"local"`
+(local-probe.ts `tierFromParameterSize`), whose preserve budget is 4,000.
+`runner.ts:221` (`defaultTier` = ollama probe tier, else `"mid"`) and
+`fromKernelState` tier plumbing don't carry the probed `local` tier into the
+profile, so older results are crushed 3.3× harder than the tier intends. The
+window fix corrected `maxTokens` (drives the LATEST-result recency budget); the
+`tier` (drives OLD-result preserve budget) is a separate leak on the same path.
+
+**Discharge:** thread the probed capability tier into the resolved profile;
+gate with a deterministic profile-resolution test (tier follows probe) + a
+live run showing an older result retains `local`'s 4,000-char budget.
+
+### D-2026-07-30-I — `predictNumCtx` + `BUCKETS` designed but never wired (demand-driven num_ctx)
+
+**Class:** ORPHAN.
+
+`ResolvedCapability.predictNumCtx(assembledPromptTokens)` +
+`BUCKETS = [8192…131072]` (`assembly/capability.ts`) implement demand-driven
+context bucketing (allocate the next bucket ≥ actual assembled size). **Grep:
+zero callers.** The wire `num_ctx` (`local.ts resolveOllamaNumCtx`) is instead
+a FIXED per-model value (`capability.recommendedNumCtx`), so small prompts
+over-allocate KV cache and there's no automatic growth for big results within
+the model's max. Wiring this would cut local wall-clock/VRAM on small turns and
+lift the ceiling on big ones — but it's a behavioral change needing a
+cross-tier ablation, not a silent flip.
+
+**Discharge:** owner-gated; wire `predictNumCtx` → `resolveOllamaNumCtx` with a
+before/after VRAM+latency measurement, or delete the dead machinery.
+
+### D-2026-07-30-J — out-of-repo probe scripts resolve the published `~/.bun` cache, not workspace src
+
+**Class:** methodology hazard (reinforces the standing bun-cache trap).
+
+During this session a measurement script under the scratchpad imported
+`@reactive-agents/tools` and silently resolved
+`~/.bun/install/cache/@reactive-agents/tools@0.14.0/dist/index.js` (the
+PUBLISHED build), not workspace `packages/tools/src` — so it measured stale
+code and manufactured a false "parseNdjson fails" result. `require.resolve`
+returned the cache path both in AND out of repo, yet the LIVE `bun run
+scratch.ts` used workspace src (proven: the just-added R4 `[ctx]` console
+line, which exists ONLY in workspace, appeared in the live run). **Rule:
+diagnostic probes must import workspace src by relative path
+(`.../packages/tools/src/skills/render-result.ts`), never the package name,
+and never run from outside the repo.** Not code debt — a pin for future
+diagnosis so a probe never lies again.
+
+---
+
 ## 6. The gates that keep it fixed (no fix is done without one)
 
 | Gate | Kills | Level |
