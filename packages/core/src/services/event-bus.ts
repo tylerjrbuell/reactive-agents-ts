@@ -1149,6 +1149,25 @@ export type AgentEvent =
       readonly refs: readonly string[];
       readonly droppedRefs: readonly string[];
       readonly chars: number;
+      /**
+       * R4 (2026-07-30) — tool-result compression detail for THIS render, so the
+       * "a tool result was crushed from X to Y under budget B at window W" failure
+       * class is visible in one trace/console line instead of RA_PROMPT_DUMP
+       * archaeology. `window`/`tier` are the resolved capability the budgets came
+       * from (the divergence signal: a 2048 window here vs a 32768 wire num_ctx
+       * meant the budget/wire split that drove live fabrication, fixed 838935cb).
+       * `compressions` lists only results the projector replaced with a
+       * preview+ref (the interesting case); a render with none is a full-fidelity
+       * turn. Optional — absent on non-assembly paths and pre-R4 replays.
+       */
+      readonly window?: number;
+      readonly tier?: string;
+      readonly compressions?: readonly {
+        readonly tool: string;
+        readonly rawChars: number;
+        readonly shownChars: number;
+        readonly budget: number;
+      }[];
     }
   | {
       /**

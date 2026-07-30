@@ -43,6 +43,23 @@ describe("projectResults — full | preview+ref | cleared", () => {
     expect(tr.content.length).toBeLessThanOrEqual(input.capability.recencyBudgetChars + 400);
     expect(ctx.trace.messages.some((m) => m.projection === "preview+ref")).toBe(true);
   });
+  it("R4: preview+ref trace message carries tool + rawChars + budget for the compression report", () => {
+    // The compression reporter (runtime/context-compression-reporter.ts) and the
+    // enriched ProjectionRenderedEmitted event render `raw→shown (budget @
+    // window)` from exactly these fields. Without them the "result crushed X→Y"
+    // signal is invisible (the 2026-07-30 divergence took RA_PROMPT_DUMP to find).
+    const big = Array.from({ length: 50 }, (_, i) => ({ sha: `s${i}`, commit: { message: `message ${i} ${"x".repeat(50)}` } }));
+    const { input } = ctxWith(big);
+    const ctx = projectResultsStage({ ...input, systemPrompt: "", messages: [], toolSchemas: [], trace: emptyTrace(input.capability) });
+    const tr = ctx.trace.messages.find((m) => m.projection === "preview+ref");
+    expect(tr).toBeDefined();
+    expect(tr!.tool).toBe("github/list_commits");
+    // rawChars = the FULL pre-projection render, strictly larger than what the
+    // model actually saw (the whole point of the signal).
+    expect(tr!.rawChars).toBeGreaterThan(tr!.chars);
+    expect(tr!.budget).toBeGreaterThan(0);
+  });
+
   it("FITTING result → present full", () => {
     const small = [{ sha: "s0", commit: { message: "tiny" } }];
     const { input } = ctxWith(small);

@@ -368,6 +368,14 @@ export function emitProjectionRendered(args: {
   readonly refs: readonly string[];
   readonly droppedRefs: readonly string[];
   readonly chars: number;
+  readonly window?: number;
+  readonly tier?: string;
+  readonly compressions?: readonly {
+    readonly tool: string;
+    readonly rawChars: number;
+    readonly shownChars: number;
+    readonly budget: number;
+  }[];
 }): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
@@ -382,6 +390,9 @@ export function emitProjectionRendered(args: {
         refs: args.refs,
         droppedRefs: args.droppedRefs,
         chars: args.chars,
+        ...(args.window !== undefined ? { window: args.window } : {}),
+        ...(args.tier !== undefined ? { tier: args.tier } : {}),
+        ...(args.compressions !== undefined ? { compressions: args.compressions } : {}),
       })
       .pipe(
         Effect.catchAll((err) =>

@@ -596,9 +596,20 @@ export const buildBaseRuntimeAndEngine = (
     const { RuntimeToolSurfaceReporterLive } = yield* Effect.promise(
       () => import("../../tool-surface-reporter.js"),
     );
+    // Same unconditional/self-gated contract: surfaces tool-result compression
+    // (raw→shown, budget, window) so an overflowing result the model can't see
+    // in full is visible on sight rather than via RA_PROMPT_DUMP archaeology.
+    const { RuntimeContextCompressionReporterLive } = yield* Effect.promise(
+      () => import("../../context-compression-reporter.js"),
+    );
     const runtimeWithReporters: Layer.Layer<unknown, unknown, unknown> = Layer.merge(
-      runtimeWithCortex,
-      (RuntimeToolSurfaceReporterLive as Layer.Layer<unknown>).pipe(
+      Layer.merge(
+        runtimeWithCortex,
+        (RuntimeToolSurfaceReporterLive as Layer.Layer<unknown>).pipe(
+          Layer.provide(baseRuntimeView),
+        ),
+      ),
+      (RuntimeContextCompressionReporterLive as Layer.Layer<unknown>).pipe(
         Layer.provide(baseRuntimeView),
       ),
     );

@@ -4,6 +4,12 @@ export interface MessageTrace {
   readonly role: string;
   readonly chars: number;
   readonly projection?: "full" | "preview+ref" | "cleared";
+  /** R4: tool name for a tool_result message (drives the compression report). */
+  readonly tool?: string;
+  /** R4: full pre-projection size, so a preview+ref carries the "X→Y" it hid. */
+  readonly rawChars?: number;
+  /** R4: the per-result budget the projection decision was made against. */
+  readonly budget?: number;
 }
 
 /**

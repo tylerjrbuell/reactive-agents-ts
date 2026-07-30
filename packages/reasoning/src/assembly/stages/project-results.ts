@@ -123,7 +123,14 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
         ...messages,
         { role: "tool_result", toolCallId: e.callId, toolName: call?.tool ?? "tool", content },
       ];
-      trace = recordMessage(trace, { role: "tool_result", chars: content.length, projection });
+      trace = recordMessage(trace, {
+        role: "tool_result",
+        chars: content.length,
+        projection,
+        tool: call?.tool ?? stored.tool ?? "tool",
+        rawChars: fullText.length,
+        budget,
+      });
       resultSeen++;
     }
   }

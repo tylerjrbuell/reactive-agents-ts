@@ -512,6 +512,24 @@ export function handleThinking(
     // line (sections + reachable refs + dropped refs + size) mirroring
     // contract-compiled / assessment. Best-effort: no bus → no-op.
     if (trace.projection) {
+      // R4 — carry the per-result compression decisions + the capability window
+      // the budgets came from, so the "crushed X→Y under budget B @ window W"
+      // failure class surfaces in one trace/console line. Only preview+ref
+      // results (the ones the model can't see in full) are interesting.
+      const compressions = trace.messages
+        .filter(
+          (m): m is typeof m & { tool: string; rawChars: number; budget: number } =>
+            m.projection === "preview+ref" &&
+            typeof m.tool === "string" &&
+            typeof m.rawChars === "number" &&
+            typeof m.budget === "number",
+        )
+        .map((m) => ({
+          tool: m.tool,
+          rawChars: m.rawChars,
+          shownChars: m.chars,
+          budget: m.budget,
+        }));
       yield* emitProjectionRendered({
         taskId: state.taskId,
         iteration: state.iteration,
@@ -519,6 +537,9 @@ export function handleThinking(
         refs: trace.projection.refs,
         droppedRefs: trace.projection.droppedRefs,
         chars: trace.projection.chars,
+        window: trace.capability.window,
+        tier: trace.capability.tier,
+        ...(compressions.length > 0 ? { compressions } : {}),
       });
     }
 
