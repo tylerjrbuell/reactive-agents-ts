@@ -383,7 +383,19 @@ already showed that surface isn't where the gap is.
 
 ---
 
-### D-2026-07-30-F — `renderValue("bullets")` explodes nested user-objects into ~20 URL noise fields
+### D-2026-07-30-F — `renderValue("bullets")` explodes nested user-objects into ~20 URL noise fields — ✅ RESOLVED (compact preview, 2026-07-30)
+
+**✅ RESOLVED 2026-07-30:** added `renderValue(value, format, { compact })` +
+`NOISE_KEY` (render-result.ts). `ResultStore.preview` now renders `compact:true`
+(drops `*_url`/`node_id`/`gravatar_id`/`avatar` — never selection criteria, full
+data recoverable by `result_ref`); `materialize` (the file deliverable) stays
+byte-complete. Measured 30,266→6,345 chars (79% saved) on the 25-commit
+user-object shape, message/author.login/sha all retained. Red-on-cut tests:
+render-result.test.ts (compact vs full) + result-store.test.ts (preview compact,
+materialize complete). Tools 985/0, reasoning 0 fail. **Possible future
+refinement (not done):** recursive nested-salient extraction
+(`author={login,…}`→`author=login`) would beat the keyword-class drop, but the
+non-fragile URL-class drop banks the bulk of the win safely.
 
 **Class:** confirmed correctness/waste — measured against workspace src (NOT
 the `~/.bun/install/cache` published v0.14.0; see the probe-resolution note

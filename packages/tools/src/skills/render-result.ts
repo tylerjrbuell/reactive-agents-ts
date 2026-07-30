@@ -9,7 +9,29 @@
 
 export type ResultFormat = "bullets" | "json" | "table" | "lines";
 
+/** Render options. `compact` drops navigation/metadata noise (see NOISE_KEY) —
+ * used by the PREVIEW path (model reasons over it; full data stays recoverable
+ * by result_ref) but NOT by the materialize/file-deliverable path (which must
+ * stay byte-complete). */
+export interface RenderOptions {
+  readonly compact?: boolean;
+}
+
 const SALIENT_FIELDS = ["message", "title", "name", "text", "summary", "content"];
+
+/**
+ * Navigation/metadata field-key class that is NEVER a selection criterion —
+ * REST APIs (GitHub/GitLab/…) attach ~15–20 `*_url` + `node_id` + `gravatar_id`
+ * + `avatar_url` fields to every user/commit object. In a `compact` preview they
+ * are dropped: a 25-commit `{sha, message, author: <user object>}` result shrank
+ * 30,266→6,345 chars (79% saved) while every field the model selects on
+ * (message, author.login, sha, date) survived (D-2026-07-30-F). Matched against
+ * the LAST dot-segment of a flattened key so `author.avatar_url` is caught.
+ */
+const NOISE_KEY = /(_url|url|node_id|gravatar_id|avatar)$/i;
+
+const isNoiseKey = (flatKey: string): boolean =>
+  NOISE_KEY.test(flatKey.split(".").pop() ?? flatKey);
 
 function firstLine(s: string): string {
   const nl = s.indexOf("\n");
@@ -91,10 +113,11 @@ function findSalient(flat: Record<string, unknown>): { key: string; value: strin
   return undefined;
 }
 
-/** Every scalar field (dot-flattened) rendered compactly — `k=v | k=v`. */
-function compactObject(item: Record<string, unknown>, exceptKey?: string): string {
+/** Every scalar field (dot-flattened) rendered compactly — `k=v | k=v`. In
+ * `compact` mode, navigation/metadata noise keys (NOISE_KEY) are dropped. */
+function compactObject(item: Record<string, unknown>, exceptKey?: string, compact = false): string {
   return Object.entries(flattenRecord(item))
-    .filter(([k, v]) => k !== exceptKey && v !== null && typeof v !== "object")
+    .filter(([k, v]) => k !== exceptKey && v !== null && typeof v !== "object" && (!compact || !isNoiseKey(k)))
     .map(([k, v]) => `${k}=${String(v)}`)
     .join(" | ");
 }
@@ -108,16 +131,16 @@ function compactObject(item: Record<string, unknown>, exceptKey?: string): strin
  * (2026-07-30, live gh-cli run — the general failure mode: any "bullets"
  * caller on any multi-field record loses every field but one).
  */
-function renderRecordLine(item: Record<string, unknown>): string {
+function renderRecordLine(item: Record<string, unknown>, compact = false): string {
   const flat = flattenRecord(item);
   const salient = findSalient(flat);
-  const rest = compactObject(item, salient?.key);
+  const rest = compactObject(item, salient?.key, compact);
   if (salient && rest) return `${salient.value} (${rest})`;
   if (salient) return salient.value;
   return rest || "{}";
 }
 
-function renderTable(arr: unknown[]): string {
+function renderTable(arr: unknown[], compact = false): string {
   const objs = arr.filter(
     (i): i is Record<string, unknown> => !!i && typeof i === "object" && !Array.isArray(i),
   );
@@ -125,7 +148,11 @@ function renderTable(arr: unknown[]): string {
   const flat = objs.map((o) => flattenRecord(o));
   const cols = Array.from(
     flat.reduce<Set<string>>((set, o) => {
-      for (const k of Object.keys(o)) if (typeof o[k] !== "object") set.add(k);
+      for (const k of Object.keys(o)) {
+        if (typeof o[k] === "object") continue;
+        if (compact && isNoiseKey(k)) continue;
+        set.add(k);
+      }
       return set;
     }, new Set()),
   );
@@ -135,21 +162,24 @@ function renderTable(arr: unknown[]): string {
   return [head, sep, ...rows].join("\n");
 }
 
-/** Deterministically render a value into the requested shape — ALL items. */
-export function renderValue(value: unknown, format: ResultFormat): string {
+/** Deterministically render a value into the requested shape — ALL items.
+ * `opts.compact` drops navigation/metadata noise (NOISE_KEY) for the preview
+ * path; the default (materialize/file deliverable) stays byte-complete. */
+export function renderValue(value: unknown, format: ResultFormat, opts?: RenderOptions): string {
   if (format === "json") return JSON.stringify(value, null, 2);
 
+  const compact = opts?.compact ?? false;
   const arr = asArray(value);
   if (!arr) {
     return typeof value === "string" ? value : JSON.stringify(value, null, 2);
   }
-  if (format === "table") return renderTable(arr);
+  if (format === "table") return renderTable(arr, compact);
 
   const prefix = format === "bullets" ? "- " : "";
   return arr
     .map((item) => {
       if (item && typeof item === "object" && !Array.isArray(item)) {
-        return prefix + renderRecordLine(item as Record<string, unknown>);
+        return prefix + renderRecordLine(item as Record<string, unknown>, compact);
       }
       return prefix + String(item);
     })

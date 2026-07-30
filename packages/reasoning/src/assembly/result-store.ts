@@ -88,7 +88,12 @@ export class ResultStore {
   preview(ref: string, budgetChars: number): string {
     const s = this.map.get(ref);
     if (!s) return `[unknown result_ref="${ref}"]`;
-    const fullText = renderValue(s.value, "bullets");
+    // compact: this is the model's REASONING view — drop navigation/metadata
+    // noise (author.*_url ×15/record on GitHub shapes) so the budget is spent on
+    // selection-criteria fields, not URLs. The full untouched data stays
+    // recoverable via `write_result_to_file(result_ref)` / recall, and
+    // `materialize()` (the actual file deliverable) still renders byte-complete.
+    const fullText = renderValue(s.value, "bullets", { compact: true });
     if (fullText.length <= budgetChars) return fullText;
 
     // H2: recall read-hint in the gate-matched vocabulary (see summarize()).

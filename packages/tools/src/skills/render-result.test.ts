@@ -94,3 +94,59 @@ describe("renderValue — bullets never drops a scalar field", () => {
     expect(rendered).toContain("- Result Two");
   });
 });
+
+describe("renderValue — compact preview drops navigation/metadata noise (D-2026-07-30-F)", () => {
+  // A GitHub commit whose `author` is the full REST user object: ~15 *_url
+  // fields + node_id/gravatar/avatar per record. In the model's REASONING view
+  // those are pure waste (never a selection criterion; full data recoverable by
+  // ref). compact:true drops them; the default (materialize) keeps everything.
+  const withUserObject = [
+    {
+      sha: "abc1234",
+      message: "fix: repair guard",
+      author: {
+        login: "alice",
+        id: 42,
+        avatar_url: "https://avatars.example/u/42",
+        events_url: "https://api.example/users/alice/events{/privacy}",
+        followers_url: "https://api.example/users/alice/followers",
+        html_url: "https://github.com/alice",
+        node_id: "MDQ6VXNlcjQy",
+        gravatar_id: "",
+        type: "User",
+      },
+    },
+  ];
+
+  it("compact drops *_url / node_id / gravatar / avatar but keeps salient + identity", () => {
+    const compact = renderValue(withUserObject, "bullets", { compact: true });
+    // salient headline + the fields a model selects on survive
+    expect(compact).toContain("fix: repair guard");
+    expect(compact).toContain("sha=abc1234");
+    expect(compact).toContain("author.login=alice");
+    // navigation/metadata noise is gone
+    expect(compact).not.toContain("_url");
+    expect(compact).not.toContain("node_id");
+    expect(compact).not.toContain("gravatar");
+    expect(compact).not.toContain("avatar_url");
+    // and it's dramatically smaller than the full render
+    const full = renderValue(withUserObject, "bullets");
+    expect(compact.length).toBeLessThan(full.length * 0.6);
+  });
+
+  it("default (materialize path) is byte-complete — every field retained", () => {
+    const full = renderValue(withUserObject, "bullets");
+    expect(full).toContain("author.avatar_url=");
+    expect(full).toContain("author.events_url=");
+    expect(full).toContain("author.node_id=");
+    expect(full).toContain("author.login=alice");
+  });
+
+  it("compact table drops noise columns; default table keeps them", () => {
+    const compactTable = renderValue(withUserObject, "table", { compact: true });
+    expect(compactTable).not.toContain("author.avatar_url");
+    expect(compactTable).toContain("author.login");
+    const fullTable = renderValue(withUserObject, "table");
+    expect(fullTable).toContain("author.avatar_url");
+  });
+});

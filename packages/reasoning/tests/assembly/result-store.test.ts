@@ -92,6 +92,38 @@ describe("ResultStore.preview() — content-aware bounded overflow projection", 
     const ref = s.put("file-read", bigDoc);
     expect(s.preview(ref, 1500)).toContain(ref);
   });
+
+  it("preview is COMPACT (drops *_url noise) but materialize stays byte-complete (D-2026-07-30-F)", () => {
+    // A commit array whose author is the full REST user object — the shape that
+    // buried the model's selection fields under ~15 URL fields/record.
+    const commits = Array.from({ length: 20 }, (_, i) => ({
+      sha: `sha${i}`,
+      message: `commit ${i}`,
+      author: {
+        login: `user${i}`,
+        avatar_url: `https://avatars.example/u/${i}`,
+        events_url: `https://api.example/users/user${i}/events{/privacy}`,
+        followers_url: `https://api.example/users/user${i}/followers`,
+        html_url: `https://github.com/user${i}`,
+        node_id: `NODE${i}`,
+      },
+    }));
+    const s = new ResultStore();
+    const ref = s.put("gh-cli", commits);
+    // preview (model's reasoning view) — noise dropped, selection fields kept.
+    // Budget generous so we test the compact RENDER, not the truncation branch.
+    const p = s.preview(ref, 100_000);
+    expect(p).not.toContain("_url");
+    expect(p).not.toContain("node_id");
+    expect(p).toContain("author.login=user0");
+    expect(p).toContain("commit 0");
+    // materialize (the actual file deliverable) — byte-complete, noise retained.
+    const full = s.materialize(ref, "bullets");
+    expect(full).toContain("author.avatar_url=");
+    expect(full).toContain("author.node_id=");
+    // and the compact preview is much smaller than the full materialize.
+    expect(p.length).toBeLessThan(full.length * 0.6);
+  });
 });
 
 // ── H2 (2026-07-08 sweep, audit 03-F2): recall read-hint vocabulary ───────────
