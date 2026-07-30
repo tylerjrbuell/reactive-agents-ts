@@ -2280,13 +2280,41 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             )
         }
 
+        // Eager capability prime — run the provider's live discovery probe
+        // (Ollama /api/show) and write through to the process-wide registry
+        // BEFORE we resolve the context profile below AND before validateBuild's
+        // synchronous PreFlight resolve. Ordering is load-bearing: the context
+        // profile (tier + window/maxTokens) is frozen HERE from the resolved
+        // capability, and the wire `num_ctx` resolves later at call time from the
+        // SAME registry. If prime ran AFTER the profile resolve, the profile
+        // froze to the 2048-ctx `source: "fallback"` while the wire got the real
+        // probed window (e.g. gemma4 32768) — a 16× budget/wire divergence that
+        // starved every tool-result compression budget (live-confirmed 2026-07-30:
+        // a 25-KB gh-cli result crushed to ~1.2 KB → model fabricated the tail).
+        // Best-effort: never throws, no-op for providers without a probe.
+        const { primeCapability, registerUserSuppliedCapability } = await import(
+            '@reactive-agents/llm-provider'
+        )
+        await primeCapability(this._provider, this._model)
+        // Developer-declared window via `.withModel({ numCtx })` wins over the
+        // probe/table AND must reach the profile too — so it has to register
+        // BEFORE the profile resolve below (one knob moves both budget + wire).
+        // Also the escape hatch when the probe is unavailable (air-gapped,
+        // proxied gateway): otherwise validateBuild fails on a `source:
+        // "fallback"` capability and tells the user to patch STATIC_CAPABILITIES
+        // for a fact they just supplied. No-op when the probe or table won.
+        if (this._numCtx !== undefined && this._model !== undefined) {
+            registerUserSuppliedCapability(this._provider, this._model, this._numCtx)
+        }
+
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
-        // (recommendedNumCtx) instead of the tier placeholder — otherwise the
-        // placeholder (e.g. mid=32768) masqueraded as a caller-set cap and the
-        // runner's applyCapabilityMaxTokens skipped resolution, so builder agents
-        // ran at 32768 instead of e.g. haiku's 200k (createRuntime resolved fine
-        // → a same-model asymmetry between the two construction paths).
+        // (recommendedNumCtx — now probe/numCtx-aware thanks to the prime above)
+        // instead of the tier placeholder — otherwise the placeholder (e.g.
+        // mid=32768) masqueraded as a caller-set cap and the runner's
+        // applyCapabilityMaxTokens skipped resolution, so builder agents ran at
+        // 32768 instead of e.g. haiku's 200k (createRuntime resolved fine → a
+        // same-model asymmetry between the two construction paths).
         if (!this._contextProfile && this._model) {
             const { resolveProfileWithWindow } = await import(
                 '@reactive-agents/reasoning'
@@ -2329,26 +2357,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 hasMcpServers: this._mcpServers.length > 0,
             }
         }
-        // Eager capability prime — run the provider's live discovery probe
-        // (Ollama /api/show) and write through to the process-wide registry
-        // BEFORE validateBuild's synchronous PreFlight resolve. Without this any
-        // pulled model not in the static table resolves at the 2048-ctx
-        // `source: "fallback"`, tripping the honesty gate AND under-sizing the
-        // first reasoning iteration. Best-effort: never throws, no-op for
-        // providers without a probe (anthropic/openai/…).
-        const { primeCapability, registerUserSuppliedCapability } = await import(
-            '@reactive-agents/llm-provider'
-        )
-        await primeCapability(this._provider, this._model)
-        // Probe unavailable (air-gapped, proxied gateway, unreachable endpoint)
-        // but the caller declared the window via `.withModel({ numCtx })`? Use
-        // it. Otherwise validateBuild below fails on a `source: "fallback"`
-        // capability and tells the user to patch STATIC_CAPABILITIES for a fact
-        // they just supplied. No-op when the probe or the static table won.
-        if (this._numCtx !== undefined && this._model !== undefined) {
-            registerUserSuppliedCapability(this._provider, this._model, this._numCtx)
-        }
-
         const validation = validateBuild(
             this._provider,
             this._model,

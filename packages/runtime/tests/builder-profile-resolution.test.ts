@@ -33,6 +33,33 @@ describe("Builder auto-resolves context profile from model name", () => {
     expect(agent).toBeInstanceOf(ReactiveAgent);
   });
 
+  it("developer-supplied numCtx reaches the resolved context profile (prime-before-profile ordering)", async () => {
+    // Regression pin for the 2026-07-30 budget/wire divergence: the builder
+    // resolved the context profile (tier + maxTokens/window) from the capability
+    // registry BEFORE priming it (probe + user-supplied numCtx), so the profile
+    // froze to the 2048-ctx `source: "fallback"` while the wire num_ctx resolved
+    // later from the primed registry. Every tool-result compression budget then
+    // derived from the starved 2048 window — a 25-KB result crushed to ~1.2 KB,
+    // driving live fabrication. The fix moves prime + registerUserSuppliedCapability
+    // ABOVE the profile resolve so ONE knob (`numCtx`) moves both budget and wire.
+    //
+    // Deterministic (no Ollama): a novel model name resolves to `fallback`, so
+    // `.withModel({ numCtx })` is the sole window source. If registration ran
+    // AFTER the profile resolve (the bug), maxTokens would be the 2048 fallback.
+    const declaredNumCtx = 65536;
+    const uniqueModel = `budget-divergence-pin-${Date.now()}`;
+    const builder = ReactiveAgents.create()
+      .withName("numctx-reaches-profile")
+      .withProvider("test")
+      .withModel({ model: uniqueModel, numCtx: declaredNumCtx });
+    await builder.build();
+
+    const resolvedProfile = (
+      builder as unknown as { _contextProfile?: { maxTokens?: number } }
+    )._contextProfile;
+    expect(resolvedProfile?.maxTokens).toBe(declaredNumCtx);
+  });
+
   it("explicit withContextProfile overrides auto-resolution", async () => {
     // Even though model name would resolve to "mid", explicit profile wins
     const agent = await ReactiveAgents.create()
