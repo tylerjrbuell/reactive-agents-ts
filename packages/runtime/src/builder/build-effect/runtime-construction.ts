@@ -590,9 +590,22 @@ export const buildBaseRuntimeAndEngine = (
           )
         : baseRuntimeView;
 
+    // Unconditional (unlike the opt-in cortex reporter above): prints the
+    // ACTUAL per-iteration visible tool surface, self-gated on obs/verbosity
+    // exactly like every other console line — see tool-surface-reporter.ts.
+    const { RuntimeToolSurfaceReporterLive } = yield* Effect.promise(
+      () => import("../../tool-surface-reporter.js"),
+    );
+    const runtimeWithReporters: Layer.Layer<unknown, unknown, unknown> = Layer.merge(
+      runtimeWithCortex,
+      (RuntimeToolSurfaceReporterLive as Layer.Layer<unknown>).pipe(
+        Layer.provide(baseRuntimeView),
+      ),
+    );
+
     return {
       baseRuntime: baseRuntimeView,
-      runtimeWithCortex,
+      runtimeWithCortex: runtimeWithReporters,
       engine,
       kernelMetaTools,
     };
