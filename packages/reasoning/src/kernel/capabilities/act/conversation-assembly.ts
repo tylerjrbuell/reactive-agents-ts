@@ -36,8 +36,6 @@ import {
   buildSuccessfulToolCallCounts,
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
-import { renderRecallHint } from "../../../assembly/ref-grammar.js";
-
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
 /** Observation is a compressed preview that points at scratchpad storage — model must recall before synthesizing. */
@@ -111,13 +109,19 @@ export function assembleConversation(args: {
     if (!obsStep) return [];
     const storedKey = obsStep.metadata?.storedKey as string | undefined;
     const fullFromScratchpad = storedKey ? sharedScratchpad.get(storedKey) : undefined;
-    let resolvedContent = fullFromScratchpad ?? obsStep.content;
-    if (fullFromScratchpad && fullFromScratchpad.length > TOOL_RESULT_INLINE_CAP) {
-      resolvedContent =
-        fullFromScratchpad.slice(0, TOOL_RESULT_INLINE_CAP) +
-        `\n  ...truncated (${fullFromScratchpad.length - TOOL_RESULT_INLINE_CAP} chars).` +
-        (storedKey ? ` Full available via ${renderRecallHint(storedKey, "full")}.` : "");
-    }
+    // When the full result doesn't fit the inline cap, fall back to
+    // `obsStep.content` — the ALREADY-computed structured compressToolResult
+    // preview — instead of blind-slicing the raw full text. A character slice
+    // has no notion of item/line boundaries: it can cut mid-record (breaking
+    // valid JSON) and silently drops whatever fell past the cut with only a
+    // generic "...truncated (N chars)" note, no signal of how many real items
+    // were lost. The compressed preview already carries an honest "M of N
+    // shown" count and a working recall() hint (2026-07-30 — root cause of a
+    // live run silently losing 21 of 25 requested commits mid-string).
+    const resolvedContent =
+      fullFromScratchpad && fullFromScratchpad.length <= TOOL_RESULT_INLINE_CAP
+        ? fullFromScratchpad
+        : obsStep.content;
     const msg: KernelMessage = {
       role: "tool_result" as const,
       toolCallId: tc.id,

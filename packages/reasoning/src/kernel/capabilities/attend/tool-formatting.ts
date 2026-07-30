@@ -237,7 +237,45 @@ export function compressToolResult(
 
   // Try JSON first
   try {
-    const parsed = JSON.parse(result) as unknown;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+      // NDJSON fallback — `gh ... --jq '.[] | {...}'` and similar CLI filters
+      // emit one JSON value per line rather than a single top-level array.
+      // Recognize it as equivalent to an array so listing tasks ("last N
+      // commits") get the same full-render/recall-hint treatment a real
+      // array gets, instead of falling through to the blind plain-text line
+      // preview below, which has no concept of "N items, M shown" (root
+      // cause of a live run losing 21 of 25 requested commits, 2026-07-30).
+      const lines = result.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+      if (lines.length < 2) throw new SyntaxError("not JSON and not NDJSON");
+      parsed = lines.map((l) => JSON.parse(l));
+    }
+
+    // CLI-tool-result envelope unwrap — gh-cli, shell-execute, docker-execute
+    // and code-execute all wrap their real payload as `{command, stdout,
+    // stderr, exitCode, ...}`. Compressing the OUTER envelope treats the
+    // actual data a task asked for as one opaque `stdout` string field
+    // (sliced to 80 chars by the generic object-branch below); the array/
+    // object detectors never see it. Recurse on `stdout` alone — dropping the
+    // wrapper's fixed overhead (command text, stderr, escaping) from the
+    // budget check also means many payloads that fit once unwrapped get
+    // shown in full with no STORED/recall dance at all.
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      typeof (parsed as Record<string, unknown>).stdout === "string" &&
+      ("command" in (parsed as object) || "exitCode" in (parsed as object))
+    ) {
+      const envelope = parsed as { command?: string; stdout: string; exitCode?: number };
+      const inner = compressToolResult(envelope.stdout, toolName, budget, previewItems);
+      const prefix =
+        `[${toolName}${envelope.command ? `: ${envelope.command}` : ""}` +
+        `${typeof envelope.exitCode === "number" ? ` (exit ${envelope.exitCode})` : ""}]\n`;
+      return { content: prefix + inner.content, stored: inner.stored };
+    }
 
     if (Array.isArray(parsed)) {
       const looksLikeGitHubCommitArray = (value: unknown): value is Array<Record<string, unknown>> => {

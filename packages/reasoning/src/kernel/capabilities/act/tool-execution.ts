@@ -371,7 +371,15 @@ function normalizeObservation(toolName: string, result: string): string {
     }
 
     if (toolName === "code-execute" && parsed.executed === false) {
-      return "[Code execution unavailable — compute from first principles]";
+      // Was a generic "unavailable — compute from first principles" regardless
+      // of cause, discarding `parsed.error` (always populated by
+      // code-execution.ts on this branch) — masking a real syntax/runtime
+      // error from the model that generated the code and denying it any
+      // chance to see what actually broke and fix it (2026-07-30: the
+      // masked message read as a permanent capability gap, not the transient,
+      // self-correctable code bug it actually was).
+      const detail = String(parsed.error ?? "unknown error");
+      return `[Code execution failed: ${detail}] Fix the code and retry, or use recall() + manual extraction instead.`;
     }
 
     if (toolName === "web-search" && Array.isArray(parsed.results)) {

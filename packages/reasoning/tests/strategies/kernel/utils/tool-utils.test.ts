@@ -524,4 +524,58 @@ describe("compressToolResult", () => {
     expect(compressed.content).toContain("full: true");
     expect(compressed.content).not.toContain("╔══════════════════");
   });
+
+  // 2026-07-30: root cause of a live gh-cli run losing 21 of 25 requested
+  // commits. `gh ... --jq '.[] | {...}'` (the tool's own recommended usage
+  // pattern) emits one JSON object per line, not a single top-level array —
+  // it fell through to the blind plain-text line preview below, which has no
+  // concept of "N items total, M shown."
+  it("recognizes NDJSON (one JSON object per line) as an array, not plain text", () => {
+    const commits = [
+      { sha: "1111111", message: "fix: repair guard", author: "alice" },
+      { sha: "2222222", message: "feat: add thing", author: "bob" },
+      {
+        sha: "3333333",
+        message: "docs: update readme and expand the migration notes section with extra detail",
+        author: "carol",
+      },
+    ];
+    const ndjson = commits.map((c) => JSON.stringify(c)).join("\n");
+    const compressed = compressToolResult(ndjson, "gh-cli", 60, 2);
+
+    expect(compressed.content).toContain("Array(3)");
+    // All 3 commits stay safely recoverable via recall() even though only
+    // `previewItems` (2) are rendered inline.
+    expect(compressed.stored?.value).toBe(ndjson);
+    expect(compressed.stored?.value).toContain('"sha":"3333333"');
+  });
+
+  // 2026-07-30: gh-cli, shell-execute, docker-execute and code-execute all
+  // wrap their real payload as `{command, stdout, stderr, exitCode, ...}`.
+  // Without unwrapping, the array/object detectors only ever see this
+  // 4-6-key wrapper — the real data a task asked for reads as one opaque
+  // `stdout` string sliced to 80 raw characters.
+  it("unwraps a CLI-tool-result envelope so the array detector sees the real stdout payload, not an opaque field", () => {
+    const commits = [
+      { sha: "aaaaaaa", message: "fix: one", author: "alice" },
+      { sha: "bbbbbbb", message: "feat: two", author: "bob" },
+    ];
+    const stdout = commits.map((c) => JSON.stringify(c)).join("\n");
+    const envelope = {
+      command: "gh api repos/o/r/commits?per_page=25 --jq '.[] | {sha,message,author}'",
+      stdout,
+      stderr: "",
+      exitCode: 0,
+      durationMs: 120,
+    };
+    const raw = JSON.stringify(envelope);
+    const compressed = compressToolResult(raw, "gh-cli", 60, 5);
+
+    // Without the unwrap this reads "Type: Object(5 keys)" and slices
+    // `stdout`'s value to 80 raw characters — the actual defect.
+    expect(compressed.content).not.toContain("Object(5 keys)");
+    expect(compressed.content).toContain("Array(2)");
+    expect(compressed.content).toContain(envelope.command);
+    expect(compressed.stored?.value).toBe(stdout);
+  });
 });
