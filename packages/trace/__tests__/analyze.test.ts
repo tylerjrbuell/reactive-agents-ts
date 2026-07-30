@@ -156,9 +156,12 @@ describe("analyzeRun — full decision-grade signal", () => {
   it("coverage centerpiece: marks blind spots for missing emitters (NOT real zeros)", () => {
     const a = analyzeRun(richFixture({ substantive: true }));
     const blind = a.coverage.blindSpots.map((b) => b.metric).join(" | ");
-    expect(blind).toContain("cache"); // llm-exchange missing
-    expect(a.coverage.knownDeadEmitters.join(" ")).toContain("emitCuratorDecision");
-    // guard-fired terminal-only → overlap visibility flagged blind
+    expect(blind).toContain("cache"); // llm-exchange missing THIS run
+    // emitCuratorDecision was wired at the projection boundary 2026-07-30 and
+    // removed from the dead list; emitAlternativesConsidered is still the only
+    // genuinely-dead emitter. Asserting the live one here would re-pin a stale claim.
+    expect(a.coverage.knownDeadEmitters.join(" ")).toContain("emitAlternativesConsidered");
+    // ≤1 guard fired on this fixture → overlap visibility flagged blind
     expect(blind.toLowerCase()).toContain("overlap");
   });
 

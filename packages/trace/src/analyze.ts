@@ -486,9 +486,11 @@ export interface RunAnalysis {
   readonly wire?: WireVisibility;
 }
 
-/** Emitters verified (this session) to have zero call sites. */
+/** Emitters verified to have zero call sites. Keep this list HONEST — a stale
+ *  "dead" entry sends future agents chasing a wiring gap that no longer exists
+ *  (emitCuratorDecision was wired at the projection boundary 2026-07-30; removed
+ *  here in the same change). */
 const KNOWN_DEAD_EMITTERS = [
-  "emitCuratorDecision (0 callers — context-fidelity/budget-decision signal blind)",
   "emitAlternativesConsidered (0 callers — counterfactual signal blind)",
 ];
 
@@ -622,15 +624,21 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   const present: Record<string, number> = {};
   for (const e of ev) present[e.kind] = (present[e.kind] ?? 0) + 1;
   const blindSpots: { metric: string; reason: string }[] = [];
+  // Reasons state what's TRUE THIS RUN, not a stale structural claim — the
+  // emitters below are all wired on the live path (verified 2026-07-30:
+  // llm-exchange fires, emitCuratorDecision wired at the projection boundary,
+  // emitGuardFired wired at ~9 loop sites). A zero/low count here means the
+  // event didn't OCCUR this run (no round-trip / no tool-result curation / no
+  // guard storm), NOT that the emitter is unwired.
   if ((present["llm-exchange"] ?? 0) === 0) {
-    blindSpots.push({ metric: "tokensIn/Out + cache hit-rate (KV-stability)", reason: "no llm-exchange events (emitter does not fire on live path)" });
-    blindSpots.push({ metric: "what-model-saw / context-fidelity", reason: "no llm-exchange events" });
+    blindSpots.push({ metric: "tokensIn/Out + cache hit-rate (KV-stability)", reason: "no llm-exchange events this run" });
+    blindSpots.push({ metric: "what-model-saw / context-fidelity", reason: "no llm-exchange events this run" });
   }
   if ((present["curator-decision"] ?? 0) === 0) {
-    blindSpots.push({ metric: "context kept/dropped/compressed (budget-inversion evidence)", reason: "emitCuratorDecision has 0 callers" });
+    blindSpots.push({ metric: "context kept/dropped/compressed (budget-inversion evidence)", reason: "no tool-result curation this run (emitCuratorDecision fires per projected result — this run curated none)" });
   }
   if ((present["guard-fired"] ?? 0) <= 1) {
-    blindSpots.push({ metric: "intervention overlap-storms on real runs", reason: "emitGuardFired wired at terminal only; per-site fan-out pending (the decision-critical gap)" });
+    blindSpots.push({ metric: "intervention overlap-storms on real runs", reason: "≤1 guard fired this run — too few to observe an overlap-storm (emitGuardFired is wired across the loop, not terminal-only)" });
   }
   if ((present["verifier-verdict"] ?? 0) === 0) {
     blindSpots.push({ metric: "verifier accept/reject reasons", reason: "no verifier-verdict events this run (conditional emitter)" });
