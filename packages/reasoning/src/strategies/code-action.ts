@@ -37,6 +37,21 @@ import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
+import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
+import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+
+/**
+ * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
+ * RunLedger for this strategy's merge. Mirrors `inline-act.ts`'s
+ * `childRunLedgerOf` — code-action is the 4th delegation path (root cause
+ * #7, 2026-07-29 systems audit) that Wave C.2 never wired: it dispatches
+ * tools from a sandbox-Worker closure, not the kernel act primitive, so it
+ * needs its own copy of the same narrowing rather than sharing the kernel's.
+ */
+const childRunLedgerOf = (result: unknown): RunLedger | undefined => {
+  const entries = subAgentChildLedgerEntries(result);
+  return entries.length > 0 ? (entries as RunLedger) : undefined;
+};
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -315,9 +330,16 @@ export const executeCodeAction = (
         let callIdx = 0;
         for (const tc of sandboxResult.toolCalls) {
           const callId = `code-action-${iteration}-${callIdx++}`;
+          // Root cause #7 (2026-07-29 systems audit): strip a spawn-agent
+          // result's carried childRunLedger before it hits model-visible
+          // text — code-action was the one delegation path Wave C.2 never
+          // wired through the merge/strip pattern the other 3 paths use.
           const resultText =
-            typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result) ?? "";
+            typeof tc.result === "string"
+              ? tc.result
+              : JSON.stringify(subAgentResultForDisplay(tc.result)) ?? "";
           const obsContent = `[${tc.name} result]\n${resultText}`;
+          const subAgentLedger = childRunLedgerOf(tc.result);
           steps.push(
             makeStep("action", `[CODE-ACTION] ${tc.name}`, {
               toolCall: {
@@ -330,7 +352,8 @@ export const executeCodeAction = (
           const obsStep = makeStep("observation", obsContent, {
             toolCallId: callId,
             observationResult: makeObservationResult(tc.name, true, obsContent),
-          });
+            ...(subAgentLedger ? { subAgentLedger } : {}),
+          } as ReasoningStep["metadata"]);
           steps.push(obsStep);
           iterationLedger.push({ obsStep, tc, callId });
         }

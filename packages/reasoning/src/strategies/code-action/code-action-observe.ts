@@ -2,6 +2,7 @@
 //
 // Formats sandbox execution results as an observation message suitable
 // for appending to the LLM conversation thread.
+import { subAgentResultForDisplay } from "@reactive-agents/tools";
 
 export interface ToolCallRecord {
   name: string;
@@ -12,6 +13,14 @@ export interface ToolCallRecord {
 /**
  * Formats the tool call log and final result as a human-readable
  * observation string appended to state.messages.
+ *
+ * `subAgentResultForDisplay` strips a `spawn-agent`/`spawn-agents` result's
+ * `childRunLedger` carrier before it's stringified — without it a delegated
+ * sub-agent's raw ledger entries leaked verbatim into this model-visible
+ * text (root cause #7, 2026-07-29 systems audit; code-action was the one
+ * delegation path Wave C.2 never wired through the merge/strip pattern the
+ * other 3 paths use — see `subAgentChildLedgerEntries` in code-action.ts for
+ * the merge half of the fix).
  */
 export function formatObservationMessage(
   toolCalls: ToolCallRecord[],
@@ -26,7 +35,7 @@ export function formatObservationMessage(
       const resultStr =
         typeof call.result === "string"
           ? call.result
-          : JSON.stringify(call.result);
+          : JSON.stringify(subAgentResultForDisplay(call.result));
       lines.push(`  - ${call.name}(${argsStr}) → ${resultStr}`);
     }
   } else {
@@ -37,7 +46,7 @@ export function formatObservationMessage(
     `\nFinal result: ${
       typeof finalResult === "string"
         ? finalResult
-        : JSON.stringify(finalResult)
+        : JSON.stringify(subAgentResultForDisplay(finalResult))
     }`,
   );
 
