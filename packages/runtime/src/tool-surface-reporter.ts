@@ -78,7 +78,7 @@ export const RuntimeToolSurfaceReporterLive = Layer.scopedDiscard(
                         event.visible.length > 0
                             ? event.visible.join(', ')
                             : '(none)'
-                    yield* obs.info(`◉ [tools]   visible: ${names}`).pipe(
+                    yield* obs.info(`◉ [tools]      visible: ${names}`).pipe(
                         Effect.catchAll((err) =>
                             emitErrorSwallowed({
                                 site: 'runtime/src/tool-surface-reporter.ts:print',
