@@ -130,6 +130,28 @@ describe("Sandbox", () => {
     expect(error.message).toBe("nested failure");
   });
 
+  it("should NOT fast-fail an async tool when timeoutMs is undefined (regression: NaN→1ms)", async () => {
+    // Raw-object tool registrations may omit timeoutMs. Passing undefined must
+    // fall back to the 30s default, not Duration.millis(undefined)→NaN→1ms.
+    const result = await Effect.runPromise(
+      sandbox.execute(
+        () => Effect.sleep("50 millis").pipe(Effect.as("done")),
+        { timeoutMs: undefined as unknown as number, toolName: "no-timeout" },
+      ),
+    );
+    expect(result).toBe("done");
+  });
+
+  it("should NOT fast-fail when timeoutMs is NaN", async () => {
+    const result = await Effect.runPromise(
+      sandbox.execute(
+        () => Effect.sleep("50 millis").pipe(Effect.as("done")),
+        { timeoutMs: Number.NaN, toolName: "nan-timeout" },
+      ),
+    );
+    expect(result).toBe("done");
+  });
+
   it("should handle very large result strings", async () => {
     const bigString = "x".repeat(1_000_000); // 1MB string
     const result = await Effect.runPromise(

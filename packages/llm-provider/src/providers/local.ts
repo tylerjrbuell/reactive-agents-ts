@@ -365,7 +365,12 @@ function resolveLocalTimeoutMs(
     request: { readonly timeoutMs?: number },
     config: { readonly ollamaTimeoutMs?: number },
 ): number {
-    return request.timeoutMs ?? config.ollamaTimeoutMs ?? DEFAULT_LOCAL_TIMEOUT_MS
+    // `??` only short-circuits null/undefined — a NaN (e.g. from
+    // `Number(OLLAMA_TIMEOUT_MS)` on a non-numeric env value) would fall
+    // through and become a 1 ms timeout. Require a finite number at each rung.
+    if (Number.isFinite(request.timeoutMs)) return request.timeoutMs as number
+    if (Number.isFinite(config.ollamaTimeoutMs)) return config.ollamaTimeoutMs as number
+    return DEFAULT_LOCAL_TIMEOUT_MS
 }
 
 // ─── Ollama / Local Provider Layer ───

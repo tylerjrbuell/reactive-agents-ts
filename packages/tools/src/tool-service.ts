@@ -402,7 +402,11 @@ export const ToolServiceLive = Layer.effect(
         const result = yield* sandbox.execute(
           () => tool.handler(validatedArgs),
           {
-            timeoutMs: tool.definition.timeoutMs,
+            // Raw-object tool registrations (`.withTools({ tools: [...] })`)
+            // may omit timeoutMs; default to 30 s rather than pass undefined
+            // (which becomes a 1 ms NaN-coerced timeout). The sandbox guards
+            // this too — belt and suspenders on the primary custom-tool path.
+            timeoutMs: tool.definition.timeoutMs ?? 30_000,
             toolName: input.toolName,
           },
         );
