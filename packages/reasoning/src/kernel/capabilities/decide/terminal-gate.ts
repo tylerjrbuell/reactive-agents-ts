@@ -36,6 +36,7 @@
  */
 
 import type { ReasoningStep } from "../../../types/index.js";
+import type { RunLedger } from "../../ledger/run-ledger.js";
 import { TERMINAL_ANSWER_REASONS } from "../../loop/runner-helpers/grounded-terminal.js";
 import {
   describeUnmet,
@@ -144,6 +145,20 @@ export type TerminalGateInput = {
   readonly evidence?: {
     readonly steps: readonly ReasoningStep[];
     readonly output: string;
+    /**
+     * The run-scoped RunLedger — a delegated write lives ONLY here (the parent's
+     * `steps` hold `spawn-agent`), so without it the gate false-fails a run whose
+     * sub-agent produced the deliverable. Optional → callers that omit it get the
+     * prior steps-only behaviour.
+     */
+    readonly ledger?: RunLedger;
+    /**
+     * Move 2 / RC#1 — filesystem ground truth for `ArtifactProduced`. When the
+     * ledger/steps reconstruction misses a write, a file on disk still proves the
+     * artifact was produced. The gate injects `nodeFileExists`; tests inject a
+     * stub. Optional → absent means today's reconstruction-only behaviour.
+     */
+    readonly fileExists?: (path: string) => boolean;
   };
   /**
    * P6b slot: verdict from the independent checker, if one is configured AND
@@ -195,6 +210,8 @@ function unsatisfiedRequirements(
 ): readonly string[] {
   const { unmet } = verify(contract.postConditions, evidence.steps, {
     output: evidence.output,
+    ledger: evidence.ledger,
+    fileExists: evidence.fileExists,
   });
   return unmet.map((c) => {
     const key = JSON.stringify(c);

@@ -96,6 +96,13 @@ export interface TerminationContext {
    * state.meta.runContract.
    */
   readonly runContract?: import("../../contract/run-contract.js").RunContract;
+  /**
+   * The run-scoped RunLedger (from `state.ledger`), threaded by think.ts. Passed
+   * into the terminal gate's coverage `verify()` so a DELEGATED write — which
+   * lives only in the ledger, not in the parent's `steps` — can satisfy an
+   * `ArtifactProduced` requirement. Absent → steps-only (prior behaviour).
+   */
+  readonly ledger?: import("../../ledger/run-ledger.js").RunLedger;
 }
 
 export interface SignalVerdict {
@@ -330,7 +337,7 @@ function contractCoverageProposal(
     ...(ctx.redirectBudget !== undefined ? { redirectBudget: ctx.redirectBudget } : {}),
     coverageExhaustionPolicy: "accept",
     contract: ctx.runContract,
-    evidence: { steps: ctx.steps, output: candidate },
+    evidence: { steps: ctx.steps, output: candidate, ledger: ctx.ledger, fileExists: nodeFileExists },
     buildGroundingGuidance: () => "",
     buildCoverageGuidance: (missing) =>
       `outstanding requirements not yet satisfied: ${missing.join("; ")} — address them, or state explicitly why they are unnecessary and give your final answer`,
@@ -399,7 +406,12 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       ...(ctx.runContract !== undefined
         ? {
             contract: ctx.runContract,
-            evidence: { steps: ctx.steps, output: ctx.thought.trim() },
+            evidence: {
+              steps: ctx.steps,
+              output: ctx.thought.trim(),
+              ledger: ctx.ledger,
+              fileExists: nodeFileExists,
+            },
           }
         : {}),
       buildGroundingGuidance: () => "",
@@ -975,6 +987,7 @@ function synthesisQualityRetry(
 import { detectScaffoldLeak } from "../verify/scaffold-leak.js";
 import { deriveConditions } from "../verify/derive-conditions.js";
 import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
+import { nodeFileExists } from "../verify/file-truth.js";
 import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,

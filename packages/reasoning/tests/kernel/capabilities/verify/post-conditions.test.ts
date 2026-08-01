@@ -293,3 +293,51 @@ describe("verify — purity contract", () => {
     expect(a.unmet).toHaveLength(2);
   }, 15000);
 });
+
+// ─── Move 2: disk ground-truth override (Sys-audit RC#1 — filesystem-blind) ───
+// The ledger/steps linkage is a RECONSTRUCTION of what the run believes it did.
+// When it misses (an unlinked write, a delegated write, a path-arg the extractor
+// doesn't know), the file can still be ON DISK. A file on disk IS the artifact:
+// `fileExists` is a deterministic ground-truth override that flips a false-UNMET
+// to MET. It can only turn false→true, so it strictly reduces false-negatives and
+// cannot open a false-met beyond "the file the contract named actually exists."
+describe("verify(ArtifactProduced) — disk ground-truth override", () => {
+  it("MET when ledger/steps miss but the file exists on disk", () => {
+    // A successful write observation with NO linked action path (unlinked write):
+    // the reconstruction cannot tie it to the target, so today's gate says UNMET.
+    const steps = [obs("file-write", true)];
+    const target = "./cryptos.md";
+
+    const withoutDisk = verify([artifactProduced(target)], steps);
+    expect(withoutDisk.unmet).toHaveLength(1); // reconstruction is blind — the bug
+
+    const withDisk = verify([artifactProduced(target)], steps, {
+      fileExists: (p) => p === target,
+    });
+    expect(withDisk.unmet).toHaveLength(0); // disk truth flips it to MET
+    expect(withDisk.met).toHaveLength(1);
+  }, 15000);
+
+  it("does NOT consult disk when ledger/steps already satisfy (no behavior change)", () => {
+    const steps = [
+      action("file-write", { path: "/abs/dir/out.md" }, "tc1"),
+      obs("file-write", true, "tc1"),
+    ];
+    const spy = { called: false };
+    const r = verify([artifactProduced("out.md")], steps, {
+      fileExists: () => {
+        spy.called = true;
+        return false;
+      },
+    });
+    expect(r.unmet).toHaveLength(0);
+    expect(spy.called).toBe(false); // ledger already satisfied — disk not needed
+  }, 15000);
+
+  it("stays UNMET when there is no evidence and the file is absent (no false-met)", () => {
+    const r = verify([artifactProduced("./out.md")], [], {
+      fileExists: () => false,
+    });
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+});

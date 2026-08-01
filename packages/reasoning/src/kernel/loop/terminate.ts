@@ -26,6 +26,7 @@ import {
   verify as verifyPostConditions,
   describeUnmet,
 } from "../capabilities/verify/post-conditions.js";
+import { nodeFileExists } from "../capabilities/verify/file-truth.js";
 
 // `TerminateReason` lives in the dependency-free leaf `terminate-reason.ts`
 // (GH #184) so `runner-helpers/deliverable.ts` can import the type without the
@@ -143,6 +144,11 @@ function applyTerminalPostConditionGate(
     // Without it an orchestrator that delegated the deliverable was refused
     // success while the file existed on disk.
     ledger: state.ledger,
+    // Move 2 / RC#1 — the DETERMINISTIC ground-truth backstop. Even with the
+    // ledger, an unlinked or unknown-path-arg write escapes the reconstruction;
+    // if the contract's target file is on disk it WAS produced. Positive-only:
+    // flips a would-be false-fail to success, never the reverse.
+    fileExists: nodeFileExists,
   });
   if (result.unmet.length === 0) return null; // state-grounded success — proceed
 

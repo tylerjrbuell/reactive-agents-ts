@@ -14,6 +14,9 @@
 // (trace 01KSWR3S5FEW0KM61PCF1M6946): result.success=TRUE with ./commits.md
 // absent because the stall path force-delivered around the gated verdict.
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { terminate } from "../../src/kernel/loop/terminate.js";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import { runStallDeliverableStep } from "../../src/kernel/loop/runner-helpers/stall-deliverable.js";
@@ -167,6 +170,47 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
     const next = terminate(state, { reason: "harness_deliverable", deliverable: modelSynthesisDeliverable({ type: "thought", content: "Summary.", iteration: 0 }) });
     expect(next.status).toBe("done");
     expect(next.output).toBe("Summary.");
+  }, 15000);
+
+  // Move 2 / Sys-audit RC#1 — the filesystem-blind false-failure. Same cogito
+  // shape as the first test (ledger has a non-write artifact, no linked write of
+  // the target), BUT the deliverable is actually ON DISK. The reconstruction
+  // still can't tie a write to it — yet the file exists, so the run MUST NOT be
+  // demoted to failed. This is the exact `./commits.md existed on disk` case the
+  // post-conditions doc-comment describes.
+  it("does NOT demote when the target file exists on disk (ground-truth override)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-filetruth-"));
+    const abs = join(dir, "commits.md");
+    writeFileSync(abs, "# commits\n- deadbeef fix\n");
+    try {
+      const state = baseState({
+        steps: ledgerWithArtifactButNoWrite(), // no write of `abs` is linked
+        meta: { postConditions: [artifactProduced(abs)] },
+      });
+      const next = terminate(state, {
+        reason: "harness_deliverable",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Wrote the commits file.", iteration: 0 }),
+      });
+      // Disk is ground truth: the file is there → honest SUCCESS, not a false-fail.
+      expect(next.status).toBe("done");
+      expect(next.output).toBe("Wrote the commits file.");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("STILL demotes when the target file is absent from disk (no false-met)", () => {
+    const abs = join(tmpdir(), `ra-absent-${Date.now()}.md`); // never created
+    const state = baseState({
+      steps: ledgerWithArtifactButNoWrite(),
+      meta: { postConditions: [artifactProduced(abs)] },
+    });
+    const next = terminate(state, {
+      reason: "harness_deliverable",
+      deliverable: modelSynthesisDeliverable({ type: "thought", content: "claimed done", iteration: 0 }),
+    });
+    expect(next.status).toBe("failed");
+    expect(next.output).toBeNull();
   }, 15000);
 });
 

@@ -1651,6 +1651,9 @@ export function handleThinking(
         toolRequest: null,
         iteration: state.iteration,
         steps: state.steps,
+        // Move 2 / RC#1 — the run-scoped ledger so the terminal gate's coverage
+        // check sees delegated writes (steps hold only `spawn-agent`).
+        ledger: state.ledger,
         priorThought: state.priorThought,
         entropy: state.meta.entropy?.latestScore as TerminationContext["entropy"],
         trajectory: state.meta.entropy?.latestTrajectory as TerminationContext["trajectory"],

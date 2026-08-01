@@ -101,6 +101,24 @@ export interface VerifyOptions {
    * absent the check is steps-only, as before.
    */
   readonly ledger?: RunLedger;
+  /**
+   * Move 2 — the DETERMINISTIC ground-truth override for `ArtifactProduced`
+   * (Sys-audit 2026-07-29 RC#1: the success authority was filesystem-blind).
+   *
+   * The ledger/steps evidence is a RECONSTRUCTION of what the run believes it
+   * did — it misses an unlinked write, a write tool whose path-arg key we don't
+   * know, or a side-effecting producer. When it misses, the file may still be
+   * ON DISK, and a file on disk IS the artifact. This capability answers "does
+   * the target path exist as ground truth?" and is consulted ONLY to flip a
+   * would-be UNMET to MET — never the reverse. So it strictly reduces the
+   * documented false-failure rate and cannot open a false-met beyond "the file
+   * the contract named actually exists."
+   *
+   * Injected (not a direct `fs` import) so `verify()` stays pure and unit-test
+   * deterministic; the terminal gate supplies an fs-backed implementation.
+   * Absent → today's ledger-only behaviour, byte-identical.
+   */
+  readonly fileExists?: (path: string) => boolean;
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -258,6 +276,7 @@ function isArtifactProduced(
   path: string,
   steps: readonly ReasoningStep[],
   ledger?: RunLedger,
+  fileExists?: (path: string) => boolean,
 ): boolean {
   // ── Ledger `artifact` entries first (2026-07-26) ──────────────────────────
   // An `artifact` entry is minted (artifact-projection.ts) ONLY from a
@@ -325,6 +344,15 @@ function isArtifactProduced(
     }
   }
 
+  // ── Deterministic ground-truth override (Move 2 / RC#1) ──────────────────────
+  // The reconstruction above found nothing. Before declaring the artifact
+  // UNPRODUCED, ask the world: if the contract's target path exists on disk, it
+  // WAS produced, regardless of whether the ledger managed to link the write.
+  // Positive-only: a present file flips false→MET; an absent file leaves the
+  // reconstruction's verdict unchanged (no false-met). This is what makes the
+  // "deterministic" authority in authority.ts actually deterministic.
+  if (fileExists?.(path) === true) return true;
+
   return false;
 }
 
@@ -353,7 +381,7 @@ export function verify(
         satisfied = isToolCalled(condition.tool, steps, opts?.ledger);
         break;
       case "ArtifactProduced":
-        satisfied = isArtifactProduced(condition.path, steps, opts?.ledger);
+        satisfied = isArtifactProduced(condition.path, steps, opts?.ledger, opts?.fileExists);
         break;
       case "OutputContains":
         satisfied = output.includes(condition.pattern);
