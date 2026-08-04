@@ -36,6 +36,20 @@ export function normalizeActionContent(content: string): string {
   }
 }
 
+interface ToolCallMeta {
+  readonly id?: string;
+  readonly name?: string;
+}
+interface ObservationResultMeta {
+  readonly success?: boolean;
+}
+
+/** The tool name of an action step, read from its `toolCall` metadata. */
+function actionToolName(step: ReasoningStep): string | null {
+  const tc = step.metadata?.toolCall as ToolCallMeta | undefined;
+  return typeof tc?.name === "string" && tc.name.length > 0 ? tc.name : null;
+}
+
 /**
  * Detect loop patterns in the current step history.
  *
@@ -59,6 +73,42 @@ export function detectLoop(
     const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
     if (allSame) {
       loopMsg = `Loop detected: same tool call repeated ${maxSameTool} times`;
+    }
+  }
+
+  // (d) No-new-evidence loop (Move 5 / ground-truth progress): N calls to the
+  //     SAME tool (by NAME — arguments may vary) that produce NO successful
+  //     observation among them. This catches the thrash pattern (a) misses —
+  //     re-reading different bad paths, reworded failing searches, paging a
+  //     failing API — which otherwise burns silently to maxIterations. Gated on
+  //     "no successful observation" (the ground-truth progress signal), so a
+  //     tool that is genuinely succeeding never trips it. Floor of 3 so a local
+  //     tier's maxSameTool=2 does not fire on a single legitimate retry (tool
+  //     healing owns small retry bursts).
+  if (loopMsg === null) {
+    const threshold = Math.max(maxSameTool, 3);
+    if (allActions.length >= threshold) {
+      const recent = allActions.slice(-threshold);
+      const name0 = actionToolName(recent[0]!);
+      const ids = recent.map((a) => (a.metadata?.toolCall as ToolCallMeta | undefined)?.id);
+      const allLinkable = ids.every((id): id is string => typeof id === "string" && id.length > 0);
+      const sameName = name0 !== null && recent.every((a) => actionToolName(a) === name0);
+      if (sameName && allLinkable) {
+        const recentIds = new Set(ids as string[]);
+        const anySuccess = steps.some(
+          (s) =>
+            s.type === "observation" &&
+            typeof s.metadata?.toolCallId === "string" &&
+            recentIds.has(s.metadata.toolCallId) &&
+            (s.metadata?.observationResult as ObservationResultMeta | undefined)?.success === true,
+        );
+        if (!anySuccess) {
+          loopMsg =
+            `Loop detected: ${threshold} consecutive '${name0}' calls produced no successful result — ` +
+            `the tool keeps failing or returns nothing new. Change the arguments substantially, ` +
+            `use a different tool, or give your best answer with what you already have.`;
+        }
+      }
     }
   }
 
