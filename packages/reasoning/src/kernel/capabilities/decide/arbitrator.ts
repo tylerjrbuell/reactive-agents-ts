@@ -337,7 +337,7 @@ function contractCoverageProposal(
     ...(ctx.redirectBudget !== undefined ? { redirectBudget: ctx.redirectBudget } : {}),
     coverageExhaustionPolicy: "accept",
     contract: ctx.runContract,
-    evidence: { steps: ctx.steps, output: candidate, ledger: ctx.ledger, fileExists: nodeFileExists },
+    evidence: { steps: ctx.steps, output: candidate, ledger: ctx.ledger },
     buildGroundingGuidance: () => "",
     buildCoverageGuidance: (missing) =>
       `outstanding requirements not yet satisfied: ${missing.join("; ")} — address them, or state explicitly why they are unnecessary and give your final answer`,
@@ -410,7 +410,6 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
               steps: ctx.steps,
               output: ctx.thought.trim(),
               ledger: ctx.ledger,
-              fileExists: nodeFileExists,
             },
           }
         : {}),
@@ -987,7 +986,6 @@ function synthesisQualityRetry(
 import { detectScaffoldLeak } from "../verify/scaffold-leak.js";
 import { deriveConditions } from "../verify/derive-conditions.js";
 import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
-import { nodeFileExists } from "../verify/file-truth.js";
 import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,

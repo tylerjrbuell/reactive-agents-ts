@@ -40,9 +40,9 @@ import type { RunLedger } from "../../ledger/run-ledger.js";
 import { TERMINAL_ANSWER_REASONS } from "../../loop/runner-helpers/grounded-terminal.js";
 import {
   describeUnmet,
-  verify,
   type PostCondition,
 } from "../verify/post-conditions.js";
+import { verifyDelivery } from "../verify/delivery-authority.js";
 
 // ── Decision vocabulary ───────────────────────────────────────────────────────
 
@@ -208,7 +208,11 @@ function unsatisfiedRequirements(
   contract: NonNullable<TerminalGateInput["contract"]>,
   evidence: NonNullable<TerminalGateInput["evidence"]>,
 ): readonly string[] {
-  const { unmet } = verify(contract.postConditions, evidence.steps, {
+  // Single delivery authority (Move 2) — same owner as the imperative
+  // terminate() path, so the verdict gate cannot disagree with the hard-stop on
+  // what "produced" means, and both get disk ground truth by default.
+  const { unmet } = verifyDelivery(contract.postConditions, {
+    steps: evidence.steps,
     output: evidence.output,
     ledger: evidence.ledger,
     fileExists: evidence.fileExists,

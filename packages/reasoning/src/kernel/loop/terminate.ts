@@ -22,11 +22,8 @@ import { deliverableToContent } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
 import { commitDeliverable } from "./runner-helpers/deliverable.js";
-import {
-  verify as verifyPostConditions,
-  describeUnmet,
-} from "../capabilities/verify/post-conditions.js";
-import { nodeFileExists } from "../capabilities/verify/file-truth.js";
+import { describeUnmet } from "../capabilities/verify/post-conditions.js";
+import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 
 // `TerminateReason` lives in the dependency-free leaf `terminate-reason.ts`
 // (GH #184) so `runner-helpers/deliverable.ts` can import the type without the
@@ -137,18 +134,15 @@ function applyTerminalPostConditionGate(
   const conditions = state.meta.postConditions;
   if (!conditions || conditions.length === 0) return null;
 
-  const result = verifyPostConditions(conditions, state.steps, {
+  // Route through the single delivery authority (Move 2): it composes the
+  // run-scoped ledger (delegated writes live only there) AND disk ground truth
+  // (an unlinked/unknown-path-arg write escapes the reconstruction, but a file
+  // on disk WAS produced). Ground truth is ON by default inside the authority,
+  // so this imperative path cannot silently regress to filesystem-blind.
+  const result = verifyDelivery(conditions, {
+    steps: state.steps,
     output: deliverableToContent(opts.deliverable),
-    // The run-scoped ledger carries a DELEGATED write (merged `sub-agent:<name>`,
-    // Wave C.2 slice 2); `state.steps` hold only this agent's own `spawn-agent`.
-    // Without it an orchestrator that delegated the deliverable was refused
-    // success while the file existed on disk.
     ledger: state.ledger,
-    // Move 2 / RC#1 — the DETERMINISTIC ground-truth backstop. Even with the
-    // ledger, an unlinked or unknown-path-arg write escapes the reconstruction;
-    // if the contract's target file is on disk it WAS produced. Positive-only:
-    // flips a would-be false-fail to success, never the reverse.
-    fileExists: nodeFileExists,
   });
   if (result.unmet.length === 0) return null; // state-grounded success — proceed
 
