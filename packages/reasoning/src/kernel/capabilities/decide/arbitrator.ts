@@ -985,7 +985,8 @@ function synthesisQualityRetry(
 // either way; this keeps the import block at the top tidy.
 import { detectScaffoldLeak } from "../verify/scaffold-leak.js";
 import { deriveConditions } from "../verify/derive-conditions.js";
-import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
+import { describeUnmet } from "../verify/post-conditions.js";
+import { verifyDelivery } from "../verify/delivery-authority.js";
 import {
   GROUNDING_REDIRECT,
   TERMINAL_ANSWER_REASONS,
@@ -1049,9 +1050,15 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
     ctx.postConditions ?? deriveConditions(ctx.task, ctx.requiredTools);
   if (conditions.length === 0) return verdict; // fall back to prose, as today
 
-  const result = verifyPostConditions(conditions, ctx.steps, {
-    ledger: ctx.ledger,
+  // Single delivery authority (Move 2) — disk ground truth ON by default, so a
+  // deliverable ON DISK that the ledger/steps reconstruction failed to link
+  // (unlinked write, non-standard path-arg key, delegated write) is not falsely
+  // demoted here. This is the reactive/exit-success chokepoint — the third
+  // post-condition authority, unified with terminate.ts + terminal-gate.ts.
+  const result = verifyDelivery(conditions, {
+    steps: ctx.steps,
     output: verdict.output,
+    ledger: ctx.ledger,
   });
   if (result.unmet.length === 0) return verdict; // state-grounded success
 

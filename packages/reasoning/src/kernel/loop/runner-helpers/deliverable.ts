@@ -24,7 +24,7 @@ import {
   transitionState,
 } from "../../../kernel/state/kernel-state.js";
 import { artifacts } from "../../ledger/artifact-projection.js";
-import { verify as verifyPostConditions } from "../../capabilities/verify/post-conditions.js";
+import { verifyDelivery } from "../../capabilities/verify/delivery-authority.js";
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import {
   type Deliverable,
@@ -340,9 +340,10 @@ export function unproducedDeliverables(state: KernelState): readonly string[] {
   const out: string[] = [];
   for (const d of declared) {
     if (d.matcher.kind !== "ArtifactProduced") continue;
-    const { unmet } = verifyPostConditions([d.matcher], state.steps, {
+    const { unmet } = verifyDelivery([d.matcher], {
+      steps: state.steps,
       output: state.output ?? "",
-      ...(state.ledger ? { ledger: state.ledger } : {}),
+      ledger: state.ledger,
     });
     if (unmet.length > 0) out.push(d.matcher.path);
   }

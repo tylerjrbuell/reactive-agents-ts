@@ -55,10 +55,10 @@ import {
 import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
 import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
 import {
-  verify,
   describeUnmet,
   type PostCondition,
 } from "../kernel/capabilities/verify/post-conditions.js";
+import { verifyDelivery } from "../kernel/capabilities/verify/delivery-authority.js";
 import {
   enforceQualityGate,
   collectToolData,
@@ -536,11 +536,10 @@ export const executeReflexion = (
               input.requiredTools ?? [],
             );
             if (conditions.length > 0) {
-              const verifyResult = verify(
-                conditions,
-                s.allSideEffectSteps,
-                { output: s.response },
-              );
+              const verifyResult = verifyDelivery(conditions, {
+                steps: s.allSideEffectSteps,
+                output: s.response,
+              });
               spineUnmet = verifyResult.unmet;
               if (spineUnmet.length > 0) {
                 yield* emitLog({

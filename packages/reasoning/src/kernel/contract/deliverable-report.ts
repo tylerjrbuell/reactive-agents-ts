@@ -13,7 +13,8 @@
 
 import type { DeliverableReceipt } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
-import { describeUnmet, verify } from "../capabilities/verify/post-conditions.js";
+import { describeUnmet } from "../capabilities/verify/post-conditions.js";
+import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 import type { RunContract } from "./run-contract.js";
 
@@ -55,9 +56,8 @@ export function computeDeliverableReport(
   output = "",
   opts?: DeliverableReportOptions,
 ): readonly DeliverableReceipt[] {
-  const ledgerOpt = opts?.ledger ? { ledger: opts.ledger } : {};
   return contract.deliverables.map((d) => {
-    const { met } = verify([d.matcher], steps, { output, ...ledgerOpt });
+    const { met } = verifyDelivery([d.matcher], { steps, output, ledger: opts?.ledger });
     const req = contract.requirements.find((r) => r.id === d.id);
     const spec = req?.spec.description ?? describeUnmet([d.matcher]);
     return { spec, produced: met.length === 1 };
