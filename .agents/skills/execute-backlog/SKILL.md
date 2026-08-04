@@ -51,7 +51,7 @@ Caller examples:
 Query GitHub for candidate issues matching the filter.
 
 ```bash
-rtk gh issue list \
+gh issue list \
   --state open \
   --label "<comma-joined labels>" \
   --json number,title,labels,body,createdAt,updatedAt \
@@ -186,7 +186,7 @@ Read the `superpowers:writing-plans` skill conventions (location override: `wiki
 
 ```bash
 # 1. Locate where the unit under fix gets invoked
-rtk grep -rn "<wrapper-or-helper-name>\|<registered-fn-pattern>" packages/
+grep -rn "<wrapper-or-helper-name>\|<registered-fn-pattern>" packages/
 
 # 2. Confirm at least one fire site is reached by the planned test config
 #    (provider, reasoning, strategy, test scenario, etc.)
@@ -211,8 +211,8 @@ If adjacent improvement adopted, **update the plan doc's "Adjacent improvement f
 Before any code edits land, create a dedicated feature branch off `main` for the bundle:
 
 ```bash
-rtk git fetch origin main
-rtk git checkout -B bundle/<bundle-name> origin/main
+git fetch origin main
+git checkout -B bundle/<bundle-name> origin/main
 ```
 
 Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR ships them together.
@@ -222,8 +222,8 @@ If the working tree is dirty when this skill is invoked, **stop** and surface th
 **Baseline capture (added 2026-05-21):** immediately after branching, pin the pre-EXECUTE state:
 
 ```bash
-rtk bun run build 2>&1 | tail -3   # → record "Tasks: N/N successful"
-rtk bun test 2>&1 | tail -3        # → record pass/fail/skip counts
+bun run build 2>&1 | tail -3   # → record "Tasks: N/N successful"
+bun test 2>&1 | tail -3        # → record pass/fail/skip counts
 ```
 
 Stash the numbers in the plan doc under a `## Baseline` heading. Phase 5 compares against these; pre-existing reds get filed as follow-up issues (see #93 pattern) rather than blocking the bundle. Without this baseline, a pre-existing failure surfaced by your edits looks like a regression and you'll burn budget chasing it.
@@ -243,7 +243,7 @@ COMMIT → conventional commit, citing GH issue numbers
 
 **RED authority check (added 2026-05-25 v10).** Before relying on a RED test to pin a missing type or field, check **two harness conditions** that can silently mask the RED:
 
-1. **Tests excluded from typecheck.** Run `rtk grep -A2 '"exclude"' packages/<X>/tsconfig.json` — if `"tests/**/*"` is excluded, missing-type errors in the RED test will NOT fail typecheck. The "RED" passes against pre-fix state at type level.
+1. **Tests excluded from typecheck.** Run `grep -A2 '"exclude"' packages/<X>/tsconfig.json` — if `"tests/**/*"` is excluded, missing-type errors in the RED test will NOT fail typecheck. The "RED" passes against pre-fix state at type level.
 2. **TaggedError / structural-type leniency.** Effect's `Data.TaggedError` stores any field passed to its constructor, even if the payload type doesn't declare it. `expect(err.newField).toBeDefined()` will pass against pre-fix state if the test constructs the error with `newField`. Same for plain TS structural types — passing extra properties to a struct constructor is accepted at runtime.
 
 When either holds, the RED is post-hoc regression coverage only — it doesn't prove the pre-fix state was broken. Acceptable; just note in the plan's risk register and don't claim "test failed before fix, passes after" in the retro unless you confirmed it. To strengthen RED authority for type fields: write a temporary `src/.test-types.ts` smoke file that imports and destructures the new field, run `tsc --noEmit` on src/, then delete the smoke file before commit. Overkill for most fixes; flag only when the pre-fix RED must be authoritative.
@@ -276,7 +276,7 @@ Procedure:
 
 ```bash
 # Before bulk sed, verify no prior-wrapped sites exist
-rtk grep -c "<post-state-tail>" <file>   # e.g., grep -c "asInterventionHandler(fixedHandler" file
+grep -c "<post-state-tail>" <file>   # e.g., grep -c "asInterventionHandler(fixedHandler" file
 # If > 0 → DO NOT use sed. Use Edit with replace_all=true per unique site.
 # If == 0 → safe to sed; verify with typecheck immediately after.
 ```
@@ -355,9 +355,9 @@ If any of those fail, **descope**: file the bug as a separate issue and ship the
 Run the bundle-wide verification gate:
 
 ```bash
-rtk bun run build           # all packages green
-rtk bun test                # full suite, no net-new failures vs pre-bundle baseline
-rtk bun run typecheck       # workspace-wide
+bun run build           # all packages green
+bun test                # full suite, no net-new failures vs pre-bundle baseline
+bun run typecheck       # workspace-wide
 ```
 
 For each issue in the bundle, re-check the original verified-by claim against the new code state:
@@ -372,11 +372,11 @@ If a verified-by check fails to come down → the fix didn't actually address th
 
 **Workspace-test-flake protocol (added 2026-05-22 v7).** When `bun test` (workspace, run from repo root) shows failures but per-package isolation runs clean, treat as test-order / fixture-state flake. Verification is acceptable when:
 
-1. The bundle's touched package suite passes in isolation: `rtk bun test packages/<touched>/` → 0 fail.
-2. The failing tests live in packages NOT touched by the bundle. (`rtk bun test packages/<failing-pkg>/` → 0 fail confirms it's flake, not real.)
+1. The bundle's touched package suite passes in isolation: `bun test packages/<touched>/` → 0 fail.
+2. The failing tests live in packages NOT touched by the bundle. (`bun test packages/<failing-pkg>/` → 0 fail confirms it's flake, not real.)
 3. The failing tests are not the verified-by recheck for any bundle issue.
 
-Document the flake in the PR body (test name + isolation evidence). Do NOT block the bundle. CI may surface the same flake; if so, rerun the failed job. (Reason: 2026-05-22 #82 spawn — workspace `bun test` showed 2 fails in `packages/diagnose/`; `rtk bun test packages/diagnose/` → 35/0. Pre-existing test-order issue, unrelated to the react smoke bundle. CI on #100 will rerun cleanly. Same pattern surfaced on #99 — `httpbin.org` external-network flake resolved on rerun.)
+Document the flake in the PR body (test name + isolation evidence). Do NOT block the bundle. CI may surface the same flake; if so, rerun the failed job. (Reason: 2026-05-22 #82 spawn — workspace `bun test` showed 2 fails in `packages/diagnose/`; `bun test packages/diagnose/` → 35/0. Pre-existing test-order issue, unrelated to the react smoke bundle. CI on #100 will rerun cleanly. Same pattern surfaced on #99 — `httpbin.org` external-network flake resolved on rerun.)
 
 Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., "test-order flake in packages/diagnose under workspace `bun test`") — separately from any active bundle.
 
@@ -387,8 +387,8 @@ Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., 
 **6a — Open the PR (mandatory).** Every execution session ships its bundle as one PR. No direct-to-main pushes.
 
 ```bash
-rtk git push -u origin bundle/<bundle-name>
-rtk gh pr create \
+git push -u origin bundle/<bundle-name>
+gh pr create \
   --base main \
   --head bundle/<bundle-name> \
   --title "<bundle-name>: <one-line summary>" \
@@ -477,7 +477,7 @@ This is non-negotiable. A bundle without a retro is not finished. A retro withou
 
 ## Inputs This Skill Reads
 
-- GH issues — `rtk gh issue list ...`
+- GH issues — `gh issue list ...`
 - GH labels — existing taxonomy (`area:*`, `phase:*`, `priority:*`, `health-sweep`, `architecture-debt`, `verified`, `audit-2026-05-21`)
 - `wiki/Hot.md` — recent state to avoid stepping on in-flight work
 - `wiki/Issues/Running Issues Log.md` — historical context for HS-NN items

@@ -39,9 +39,9 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
-| 2026-07-11 | [[Implementation-Plans/2026-07-11-subagents-and-logging\|Subagents + Unified Logging]] | ⬜ DRAFT — awaiting RATIFY | Claude Code |
-| 2026-07-10 | [[Implementation-Plans/2026-07-10-harness-root-cause-closure-program\|Harness Root-Cause Closure Program]] | 🔄 Active (Tier 1–3 open list = canonical backlog) | Claude Code |
-| 2026-07-10 | [[Implementation-Plans/2026-07-10-goal-reliability-and-feedback-loop-program\|Goal-Reliability + Feedback-Loop Program]] | 🔄 Active (open: #44 spine, #39 per-entity, #38 ablation, B4) | Claude Code |
+| 2026-07-11 | [[Implementation-Plans/2026-07-11-subagents-and-logging|Subagents + Unified Logging]] | ⬜ RATIFIED (RE-SCOPED) 2026-07-20 — folded into debt-burndown Wave 2 B8 (see DEBT-REGISTER §3); index badge was stale | Claude Code |
+| 2026-07-10 | [[Implementation-Plans/2026-07-10-harness-root-cause-closure-program|Harness Root-Cause Closure Program]] | ⚠️ SUPERSEDED (2026-07-19, per the file's own frontmatter + `DEBT-REGISTER.md`) — open items absorbed into DEBT-REGISTER §3b; kept in place (still linked from `wiki/Hot.md` + `2026-07-08-meta-loop-execution-plan.md`) | Claude Code |
+| ~~2026-07-10~~ | ~~Goal-Reliability + Feedback-Loop Program~~ | 🗄️ ARCHIVED 2026-07-31 — file's own frontmatter already read `status: SUPERSEDED (2026-07-19)`; moved to [[Implementation-Plans/_archive/2026-07-10-goal-reliability-and-feedback-loop-program|_archive/2026-07-10-goal-reliability-and-feedback-loop-program]] | Claude Code |
 
 ## Completed Plans (2026)
 
@@ -75,13 +75,29 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 - 2026-02-27 — Tool result compression, reasoning strategy improvements
 - 2026-02-28 — Agent gateway, messaging channels
 
-> **Note:** ~36 plans from Feb-Apr 2026 live in `Implementation-Plans/`. Most are complete; check git log or content for status. Future plans should be added with explicit `status:` frontmatter.
+> **Note (superseded 2026-07-31):** most of the "~36 plans from Feb-Apr 2026" this note used to
+> point at have since been archived — see below. Future plans should be added with explicit
+> `status:` frontmatter.
 
 ## Archive
 
 ### Superpowers Legacy (Historic)
 - `Implementation-Plans/Superpowers/` — Plans created by superpowers `writing-plans` skill before consolidation
-- 3 files preserved as historical reference
+
+### `_archive/` (2026-07-31 wiki cleanup pass)
+- 105 orphaned, confirmed-shipped/superseded plans (Feb 2026 → 2026-07-10) moved to
+  `Implementation-Plans/_archive/` — cross-referenced against `wiki/Architecture/DEBT-REGISTER.md`
+  and `.agents/MEMORY.md` before moving; anything not confirmed shipped was left in place.
+  Companion sweep archived 50 files from `Architecture/Design-Specs/_archive/`.
+- Left in place despite being orphaned (status unconfirmed or explicitly not-yet-complete):
+  `2026-06-04-calibration-adapter-toolcalling-plan.md` (own frontmatter: "proposed, awaiting review"),
+  `2026-06-06-cortex-rich-trace-debugger-plan.md` (may = the still-open "traces→TracePanel" item),
+  `2026-06-06-uniform-contextpressure-chokepoint.md`, `2026-06-28-trustworthy-docs-benchmark.md`
+  (flagged **▶ active** in `.agents/MEMORY.md`), `2026-06-29-abstention-trust-loop.md` (design
+  counterpart says "partially-shipped"), `2026-06-30-test-robustness-strategy.md`,
+  `2026-07-11-subagents-and-logging.md`, `2026-07-22-cross-cutting-cascade.md`,
+  `2026-07-24-observability-unified-run-tree-plan.md` (last two: shipped but very recent/still
+  architecturally current — archiving felt premature, flagged for a human call).
 
 ---
 

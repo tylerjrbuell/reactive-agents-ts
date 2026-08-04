@@ -1,0 +1,147 @@
+{
+  "model": "gpt-4o-mini",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-30T01-15-57",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 189,
+      "inputTokens": 161,
+      "outputTokens": 28,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 451.203026,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 5420,
+      "inputTokens": 3755,
+      "outputTokens": 88,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 3220.3075499999995,
+      "output": "Rationale for first get-hn-posts call:\ncall=\"1\"\nwhy=\"Fetch top 15 Hacker News posts via get-hn-posts.\"\nconfidence=0.5\n\nRationale for second get-hn-posts call:\ncall=\"2\"\nwhy=\"Fetch additional 15 Hacker News posts to reach a total of 30 via get-hn-posts.\"\nconfidence=0.8\n\n{\"name\": \"brief\", \"parameters\": {\"section\": \"get-hn-posts\"}}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 5410,
+      "inputTokens": 4671,
+      "outputTokens": 122,
+      "stepsCount": 10,
+      "toolCallCount": 3,
+      "wallMs": 2917.7599920000002,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 7980,
+      "inputTokens": 7244,
+      "outputTokens": 137,
+      "stepsCount": 13,
+      "toolCallCount": 5,
+      "wallMs": 3197.126233,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8572,
+      "inputTokens": 5196,
+      "outputTokens": 120,
+      "stepsCount": 12,
+      "toolCallCount": 4,
+      "wallMs": 5557.078922999999,
+      "output": "# Today on Hacker News\n## AI/ML\n- **\"Disagreement among frontier LLMs on reality\"**: A discussion about the limitations of large language models in understanding reality.\n- **\"AI is making DDoS attacks faster, smarter, and far more dangerous\"**: An article highlighting the threat of AI-powered DDoS attacks.\n\n## Programming\n- **\"Can we have the day off?\"**: A question about taking breaks from coding and maintaining a healthy work-life balance.\n- **\"Bricks and Minifigs Stole a Man's $200k Lego Collection\"**: A story about a man who lost his entire Lego collection to thieves.\n\n## Other\n- **\"The California state assembly has passed the 'Protect Our Games Act'\"**: News about a new law aimed at protecting gamers from online harassment.\n- **\"Liquid AI reveals 8B-A1B MoE trained on 38T\"**: An update on the Liquid AI project, which has achieved significant results in training large language models.\n\nNote: The articles listed above are not necessarily the top stories on Hacker News, but rather a selection of relevant and interesting posts that fit into the respective categories.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "3 category sections",
+          "1/15 titles cited",
+          "173 words",
+          "★ called recall()"
+        ],
+        "composite": 0.5733333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5036666666666666,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "model": "gpt-4o-mini",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-30T01-14-52",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 608,
+      "inputTokens": 161,
+      "outputTokens": 36,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2918.6609120000003,
+      "output": "1. **Monday**\n2. **Tuesday**\n3. **Wednesday**\n4. **Thursday**\n5. **Friday**\n6. **Saturday**\n7. **Sunday**",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 3762,
+      "inputTokens": 3195,
+      "outputTokens": 19,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 2342.0388169999997,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 4739,
+      "inputTokens": 3129,
+      "outputTokens": 73,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 2841.8891439999998,
+      "output": "{\"rationale\": \"Get top 25 Hacker News posts with comments\", \"call\": \"1\", \"why\": \"To fetch the top 25 Hacker News posts and extract their comment counts.\", \"confidence\": 0.9}\n{\"name\": \"get-hn-posts\", \"parameters\": {\"count\":\"25\"}}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 7324,
+      "inputTokens": 4645,
+      "outputTokens": 38,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 3133.6328159999994,
+      "output": "**Highest Score**\n1. SQLite is all you need for durable workflows (340)\n2. The dead economy theory (664)\n3. Liquid AI reveals 8B-A1B MoE trained on 38T (146)\n\n**Most Comments**\n1. You can just say it (195)\n2. It's hard to justify buying a Framework 12 (217)\n3. Shift will clean homes for free to train future robots (81)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "4/6 correct titles"
+        ],
+        "composite": 0.6666666666666666
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6892,
+      "inputTokens": 6110,
+      "outputTokens": 133,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 3111.225400000001,
+      "output": "}; {\"name\": \"recall\", \"parameters\": {\"query\": \"\", \"full\": \"true\", \"start\": \"0\", \"maxChars\": \"10000\", \"lineStart\": \"0\", \"lineCount\": \"null\", \"arrayStart\": \"null\", \"arrayCount\": \"null\"}}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "20 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5363333333333333,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

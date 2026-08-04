@@ -54,14 +54,14 @@ Pick the cheapest tool per claim type:
 
 ```bash
 # Symbol existence / dead code
-rtk grep -r "buildDynamicContext" packages --type ts
-rtk grep -r "_riHooks" packages/runtime/src/builder.ts -n
+grep -r "buildDynamicContext" packages --type ts
+grep -r "_riHooks" packages/runtime/src/builder.ts -n
 
 # File size / LOC claims
-rtk bash "wc -l packages/reasoning/src/context/context-engine.ts"
+wc -l packages/reasoning/src/context/context-engine.ts
 
 # Feature wiring — follow the call chain
-rtk grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/kernel -n
+grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/kernel -n
 # Read the handler registry to count wired handlers:
 cat packages/reactive-intelligence/src/controller/handlers/index.ts
 
@@ -69,7 +69,7 @@ cat packages/reactive-intelligence/src/controller/handlers/index.ts
 bun test 2>&1 | tail -5
 
 # "FIXED on Apr X" claims — cross-check with git log
-rtk git log --oneline --grep="fix"
+git log --oneline --grep="fix"
 ```
 
 Record findings as `CONFIRMED`, `STALE`, or `REMOVED` for each claim.
@@ -119,7 +119,7 @@ Prior prune pass found four stale architecture-debt entries:
 
 | Claim | Verification | Action |
 |---|---|---|
-| `buildDynamicContext` ~560 LOC dead | `rtk grep` returned 0 hits in `packages/` | Removed entry |
+| `buildDynamicContext` ~560 LOC dead | `grep` returned 0 hits in `packages/` | Removed entry |
 | `context-engine.ts` ~690 LOC mostly dead | `wc -l` → 190 lines; `buildStaticContext` actively imported | Removed entry |
 | `_riHooks` dead, never invoked | `builder.ts:2336–2353` subscribes 3/6 | Moved to Resolved; added 3/6 wired + 3/6 blocked-on-missing-AgentEvent-types |
 | 4,153 tests / 461 files | `bun test` → 4,226 pass / 23 skip / 1 fail / 482 files | Updated counts |

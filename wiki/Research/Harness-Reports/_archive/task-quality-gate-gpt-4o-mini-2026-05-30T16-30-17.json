@@ -1,0 +1,393 @@
+{
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "recentObservationsLimit": 5,
+  "runsPerTask": 1,
+  "timestamp": "2026-05-30T16-30-17",
+  "runSets": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "runs": [
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 608,
+          "inputTokens": 134,
+          "outputTokens": 40,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 3012.315668,
+          "output": "Here are the 7 days of the week starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "1/1",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": null,
+      "postCondLabel": "—"
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "runs": [
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 5969,
+          "inputTokens": 4814,
+          "outputTokens": 358,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 17675.879504,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "1/1",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 1,
+      "postCondLabel": "1/1"
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "runs": [
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": false,
+          "tokensUsed": 11434,
+          "inputTokens": 10068,
+          "outputTokens": 1366,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 32279.162865000002,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.3,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+              "★ called recall()"
+            ],
+            "composite": 0.345
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": false,
+      "passKLabel": "0/1",
+      "compositeMean": 0.345,
+      "compositeMin": 0.345,
+      "compositeMax": 0.345,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": 0,
+      "t3StrictCorrectLabel": "0/1",
+      "postCondMetCount": 1,
+      "postCondLabel": "1/1"
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "runs": [
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 5929,
+          "inputTokens": 5140,
+          "outputTokens": 158,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 17097.77404699999,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Danish pension fund excludes SpaceX citing governance and valuation (323)\n3. Notes from the Mistral AI Now Summit (405)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Proposed new US funding rules: We can cancel any grant at any time (114)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "1/1",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 1,
+      "postCondLabel": "1/1"
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "runs": [
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": false,
+          "tokensUsed": 10195,
+          "inputTokens": 9160,
+          "outputTokens": 1035,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 23554.719238000005,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.2,
+            "faithfulness": 0,
+            "completeness": 0.2,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "notes": [
+              "★ missing title",
+              "0 category sections",
+              "0/15 titles cited",
+              "0 words",
+              "★ called recall()"
+            ],
+            "composite": 0.37
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": false,
+      "passKLabel": "0/1",
+      "compositeMean": 0.37,
+      "compositeMin": 0.37,
+      "compositeMax": 0.37,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 1,
+      "postCondLabel": "1/1"
+    }
+  ],
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 608,
+      "inputTokens": 134,
+      "outputTokens": 40,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 3012.315668,
+      "output": "Here are the 7 days of the week starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 0,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5969,
+      "inputTokens": 4814,
+      "outputTokens": 358,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 17675.879504,
+      "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 0,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 11434,
+      "inputTokens": 10068,
+      "outputTokens": 1366,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 32279.162865000002,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "strictCorrect": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion",
+          "★ strict ✗ (wrong post ids)",
+          "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+          "★ called recall()"
+        ],
+        "composite": 0.345
+      },
+      "runIndex": 0,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5929,
+      "inputTokens": 5140,
+      "outputTokens": 158,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 17097.77404699999,
+      "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Danish pension fund excludes SpaceX citing governance and valuation (323)\n3. Notes from the Mistral AI Now Summit (405)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Proposed new US funding rules: We can cancel any grant at any time (114)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 0,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 10195,
+      "inputTokens": 9160,
+      "outputTokens": 1035,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 23554.719238000005,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "0 words",
+          "★ called recall()"
+        ],
+        "composite": 0.37
+      },
+      "runIndex": 0,
+      "postConditionsMet": true
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.743,
+    "recallSmellCount": 2,
+    "taskCount": 5,
+    "totalRuns": 5,
+    "passKCount": 3,
+    "passKRate": 0.6
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "model": "gemini-2.5-flash",
+  "provider": "gemini",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-29T23-55-53",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 164,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 931.432381,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 6983,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 12400.852825999998,
+      "output": "1. SQLite is all you need for durable workflows (score: 305)\n2. You can just say it (score: 89)\n3. The dead economy theory (score: 611)\n4. Notes from the Mistral AI Now Summit (score: 298)\n5. MCP Is Dead (score: 40)\n6. Shift will clean homes for free to train future robots (score: 64)\n7. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 66)\n8. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 40)\n9. It's hard to justify buying a Framework 12 (score: 200)\n10. Bijou64: A variable-length integer encoding (score: 198)\n11. On Rendering Diffs (score: 132)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 138)\n13. The California state assembly has passed the 'Protect Our Games Act' (score: 161)\n14. Free full BGP feed. IPv4 and IPv6 (score: 14)\n15. Is AI causing a repeat of frontend’s lost decade? (score: 272)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 13117,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 17291.514733000004,
+      "output": "The top three Hacker News posts, ranked by the number of comments, are as follows:\n\n1. The dead economy theory — comments: 797\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 648\n3. GTA 6 Developers Unionize — comments: 365",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11061,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 15378.519859999997,
+      "output": "## Highest Score\n1. The dead economy theory (611)\n2. GTA 6 Developers Unionize (539)\n3. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (434)\n\n## Most Comments\n1. The dead economy theory (797)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (648)\n3. GTA 6 Developers Unionize (365)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7878,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 15126.645670999998,
+      "output": "# Today on Hacker News\n\n## AI/ML\n\nThe world of Artificial Intelligence and Machine Learning continues to be a hot topic, with several articles discussing the latest advancements and implications. \"Notes from the Mistral AI Now Summit\" provides insights from a recent AI conference, highlighting new developments from Mistral AI. Further solidifying the trend, \"Liquid AI reveals 8B-A1B MoE trained on 38T\" showcases another significant model release. On the practical application side, \"Shift will clean homes for free to train future robots\" details an interesting approach to gathering training data for robotics, while \"Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA\" presents a technical advancement in optimizing large language model inference. The broader impact of AI is also considered in \"Is AI causing a repeat of frontend’s lost decade?\", prompting reflection on its potential effects on software development.\n\n## Programming & Software Development\n\nSeveral posts delve into various aspects of programming and software development. \"SQLite is all you need for durable workflows\" advocates for the versatility of SQLite in building robust systems. \"On Rendering Diffs\" explores the technical challenges and solutions involved in visualizing code changes. \"Bijou64: A variable-length integer encoding\" introduces a novel approach to integer encoding, potentially offering efficiency improvements.\n\n## Hardware & Open Source\n\nInnovation in hardware and the spirit of open source are also represented. \"Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer\" highlights a new open-source feature for 3D printing. However, a critical perspective on modern hardware is offered in \"It's hard to justify buying a Framework 12\", discussing potential drawbacks of a modular laptop.\n\n## Other Interesting Reads\n\nBeyond the core tech categories, some posts offer broader commentary or unique perspectives. \"The dead economy theory\" presents an economic theory that has garnered significant attention. \"You can just say it\" offers a philosophical take on communication, while \"MCP Is Dead\" discusses the obsolescence of a certain technology or concept. Finally, \"The California state assembly has passed the 'Protect Our Games Act'\" reports on a legislative development impacting the gaming industry, and \"Free full BGP feed. IPv4 and IPv6\" provides a resource for network professionals.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "15/15 titles cited",
+          "357 words"
+        ],
+        "composite": 0.9999999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9999999999999998,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

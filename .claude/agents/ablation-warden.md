@@ -19,7 +19,7 @@ The discipline keeper. Any mechanism becoming default-on must pass through me. I
 **Bash allowed:**
 - All `bun test`, `bunx turbo run typecheck`
 - Probe scripts (`cross-strategy-matrix`, `ri-ablation`, `harness-probe`)
-- `rtk git`, `rtk grep`, `rtk find`
+- `git`, `grep`, `find`
 
 **Hard refuse:** ANY edit to `packages/**/src/**` (escalate to domain warden); commits to non-ablation paths; releases.
 

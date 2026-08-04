@@ -19,7 +19,7 @@ Bounded specialist for `packages/memory/**`. I/O contract: [[mission-brief]] + [
 **Bash allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/memory`
 - `bun test packages/memory/`
-- `rtk git diff`, `rtk git log`, `rtk grep`, `rtk find`
+- `git diff`, `git log`, `grep`, `find`
 
 **Hard refuse:** edits outside `packages/memory/**`; commits; releases.
 

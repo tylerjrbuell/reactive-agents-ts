@@ -1,0 +1,682 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "runsPerTask": 3,
+  "timestamp": "2026-05-30T23-32-25",
+  "runSets": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "runs": [
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 304,
+          "inputTokens": 162,
+          "outputTokens": 142,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 2104.366539,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 290,
+          "inputTokens": 162,
+          "outputTokens": 128,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 1703.5211590000004,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 282,
+          "inputTokens": 162,
+          "outputTokens": 120,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 1591.0731580000001,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": null,
+      "postCondLabel": "—"
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "runs": [
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 10802,
+          "inputTokens": 5014,
+          "outputTokens": 477,
+          "stepsCount": 6,
+          "toolCallCount": 1,
+          "wallMs": 40783.077873,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 11413,
+          "inputTokens": 5014,
+          "outputTokens": 1168,
+          "stepsCount": 6,
+          "toolCallCount": 1,
+          "wallMs": 48339.535622,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 10251,
+          "inputTokens": 5014,
+          "outputTokens": 407,
+          "stepsCount": 6,
+          "toolCallCount": 1,
+          "wallMs": 35209.603753999996,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "runs": [
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 10770,
+          "inputTokens": 7485,
+          "outputTokens": 223,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 77145.671596,
+          "output": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Task:** Fetch top 25 Hacker News posts (simulated via provided raw data), identify the 3 posts with the MOST comments (based on the 'descendants' field), and output them in a specific format.\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Sorting:** Sort by comment count descending.\n    *   **Output Style:** Prose (flowing paragraphs).\n    *   **Constraint:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". (This seems like a partial instruction or a typo in the prompt's \"REQUIRED COLUMNS/FIELDS\" section, but the core instruction says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". I need to follow the explicit format instruction for the content, while wrapping it in prose as requested by the \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Conflict Resolution:** The prompt asks for \"prose\" but also specifies an \"exact format: '1. TITLE — comments: COUNT'\". Usually, when \"exact format\" is requested, it overrides general style. However, the instruction also says \"Write as flowing prose paragraphs.\" and \"Produce ONLY the formatted output\". This is a bit contradictory. If I write prose, I can't just list them. If I list them, it's not prose.\n    *   **Re-reading the \"REQUIRED COLUMNS/FIELDS\" section:** It says \"most comments in this exact format: '1\". This looks like a truncated instruction. The main user prompt says: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Re-reading the \"Instruction: Write as flowing prose paragraphs.\"**: This is a system-level or meta-instruction about the style.\n    *   **Re-reading \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"**: This suggests I should not add \"Here is the data...\" but just the content.\n    *   **Interpretation:** The user wants the top 3 posts identified. The format for the *content* of the answer should be prose, but the specific data points (the top 3 posts) must adhere to the format '1. TITLE — comments: COUNT'. However, writing a list inside prose is awkward. Let's look at the \"REQUIRED COLUMNS/FIELDS\" again. It says \"most comments in this exact format: '1\". This is likely a copy-paste error in the prompt template provided to me. The user prompt explicitly says: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Decision:** I need to balance the \"prose\" instruction with the \"exact format\" instruction. Usually, specific format constraints for data extraction override general style instructions. However, the instruction \"Write as flowing prose paragraphs\" is quite strong.\n    *   **Wait, looking closer at the prompt structure:** The user prompt says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". Then there is a system instruction \"Instruction: Write as flowing prose paragraphs.\" and \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\".\n    *   **Hypothesis:** The user wants the top 3 items listed, but the surrounding text should be prose. Or, the user wants the output to *be* the list, but the system instruction says prose.\n    *   **Strict Adherence:** The prompt says \"Produce ONLY the formatted output\". If I write prose introducing the list, is that \"formatted output\"?\n    *   **Let's look at the data:**\n        *   Post 1: \"The dead economy theory\" (descendants: 1245)\n        *   Post 2: \"SQLite is all you need for durable workflows\" (descendants: 307)\n        *   Post 3: \"Danish pension fund excludes SpaceX citing governance and valuation\" (descendants: 261)\n        *   Post 4: \"MCP is dead?\" (descendants: 290) -> Wait, 290 > 261.\n        *   Let's sort the provided data by 'descendants':\n            1.  \"The dead economy theory\": 1245\n            2.  \"SQLite is all you need for durable workflows\": 307\n            3.  \"MCP is dead?\": 290\n            4.  \"Danish pension fund excludes SpaceX citing governance and valuation\": 261\n            5.  \"It's hard to justify buying a Framework 12\": 542 -> Wait, 542 > 307.\n            6.  \"Shift will clean homes for free to train future robots\": 219\n            7.  \"Notes from the Mistral AI Now Summit\": 176\n            8.  \"Proposed new US funding rules...\": 114\n            9.  \"Zig: Build System Reworked\": 96\n            10. \"Snowboard Kids 2 is 100% Decompiled\": 98\n            ...\n        *   Let's re-sort carefully.\n            *   1245: \"The dead economy theory\"\n            *   542: \"It's hard to justify buying a Framework 12\"\n            *   307: \"SQLite is all you need for durable workflows\"\n            *   290: \"MCP is dead?\"\n            *   261: \"Danish pension fund excludes SpaceX citing governance and valuation\"\n            *   219: \"Shift will clean homes for free to train future robots\"\n            *   176: \"Notes from the Mistral AI Now Summit\"\n            *   114: \"Proposed new US funding rules...\"\n            *   98: \"Snowboard Kids 2 is 100% Decompiled\"\n            *   96: \"Zig: Build System Reworked\"\n            *   51: \"Print with dozens of colors...\"\n            *   48: \"Leo's first encyclical...\"\n            *   45: \"Corporate America Is Starting to Ration AI...\"\n            *   34: \"Anthropic surpasses OpenAI...\"\n            *   32: \"Danish pension fund...\" (Wait, I listed 261 for that one earlier. Let me check the JSON again.)\n                *   ID 48333820: \"Danish pension fund excludes SpaceX...\", descendants: 261.\n                *   ID 48336233: \"Anthropic surpasses OpenAI...\", descendants: 34.\n            *   Okay, top 3 are:\n                1.  \"The dead economy theory\" (1245)\n                2.  \"It's hard to justify buying a Framework 12\" (542)\n                3.  \"SQLite is all you need for durable workflows\" (307)\n\n    *   **Formatting Conflict:** The user says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". But the system instruction says \"Write as flowing prose paragraphs.\" and \"Produce ONLY the formatted output\".\n    *   **Resolution:** If I write prose, I can't strictly use the numbered list format for the whole text. However, the specific instruction \"Output the 3 posts... in this exact format\" usually implies the core data presentation. If I embed the list within a prose paragraph, it might violate the \"exact format\". If I just output the list, it violates \"flowing prose\".\n    *   **Looking at similar tasks:** Usually, when \"exact format\" is specified for the data, that takes precedence for the data lines. The \"prose\" instruction might mean \"don't use a code block\" or \"don't add conversational filler\".\n    *   **Wait, the \"REQUIRED COLUMNS/FIELDS\" section says:** \"most comments in this exact format: '1\". This is clearly a truncated instruction from the prompt template. The user prompt says: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **System Instruction:** \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Constraint:** \"Produce ONLY the formatted output\".\n    *   **Strategy:** I will write a short prose paragraph introducing the findings, then present the top 3 items using the requested format within the text or as a list that fits the prose flow. However, \"exact format\" usually means a list.\n    *   **Actually, looking at the instruction \"Write as flowing prose paragraphs.\"**: This suggests I should describe the data in sentences. But the user explicitly asked for the output in the format '1. TITLE — comments: COUNT'.\n    *   **Best approach:** Combine them. Write a sentence, then the formatted lines, then a sentence? No, \"flowing prose paragraphs\".\n    *   **Alternative",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 0.33999999999999997,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "3/3 correct titles",
+              "3/3 correct comment counts",
+              "★ 2 score-confusion picks",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[48336233,48334048,48334710,48335135,48326802,48335388,48333820,48325340,48284494,48283410,48330436,48324712,48323869,48327962]",
+              "★ called recall()"
+            ],
+            "composite": 0.8019999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 7049,
+          "inputTokens": 5349,
+          "outputTokens": 712,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 51234.917344999994,
+          "output": "1. SQLite is all you need for durable workflows — comments: 307\n2. MCP is dead? — comments: 290\n3. Danish pension fund excludes SpaceX citing governance and valuation — comments: 261",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.3333333333333333,
+            "completeness": 1,
+            "noFabrication": 0.6699999999999999,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "1/3 correct titles",
+              "1/3 correct comment counts",
+              "★ 1 score-confusion picks",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[48326802,48333820,48330436]"
+            ],
+            "composite": 0.6676666666666667
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 11340,
+          "inputTokens": 7913,
+          "outputTokens": 322,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 78594.418389,
+          "output": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Task:** Fetch top 25 Hacker News posts (simulated via provided raw data), identify the 3 posts with the MOST comments (based on the 'descendants' field), and output them in a specific format.\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Sorting:** Sort by comment count descending.\n    *   **Style:** Prose (flowing paragraphs).\n    *   **Constraint:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". (This looks like a template instruction that got cut off or is slightly confusing, but the core instruction says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". The \"REQUIRED COLUMNS/FIELDS\" section seems to be a system instruction artifact, but the user prompt explicitly says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". However, the system instruction also says \"Instruction: Write as flowing prose paragraphs.\" and \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"\n    *   **Conflict Resolution:** The user prompt asks for \"prose\" but also specifies an \"exact format: '1. TITLE — comments: COUNT'\". Usually, when a specific format is requested for the data points, it overrides the general prose style for the data itself, but the surrounding text should be prose. However, the instruction \"Produce ONLY the formatted output\" suggests I shouldn't add introductory text like \"Here are the top posts...\". But the instruction \"Write as flowing prose paragraphs\" suggests I should describe the data in text.\n    *   **Re-evaluating the \"Exact Format\" vs \"Prose\" constraint:**\n        *   User: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   System Instruction: \"Instruction: Write as flowing prose paragraphs.\"\n        *   System Instruction: \"Produce ONLY the formatted output — no explanation, no preamble...\"\n        *   This is a tricky combination. If I write prose, I can't just list the numbers. If I list the numbers, I violate the prose instruction.\n        *   Let's look at the \"REQUIRED COLUMNS/FIELDS\" section in the system prompt: \"most comments in this exact format: '1\". This looks like a truncated instruction.\n        *   Let's look at the User Prompt again: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'. Sort by comment count descending. Use exact titles from the tool result.\"\n        *   System Instruction: \"Write as flowing prose paragraphs.\"\n        *   System Instruction: \"Produce ONLY the formatted output\".\n        *   Interpretation: The user wants the specific list format for the data, but the system instruction says \"Write as flowing prose paragraphs\". Usually, specific format constraints from the user override general style instructions, but the \"Prose\" instruction is a system instruction.\n        *   However, looking closely at the system instruction: \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This is likely a placeholder for the user's format request.\n        *   Let's try to combine them. I will write a paragraph introducing the findings, then present the list in the requested format within the prose, or just present the list if \"ONLY the formatted output\" is strict.\n        *   Wait, the system instruction says \"Produce ONLY the formatted output — no explanation, no preamble\". This contradicts \"Write as flowing prose paragraphs\" if the format is a list.\n        *   Let's look at the \"Instruction: Write as flowing prose paragraphs.\" This is a system instruction.\n        *   Let's look at the User Prompt: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   If I write prose, I can't strictly follow '1. TITLE — comments: COUNT' as a list without breaking prose flow.\n        *   However, often \"formatted output\" means the specific structure requested.\n        *   Let's prioritize the User's explicit format request for the data points, but wrap it in prose if possible, or just output the list if \"ONLY the formatted output\" is the dominant constraint.\n        *   Actually, reading the system instruction carefully: \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\" This usually means \"Don't say 'Here is the data'\".\n        *   But the \"Instruction: Write as flowing prose paragraphs\" is also a system instruction.\n        *   Hypothesis: The user wants the data presented in the specific list format, but the text surrounding it (or the whole thing) should be prose.\n        *   Wait, if I output a list, is that prose? No.\n        *   If I write prose describing the top 3, does that meet the \"exact format\" requirement?\n        *   \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   Okay, I must use that format for the lines.\n        *   So, I will write a paragraph, then the list? Or just the list?\n        *   \"Produce ONLY the formatted output\". This suggests no intro text.\n        *   But \"Write as flowing prose paragraphs\".\n        *   This is a contradiction. I need to find a middle ground. I will write the content as prose that incorporates the required format lines, or I will prioritize the \"exact format\" for the specific data lines as requested by the user, while ensuring the overall response isn't just a raw dump if possible, but the \"ONLY the formatted output\" instruction is strong.\n        *   Let's look at the \"REQUIRED COLUMNS/FIELDS\" again. It says \"most comments in this exact format: '1\". This is likely a system artifact.\n        *   Okay, I will follow the User's format for the data points ('1. TITLE — comments: COUNT') but I need to decide if I can add prose.\n        *   If I add prose, I violate \"Produce ONLY the formatted output\".\n        *   If I don't add prose, I violate \"Write as flowing prose paragraphs\".\n        *   Usually, User instructions override System instructions regarding content, but System instructions regarding safety/style (like \"prose\") are important.\n        *   However, \"Produce ONLY the formatted output\" is very specific.\n        *   Let's assume the \"formatted output\" refers to the specific data lines requested.\n        *   Actually, looking at the instruction \"Instruction: Write as flowing prose paragraphs.\" This is likely the dominant style instruction.\n        *   But the user says \"Output the 3 posts... in this exact format\".\n        *   Okay, I will write a short prose paragraph that introduces the analysis, then present the list in the requested format, as that seems to be the core task.\n        *   Wait, \"Produce ONLY the formatted output\". This usually means \"Don't add 'Here is the response'\".\n        *   Let's try to make the prose *contain* the formatted lines.\n        *   Actually, looking at the raw data, I need to find the top 3 by 'descendants'.\n        *   Data Analysis:\n            1.  \"The dead economy theory\" -> descendants: 1245\n            2.  \"SQLite is all you need for durable workflows\" -> descendants: 307\n            3.  \"MCP is dead?\" -> descendants: 290\n            4.  \"Danish pension fund excludes SpaceX citing governance and valuation\" -> descendants: 261\n            5.  \"It's hard to justify buying a Framework 12\" -> descendants: 542\n            6.  \"Shift will clean homes for free to train future robots\" -> descendants: 219\n            7.  \"Notes from the Mistral AI Now Summit\" -> descendants: 176\n            8.  \"Proposed new US funding rules: We can cancel any grant at any time\" -> descendants: 114\n            9.  \"The Last Technical Interview\" -> descendants: 124\n            10. \"Zig: Build System Reworked\" -> descendants: 96\n            11. \"Snowboard Kids 2 is 100% Decompiled\" -> descendants: 98\n            ...\n        *   Top 3:\n            1.  The dead economy theory (1245)\n            2.  It's hard to justify buying a Framework 12 (542)\n            3.  SQLite is all you need for durable workflows (307)\n        *   Wait, let me re-check the counts.\n            *   \"The dead economy theory\": 1245\n            *   \"It's hard to justify buying a Framework 12\": 542\n            *   \"SQLite is all you need for durable workflows\": 307\n            *   \"MCP is dead?\": 290\n            *   \"Danish pension fund...\": 261\n            *   \"",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 0.33999999999999997,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "3/3 correct titles",
+              "3/3 correct comment counts",
+              "★ 2 score-confusion picks",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[48334048,48335135,48326802,48333820,48325340,48284494,48330436,48324712,48328405,48323869,48327962]",
+              "★ called recall()"
+            ],
+            "composite": 0.8019999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.7572222222222221,
+      "compositeMin": 0.6676666666666667,
+      "compositeMax": 0.8019999999999999,
+      "compositeSpread": 0.1343333333333332,
+      "t3StrictCorrectCount": 0,
+      "t3StrictCorrectLabel": "0/3",
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "runs": [
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 6920,
+          "inputTokens": 5303,
+          "outputTokens": 536,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 64035.23111499997,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Notes from the Mistral AI Now Summit (405)\n3. Danish pension fund excludes SpaceX citing governance and valuation (323)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Danish pension fund excludes SpaceX citing governance and valuation (261)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 7036,
+          "inputTokens": 5303,
+          "outputTokens": 696,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 65632.63171499997,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Notes from the Mistral AI Now Summit (405)\n3. Danish pension fund excludes SpaceX citing governance and valuation (323)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Danish pension fund excludes SpaceX citing governance and valuation (261)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 6847,
+          "inputTokens": 5303,
+          "outputTokens": 507,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 61148.20501399995,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Notes from the Mistral AI Now Summit (405)\n3. Danish pension fund excludes SpaceX citing governance and valuation (323)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Danish pension fund excludes SpaceX citing governance and valuation (261)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "runs": [
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 7318,
+          "inputTokens": 5021,
+          "outputTokens": 935,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 39804.28086099995,
+          "output": "# Today on Hacker News\n\n**AI/ML & Tech Policy**\nThe top stories today featured significant developments in the AI sector and related policy discussions. Anthropic has surpassed OpenAI to become the world's most valuable AI startup, drawing considerable attention from the tech community. This milestone reflects the shifting landscape of artificial intelligence investment and market dynamics. Alongside this news, there's growing concern about AI costs as corporate America begins rationing AI usage amid skyrocketing expenses. The discourse extends to broader philosophical questions about technology's role in society, exemplified by a discussion on Leo's first encyclical attacking technological messianism, highlighting ongoing debates about the ethical boundaries of AI adoption and development.\n\n**Programming & Tools**\nThe programming community remains active with several noteworthy tools and discussions. The Pandoc Templates project continues to gain traction for document processing needs, while Zig's reworked build system has sparked substantial discussion among developers. The OpenBSD team's new rsync implementation (Openrsync) represents another significant tool release for systems administrators. SQLite's enduring utility is celebrated in a post about making it sufficient for durable workflows, while a thought-provoking piece titled \"Vibe Coding Is Not Engineering\" challenges popular trends in software development practices.\n\n**Hardware & Science**\nHardware enthusiasts are excited about IXI's autofocusing lenses nearing readiness to replace multifocal glasses, promising to transform wearable technology. Computational fluid dynamics finds new expression in a Navier-Stokes simulation explained using the Godot game engine, demonstrating accessible approaches to complex physics. Low-level CPU/GPU optimization continues with discussions on floor and ceil operations versus denormals. Meanwhile, the Danish pension fund's decision to exclude SpaceX from their portfolio due to governance and valuation concerns adds a governance perspective to the hardware space.\n\n**Community Projects**\nThe Show HN section continues to foster innovation with a project proposing plug-in solar solutions for British addresses. Community discussions also explore niche topics like locust population dynamics, showing the breadth of interests maintained by the Hacker News community.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.5,
+            "faithfulness": 0.26666666666666666,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "0 category sections",
+              "4/15 titles cited",
+              "318 words"
+            ],
+            "composite": 0.6683333333333332
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 7000,
+          "inputTokens": 5021,
+          "outputTokens": 622,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 49624.30253700004,
+          "output": "# Today on Hacker News\n\nToday's top stories on Hacker News span a diverse range of topics, from AI industry shifts to open-source tools and hardware innovations. The discussions reflect both technical breakthroughs and broader societal implications of emerging technologies.\n\n**AI/ML**\nThe most prominent story concerns Anthropic surpassing OpenAI to become the world's most valuable AI startup, sparking debate about the competitive landscape in artificial intelligence. This development is contextualized by another major piece about corporate America beginning to ration AI as costs skyrocket, highlighting the economic pressures reshaping the industry. These stories collectively underscore the rapid evolution and maturation of the AI sector, where valuation shifts and cost considerations are driving significant strategic changes.\n\n**Software & Tools**\nThe open-source community continues to thrive with several notable projects. Pandoc Templates offers a resource for document processing enthusiasts, while Zig's build system is being reworked to improve developer experience. Openrsync, an implementation of rsync by the OpenBSD team, addresses file synchronization needs with enhanced security. Additionally, SQLite is championed as sufficient for durable workflows, emphasizing the power of lightweight database solutions for modern applications.\n\n**Hardware & Science**\nInnovation extends to hardware and scientific applications. IXI's autofocusing lenses are nearly ready to replace multifocal glasses, promising improved vision correction. The Danish pension fund's exclusion of SpaceX due to governance and valuation concerns adds a governance perspective to the space industry. A proposed new US funding rule allowing cancellation of any grant at any time raises questions about research stability and funding reliability.\n\n**Other**\nBeyond technical topics, there's a piece on Leo's first encyclical attacking technological messianism, reflecting on the intersection of technology and societal values. Navier-Stokes fluid simulation explained with Godot game engine demonstrates accessible technical communication. A Show HN post about plug-in solar for any address in Britain highlights renewable energy accessibility, while \"Vibe Coding Is Not Engineering\" prompts reflection on the nature of software development practices.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.5,
+            "faithfulness": 0.3333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "0 category sections",
+              "5/15 titles cited",
+              "316 words"
+            ],
+            "composite": 0.6916666666666667
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 11535,
+          "inputTokens": 5112,
+          "outputTokens": 1098,
+          "stepsCount": 8,
+          "toolCallCount": 2,
+          "wallMs": 48454.19403000001,
+          "output": "# Today on Hacker News\n\n**AI/ML & Tech Industry**\nThe AI startup landscape continues to evolve, with Anthropic surpassing OpenAI to become the most valuable AI startup, sparking discussion in the community. Alongside this, concerns about AI costs are growing as corporate America starts rationing AI resources amid skyrocketing expenses. The Danish pension fund's decision to exclude SpaceX from its portfolio, citing governance and valuation concerns, adds another layer to the ongoing debate about tech investments and ethical considerations in the AI sector.\n\n**Programming & Software Development**\nDevelopers are actively shaping the tooling landscape with contributions ranging from Pandoc Templates to a reworked Zig build system. The OpenBSD team's Openrsync implementation continues to set standards for secure file synchronization. Practical database solutions are gaining traction, with SQLite emerging as a go-to choice for durable workflows. Meanwhile, the programming community debates the merits of \"vibe coding\" versus proper engineering practices, while fluid simulation techniques are being explored through the Godot game engine. The mysterious disappearance of locusts also captured attention as a scientific curiosity.\n\n**Hardware & Physical Technology**\nInnovation continues at the hardware level, with IXI's autofocusing lenses nearing readiness to replace multifocal glasses. Renewable energy solutions are also making waves, as shown by a Show HN project exploring plug-in solar capabilities for any address in Britain. Low-level CPU and GPU performance discussions around floor and ceil versus denormals highlight ongoing optimizations in compute architecture.\n\n**Policy & Society**\nBeyond technology itself, broader societal issues are making headlines. The Pope's encyclical addressing technological messianism has sparked conversation about the ethical implications of rapid tech advancement. Additionally, proposed changes to US funding rules that could allow cancellation of any grant at any time have raised concerns among researchers and the scientific community about potential impacts on scientific progress and funding stability.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.5,
+            "faithfulness": 0.13333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "0 category sections",
+              "2/15 titles cited",
+              "298 words"
+            ],
+            "composite": 0.6216666666666666
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.6605555555555555,
+      "compositeMin": 0.6216666666666666,
+      "compositeMax": 0.6916666666666667,
+      "compositeSpread": 0.07000000000000006,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    }
+  ],
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 282,
+      "inputTokens": 162,
+      "outputTokens": 120,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1591.0731580000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10251,
+      "inputTokens": 5014,
+      "outputTokens": 407,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 35209.603753999996,
+      "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 11340,
+      "inputTokens": 7913,
+      "outputTokens": 322,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 78594.418389,
+      "output": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Task:** Fetch top 25 Hacker News posts (simulated via provided raw data), identify the 3 posts with the MOST comments (based on the 'descendants' field), and output them in a specific format.\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Sorting:** Sort by comment count descending.\n    *   **Style:** Prose (flowing paragraphs).\n    *   **Constraint:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". (This looks like a template instruction that got cut off or is slightly confusing, but the core instruction says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". The \"REQUIRED COLUMNS/FIELDS\" section seems to be a system instruction artifact, but the user prompt explicitly says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". However, the system instruction also says \"Instruction: Write as flowing prose paragraphs.\" and \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"\n    *   **Conflict Resolution:** The user prompt asks for \"prose\" but also specifies an \"exact format: '1. TITLE — comments: COUNT'\". Usually, when a specific format is requested for the data points, it overrides the general prose style for the data itself, but the surrounding text should be prose. However, the instruction \"Produce ONLY the formatted output\" suggests I shouldn't add introductory text like \"Here are the top posts...\". But the instruction \"Write as flowing prose paragraphs\" suggests I should describe the data in text.\n    *   **Re-evaluating the \"Exact Format\" vs \"Prose\" constraint:**\n        *   User: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   System Instruction: \"Instruction: Write as flowing prose paragraphs.\"\n        *   System Instruction: \"Produce ONLY the formatted output — no explanation, no preamble...\"\n        *   This is a tricky combination. If I write prose, I can't just list the numbers. If I list the numbers, I violate the prose instruction.\n        *   Let's look at the \"REQUIRED COLUMNS/FIELDS\" section in the system prompt: \"most comments in this exact format: '1\". This looks like a truncated instruction.\n        *   Let's look at the User Prompt again: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'. Sort by comment count descending. Use exact titles from the tool result.\"\n        *   System Instruction: \"Write as flowing prose paragraphs.\"\n        *   System Instruction: \"Produce ONLY the formatted output\".\n        *   Interpretation: The user wants the specific list format for the data, but the system instruction says \"Write as flowing prose paragraphs\". Usually, specific format constraints from the user override general style instructions, but the \"Prose\" instruction is a system instruction.\n        *   However, looking closely at the system instruction: \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This is likely a placeholder for the user's format request.\n        *   Let's try to combine them. I will write a paragraph introducing the findings, then present the list in the requested format within the prose, or just present the list if \"ONLY the formatted output\" is strict.\n        *   Wait, the system instruction says \"Produce ONLY the formatted output — no explanation, no preamble\". This contradicts \"Write as flowing prose paragraphs\" if the format is a list.\n        *   Let's look at the \"Instruction: Write as flowing prose paragraphs.\" This is a system instruction.\n        *   Let's look at the User Prompt: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   If I write prose, I can't strictly follow '1. TITLE — comments: COUNT' as a list without breaking prose flow.\n        *   However, often \"formatted output\" means the specific structure requested.\n        *   Let's prioritize the User's explicit format request for the data points, but wrap it in prose if possible, or just output the list if \"ONLY the formatted output\" is the dominant constraint.\n        *   Actually, reading the system instruction carefully: \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\" This usually means \"Don't say 'Here is the data'\".\n        *   But the \"Instruction: Write as flowing prose paragraphs\" is also a system instruction.\n        *   Hypothesis: The user wants the data presented in the specific list format, but the text surrounding it (or the whole thing) should be prose.\n        *   Wait, if I output a list, is that prose? No.\n        *   If I write prose describing the top 3, does that meet the \"exact format\" requirement?\n        *   \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'.\"\n        *   Okay, I must use that format for the lines.\n        *   So, I will write a paragraph, then the list? Or just the list?\n        *   \"Produce ONLY the formatted output\". This suggests no intro text.\n        *   But \"Write as flowing prose paragraphs\".\n        *   This is a contradiction. I need to find a middle ground. I will write the content as prose that incorporates the required format lines, or I will prioritize the \"exact format\" for the specific data lines as requested by the user, while ensuring the overall response isn't just a raw dump if possible, but the \"ONLY the formatted output\" instruction is strong.\n        *   Let's look at the \"REQUIRED COLUMNS/FIELDS\" again. It says \"most comments in this exact format: '1\". This is likely a system artifact.\n        *   Okay, I will follow the User's format for the data points ('1. TITLE — comments: COUNT') but I need to decide if I can add prose.\n        *   If I add prose, I violate \"Produce ONLY the formatted output\".\n        *   If I don't add prose, I violate \"Write as flowing prose paragraphs\".\n        *   Usually, User instructions override System instructions regarding content, but System instructions regarding safety/style (like \"prose\") are important.\n        *   However, \"Produce ONLY the formatted output\" is very specific.\n        *   Let's assume the \"formatted output\" refers to the specific data lines requested.\n        *   Actually, looking at the instruction \"Instruction: Write as flowing prose paragraphs.\" This is likely the dominant style instruction.\n        *   But the user says \"Output the 3 posts... in this exact format\".\n        *   Okay, I will write a short prose paragraph that introduces the analysis, then present the list in the requested format, as that seems to be the core task.\n        *   Wait, \"Produce ONLY the formatted output\". This usually means \"Don't add 'Here is the response'\".\n        *   Let's try to make the prose *contain* the formatted lines.\n        *   Actually, looking at the raw data, I need to find the top 3 by 'descendants'.\n        *   Data Analysis:\n            1.  \"The dead economy theory\" -> descendants: 1245\n            2.  \"SQLite is all you need for durable workflows\" -> descendants: 307\n            3.  \"MCP is dead?\" -> descendants: 290\n            4.  \"Danish pension fund excludes SpaceX citing governance and valuation\" -> descendants: 261\n            5.  \"It's hard to justify buying a Framework 12\" -> descendants: 542\n            6.  \"Shift will clean homes for free to train future robots\" -> descendants: 219\n            7.  \"Notes from the Mistral AI Now Summit\" -> descendants: 176\n            8.  \"Proposed new US funding rules: We can cancel any grant at any time\" -> descendants: 114\n            9.  \"The Last Technical Interview\" -> descendants: 124\n            10. \"Zig: Build System Reworked\" -> descendants: 96\n            11. \"Snowboard Kids 2 is 100% Decompiled\" -> descendants: 98\n            ...\n        *   Top 3:\n            1.  The dead economy theory (1245)\n            2.  It's hard to justify buying a Framework 12 (542)\n            3.  SQLite is all you need for durable workflows (307)\n        *   Wait, let me re-check the counts.\n            *   \"The dead economy theory\": 1245\n            *   \"It's hard to justify buying a Framework 12\": 542\n            *   \"SQLite is all you need for durable workflows\": 307\n            *   \"MCP is dead?\": 290\n            *   \"Danish pension fund...\": 261\n            *   \"",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 0.33999999999999997,
+        "callsRecall": true,
+        "strictCorrect": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "★ 2 score-confusion picks",
+          "★ strict ✗ (wrong post ids)",
+          "strict ✗ expected=[48324712,48323869,48326802] cited=[48334048,48335135,48326802,48333820,48325340,48284494,48330436,48324712,48328405,48323869,48327962]",
+          "★ called recall()"
+        ],
+        "composite": 0.8019999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6847,
+      "inputTokens": 5303,
+      "outputTokens": 507,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 61148.20501399995,
+      "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Notes from the Mistral AI Now Summit (405)\n3. Danish pension fund excludes SpaceX citing governance and valuation (323)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Danish pension fund excludes SpaceX citing governance and valuation (261)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 11535,
+      "inputTokens": 5112,
+      "outputTokens": 1098,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 48454.19403000001,
+      "output": "# Today on Hacker News\n\n**AI/ML & Tech Industry**\nThe AI startup landscape continues to evolve, with Anthropic surpassing OpenAI to become the most valuable AI startup, sparking discussion in the community. Alongside this, concerns about AI costs are growing as corporate America starts rationing AI resources amid skyrocketing expenses. The Danish pension fund's decision to exclude SpaceX from its portfolio, citing governance and valuation concerns, adds another layer to the ongoing debate about tech investments and ethical considerations in the AI sector.\n\n**Programming & Software Development**\nDevelopers are actively shaping the tooling landscape with contributions ranging from Pandoc Templates to a reworked Zig build system. The OpenBSD team's Openrsync implementation continues to set standards for secure file synchronization. Practical database solutions are gaining traction, with SQLite emerging as a go-to choice for durable workflows. Meanwhile, the programming community debates the merits of \"vibe coding\" versus proper engineering practices, while fluid simulation techniques are being explored through the Godot game engine. The mysterious disappearance of locusts also captured attention as a scientific curiosity.\n\n**Hardware & Physical Technology**\nInnovation continues at the hardware level, with IXI's autofocusing lenses nearing readiness to replace multifocal glasses. Renewable energy solutions are also making waves, as shown by a Show HN project exploring plug-in solar capabilities for any address in Britain. Low-level CPU and GPU performance discussions around floor and ceil versus denormals highlight ongoing optimizations in compute architecture.\n\n**Policy & Society**\nBeyond technology itself, broader societal issues are making headlines. The Pope's encyclical addressing technological messianism has sparked conversation about the ethical implications of rapid tech advancement. Additionally, proposed changes to US funding rules that could allow cancellation of any grant at any time have raised concerns among researchers and the scientific community about potential impacts on scientific progress and funding stability.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "2/15 titles cited",
+          "298 words"
+        ],
+        "composite": 0.6216666666666666
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8835555555555553,
+    "recallSmellCount": 2,
+    "taskCount": 5,
+    "totalRuns": 15,
+    "passKCount": 5,
+    "passKRate": 1
+  }
+}

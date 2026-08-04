@@ -1,7 +1,7 @@
 ---
 title: Cortex ↔ latest RA API wiring (durable Phase E + offerings audit)
 date: 2026-06-16
-status: in-progress
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 tags: [cortex, durable-execution, hitl, structured-output, v0.12]
 ---
 

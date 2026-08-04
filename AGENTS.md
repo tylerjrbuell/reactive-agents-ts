@@ -124,7 +124,7 @@ Foundation (no reactive-agents deps)
 | `verification`  | `src/services/verification-service.ts`  | `VerificationService`                                       |
 | `cost`          | `src/services/cost-service.ts`          | `CostService`                                               |
 | `identity`      | `src/services/identity-service.ts`      | `IdentityService`                                           |
-| `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
+| `observability` | `src/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
 | `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
 | `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
 | `runtime-shim`  | `src/index.ts`                          | `Database`, `spawn`, `serve`, `glob`, `hash`, `isMain`, `isBun`, `isNode` |
@@ -155,15 +155,15 @@ Quick reference for tracing issues to specific kernel phases/services:
 | Symptom | Start here |
 | --- | --- |
 | Tools not called | `packages/reasoning/src/kernel/capabilities/reason/think.ts` → `kernel/capabilities/act/act.ts` |
-| Context missing | `packages/reasoning/src/context/context-manager.ts` (`ContextManager.build`) → `context/message-window.ts` |
+| Context missing | `packages/reasoning/src/assembly/project.ts` (`project()` — sole live prompt/context assembler since the `ContextManager`/APC stack was deleted 2026-07-07) → `assembly/from-kernel-state.ts` |
 | Tool results lost | `kernel/capabilities/act/tool-execution.ts` → `kernel/capabilities/attend/tool-formatting.ts:compressToolResult` |
 | EventBus silent | `packages/core/src/services/event-bus.ts` (check shared ManagedRuntime) |
 | LLM call fails | `packages/llm-provider/src/runtime.ts` → provider-specific in `src/providers/` |
 | Memory not persisting | `packages/memory/src/runtime.ts:createMemoryLayer()` wiring |
 | Plan loops forever | `packages/reasoning/src/strategies/plan-execute.ts:isSatisfied()` guard |
 | Gateway won't start | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
-| Chat history missing | `packages/runtime/src/gateway-chat.ts:GatewayChatManager` + SessionStoreService wiring |
-| Metrics missing | `packages/observability/src/services/observability-service.ts:MetricsCollectorLive` |
+| Chat history missing | `packages/runtime/src/gateway-context-formatting.ts:GatewayChatManager` + SessionStoreService wiring |
+| Metrics missing | `packages/observability/src/observability-service.ts:MetricsCollectorLive` |
 
 ---
 
@@ -242,7 +242,7 @@ Key references:
 ### Before Starting Work
 
 1. Read this `AGENTS.md` for project status, build commands, architecture overview, and workflow rules
-2. Query the Obsidian oracle via `obsidian-vault-query` — check prior [[Decisions]], [[Experiments]], [[Running Issues Log]], and any concept notes touching your work
+2. Query the Obsidian oracle via `claude-obsidian:wiki-query` — check prior [[Decisions]], [[Experiments]], [[Running Issues Log]], and any concept notes touching your work
 3. Read the relevant spec in `wiki/Architecture/Specs/` for the feature you're implementing
 4. Check `wiki/Planning/Implementation-Plans/` for active plans relevant to your work
 5. Load relevant skills (`effect-ts-patterns`, `architecture-reference`, `llm-api-contract`)
@@ -360,7 +360,7 @@ The team-ownership contract graduated from pilot to standing convention on **202
 1. **NO new files in `docs/`** — that directory was eliminated in May 2026 consolidation. Plans, specs, debriefs all go to `wiki/`.
 2. **`docs/superpowers/plans/` is DEPRECATED** — superpowers `writing-plans` skill should target `wiki/Planning/Implementation-Plans/`. If a plan lands in the deprecated location, move it.
 3. **All agents follow the same convention** — Claude Code, Cursor, Codex, Aider, etc. write to wiki. There is no agent-specific plan directory.
-4. **Update the index after writing** — after creating any plan/spec/decision, append to the relevant index page (`wiki/Planning/Planning-Index.md`, `wiki/Decisions/Decision-Index.md`, etc.).
+4. **Update the index after writing** — after creating any plan/spec/decision, append to the relevant index page (`wiki/Planning/Planning-Index.md`, `wiki/Decisions/Decision Index.md`, etc.).
 5. **Use frontmatter** — every wiki file gets `---` YAML frontmatter with `type`, `status`, `created`, `tags`.
 
 ### For superpowers `writing-plans` Skill Users
@@ -422,7 +422,7 @@ Skills that integrate with this workflow: `harness-improvement-loop`, `update-do
 | **New/changed builder method** | `README.md` (quick start + capabilities), `apps/docs/src/content/docs/reference/builder-api.md`, `AGENTS.md` (architecture/workflow)   |
 | **New CLI command**            | `README.md` (CLI section), `apps/docs/src/content/docs/reference/cli.md`, `AGENTS.md` (CLI/build workflow)                             |
 | **Test count changed**         | Bump `tests` in `apps/docs/src/data/metrics-cache.json`, then `bun run --cwd apps/docs metrics:sync-readme` — home page picks it up automatically |
-| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.md`                                                       |
+| **New reasoning strategy**     | `README.md` (strategies table), `apps/docs/src/content/docs/guides/reasoning.mdx`                                                       |
 | **New LLM provider**           | `README.md` (providers table), `apps/docs/src/content/docs/features/llm-providers.md`, `AGENTS.md` (env vars/workflow notes if needed) |
 | **New feature page needed**    | `apps/docs/src/content/docs/features/<name>.md` or `guides/<name>.md`                                                                  |
 | **API signature change**       | Search all docs for old signature and update: `grep -r "oldMethod" apps/docs/`                                                         |
@@ -445,7 +445,7 @@ Key files:
 - `src/content.config.ts` — content collections (Astro 6 Content Layer: `docsLoader()` + schemas; custom loaders live under `src/content/`)
 - `src/data/metrics.json` — **build-time generated**, single source of truth for stat numbers (gitignored — always regenerated)
 - `src/data/metrics-cache.json` — committed snapshot of the latest `bun test` pass count (manually editable)
-- `scripts/generate-metrics.ts` — derives counts from filesystem + canonical source
+- `apps/docs/scripts/generate-metrics.ts` — derives counts from filesystem + canonical source
 
 ### Drift-Prone Stats Are Now Dynamic
 
@@ -542,7 +542,7 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 
 **Bump types:** `patch` (fixes), `minor` (features), `major` (breaking)
 
-**All 36 packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
+**All 34 packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
 
 ---
 
@@ -552,7 +552,7 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | **Agent onboarding** | **START HERE:** `QUICK_START.md` (5 min) + `NAVIGATION.md` (repo structure)                                                             |
 | **Memory**           | `.agents/MEMORY.md` — cross-session project context, status, patterns, known issues                                                      |
-| **Knowledge vault**  | `wiki/` — single source of truth: Architecture, Concepts, Planning, Reference, Research, Development. Query via `obsidian-vault-query`. |
+| **Knowledge vault**  | `wiki/` — single source of truth: Architecture, Concepts, Planning, Reference, Research, Development. Query via `claude-obsidian:wiki-query`. |
 | **Canonical specs**  | `wiki/Architecture/Specs/` — uniform NN-NAME.md numbering; see `DOCUMENT_INDEX.md` for authority hierarchy                              |
 | **Implementation plans** | `wiki/Planning/Implementation-Plans/` — ALL plans go here, regardless of agent (Claude/Cursor/Codex/etc.)                          |
 | **Design specs**     | `wiki/Architecture/Design-Specs/` — feature design documents                                                                             |
@@ -569,7 +569,7 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 
 > **Note:** `.agents/MEMORY.md` contains cross-agent project memory — current status, build patterns, architecture decisions, known issues, and roadmap. All agents should read it before starting work and update it after completing significant features.
 >
-> **Oracle vault:** lives in the repo at `wiki/`. Typed-frontmatter notes for every package, concept, decision, experiment, failure mode, and release. **Read `wiki/Hot.md` first** (≤500-word recent-context cache), then `wiki/Home.md` for the index, then drill into the relevant MOC. At session close, regenerate `wiki/Hot.md` and append to `wiki/Log.md`. Use `obsidian-vault-query` to query, `obsidian-vault-sync` to write durable artifacts (Decisions, Experiments, Sessions, Concept updates), and `obsidian-vault-hygiene` for periodic graph health (orphan / bitrot / duplicate / broken-link loops). The vault's own `wiki/CLAUDE.md` and `wiki/Playbooks/Vault Operations.md` are the canonical protocols.
+> **Oracle vault:** lives in the repo at `wiki/`. Typed-frontmatter notes for every package, concept, decision, experiment, failure mode, and release. **Read `wiki/Hot.md` first** (≤500-word recent-context cache), then `wiki/Home.md` for the index, then drill into the relevant MOC. At session close, regenerate `wiki/Hot.md` and append to `wiki/Log.md`. Use `claude-obsidian:wiki-query` to query, `claude-obsidian:save`/`wiki-ingest` to write durable artifacts (Decisions, Experiments, Sessions, Concept updates), and `claude-obsidian:wiki-lint` for periodic graph health (orphan / bitrot / duplicate / broken-link loops) — see §Canonical Wiki Workflow above for the full skill family.
 
 ## Project Skills Index
 
@@ -596,9 +596,9 @@ Canonical project skills live in `.agents/skills/`:
 - `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
 - `architecture-audit` — system-level architecture health check: dead code, layer violations, over-abstraction, documentation drift, and simplification opportunities
 - `execute-backlog` — SCAN → BUNDLE → PLAN → EXECUTE → VERIFY → UPDATE → RETRO loop over GitHub issue backlog. Self-improving: every retro must amend this skill. Supports parallel agent teams via label-scoped bundles.
-- `obsidian-vault-query` — read the Obsidian vault (external project oracle) at session start
-- `obsidian-vault-sync` — write durable artifacts (decisions, experiments, sessions) to the vault
-- `obsidian-vault-hygiene` — orphan / bitrot / duplicate loops keeping the vault graph coherent
+- `claude-obsidian:wiki-query` — read the Obsidian vault (external project oracle) at session start
+- `claude-obsidian:save` / `claude-obsidian:wiki-ingest` — write durable artifacts (decisions, experiments, sessions) to the vault
+- `claude-obsidian:wiki-lint` — orphan / bitrot / duplicate loops keeping the vault graph coherent
 
 ---
 
@@ -664,7 +664,7 @@ Canonical project skills live in `.agents/skills/`:
 ## Common Pitfalls
 
 1. **`serviceOption` returns `Option`** — use `Option.isSome()` + `.value`, not direct access
-2. **`ContextWindowManager.truncate()`** not `buildContext()` — for kernel FC context, use `message-window.ts` (`applyMessageWindowWithCompact`) + `context-manager.ts` (`ContextManager.build`)
+2. **`ContextWindowManager.truncate()`** not `buildContext()` — for kernel FC context, use `assembly/project.ts` (`project()`); the older `message-window.ts`/`context-manager.ts` (`ContextManager.build`) stack was deleted 2026-07-07 (no live caller)
 3. **Gemini SDK is `@google/genai`** not `@google/generative-ai`
 4. **`mock.module()` in Bun** only intercepts ES `import()`, not CJS `require()`
 5. **ReasoningService.execute** takes single params object, not positional args
@@ -677,7 +677,7 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Current Framework Snapshot (v0.14.0, 2026-07-21)
 
-- Monorepo scale: **36 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz) — `@reactive-agents/orchestration` and `@reactive-agents/scenarios` are removed from the published set in v0.14 (**34 published on npm**)
+- Monorepo scale: **34 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz) — 32 published on npm, 2 private (`benchmarks`, `judge-server`). `@reactive-agents/orchestration` and `@reactive-agents/scenarios` were removed entirely in v0.14.
 - Verified quality: **8,276 pass / 0 fail across 1,060 files** (2026-07-21) — run `bun test` for the authoritative count before release
 - Current empirical state: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`
 
@@ -707,7 +707,7 @@ Canonical project skills live in `.agents/skills/`:
 8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTools({ terminal: true })`
 9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
 10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
-11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-chat.ts`.
+11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-context-formatting.ts` (renamed from `gateway-chat.ts`, May 2026).
 
 ### External channels (shipped — merged to `main`)
 

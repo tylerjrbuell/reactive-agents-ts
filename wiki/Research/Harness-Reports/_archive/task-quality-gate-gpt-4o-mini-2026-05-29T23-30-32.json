@@ -1,0 +1,135 @@
+{
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-29T23-30-32",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 619,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 3529.9429419999997,
+      "output": "Here is the list of the 7 days of the week starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5846,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 27914.997159,
+      "output": "1. SQLite is all you need for durable workflows (score: 290)\n2. The dead economy theory (score: 591)\n3. Notes from the Mistral AI Now Summit (score: 297)\n4. You can just say it (score: 53)\n5. MCP Is Dead (score: 31)\n6. Shift will clean homes for free to train future robots (score: 60)\n7. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 61)\n8. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 35)\n9. It's hard to justify buying a Framework 12 (score: 190)\n10. On Rendering Diffs (score: 129)\n11. Bijou64: A variable-length integer encoding (score: 197)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 135)\n13. The California state assembly has passed the 'Protect Our Games Act' (score: 155)\n14. Free full BGP feed. IPv4 and IPv6 (score: 11)\n15. Rothko for your current weather conditions (score: 111)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 5873,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 11445.207440999995,
+      "output": "1. The dead economy theory — comments: 778\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 645\n3. GTA 6 Developers Unionize — comments: 363",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5807,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 16413.417589999997,
+      "output": "## Highest Score\n1. The dead economy theory (591)\n2. GTA 6 Developers Unionize (531)\n3. SQLite is all you need for durable workflows (290)\n\n## Most Comments\n1. The dead economy theory (778)\n2. GTA 6 Developers Unionize (363)\n3. It's hard to justify buying a Framework 12 (345)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6615,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 16035.870159999999,
+      "output": "# Today on Hacker News\n\n## AI/ML\nThe field of artificial intelligence is buzzing with activity this week. Notable posts include **[Notes from the Mistral AI Now Summit](https://koenvangilst.nl/lab/mistral-ai-now-summit)**, which highlights key discussions from a recent summit, and **[Liquid AI reveals 8B-A1B MoE trained on 38T](https://www.liquid.ai/blog/lfm2-5-8b-a1b)**, showcasing advancements in machine learning models. Additionally, **[Shift will clean homes for free to train future robots](https://www.theverge.com/ai-artificial-intelligence/939765/ai-training-data-startup-shift-free-cleaning)** emphasizes innovative methods to gather training data for AI systems.\n\n## Economics & Society\nIn the realm of economics, **[The dead economy theory](https://www.owenmcgrann.com/p/the-dead-economy-theory)** presents a thought-provoking analysis of current economic trends, while the **[California state assembly has passed the 'Protect Our Games Act'](https://www.invenglobal.com/articles/22330/stop-killing-games-movement-gains-momentum-california-assembly-passes-game-protection-bill)** raises discussions about the intersection of legislation and gaming culture.\n\n## Technology & Development\nSeveral posts focus on technology advancements. The article **[SQLite is all you need for durable workflows](https://obeli.sk/blog/sqlite-is-all-you-need-for-durable-workflows/)** argues for the efficiency of SQLite in various applications. Meanwhile, **[Bijou64: A variable-length integer encoding](https://www.inkandswitch.com/tangents/bijou64/)** delves into encoding techniques relevant for developers, and **[Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA](https://github.com/jmaczan/tiny-vllm)** introduces a new tool for efficiently running large language models.\n\n## Miscellaneous\nIn other interesting news, **[Rothko for your current weather conditions](https://rothko.joonas.wtf/)** provides a unique visual representation of the current weather, merging art and data. Additionally, **[MCP Is Dead](https://www.quandri.io/engineering-blog/mcp-is-dead)** discusses the end of a technology era, while **[It's hard to justify buying a Framework 12](https://www.jeffgeerling.com/blog/2026/its-hard-to-justify-framework-12/)** offers insights into the latest laptop models. \n\nOverall, this week’s Hacker News posts reflect a diverse range of topics from AI advancements to economic theories, showcasing the vibrant discussions happening in tech communities.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "10/15 titles cited",
+          "259 words"
+        ],
+        "composite": 0.8833333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9583333333333333,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

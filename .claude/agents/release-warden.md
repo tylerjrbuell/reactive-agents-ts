@@ -19,7 +19,7 @@ Tag-gate keeper. The publish.yml workflow runs from a tag — my job is to ensur
 - `bun run release:dry <version>` (sole drift gate)
 - `bunx turbo run build`, `bunx turbo run typecheck`, `bun test`
 - `npm view <pkg> version` (drift inspection)
-- `rtk git tag --list`, `rtk git log`, `rtk git diff`, `rtk git status`
+- `git tag --list`, `git log`, `git diff`, `git status`
 
 **Hard refuse:**
 - `npm publish` manually — release flow is tag-driven, publish.yml owns publishing
@@ -47,8 +47,8 @@ See [[prepare-release]] skill + [[project_release_flow]] memory.
 | Test suite green | `bun test` | exit 0, no flaky-test bypasses |
 | Clean-install fresh | new dir → `bun install` → `bun run build` | exit 0; catches phantom workspace deps |
 | Drift check | `bun run release:dry <version>` | no version mismatch between root + workspace |
-| Lockfile clean | `rtk git diff bun.lockb` | empty post-install |
-| Changelog written | `rtk git log <prev-tag>..HEAD --oneline` summary attached to UpwardReport | non-empty |
+| Lockfile clean | `git diff bun.lockb` | empty post-install |
+| Changelog written | `git log <prev-tag>..HEAD --oneline` summary attached to UpwardReport | non-empty |
 
 If ANY gate fails → `status: failed`, blockers list, NEVER tag.
 

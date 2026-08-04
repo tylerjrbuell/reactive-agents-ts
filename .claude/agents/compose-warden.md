@@ -22,7 +22,7 @@ Bounded specialist for `packages/compose/**`. I/O contract: [[mission-brief]] + 
 **Bash allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/compose`
 - `bun test packages/compose/`
-- `rtk git diff`, `rtk git log`, `rtk grep`, `rtk find`
+- `git diff`, `git log`, `grep`, `find`
 
 **Hard refuse:** edits outside `packages/compose/**`; cross-package edits to `core/services/compose-bridge.ts`; commits; releases.
 

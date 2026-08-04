@@ -1,0 +1,687 @@
+{
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "recentObservationsLimit": 5,
+  "runsPerTask": 3,
+  "timestamp": "2026-05-30T16-36-38",
+  "runSets": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "runs": [
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 617,
+          "inputTokens": 134,
+          "outputTokens": 40,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 2696.099593,
+          "output": "Here are the 7 days of the week starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 620,
+          "inputTokens": 134,
+          "outputTokens": 45,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 2299.477251,
+          "output": "Sure! Here is the list of the 7 days of the week starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 161,
+          "inputTokens": 134,
+          "outputTokens": 27,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 681.2781670000004,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": null,
+      "postCondLabel": "—"
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "runs": [
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 5957,
+          "inputTokens": 4814,
+          "outputTokens": 358,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 36743.751022,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 5960,
+          "inputTokens": 4814,
+          "outputTokens": 358,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 22596.866325000003,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 5984,
+          "inputTokens": 4814,
+          "outputTokens": 357,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 22647.565151000003,
+          "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "runs": [
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": false,
+          "tokensUsed": 10167,
+          "inputTokens": 9999,
+          "outputTokens": 168,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 7248.272685000004,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.3,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+              "★ called recall()"
+            ],
+            "composite": 0.345
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": false,
+          "tokensUsed": 9005,
+          "inputTokens": 8870,
+          "outputTokens": 135,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 5857.883480000004,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.3,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+              "★ called recall()"
+            ],
+            "composite": 0.345
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": false,
+          "tokensUsed": 8940,
+          "inputTokens": 8805,
+          "outputTokens": 135,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 6216.464434000009,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.3,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+              "★ called recall()"
+            ],
+            "composite": 0.345
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": false,
+      "passKLabel": "0/3",
+      "compositeMean": 0.345,
+      "compositeMin": 0.345,
+      "compositeMax": 0.345,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": 0,
+      "t3StrictCorrectLabel": "0/3",
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "runs": [
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 12057,
+          "inputTokens": 5140,
+          "outputTokens": 1310,
+          "stepsCount": 8,
+          "toolCallCount": 2,
+          "wallMs": 36307.499581,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Danish pension fund excludes SpaceX citing governance and valuation (323)\n3. Notes from the Mistral AI Now Summit (405)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Proposed new US funding rules: We can cancel any grant at any time (114)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles",
+              "★ called recall()"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 12091,
+          "inputTokens": 5140,
+          "outputTokens": 1312,
+          "stepsCount": 8,
+          "toolCallCount": 2,
+          "wallMs": 35191.79564200001,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (599)\n2. Danish pension fund excludes SpaceX citing governance and valuation (323)\n3. Notes from the Mistral AI Now Summit (405)\n\n## Most Comments\n1. SQLite is all you need for durable workflows (307)\n2. MCP is dead? (290)\n3. Proposed new US funding rules: We can cancel any grant at any time (114)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "6/6 correct titles",
+              "★ called recall()"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": false,
+          "tokensUsed": 9121,
+          "inputTokens": 8889,
+          "outputTokens": 232,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 7960.112072999997,
+          "output": "",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "notes": [
+              "★ missing Highest Score section",
+              "★ missing Most Comments section",
+              "0/6 correct titles",
+              "★ called recall()"
+            ],
+            "composite": 0.3
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": false,
+      "passKLabel": "2/3",
+      "compositeMean": 0.7666666666666666,
+      "compositeMin": 0.3,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0.7,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "runs": [
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6581,
+          "inputTokens": 4887,
+          "outputTokens": 602,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 17695.830641999986,
+          "output": "# Today on Hacker News\n\n## AI and Machine Learning\nIn a significant development, [Anthropic has surpassed OpenAI to become the world's most valuable AI startup](https://qazinform.com/news/anthropic-surpasses-openai-to-become-worlds-most-valuable-ai-startup), signaling a potential shift in the competitive landscape of AI. As corporate investments in AI continue to grow, [Corporate America is starting to ration AI as costs skyrocket](https://www.wsj.com/tech/ai/corporate-america-is-starting-to-ration-ai-as-cost-skyrockets-1eb99d7a), raising concerns about sustainability and access to advanced technologies.\n\n## Programming and Development\nThe programming community has a lot to discuss with the release of [Zig: Build System Reworked](https://ziglang.org/devlog/2026/#2026-05-26), which offers improvements that developers have been eagerly awaiting. Additionally, [Pandoc Templates](https://pandoc-templates.org/) have been introduced, which can enhance document generation workflows. Developers interested in file synchronization can explore [Openrsync, an implementation of rsync by the OpenBSD team](https://github.com/kristapsdz/openrsync), which promises to deliver a robust solution for file transfers.\n\n## Science and Technology\nIn the realm of science, the [proposed new US funding rules](https://arstechnica.com/science/2026/05/the-office-of-management-and-budget-tries-again-to-cripple-us-science/) have stirred controversy as they allow the government to cancel any grant at any time, potentially jeopardizing scientific research. Moreover, [IXI's autofocusing lenses](https://www.engadget.com/wearables/ixis-autofocusing-lenses-multifocal-glasses-ces-2026-212608427.html) promise to revolutionize eyewear by almost replacing multifocal glasses.\n\n## Other Notable Mentions\nIn cultural discussions, [Leo's first encyclical attacks technological messianism](https://www.economist.com/europe/2026/05/28/leos-first-encyclical-attacks-technological-messianism), reflecting on the societal impacts of technology. Lastly, a fascinating exploration titled [What Happened to the Locusts?](https://explosion-scratch.github.io/locusts/) has captured attention, shedding light on ecological changes affecting these insects.\n\nThis week’s top stories reflect the dynamic interplay between technology, science, and societal concerns, providing a rich landscape for discussion and exploration.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.3333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "5/15 titles cited",
+              "240 words"
+            ],
+            "composite": 0.7666666666666667
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6289,
+          "inputTokens": 4887,
+          "outputTokens": 453,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 15264.645113000006,
+          "output": "# Today on Hacker News\n\n## AI/ML\nThe world of artificial intelligence has seen significant shifts recently, particularly with **Anthropic** surpassing **OpenAI** to become the most valuable AI startup. This change has sparked discussions about the evolving landscape of AI companies. Additionally, **Corporate America** is beginning to ration AI resources as costs continue to skyrocket, highlighting the financial pressures on tech companies navigating the AI market.\n\n## Programming\nIn the programming category, the release of **Zig's reworked build system** has garnered attention, showcasing innovative approaches in the software development field. Another noteworthy mention is **Pandoc Templates**, a resource that continues to be invaluable for documentation and formatting tasks. Moreover, the **Openrsync** project by the OpenBSD team is an exciting implementation of rsync, contributing to the ongoing evolution of file synchronization tools.\n\n## Science and Technology\nOn the technological front, **IXI's autofocusing lenses** are on the verge of revolutionizing vision correction by providing alternatives to multifocal glasses. In addition, the discussion surrounding **Leo's first encyclical**, which critiques technological messianism, invites a philosophical examination of technology's role in society. Meanwhile, a proposed new set of U.S. funding rules suggests that grants could be canceled at any time, stirring debate about the future of scientific funding.\n\n## Miscellaneous\nIn other news, a fascinating exploration of **Navier-Stokes fluid simulation** through the **Godot game engine** has emerged, providing insights into computational fluid dynamics. The **Helios** project has also made waves by illustrating what plug-in solar power could generate for any address in Britain, emphasizing the potential of renewable energy solutions. Lastly, an intriguing piece titled **\"What Happened to the Locusts?\"** continues to engage readers with its exploration of ecological phenomena.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.26666666666666666,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "4/15 titles cited",
+              "275 words"
+            ],
+            "composite": 0.7433333333333333
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6282,
+          "inputTokens": 4887,
+          "outputTokens": 444,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 12867.289479,
+          "output": "# Today on Hacker News\n\n## AI/ML\nThe AI landscape is ever-evolving, with recent developments making headlines. Notably, **Anthropic surpasses OpenAI to become the world's most valuable AI startup**. This significant shift highlights the competitive nature of the AI sector. Additionally, **Corporate America is starting to ration AI as costs skyrocket**, indicating a cautious approach amidst rising expenses in AI technology.\n\n## Programming\nIn the programming domain, several noteworthy projects have caught attention. The **Zig build system has been reworked**, showcasing the community's ongoing commitment to improving tools for developers. Furthermore, **Openrsync**, an implementation of rsync by the OpenBSD team, presents an exciting alternative for file synchronization. The article on **Pandoc Templates** also offers valuable resources for developers looking to enhance their documentation processes.\n\n## Hardware\nInnovations in hardware are also making waves, particularly with IXI's **autofocusing lenses**, which are almost ready to replace multifocal glasses, providing a glimpse into the future of personal optics. Meanwhile, the **Show HN: Helios** project proposes a novel solution for solar energy generation that could revolutionize energy accessibility in Britain.\n\n## Science and Society\nOn the societal front, **Leo's first encyclical attacks technological messianism**, sparking discussions on the implications of technology on religious and moral perspectives. Additionally, proposed new US funding rules that allow for the cancellation of grants at any time raise questions about the future of scientific research in the country. The article titled **What Happened to the Locusts?** also explores intriguing ecological changes that warrant attention.\n\nThis roundup highlights the dynamism within various sectors, showcasing the interplay between advancements in technology, programming innovations, and the larger societal implications of these changes. Stay tuned for more updates!",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.26666666666666666,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "4/15 titles cited",
+              "275 words"
+            ],
+            "composite": 0.7433333333333333
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.7511111111111112,
+      "compositeMin": 0.7433333333333333,
+      "compositeMax": 0.7666666666666667,
+      "compositeSpread": 0.023333333333333428,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    }
+  ],
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 161,
+      "inputTokens": 134,
+      "outputTokens": 27,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 681.2781670000004,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5984,
+      "inputTokens": 4814,
+      "outputTokens": 357,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 22647.565151000003,
+      "output": "1. Anthropic surpasses OpenAI to become most valuable AI startup (score: 58)\n2. Pandoc Templates (score: 203)\n3. Zig: Build System Reworked (score: 189)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 68)\n5. Leo's first encyclical attacks technological messianism (score: 70)\n6. Proposed new US funding rules: We can cancel any grant at any time (score: 173)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 39)\n8. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 39)\n9. Navier-Stokes fluid simulation explained with Godot game engine (score: 15)\n10. What Happened to the Locusts? (score: 82)\n11. Vibe Coding Is Not Engineering (score: 14)\n12. SQLite is all you need for durable workflows (score: 599)\n13. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 56)\n14. Danish pension fund excludes SpaceX citing governance and valuation (score: 323)\n15. Floor and Ceil versus Denormals on CPU and GPU (score: 27)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 8940,
+      "inputTokens": 8805,
+      "outputTokens": 135,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 6216.464434000009,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "strictCorrect": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion",
+          "★ strict ✗ (wrong post ids)",
+          "strict ✗ expected=[48324712,48323869,48326802] cited=[]",
+          "★ called recall()"
+        ],
+        "composite": 0.345
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 9121,
+      "inputTokens": 8889,
+      "outputTokens": 232,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 7960.112072999997,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.3
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6282,
+      "inputTokens": 4887,
+      "outputTokens": 444,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 12867.289479,
+      "output": "# Today on Hacker News\n\n## AI/ML\nThe AI landscape is ever-evolving, with recent developments making headlines. Notably, **Anthropic surpasses OpenAI to become the world's most valuable AI startup**. This significant shift highlights the competitive nature of the AI sector. Additionally, **Corporate America is starting to ration AI as costs skyrocket**, indicating a cautious approach amidst rising expenses in AI technology.\n\n## Programming\nIn the programming domain, several noteworthy projects have caught attention. The **Zig build system has been reworked**, showcasing the community's ongoing commitment to improving tools for developers. Furthermore, **Openrsync**, an implementation of rsync by the OpenBSD team, presents an exciting alternative for file synchronization. The article on **Pandoc Templates** also offers valuable resources for developers looking to enhance their documentation processes.\n\n## Hardware\nInnovations in hardware are also making waves, particularly with IXI's **autofocusing lenses**, which are almost ready to replace multifocal glasses, providing a glimpse into the future of personal optics. Meanwhile, the **Show HN: Helios** project proposes a novel solution for solar energy generation that could revolutionize energy accessibility in Britain.\n\n## Science and Society\nOn the societal front, **Leo's first encyclical attacks technological messianism**, sparking discussions on the implications of technology on religious and moral perspectives. Additionally, proposed new US funding rules that allow for the cancellation of grants at any time raise questions about the future of scientific research in the country. The article titled **What Happened to the Locusts?** also explores intriguing ecological changes that warrant attention.\n\nThis roundup highlights the dynamism within various sectors, showcasing the interplay between advancements in technology, programming innovations, and the larger societal implications of these changes. Stay tuned for more updates!",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.26666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "4/15 titles cited",
+          "275 words"
+        ],
+        "composite": 0.7433333333333333
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7725555555555557,
+    "recallSmellCount": 6,
+    "taskCount": 5,
+    "totalRuns": 15,
+    "passKCount": 3,
+    "passKRate": 0.6
+  }
+}

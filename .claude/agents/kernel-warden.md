@@ -22,8 +22,8 @@ Bounded specialist for `packages/reasoning/src/kernel/**`. Decentralized-command
 **Bash commands allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/reasoning`
 - `bun test packages/reasoning/src/kernel/**`
-- `rtk git diff`, `rtk git log`, `rtk git status`
-- `rtk grep`, `rtk find`
+- `git diff`, `git log`, `git status`
+- `grep`, `find`
 
 **Hard refuse:**
 - Edits outside `packages/reasoning/src/kernel/**`

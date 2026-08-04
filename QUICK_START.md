@@ -8,7 +8,7 @@
 
 **Reactive Agents** — TypeScript/Effect-TS framework for building reliable, observable AI agents with composable strategies, adaptive provider selection, and explicit control.
 
-**Current version:** v0.12.0 (released 2026-06-17)
+**Current version:** v0.14.0
 **Architecture:** 35 packages + 6 apps, monorepo via Bun + Turborepo
 **Quality bar:** 6,558 tests, Effect-TS patterns, no raw `throw`/`await`, types-first
 
@@ -26,11 +26,13 @@
 ## I Want to...
 
 ### Understand the architecture
-- Read: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` (target architecture)
-- Then: `wiki/Architecture/Specs/04-PROJECT-STATE.md` (current empirical state)
-- Reference: `AGENTS.md` §Architecture Quick Reference (package tree)
+
+-   Read: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` (target architecture)
+-   Then: `wiki/Architecture/Specs/04-PROJECT-STATE.md` (current empirical state)
+-   Reference: `AGENTS.md` §Architecture Quick Reference (package tree)
 
 ### Add a new feature
+
 1. Load skill: `.agents/skills/effect-ts-patterns/SKILL.md`
 2. Find package: `NAVIGATION.md` §Package Map (29 packages listed)
 3. Understand the package: `packages/<name>/src/index.ts` + `src/runtime.ts`
@@ -40,6 +42,7 @@
 7. Update: `README.md` example + changeset via `bun run changeset`
 
 ### Fix a bug
+
 1. Find symptom: `AGENTS.md` §Common Debugging Entry Points (11-row table)
 2. Read: that file + neighboring files
 3. Test: `bun test packages/<affected>/tests/<file>.test.ts`
@@ -47,6 +50,7 @@
 5. Commit: one concern per commit
 
 ### Create a new package
+
 1. Checklist: `AGENTS.md` §New Package Checklist (6 steps)
 2. Skills: Load `.agents/skills/build-package/SKILL.md`
 3. Reference: Browse `packages/core/` or `packages/llm-provider/` for structure
@@ -55,18 +59,21 @@
 6. Update: AGENTS.md package map, README.md table, architecture-reference skill
 
 ### Write a test
+
 1. Skill: `.agents/skills/agent-tdd/SKILL.md` (Effect-TS TDD discipline)
 2. Patterns: Check `packages/*/tests/*.test.ts` for style
 3. Key rule: Add `--timeout 15000` to prevent hangs; call `.stop(true)` on servers in teardown
 4. Run: `bun test packages/<name>/tests/<file>.test.ts`
 
 ### Understand the kernel (reasoning engine)
+
 1. Read: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` §4. The Cognitive Architecture
 2. Browse: `packages/reasoning/src/strategies/kernel/phases/` (12 files = 12 phases)
 3. Trace: `packages/reasoning/src/strategies/kernel/kernel-runner.ts` calls them in order
 4. Example: `packages/reasoning/tests/kernel-*.test.ts`
 
 ### Add a new LLM provider
+
 1. Reference: `AGENTS.md` §Adaptive Calibration + `llm-api-contract/SKILL.md`
 2. Implement: `packages/llm-provider/src/providers/<name>.ts`
 3. Register: Add to `src/runtime.ts` layer factory
@@ -74,6 +81,7 @@
 5. Update: `CAPABILITIES.md` (CI-enforced registry)
 
 ### Debug test failures
+
 1. Run scoped: `bun test packages/<name>/tests/<file>.test.ts`
 2. Check: AGENTS.md §Terminal Execution Rules (timeouts, dangling servers)
 3. Root cause: Check error message + read test file + read source code
@@ -81,23 +89,27 @@
 5. Commit: Only one concern per commit
 
 ### Understand a failure mode
+
 1. Find: `wiki/Architecture/Specs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.)
 2. Read: Manifestation, reproduction, existing mitigation, empirical evidence
 3. Code: Search for the mitigation in `packages/reasoning/src/` or `packages/tools/src/`
 4. Tests: Look for related tests in package test files
 
 ### Check current project status
-- `.agents/MEMORY.md` (session cross-memory: status, resolved issues, running issues)
-- `wiki/Architecture/Specs/04-PROJECT-STATE.md` (empirical state: validated mechanisms, unvalidated mechanisms)
-- `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` (phase sequencing: gates, validation, Phase 2+ work)
+
+-   `.agents/MEMORY.md` (session cross-memory: status, resolved issues, running issues)
+-   `wiki/Architecture/Specs/04-PROJECT-STATE.md` (empirical state: validated mechanisms, unvalidated mechanisms)
+-   `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` (phase sequencing: gates, validation, Phase 2+ work)
 
 ### Find what changed recently
-- `CHANGELOG.md` (auto-generated, organized by version)
-- `wiki/Hot.md` (Obsidian vault: recent decisions/experiments/sessions)
+
+-   `CHANGELOG.md` (auto-generated, organized by version)
+-   `wiki/Hot.md` (Obsidian vault: recent decisions/experiments/sessions)
 
 ### Understand methodology / validation rules
-- `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
-- `wiki/Architecture/Specs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
+
+-   `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
+-   `wiki/Architecture/Specs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
 
 ---
 
@@ -121,18 +133,18 @@ bun run changeset               # Add changeset for next release
 
 ## Key Files at a Glance
 
-| File | Purpose | Read Time |
-|------|---------|-----------|
-| `.agents/MEMORY.md` | Cross-session project memory | 5 min |
-| `AGENTS.md` | Canonical agent workflow | 15 min |
-| `NAVIGATION.md` | Repo structure + quick patterns | 5 min |
-| `CODING_STANDARDS.md` | TypeScript/Effect-TS authority | skim |
-| `CAPABILITIES.md` | CI-enforced capability registry | 2 min |
-| `README.md` | Public API overview + examples | 5 min |
-| `wiki/Architecture/Specs/04-PROJECT-STATE.md` | Current empirical state | 10 min |
-| `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` | Architecture target | 20 min |
-| `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules) | 5 min |
-| `wiki/Architecture/Specs/02-FAILURE-MODES.md` | Failure catalog + mitigations | as-needed |
+| File                                                | Purpose                         | Read Time |
+| --------------------------------------------------- | ------------------------------- | --------- |
+| `.agents/MEMORY.md`                                 | Cross-session project memory    | 5 min     |
+| `AGENTS.md`                                         | Canonical agent workflow        | 15 min    |
+| `NAVIGATION.md`                                     | Repo structure + quick patterns | 5 min     |
+| `CODING_STANDARDS.md`                               | TypeScript/Effect-TS authority  | skim      |
+| `CAPABILITIES.md`                                   | CI-enforced capability registry | 2 min     |
+| `README.md`                                         | Public API overview + examples  | 5 min     |
+| `wiki/Architecture/Specs/04-PROJECT-STATE.md`       | Current empirical state         | 10 min    |
+| `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`   | Architecture target             | 20 min    |
+| `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules)          | 5 min     |
+| `wiki/Architecture/Specs/02-FAILURE-MODES.md`       | Failure catalog + mitigations   | as-needed |
 
 **Total onboarding time:** 45 min (if you do all 10), or 25 min (essential 5)
 
@@ -167,11 +179,11 @@ bun run changeset               # Add changeset for next release
 
 ## Token Optimization Tips
 
-- **Don't explore aimlessly.** Read the above 3 files in order, then navigate by task (section "I Want to...").
-- **Use symptom maps, not grep.** `AGENTS.md` §Common Debugging has an 11-row table — faster than searching.
-- **Scoped tests only.** `bun test packages/<name>/tests/<file>.test.ts` is 100x faster than the full suite.
-- **Avoid `_archive/` docs.** They're historical; read canonical docs in `wiki/Architecture/Specs/` instead.
-- **Query Obsidian before exploring.** `obsidian-vault-query` for recent decisions is faster than reading 500-page design docs.
+-   **Don't explore aimlessly.** Read the above 3 files in order, then navigate by task (section "I Want to...").
+-   **Use symptom maps, not grep.** `AGENTS.md` §Common Debugging has an 11-row table — faster than searching.
+-   **Scoped tests only.** `bun test packages/<name>/tests/<file>.test.ts` is 100x faster than the full suite.
+-   **Avoid `_archive/` docs.** They're historical; read canonical docs in `wiki/Architecture/Specs/` instead.
+-   **Query Obsidian before exploring.** `obsidian-vault-query` for recent decisions is faster than reading 500-page design docs.
 
 ---
 

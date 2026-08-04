@@ -1,6 +1,6 @@
 ---
 type: implementation-plan
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — pilot window expired 2026-06-15 per its own frontmatter, untouched since)
 created: 2026-05-23
 expires: 2026-06-15
 tags: [dev-workflow, multi-agent, extreme-ownership, pilot, ablation-gated]

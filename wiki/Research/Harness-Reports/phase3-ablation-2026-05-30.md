@@ -3,7 +3,7 @@
 **Date:** 2026-05-30
 **Warden:** ablation-warden
 **Probe:** `.agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts`
-**Fixture (pinned, identical across all arms):** `wiki/Research/Harness-Reports/hn-fixture-2026-05-30.json` (30 HN posts)
+**Fixture (pinned, identical across all arms):** `wiki/Research/Harness-Reports/_archive/hn-fixture-2026-05-30.json` (30 HN posts)
 **Config:** `RUNS_PER_TASK=3`, `recentObservationsLimit=5`, calibration auto. N=3 per task × 5 tasks = 15 runs/arm.
 **Tiers:** cogito:14b (ollama, profile tier `mid`/local-class — obs default-ON) + gpt-4o-mini (openai, profile tier `mid` per `profile-resolver.ts:82` — obs default-ON). Both are obs-affected tiers; this is a genuine 2-tier ablation for both mechanisms.
 
@@ -130,7 +130,7 @@ recall-gate at its NEW default (on), fixture-pinned N=3:
   break under default-on recall gating).
 - This is a default-on datapoint, NOT a gate on/off A/B on this model — it confirms
   the default-on harness is **functional on a genuine small local model**, closing the
-  "local unverified" gap directionally. (`task-quality-gate-llama3-2-latest-2026-05-30T22-18-01.json`.)
+  "local unverified" gap directionally. (`_archive/task-quality-gate-llama3-2-latest-2026-05-30T22-18-01.json`.)
 
 ### MCP-path live check — deferred (logically resolved)
 The clean spot-test under the new default (recall-gate on, MCP/GitHub path) could not

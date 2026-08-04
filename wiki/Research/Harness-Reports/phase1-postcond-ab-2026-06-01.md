@@ -3,10 +3,10 @@ title: Phase 1 PostConditions A/B — cogito:14b, pinned fixture, N=3
 date: 2026-06-01
 phase: "Phase 1 (WS-1) — PostConditionVerifier spine — LIVE-RUN GATE (partial)"
 plan: "[[2026-05-30-canonical-agentic-convergence-plan]]"
-fixture: wiki/Research/Harness-Reports/hn-fixture-2026-06-01.json
+fixture: wiki/Research/Harness-Reports/_archive/hn-fixture-2026-06-01.json
 arms: { on: "RA_POST_CONDITIONS unset (default-on)", off: "RA_POST_CONDITIONS=0" }
-reports: [task-quality-gate-cogito-14b-2026-06-01T11-30-16.json (ON), task-quality-gate-cogito-14b-2026-06-01T11-44-41.json (OFF)]
-status: ACTIVE
+reports: [_archive/task-quality-gate-cogito-14b-2026-06-01T11-30-16.json (ON), _archive/task-quality-gate-cogito-14b-2026-06-01T11-44-41.json (OFF)]
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 ---
 
 # Phase 1 PostConditions A/B (2026-06-01)
@@ -15,7 +15,7 @@ Resolves the stale "0.31→0.72 retired/unmeasured on current code" debt with a
 fixture-pinned N=3 measurement, and partially satisfies Phase 1's LIVE-RUN GATE.
 ON arm = UNSET (the real default regime users get; equivalence-proven ≡ "1");
 OFF arm = `RA_POST_CONDITIONS=0`. Both arms ran on the SAME frozen HN fixture
-(`hn-fixture-2026-06-01.json`, 30 posts) so cross-arm numbers are comparable.
+(`_archive/hn-fixture-2026-06-01.json`, 30 posts) so cross-arm numbers are comparable.
 
 ## Results
 

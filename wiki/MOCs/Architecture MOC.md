@@ -5,6 +5,15 @@ tags: [MOC]
 
 # Architecture MOC
 
+> [!warning] Stale as of 2026-07-31 — unmaintained since the May 2026 vault scaffold
+> This MOC has not been updated since creation and is majority broken links (traced to a
+> `wiki/Concepts/` directory that was never created, decision names that predate the current
+> `YYYY-MM-DD-<slug>` filename convention, and package/app stub pages for most of the 22
+> documented packages). Do not trust its links. Current entry points:
+> [[../Hot|Hot.md]] → [[../Architecture/DEBT-REGISTER|DEBT-REGISTER.md]] →
+> [[../Architecture/Specs/09-UNIFIED-PROGRAM|09-UNIFIED-PROGRAM.md]].
+
+
 **Purpose:** Central hub for understanding the system design, kernel phases, package relationships, and architectural decisions.
 
 > 🟢 **START HERE — [[Framework-Architecture-Index]]** (verified against `main` @ 2026-06-03, every claim file:line-anchored). It is the authoritative, re-verifiable spine. The links below are older notes and may be stale — trust the Index where they conflict. Companions: [[2026-06-03-full-potential-realization-plan]] · [[2026-06-03-architecture-drift-register]].

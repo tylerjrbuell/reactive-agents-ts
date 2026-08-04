@@ -2,7 +2,7 @@
 title: Evidence Refresh — RA_ASSEMBLY grid + #7 postconditions on current code
 date: 2026-06-01
 branch: overhaul/agentic-core-2026-05-31
-status: ACTIVE
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 relates: [assembly-ab-grid-hardened-2026-05-31, postconditions-ablation-2026-05-31]
 ---
 

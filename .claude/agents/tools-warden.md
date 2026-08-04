@@ -19,7 +19,7 @@ Bounded specialist for `packages/tools/**`. I/O contract: [[mission-brief]] + [[
 **Bash allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/tools`
 - `bun test packages/tools/`
-- `rtk git diff`, `rtk git log`, `rtk grep`, `rtk find`
+- `git diff`, `git log`, `grep`, `find`
 - Docker inspect/logs (read-only) for MCP debugging — never `docker run/rm` outside MCP lifecycle code paths
 
 **Hard refuse:** edits outside `packages/tools/**`; commits; releases; manual docker container management.

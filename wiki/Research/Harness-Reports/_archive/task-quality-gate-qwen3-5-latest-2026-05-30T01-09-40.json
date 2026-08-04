@@ -1,0 +1,145 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-30T01-09-40",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 281,
+      "inputTokens": 162,
+      "outputTokens": 119,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6271.519977,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10195,
+      "inputTokens": 4947,
+      "outputTokens": 450,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 48858.346126000004,
+      "output": "1. The dead economy theory (score: 661)\n2. SQLite is all you need for durable workflows (score: 337)\n3. Notes from the Mistral AI Now Summit (score: 308)\n4. It's hard to justify buying a Framework 12 (score: 216)\n5. You can just say it (score: 191)\n6. Bijou64: A variable-length integer encoding (score: 200)\n7. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 146)\n8. On Rendering Diffs (score: 138)\n9. Shift will clean homes for free to train future robots (score: 81)\n10. Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 79)\n11. MCP is dead? (score: 65)\n12. What Is a Dickover? (score: 55)\n13. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 60)\n14. Snowboard Kids 2 is 100% Decompiled (score: 32)\n15. Free full BGP feed. IPv4 and IPv6 (score: 21)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.9333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "14/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9766666666666667
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6727,
+      "inputTokens": 5358,
+      "outputTokens": 371,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 69450.378073,
+      "output": "1. The dead economy theory — comments: 843\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 659\n3. SQLite is all you need for durable workflows — comments: 193",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6930,
+      "inputTokens": 5279,
+      "outputTokens": 548,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 97856.58699499999,
+      "output": "## Highest Score\n1. The dead economy theory (661)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (455)\n3. SQLite is all you need for durable workflows (337)\n\n## Most Comments\n1. The dead economy theory (843)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (659)\n3. It's hard to justify buying a Framework 12 (374)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7398,
+      "inputTokens": 4954,
+      "outputTokens": 1065,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 47605.93638999999,
+      "output": "# Today on Hacker News\n\n## AI/ML\nArtificial intelligence continues to dominate today's discussions, with several major developments surfacing. The \"Notes from the Mistral AI Now Summit\" post generated significant interest, providing insights from the recent gathering. The AI community is also buzzing about \"Liquid AI reveals 8B-A1B MoE trained on 38T,\" showcasing a new mixture-of-experts model trained on 38 trillion tokens. In the infrastructure space, \"Shift will clean homes for free to train future robots\" highlights an ambitious startup using real-world data collection to train AI agents. Additionally, \"MCP is dead?\" sparked debate about the future of Model Context Protocol, while \"Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA\" offered an alternative high-performance inference solution.\n\n## Programming & Databases\nThe programming community celebrated practical database solutions with \"SQLite is all you need for durable workflows,\" arguing that SQLite suffices for many persistent data needs. Meanwhile, \"Bijou64: A variable-length integer encoding\" introduced an interesting data compression technique. The post \"On Rendering Diffs\" explored visual rendering challenges in development tools, while \"You can just say it\" offered insights into network protocols and communication design.\n\n## Hardware & Computing\nHardware enthusiasts debated the value proposition of the Framework 12 laptop in \"It's hard to justify buying a Framework 12,\" examining the economics of modular computing devices. In the 3D printing space, \"Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer\" showcased an exciting advancement in multi-color printing capabilities.\n\n## Other\nBeyond technical topics, economic theory took center stage with \"The dead economy theory,\" which challenged conventional economic thinking. The decompilation of \"Snowboard Kids 2\" demonstrated the accessibility of modern game reverse engineering, while \"Free full BGP feed. IPv4 and IPv6\" provided valuable networking resources. The community also engaged with \"What Is a Dickover?\" in today's lighter fare.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.9333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "14/15 titles cited",
+          "302 words"
+        ],
+        "composite": 0.9766666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9475333333333333,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -21,44 +21,54 @@ bun install
 ## Project Structure
 
 ```
-packages/                  # 25 packages (24 publishable + 1 private: benchmarks)
+packages/                  # 34 packages (32 published, 2 private: benchmarks, judge-server)
   core/                    # EventBus, AgentService, TaskService, shared types
   runtime/                 # ExecutionEngine, ReactiveAgentBuilder, createRuntime()
-  llm-provider/            # 6 providers: Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test
+  llm-provider/            # 8 providers: Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, Test
   memory/                  # 4-layer memory (Working/Semantic/Episodic/Procedural) via bun:sqlite + FTS5 + sqlite-vec
-  reasoning/               # 5 strategies + composable ThoughtKernel + KernelRunner
-  tools/                   # ToolService, 9 capability tools, 8 meta-tools, MCP client, sandbox
+  reasoning/               # 8 strategies + composable ThoughtKernel + KernelRunner
+  tools/                   # ToolService, 9 capability tools, 9 meta-tools, MCP client, sandbox
   guardrails/              # Injection/PII/toxicity, KillSwitch, behavioral contracts
   verification/            # Semantic entropy, fact decomposition, NLI, hallucination detection
   cost/                    # Complexity router, budget enforcer, semantic cache
   identity/                # Ed25519 certs, RBAC, delegation, audit trail
   observability/           # Distributed tracing, metrics, structured logging
   interaction/             # 5 autonomy modes, checkpoints, preference learning
-  orchestration/           # Multi-agent workflows (sequential, parallel, pipeline, map-reduce)
   prompts/                 # Template engine, version control, tier-adaptive variants
   eval/                    # LLM-as-judge, EvalStore, 5 scoring dimensions
   a2a/                     # Agent Cards, JSON-RPC 2.0, SSE streaming
   gateway/                 # Persistent harness: heartbeats, crons, webhooks, policy engine
+  channels/                # External channel triggers: webhook adapter, FIFO session bridge
+  compose/                 # Harness composition + killswitches (maxIterations, budgetLimit, watchdog, ...)
   health/                  # Health checks, readiness probes
   testing/                 # Mock LLMService, mock ToolService, assertion helpers
   reactive-intelligence/   # Entropy sensor, reactive controller, learning engine, telemetry
-  benchmarks/              # Private: 20-task benchmark suite (not published)
+  trace/                   # Structured execution traces: TraceEvent schema, recorders, span helpers
+  replay/                  # Deterministic trace replay: loadRecordedRun, diffTraces
+  diagnose/                # Trace diagnostics + replay-driven root-cause analysis (rax-diagnose CLI)
+  observe/                 # OpenTelemetry/OpenInference span exporter
+  runtime-shim/            # Bun/Node.js unified primitives (Database, spawn, serve, glob, hash)
+  judge-server/            # Private: LLM-as-judge HTTP server backing eval
+  benchmarks/              # Private: benchmark suite (not published)
+  ui-core/                 # Headless UI core: wire protocol, resumable stream client, run state machines
   react/                   # React hooks: useAgent, useAgentStream
   vue/                     # Vue composables
   svelte/                  # Svelte stores
   reactive-agents/         # Public facade — bundles the publishable packages
+  create-reactive-agent/   # `npm create reactive-agent` scaffold CLI for new projects
 apps/
   cli/                     # rax CLI
   cortex/                  # Bun/Elysia desk server + SvelteKit UI (Stage/Run)
   docs/                    # Starlight documentation site
   examples/                # Example agent scripts
   advocate/                # Community growth agent (flagship dogfood)
+  stackblitz/              # Standalone npm-only demo projects (no workspace:* deps)
 ```
 
 ## Development Workflow
 
 ```bash
-bun test              # Run all 5,128+ tests
+bun test              # Run the full test suite (turbo-cached; count is derived, not hand-edited — see AGENTS.md §Drift-Prone Stats)
 bun run build         # Build + typecheck all packages (turbo-cached)
 bun run docs:dev      # Start docs dev server
 bun run rax --help    # Test the CLI

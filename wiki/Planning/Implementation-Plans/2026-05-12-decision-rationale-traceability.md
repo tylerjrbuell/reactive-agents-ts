@@ -1,6 +1,6 @@
 ---
 type: implementation-plan
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 created: 2026-05-12
 updated: 2026-05-12
 completed: null

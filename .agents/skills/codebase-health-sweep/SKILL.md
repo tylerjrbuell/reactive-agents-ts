@@ -33,16 +33,16 @@ Before launching agents, spend 5 minutes on current state. **Don't skip.**
 
 ```bash
 # Build baseline
-rtk bun run build 2>&1 | tail -30
+bun run build 2>&1 | tail -30
 
 # Test baseline
-rtk bun test 2>&1 | tail -40
+bun test 2>&1 | tail -40
 
 # TypeScript errors (authoritative for DTS issues)
-rtk bunx turbo run build --filter=... 2>&1 | grep -E "error TS|Type error" | head -30
+bunx turbo run build --filter=... 2>&1 | grep -E "error TS|Type error" | head -30
 
 # Recent changes (last 10 commits)
-rtk git log --oneline -10
+git log --oneline -10
 ```
 
 Query the wiki for prior sweep results to avoid re-filing known issues:
@@ -233,7 +233,7 @@ Tests: N ran, M fail (= baseline M, zero new regressions)
 
 - Don't batch multiple unrelated fixes in one commit — one finding per commit
 - Don't fix P2 items inline with P0/P1 fixes — separate commits or defer
-- Don't remove code you're unsure is dead — grep the full monorepo first (`rtk grep -r "functionName" packages/`)
+- Don't remove code you're unsure is dead — grep the full monorepo first (`grep -r "functionName" packages/`)
 - Don't break a passing test to make the fix work — fix the fix
 
 ---
@@ -271,22 +271,22 @@ claude-obsidian:wiki-lint
 
 ```bash
 # Build all
-rtk bun run build
+bun run build
 
 # Test all (with output)
-rtk bun test 2>&1 | tail -50
+bun test 2>&1 | tail -50
 
 # Test single package
-cd packages/<name> && rtk bun test
+cd packages/<name> && bun test
 
 # Find dead exports (example)
-rtk grep -r "export.*functionName" packages/ apps/
+grep -r "export.*functionName" packages/ apps/
 
 # TypeScript errors only
-rtk bunx turbo run build 2>&1 | grep "error TS"
+bunx turbo run build 2>&1 | grep "error TS"
 
 # Count TODOs/FIXMEs
-rtk grep -r "TODO\|FIXME\|HACK\|as any\|@ts-ignore" packages/*/src --include="*.ts" | wc -l
+grep -r "TODO\|FIXME\|HACK\|as any\|@ts-ignore" packages/*/src --include="*.ts" | wc -l
 ```
 
 ## Anti-Patterns

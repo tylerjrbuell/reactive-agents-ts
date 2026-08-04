@@ -22,7 +22,7 @@ tags: [debrief, harness-improvement, verifier, retry, divergence, cogito]
 
 ## Evidence
 
-### Baseline probe: `task-quality-gate-cogito-14b-2026-05-06T20-25-17.json`
+### Baseline probe: `_archive/task-quality-gate-cogito-14b-2026-05-06T20-25-17.json`
 
 | Task | Composite | Faithfulness | Wall | terminatedBy | verifier-verdict count |
 |------|-----------|--------------|------|--------------|----------------------|
@@ -169,7 +169,7 @@ In cogito:14b after-fix probes, 5/5 runs likewise avoided harness_deliverable (o
 
 **Empirical evidence (cogito:14b post-Pivot-B, n=2 runs):**
 
-Run 1 (`task-quality-gate-cogito-14b-2026-05-06T23-13-29.json`) and Run 2 (`task-quality-gate-cogito-14b-2026-05-06T23-18-02.json`):
+Run 1 (`_archive/task-quality-gate-cogito-14b-2026-05-06T23-13-29.json`) and Run 2 (`_archive/task-quality-gate-cogito-14b-2026-05-06T23-18-02.json`):
 
 | Task | Pre-Pivot baseline | Run 1 | Run 2 | Mechanism (both runs) |
 |------|--------------------|-------|-------|---------------------|
@@ -211,11 +211,11 @@ The M3 retry-context tuning *itself* (FM-A1 / FM-C2 signal text iteration) remai
 ## References
 
 - Probe: `.agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts`
-- Pre-fix baseline: `wiki/Research/Harness-Reports/task-quality-gate-cogito-14b-2026-05-06T20-25-17.json`
-- Post-fix cogito:14b: `wiki/Research/Harness-Reports/task-quality-gate-cogito-14b-2026-05-06T23-03-08.json`
-- Post-fix cogito:8b: `wiki/Research/Harness-Reports/task-quality-gate-cogito-8b-2026-05-06T23-07-47.json`
-- Pivot B run 1 cogito:14b: `wiki/Research/Harness-Reports/task-quality-gate-cogito-14b-2026-05-06T23-13-29.json`
-- Pivot B run 2 cogito:14b: `wiki/Research/Harness-Reports/task-quality-gate-cogito-14b-2026-05-06T23-18-02.json`
+- Pre-fix baseline: `wiki/Research/Harness-Reports/_archive/task-quality-gate-cogito-14b-2026-05-06T20-25-17.json`
+- Post-fix cogito:14b: `wiki/Research/Harness-Reports/_archive/task-quality-gate-cogito-14b-2026-05-06T23-03-08.json`
+- Post-fix cogito:8b: `wiki/Research/Harness-Reports/_archive/task-quality-gate-cogito-8b-2026-05-06T23-07-47.json`
+- Pivot B run 1 cogito:14b: `wiki/Research/Harness-Reports/_archive/task-quality-gate-cogito-14b-2026-05-06T23-13-29.json`
+- Pivot B run 2 cogito:14b: `wiki/Research/Harness-Reports/_archive/task-quality-gate-cogito-14b-2026-05-06T23-18-02.json`
 - T4 baseline trace: `~/.reactive-agents/traces/01KQZFH4YSJX6X4BJA94PEZXWG.jsonl`
 - T5 baseline trace: `~/.reactive-agents/traces/01KQZFHFQA97RHHCNXQ792VWNQ.jsonl`
 - Diagnose CLI: `bun run rax:diagnose replay <runId>`

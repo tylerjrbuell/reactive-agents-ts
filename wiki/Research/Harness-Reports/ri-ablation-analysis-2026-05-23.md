@@ -3,7 +3,7 @@ tags: [evidence, ri-ablation, q1a, q1b]
 date: 2026-05-23
 campaign-step: 6
 answers: Q1a (RI fire rate?) + Q1b (Δ-success when fires?)
-basis: ri-ablation-2026-05-23-03:46.json (16 cells: 2 models × 4 scenarios × {RI-on, RI-off})
+basis: _archive/ri-ablation-2026-05-23-03:46.json (16 cells: 2 models × 4 scenarios × {RI-on, RI-off})
 ---
 
 # RI Ablation Analysis

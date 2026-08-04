@@ -1,6 +1,6 @@
 # Reactive Agents — Coding Standards
 
-> Authoritative coding standards for all agents and contributors. Derived from 353 source files, 274 test files, 22 packages. All code must conform.
+> Authoritative coding standards for all agents and contributors. Derived from production Effect-TS/TypeScript conventions across the framework's 36 packages. All code must conform.
 
 ---
 

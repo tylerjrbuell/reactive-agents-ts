@@ -75,7 +75,7 @@ reactive-agents-ts/
 │
 ├── .agents/ .............................. agent-internal guidance
 │   ├── MEMORY.md ........................ cross-session project memory (READ FIRST)
-│   └── skills/ .......................... 24 contributor skills for framework development
+│   └── skills/ .......................... 28 contributor skills for framework development
 │
 ├── wiki/ ................................. 🎯 KNOWLEDGE VAULT (single source of truth)
 │   ├── Home.md .......................... vault entry point + index
@@ -94,7 +94,7 @@ reactive-agents-ts/
 │   │   └── Planning-Index.md ........... index of all plans by status
 │   │
 │   ├── Decisions/ ...................... decisions & RFCs
-│   │   └── Decision-Index.md ........... searchable decision log
+│   │   └── Decision Index.md .......... searchable decision log
 │   │
 │   ├── Concepts/ ....................... conceptual knowledge
 │   │
@@ -127,12 +127,12 @@ reactive-agents-ts/
 │   ├── _Templates/ ..................... templates for new notes
 │   └── .obsidian/ ...................... Obsidian config (do not edit by hand)
 │
-├── packages/ ............................. 35 packages (33 published, 2 private: benchmarks, judge-server)
+├── packages/ ............................. 34 packages (32 published to npm; 2 private: benchmarks, judge-server)
 │   ├── core/ ............................ EventBus, AgentService, TaskService, types
-│   ├── llm-provider/ .................... 6 LLM providers + adapter hooks
+│   ├── llm-provider/ .................... 8 LLM providers (Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, Test) + adapter hooks
 │   ├── memory/ .......................... 4-layer memory system
-│   ├── reasoning/ ....................... 5 strategies + composable kernel
-│   ├── tools/ ........................... ToolService, 11 built-in tools, MCP client
+│   ├── reasoning/ ....................... 8 strategies + composable kernel
+│   ├── tools/ ........................... ToolService, 9 capability + 9 meta-tools, MCP client
 │   ├── guardrails/ ...................... injection/PII/toxicity detection
 │   ├── verification/ .................... semantic entropy, NLI, hallucination detection
 │   ├── cost/ ............................ complexity router, budget enforcer
@@ -140,13 +140,21 @@ reactive-agents-ts/
 │   ├── observability/ ................... tracing, metrics, structured logging
 │   ├── gateway/ ......................... persistent harness: heartbeats, webhooks
 │   ├── eval/ ............................ LLM-as-judge, regression testing
-│   ├── orchestration/ ................... multi-agent workflows
+│   ├── channels/ ......................... external channel triggers (webhook, session bridge)
+│   ├── compose/ .......................... harness composition + killswitches
+│   ├── health/ / testing/ ................ health probes / mock services for tests
+│   ├── reactive-intelligence/ ............ entropy sensor, reactive controller, learning engine
+│   ├── trace/ / replay/ / diagnose/ ...... execution traces, deterministic replay, rax-diagnose CLI
+│   ├── observe/ / runtime-shim/ .......... OTel exporter / Bun-Node unified primitives
+│   ├── ui-core/ (+ react/, vue/, svelte/)  headless UI core + framework bindings
 │   ├── interaction/ ..................... autonomy modes, approval gates
 │   ├── prompts/ ......................... template engine, tier-adaptive variants
 │   ├── a2a/ ............................. agent-to-agent networking
 │   ├── runtime/ ......................... ExecutionEngine, ReactiveAgentBuilder
 │   ├── reactive-agents/ ................. public API facade (re-exports)
-│   └── benchmarks/ (private) ............ evaluation suite
+│   ├── create-reactive-agent/ ............ `npm create reactive-agent` scaffold CLI
+│   ├── benchmarks/ (private) ............ evaluation suite
+│   └── judge-server/ (private) ........... LLM-as-judge HTTP server
 │
 ├── apps/
 │   ├── docs/ ............................ Starlight/Astro public docs site
@@ -154,14 +162,15 @@ reactive-agents-ts/
 │   │   └── skills/ ..................... consumer-facing AI agent skills (publicly fetchable)
 │   ├── cli/ ............................. rax CLI (entry point: main.ts)
 │   ├── cortex/ .......................... SvelteKit admin UI (Bun + SQLite)
-│   ├── examples/ ........................ 34 usage examples
-│   └── advocate/ ........................ community growth agent (flagship dogfood)
+│   ├── examples/ ........................ ~60 usage examples (see AGENTS.md §Key File Paths)
+│   ├── advocate/ ........................ community growth agent (flagship dogfood)
+│   └── stackblitz/ ...................... standalone npm-only demo projects (no workspace:* deps)
 │
 ├── scripts/ ............................. utility scripts
 ├── docker/ .............................. container configs
 ├── .github/workflows/ ................... CI: tests, lint, publish, docs deploy
 └── .claude/
-    └── skills/ .......................... 24 contributor development skills
+    └── skills/ .......................... 29 contributor development skills
 ```
 
 > **Note:** `docs/` directory was eliminated in May 2026. All previous content moved to `wiki/`. If you find yourself wanting to write to `docs/`, write to `wiki/` instead.
@@ -195,14 +204,14 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 
 ---
 
-## 4. Package Map (All 29 Packages)
+## 4. Package Map (19 of 34 packages — core/frequently-touched only; see `AGENTS.md` §Architecture Quick Reference for the full dependency tree covering all 34)
 
 | Package | Purpose | Key Files | Layer | Depends On |
 |---------|---------|-----------|-------|-----------|
 | `core` | EventBus, types, AgentService | `src/services/event-bus.ts` | Foundation | none |
 | `llm-provider` | 6 LLM providers, streaming, tool calling | `src/runtime.ts`, `src/providers/` | Foundation | core |
 | `memory` | 4-layer memory | `src/runtime.ts`, `src/services/` | Foundation | core, llm-provider |
-| `reasoning` | 5 strategies + kernel | `src/strategies/kernel/`, `src/services/` | Composition | core, llm-provider, memory, tools |
+| `reasoning` | 8 strategies + kernel | `src/kernel/`, `src/strategies/`, `src/services/` | Composition | core, llm-provider, memory, tools |
 | `tools` | ToolService, 11 built-in tools, MCP | `src/services/tool-service.ts` | Composition | core, llm-provider |
 | `guardrails` | Injection/PII/toxicity, KillSwitch | `src/services/guardrail-service.ts` | Quality | core, llm-provider |
 | `verification` | Semantic entropy, NLI | `src/services/verification-service.ts` | Quality | core, llm-provider |
@@ -212,7 +221,6 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 | `prompts` | Template engine, tier variants | `src/services/prompt-service.ts` | Composition | core, llm-provider |
 | `eval` | LLM-as-judge, EvalStore | `src/services/eval-service.ts` | Testing | core, llm-provider |
 | `interaction` | 5 autonomy modes, approval gates | `src/services/interaction-service.ts` | Control | core |
-| `orchestration` | Multi-agent workflows | `src/services/orchestration-service.ts` | Composition | core, llm-provider, tools |
 | `a2a` | Agent Cards, JSON-RPC 2.0 | `src/services/a2a-service.ts` | Networking | core |
 | `gateway` | Persistent harness | `src/services/gateway-service.ts` | Persistence | core, llm-provider, tools |
 | `runtime` | ExecutionEngine, Builder | `src/builder.ts`, `src/gateway-chat.ts` | Orchestration | ALL |
@@ -241,9 +249,9 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 | Failure modes | `wiki/Architecture/Specs/02-FAILURE-MODES.md` + `wiki/Failure-Modes/` |
 | API reference | `apps/docs/src/content/docs/reference/builder-api.md` |
 | User guides | `apps/docs/src/content/docs/guides/` |
-| Examples | `apps/examples/src/` (34 patterns) |
+| Examples | `apps/examples/src/` (~60 patterns) |
 | Recent context | `wiki/Hot.md` |
-| Decision log | `wiki/Decisions/Decision-Index.md` |
+| Decision log | `wiki/Decisions/Decision Index.md` |
 | Active plans | `wiki/Planning/Planning-Index.md` |
 | Past debriefs | `wiki/Research/Debriefs/` |
 | Methodology | `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` |
@@ -267,7 +275,7 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 ```
 1. Identify symptom: AGENTS.md §Common Debugging Entry Points
 2. Read that file + neighbors
-3. Check: context? → context-builder.ts | tool-call? → phases/act.ts | loop? → loop-detector.ts
+3. Check: context? → assembly/project.ts (`project()`) | tool-call? → kernel/capabilities/act/act.ts | loop? → kernel/capabilities/reflect/loop-detector.ts
 4. Test: bun test packages/reasoning/tests/kernel-*.test.ts
 5. (If significant fix) Write debrief: wiki/Research/Debriefs/YYYY-MM-DD-<bug>-debrief.md
 ```
@@ -285,8 +293,8 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 ### Pattern 4: "Understanding kernel phases"
 ```
 1. Read: wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md §Cognitive Architecture
-2. Browse: packages/reasoning/src/strategies/kernel/phases/ (12 phase files)
-3. Trace: kernel-runner.ts calls them in sequence
+2. Browse: packages/reasoning/src/kernel/capabilities/ (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify)
+3. Trace: packages/reasoning/src/kernel/loop/runner.ts calls them in sequence
 4. Code example: packages/reasoning/tests/kernel-*.test.ts
 ```
 
@@ -313,7 +321,7 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 **After that:**
 
 - Navigate by symptom (AGENTS.md §Debugging) or task (this file §Common Patterns)
-- Query Obsidian vault for decisions/experiments via `obsidian-vault-query`
+- Query Obsidian vault for decisions/experiments via `claude-obsidian:wiki-query`
 - Use IDE's "Go to File" / grep for specific code
 
 **Avoid:**
@@ -343,7 +351,7 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 | Design target | `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` |
 | Recent context | `wiki/Hot.md` |
 | Active plans | `wiki/Planning/Planning-Index.md` |
-| Decisions log | `wiki/Decisions/Decision-Index.md` |
+| Decisions log | `wiki/Decisions/Decision Index.md` |
 | Methodology | `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` |
 | API reference | `apps/docs/src/content/docs/reference/builder-api.md` |
 | User guides | `apps/docs/src/content/docs/guides/` |
@@ -351,5 +359,5 @@ The skill defaults to `docs/superpowers/plans/` — **override to `wiki/Planning
 
 ---
 
-**Last updated:** 2026-05-05 (wiki consolidation pass)
+**Last updated:** 2026-07-31 (context-cleanup pass: package/skill/example counts refreshed against filesystem)
 **Maintenance:** Keep synchronized with AGENTS.md and wiki/Home.md when restructuring.

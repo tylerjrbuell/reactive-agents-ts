@@ -1,0 +1,136 @@
+{
+  "model": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-29T23-59-24",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 171,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1647.59753,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 2218,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 22107.181294,
+      "output": "1. SQLite is all you need for durable workflows (score: 307)\n2. You can just say it (score: 92)\n3. The dead economy theory (score: 613)\n4. Notes from the Mistral AI Now Summit (score: 299)\n5. MCP Is Dead (score: 42)\n6. Shift will clean homes for free to train future robots (score: 65)\n7. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 68)\n8. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 41)\n9. It's hard to justify buying a Framework 12 (score: 200)\n10. Bijou64: A variable-length integer encoding (score: 198)\n11. On Rendering Diffs (score: 132)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 138)\n13. The California state assembly has passed the 'Protect Our Games Act' (score: 161)\n14. Free full BGP feed. IPv4 and IPv6 (score: 14)\n15. Is AI causing a repeat of frontend's lost decade? (score: 272)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 1947,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 28678.996285000005,
+      "output": "Among the top 25 Hacker News posts retrieved, three stories stood out for generating the most discussion and engagement from the community. Leading the pack by a considerable margin is \"The dead economy theory,\" which accumulated a remarkable 799 comments, making it far and away the most talked-about post in the set. Close behind in second place is \"Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM,\" a piece that clearly struck a nerve with readers and sparked 649 comments worth of debate. Rounding out the top three is \"GTA 6 Developers Unionize,\" which drew 368 comments as the gaming and labor communities weighed in on the news.\n\nPresented in the requested format, the three posts with the most comments are:\n\n1. The dead economy theory — comments: 799\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 649\n3. GTA 6 Developers Unionize — comments: 368",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 1858,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 24073.494016000004,
+      "output": "## Highest Score\n1. The dead economy theory (613)\n2. GTA 6 Developers Unionize (540)\n3. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (435)\n\n## Most Comments\n1. The dead economy theory (799)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (649)\n3. GTA 6 Developers Unionize (368)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 3861,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 44028.919615000006,
+      "output": "# Today on Hacker News\n\n## 🤖 AI & Machine Learning\n\nThe AI conversation dominates today's front page. **\"Notes from the Mistral AI Now Summit\"** offers a firsthand look at the latest developments from one of Europe's leading AI labs, while **\"Liquid AI reveals 8B-A1B MoE trained on 38T\"** highlights a new Mixture-of-Experts model trained on a staggering 38 trillion tokens — a sign of just how fast the frontier is moving. On the tooling side, **\"Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA\"** showcases community-driven work to make LLM inference faster and leaner. More provocatively, **\"MCP Is Dead\"** questions the longevity of the Model Context Protocol, and **\"Shift will clean homes for free to train future robots\"** raises eyebrows about the lengths companies will go to gather real-world training data. Rounding out the theme, **\"Is AI causing a repeat of frontend's lost decade?\"** sparks a lively debate about whether AI-generated code is quietly degrading the quality of web development.\n\n---\n\n## 💻 Programming & Developer Tools\n\nSeveral high-scoring posts speak directly to the craft of software engineering. **\"SQLite is all you need for durable workflows\"** (307 points) makes a compelling case for leaning on SQLite as a reliable backbone for stateful, long-running processes — a counterpoint to heavyweight orchestration systems. **\"Bijou64: A variable-length integer encoding\"** from Ink & Switch dives into the elegant design of a compact integer format, while **\"On Rendering Diffs\"** explores the surprisingly nuanced problem of displaying code differences clearly and intuitively. **\"You can just say it\"**, penned by Redis creator antirez, offers a philosophical nudge toward plain, direct communication in technical writing.\n\n---\n\n## 🖥️ Hardware & Gadgets\n\nHardware enthusiasts have plenty to chew on. **\"It's hard to justify buying a Framework 12\"** (200 points) is a candid review from Jeff Geerling arguing that the latest modular laptop, while admirable in principle, struggles to compete on pure value. Meanwhile, **\"Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer\"** announces an exciting multi-color 3D printing feature from Prusa, lowering the bar for vibrant, complex prints at home.\n\n---\n\n## 🌐 Society, Economics & Policy\n\nThe most-discussed post of the day is **\"The dead economy theory\"** (613 points, 799 comments), a thought-provoking essay arguing that large swaths of modern economic activity are hollow or self-referential. On the policy front, **\"The California state assembly has passed the 'Protect Our Games Act'\"** is a win for the Stop Killing Games movement, requiring publishers to keep games playable even after official support ends — a landmark moment for digital consumer rights. Finally, **\"Free full BGP feed. IPv4 and IPv6\"** is a quiet but useful resource for network engineers needing full internet routing tables for lab work.\n\n---\n*Report generated from the top 15 Hacker News posts on May 29, 2026.*",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "15/15 titles cited",
+          "467 words"
+        ],
+        "composite": 0.9999999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9999999999999998,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

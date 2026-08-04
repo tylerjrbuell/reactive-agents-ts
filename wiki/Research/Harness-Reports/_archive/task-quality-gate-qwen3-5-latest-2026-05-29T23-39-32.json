@@ -1,0 +1,136 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-29T23-39-32",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 289,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 5130.762024,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 12157,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 43144.443612,
+      "output": "1. SQLite is all you need for durable workflows (score: 296)\n2. The dead economy theory (score: 593)\n3. You can just say it (score: 67)\n4. Notes from the Mistral AI Now Summit (score: 297)\n5. Shift will clean homes for free to train future robots (score: 61)\n6. MCP Is Dead (score: 37)\n7. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 63)\n8. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 35)\n9. It's hard to justify buying a Framework 12 (score: 191)\n10. Bijou64: A variable-length integer encoding (score: 198)\n11. On Rendering Diffs (score: 129)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 135)\n13. Free full BGP feed. IPv4 and IPv6 (score: 12)\n14. The California state assembly has passed the 'Protect Our Games Act' (score: 158)\n15. Is AI causing a repeat of frontend's lost decade? (score: 270)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 7935,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 56221.03178,
+      "output": "1. The dead economy theory — comments: 781\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 646\n3. GTA 6 Developers Unionize — comments: 363",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 12885,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 78202.39627800001,
+      "output": "## Highest Score\n\n1. The dead economy theory (593)\n2. GTA 6 Developers Unionize (535)\n3. Notes from the Mistral AI Now Summit (297)\n\n## Most Comments\n\n1. The dead economy theory (781)\n2. GTA 6 Developers Unionize (363)\n3. It's hard to justify buying a Framework 12 (348)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8218,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 39902.012889000005,
+      "output": "# Today on Hacker News\n\n**AI/ML** dominated today's discussions, with several significant developments in the field. The community explored the latest from the Mistral AI Now Summit, sharing notes on emerging trends in the rapidly evolving landscape. Hardware advances continued with Liquid AI revealing their 8B-A1B MoE model trained on an impressive 38 trillion tokens, while developers shared Tiny-vLLM, a high-performance LLM inference engine built in C++ and CUDA. The debate also turned to whether AI is causing a repeat of frontend's \"lost decade,\" with 233 comments diving into the implications for web development. Additionally, a notable story about Shift, a startup training future robots by cleaning homes for free, sparked conversation about AI's role in data collection and workforce automation.\n\n**Programming and Software** saw strong engagement around database optimization and system design. The post \"SQLite is all you need for durable workflows\" with 178 comments highlighted the enduring utility of SQLite for building resilient applications. Technical discussions also covered \"MCP Is Dead,\" suggesting a shift in messaging protocols, while \"On Rendering Diffs\" offered insights into visualizing code changes. The community explored data encoding with \"Bijou64: A variable-length integer encoding,\" and network engineers shared a free full BGP feed for IPv4 and IPv6, providing valuable resources for network monitoring and research.\n\n**Hardware and Tools** featured interesting discussions around developer hardware and 3D printing. A controversial post titled \"It's hard to justify buying a Framework 12\" generated 348 comments, debating the value proposition of Framework laptops despite their repairability. For makers and 3D printing enthusiasts, PrusaSlicer's new ColorMix feature enabled printing with dozens of colors, opening creative possibilities for multi-material prints.\n\n**Economics and Policy** rounded out the day's stories, with Owen McGrann's \"The dead economy theory\" amassing 781 comments as readers debated current economic conditions. Gaming policy also made headlines as California's state assembly passed the \"Protect Our Games Act,\" a legislative move aimed at preventing game shutdowns that sparked 158 comments from the gaming community.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.4,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "6/15 titles cited",
+          "325 words"
+        ],
+        "composite": 0.7149999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.943,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

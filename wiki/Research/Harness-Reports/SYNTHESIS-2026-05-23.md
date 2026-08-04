@@ -291,7 +291,7 @@ Plus probe scripts:
 Plus data:
 - `wiki/Research/Harness-Reports/cross-strategy-matrix-2026-05-23-03:34.json` (40 cells local)
 - `wiki/Research/Harness-Reports/cross-strategy-matrix-2026-05-23-12:01.json` (20 cells frontier)
-- `wiki/Research/Harness-Reports/ri-ablation-2026-05-23-03:46.json` (16 cells)
+- `wiki/Research/Harness-Reports/_archive/ri-ablation-2026-05-23-03:46.json` (16 cells)
 
 ---
 

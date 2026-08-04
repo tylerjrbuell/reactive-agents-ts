@@ -5,6 +5,15 @@ tags: [MOC]
 
 # Research MOC
 
+> [!warning] Stale as of 2026-07-31 — unmaintained since the May 2026 vault scaffold
+> This MOC has not been updated since creation and is majority broken links (traced to a
+> `wiki/Concepts/` directory that was never created, decision names that predate the current
+> `YYYY-MM-DD-<slug>` filename convention, and package/app stub pages for most of the 22
+> documented packages). Do not trust its links. Current entry points:
+> [[../Hot|Hot.md]] → [[../Architecture/DEBT-REGISTER|DEBT-REGISTER.md]] →
+> [[../Architecture/Specs/09-UNIFIED-PROGRAM|09-UNIFIED-PROGRAM.md]].
+
+
 **Purpose:** Comprehensive spike research, mechanism validation, failure modes, and improvement loop tracking.
 
 ---

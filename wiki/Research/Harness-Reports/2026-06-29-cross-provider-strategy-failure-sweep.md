@@ -1,7 +1,7 @@
 ---
 title: Cross-Provider × Strategy Failure-Mode Sweep
 date: 2026-06-29
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 type: harness-report
 tags: [failure-modes, providers, strategies, thinking-budget, output-ownership]
 ---

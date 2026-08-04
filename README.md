@@ -14,7 +14,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **39 packages & apps**       | 34 packages + 5 apps — 34 published to npm, all opt-in, no hidden coupling |
+| **40 packages & apps**       | 34 packages + 6 apps — 32 published to npm, all opt-in, no hidden coupling |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **8 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Direct · Code-Action (@exp) |
 | **8,294 tests · 1061 files**  | Verified with `bun test` on every PR                            |
@@ -621,12 +621,14 @@ gauge in Cortex Studio.
 | [`@reactive-agents/cost`](packages/cost)                                   | Multi-factor complexity routing, per-execution budget enforcement, semantic cache                                                                                                            |
 | [`@reactive-agents/identity`](packages/identity)                           | Ed25519 agent certificates, RBAC policies, delegation chains, audit logging                                                                                                               |
 | [`@reactive-agents/observability`](packages/observability)                 | Distributed tracing (OTLP), MetricsCollector, structured logging, console + JSON exporters                                                                                                |
+| [`@reactive-agents/trace`](packages/trace)                                 | Structured execution traces: `TraceEvent` schema, recorders, span helpers — backs replay and diagnose                                                                                     |
 | [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning                                                                                                                  |
 | [`@reactive-agents/prompts`](packages/prompts)                             | Version-controlled template engine with variable interpolation and prompt library                                                                                                         |
 | [`@reactive-agents/eval`](packages/eval)                                   | Evaluation framework: LLM-as-judge scoring, EvalStore persistence, comparison reports                                                                                                     |
 | [`@reactive-agents/a2a`](packages/a2a)                                     | A2A protocol: Agent Cards, JSON-RPC 2.0 server/client, SSE streaming                                                                                                                      |
 | [`@reactive-agents/gateway`](packages/gateway)                             | Persistent autonomous harness: adaptive heartbeats, cron scheduling, webhook ingestion, composable policy engine                                                                          |
 | [`@reactive-agents/channels`](packages/channels)                           | External channel triggers — webhook adapter, FIFO session bridge, wired via `.withChannels()`                                                                                             |
+| [`@reactive-agents/compose`](packages/compose)                             | Harness composition + killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`)                                                                     |
 | [`@reactive-agents/testing`](packages/testing)                             | Mock services (LLM, tools, EventBus), assertion helpers, deterministic test fixtures                                                                                                      |
 | [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 20 tasks x 5 tiers, overhead measurement, report generation                                                                                                              |
 | [`@reactive-agents/health`](packages/health)                               | Health checks and readiness probes for production deployments                                                                                                                             |
@@ -637,6 +639,7 @@ gauge in Cortex Studio.
 | [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores over `ui-core`: `createRun`, `createResumableRun`, `createInteractions`, `createAgentStream`, `createAgent`                                                              |
 | [`@reactive-agents/observe`](packages/observe)                             | Zero-config OpenTelemetry tracing — maps `AgentStarted/Completed`, `LLMRequest*`, and `ToolCall*` events to OpenInference-compliant OTLP spans                                            |
 | [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay — record any run to a snapshot file, re-run with different model/prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`              |
+| [`@reactive-agents/diagnose`](packages/diagnose)                           | Trace diagnostics + replay-driven root-cause analysis — powers the `rax diagnose` CLI                                                                                                     |
 | [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter — lets the framework run on Node.js 22.5+ in addition to Bun; provides unified `Database`, `spawn`, `serve`, and file I/O primitives                               |
 | [`create-reactive-agent`](packages/create-reactive-agent)                  | Project scaffolder — `bunx create-reactive-agent my-app` generates a runnable agent project with template, provider, and package-manager selection                                        |
 

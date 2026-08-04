@@ -1,0 +1,148 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-30T00-14-14",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 291,
+      "inputTokens": 162,
+      "outputTokens": 129,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 5313.2266629999995,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 11893,
+      "inputTokens": 5791,
+      "outputTokens": 885,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 41623.861684,
+      "output": "1. You can just say it (score: 117)\n2. SQLite is all you need for durable workflows (score: 314)\n3. The dead economy theory (score: 624)\n4. Notes from the Mistral AI Now Summit (score: 299)\n5. Shift will clean homes for free to train future robots (score: 68)\n6. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 71)\n7. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 42)\n8. It's hard to justify buying a Framework 12 (score: 204)\n9. Snowboard Kids 2 is 100% Decompiled (score: 10)\n10. Bijou64: A variable-length integer encoding (score: 198)\n11. On Rendering Diffs (score: 133)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 140)\n13. The California state assembly has passed the 'Protect Our Games Act' (score: 163)\n14. Is AI causing a repeat of frontend's lost decade? (score: 276)\n15. Free full BGP feed. IPv4 and IPv6 (score: 16)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 15481,
+      "inputTokens": 11586,
+      "outputTokens": 794,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 75535.73926599999,
+      "output": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Task:** Fetch top 25 Hacker News posts (data provided), identify the 3 posts with the MOST comments (based on the 'descendants' field), and output them in a specific format.\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Sorting:** Sort by comment count descending.\n    *   **Style:** Prose (flowing paragraphs).\n    *   **Constraint:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This seems like a conflicting instruction. The user asked for \"prose\" but also specified an exact format for the output lines. However, the instruction \"Write as flowing prose paragraphs\" suggests I shouldn't just list them. But the \"REQUIRED COLUMNS/FIELDS\" section says \"most comments in this exact format: '1\". This looks like a template instruction that might be conflicting with the \"prose\" instruction.\n    *   **Re-evaluating the \"REQUIRED COLUMNS/FIELDS\" instruction:** It says \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This is likely a placeholder or a specific constraint from the system prompt that expects a specific string structure. However, the user's prompt says \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Conflict Resolution:** The user explicitly asked for \"prose\" in the \"Instruction\" section (\"Write as flowing prose paragraphs\"). But the \"REQUIRED COLUMNS/FIELDS\" section says \"most comments in this exact format: '1\". This looks like a system instruction override. Usually, when there's a conflict between \"prose\" and \"exact format\", the \"exact format\" constraint for the *content* of the answer is paramount if it's about data extraction. However, the user instruction says \"Output the 3 posts... in this exact format\". The system instruction says \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This is confusing. Let's look at the user's specific request again: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Wait, looking closer at the system instruction:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This looks like a truncated instruction. It probably means \"Ensure the output follows the format '1. TITLE — comments: COUNT'\".\n    *   **BUT** the user instruction also says \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Decision:** I need to balance these. If I write prose, I can't strictly follow the '1. TITLE — comments: COUNT' format for *every* line if it's prose. However, the core task is to extract the data. The \"prose\" instruction might mean I should introduce the data in a narrative way, but the specific format for the *list* might still be required.\n    *   **Actually, looking at the \"REQUIRED COLUMNS/FIELDS\" section in the system prompt:** It says \"most comments in this exact format: '1\". This is likely a directive to ensure the specific string format is used for the ranking.\n    *   **Let's look at the \"Instruction\" field in the user prompt:** \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Let's look at the \"REQUIRED COLUMNS/FIELDS\" field in the system prompt:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\".\n    *   **Interpretation:** The system prompt is trying to enforce a specific output structure. The user prompt asks for prose. Usually, specific format constraints override general style instructions when it comes to data presentation. However, \"Write as flowing prose paragraphs\" is a strong style constraint.\n    *   **Hypothesis:** The system instruction \"REQUIRED COLUMNS/FIELDS\" is likely a template that got cut off or is meant to define the *content* of the response. If I write prose, I can't have numbered lists easily without breaking prose.\n    *   **Wait, re-reading the system instruction:** \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\" This suggests I should follow the format strictly.\n    *   **Re-reading the User Instruction:** \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Re-reading the System Instruction:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This is weird. It probably means \"Ensure the output contains the most comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Conflict:** User says \"Write as flowing prose paragraphs\". System says \"Produce ONLY the formatted output\".\n    *   **Resolution:** The user's specific request for the output format ('1. TITLE — comments: COUNT') is usually the hard constraint for the data. The \"prose\" instruction might be a style preference that conflicts with the \"exact format\". Given the instruction \"Produce ONLY the formatted output\", I should prioritize the exact format for the data points. However, if I write prose, I can't just output a list.\n    *   **Wait, looking at the \"REQUIRED COLUMNS/FIELDS\" again:** It says \"most comments in this exact format: '1\". This looks like a placeholder for the format string. The user prompt says \"in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Okay, let's look at the data:**\n        *   Post 1: \"The dead economy theory\" (descendants: 808)\n        *   Post 2: \"Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM\" (descendants: 651)\n        *   Post 3: \"GTA 6 Developers Unionize\" (descendants: 371)\n        *   Post 4: \"It's hard to justify buying a Framework 12\" (descendants: 358)\n        *   ...\n    *   **Top 3:**\n        1.  The dead economy theory (808)\n        2.  Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (651)\n        3.  GTA 6 Developers Unionize (371)\n    *   **Format:** '1. TITLE — comments: COUNT'\n    *   **Style:** Prose.\n    *   **Problem:** How to write prose *and* use the exact format '1. TITLE — comments: COUNT'?\n    *   **Solution:** I will write a paragraph that introduces the analysis, then present the top 3 using the required format within the text or as a distinct section, but the instruction \"Produce ONLY the formatted output\" suggests I shouldn't add extra text.\n    *   **Wait, the system instruction says:** \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"\n    *   **The User Instruction says:** \"Instruction: Write as flowing prose paragraphs.\"\n    *   **The System Instruction says:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\".\n    *   **This is a \"System Instruction\" vs \"User Instruction\" conflict.** Usually, System Instructions (like \"Produce ONLY the formatted output\") take precedence for safety and structure, but User Instructions define the task.\n    *   **However**, the \"REQUIRED COLUMNS/FIELDS\" section in the system prompt seems to be a directive to ensure the specific format is used for the *ranking*.\n    *   **Let's try to combine:** I will write the response as prose that incorporates the required format lines for the top 3 items. Or, I will just output the lines if the \"Produce ONLY the formatted output\" instruction is strict.\n    *   **Actually, looking at the \"REQUIRED COLUMNS/FIELDS\" line:** It says \"most comments in this exact format: '1\". This is likely a directive to ensure the output *contains* the formatted list.\n    *   **Wait, the User Prompt says:** \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **The System Prompt says:** \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Okay, I need to follow the User's \"Instruction\" field regarding prose, BUT the User also said \"Output... in this exact format\".**\n    *   **If I write prose, I can't strictly use the numbered list format without breaking prose.**\n    *   **Let's look at the \"REQUIRED COLUMNS/FIELDS\" again.** It says \"most comments in this exact format: '1\". This is likely a truncated instruction meaning \"Ensure the output follows the format '1. TITLE — comments: COUNT'\".\n    *   **Okay, I will prioritize the User's explicit format request for the data points, but wrap it in prose if possible, OR just output the formatted lines if \"Produce ONLY the formatted output\" is interpreted strictly.**\n    *   **Wait, the System Instruction says:** \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"\n    *   **This contradicts \"Write as flowing",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 16898,
+      "inputTokens": 10391,
+      "outputTokens": 874,
+      "stepsCount": 11,
+      "toolCallCount": 3,
+      "wallMs": 72823.428961,
+      "output": "## Highest Score\n\n1. The dead economy theory (624)\n2. GTA 6 Developers Unionize (545)\n3. SQLite is all you need for durable workflows (314)\n\n## Most Comments\n\n1. The dead economy theory (808)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (651)\n3. GTA 6 Developers Unionize (371)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 12975,
+      "inputTokens": 9995,
+      "outputTokens": 1466,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 47810.077327000006,
+      "output": "# Today on Hacker News\n\n## AI/ML\n\nThe artificial intelligence and machine learning space dominated discussions today with several significant developments. **Liquid AI revealed their 8B-A1B MoE model trained on 38T tokens**, showcasing continued progress in efficient model architectures. The community also engaged with **Notes from the Mistral AI Now Summit**, sharing insights from recent industry gatherings. Hardware efficiency remained a hot topic with **Show HN: Tiny-vLLM**, a high-performance LLM inference engine built in C++ and CUDA. Meanwhile, **Shift will clean homes for free to train future robots** sparked conversation about AI training data collection methods. The discussion extended to industry concerns in **Is AI causing a repeat of frontend's lost decade?**, examining whether AI is displacing traditional development roles.\n\n## Programming/Engineering\n\nBackend and systems engineering discussions centered around practical database solutions with **SQLite is all you need for durable workflows**, proposing SQLite as a robust foundation for persistent workflows. Algorithmic innovation appeared in **Bijou64: A variable-length integer encoding**, introducing a new compression technique. Frontend developers engaged with **On Rendering Diffs**, exploring visualization challenges in code comparison tools. The community also debated **You can just say it**, a post by antirez that likely touches on communication and tooling philosophy.\n\n## Hardware/Physical Computing\n\nHardware enthusiasts discussed the **Framework 12**, debating whether its price point justifies the modular laptop's appeal. 3D printing innovation continued with **Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer**, expanding color capabilities in additive manufacturing. Network engineers shared **Free full BGP feed**, providing valuable routing data for IPv4 and IPv6 networks.\n\n## Society/Economics\n\nBroader discussions included **The dead economy theory**, which appears to be the most upvoted story at 624 points, suggesting economic anxiety resonated strongly. Policy developments emerged with **The California state assembly has passed the 'Protect Our Games Act'**, aiming to protect the gaming industry. Retro computing nostalgia surfaced in **Snowboard Kids 2 is 100% Decompiled**, celebrating the preservation of classic game code.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.7333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "11/15 titles cited",
+          "320 words",
+          "★ called recall()"
+        ],
+        "composite": 0.9066666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9813333333333333,
+    "recallSmellCount": 3,
+    "taskCount": 5
+  }
+}

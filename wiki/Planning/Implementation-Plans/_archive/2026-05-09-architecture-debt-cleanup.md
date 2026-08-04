@@ -1,7 +1,7 @@
 ---
 title: Architecture Debt Cleanup (post-W25)
 date: 2026-05-09
-status: in-progress
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 owners: claude
 related: [[../Architecture/Specs/06-AUDIT-v0.10.0]], AGENTS.md#architecture-debt
 ---

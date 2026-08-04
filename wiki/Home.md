@@ -5,6 +5,22 @@ tags: [MOC, root]
 
 # Reactive Agents Project Brain
 
+> [!warning] Stale as of 2026-07-31 — not the current entry point
+> This page and the `MOCs/` layer beneath it haven't been touched since the May 2026 vault
+> scaffold. Most links below are broken (they point at a `Concepts/` directory that was never
+> created, at decision names that predate the current `YYYY-MM-DD-<slug>` filename convention,
+> and at package/app stub pages for 18 of the 22 documented packages). Treat everything on this
+> page as unreliable navigation, not as current state.
+>
+> **Use these instead, in order:**
+> 1. [[Hot|Hot.md]] — recent session context cache
+> 2. [[Architecture/DEBT-REGISTER|Architecture/DEBT-REGISTER.md]] — the canonical debt ledger
+> 3. [[Architecture/Specs/09-UNIFIED-PROGRAM|Architecture/Specs/09-UNIFIED-PROGRAM.md]] — canonical sequencing/direction
+>
+> Full regeneration of this MOC layer was scoped out of the 2026-07-31 cleanup pass (too much
+> surface, high hallucination risk to rebuild without the session context that produced it) —
+> it is marked legacy here rather than deleted.
+
 **Purpose:** Comprehensive knowledge management system for the reactive-agents-ts framework. Maps architecture, tracks research, documents decisions, and enables rapid understanding for agentic coding and research.
 
 **Current Phase:** Phase 1 complete (mechanism validation sweep). Preparing for Phase 2.

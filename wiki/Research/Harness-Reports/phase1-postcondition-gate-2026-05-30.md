@@ -77,7 +77,7 @@ output … after 4 stalled iterations` → `success:true` with no file). The ter
 now converts that to honest `status=failed`.
 
 ### 3. No-regression — cross-tier pass^k flat (fixture-pinned, N=3)
-Arm A (flag off) vs Arm B (flag on), `hn-fixture-2026-05-30.json`:
+Arm A (flag off) vs Arm B (flag on), `_archive/hn-fixture-2026-05-30.json`:
 
 | tier | pass^k A→B | avg composite A→B |
 |---|---|---|

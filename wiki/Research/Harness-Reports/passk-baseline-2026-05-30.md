@@ -115,7 +115,7 @@ phase (control-first, env-gated, default behavior unchanged):
 - `TASK_GATE_HN_FIXTURE=<path>` — load `HN_CACHE` from JSON if the file exists; else
   live-fetch and freeze it to that path for reuse.
 - `TASK_GATE_FREEZE_ONLY=1` — freeze the fixture and exit, without running the suite.
-- Frozen fixture for this campaign: `hn-fixture-2026-05-30.json` (30 posts).
+- Frozen fixture for this campaign: `_archive/hn-fixture-2026-05-30.json` (30 posts).
 
 **Floor for Phase 1+:** every cross-phase pass^k claim MUST run on the pinned fixture.
 Phase 1's first task is to capture the fixture-pinned cross-tier baseline as the

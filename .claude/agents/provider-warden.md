@@ -24,7 +24,7 @@ Bounded specialist for `packages/llm-provider/**`. I/O contract: see [[mission-b
 
 -   `bunx turbo run typecheck --filter=@reactive-agents/llm-provider`
 -   `bun test packages/llm-provider/`
--   `rtk git diff`, `rtk git log`, `rtk grep`, `rtk find`
+-   `git diff`, `git log`, `grep`, `find`
 
 **Hard refuse:** edits outside `packages/llm-provider/**`; commits; releases; AGENTS.md/CLAUDE.md/wiki/\* changes.
 

@@ -1,0 +1,681 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "runsPerTask": 3,
+  "timestamp": "2026-06-01T11-30-16",
+  "runSets": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "runs": [
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 600,
+          "inputTokens": 116,
+          "outputTokens": 36,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 20792.848548,
+          "output": "1. **Monday**\n2. **Tuesday**\n3. **Wednesday**\n4. **Thursday**\n5. **Friday**\n6. **Saturday**\n7. **Sunday**",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 144,
+          "inputTokens": 116,
+          "outputTokens": 28,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 2791.164662000003,
+          "output": "1. Monday\n2. Tuesday \n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 144,
+          "inputTokens": 116,
+          "outputTokens": 28,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 4243.322853999998,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": null,
+      "postCondLabel": "—"
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "runs": [
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 6187,
+          "inputTokens": 4876,
+          "outputTokens": 398,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 56412.585981000004,
+          "output": "1. A 10 year old Xeon is all you need (score: 193)\n2. Tracing HTTP Requests with Go's net/HTTP/httptrace (score: 45)\n3. Chuwi Minibook X (score: 303)\n4. Benchmarking SurrealDB 3.x vs. Postgres, Mongo, Neo4j and Redis (With Fsync) (score: 22)\n5. Cloudflare Turnstile requiring fingerprintable WebGL (score: 690)\n6. two strangers. one call. no names (score: 9)\n7. The SLAX Scripting Language: An Alternate Syntax for XSLT (score: 8)\n8. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (score: 137)\n9. Cessation of public development of Kefir C compiler (score: 38)\n10. ChatGPT for Google Sheets exfiltrates workbooks (score: 236)\n11. 1-Bit Bonsai Image 4B Image Generation for Local Devices (score: 403)\n12. Dav2d (score: 500)\n13. Two Ways to Draw Infinite Jest's Sierpinski Gasket (score: 31)\n14. United Airlines 767 returns to Newark after Bluetooth name sparks alert (score: 368)\n15. Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas (score: 32)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 5931,
+          "inputTokens": 4876,
+          "outputTokens": 145,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 64557.61779100001,
+          "output": "1. A 10 year old Xeon is all you need (score: 193)\n2. Tracing HTTP Requests with Go's net/HTTP/httptrace (score: 45)\n3. Chuwi Minibook X (score: 303)\n4. Benchmarking SurrealDB 3.x vs. Postgres, Mongo, Neo4j and Redis (With Fsync) (score: 22)\n5. Cloudflare Turnstile requiring fingerprintable WebGL (score: 690)\n6. two strangers. one call. no names (score: 9)\n7. The SLAX Scripting Language: An Alternate Syntax for XSLT (score: 8)\n8. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (score: 137)\n9. Cessation of public development of Kefir C compiler (score: 38)\n10. ChatGPT for Google Sheets exfiltrates workbooks (score: 236)\n11. 1-Bit Bonsai Image 4B Image Generation for Local Devices (score: 403)\n12. Dav2d (score: 500)\n13. Two Ways to Draw Infinite Jest's Sierpinski Gasket (score: 31)\n14. United Airlines 767 returns to Newark after Bluetooth name sparks alert (score: 368)\n15. Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas (score: 32)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 6374,
+          "inputTokens": 4876,
+          "outputTokens": 541,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 94260.626999,
+          "output": "1. A 10 year old Xeon is all you need (score: 193)\n2. Tracing HTTP Requests with Go's net/HTTP/httptrace (score: 45)\n3. Chuwi Minibook X (score: 303)\n4. Benchmarking SurrealDB 3.x vs. Postgres, Mongo, Neo4j and Redis (With Fsync) (score: 22)\n5. Cloudflare Turnstile requiring fingerprintable WebGL (score: 690)\n6. two strangers. one call. no names (score: 9)\n7. The SLAX Scripting Language: An Alternate Syntax for XSLT (score: 8)\n8. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (score: 137)\n9. Cessation of public development of Kefir C compiler (score: 38)\n10. ChatGPT for Google Sheets exfiltrates workbooks (score: 236)\n11. 1-Bit Bonsai Image 4B Image Generation for Local Devices (score: 403)\n12. Dav2d (score: 500)\n13. Two Ways to Draw Infinite Jest's Sierpinski Gasket (score: 31)\n14. United Airlines 767 returns to Newark after Bluetooth name sparks alert (score: 368)\n15. Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas (score: 32)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "runs": [
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 7941,
+          "inputTokens": 6990,
+          "outputTokens": 195,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 47414.097717000026,
+          "output": "1. United Airlines 767 returns to Newark after Bluetooth name sparks alert — comments: 721\n2. Meta launches Instagram, Facebook, and WhatsApp subscriptions — comments: 377\n3. Tracing HTTP Requests with Go's net/HTTP/httptrace — comments: 0",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "2/3 correct titles",
+              "2/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48345248,48345840,48347354] cited=[48311587,48345248,48347354]"
+            ],
+            "composite": 0.8833333333333334
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 5190,
+          "inputTokens": 4243,
+          "outputTokens": 248,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 46888.49024099996,
+          "output": "- 1-Bit Bonsai Image 4B Image Generation for Local Devices — comments: 250\n- What if remote working, not AI, is to blame for weak junior hiring? — comments: 236\n- Finding success in industry as a chip designer — comments: 227",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 0.3,
+            "faithfulness": 0,
+            "completeness": 0,
+            "noFabrication": 0.6699999999999999,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "★ 1 score-confusion picks",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48345248,48345840,48347354] cited=[48346257,48326721,48322134]"
+            ],
+            "composite": 0.246
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 8955,
+          "inputTokens": 7343,
+          "outputTokens": 829,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 99661.65060300002,
+          "output": "1. United Airlines 767 returns to Newark after Bluetooth name sparks alert — comments: 721\n\n2. Meta launches Instagram, Facebook, and WhatsApp subscriptions — comments: 377\n\n3. Tracing HTTP Requests with Go's net/HTTP/httptrace — comments: 0",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": true,
+            "strictCorrect": false,
+            "notes": [
+              "2/3 correct titles",
+              "2/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48345248,48345840,48347354] cited=[48311587,48345248,48347354]",
+              "★ called recall()"
+            ],
+            "composite": 0.8833333333333334
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.6708888888888889,
+      "compositeMin": 0.246,
+      "compositeMax": 0.8833333333333334,
+      "compositeSpread": 0.6373333333333334,
+      "t3StrictCorrectCount": 0,
+      "t3StrictCorrectLabel": "0/3",
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "runs": [
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 6208,
+          "inputTokens": 5236,
+          "outputTokens": 229,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 52199.069819000026,
+          "output": "```markdown\n## Highest Score\n\n1. **Chuwi Minibook X (303)**\n2. **Cloudflare Turnstile requiring fingerprintable WebGL (690)**\n3. **Dav2d (500)**\n\n## Most Comments\n\n1. **Cloudflare Turnstile requiring fingerprintable WebGL (390)**\n2. **United Airlines 767 returns to Newark after Bluetooth name sparks alert (721)**\n3. **Meta launches Instagram, Facebook, and WhatsApp subscriptions (377)**\n```",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.8333333333333334,
+            "completeness": 0.8333333333333334,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "5/6 correct titles"
+            ],
+            "composite": 0.9083333333333333
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 10147,
+          "inputTokens": 8980,
+          "outputTokens": 356,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 67202.68212700001,
+          "output": "## Highest Score\n1. Chuwi Minibook X (303)\n2. Cloudflare Turnstile requiring fingerprintable WebGL (690)\n3. 1-Bit Bonsai Image 4B Image Generation for Local Devices (403)\n\n## Most Comments\n1. United Airlines 767 returns to Newark after Bluetooth name sparks alert (721)\n2. ChatGPT for Google Sheets exfiltrates workbooks (84)\n3. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (21)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 0.6666666666666666,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "4/6 correct titles"
+            ],
+            "composite": 0.8166666666666667
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 9903,
+          "inputTokens": 8809,
+          "outputTokens": 254,
+          "stepsCount": 7,
+          "toolCallCount": 2,
+          "wallMs": 59711.87957000011,
+          "output": "Let me prepare the markdown with the top 3 highest score and most commented posts.\n\n## Highest Score\n1. Cloudflare Turnstile requiring fingerprintable WebGL (690)\n2. A 10 year old Xeon is all you need (193)\n3. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (137)\n\n## Most Comments\n1. United Airlines 767 returns to Newark after Bluetooth name sparks alert (721)\n2. Meta launches Instagram, Facebook, and WhatsApp subscriptions (377)\n3. ChatGPT for Google Sheets exfiltrates workbooks (84)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 0.6666666666666666,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "4/6 correct titles"
+            ],
+            "composite": 0.8166666666666667
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.8472222222222223,
+      "compositeMin": 0.8166666666666667,
+      "compositeMax": 0.9083333333333333,
+      "compositeSpread": 0.09166666666666667,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "runs": [
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6663,
+          "inputTokens": 4976,
+          "outputTokens": 573,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 80502.45905099995,
+          "output": "I'll analyze these posts and group them into thematic categories:\n\n# Today on Hacker News\n\n## Technology Hardware\nToday's tech hardware stories include a fascinating look at running a modern system on old Xeon processors, showcasing how far we've come in software optimization. The Chuwi Minibook X laptop review highlights the latest trends in portable computing, while the Dav2d project demonstrates advancements in video decoding efficiency.\n\nThe 1-Bit Bonsai Image 4B generation showcases innovative approaches to local device image creation without needing powerful cloud resources. These stories collectively emphasize how hardware and software continue to evolve, making more efficient use of available resources.\n\n## Security & Privacy\nSecurity dominates the headlines with multiple significant findings. Cloudflare's Turnstile implementation is raising concerns over WebGL fingerprinting techniques that could potentially track users across websites. Similarly, a critical security flaw has been identified in ChatGPT integrations within Google Sheets, which can result in unauthorized data exfiltration.\n\nThese developments highlight ongoing challenges in balancing user privacy with functionality and the need for robust security measures across various platforms.\n\n## Open Source & Development\nThe open source community continues to drive innovation. The cessation of public development on Kefir C compiler represents a significant shift in the compilation tools landscape. SurrealDB's benchmarking against traditional databases like Postgres, MongoDB, Neo4j, and Redis offers insights into evolving database technologies, emphasizing the growing importance of NoSQL solutions.\n\nAdditionally, an alternative scripting language for XSLT (SLAX) has been developed, demonstrating how communities adapt existing standards to better meet modern developer needs. These stories underscore the vitality and rapid evolution of open-source projects and tools.\n\n## Diverse Topics\nA wide range of other interesting topics made headlines today:\n\n- Environmental conservation efforts in Alameda Creek are seeing success after decades of work to restore steelhead and salmon passage.\n- United Airlines experienced an unusual incident when a Bluetooth name triggered security alerts during a flight back to Newark, highlighting unexpected technical interactions.\n- In space exploration news, Rubin Observatory is tracking impressive celestial objects including skyscraper-sized asteroids, failed supernovas, and interstellar visitors.\n\nThese stories illustrate how technology intersects with various fields, from environmental science to aviation safety and astronomy, showcasing the broad impact of technological advances across society.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.13333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "2/15 titles cited",
+              "368 words"
+            ],
+            "composite": 0.6966666666666667
+          },
+          "runIndex": 0,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6530,
+          "inputTokens": 4976,
+          "outputTokens": 519,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 71601.46741699998,
+          "output": "# Today on Hacker News\n\n## Hardware & Electronics\nThe hardware space is active with notable developments in both computing infrastructure and consumer electronics. A particularly interesting post highlights how a 10-year-old Xeon processor can still handle modern tasks effectively, suggesting the longevity of server-grade components. Additionally, there's buzz around the Chuwi Minibook X, a compact laptop aimed at mobile users who value portability without compromising on performance.\n\n## Software Development & Tools\nThis category includes updates and new developments in various software domains. Of particular interest is the introduction of SLAX, an alternate syntax for XSLT scripting language designed to make XML transformations more accessible. Another post delves into optimizing HTTP request tracing with Go's net/HTTP/httptrace package, which could be valuable for developers working on performance-critical applications.\n\n## AI & Machine Learning\nThe field of machine learning continues to evolve with new tools and frameworks emerging. Notable in this category is the announcement about \"1-Bit Bonsai Image 4B,\" a local device image generation solution using only 4 billion bits, designed for limited hardware resources. This development suggests significant progress toward more accessible AI technologies.\n\n## Security & Privacy\nSecurity concerns remain prominent in discussions around emerging technologies. A critical post warns about the risks of integrating ChatGPT with Google Sheets, highlighting potential data exfiltration vulnerabilities. Another security-related story involves United Airlines 767 being diverted due to a Bluetooth name alert, demonstrating how even everyday devices can trigger safety protocols.\n\n## Other\nThe \"other\" category captures varied topics, from environmental conservation efforts like the restoration of salmon passage in Alameda Creek to scientific discoveries like Rubin Observatory's tracking of skyscraper-sized asteroids. These stories showcase the diverse range of issues that capture public interest and research attention today.\n\nThis categorization reflects the breadth of current technological discussions on Hacker News, ranging from practical software development tools to cutting-edge AI solutions, with security and hardware developments forming key themes in the mix.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.06666666666666667,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "5 category sections",
+              "1/15 titles cited",
+              "320 words"
+            ],
+            "composite": 0.6733333333333333
+          },
+          "runIndex": 1,
+          "postConditionsMet": true
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6989,
+          "inputTokens": 4976,
+          "outputTokens": 733,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 95184.77715900005,
+          "output": "Let's categorize these stories:\n\n**1) Hardware & Computing**\n- \"A 10 year old Xeon is all you need\" - A blog post discussing running a modern system on an older hardware configuration.\n- \"Chuwi Minibook X\" - Review of a new lightweight laptop.\n- \"Dav2d\" - Performance improvements in video decoding software.\n\n**2) Security & Privacy**\n- \"Cloudflare Turnstile requiring fingerprintable WebGL\" - Discussion about potential privacy concerns with Cloudflare's CAPTCHA system.\n- \"ChatGPT for Google Sheets exfiltrates workbooks\" - Security alert regarding misuse of AI integration in spreadsheets.\n\n**3) Software Development & Tech Infrastructure**\n- \"Tracing HTTP Requests with Go's net/HTTP/httptrace\" - Tutorial on debugging web requests using a specific library.\n- \"Benchmarking SurrealDB 3.x vs. Postgres, Mongo...\" - Database performance comparison.\n- \"The SLAX Scripting Language: An Alternate Syntax for XSLT\" - Alternative syntax for data transformation in XML.\n\n**4) Other Tech & Culture**\n- \"Two Ways to Draw Infinite Jest's Sierpinski Gasket\" - Mathematical/artistic exploration using a novel book as inspiration.\n- \"United Airlines 767 returns to Newark after Bluetooth name sparks alert\" - Interesting case of technology causing unexpected incidents.\n- \"Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas\" - Scientific research on celestial bodies.\n\n**5) Sustainability & Environment**\n- \"Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek\" - Environmental restoration project in California, highlighting long-term ecological efforts.\n\nHere's the markdown report:\n\n# Today on Hacker News\n\n## Hardware & Computing\nModern computing continues to find innovative ways to optimize performance. This week sees a fascinating exploration of running contemporary workloads on older hardware with \"A 10 year old Xeon is all you need,\" while the tech community celebrates new releases like the Chuwi Minibook X and Dav2d, showcasing advancements in portable computing and video processing capabilities.\n\n## Security & Privacy\nSecurity concerns are highlighted this week with discussions about Cloudflare's Turnstile implementation and its potential for privacy invasion through WebGL fingerprinting. Additionally, \"ChatGPT for Google Sheets exfiltrates workbooks\" raises important questions about the secure integration of AI tools into business applications.\n\n## Software Development & Infrastructure\nDevelopers have several interesting resources this week, including a detailed guide on using Go's HTTP/httptrace library for request tracing and benchmark results comparing SurrealDB 3.x against established databases. The introduction of SLAX as an alternative syntax for XSLT processing rounds out the technical content with its focus on data transformation efficiency.\n\n## Other Tech & Culture\nThis week's coverage extends beyond traditional tech topics to include diverse areas like mathematical artistry in \"Two Ways to Draw Infinite Jest's Sierpinski Gasket,\" unexpected technological incidents affecting airline operations, and groundbreaking astronomical research tracking significant celestial events.\n\nThe breadth of content demonstrates the ever-expanding influence of technology across various aspects of modern life.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.8,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "12/15 titles cited",
+              "453 words"
+            ],
+            "composite": 0.93
+          },
+          "runIndex": 2,
+          "postConditionsMet": true
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.7666666666666667,
+      "compositeMin": 0.6733333333333333,
+      "compositeMax": 0.93,
+      "compositeSpread": 0.2566666666666667,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postCondMetCount": 3,
+      "postCondLabel": "3/3"
+    }
+  ],
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 144,
+      "inputTokens": 116,
+      "outputTokens": 28,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4243.322853999998,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 6374,
+      "inputTokens": 4876,
+      "outputTokens": 541,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 94260.626999,
+      "output": "1. A 10 year old Xeon is all you need (score: 193)\n2. Tracing HTTP Requests with Go's net/HTTP/httptrace (score: 45)\n3. Chuwi Minibook X (score: 303)\n4. Benchmarking SurrealDB 3.x vs. Postgres, Mongo, Neo4j and Redis (With Fsync) (score: 22)\n5. Cloudflare Turnstile requiring fingerprintable WebGL (score: 690)\n6. two strangers. one call. no names (score: 9)\n7. The SLAX Scripting Language: An Alternate Syntax for XSLT (score: 8)\n8. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (score: 137)\n9. Cessation of public development of Kefir C compiler (score: 38)\n10. ChatGPT for Google Sheets exfiltrates workbooks (score: 236)\n11. 1-Bit Bonsai Image 4B Image Generation for Local Devices (score: 403)\n12. Dav2d (score: 500)\n13. Two Ways to Draw Infinite Jest's Sierpinski Gasket (score: 31)\n14. United Airlines 767 returns to Newark after Bluetooth name sparks alert (score: 368)\n15. Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas (score: 32)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8955,
+      "inputTokens": 7343,
+      "outputTokens": 829,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 99661.65060300002,
+      "output": "1. United Airlines 767 returns to Newark after Bluetooth name sparks alert — comments: 721\n\n2. Meta launches Instagram, Facebook, and WhatsApp subscriptions — comments: 377\n\n3. Tracing HTTP Requests with Go's net/HTTP/httptrace — comments: 0",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "strictCorrect": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion",
+          "★ strict ✗ (wrong post ids)",
+          "strict ✗ expected=[48345248,48345840,48347354] cited=[48311587,48345248,48347354]",
+          "★ called recall()"
+        ],
+        "composite": 0.8833333333333334
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 9903,
+      "inputTokens": 8809,
+      "outputTokens": 254,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 59711.87957000011,
+      "output": "Let me prepare the markdown with the top 3 highest score and most commented posts.\n\n## Highest Score\n1. Cloudflare Turnstile requiring fingerprintable WebGL (690)\n2. A 10 year old Xeon is all you need (193)\n3. Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek (137)\n\n## Most Comments\n1. United Airlines 767 returns to Newark after Bluetooth name sparks alert (721)\n2. Meta launches Instagram, Facebook, and WhatsApp subscriptions (377)\n3. ChatGPT for Google Sheets exfiltrates workbooks (84)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "4/6 correct titles"
+        ],
+        "composite": 0.8166666666666667
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6989,
+      "inputTokens": 4976,
+      "outputTokens": 733,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 95184.77715900005,
+      "output": "Let's categorize these stories:\n\n**1) Hardware & Computing**\n- \"A 10 year old Xeon is all you need\" - A blog post discussing running a modern system on an older hardware configuration.\n- \"Chuwi Minibook X\" - Review of a new lightweight laptop.\n- \"Dav2d\" - Performance improvements in video decoding software.\n\n**2) Security & Privacy**\n- \"Cloudflare Turnstile requiring fingerprintable WebGL\" - Discussion about potential privacy concerns with Cloudflare's CAPTCHA system.\n- \"ChatGPT for Google Sheets exfiltrates workbooks\" - Security alert regarding misuse of AI integration in spreadsheets.\n\n**3) Software Development & Tech Infrastructure**\n- \"Tracing HTTP Requests with Go's net/HTTP/httptrace\" - Tutorial on debugging web requests using a specific library.\n- \"Benchmarking SurrealDB 3.x vs. Postgres, Mongo...\" - Database performance comparison.\n- \"The SLAX Scripting Language: An Alternate Syntax for XSLT\" - Alternative syntax for data transformation in XML.\n\n**4) Other Tech & Culture**\n- \"Two Ways to Draw Infinite Jest's Sierpinski Gasket\" - Mathematical/artistic exploration using a novel book as inspiration.\n- \"United Airlines 767 returns to Newark after Bluetooth name sparks alert\" - Interesting case of technology causing unexpected incidents.\n- \"Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas\" - Scientific research on celestial bodies.\n\n**5) Sustainability & Environment**\n- \"Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek\" - Environmental restoration project in California, highlighting long-term ecological efforts.\n\nHere's the markdown report:\n\n# Today on Hacker News\n\n## Hardware & Computing\nModern computing continues to find innovative ways to optimize performance. This week sees a fascinating exploration of running contemporary workloads on older hardware with \"A 10 year old Xeon is all you need,\" while the tech community celebrates new releases like the Chuwi Minibook X and Dav2d, showcasing advancements in portable computing and video processing capabilities.\n\n## Security & Privacy\nSecurity concerns are highlighted this week with discussions about Cloudflare's Turnstile implementation and its potential for privacy invasion through WebGL fingerprinting. Additionally, \"ChatGPT for Google Sheets exfiltrates workbooks\" raises important questions about the secure integration of AI tools into business applications.\n\n## Software Development & Infrastructure\nDevelopers have several interesting resources this week, including a detailed guide on using Go's HTTP/httptrace library for request tracing and benchmark results comparing SurrealDB 3.x against established databases. The introduction of SLAX as an alternative syntax for XSLT processing rounds out the technical content with its focus on data transformation efficiency.\n\n## Other Tech & Culture\nThis week's coverage extends beyond traditional tech topics to include diverse areas like mathematical artistry in \"Two Ways to Draw Infinite Jest's Sierpinski Gasket,\" unexpected technological incidents affecting airline operations, and groundbreaking astronomical research tracking significant celestial events.\n\nThe breadth of content demonstrates the ever-expanding influence of technology across various aspects of modern life.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "12/15 titles cited",
+          "453 words"
+        ],
+        "composite": 0.93
+      },
+      "runIndex": 2,
+      "postConditionsMet": true
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8569555555555556,
+    "recallSmellCount": 1,
+    "taskCount": 5,
+    "totalRuns": 15,
+    "passKCount": 5,
+    "passKRate": 1
+  }
+}

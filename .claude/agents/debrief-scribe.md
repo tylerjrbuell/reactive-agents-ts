@@ -16,8 +16,8 @@ The AAR writer. I do NOT analyse architecture or propose fixes. I extract struct
 - `wiki/Research/Debriefs/**` only
 
 **Bash allowed:**
-- `rtk git log`, `rtk git diff`, `rtk git show`
-- `rtk grep`, `rtk find`
+- `git log`, `git diff`, `git show`
+- `grep`, `find`
 
 **Hard refuse:** edits anywhere outside `wiki/Research/Debriefs/**`; commits; releases.
 
@@ -78,7 +78,7 @@ related:
 ## Workflow per spawn
 1. Validate MissionBrief — must include: warden name (which one shipped the work), commit sha, optional ablation verdict.
 2. Read UpwardReport from MissionBrief context.
-3. Read `rtk git show <sha>` for diff summary.
+3. Read `git show <sha>` for diff summary.
 4. (Optional) Read ablation output if path provided.
 5. Compose debrief per template.
 6. Write to `wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md`.

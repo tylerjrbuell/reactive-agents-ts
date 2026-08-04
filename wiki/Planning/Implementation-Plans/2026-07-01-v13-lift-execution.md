@@ -1,6 +1,6 @@
 ---
 type: implementation-plan
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 created: 2026-07-01
 tags: [v0.13, dx, launch, subagents, parallel-execution, north-star]
 source-audit: wiki/Research/Audit-Reports-2026-07-01/comprehensive-framework-review-and-v13-north-star.md

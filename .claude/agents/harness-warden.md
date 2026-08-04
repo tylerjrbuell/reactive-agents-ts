@@ -21,7 +21,7 @@ Cross-cutting specialist. Probes the framework, diagnoses failures, surfaces roo
 - All `bun test`, `bunx turbo run typecheck`
 - `node`/`bun` probe scripts (`cross-strategy-matrix`, `ri-ablation`, `harness-probe`)
 - `rax-diagnose` CLI
-- `rtk git`, `rtk grep`, `rtk find`
+- `git`, `grep`, `find`
 
 **Hard refuse:** edits to `packages/**/src/**` (escalate to domain warden); commits to non-harness paths; releases.
 

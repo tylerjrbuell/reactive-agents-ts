@@ -1,7 +1,7 @@
 ---
 tags: [measurement, eval, benchmark, diagnose, audit, root-cause]
 date: 2026-07-10
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 scope: every mechanism that turns a harness change into a verdict
 ---
 

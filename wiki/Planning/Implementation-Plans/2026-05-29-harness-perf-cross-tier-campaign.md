@@ -1,7 +1,7 @@
 ---
 title: Harness Performance + Cross-Tier Consistency Campaign
 date: 2026-05-29
-status: active
+status: superseded (2026-07-31 wiki-lint cleanup — untouched since creation, not in current active-program list per .agents/MEMORY.md)
 branch: main (post canonical-refactor merge d783c876)
 related:
   - "[[2026-05-29-e2e-perf-bottleneck-findings]]"

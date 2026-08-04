@@ -1,0 +1,136 @@
+{
+  "model": "gemini-2.5-flash",
+  "provider": "gemini",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-29T23-54-36",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 163,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1169.7959580000002,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 6908,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 12442.803453,
+      "output": "1. SQLite is all you need for durable workflows (score: 304)\n2. The dead economy theory (score: 611)\n3. You can just say it (score: 87)\n4. Notes from the Mistral AI Now Summit (score: 298)\n5. MCP Is Dead (score: 40)\n6. Shift will clean homes for free to train future robots (score: 62)\n7. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 66)\n8. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 40)\n9. It's hard to justify buying a Framework 12 (score: 199)\n10. Bijou64: A variable-length integer encoding (score: 198)\n11. On Rendering Diffs (score: 132)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 137)\n13. The California state assembly has passed the 'Protect Our Games Act' (score: 160)\n14. Free full BGP feed. IPv4 and IPv6 (score: 14)\n15. Is AI causing a repeat of frontend’s lost decade? (score: 272)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12785,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 17083.178055999997,
+      "output": "The top three Hacker News posts, ranked by the number of comments, are as follows:\n\n1. The dead economy theory — comments: 794\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM — comments: 648\n3. GTA 6 Developers Unionize — comments: 364",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11272,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 16551.569957,
+      "output": "## Highest Score\n1. The dead economy theory (611)\n2. GTA 6 Developers Unionize (539)\n3. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (433)\n\n## Most Comments\n1. The dead economy theory (794)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (648)\n3. GTA 6 Developers Unionize (364)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 11911,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 27560.994834000005,
+      "output": "# Today on Hacker News\n\n## AI and Machine Learning\nThis section highlights the ongoing advancements and discussions within the artificial intelligence and machine learning sphere. \"Notes from the Mistral AI Now Summit\" provides insights into the latest developments from a prominent AI company. The ethical and practical implications of AI are explored in \"Shift will clean homes for free to train future robots,\" which details a company's approach to data collection for robot training. On the technical front, \"Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA\" introduces a new tool for efficient large language model inference, while \"Liquid AI reveals 8B-A1B MoE trained on 38T\" showcases a significant new model release. Finally, \"Is AI causing a repeat of frontend’s lost decade?\" sparks a debate on the potential impact of AI on software development trends.\n\n## Programming and Software Development\nSoftware development remains a core topic, with several posts offering practical insights and new tools. \"SQLite is all you need for durable workflows\" suggests a simplified approach to building robust systems. Discussions around coding philosophy and practices are present in \"You can just say it\" and \"MCP Is Dead.\" For those interested in data structures and algorithms, \"Bijou64: A variable-length integer encoding\" presents an efficient encoding method. Additionally, \"On Rendering Diffs\" delves into the technicalities of displaying code changes, and \"Free full BGP feed. IPv4 and IPv6\" offers a valuable resource for network engineers.\n\n## Hardware and Technology Industry\nInnovation in hardware and the broader tech industry also captured attention. \"Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer\" showcases advancements in 3D printing technology, enabling more complex and colorful prints. Meanwhile, \"It's hard to justify buying a Framework 12\" provides a critical look at the current state and value proposition of modular laptops, prompting discussion on consumer choices and product longevity.\n\n## Other Interesting Reads\nBeyond the immediate tech sphere, several articles offered broader perspectives. \"The dead economy theory\" presents an intriguing economic hypothesis, inviting readers to consider new frameworks for understanding market dynamics. In the realm of policy and gaming, \"The California state assembly has passed the 'Protect Our Games Act'\" reports on legislative efforts to safeguard video game titles and their preservation, reflecting ongoing concerns about digital ownership and cultural heritage.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "15/15 titles cited",
+          "381 words"
+        ],
+        "composite": 0.9999999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9999999999999998,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

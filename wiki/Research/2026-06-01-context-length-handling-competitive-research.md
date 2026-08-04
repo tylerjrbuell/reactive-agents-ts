@@ -155,7 +155,7 @@ valve for genuinely huge results, not the primary plan). This is the opposite of
 - Every layer logged in diagnostics so the resolved budget is never a mystery.
 
 ## Measurement plan (default behavioral change → must be measured)
-Cross-tier `pass^k` on the PINNED fixture (`hn-fixture-2026-06-01.json`), before/after:
+Cross-tier `pass^k` on the PINNED fixture (`_archive/hn-fixture-2026-06-01.json`), before/after:
 - **Targets the visibility/balk failure** → expect MID (gpt-4o-mini) + FRONTIER
   (sonnet) T3-strict 0/3 → >0; tokens within headroom.
 - **Will NOT fix** local cogito (wrong-field sort = reasoning) or qwen (no-filter

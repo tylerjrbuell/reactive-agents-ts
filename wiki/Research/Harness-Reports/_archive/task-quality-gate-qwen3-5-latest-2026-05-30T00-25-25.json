@@ -1,0 +1,147 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-30T00-25-25",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 281,
+      "inputTokens": 162,
+      "outputTokens": 119,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 5147.584398,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 12187,
+      "inputTokens": 5791,
+      "outputTokens": 796,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 42145.059737999996,
+      "output": "1. You can just say it (score: 145)\n2. SQLite is all you need for durable workflows (score: 317)\n3. The dead economy theory (score: 631)\n4. Notes from the Mistral AI Now Summit (score: 303)\n5. Shift will clean homes for free to train future robots (score: 70)\n6. Show HN: Tiny-vLLM – high performance LLM inference engine in C++ and CUDA (score: 74)\n7. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 46)\n8. Snowboard Kids 2 is 100% Decompiled (score: 14)\n9. It's hard to justify buying a Framework 12 (score: 207)\n10. Bijou64: A variable-length integer encoding (score: 199)\n11. On Rendering Diffs (score: 135)\n12. Liquid AI reveals 8B-A1B MoE trained on 38T (score: 143)\n13. Free full BGP feed. IPv4 and IPv6 (score: 19)\n14. The California state assembly has passed the 'Protect Our Games Act' (score: 165)\n15. Is AI causing a repeat of frontend's lost decade? (score: 279)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 15042,
+      "inputTokens": 11592,
+      "outputTokens": 346,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 69588.11641799999,
+      "output": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Task:** Fetch top 25 Hacker News posts (data provided), identify the 3 posts with the MOST comments (based on the 'descendants' field), and output them in a specific format.\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Sorting:** Sort by comment count descending.\n    *   **Output Style:** Prose (flowing paragraphs).\n    *   **Constraint:** \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". (This part is slightly confusing in the prompt instructions: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'. Sort by comment count descending. Use exact titles from the tool result.\" followed by \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\".\n    *   **Conflict:** The user instruction says \"Write as flowing prose paragraphs\" but also specifies an exact format `'1. TITLE — comments: COUNT'`. Usually, when a specific format is requested alongside a prose instruction, the format constraint for the *data* takes precedence for the specific items, but the surrounding text should be prose. However, the instruction \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source\" suggests I should not add extra text.\n    *   **Re-evaluating the \"Prose\" instruction:** The prompt says \"Instruction: Write as flowing prose paragraphs.\" but also \"Produce ONLY the formatted output\". This is a common conflict in these types of prompts. Usually, if a specific format like `'1. TITLE — comments: COUNT'` is requested for the *list*, I should follow that for the list items. However, the \"Prose\" instruction suggests wrapping this in text.\n    *   **Re-reading the \"REQUIRED COLUMNS/FIELDS\" section:** It says \"most comments in this exact format: '1\". This looks like a truncation or a specific constraint. Let's look at the main instruction: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\".\n    *   **Re-reading the \"Prose\" instruction:** \"Instruction: Write as flowing prose paragraphs.\"\n    *   **Re-reading the \"ONLY formatted output\" instruction:** \"Produce ONLY the formatted output — no explanation, no preamble, no meta-commentary about the data source.\"\n    *   **Synthesis:** The user wants the top 3 posts listed in the specific format `1. TITLE — comments: COUNT`, sorted by comment count descending. The \"prose\" instruction might be a template instruction that conflicts with the specific format request. Given the explicit \"exact format\" requirement for the output of the posts, I should prioritize the specific format for the data points. However, the \"Prose\" instruction says \"Write as flowing prose paragraphs\". If I just output the list, is that prose? No. If I write a paragraph introducing the list, is that prose? Yes. But the \"ONLY the formatted output\" constraint usually means \"don't add conversational filler\".\n    *   **Decision:** The most critical constraint is the \"exact format\" for the posts. The \"prose\" instruction likely refers to the general style of the response if it weren't for the specific format constraint. However, looking at the \"REQUIRED COLUMNS/FIELDS\" line: \"most comments in this exact format: '1\". This seems to imply the list format.\n    *   **Wait, looking closer at the prompt structure:** The prompt has a section \"Instruction: Write as flowing prose paragraphs.\" and then \"REQUIRED COLUMNS/FIELDS: most comments in this exact format: '1\". This looks like a system prompt injection or a specific constraint set.\n    *   **Conflict Resolution:** The user explicitly asked: \"Output the 3 posts with the MOST comments in this exact format: '1. TITLE — comments: COUNT'\". Then later says \"Instruction: Write as flowing prose paragraphs.\" Then \"Produce ONLY the formatted output\".\n    *   **Interpretation:** The \"exact format\" instruction for the posts is the primary data requirement. The \"prose\" instruction might be a generic instruction that conflicts. However, often when \"exact format\" is specified, it overrides \"prose\". But if I write a paragraph *containing* the list, does that satisfy both?\n    *   **Actually, looking at the \"Produce ONLY the formatted output\" instruction:** This usually means \"Don't write 'Here is the list...'\". Just the list.\n    *   **But the \"Write as flowing prose paragraphs\" instruction:** This suggests I should write text.\n    *   **Let's look at the data:**\n        *   Post 1: \"Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM\" (descendants: 654)\n        *   Post 2: \"GTA 6 Developers Unionize\" (descendants: 373)\n        *   Post 3: \"It's hard to justify buying a Framework 12\" (descendants: 363)\n        *   Next highest: \"The dead economy theory\" (816 descendants). Wait, I need to check the data again.\n        *   Data Check:\n            *   \"The dead economy theory\": 816 descendants.\n            *   \"Citing 'severe' math deficits...\": 654 descendants.\n            *   \"GTA 6 Developers Unionize\": 373 descendants.\n            *   \"It's hard to justify buying a Framework 12\": 363 descendants.\n            *   \"Is AI causing a repeat of frontend’s lost decade?\": 239 descendants.\n            *   \"SQLite is all you need...\": 184 descendants.\n            *   \"The California state assembly...\": 168 descendants.\n            *   \"The mysterious Hy3 LLM...\": 93 descendants.\n            *   \"Bijou64...\": 73 descendants.\n            *   \"Shift will clean homes...\": 95 descendants.\n            *   \"You can just say it\": 48 descendants.\n            *   \"Liquid AI reveals...\": 45 descendants.\n            *   \"Notes from the Mistral AI Now Summit\": 105 descendants.\n            *   \"Rothko for your current weather conditions\": 11 descendants.\n            *   \"On Rendering Diffs\": 35 descendants.\n            *   \"Show HN: TV Explorer...\": 22 descendants.\n            *   \"Show HN: Zot...\": 60 descendants.\n            *   \"Free full BGP feed...\": 7 descendants.\n            *   \"The Last Technical Interview\": 6 descendants.\n            *   \"Show HN: Open-source private home security...\": 3 descendants.\n            *   \"Snowboard Kids 2...\": 2 descendants.\n            *   \"Print with dozens of colors...\": 1 descendant.\n            *   \"Finding Miscompiles...\": 1 descendant.\n            *   \"Letter from the Duke...\": 13 descendants.\n            *   \"Tiny-vLLM...\": 7 descendants.\n    *   **Top 3 by descendants:**\n        1.  \"The dead economy theory\" (816)\n        2.  \"Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM\" (654)\n        3.  \"GTA 6 Developers Unionize\" (373)\n    *   **Wait, check \"It's hard to justify buying a Framework 12\":** 363 descendants.\n    *   **So Top 3:**\n        1.  The dead economy theory (816)\n        2.  Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (654)\n        3.  GTA 6 Developers Unionize (373)\n    *   **Format:** '1. TITLE — comments: COUNT'.\n    *   **Prose Constraint:** \"Write as flowing prose paragraphs.\"\n    *   **Only Formatted Output Constraint:** \"Produce ONLY the formatted output\".\n    *   **Resolution:** If I write prose, I violate \"ONLY the formatted output\" if the format is strictly the list. If I write the list, I violate \"prose\". However, the \"exact format\" instruction for the posts is usually the hard constraint for the data representation. The \"prose\" instruction might be a generic system instruction that gets overridden by the specific task instruction (\"Output the 3 posts... in this exact format\").\n    *   **Wait, looking at the \"REQUIRED COLUMNS/FIELDS\" section:** It says \"most comments in this exact format: '1\". This is likely a typo in the prompt provided to me, meant to be the list format.\n    *   **Let's try to combine:** I will write a brief introductory sentence (prose) and then the list, or just the list if \"ONLY the formatted output\" is strict.\n    *   **Strict Interpretation:** \"Produce ONLY the formatted output\". This usually means no intro text. But \"Write as flowing prose paragraphs\" contradicts \"ONLY the formatted output\" if the format is a list.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.9009999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 7949,
+      "inputTokens": 6067,
+      "outputTokens": 833,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 64739.28932300002,
+      "output": "## Highest Score\n1. The dead economy theory (631)\n2. GTA 6 Developers Unionize (547)\n3. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (440)\n\n## Most Comments\n1. The dead economy theory (816)\n2. Citing 'severe' math deficits, UC faculty demand a return to SAT tests for STEM (654)\n3. GTA 6 Developers Unionize (373)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 18175,
+      "inputTokens": 10291,
+      "outputTokens": 1418,
+      "stepsCount": 9,
+      "toolCallCount": 2,
+      "wallMs": 54130.680704,
+      "output": "# Today on Hacker News\n\n**AI/ML** dominated today's top stories, with significant discussion around recent model developments and industry events. The **Notes from the Mistral AI Now Summit** (303 points) drew substantial attention as a key industry gathering. In practical applications, **Shift will clean homes for free to train future robots** (70 points) highlighted an intriguing experiment in collecting training data through service work. Show HN submissions featured **Tiny-vLLM – high performance LLM inference engine in C++ and CUDA** (74 points), demonstrating continued interest in optimized inference systems. The **Liquid AI reveals 8B-A1B MoE trained on 38T** (143 points) showcased massive-scale model training achievements. Community concern appeared in **Is AI causing a repeat of frontend's lost decade?** (279 points), where 239 commenters debated AI's impact on frontend development careers.\n\n**Programming and Systems** discussions focused on practical engineering challenges. **SQLite is all you need for durable workflows** (317 points) generated 184 comments about simplifying backend architectures. Technical deep dives included **Bijou64: A variable-length integer encoding** (199 points) from justinweiss and **On Rendering Diffs** (135 points), both exploring fundamental computing concepts. Network enthusiasts appreciated **Free full BGP feed. IPv4 and IPv6** (19 points) for providing valuable routing data.\n\n**Hardware** enthusiasts debated the **Framework 12** laptop (207 points), with many questioning its value proposition despite the modular design. 3D printing fans celebrated **Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer** (46 points). Meanwhile, **Snowboard Kids 2 is 100% Decompiled** (14 points) showcased reverse engineering achievements.\n\n**Economics and Society** saw **The dead economy theory** (631 points) as the most discussed post with 816 comments, exploring unconventional economic perspectives. Policy discussions focused on **The California state assembly has passed the 'Protect Our Games Act'** (165 points), which aims to prevent game developers from being fired for political reasons.\n\n**You can just say it** by antirez (145 points) and **It's hard to justify buying a Framework 12** (207 points) rounded out the top conversations, reflecting the community's pragmatic approach to technology adoption and communication.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.9333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "14/15 titles cited",
+          "331 words",
+          "★ called recall()"
+        ],
+        "composite": 0.9016666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9605333333333332,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}
