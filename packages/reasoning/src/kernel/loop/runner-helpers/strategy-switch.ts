@@ -146,8 +146,17 @@ export function applyStrategySwitch(
 
     const currentOptions: KernelRunOptions = { ...options, strategy: toStrategy };
 
-    // Reset state — fresh iteration count, carry forward toolsUsed.
+    // Reset state, but CARRY the run's iteration count across the switch (Move 5,
+    // per-run iteration cap). `initialKernelState` zeroes `iteration`; leaving it
+    // at 0 gave each strategy pass its OWN `maxIterations` budget, so a run that
+    // switched could execute up to (switches+1)×maxIterations — the declared cap
+    // was a lie (2026-07-29 audit: 16-28 iterations against a declared 12). The
+    // run-total now bounds the loop; a run that switches late gets what remains,
+    // which is the honest reading of a per-RUN cap. Trims the pathological tail
+    // (only runs that loop-detect AND switch are affected — healthy runs never
+    // reach here), so it cannot regress a run that was not already thrashing.
     let state = initialKernelState(currentOptions);
+    state = transitionState(state, { iteration: priorState.iteration });
 
     // P4 (2026-07-07, A2 #3): carry successful tool observations AND the
     // toolsUsed ledger across the switch. Without them the new strategy both

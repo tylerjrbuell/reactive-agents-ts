@@ -83,4 +83,27 @@ describe("applyStrategySwitch carries successful tool results + toolsUsed", () =
         )
         expect(carriedFailures.length).toBe(0)
     })
+
+    // Move 5 — per-run iteration cap: the switch must CARRY the run's iteration
+    // count, not reset it to 0. Otherwise each strategy pass gets its own
+    // maxIterations budget and a switched run runs (switches+1)×max (2026-07-29
+    // audit: 16-28 vs a declared 12).
+    test("iteration count is carried across the switch (per-run cap)", async () => {
+        const prior = transitionState(buildPriorState(), { iteration: 8 })
+        const result = await Effect.runPromise(
+            applyStrategySwitch({
+                state: prior,
+                currentInput: input,
+                context,
+                options,
+                hooks,
+                triedStrategies: ["react"],
+                switchCount: 0,
+                fromStrategy: "react",
+                toStrategy: "plan-execute",
+                failureReason: "loop detected",
+            }),
+        )
+        expect(result.state.iteration).toBe(8)
+    })
 })
