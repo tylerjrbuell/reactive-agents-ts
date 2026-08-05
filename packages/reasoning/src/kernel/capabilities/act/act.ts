@@ -144,7 +144,7 @@ export function handleActing(
   context: KernelContext,
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
-    const { input, profile, compression, toolService, hooks, memoryService } = context;
+    const { input, profile, compression, toolService, hooks } = context;
     // profileOverrides were already merged into `profile` by kernel-runner;
     // here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
@@ -708,7 +708,6 @@ export function handleActing(
                   {
                     compression,
                     scratchpad: sharedScratchpad,
-                    memoryService,
                     profile,
                     // The pruned schemas actually shown to the model this turn.
                     // A recovery hint may name a tool only from this set — the
@@ -996,7 +995,6 @@ export function handleActing(
                     ...(input.requiredTools ? { requiredTools: input.requiredTools } : {}),
                     toolsUsed: newToolsUsed,
                   },
-                  memoryService,
                 }
               : {}),
           },

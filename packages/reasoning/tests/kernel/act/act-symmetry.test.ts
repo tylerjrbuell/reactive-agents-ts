@@ -6,9 +6,11 @@
  * for parallel turns (batch tool-results were invisible to .on()/.tap()).
  *
  * E2 (gated, default OFF): with RA_TOOL_OBSERVE_SYMMETRY=1 the SINGLE path
- * attaches a `verification` to the obsStep AND forks a semantic-memory store;
- * with the flag unset, neither happens (byte-identical to the pre-Phase-E single
- * path — pinned by the Phase B golden-master, re-asserted here for the memory leg).
+ * attaches a `verification` to the obsStep; with the flag unset it does not
+ * (byte-identical to the pre-Phase-E single path — pinned by the Phase B
+ * golden-master). The old semantic-memory leg was removed in Move 4 (2026-08):
+ * the tool-observation write was dead (retrieval never wired), so the kernel
+ * no longer calls storeSemantic on either path.
  */
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
@@ -159,7 +161,7 @@ describe("act symmetry — E1 batch compose tags (unconditional)", () => {
 });
 
 describe("act symmetry — E2 single path gated by RA_TOOL_OBSERVE_SYMMETRY", () => {
-  it("WITH flag=1: single-path obsStep has verification AND memory.storeSemantic invoked", async () => {
+  it("WITH flag=1: single-path obsStep has verification (Move 4: semantic write removed)", async () => {
     const prev = process.env.RA_TOOL_OBSERVE_SYMMETRY;
     process.env.RA_TOOL_OBSERVE_SYMMETRY = "1";
     try {
@@ -176,9 +178,10 @@ describe("act symmetry — E2 single path gated by RA_TOOL_OBSERVE_SYMMETRY", ()
 
       expect(steps.length).toBe(1);
       expect(steps[0]!.metadata?.verification).toBeDefined();
-      // memory write is forked (daemon) — give the fiber a tick to run.
+      // Move 4 (2026-08): the dead tool-observation semantic write was removed
+      // (retrieval was never wired). The kernel must no longer call storeSemantic.
       await new Promise((r) => setTimeout(r, 50));
-      expect(mem.stored.length).toBeGreaterThanOrEqual(1);
+      expect(mem.stored.length).toBe(0);
     } finally {
       if (prev === undefined) delete process.env.RA_TOOL_OBSERVE_SYMMETRY;
       else process.env.RA_TOOL_OBSERVE_SYMMETRY = prev;

@@ -47,7 +47,6 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type {
   MaybeService,
-  MemoryServiceInstance,
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 
@@ -126,12 +125,6 @@ export interface ToolObserveConfig {
     readonly requiredTools?: readonly string[];
     readonly toolsUsed: ReadonlySet<string>;
   };
-  /**
-   * Phase E (E2) — when present, passed straight through to
-   * `executeNativeToolCall` so successful tool results are forked into semantic
-   * memory (it already forks a daemon store). Absent ⇒ no memory write.
-   */
-  readonly memoryService?: MaybeService<MemoryServiceInstance>;
   /**
    * Tool-policy enforcement (P0-4, a SAFETY gate). When either field is present
    * the primitive BLOCKS a violating tool BEFORE dispatch — returning a normal
@@ -445,7 +438,6 @@ export function executeToolAndObserve(
         ...(config.scratchpad ? { scratchpad: config.scratchpad } : {}),
         ...(config.profile ? { profile: config.profile } : {}),
         ...(config.preprocess ? { preprocess: config.preprocess } : {}),
-        ...(config.memoryService ? { memoryService: config.memoryService } : {}),
         // The model's ACTUAL toolbox this turn. A recovery hint may name a tool
         // only if it is here — the registry lists built-ins the schema withheld.
         // Absent schemas ⇒ empty set ⇒ hints name no tool, which is the safe
