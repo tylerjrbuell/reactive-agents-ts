@@ -158,3 +158,33 @@ describe("deriveDeliverablePath — binds to the WRITE verb, not the first path"
     expect(artifactPath(c)).toBe("./report.md");
   }, 15000);
 });
+
+describe("deriveConditions — non-file mutation (SideEffectLanded)", () => {
+  const kinds = (c: ReturnType<typeof deriveConditions>) => c.map((x) => x.kind);
+
+  it("'create a keep note with groceries' -> SideEffectLanded (no file)", () => {
+    const c = deriveConditions("Use the gws-cli tool to create a new keep note with groceries: butter, milk, eggs", []);
+    expect(kinds(c)).toContain("SideEffectLanded");
+  }, 15000);
+
+  it("'send an email to Bob' -> SideEffectLanded", () => {
+    const c = deriveConditions("Send an email to Bob about the meeting", []);
+    expect(kinds(c)).toContain("SideEffectLanded");
+  }, 15000);
+
+  it("READ task 'get my calendar events' -> NO SideEffectLanded", () => {
+    const c = deriveConditions("Get my calendar events for today and summarise them", []);
+    expect(kinds(c)).not.toContain("SideEffectLanded");
+  }, 15000);
+
+  it("'create a function' (no external resource) -> NO SideEffectLanded", () => {
+    const c = deriveConditions("Create a function that adds two numbers", []);
+    expect(kinds(c)).not.toContain("SideEffectLanded");
+  }, 15000);
+
+  it("FILE mutation stays ArtifactProduced, NOT SideEffectLanded", () => {
+    const c = deriveConditions("Create a file ./notes.md with my grocery list", ["file-write"]);
+    expect(kinds(c)).toContain("ArtifactProduced");
+    expect(kinds(c)).not.toContain("SideEffectLanded");
+  }, 15000);
+});

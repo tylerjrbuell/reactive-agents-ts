@@ -19,10 +19,23 @@
 import {
   artifactProduced,
   outputContains,
+  sideEffectLanded,
   toolCalled,
   WRITING_TOOL_NAMES,
   type PostCondition,
 } from "./post-conditions.js";
+
+// HIGH-PRECISION non-file mutation matcher. A task that asks to create/send/
+// delete an EXTERNAL resource (a note, email, event, issue, …) via a tool has a
+// side-effect deliverable with NO local file to disk-check — so `ToolCalled`
+// (satisfied by a successful READ like a schema query) is the only signal, and
+// it cannot tell a read from a failed write. Require BOTH a mutation verb AND an
+// external-resource noun so a READ ("get the events", "summarise the note") and
+// a bare "create a function" never derive a side-effect condition.
+const MUTATION_VERB =
+  /\b(create|send|add|post|delete|remove|update|schedule|assign|upload|publish|rename|archive|move|share|invite|draft|reply|forward|submit|set)\b/i;
+const EXTERNAL_RESOURCE_NOUN =
+  /\b(note|email|e-mail|message|event|issue|pull[\s-]?request|pr|record|reminder|todo|task|label|calendar|comment|page|row|entry|ticket|memo|invite|meeting|contact|folder|group|channel|list|draft|thread)\b/i;
 
 // Tools that count as "writing" a file artifact — shared with post-conditions.ts
 // (WRITING_TOOL_NAMES) so derive/produce vocabularies stay in lockstep. If a
@@ -330,6 +343,12 @@ export function deriveConditions(
   if (path) {
     push(artifactProduced(path));
     push(toolCalled(pickWritingTool(requiredTools)));
+  } else if (MUTATION_VERB.test(task) && EXTERNAL_RESOURCE_NOUN.test(task)) {
+    // 3. non-file mutation (create/send/… a note/email/event) -> the side-effect
+    //    must LAND. Excluded when a file path derived above: ArtifactProduced's
+    //    disk truth already grounds that case, and adding a terminal-success
+    //    condition on top would false-negative a write-then-failed-read run.
+    push(sideEffectLanded());
   }
 
   return conditions;

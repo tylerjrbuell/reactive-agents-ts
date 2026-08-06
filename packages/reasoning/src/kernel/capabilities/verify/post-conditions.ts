@@ -26,6 +26,7 @@
 import type { ReasoningStep } from "../../../types/index.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { getMissingRequiredToolsFromSteps } from "./requirement-state.js";
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS } from "../../state/kernel-constants.js";
 
 // ─── PostCondition union ────────────────────────────────────────────────────
 
@@ -51,10 +52,26 @@ export interface OutputContainsCondition {
   readonly pattern: string;
 }
 
+/**
+ * The run's side-effect must have LANDED — for a mutation task (create/send/
+ * delete a note/email/event/…) whose deliverable is NOT a local file, so no
+ * `ArtifactProduced` disk-check applies. Met iff the run's LATEST substantive
+ * (non-meta, non-pseudo) tool observation SUCCEEDED. This closes the
+ * generic-CLI blind spot: `ToolCalled(gws-cli)` is satisfied by a successful
+ * `schema` READ while the `create` MUTATION failed — the tool name can't tell a
+ * read from a write, so a failed mutation read as done and shipped a fabricated
+ * "note created". Grounding on the terminal observation's success recovers the
+ * ground truth the tool-name check throws away.
+ */
+export interface SideEffectLandedCondition {
+  readonly kind: "SideEffectLanded";
+}
+
 export type PostCondition =
   | ToolCalledCondition
   | ArtifactProducedCondition
-  | OutputContainsCondition;
+  | OutputContainsCondition
+  | SideEffectLandedCondition;
 
 // ─── Constructors ───────────────────────────────────────────────────────────
 
@@ -71,6 +88,10 @@ export const artifactProduced = (path: string): ArtifactProducedCondition => ({
 export const outputContains = (pattern: string): OutputContainsCondition => ({
   kind: "OutputContains",
   pattern,
+});
+
+export const sideEffectLanded = (): SideEffectLandedCondition => ({
+  kind: "SideEffectLanded",
 });
 
 // ─── Verification result ──────────────────────────────────────────────────────
@@ -250,6 +271,52 @@ function isToolCalled(
   return getMissingRequiredToolsFromSteps(steps, [tool]).length === 0;
 }
 
+/** A tool name that is real work — not a harness meta-tool or pseudo-tool. */
+function isSubstantiveToolName(toolName: string | undefined): toolName is string {
+  return (
+    typeof toolName === "string" &&
+    toolName.length > 0 &&
+    !META_TOOLS.has(toolName) &&
+    !HARNESS_PSEUDO_TOOLS.has(toolName)
+  );
+}
+
+/**
+ * SideEffectLanded is met iff the run's LATEST substantive (non-meta,
+ * non-pseudo) tool result SUCCEEDED. For a mutation task the model does its
+ * reads first and its write last, so the terminal substantive action IS the
+ * mutation attempt — if it FAILED, the side-effect never landed and the run must
+ * not report success (the reported gws-cli fabrication: `schema` succeeded,
+ * `create` failed, harness declared done). No substantive result at all →
+ * unmet: nothing was performed. Delegation (`spawn-agent`) counts as substantive
+ * so a sub-agent that carried out the mutation is credited.
+ *
+ * Prefers the run-scoped ledger (append order = call order, and it sees
+ * delegated results) and falls back to the steps scan for ledger-less callers.
+ */
+export function isSideEffectLanded(
+  steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
+): boolean {
+  const results = ledger ? [...entriesOfKind(ledger, "tool-result")] : [];
+  if (results.length > 0) {
+    for (let i = results.length - 1; i >= 0; i--) {
+      const entry = results[i]!;
+      if (!isSubstantiveToolName(entry.toolName)) continue;
+      return entry.success === true;
+    }
+    return false;
+  }
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const step = steps[i]!;
+    if (step.type !== "observation") continue;
+    const result = step.metadata?.observationResult as ObservationResultLike | undefined;
+    if (!isSubstantiveToolName(result?.toolName)) continue;
+    return result?.success === true;
+  }
+  return false;
+}
+
 /**
  * ArtifactProduced is met iff a SUCCESSFUL WRITE observation can be tied to the
  * target path. "Write" is judged from the observation's own toolName (DBC: tied
@@ -386,6 +453,9 @@ export function verify(
       case "OutputContains":
         satisfied = output.includes(condition.pattern);
         break;
+      case "SideEffectLanded":
+        satisfied = isSideEffectLanded(steps, opts?.ledger);
+        break;
     }
     if (satisfied) met.push(condition);
     else unmet.push(condition);
@@ -405,6 +475,8 @@ export function describeUnmet(unmet: readonly PostCondition[]): string {
         return `write the file ${c.path}`;
       case "OutputContains":
         return `include "${c.pattern}" in your answer`;
+      case "SideEffectLanded":
+        return "actually complete the requested action — your last tool call failed, so it did not take effect; retry it (correct the arguments) or report honestly that it could not be done";
       default: {
         // Exhaustiveness: a future PostCondition kind must be handled here.
         // Without this, the switch would yield `undefined` -> "You still

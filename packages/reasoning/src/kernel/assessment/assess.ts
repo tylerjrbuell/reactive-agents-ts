@@ -26,7 +26,7 @@
 // (`entriesOfKind`, `artifacts`) against the contract's PostConditions.
 
 import { isGatheringTool, normalizeArgsHash } from "../../assembly/gather-dedup.js";
-import type { PostCondition } from "../capabilities/verify/post-conditions.js";
+import { isSideEffectLanded, type PostCondition } from "../capabilities/verify/post-conditions.js";
 import type { DeliverableSpec, RunContract, TaskRequirement } from "../contract/run-contract.js";
 import { artifacts } from "../ledger/artifact-projection.js";
 import { entriesOfKind, type RunLedger } from "../ledger/run-ledger.js";
@@ -216,6 +216,8 @@ export function assess(
       case "OutputContains":
         // The estimator has no output; only the terminal gate verifies this.
         return false;
+      case "SideEffectLanded":
+        return isSideEffectLanded([], ledger);
     }
   };
 

@@ -12,6 +12,7 @@ import {
   toolCalled,
   artifactProduced,
   outputContains,
+  sideEffectLanded,
   type PostCondition,
 } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
@@ -338,6 +339,33 @@ describe("verify(ArtifactProduced) — disk ground-truth override", () => {
     const r = verify([artifactProduced("./out.md")], [], {
       fileExists: () => false,
     });
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+});
+
+describe("SideEffectLanded — the mutation must actually land", () => {
+  it("MET when the latest substantive observation succeeded (create landed)", () => {
+    const steps = [obs("gws-cli", true), obs("gws-cli", true)]; // schema ok, create ok
+    const r = verify([sideEffectLanded()], steps);
+    expect(r.unmet).toHaveLength(0);
+  }, 15000);
+
+  it("UNMET when the latest substantive observation FAILED (the gws-cli fabrication)", () => {
+    // schema succeeded, but every create attempt failed — old ToolCalled(gws-cli)
+    // was satisfied by the schema success and shipped a fabricated 'note created'.
+    const steps = [obs("gws-cli", true), obs("gws-cli", false), obs("gws-cli", false)];
+    const r = verify([sideEffectLanded()], steps);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+
+  it("ignores trailing META/pseudo observations (final-answer, system)", () => {
+    const steps = [obs("gws-cli", true), obs("final-answer", true), obs("system", false)];
+    const r = verify([sideEffectLanded()], steps);
+    expect(r.unmet).toHaveLength(0); // last SUBSTANTIVE = gws-cli success
+  }, 15000);
+
+  it("UNMET when no substantive tool ran at all (pure fabrication)", () => {
+    const r = verify([sideEffectLanded()], [obs("final-answer", true)]);
     expect(r.unmet).toHaveLength(1);
   }, 15000);
 });

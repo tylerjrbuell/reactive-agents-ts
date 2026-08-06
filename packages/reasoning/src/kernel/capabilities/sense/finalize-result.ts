@@ -30,7 +30,7 @@ import type { ReasoningResult } from "../../../types/index.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { RunEnvelope } from "../../envelope/run-envelope.js";
 import { compileRunContract } from "../../contract/run-contract.js";
-import { writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
+import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 
@@ -74,6 +74,8 @@ function conditionMetByLedger(
       );
     case "OutputContains":
       return output.includes(condition.pattern);
+    case "SideEffectLanded":
+      return isSideEffectLanded([], ledger);
   }
 }
 
