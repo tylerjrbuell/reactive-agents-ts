@@ -8,16 +8,23 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
+import { getFileRoot } from "@reactive-agents/tools";
 
 /**
  * Does `path` name an existing file/dir on disk? Deterministic ground truth for
  * `ArtifactProduced`. Contract target paths are typically relative (e.g.
- * `./cryptos.md`) and the file-write tool writes them relative to the process
- * cwd, so a relative target is resolved against `cwd`; an absolute target is
- * checked as-is. Any fs error (permissions, bad path) degrades to `false` — the
- * safe direction: the override can only ADD a MET, never remove one.
+ * `./cryptos.md`) and the file-write tool writes them relative to the ACTIVE
+ * file root — `getFileRoot()`, which is `process.cwd()` unless the run is
+ * wrapped in `withFileRoot()` (a sandbox / per-task temp dir). The default cwd
+ * MUST match the writer's root: resolving a relative target against
+ * `process.cwd()` while the writer targeted a sandbox root made the check look
+ * in the wrong directory, report the deliverable missing, and steer a COMPLETED
+ * run into a fabricated `harness_deliverable` the verifier then rejected
+ * (observed live on Groq/Gemini native-FC via `withFileRoot`). An absolute
+ * target is checked as-is. Any fs error degrades to `false` — the safe
+ * direction: the override can only ADD a MET, never remove one.
  */
-export function nodeFileExists(path: string, cwd: string = process.cwd()): boolean {
+export function nodeFileExists(path: string, cwd: string = getFileRoot()): boolean {
   try {
     const trimmed = path.trim();
     if (trimmed.length === 0) return false;
