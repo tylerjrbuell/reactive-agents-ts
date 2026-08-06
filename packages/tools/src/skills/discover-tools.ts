@@ -76,25 +76,66 @@ export const makeDiscoverToolsHandler =
         return "No tools registered.";
       }
 
-      const matches = query && query.length > 0
-        ? rankByQuery(all, query).slice(0, 8)
-        : all;
+      // ── No query: list the whole permitted surface. ──
+      if (!query || query.length === 0) {
+        yield* markDiscovered(state, all);
+        return [
+          `${all.length} tools available (now callable):`,
+          ...all.map(formatToolLine),
+        ].join("\n");
+      }
 
-      // Side-effect: mark these as discovered so the curator surfaces them
-      // in the next iteration's tool schema list.
-      yield* Ref.update(state.discoveredRef, (set) => {
-        const next = new Set(set);
-        for (const t of matches) next.add(t.name);
-        return next;
-      });
+      // ── Query given: rank, then apply a relevance FLOOR. ──
+      // ROOT FIX (2026-08-06): the scorer awards +1 per incidental token, so a
+      // query like "read file" matched `file-write` (its name/description both
+      // contain "file") and the handler reported it as a confident match —
+      // "Top 1 tools matching 'read file' (now callable): file-write". A model
+      // hunting a READ capability was told one existed when it did not, then
+      // thrashed for iterations and (on capable models) shipped a fabricated
+      // deliverable. Discovery must be HONEST: a single incidental common-token
+      // hit is not a match. When nothing clears the floor, say so and list the
+      // complete permitted set so the model stops assuming a hidden tool exists.
+      const RELEVANCE_FLOOR = 2;
+      const ranked = rankByQuery(all, query);
+      const confident = ranked.filter((r) => r.score >= RELEVANCE_FLOOR).slice(0, 8);
 
-      const lines = matches.map(formatToolLine);
-      const header =
-        query && query.length > 0
-          ? `Top ${matches.length} tools matching "${query}" (now callable):`
-          : `${matches.length} tools available (now callable):`;
-      return [header, ...lines].join("\n");
+      if (confident.length === 0) {
+        // Honest exhaustion: no tool clearly does what was asked. Surface the
+        // ENTIRE catalog (marked callable) so the model has ground truth — the
+        // permitted surface is exactly this, and the wanted capability is not in
+        // it. This converts an infinite misleading dead-end into one honest turn.
+        yield* markDiscovered(state, all);
+        return [
+          `No tool clearly matches "${query}". This is the COMPLETE set of tools ` +
+            `available to you — if none does what you need, that capability is NOT ` +
+            `available; do not assume a hidden tool exists. Proceed with these or, ` +
+            `if the task cannot be done, say so via final-answer.`,
+          ...all.map(formatToolLine),
+        ].join("\n");
+      }
+
+      const matches = confident.map((r) => r.tool);
+      yield* markDiscovered(state, matches);
+      return [
+        `Top ${matches.length} tools matching "${query}" (now callable):`,
+        ...matches.map(formatToolLine),
+      ].join("\n");
     });
+
+/**
+ * Mark tools as discovered so the curator surfaces them in the next iteration's
+ * tool schema list. Shared by every return path — a listed tool must be callable.
+ */
+function markDiscovered(
+  state: DiscoverToolsState,
+  tools: readonly DiscoverableTool[],
+): Effect.Effect<void> {
+  return Ref.update(state.discoveredRef, (set) => {
+    const next = new Set(set);
+    for (const t of tools) next.add(t.name);
+    return next;
+  });
+}
 
 /**
  * One-line tool summary: `name(param: type, …) — first sentence of description`.
@@ -117,11 +158,19 @@ function formatToolLine(t: DiscoverableTool): string {
  *   +3 query is substring of description (case-insensitive)
  *   +1 per query token that appears in name+description
  * Tie-break: shorter name first (more specific).
+ *
+ * Returns the score alongside each tool so the handler can apply a relevance
+ * FLOOR — a single incidental common-token hit (score 1) is not a match.
  */
+interface ScoredTool {
+  readonly tool: DiscoverableTool;
+  readonly score: number;
+}
+
 function rankByQuery(
   tools: readonly DiscoverableTool[],
   query: string,
-): readonly DiscoverableTool[] {
+): readonly ScoredTool[] {
   const q = query.toLowerCase();
   const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
   const scored = tools.map((t) => {
@@ -139,6 +188,5 @@ function rankByQuery(
     .filter((s) => s.score > 0)
     .sort((a, b) =>
       b.score - a.score !== 0 ? b.score - a.score : a.tool.name.length - b.tool.name.length,
-    )
-    .map((s) => s.tool);
+    );
 }
