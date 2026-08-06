@@ -187,15 +187,24 @@ const cannedStreamEvents: readonly StreamEvent[] = [
   { type: "usage", usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12, estimatedCost: 0 } },
 ];
 
+const captureReqTools = (req: unknown): void => {
+  const tools = (req as { tools?: readonly { name?: string }[] })?.tools ?? [];
+  if (tools.length > 0) capturedFCToolNames = tools.map((t) => t.name ?? "").filter(Boolean);
+};
 const stubLLM = Layer.succeed(LLMService, {
-  complete: () =>
-    Effect.succeed({
+  complete: (req: unknown) => {
+    captureReqTools(req);
+    return Effect.succeed({
       content: "ok",
       stopReason: "end_turn",
       usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12, estimatedCost: 0 },
       model: "test-model",
-    }) as never,
-  stream: () => Effect.succeed(Stream.fromIterable(cannedStreamEvents) as never),
+    }) as never;
+  },
+  stream: (req: unknown) => {
+    captureReqTools(req);
+    return Effect.succeed(Stream.fromIterable(cannedStreamEvents) as never);
+  },
   completeStructured: () => Effect.succeed({ ok: true }) as never,
   embed: () => Effect.succeed([]),
   countTokens: () => Effect.succeed(0),
@@ -204,26 +213,25 @@ const stubLLM = Layer.succeed(LLMService, {
   capabilities: () => Effect.succeed({} as never),
 } as never);
 
-/** Drive the REAL think phase and capture the system prompt handed to the model. */
-const captureSystemPrompt = async (state: KernelState, input: KernelInput): Promise<string> => {
-  let captured = "";
+// Native-FC: the model's real toolset is the FC `tools` array (dialect-blindness
+// fix 2026-08-05) — a forbidden tool's absence must be checked THERE, not in the
+// prompt (which no longer lists tools on native-FC).
+let capturedFCToolNames: string[] = [];
+
+/** Drive the REAL think phase and capture the FC tool names handed to the model. */
+const captureFCTools = async (state: KernelState, input: KernelInput): Promise<string[]> => {
+  capturedFCToolNames = [];
   const context: KernelContext = {
     input,
     profile: CONTEXT_PROFILES.local,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
     toolService: { _tag: "None" },
-    hooks: {
-      ...noopHooks,
-      onThought: (_s: KernelState, _t: string, prompt?: { system: string }) => {
-        captured = prompt?.system ?? "";
-        return Effect.void;
-      },
-    },
+    hooks: noopHooks,
     toolCallingDriver: new NativeFCDriver(),
     memoryService: { _tag: "None" },
   };
   await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));
-  return captured;
+  return capturedFCToolNames;
 };
 
 const stateWith = (contractTools?: readonly { kind: string; name: string }[]): KernelState => {
@@ -248,17 +256,17 @@ const input: KernelInput = {
 
 describe("WIRING: a contract-declared forbidden tool never reaches the model", () => {
   it("without a contract, shell-execute IS offered (control)", async () => {
-    const system = await captureSystemPrompt(stateWith(), input);
-    expect(system).toContain("shell-execute");
+    const tools = await captureFCTools(stateWith(), input);
+    expect(tools).toContain("shell-execute");
   });
 
-  it("P0: with `forbidden: shell-execute` declared, the prompt NEVER mentions it", async () => {
-    const system = await captureSystemPrompt(
+  it("P0: with `forbidden: shell-execute` declared, the FC array NEVER offers it", async () => {
+    const tools = await captureFCTools(
       stateWith([{ kind: "forbidden", name: "shell-execute" }]),
       input,
     );
-    expect(system).not.toContain("shell-execute");
+    expect(tools).not.toContain("shell-execute");
     // The sibling tool is unaffected — we denied one tool, not the surface.
-    expect(system).toContain("file-read");
+    expect(tools).toContain("file-read");
   });
 });

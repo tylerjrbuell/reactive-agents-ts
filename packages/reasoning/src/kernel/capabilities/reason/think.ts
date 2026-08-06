@@ -192,13 +192,19 @@ export function buildThinkProviderRequest(
   task: string,
   /** H1: KernelInput.priorContext — rendered by systemPromptStage (03-F1). */
   priorContext?: string,
+  /**
+   * The model's real tool-calling dialect (`context.toolCallingDriver.mode`).
+   * Native-FC → the in-prompt tool reference is skipped (the FC `tools` array is
+   * the interface). Defaults to `"text-parse"` = render, the pre-fix behaviour.
+   */
+  dialect: "native-fc" | "text-parse" | "none" = "text-parse",
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
   return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext),
+    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect),
   );
 }
 
@@ -479,6 +485,10 @@ export function handleThinking(
       promptSchemas,
       input.task,
       input.priorContext,
+      // Dialect-blindness fix (2026-08-05): pass the REAL driver mode so the
+      // in-prompt tool reference is skipped on native-FC (tools ride the FC
+      // `tools` array); text-parse/weak-FC still get the in-prompt copy.
+      context.toolCallingDriver.mode,
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);

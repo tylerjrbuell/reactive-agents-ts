@@ -164,6 +164,9 @@ const cannedStreamEvents: readonly StreamEvent[] = [
   { type: "usage", usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12, estimatedCost: 0 } },
 ];
 
+// Native-FC tools ride the FC `tools` array, not the prompt (dialect-blindness
+// fix 2026-08-05). Capture the array the model actually receives.
+let capturedFCToolNames: string[] = [];
 const stubLLM = Layer.succeed(LLMService, {
   complete: () =>
     Effect.succeed({
@@ -172,7 +175,11 @@ const stubLLM = Layer.succeed(LLMService, {
       usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12, estimatedCost: 0 },
       model: "test-model",
     }) as never,
-  stream: () => Effect.succeed(Stream.fromIterable(cannedStreamEvents) as never),
+  stream: (req: unknown) => {
+    const tools = (req as { tools?: readonly { name?: string }[] })?.tools ?? [];
+    capturedFCToolNames = tools.map((t) => t.name ?? "").filter(Boolean);
+    return Effect.succeed(Stream.fromIterable(cannedStreamEvents) as never);
+  },
   completeStructured: () => Effect.succeed({ ok: true }) as never,
   embed: () => Effect.succeed([]),
   countTokens: () => Effect.succeed(0),
@@ -199,8 +206,15 @@ const captureSystemPrompt = async (state: KernelState, input: KernelInput): Prom
     toolCallingDriver: new NativeFCDriver(),
     memoryService: { _tag: "None" },
   };
+  capturedFCToolNames = [];
   await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));
   return captured;
+};
+
+/** Native-FC: the tools the model receives are the FC `tools` array, not the prompt. */
+const captureFCTools = async (state: KernelState, input: KernelInput): Promise<string[]> => {
+  await captureSystemPrompt(state, input);
+  return capturedFCToolNames;
 };
 
 const regressionState = (): KernelState => ({
@@ -230,17 +244,19 @@ afterEach(async () => {
 });
 
 describe("WIRING: a discovered catalog-only tool is offered on the NEXT think pass", () => {
+  // Native-FC driver: tools reach the model via the FC `tools` array, not the
+  // system prompt (dialect-blindness fix). Assert on the array the model receives.
   it("control: before discovery, web-search is NOT offered", async () => {
     await seedDiscovered([]);
-    const system = await captureSystemPrompt(regressionState(), regressionInput);
-    expect(system).not.toContain("web-search");
-    expect(system).toContain("file-write");
+    const tools = await captureFCTools(regressionState(), regressionInput);
+    expect(tools).not.toContain("web-search");
+    expect(tools).toContain("file-write");
   });
 
-  it("01KX6KY8 regression: after discover-tools surfaces web-search, the next prompt offers it", async () => {
+  it("01KX6KY8 regression: after discover-tools surfaces web-search, the next pass offers it (FC array)", async () => {
     await seedDiscovered(["web-search"]);
-    const system = await captureSystemPrompt(regressionState(), regressionInput);
-    expect(system).toContain("web-search");
-    expect(system).toContain("file-write");
+    const tools = await captureFCTools(regressionState(), regressionInput);
+    expect(tools).toContain("web-search");
+    expect(tools).toContain("file-write");
   });
 });

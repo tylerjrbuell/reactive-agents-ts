@@ -76,6 +76,30 @@ describe("buildThinkProviderRequest — prompt tool-reference name display", () 
   });
 });
 
+// Dialect-blindness fix (2026-08-05): the in-prompt tool reference is a SECOND
+// copy of the tools for a native-FC model (which reads the FC `tools` array), a
+// fixed token tax. Measured: Gemini kernel overhead +469% → +278% when skipped.
+// It must STILL render for text-parse (the prompt is the tools' only channel —
+// the whole reason this test file exists).
+describe("buildThinkProviderRequest — dialect gates the in-prompt tool reference", () => {
+  it("native-fc: the in-prompt tool reference is SKIPPED (FC array carries tools)", () => {
+    const { request } = buildThinkProviderRequest(
+      baseState(), CONTEXT_PROFILES.local, "", [schema(CANONICAL)],
+      "List the recent commits on the repo.", undefined, "native-fc",
+    );
+    expect(request.systemPrompt).not.toContain(SANITIZED);
+    expect(request.systemPrompt).not.toContain("Available tools");
+  });
+
+  it("text-parse: the in-prompt tool reference is RENDERED (only channel)", () => {
+    const { request } = buildThinkProviderRequest(
+      baseState(), CONTEXT_PROFILES.local, "", [schema(CANONICAL)],
+      "List the recent commits on the repo.", undefined, "text-parse",
+    );
+    expect(request.systemPrompt).toContain(SANITIZED);
+  });
+});
+
 describe("inbound de-sanitization map — canonical registry lookup is intact", () => {
   // This is the EXACT construction at think.ts:696 (built from the canonical
   // schemas offered this turn). The display-only sanitize at the project() arg

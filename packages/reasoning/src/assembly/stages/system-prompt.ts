@@ -59,9 +59,16 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
   parts.push(
     buildSystemPrompt(goal, c.persona.system || undefined, c.capability.tier, schemas.length > 0),
   );
-  parts.push(
-    buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
-  );
+  // Dialect-blindness fix (2026-08-05): a native-FC model reads its tools from
+  // the FC `tools` array — the in-prompt tool reference is a redundant SECOND
+  // copy (a fixed token tax, worst on capable cloud models). Emit it ONLY for
+  // text-parse / weak-FC models, where the prompt is the tools' only channel.
+  // Gate: scripts/check-dialect-aware.sh
+  if (c.capability.dialect !== "native-fc") {
+    parts.push(
+      buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
+    );
+  }
   if (goal) parts.push(`\nGoal: ${goal}`);
   // F10: the standing frame and the remaining-steps line used to be pushed
   // here. They change every iteration, and everything in this string is inside

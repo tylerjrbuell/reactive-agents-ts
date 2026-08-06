@@ -53,6 +53,16 @@ export function fromKernelState(
    * AssemblyInput so systemPromptStage can render it (audit 03-F1).
    */
   priorContext?: string,
+  /**
+   * The model's REAL tool-calling dialect (`context.toolCallingDriver.mode`).
+   * Was hardcoded `"native-fc"` — a dialect-blindness bug: the assembly rendered
+   * the full in-prompt tool reference for EVERY model, duplicating the native-FC
+   * `tools` array on capable models (dialect-blindness class, 2026-08-05). Now
+   * threaded so `systemPromptStage` can skip the redundant in-prompt copy on
+   * native-FC. Defaults to `"text-parse"` = render (the pre-fix behaviour) for
+   * callers that don't specify.
+   */
+  dialect: "native-fc" | "text-parse" | "none" = "text-parse",
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -160,7 +170,7 @@ export function fromKernelState(
   const capability = resolveCapability({
     window: profile.maxTokens ?? 32_768,
     outputBudget: 2000,
-    dialect: "native-fc",
+    dialect,
     tier: (profile.tier as Tier) ?? "mid",
   });
 
