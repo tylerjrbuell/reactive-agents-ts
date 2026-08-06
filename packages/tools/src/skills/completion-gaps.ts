@@ -95,7 +95,18 @@ export function detectCompletionGaps(
     [/\b(write to|save to|create) (a )?file\b/i, "file-write", (u) => u.has("file-write")],
     [/\b(read|open|load) (a |the )?file\b/i, "file-read", (u) => u.has("file-read")],
   ];
+  // ROOT FIX (2026-08-06): only flag a verb→tool gap for a tool the agent
+  // ACTUALLY HAS. A task saying "look up" on an agent with no web-search tool
+  // must NOT block final-answer — the requirement is unsatisfiable (the model
+  // cannot call a tool it was never given), so the guard would stall the run
+  // forever: the model finishes, the gate refuses, it stalls, and the harness
+  // ships a fabricated deliverable (observed on Gemini native-FC, where the
+  // model DID emit a clean final-answer that this gate rejected). The agent's
+  // own tool (e.g. get_fact) is the legitimate substitute; requiring a phantom
+  // built-in the caller never registered is a harness assumption, not a gap.
+  const availableToolNames = new Set(allToolSchemas.map((s) => s.name.toLowerCase()));
   for (const [pattern, toolName, check] of ACTION_TOOL_MAP) {
+    if (!availableToolNames.has(toolName.toLowerCase())) continue;
     const match = taskLower.match(pattern);
     if (match && !check(effectiveToolsUsed)) {
       gaps.push(`Task asks to "${match[0]}" but ${toolName} was not called`);

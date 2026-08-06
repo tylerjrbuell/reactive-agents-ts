@@ -337,21 +337,30 @@ describe("detectCompletionGaps", () => {
     expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(0);
   });
 
-  it("requires web-search when task says 'search online'", () => {
+  // Root fix 2026-08-06: a verb→tool gap only fires for a tool the agent HAS.
+  const WITH_WEB_SEARCH = [{ name: "web-search" }];
+
+  it("requires web-search when task says 'search online' (and web-search is available)", () => {
     const toolsUsed = new Set<string>();
-    const gaps = detectCompletionGaps("search online for the latest news", toolsUsed, []);
+    const gaps = detectCompletionGaps("search online for the latest news", toolsUsed, WITH_WEB_SEARCH);
     expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(1);
   });
 
-  it("requires web-search when task says 'look up'", () => {
+  it("requires web-search when task says 'look up' (and web-search is available)", () => {
+    const toolsUsed = new Set<string>();
+    const gaps = detectCompletionGaps("look up the weather today", toolsUsed, WITH_WEB_SEARCH);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(1);
+  });
+
+  it("does NOT require web-search when the agent has no such tool (phantom requirement)", () => {
     const toolsUsed = new Set<string>();
     const gaps = detectCompletionGaps("look up the weather today", toolsUsed, []);
-    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(1);
+    expect(gaps.filter((g) => g.includes("web-search"))).toHaveLength(0);
   });
 
   it("gap message includes the matched keyword, not an empty string", () => {
     const toolsUsed = new Set<string>();
-    const gaps = detectCompletionGaps("look up the weather today", toolsUsed, []);
+    const gaps = detectCompletionGaps("look up the weather today", toolsUsed, WITH_WEB_SEARCH);
     const webSearchGap = gaps.find((g) => g.includes("web-search"))!;
     expect(webSearchGap).toBeDefined();
     // The gap message must NOT have an empty quoted string like `""`
