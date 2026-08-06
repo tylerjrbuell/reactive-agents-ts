@@ -15,6 +15,7 @@
 import { Context, Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
+import { buildSkillContentXml } from "@reactive-agents/tools";
 import { classifyTaskCategory as classifyTaskCategoryFn } from "@reactive-agents/reactive-intelligence";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
@@ -98,6 +99,29 @@ export const runBootstrapSkillPostprocess = (
           const catalogXml = resolver.generateCatalogXml(resolved.catalog, {
             catalogOnlyHint: true,
           });
+          // Build the FULL-content envelope for activated skills so their
+          // procedure is actually present in the prompt — not merely named in
+          // the catalog. Without this, `autoActivate` was a telemetry-only
+          // field: the model saw "gws-drive exists" but never its instructions,
+          // so it improvised the CLI by trial and error. `reasoning-think.ts`
+          // prepends this to memoryContext alongside the catalog.
+          const activatedSkills = resolved.autoActivate as readonly {
+            name: string;
+            version?: number;
+            source?: string;
+            instructions?: string;
+            contentVariants?: { full?: string | null };
+          }[];
+          const activatedSkillsXml = activatedSkills
+            .map((s) =>
+              buildSkillContentXml({
+                name: s.name,
+                version: s.version ?? 1,
+                source: s.source ?? "installed",
+                instructions: s.instructions ?? s.contentVariants?.full ?? "",
+              }),
+            )
+            .join("\n\n");
           // Store resolved skills + catalog XML for strategy (memoryContext) and telemetry
           ctx = {
             ...ctx,
@@ -106,11 +130,24 @@ export const runBootstrapSkillPostprocess = (
               resolvedSkills: resolved.all,
               autoActivateSkills: resolved.autoActivate,
               skillCatalogXml: catalogXml,
+              ...(activatedSkillsXml.trim().length > 0
+                ? { activatedSkillsXml }
+                : {}),
             },
           };
 
           if (obs) {
-            yield* obs.info(`Skills resolved: ${resolved.all.length} total, ${resolved.autoActivate.length} auto-activate`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:log-skills-resolved", tag: errorTag(err) })));
+            // Match the `◉ [tag]` bootstrap-summary format. `all` is the
+            // discoverable catalog (the model can pull any via get_skill_section);
+            // `autoActivate` are the ones injected in full at bootstrap — the
+            // genuinely "loaded" set, so name those. Naming the whole catalog is
+            // noise when a project has dozens of skills.
+            const autoNames = resolved.autoActivate.map((s) => s.name);
+            const autoPart =
+              autoNames.length > 0 ? `: ${autoNames.join(", ")}` : "";
+            yield* obs.info(
+              `◉ [skills]     ${resolved.all.length} available, ${resolved.autoActivate.length} auto-activated${autoPart}`,
+            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:log-skills-resolved", tag: errorTag(err) })));
           }
         }
       }

@@ -479,6 +479,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _pricingProvider?: import('@reactive-agents/llm-provider').PricingProvider
     private _skillsConfig?: {
         paths: readonly string[]
+        activate?: readonly string[]
     }
     private _riHooks?: RiHooks
     private _metaTools?: import('./types.js').MetaToolsConfig | false
@@ -2105,12 +2106,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * accepted-but-ignored and were removed in v0.14; passing them throws.
      *
      * @param config.paths - Skill directories to resolve from (non-empty)
+     * @param config.activate - Skill names to ALWAYS load: their full
+     *   instructions are injected into the agent's context at bootstrap so the
+     *   procedure is present before it acts, instead of being merely
+     *   discoverable. Task-relevant skills are also auto-activated; this is the
+     *   deterministic override.
      * @see {@link HarnessProfile.intelligent} — composable preset where
      *   skills graduate as part of the compounding-intelligence stack.
      */
-    withSkills(config: { paths: readonly string[] }): this {
+    withSkills(config: {
+        paths: readonly string[]
+        activate?: readonly string[]
+    }): this {
         const cfg = config as {
             paths?: readonly string[]
+            activate?: readonly string[]
         } & Record<string, unknown>
         for (const removed of ['packages', 'evolution', 'overrides']) {
             if (cfg && removed in cfg) {
@@ -2124,7 +2134,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 '.withSkills() requires { paths: [...] } with at least one skill directory — a path-less call was a silent no-op and now throws (v0.14, DEBT-REGISTER P0-10).'
             )
         }
-        this._skillsConfig = { paths: [...cfg.paths] }
+        this._skillsConfig = {
+            paths: [...cfg.paths],
+            ...(cfg.activate?.length ? { activate: [...cfg.activate] } : {}),
+        }
         return this
     }
 

@@ -95,6 +95,7 @@ export interface BuilderState {
   _enableSelfImprovement: boolean;
   _skillsConfig?: {
     paths: readonly string[];
+    activate?: readonly string[];
   };
 
   // hooks / harness

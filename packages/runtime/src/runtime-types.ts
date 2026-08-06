@@ -826,6 +826,13 @@ export interface RuntimeOptions {
    */
   skills?: {
     readonly paths?: readonly string[];
+    /**
+     * Skill names to ALWAYS activate — inject their full instructions into the
+     * agent's context at bootstrap, regardless of confidence or task relevance.
+     * The deterministic "load this skill" control for `.withSkills({ paths,
+     * activate: [...] })`.
+     */
+    readonly activate?: readonly string[];
   };
 
   /**

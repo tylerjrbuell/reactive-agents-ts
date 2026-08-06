@@ -97,10 +97,20 @@ export const runReasoningThink = (
   return Effect.gen(function* () {
     // ── Self-improvement read-back: surface prior strategy outcomes ──
     let memCtx = String(asThinkContext(c).memoryContext?.semanticContext ?? "");
-    const skillCatalogXml = (c.metadata as { skillCatalogXml?: string } | undefined)
-      ?.skillCatalogXml;
+    const skillMeta = c.metadata as
+      | { skillCatalogXml?: string; activatedSkillsXml?: string }
+      | undefined;
+    const skillCatalogXml = skillMeta?.skillCatalogXml;
     if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
       memCtx = `${skillCatalogXml.trim()}\n\n${memCtx}`;
+    }
+    // Activated skills' FULL instructions — prepended AFTER the catalog so they
+    // sit closest to the task. This is what makes a skill actually usable: the
+    // agent reads the procedure before acting instead of discovering the CLI by
+    // trial and error.
+    const activatedSkillsXml = skillMeta?.activatedSkillsXml;
+    if (activatedSkillsXml && activatedSkillsXml.trim().length > 0) {
+      memCtx = `${activatedSkillsXml.trim()}\n\n${memCtx}`;
     }
     // Episodic rows from bootstrap must reach the LLM — previously only
     // strategy-outcome/reflexion (with enableSelfImprovement) were injected,

@@ -928,6 +928,9 @@ export const createRuntime = (options: RuntimeOptions) => {
             customPaths: skillResolverPaths,
             agentId: options.agentId,
             projectRoot: options.skillDiscoveryRoot ?? process.cwd(),
+            ...(options.skills?.activate?.length
+              ? { activate: [...options.skills.activate] }
+              : {}),
           },
         }
       : undefined;

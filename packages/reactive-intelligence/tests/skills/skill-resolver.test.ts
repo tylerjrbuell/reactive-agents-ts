@@ -248,6 +248,102 @@ describe("SkillResolverService", () => {
     );
   });
 
+  // ── Activation: explicit + relevance (2026-08-06) ──
+  // Installed skills are "trusted", never "expert", so before this they could
+  // never auto-activate — the model saw the catalog but never a skill's
+  // instructions and improvised. `activate` (explicit) and task relevance now
+  // promote installed skills into autoActivate (= full-content injection).
+  const makeLayerAct = (customPaths: string[], activate?: string[]) =>
+    makeSkillResolverService({
+      customPaths,
+      agentId: "agent-1",
+      projectRoot: TMP_DIR,
+      skipGlobalPaths: true,
+      ...(activate ? { activate } : {}),
+    });
+
+  it("resolve() activates an explicitly-named installed skill (bypasses trusted floor)", async () => {
+    const dir = path.join(TMP_DIR, "explicit");
+    writeSkill(dir, "gws-drive", "google drive helper");
+    writeSkill(dir, "cooking", "recipes and meals");
+    await run(
+      makeLayerAct([dir], ["gws-drive"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "do something unrelated",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toContain("gws-drive");
+        expect(names).not.toContain("cooking");
+      }),
+    );
+  });
+
+  it("resolve() activates a task-relevant skill above the floor, not an unrelated one", async () => {
+    const dir = path.join(TMP_DIR, "relevance");
+    writeSkill(dir, "google-workspace", "manage google workspace drive and docs");
+    writeSkill(dir, "cooking", "recipes and meals");
+    await run(
+      makeLayerAct([dir]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "list files in my google workspace drive",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toContain("google-workspace");
+        expect(names).not.toContain("cooking");
+      }),
+    );
+  });
+
+  it("resolve() does NOT activate on a weak incidental match (floor holds)", async () => {
+    const dir = path.join(TMP_DIR, "weak");
+    // "list" is < 4 chars filtered out; nothing else overlaps → score 0.
+    writeSkill(dir, "cooking", "recipes and meals");
+    await run(
+      makeLayerAct([dir]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "list the files please",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        expect(result.autoActivate).toHaveLength(0);
+      }),
+    );
+  });
+
+  it("resolve() caps relevance-activated skills but keeps all explicit ones", async () => {
+    const dir = path.join(TMP_DIR, "cap");
+    for (let i = 0; i < 5; i++) writeSkill(dir, `drive-tool-${i}`, "google drive workspace helper");
+    await run(
+      makeLayerAct([dir], ["drive-tool-0", "drive-tool-1", "drive-tool-2"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "google drive workspace files",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        // 3 explicit (unbounded) + up to 2 relevance = 5 here, but relevance is
+        // capped at 2 so total never exceeds explicit + 2.
+        expect(result.autoActivate.length).toBeLessThanOrEqual(5);
+        expect(result.autoActivate.length).toBeGreaterThanOrEqual(3);
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toContain("drive-tool-0");
+        expect(names).toContain("drive-tool-1");
+        expect(names).toContain("drive-tool-2");
+      }),
+    );
+  });
+
   it("resolve() sorts by confidence then score", async () => {
     const skillsDir = path.join(TMP_DIR, "multi-skills");
     writeSkill(skillsDir, "skill-a", "A");

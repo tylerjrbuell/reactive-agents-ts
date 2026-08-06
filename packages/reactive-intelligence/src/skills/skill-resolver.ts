@@ -23,6 +23,15 @@ export type SkillResolverConfig = {
    * Resolves HS-25.
    */
   readonly skipGlobalPaths?: boolean;
+  /**
+   * Skill names to ALWAYS activate (inject full instructions at bootstrap),
+   * regardless of confidence tier or task relevance. This is the deterministic
+   * "load this skill into context" control — a caller who passes
+   * `.withSkills({ paths, activate: ["gws-drive"] })` wants that skill's
+   * procedure present before the agent acts, not merely discoverable. Bypasses
+   * the relevance floor by design (explicit intent).
+   */
+  readonly activate?: readonly string[];
 };
 
 // ─── Service Tag ───
@@ -116,6 +125,82 @@ function mergeWithPrecedence(
   return Array.from(map.values());
 }
 
+/**
+ * Choose which skills to ACTIVATE (full-content injection) for a task.
+ *
+ * Union of three sources, deduped by name (first wins, and `sorted` is already
+ * confidence-ranked so the strongest variant is kept):
+ *   1. expert-confidence learned skills (always)
+ *   2. explicit `activate` names from the caller (always — bypasses the floor)
+ *   3. task-relevant skills scoring above a precision floor, capped at
+ *      RELEVANCE_MAX so a big catalog can never flood the prompt
+ *
+ * The floor matters: injecting a whole SKILL.md is expensive, so a weak
+ * incidental keyword hit must NOT auto-activate — the same honesty lesson as
+ * tool discovery. Explicit intent is the only thing that skips it.
+ */
+const RELEVANCE_FLOOR = 2;
+const RELEVANCE_MAX = 2;
+
+export function selectActivated(
+  sorted: readonly SkillRecord[],
+  taskDescription: string,
+  activate: readonly string[] | undefined,
+): SkillRecord[] {
+  const explicit = new Set((activate ?? []).map((n) => n.toLowerCase()));
+  const chosen = new Map<string, SkillRecord>();
+
+  for (const s of sorted) {
+    if (s.confidence === "expert" || explicit.has(s.name.toLowerCase())) {
+      if (!chosen.has(s.name)) chosen.set(s.name, s);
+    }
+  }
+
+  // Relevance-matched, bounded — skip any already chosen above.
+  const relevant = rankSkillsByTask(sorted, taskDescription)
+    .filter((r) => r.score >= RELEVANCE_FLOOR && !chosen.has(r.skill.name))
+    .slice(0, RELEVANCE_MAX);
+  for (const r of relevant) chosen.set(r.skill.name, r.skill);
+
+  return Array.from(chosen.values());
+}
+
+/**
+ * Rank skills by task relevance. Cheap deterministic scorer over the skill's
+ * name + description tokens vs the task tokens:
+ *   +3 a task token appears in the skill NAME
+ *   +1 a task token appears in the skill DESCRIPTION
+ * Only tokens of length >= 4 count, so short common words ("the", "list",
+ * "file") do not manufacture spurious matches. Descending by score.
+ */
+function rankSkillsByTask(
+  skills: readonly SkillRecord[],
+  taskDescription: string,
+): { skill: SkillRecord; score: number }[] {
+  const tokens = Array.from(
+    new Set(
+      taskDescription
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length >= 4),
+    ),
+  );
+  if (tokens.length === 0) return [];
+  return skills
+    .map((skill) => {
+      const name = skill.name.toLowerCase();
+      const desc = skill.description.toLowerCase();
+      let score = 0;
+      for (const tok of tokens) {
+        if (name.includes(tok)) score += 3;
+        else if (desc.includes(tok)) score += 1;
+      }
+      return { skill, score };
+    })
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score);
+}
+
 const CONFIDENCE_ORDER: Record<string, number> = {
   expert: 3,
   trusted: 2,
@@ -170,7 +255,7 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
       const storeOption = yield* Effect.serviceOption(SkillStoreService);
 
       return {
-        resolve: ({ taskDescription: _taskDescription, modelId: _modelId, agentId }) =>
+        resolve: ({ taskDescription, modelId: _modelId, agentId }) =>
           Effect.gen(function* () {
             // 1. Query SQLite for learned skills (if store available)
             let learnedSkills: SkillRecord[] = [];
@@ -196,8 +281,16 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
             // 5. Sort: expert first, then trusted, then tentative; within tier by score
             const sorted = sortByConfidenceAndScore(merged);
 
-            // 6. Classify
-            const autoActivate = sorted.filter((s) => s.confidence === "expert");
+            // 6. Classify what to ACTIVATE (inject full instructions at
+            // bootstrap), so the agent has the procedure before it acts rather
+            // than only a catalog entry it must remember to fetch. Three
+            // sources, unioned:
+            //   - expert       learned skills the evolution loop graduated
+            //   - explicit     names the caller passed via `activate` (intent —
+            //                  bypasses the relevance floor)
+            //   - relevant     top task-matched skills above a precision floor,
+            //                  bounded so a large catalog cannot flood context
+            const autoActivate = selectActivated(sorted, taskDescription, config.activate);
 
             return { all: sorted, autoActivate, catalog: sorted };
           }),

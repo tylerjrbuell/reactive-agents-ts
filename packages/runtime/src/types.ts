@@ -351,9 +351,11 @@ export interface ExecutionContextMetadata {
   // ── Skill / learning ────────────────────────────────────────────────────
   /** Serialized skill catalog XML injected into the system prompt */
   skillCatalogXml?: string;
+  /** Full-instruction `<skill_content>` envelopes for activated skills, injected into the prompt */
+  activatedSkillsXml?: string;
   /** Skills resolved for this task */
   resolvedSkills?: readonly { name?: string; description?: string }[];
-  /** Subset of resolved skills auto-injected at bootstrap (expert confidence) */
+  /** Subset of resolved skills auto-injected at bootstrap (expert + explicit + relevant) */
   autoActivateSkills?: readonly { source?: string }[];
   /** ID of the skill that was applied this run */
   appliedSkillId?: string;

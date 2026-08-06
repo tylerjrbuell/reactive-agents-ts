@@ -180,6 +180,7 @@ export interface BuilderRuntimeStateView {
   >;
   readonly _skillsConfig?: {
     paths: readonly string[];
+    activate?: readonly string[];
   };
   readonly _fallbackConfig?: {
     providers?: string[];
@@ -513,7 +514,14 @@ export const buildBaseRuntimeAndEngine = (
       // `.withSkills()` guarantees non-empty paths (it throws otherwise —
       // v0.14 P0-10), so presence of the config IS the gate.
       ...(state._skillsConfig
-        ? { skills: { paths: [...state._skillsConfig.paths] } }
+        ? {
+            skills: {
+              paths: [...state._skillsConfig.paths],
+              ...(state._skillsConfig.activate?.length
+                ? { activate: [...state._skillsConfig.activate] }
+                : {}),
+            },
+          }
         : {}),
       fallbackConfig: state._fallbackConfig,
       pricingRegistry:
