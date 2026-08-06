@@ -427,6 +427,79 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     }
   });
 
+  // ─── Test: Repetition guard — converging-retry carve-out (root fix 2026-08-06) ───
+  // A distinct call adapting to a PRIOR FAILURE is progress, not repetition.
+  // Blocking it aborted the natural schema→attempt→correct loop CLI/API tools
+  // need (gws-cli: schema → create --json <wrong> → validation error → fixed).
+  const actionStep = (name: string, args: unknown, i: number) => ({
+    id: `a-${i}` as any,
+    type: "action" as const,
+    content: JSON.stringify(args),
+    timestamp: new Date(),
+    metadata: { toolCall: { id: `tc-${i}`, name, arguments: args } },
+  });
+  const obsStep = (success: boolean, i: number) => ({
+    id: `o-${i}` as any,
+    type: "observation" as const,
+    content: success ? "ok" : "error[validation]: body: Expected object",
+    timestamp: new Date(),
+    metadata: { observationResult: { success } },
+  });
+
+  it("ALLOWS a distinct correction after the tool's last call failed", () => {
+    const state = createMinimalState({
+      steps: [
+        actionStep("gws-cli", { command: "schema keep.notes.create" }, 0),
+        obsStep(true, 0),
+        actionStep("gws-cli", { command: "keep notes create --json {body:string}" }, 1),
+        obsStep(false, 1), // validation failure
+      ] as any,
+    });
+    const input = createMinimalInput({
+      allToolSchemas: [{ name: "gws-cli", description: "gws", parameters: [] }],
+    });
+    // The corrective 3rd call — DIFFERENT args, adapting to the failure.
+    const correction: ToolCallSpec = {
+      id: "gws-3",
+      name: "gws-cli",
+      arguments: { command: "keep notes create --json {body:{sections:[...]}}" },
+    };
+    expect(repetitionGuard(correction, state, input).pass).toBe(true);
+  });
+
+  it("still BLOCKS an identical re-call of the failing arguments (not progress)", () => {
+    const failingArgs = { command: "keep notes create --json {body:string}" };
+    const state = createMinimalState({
+      steps: [
+        actionStep("gws-cli", failingArgs, 0),
+        obsStep(false, 0),
+        actionStep("gws-cli", failingArgs, 1),
+        obsStep(false, 1),
+      ] as any,
+    });
+    const input = createMinimalInput({
+      allToolSchemas: [{ name: "gws-cli", description: "gws", parameters: [] }],
+    });
+    const identicalRetry: ToolCallSpec = { id: "gws-3", name: "gws-cli", arguments: failingArgs };
+    expect(repetitionGuard(identicalRetry, state, input).pass).toBe(false);
+  });
+
+  it("still BLOCKS post-success churn at the ceiling (preserves the nudge)", () => {
+    const state = createMinimalState({
+      steps: [
+        actionStep("gws-cli", { command: "keep notes list" }, 0),
+        obsStep(true, 0),
+        actionStep("gws-cli", { command: "keep notes get x" }, 1),
+        obsStep(true, 1), // last call SUCCEEDED — no failure to adapt to
+      ] as any,
+    });
+    const input = createMinimalInput({
+      allToolSchemas: [{ name: "gws-cli", description: "gws", parameters: [] }],
+    });
+    const thirdDistinct: ToolCallSpec = { id: "gws-3", name: "gws-cli", arguments: { command: "keep notes get y" } };
+    expect(repetitionGuard(thirdDistinct, state, input).pass).toBe(false);
+  });
+
   // ─── Test: Meta-tool dedup guard ───
 
   it("blocks meta-tool spam (3+ consecutive identical calls)", () => {

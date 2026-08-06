@@ -62,6 +62,31 @@ function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, 
   return counts;
 }
 
+/**
+ * The model's most recent call to `toolName`: whether its observation FAILED,
+ * and the argument signature of that call. Used to recognise a
+ * correction-after-failure — a call whose arguments DIFFER from a just-failed
+ * one is the model adapting to feedback (schema error, validation error), i.e.
+ * progress, not blind repetition. Returns null when the tool was never called.
+ */
+function lastCallToTool(
+  state: KernelState,
+  toolName: string,
+): { readonly failed: boolean; readonly argsJson: string } | null {
+  for (let i = state.steps.length - 1; i >= 0; i--) {
+    const step = state.steps[i]!;
+    if (step.type !== "action") continue;
+    const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
+    if (stepTc?.name !== toolName) continue;
+    const next = state.steps[i + 1];
+    const failed =
+      next?.type === "observation" &&
+      next.metadata?.observationResult?.success === false;
+    return { failed, argsJson: JSON.stringify(stepTc.arguments ?? {}) };
+  }
+  return null;
+}
+
 /** Re-export for backward compatibility. */
 export const META_TOOL_SET = INTROSPECTION_META_TOOLS;
 
@@ -196,6 +221,21 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const defaultCeiling = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2;
   const threshold = Math.max(quantityLimit, defaultCeiling);
   if (priorCallsOfSameTool < threshold) return { pass: true };
+
+  // Converging-retry carve-out (root fix 2026-08-06). A call that ADAPTS to a
+  // prior failure — distinct arguments after the tool's last call failed — is
+  // progress, not repetition. This is the natural schema→attempt→correct loop
+  // that schema-driven CLI / API tools require (e.g. gws-cli: `schema` →
+  // `create --json <wrong>` → validation error → `create --json <fixed>`).
+  // Counting by tool NAME alone blocked the corrective call and forced a
+  // premature, often FABRICATED, final answer (the side-effect never ran).
+  // `duplicateGuard` still blocks identical-args re-calls, and the loop
+  // detector's "N same-tool calls with no successful observation" pattern +
+  // the iteration cap bound an endless fail/correct loop.
+  const last = lastCallToTool(state, tc.name);
+  if (last?.failed && last.argsJson !== JSON.stringify(tc.arguments ?? {})) {
+    return { pass: true };
+  }
 
   // Build missing-tools hint with N/M count progress when quantities are known.
   // HS-115 anti-scaffold closure: same nominator-fallback path as duplicateGuard.
