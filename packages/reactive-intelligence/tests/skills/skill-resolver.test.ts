@@ -344,6 +344,106 @@ describe("SkillResolverService", () => {
     );
   });
 
+  // ── Prerequisite dependency auto-activation (2026-08-06) ──
+  const writeSkillBody = (dir: string, name: string, desc: string, body: string) => {
+    const skillDir = path.join(dir, name);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}`,
+    );
+  };
+
+  it("resolve() auto-activates a linked PREREQUISITE skill", async () => {
+    const dir = path.join(TMP_DIR, "prereq");
+    writeSkillBody(
+      dir,
+      "gws-drive",
+      "drive",
+      "> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth and syntax.",
+    );
+    writeSkill(dir, "gws-shared", "shared auth and syntax");
+    await run(
+      makeLayerAct([dir], ["gws-drive"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "unrelated",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toContain("gws-drive");
+        expect(names).toContain("gws-shared");
+      }),
+    );
+  });
+
+  it("resolve() does NOT treat a bare '## Prerequisites' heading as a dependency", async () => {
+    const dir = path.join(TMP_DIR, "heading");
+    writeSkillBody(dir, "solo", "solo skill", "## Prerequisites\n\nOrient first, then act.");
+    writeSkill(dir, "gws-shared", "shared");
+    await run(
+      makeLayerAct([dir], ["solo"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "unrelated",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toContain("solo");
+        expect(names).not.toContain("gws-shared");
+      }),
+    );
+  });
+
+  it("resolve() skips a prerequisite that was not discovered (no crash)", async () => {
+    const dir = path.join(TMP_DIR, "missing-prereq");
+    writeSkillBody(
+      dir,
+      "gws-drive",
+      "drive",
+      "> **PREREQUISITE:** Read `../gws-shared/SKILL.md`.",
+    );
+    // gws-shared NOT written.
+    await run(
+      makeLayerAct([dir], ["gws-drive"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "unrelated",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name);
+        expect(names).toEqual(["gws-drive"]);
+      }),
+    );
+  });
+
+  it("resolve() resolves prerequisites transitively and survives a cycle", async () => {
+    const dir = path.join(TMP_DIR, "transitive");
+    writeSkillBody(dir, "a", "a", "> **PREREQUISITE:** `../b/SKILL.md`");
+    writeSkillBody(dir, "b", "b", "> **PREREQUISITE:** `../c/SKILL.md`");
+    // c points back at a → cycle; must terminate.
+    writeSkillBody(dir, "c", "c", "> **PREREQUISITE:** `../a/SKILL.md`");
+    await run(
+      makeLayerAct([dir], ["a"]),
+      Effect.gen(function* () {
+        const resolver = yield* SkillResolverService;
+        const result = yield* resolver.resolve({
+          taskDescription: "unrelated",
+          modelId: "test",
+          agentId: "agent-1",
+        });
+        const names = result.autoActivate.map((s) => s.name).sort();
+        expect(names).toEqual(["a", "b", "c"]);
+      }),
+    );
+  });
+
   it("resolve() sorts by confidence then score", async () => {
     const skillsDir = path.join(TMP_DIR, "multi-skills");
     writeSkill(skillsDir, "skill-a", "A");

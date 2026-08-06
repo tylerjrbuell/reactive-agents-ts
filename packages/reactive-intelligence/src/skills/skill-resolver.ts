@@ -135,6 +135,10 @@ function mergeWithPrecedence(
  *   3. task-relevant skills scoring above a precision floor, capped at
  *      RELEVANCE_MAX so a big catalog can never flood the prompt
  *
+ * Then every chosen skill's declared PREREQUISITE skills are pulled in
+ * transitively (see `expandPrerequisites`) — a skill whose instructions depend
+ * on a shared reference (auth, invocation syntax) is useless without it.
+ *
  * The floor matters: injecting a whole SKILL.md is expensive, so a weak
  * incidental keyword hit must NOT auto-activate — the same honesty lesson as
  * tool discovery. Explicit intent is the only thing that skips it.
@@ -162,7 +166,68 @@ export function selectActivated(
     .slice(0, RELEVANCE_MAX);
   for (const r of relevant) chosen.set(r.skill.name, r.skill);
 
+  // Dependency closure — a prerequisite is NOT relevance-bounded: an activated
+  // skill that can't function without its shared reference must load it.
+  expandPrerequisites(chosen, sorted);
+
   return Array.from(chosen.values());
+}
+
+/**
+ * Pull every chosen skill's declared PREREQUISITE skills into the activation
+ * set, transitively. Prerequisites are declared in a skill's body as a linked
+ * reference on a line mentioning "prerequisite", e.g.
+ *
+ *   > **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth and syntax.
+ *
+ * Only LINKED prerequisites count — a bare `## Prerequisites` heading is prose,
+ * not a skill dependency, and must not trigger activation. A prerequisite only
+ * activates if it was actually discovered (present in `sorted`); a reference to
+ * a missing skill is skipped (the body still tells the model to generate it).
+ * Bounded by the discovered set + a visited guard, so a dependency cycle
+ * terminates.
+ */
+function expandPrerequisites(
+  chosen: Map<string, SkillRecord>,
+  sorted: readonly SkillRecord[],
+): void {
+  const byName = new Map<string, SkillRecord>();
+  for (const s of sorted) byName.set(s.name.toLowerCase(), s);
+
+  const queue: string[] = Array.from(chosen.values()).map((s) => s.name);
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const name = queue.shift()!;
+    if (visited.has(name)) continue;
+    visited.add(name);
+    const skill = chosen.get(name) ?? byName.get(name.toLowerCase());
+    if (!skill) continue;
+    for (const depName of extractPrerequisiteNames(skill.instructions)) {
+      const dep = byName.get(depName.toLowerCase());
+      if (dep && !chosen.has(dep.name)) {
+        chosen.set(dep.name, dep);
+        queue.push(dep.name);
+      }
+    }
+  }
+}
+
+/**
+ * Extract prerequisite skill names from a skill body: `../<name>/SKILL.md`
+ * links that appear on a line mentioning "prerequisite" (case-insensitive).
+ * Line-scoped so a related-helper link elsewhere in the body is not mistaken
+ * for a hard dependency.
+ */
+function extractPrerequisiteNames(instructions: string): string[] {
+  const names: string[] = [];
+  const linkRe = /\.\.\/([a-z0-9][a-z0-9._-]*)\/SKILL\.md/gi;
+  for (const line of instructions.split(/\r?\n/)) {
+    if (!/prerequisite/i.test(line)) continue;
+    for (const m of line.matchAll(linkRe)) {
+      if (m[1]) names.push(m[1]);
+    }
+  }
+  return names;
 }
 
 /**
