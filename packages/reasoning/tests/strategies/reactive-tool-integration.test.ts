@@ -291,7 +291,12 @@ describe("ReactiveStrategy — real tool execution", () => {
           model: "test",
           usage: { totalTokens: 0 },
         }),
-    });
+      // Pin text-parse: this test asserts the in-prompt tool reference, which
+      // the assembly renders only for text-parse (native-FC uses the FC `tools`
+      // array — dialect-blindness #2, `4438a800`).
+      capabilities: () =>
+        Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
+    } as any);
 
     const program = executeReactive({
       taskDescription: "Test task",

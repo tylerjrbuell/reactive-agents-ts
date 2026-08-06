@@ -91,6 +91,8 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+      capabilities: () =>
+        Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
     } as any);
 
     await Effect.runPromise(provideTestEnvelope(
@@ -147,6 +149,8 @@ describe("Sprint 0.1: Tool schemas in initial context", () => {
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+      capabilities: () =>
+        Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
     } as any);
 
     await Effect.runPromise(provideTestEnvelope(
@@ -609,6 +613,8 @@ describe("toolSchemaDetail from context profile", () => {
       embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
       countTokens: () => Effect.succeed(0),
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+      capabilities: () =>
+        Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
     } as any);
 
     await Effect.runPromise(provideTestEnvelope(

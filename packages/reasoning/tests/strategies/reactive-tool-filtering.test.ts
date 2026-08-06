@@ -62,6 +62,12 @@ async function createCapturingLayer() {
     embed: (texts: string[]) => Effect.succeed(texts.map(() => [])),
     countTokens: () => Effect.succeed(0),
     getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-model" }),
+    // Pin the text-parse driver: these tests assert the in-prompt tool
+    // reference (a text-parse concern). A native-FC provider offers tools via
+    // the FC `tools` array instead, and the assembly correctly omits the
+    // in-prompt copy (dialect-blindness #2, `4438a800`).
+    capabilities: () =>
+      Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
   } as any);
   return { layer, getCaptured: () => capturedContent };
 }

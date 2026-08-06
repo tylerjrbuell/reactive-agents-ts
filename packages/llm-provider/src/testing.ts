@@ -257,6 +257,7 @@ function buildToolCalls(
 export const TestLLMService = (
   scenario: TestTurn[],
   quirk?: ProviderQuirk,
+  capsOverride?: Partial<import("./capabilities.js").ProviderCapabilities>,
 ): typeof LLMService.Service => {
   // Mutable cursor — safe because each build() creates a fresh Layer instance.
   // ONE cursor, shared across channels on purpose: a harness call that skips
@@ -504,6 +505,10 @@ export const TestLLMService = (
         ...DEFAULT_CAPABILITIES,
         supportsToolCalling: true, // Test provider emits native FC stream events (tool_use_start/tool_use_delta)
         supportsStreaming: true,
+        // Override lets a test pin the tool-calling dialect — e.g.
+        // `{ supportsToolCalling: false }` forces the text-parse driver so
+        // in-prompt tool-reference rendering (a text-parse concern) is exercised.
+        ...capsOverride,
       }),
   };
 };
@@ -515,4 +520,5 @@ export const TestLLMService = (
 export const TestLLMServiceLayer = (
   scenario: TestTurn[] = [{ text: "" }],
   quirk?: ProviderQuirk,
-) => Layer.succeed(LLMService, LLMService.of(TestLLMService(scenario, quirk)));
+  capsOverride?: Partial<import("./capabilities.js").ProviderCapabilities>,
+) => Layer.succeed(LLMService, LLMService.of(TestLLMService(scenario, quirk, capsOverride)));

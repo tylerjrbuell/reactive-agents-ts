@@ -118,6 +118,11 @@ function createCapturingLLM(
       embed: () => Effect.succeed([]),
       countTokens: () => Effect.succeed(0),
       getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test-capture" }),
+      // Pin text-parse: this suite asserts in-prompt tool schemas, which the
+      // assembly renders only for text-parse (native-FC uses the FC `tools`
+      // array — dialect-blindness #2, `4438a800`).
+      capabilities: () =>
+        Effect.succeed({ supportsToolCalling: false, supportsStreaming: true, supportsStructuredOutput: false, supportsLogprobs: false }),
       getStructuredOutputCapabilities: () => Effect.succeed({
         nativeJsonMode: true,
         jsonSchemaEnforcement: false,
