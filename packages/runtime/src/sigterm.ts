@@ -36,7 +36,12 @@ export function registerShutdownHandlers(
   });
 
   const shutdown = () => {
-    handler().then(() => process.exit(0));
+    handler()
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error("[sigterm] shutdown failed:", err);
+        process.exit(1);
+      });
   };
 
   process.on("SIGTERM", shutdown);
