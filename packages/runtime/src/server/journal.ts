@@ -140,8 +140,9 @@ export const replaySSE = (
           if (seq !== undefined) controller.enqueue(encoder.encode(`id: ${seq}\n`));
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         }
-      } finally {
         controller.close();
+      } catch (err) {
+        controller.error(err);
       }
     },
   });
