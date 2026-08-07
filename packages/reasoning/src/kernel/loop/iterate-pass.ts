@@ -927,18 +927,16 @@ export function runIterationPass(
       }
 
       // Apply temperature override dispatched by the intervention dispatcher
-      if (typeof (state.meta as Record<string, unknown>).dispatchedTemperature === "number") {
+      if (typeof state.meta.dispatchedTemperature === "number") {
         currentOptions = {
           ...currentOptions,
-          temperature: (state.meta as Record<string, unknown>).dispatchedTemperature as number,
+          temperature: state.meta.dispatchedTemperature,
         };
       }
 
       // Honor dispatcher-requested strategy switch
       if (state.meta.terminatedBy === "dispatcher-strategy-switch") {
-        const pending = (state.meta as Record<string, unknown>).dispatchedStrategySwitch as
-          | { to: string; reason: string }
-          | undefined;
+        const pending = state.meta.dispatchedStrategySwitch;
         const switchCfg = options.strategySwitching;
         const maxSwitches = switchCfg?.maxSwitches ?? 1;
         if (pending && switchCfg?.enabled && switchCount < maxSwitches) {

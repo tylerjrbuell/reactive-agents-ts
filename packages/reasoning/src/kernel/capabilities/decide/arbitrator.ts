@@ -1579,8 +1579,7 @@ export function applyTermination(
         });
       }
       if (verdict.nextStrategy === "retry-with-feedback") {
-        const currentRetry =
-          ((state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined) ?? 0;
+        const currentRetry = state.meta.synthesisRetryCount ?? 0;
         return transitionState(state, {
           pendingGuidance: {
             ...(state.pendingGuidance ?? { requiredToolsPending: [], loopDetected: false }),
@@ -1707,9 +1706,7 @@ export function arbitrationContextFromState(
   // state.meta.budgetLimits set at kernel-start by runner.ts. When no limits
   // are declared, computeBudgetSignal returns undefined and ctx.budget stays
   // off — backward-compatible no-op for the pre-intent guard.
-  const budgetLimits = (state.meta as Record<string, unknown>).budgetLimits as
-    | BudgetLimits
-    | undefined;
+  const budgetLimits = state.meta.budgetLimits as BudgetLimits | undefined;
   const budgetSignal = computeBudgetSignal({
     tokensUsed: state.tokens ?? 0,
     costUsd: state.cost ?? 0,
@@ -1744,8 +1741,7 @@ export function arbitrationContextFromState(
     latestVerification: lastVerif,
     // Sprint 3.4 Scaffold 3 — surface the synthesis retry counter so the
     // Arbitrator can decide whether to escalate again.
-    synthesisRetryCount:
-      (state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined,
+    synthesisRetryCount: state.meta.synthesisRetryCount,
     // Surface scratchpad so the grounding check sees full tool data, not
     // the compressed-preview content stored on observation steps.
     scratchpad: state.scratchpad,
