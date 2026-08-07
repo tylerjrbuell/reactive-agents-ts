@@ -131,7 +131,8 @@ export const makeFindHandler =
           Effect.catchAll(() => Effect.succeed(null)),
         );
         if (webResult && typeof webResult === "object") {
-          const results = (webResult as any).results ?? [];
+          const webObj = webResult as Record<string, unknown>;
+          const results = (Array.isArray(webObj.results) ? webObj.results : []) as { snippet?: string; content?: string; url?: string; link?: string }[];
           for (const r of results) {
             allResults.push({
               content: r.snippet ?? r.content ?? "",

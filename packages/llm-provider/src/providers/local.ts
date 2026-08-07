@@ -796,10 +796,13 @@ export const LocalProviderLive = Layer.effect(
                                     }
 
                                     // Accumulate per-chunk logprobs when available
+                                    // Ollama SDK types lag the runtime API — logprobs + done_reason
+                                    // exist on the wire but not in the TS definitions.
+                                    const chunkExt = chunk as unknown as Record<string, unknown>
                                     if (wantLogprobs) {
-                                        const chunkLp = (chunk as any).logprobs
+                                        const chunkLp = chunkExt.logprobs
                                         if (Array.isArray(chunkLp)) {
-                                            for (const lp of chunkLp) {
+                                            for (const lp of chunkLp as { token: string; logprob: number; top_logprobs?: { token: string; logprob: number }[] }[]) {
                                                 accumulatedLogprobs.push({
                                                     token: lp.token,
                                                     logprob: lp.logprob,
@@ -807,9 +810,7 @@ export const LocalProviderLive = Layer.effect(
                                                         ? {
                                                               topLogprobs:
                                                                   lp.top_logprobs.map(
-                                                                      (
-                                                                          t: any
-                                                                      ) => ({
+                                                                      (t) => ({
                                                                           token: t.token,
                                                                           logprob:
                                                                               t.logprob,
@@ -825,7 +826,7 @@ export const LocalProviderLive = Layer.effect(
                                     if (chunk.done) {
                                         const hasToolCalls =
                                             accumulatedToolCalls.length > 0
-                                        const doneReason = (chunk as any)
+                                        const doneReason = chunkExt
                                             .done_reason as string | undefined
                                         emit.single({
                                             type: 'content_complete',
@@ -840,7 +841,7 @@ export const LocalProviderLive = Layer.effect(
                                                           'ollama',
                                                       ),
                                                   }),
-                                        } as any)
+                                        })
                                         if (accumulatedLogprobs.length > 0) {
                                             emit.single({
                                                 type: 'logprobs',

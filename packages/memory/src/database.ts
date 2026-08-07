@@ -337,7 +337,7 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
           Effect.try({
             try: () => {
               const stmt = db.prepare(sql);
-              return stmt.all(...(params as any[])) as T[];
+              return stmt.all(...[...params]) as T[];
             },
             catch: (e) =>
               new DatabaseError({
@@ -351,7 +351,7 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
           Effect.try({
             try: () => {
               const stmt = db.prepare(sql);
-              const result = stmt.run(...(params as any[]));
+              const result = stmt.run(...[...params]);
               return result.changes;
             },
             catch: (e) =>

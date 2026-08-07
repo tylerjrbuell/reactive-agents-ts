@@ -89,9 +89,12 @@ function buildBehavior(steps: PulseInput["steps"]) {
   const repeatedActions = [...actionCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key.split("::")[0] ?? key);
   const repeatedInvocations = [...actionCounts.values()].filter((c) => c > 1).reduce((sum, c) => sum + (c - 1), 0);
   const loopScore = actions.length > 0 ? repeatedInvocations / actions.length : 0;
-  const successCount = observations.filter((o) => (o.metadata as any)?.observationResult?.success !== false).length;
+  const successCount = observations.filter((o) => {
+    const obsResult = o.metadata?.observationResult;
+    return !(obsResult && typeof obsResult === "object" && (obsResult as Record<string, unknown>).success === false);
+  }).length;
   const toolSuccessRate = observations.length > 0 ? successCount / observations.length : 1;
-  const uniqueTools = new Set(actions.map((a) => { try { return (JSON.parse(a.content) as any).tool ?? ""; } catch { return ""; } }));
+  const uniqueTools = new Set(actions.map((a) => { try { const p = JSON.parse(a.content) as Record<string, unknown>; return (typeof p.tool === "string" ? p.tool : ""); } catch { return ""; } }));
   const actionDiversity = actions.length > 0 ? uniqueTools.size / actions.length : 1;
   return { loopScore, toolSuccessRate, repeatedActions, actionDiversity };
 }

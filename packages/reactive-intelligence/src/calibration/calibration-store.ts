@@ -65,7 +65,11 @@ export class CalibrationStore {
   }
 
   load(modelId: string): ModelCalibration | null {
-    const row = this.db.prepare("SELECT * FROM calibrations WHERE model_id = ?").get(modelId) as any;
+    const row = this.db.prepare("SELECT * FROM calibrations WHERE model_id = ?").get(modelId) as {
+      model_id: string; scores: string; sample_count: number;
+      high_entropy_threshold: number; convergence_threshold: number;
+      calibrated: number; last_updated: number; drift_detected: number;
+    } | undefined;
     if (!row) return null;
     return {
       modelId: row.model_id,

@@ -65,8 +65,7 @@ export class TelemetryClient {
     return (
       report.provider === "test" ||
       report.modelId === "test" ||
-      report.modelId.startsWith("test-") ||
-      (report as any).modelTier === "test"
+      report.modelId.startsWith("test-")
     );
   }
 

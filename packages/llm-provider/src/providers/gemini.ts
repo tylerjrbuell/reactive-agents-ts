@@ -477,7 +477,7 @@ export const GeminiProviderLive = Layer.effect(
                   tools: request.tools,
                 });
                 if (process.env.RA_GEMINI_DEBUG === "1") {
-                  process.stderr.write(`[gemini-debug] req model=${model} contents=${JSON.stringify(contents).slice(0,300)} sysLen=${(cfg as any).systemInstruction ? String((cfg as any).systemInstruction).length : 0} maxOut=${(cfg as any).maxOutputTokens} hasTools=${!!(cfg as any).tools?.length}\n`);
+                  process.stderr.write(`[gemini-debug] req model=${model} contents=${JSON.stringify(contents).slice(0,300)} sysLen=${cfg.systemInstruction ? String(cfg.systemInstruction).length : 0} maxOut=${cfg.maxOutputTokens} hasTools=${!!((cfg.tools as unknown[] | undefined)?.length)}\n`);
                 }
                 const stream = await client.models.generateContentStream({
                   model,

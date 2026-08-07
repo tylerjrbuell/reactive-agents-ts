@@ -114,7 +114,7 @@ export const EntropySensorServiceLive = (
 
             // 1. Token entropy (from logprobs)
             const tokenResult = config.entropy.tokenEntropy !== false
-              ? computeTokenEntropy(logprobs as any)
+              ? computeTokenEntropy(logprobs)
               : null;
 
             // 2. Structural entropy (always available, sync)
@@ -127,7 +127,12 @@ export const EntropySensorServiceLive = (
                 Effect.catchAll(() => Effect.succeed([] as readonly (readonly number[])[])),
               );
               if (embeddings.length >= 2) {
-                const entropyMeta = (kernelState.meta as any)?.entropy ?? {};
+                const entropyMeta = (kernelState.meta.entropy ?? {}) as {
+                  readonly thoughtEmbeddings?: {
+                    readonly embeddings?: readonly (readonly number[])[];
+                    readonly centroid?: readonly number[] | null;
+                  };
+                };
                 const priorEmbeddings = entropyMeta.thoughtEmbeddings?.embeddings ?? [];
                 const centroid = entropyMeta.thoughtEmbeddings?.centroid ?? null;
 
@@ -153,7 +158,7 @@ export const EntropySensorServiceLive = (
 
             // 4. Behavioral entropy (from kernel state steps)
             const behavioralResult = computeBehavioralEntropy({
-              steps: kernelState.steps as any[],
+              steps: kernelState.steps,
               iteration,
               maxIterations,
               taskCategory,

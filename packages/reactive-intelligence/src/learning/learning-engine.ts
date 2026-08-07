@@ -92,7 +92,7 @@ export const LearningEngineServiceLive = (
     onRunCompleted: (data) =>
       Effect.gen(function* () {
         // Guard: skip all learning for test provider runs
-        const isTestProvider = data.modelId === "test" || data.modelId.startsWith("test-") || (data as any).provider === "test";
+        const isTestProvider = data.modelId === "test" || data.modelId.startsWith("test-") || data.provider === "test";
         if (isTestProvider) {
           return {
             calibrationUpdated: false,

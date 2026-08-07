@@ -1,5 +1,7 @@
 import type { LLMMessage } from "./types.js";
 
+type MsgRecord = Record<string, unknown>;
+
 /**
  * Validates and auto-repairs a message array before sending to any LLM provider.
  * Silent — logs warnings in debug mode, never throws.
@@ -15,7 +17,8 @@ export function validateAndRepairMessages(messages: readonly LLMMessage[]): read
 
     // Collect tool call IDs from assistant messages
     if (msg.role === "assistant") {
-      const toolCalls = (msg as any).tool_calls ?? (msg as any).toolCalls ?? [];
+      const raw: MsgRecord = msg;
+      const toolCalls = (raw.tool_calls ?? raw.toolCalls ?? []) as readonly { id?: string }[];
       for (const tc of toolCalls) {
         if (tc.id) toolCallIds.add(tc.id);
       }
@@ -26,7 +29,8 @@ export function validateAndRepairMessages(messages: readonly LLMMessage[]): read
 
     // Check for orphaned tool_result
     if (msg.role === "tool") {
-      const callId = (msg as any).tool_call_id ?? (msg as any).toolCallId;
+      const raw: MsgRecord = msg;
+      const callId = (raw.tool_call_id ?? raw.toolCallId) as string | undefined;
       if (callId && !toolCallIds.has(callId)) {
         // Orphaned — skip it
         continue;
