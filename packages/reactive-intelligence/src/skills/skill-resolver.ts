@@ -8,7 +8,7 @@ import type { InstalledSkill } from "./skill-registry.js";
 
 export type ResolvedSkills = {
   readonly all: readonly SkillRecord[];
-  readonly autoActivate: readonly SkillRecord[]; // expert confidence — inject at bootstrap
+  readonly autoActivate: readonly SkillRecord[]; // expert + explicit + relevant (non-tentative) — inject at bootstrap
   readonly catalog: readonly SkillRecord[];       // all skills for catalog XML
 };
 
@@ -161,8 +161,11 @@ export function selectActivated(
   }
 
   // Relevance-matched, bounded — skip any already chosen above.
+  // Tentative skills are excluded: auto-activation via relevance is reserved
+  // for trusted/expert confidence (tentative skills stay catalog-only until
+  // the evolution loop graduates them).
   const relevant = rankSkillsByTask(sorted, taskDescription)
-    .filter((r) => r.score >= RELEVANCE_FLOOR && !chosen.has(r.skill.name))
+    .filter((r) => r.score >= RELEVANCE_FLOOR && !chosen.has(r.skill.name) && r.skill.confidence !== "tentative")
     .slice(0, RELEVANCE_MAX);
   for (const r of relevant) chosen.set(r.skill.name, r.skill);
 
