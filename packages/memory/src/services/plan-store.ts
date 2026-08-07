@@ -1,6 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Local Types (avoid circular dep on @reactive-agents/reasoning) ───
 
@@ -111,9 +112,15 @@ const rowToStep = (r: Record<string, unknown>): PlanStep => ({
   type: r.type as PlanStep["type"],
   status: r.status as PlanStep["status"],
   toolName: (r.tool_name as string | null) ?? undefined,
-  toolArgs: r.tool_args ? JSON.parse(r.tool_args as string) : undefined,
-  toolHints: r.tool_hints ? JSON.parse(r.tool_hints as string) : undefined,
-  dependsOn: r.depends_on ? JSON.parse(r.depends_on as string) : undefined,
+  toolArgs: r.tool_args
+    ? safeJsonParse<Record<string, unknown>>(r.tool_args as string, {})
+    : undefined,
+  toolHints: r.tool_hints
+    ? safeJsonParse<string[]>(r.tool_hints as string, [])
+    : undefined,
+  dependsOn: r.depends_on
+    ? safeJsonParse<string[]>(r.depends_on as string, [])
+    : undefined,
   result: (r.result as string | null) ?? undefined,
   error: (r.error as string | null) ?? undefined,
   retries: (r.retries as number) ?? 0,

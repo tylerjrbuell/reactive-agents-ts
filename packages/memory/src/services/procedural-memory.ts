@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { ProceduralEntry, MemoryId } from "../types.js";
 import { DatabaseError, MemoryNotFoundError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Service Tag ───
 
@@ -54,7 +55,7 @@ export const ProceduralMemoryServiceLive = Layer.effect(
       pattern: r.pattern as string,
       successRate: r.success_rate as number,
       useCount: r.use_count as number,
-      tags: JSON.parse(r.tags as string),
+      tags: safeJsonParse<string[]>(r.tags as string | null, []),
       createdAt: new Date(r.created_at as string),
       updatedAt: new Date(r.updated_at as string),
     });

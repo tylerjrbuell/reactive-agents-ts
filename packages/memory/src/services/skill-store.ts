@@ -9,6 +9,7 @@ import type {
 } from "@reactive-agents/core";
 import { DatabaseError, MemoryNotFoundError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Service Tag ───
 
@@ -80,7 +81,10 @@ export const SkillStoreServiceLive = Layer.effect(
     const rowToVersion = (r: Record<string, unknown>): SkillVersion => ({
       version: r.version as number,
       instructions: r.instructions as string,
-      config: JSON.parse(r.config as string) as SkillFragmentConfig,
+      config: safeJsonParse<SkillFragmentConfig>(
+        r.config as string | null,
+        {} as SkillFragmentConfig,
+      ),
       refinedAt: new Date(r.refined_at as string),
       successRateAtRefinement: r.success_rate_at_refinement as number,
       status: r.status as "candidate" | "active",
@@ -107,28 +111,47 @@ export const SkillStoreServiceLive = Layer.effect(
       instructions: r.instructions as string,
       version: r.version as number,
       versionHistory: versions,
-      config: JSON.parse(r.config as string) as SkillFragmentConfig,
+      config: safeJsonParse<SkillFragmentConfig>(
+        r.config as string | null,
+        {} as SkillFragmentConfig,
+      ),
       evolutionMode: r.evolution_mode as SkillEvolutionMode,
       confidence: r.confidence as SkillConfidence,
       successRate: r.success_rate as number,
       useCount: r.use_count as number,
       refinementCount: r.refinement_count as number,
-      taskCategories: JSON.parse(r.task_categories as string) as string[],
-      modelAffinities: JSON.parse(r.model_affinities as string) as string[],
+      taskCategories: safeJsonParse<string[]>(
+        r.task_categories as string | null,
+        [],
+      ),
+      modelAffinities: safeJsonParse<string[]>(
+        r.model_affinities as string | null,
+        [],
+      ),
       base: (r.base as string | null) ?? null,
       avgPostActivationEntropyDelta: r.avg_post_activation_entropy_delta as number,
       avgConvergenceIteration: r.avg_convergence_iteration as number,
-      convergenceSpeedTrend: JSON.parse(r.convergence_speed_trend as string) as number[],
-      conflictsWith: JSON.parse(r.conflicts_with as string) as string[],
+      convergenceSpeedTrend: safeJsonParse<number[]>(
+        r.convergence_speed_trend as string | null,
+        [],
+      ),
+      conflictsWith: safeJsonParse<string[]>(
+        r.conflicts_with as string | null,
+        [],
+      ),
       lastActivatedAt: r.last_activated_at ? new Date(r.last_activated_at as string) : null,
       lastRefinedAt: r.last_refined_at ? new Date(r.last_refined_at as string) : null,
       createdAt: new Date(r.created_at as string),
       updatedAt: new Date(r.updated_at as string),
-      contentVariants: JSON.parse(r.content_variants as string) as {
+      contentVariants: safeJsonParse<{
         full: string;
         summary: string | null;
         condensed: string | null;
-      },
+      }>(r.content_variants as string | null, {
+        full: "",
+        summary: null,
+        condensed: null,
+      }),
     });
 
     return {
@@ -203,7 +226,10 @@ export const SkillStoreServiceLive = Layer.effect(
           );
           // Filter by task category overlap (JSON array intersection)
           const matched = allRows.filter((r) => {
-            const skillCategories: string[] = JSON.parse(r.task_categories as string);
+            const skillCategories = safeJsonParse<string[]>(
+              r.task_categories as string | null,
+              [],
+            );
             return taskCategories.some((cat) => skillCategories.includes(cat));
           });
           // Sort by score (boost model affinity if modelId provided)
@@ -211,8 +237,14 @@ export const SkillStoreServiceLive = Layer.effect(
             let scoreA = (a.success_rate as number) * (a.use_count as number);
             let scoreB = (b.success_rate as number) * (b.use_count as number);
             if (modelId) {
-              const affinitiesA: string[] = JSON.parse(a.model_affinities as string);
-              const affinitiesB: string[] = JSON.parse(b.model_affinities as string);
+              const affinitiesA = safeJsonParse<string[]>(
+                a.model_affinities as string | null,
+                [],
+              );
+              const affinitiesB = safeJsonParse<string[]>(
+                b.model_affinities as string | null,
+                [],
+              );
               if (affinitiesA.includes(modelId)) scoreA += 1;
               if (affinitiesB.includes(modelId)) scoreB += 1;
             }

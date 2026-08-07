@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { SemanticEntry, MemoryId } from "../types.js";
 import { MemoryNotFoundError, DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Service Tag ───
 
@@ -63,7 +64,7 @@ export const SemanticMemoryServiceLive = Layer.effect(
       summary: r.summary as string,
       importance: r.importance as number,
       verified: Boolean(r.verified),
-      tags: JSON.parse(r.tags as string),
+      tags: safeJsonParse<string[]>(r.tags as string | null, []),
       embedding: r.embedding
         ? Array.from(new Float32Array(r.embedding as ArrayBuffer))
         : undefined,
@@ -227,7 +228,7 @@ export const SemanticMemoryServiceLive = Layer.effect(
           ];
 
           for (const entry of entries) {
-            const tags = JSON.parse(entry.tags) as string[];
+            const tags = safeJsonParse<string[]>(entry.tags, []);
             const tagStr = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
             const importanceBar = "\u2588".repeat(
               Math.round(entry.importance * 5),

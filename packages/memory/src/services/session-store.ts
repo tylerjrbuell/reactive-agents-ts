@@ -1,6 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -143,7 +144,7 @@ function rowToRecord(row: Record<string, unknown>): SessionRecord {
   return {
     sessionId: row.session_id as string,
     agentId: row.agent_id as string,
-    messages: JSON.parse(row.messages as string) as ChatMessageShape[],
+    messages: safeJsonParse<ChatMessageShape[]>(row.messages as string, []),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };

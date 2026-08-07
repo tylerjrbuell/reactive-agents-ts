@@ -3,6 +3,7 @@ import { MemoryDatabase } from "./database.js";
 import type { SearchOptions, SemanticEntry, DailyLogEntry } from "./types.js";
 import type { MemoryId } from "./types.js";
 import { DatabaseError } from "./errors.js";
+import { safeJsonParse } from "./json-utils.js";
 
 // ─── Service Tag ───
 
@@ -81,7 +82,7 @@ export const MemorySearchServiceLive = Layer.effect(
             summary: r.summary,
             importance: r.importance,
             verified: Boolean(r.verified),
-            tags: JSON.parse(r.tags),
+            tags: safeJsonParse<string[]>(r.tags, []),
             createdAt: new Date(r.created_at),
             updatedAt: new Date(r.updated_at),
             accessCount: r.access_count,
@@ -132,7 +133,7 @@ export const MemorySearchServiceLive = Layer.effect(
             eventType: r.event_type as DailyLogEntry["eventType"],
             cost: r.cost ?? undefined,
             duration: r.duration ?? undefined,
-            metadata: JSON.parse(r.metadata),
+            metadata: safeJsonParse<Record<string, unknown>>(r.metadata, {}),
             createdAt: new Date(r.created_at),
           })) satisfies DailyLogEntry[];
         }),
@@ -189,7 +190,7 @@ export const MemorySearchServiceLive = Layer.effect(
             summary: r.summary,
             importance: r.importance,
             verified: Boolean(r.verified),
-            tags: JSON.parse(r.tags),
+            tags: safeJsonParse<string[]>(r.tags, []),
             embedding: r.embedding
               ? Array.from(new Float32Array(r.embedding))
               : undefined,

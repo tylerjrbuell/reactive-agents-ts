@@ -1,6 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,18 @@ function rowToRecord(row: Record<string, unknown>): DebriefRecord {
     terminatedBy: row.terminated_by as string,
     output: row.output as string,
     outputFormat: row.output_format as string,
-    debrief: JSON.parse(row.debrief_json as string) as AgentDebriefShape,
+    debrief: safeJsonParse<AgentDebriefShape>(row.debrief_json as string, {
+      outcome: "unknown",
+      summary: "",
+      keyFindings: [],
+      errorsEncountered: [],
+      lessonsLearned: [],
+      confidence: "unknown",
+      toolsUsed: [],
+      metrics: { tokens: 0, duration: 0, iterations: 0, cost: 0 },
+      rationale: [],
+      markdown: "",
+    }),
     createdAt: row.created_at as number,
   };
 }

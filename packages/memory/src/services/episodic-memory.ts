@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { DailyLogEntry, SessionSnapshot, MemoryId } from "../types.js";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Service Tag ───
 
@@ -63,7 +64,10 @@ export const EpisodicMemoryServiceLive = Layer.effect(
       eventType: r.event_type as DailyLogEntry["eventType"],
       cost: (r.cost as number | null) ?? undefined,
       duration: (r.duration as number | null) ?? undefined,
-      metadata: JSON.parse((r.metadata as string) ?? "{}"),
+      metadata: safeJsonParse<Record<string, unknown>>(
+        r.metadata as string | null,
+        {},
+      ),
       createdAt: new Date(r.created_at as string),
     });
 
@@ -150,10 +154,19 @@ export const EpisodicMemoryServiceLive = Layer.effect(
               return {
                 id: r.id as string,
                 agentId: r.agent_id as string,
-                messages: JSON.parse(r.messages as string),
+                messages: safeJsonParse<unknown[]>(
+                  r.messages as string | null,
+                  [],
+                ),
                 summary: r.summary as string,
-                keyDecisions: JSON.parse(r.key_decisions as string),
-                taskIds: JSON.parse(r.task_ids as string),
+                keyDecisions: safeJsonParse<string[]>(
+                  r.key_decisions as string | null,
+                  [],
+                ),
+                taskIds: safeJsonParse<string[]>(
+                  r.task_ids as string | null,
+                  [],
+                ),
                 startedAt: new Date(r.started_at as string),
                 endedAt: new Date(r.ended_at as string),
                 totalCost: r.total_cost as number,

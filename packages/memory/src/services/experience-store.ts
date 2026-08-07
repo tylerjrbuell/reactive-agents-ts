@@ -1,6 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { safeJsonParse } from "../json-utils.js";
 
 // ─── Types ───
 
@@ -207,7 +208,7 @@ export const ExperienceStoreLive = Layer.effect(
         const toolPatterns: ToolPattern[] = patternRows
           .map((row) => {
             const confidence = row.total_count > 0 ? row.success_count / row.total_count : 0;
-            const pattern: readonly string[] = JSON.parse(row.tool_list) as string[];
+            const pattern = safeJsonParse<string[]>(row.tool_list, []);
             return {
               taskType: row.task_type,
               pattern,
