@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError } from "../errors.js";
+import { ToolExecutionError, toToolError } from "../errors.js";
 
 // ─── File-root sandbox (AsyncLocalStorage) ──────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
@@ -385,10 +385,5 @@ export const fileWriteHandler = (
       await fs.writeFile(resolved, content, { encoding });
       return { written: true, path: resolved };
     },
-    catch: (e) =>
-      new ToolExecutionError({
-        message: `File write failed: ${e}`,
-        toolName: "file-write",
-        cause: e,
-      }),
+    catch: toToolError("file-write", "File write"),
   });

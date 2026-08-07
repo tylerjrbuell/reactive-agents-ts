@@ -32,6 +32,7 @@ export {
   ToolValidationError,
   MCPConnectionError,
   ToolAuthorizationError,
+  toToolError,
 } from "./errors.js";
 
 // ─── Services ───

@@ -16,6 +16,26 @@ export class ToolExecutionError extends Data.TaggedError(
 }> {}
 
 /**
+ * Combinator for building a catch-handler that converts an unknown thrown
+ * value into a `ToolExecutionError` with a correctly-formatted message.
+ *
+ * Guards against the "Error: Error: ENOENT..." double-prefix that results
+ * from naively interpolating an `Error` object (`${e}` calls `.toString()`,
+ * which already includes the "Error: " prefix) — this extracts `.message`
+ * instead, falling back to `String(e)` for non-Error throws.
+ *
+ * Usage: `catch: toToolError("file-write", "File write failed")`
+ */
+export const toToolError =
+  (toolName: string, label: string) =>
+  (e: unknown): ToolExecutionError =>
+    new ToolExecutionError({
+      message: `${label} failed: ${e instanceof Error ? e.message : String(e)}`,
+      toolName,
+      cause: e,
+    });
+
+/**
  * Raised by `defineTool` when the options object is malformed — e.g. the
  * caller passed intuitive-but-wrong field names (`parameters`/`execute`)
  * instead of the canonical `input`/`handler`. This replaces the raw

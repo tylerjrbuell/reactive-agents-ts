@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError } from "../errors.js";
+import { ToolExecutionError, toToolError } from "../errors.js";
 
 /** Which backend produced the result list (for debugging and traces). */
 export type WebSearchProvider = "tavily" | "brave" | "serper" | "duckduckgo";
@@ -480,10 +480,5 @@ export const webSearchHandler = (
 
       throw formatWebSearchFailure(query, attempts);
     },
-    catch: (e) =>
-      new ToolExecutionError({
-        message: `Web search failed: ${e}`,
-        toolName: "web-search",
-        cause: e,
-      }),
+    catch: toToolError("web-search", "Web search"),
   });

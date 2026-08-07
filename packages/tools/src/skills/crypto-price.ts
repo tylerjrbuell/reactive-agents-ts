@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError } from "../errors.js";
+import { ToolExecutionError, toToolError } from "../errors.js";
 
 const COINGECKO_RETRY_ATTEMPTS = 3;
 const COINGECKO_RETRY_BASE_MS = 2_000;
@@ -213,10 +213,5 @@ export const cryptoPriceHandler = (
 
       return { prices, currency, source: "coingecko" as const };
     },
-    catch: (e) =>
-      new ToolExecutionError({
-        message: `Crypto price lookup failed: ${e}`,
-        toolName: "crypto-price",
-        cause: e,
-      }),
+    catch: toToolError("crypto-price", "Crypto price lookup"),
   });

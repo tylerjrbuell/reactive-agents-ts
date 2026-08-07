@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { assertPublicUrl } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError } from "../errors.js";
+import { ToolExecutionError, toToolError } from "../errors.js";
 import { httpAllowPrivateEnabled } from "../flags.js";
 
 /** Max redirect hops to follow while re-validating each against the egress guard. */
@@ -88,10 +88,5 @@ export const httpGetHandler = (
         body,
       };
     },
-    catch: (e) =>
-      new ToolExecutionError({
-        message: `HTTP GET failed: ${e}`,
-        toolName: "http-get",
-        cause: e,
-      }),
+    catch: toToolError("http-get", "HTTP GET"),
   });
