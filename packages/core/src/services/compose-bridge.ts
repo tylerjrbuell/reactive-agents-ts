@@ -28,6 +28,7 @@
 import { Effect } from "effect";
 import type { HarnessPipeline } from "./harness-pipeline.js";
 import type { Tag, PayloadFor, ContextFor } from "./harness-types.js";
+import { emitErrorSwallowed, errorTag } from "./error-swallowed.js";
 
 /**
  * Publish `payload` on `tag` through `pipeline`. Always succeeds.
@@ -50,5 +51,7 @@ export const emitToCompose = <T extends Tag>(
     ? Effect.void
     : Effect.tryPromise(() => pipeline.transform(tag, payload, ctx)).pipe(
         Effect.asVoid,
-        Effect.catchAll(() => Effect.void),
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({ site: "core/src/services/compose-bridge.ts:emitToCompose", tag: errorTag(err) }),
+        ),
       );

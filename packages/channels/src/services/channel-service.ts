@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { GatewayEvent, PolicyDecision } from "@reactive-agents/gateway";
 import type { ChannelConnectionError } from "../errors.js";
 import type { AdapterInfo, ChannelStatus, InboundMessage, MessageChannel, TriggerDefinition } from "../types.js";
@@ -87,7 +88,11 @@ export class ChannelService {
       };
 
       const { sessionId, reply } = yield* self.deps.sessions.runChatTurn(params, msg.content).pipe(
-        Effect.catchAll(() => Effect.succeed({ sessionId: "", reply: "" })),
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:runChatTurn", tag: errorTag(err) }).pipe(
+            Effect.as({ sessionId: "", reply: "" }),
+          ),
+        ),
       );
 
       self.totalProcessed += 1;
@@ -112,7 +117,9 @@ export class ChannelService {
             { channelId: msg.channelId, replyToMessageId: msg.replyTo },
             { text: reply },
           )
-          .pipe(Effect.catchAll(() => Effect.void));
+          .pipe(Effect.catchAll((err) =>
+            emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:sendMessage", tag: errorTag(err) }),
+          ));
       }
 
       if (bus && reply) {
@@ -125,7 +132,9 @@ export class ChannelService {
           timestamp: Date.now(),
         });
       }
-    }).pipe(Effect.catchAll(() => Effect.void));
+    }).pipe(Effect.catchAll((err) =>
+      emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:processMessage", tag: errorTag(err) }),
+    ));
   }
 
   status(): ChannelStatus {

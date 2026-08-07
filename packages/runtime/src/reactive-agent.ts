@@ -867,7 +867,7 @@ export class ReactiveAgent<TOut = unknown> {
                         reason,
                     } as AgentEvent),
                 ),
-                Effect.catchAll(() => Effect.void),
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:emitTerminated", tag: errorTag(err) })),
             ) as Effect.Effect<void>,
         )
     }

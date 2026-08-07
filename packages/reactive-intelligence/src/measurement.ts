@@ -9,6 +9,7 @@
  */
 
 import { Effect } from "effect"
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core"
 
 /** Entropy score: a snapshot of agent entropy at one iteration. */
 export interface EntropyScore {
@@ -119,8 +120,12 @@ export function makeDispatchMeasurementCollector(): {
             })
           }
           return Effect.void
-        }).pipe(Effect.catchAll(() => Effect.void))
-      }).pipe(Effect.catchAll(() => Effect.void)),
+        }).pipe(Effect.catchAll((err) =>
+          emitErrorSwallowed({ site: "reactive-intelligence/src/measurement.ts:recordEntropy-inner", tag: errorTag(err) }),
+        ))
+      }).pipe(Effect.catchAll((err) =>
+        emitErrorSwallowed({ site: "reactive-intelligence/src/measurement.ts:recordEntropy", tag: errorTag(err) }),
+      )),
 
     getSummary: () => {
       const composites = entropyEvents.map(e => e.composite)
