@@ -129,27 +129,34 @@ export const availableToolGuard: Guard = (tc, _state, input) => {
 /** Blocks the exact same tool+arguments pair if it already succeeded. */
 export const duplicateGuard: Guard = (tc, state, input) => {
   const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
-  const isDuplicate = state.steps.some((step, idx) => {
-    if (step.type !== "action") return false;
-    const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
-    if (!stepTc) return false;
-    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
-    const next = state.steps[idx + 1];
-    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
-  });
 
-  if (!isDuplicate) return { pass: true };
+  // Single pass over state.steps: find the first prior action matching this
+  // exact tool+args call that was followed by a successful observation.
+  // Previously this guard ran two identical scans (`.some()` to detect a
+  // duplicate, then `.findIndex()` to locate it) each re-running
+  // JSON.stringify() per step — O(N) stringify calls done twice, every
+  // proposed tool call, every kernel iteration. Both scans shared the exact
+  // same predicate and both short-circuit on first match, so `.some()` and
+  // `.findIndex()` always agreed on the same index; folding them into one
+  // loop halves the per-call cost without changing behavior.
+  let priorSuccessIdx = -1;
+  for (let idx = 0; idx < state.steps.length; idx++) {
+    const step = state.steps[idx]!;
+    if (step.type !== "action") continue;
+    const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
+    if (!stepTc) continue;
+    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) continue;
+    const next = state.steps[idx + 1];
+    if (next?.type === "observation" && next.metadata?.observationResult?.success === true) {
+      priorSuccessIdx = idx;
+      break;
+    }
+  }
+
+  if (priorSuccessIdx < 0) return { pass: true };
 
   // Surface prior result with advisory — don't re-execute
-  const priorSuccessIdx = state.steps.findIndex((step, idx) => {
-    if (step.type !== "action") return false;
-    const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
-    if (!stepTc) return false;
-    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) return false;
-    const next = state.steps[idx + 1];
-    return next?.type === "observation" && next.metadata?.observationResult?.success === true;
-  });
-  const priorObsContent = priorSuccessIdx >= 0 ? state.steps[priorSuccessIdx + 1]?.content ?? "" : "";
+  const priorObsContent = state.steps[priorSuccessIdx + 1]?.content ?? "";
   // HS-115 anti-scaffold closure: fall back to meta.nominatedTools when caller
   // declared no requiredTools, so missing-tool hints surface even for tasks
   // that only signal requirements via keyword cues ("what's 17*29" → calculator).
