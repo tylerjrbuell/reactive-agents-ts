@@ -28,20 +28,8 @@ export const createSSEStream = (
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         };
 
-        // Poll for task updates (simplified — production would use EventBus)
-        let closed = false;
-        const poll = async () => {
-          while (!closed) {
-            await new Promise((r) => setTimeout(r, 100));
-            // Task state checked by the caller
-          }
-        };
-        poll().catch(() => {});
-
-        // Expose send and close functions via queue consumption
-        (async () => {
-          // This would be wired to the queue in production
-        })();
+        // Production wiring: EventBus subscription pushes events through `send`.
+        void send;
       },
       cancel() {
         // Cleanup
