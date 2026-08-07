@@ -232,8 +232,12 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     }
   })();
 
-  // If loopPromise rejects (gateway not configured), propagate
-  loopPromise.catch(() => {});
+  // If loopPromise rejects (gateway not configured), log it — the rejection
+  // is already surfaced to callers via `bootstrap.error`/GatewaySummary, but
+  // an unhandled-rejection here would otherwise crash the process silently.
+  loopPromise.catch((err) => {
+    console.error("[gateway] startup failed:", err);
+  });
 
   return buildGatewayHandle({
     setStopped: (v) => {
