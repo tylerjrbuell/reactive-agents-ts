@@ -78,16 +78,22 @@ export const makeHealthService = (
       const url = new URL(req.url);
 
       if (url.pathname === "/health") {
-        const checks = await Effect.runPromise(runChecks());
-        const body = buildResponse(checks);
-        return Response.json(body, { status: 200 });
+        try {
+          const checks = await Effect.runPromise(runChecks());
+          return Response.json(buildResponse(checks), { status: 200 });
+        } catch {
+          return Response.json({ status: "unhealthy", error: "health checks failed" }, { status: 503 });
+        }
       }
 
       if (url.pathname === "/ready") {
-        const checks = await Effect.runPromise(runChecks());
-        const body = buildResponse(checks);
-        const status = body.status === "unhealthy" ? 503 : 200;
-        return Response.json(body, { status });
+        try {
+          const checks = await Effect.runPromise(runChecks());
+          const body = buildResponse(checks);
+          return Response.json(body, { status: body.status === "unhealthy" ? 503 : 200 });
+        } catch {
+          return Response.json({ status: "unhealthy", error: "readiness checks failed" }, { status: 503 });
+        }
       }
 
       if (url.pathname === "/metrics") {
