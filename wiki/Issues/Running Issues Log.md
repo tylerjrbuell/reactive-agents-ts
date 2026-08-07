@@ -520,3 +520,42 @@ At that point, we expect to see:
 **Cross-app pattern:** 2 missing public types account for 17 casts in apps — `AgentResult.debrief` (#162) and `AgentEvent` discriminated union (#163).
 
 **Doc systemically lags code:** 04-PROJECT-STATE.md (the AGENTS.md-mandated "READ FIRST" doc) is 30+ days stale, says "v0.10.0 deferred". confidenceFloor killswitch unshipped 2026-05-19 but still in AGENTS.md killswitch list (#160 — re-add anti-pattern risk).
+
+---
+
+## Health Sweep — 2026-08-06
+
+**Baseline:** Build GREEN 37/37 | Tests 8748 pass / 2 fail (skill-persistence e2e + HS-210 ceiling) / 1139 files
+**Final:** Build GREEN 37/37 | Tests 8758 pass / 1 fail (HS-210 ceiling, pre-existing) / 1141 files (+10 pass, -1 fail, +2 files)
+
+### FIXED this sweep
+
+| ID | Severity | File | Description |
+|----|----------|------|-------------|
+| HS-200 | P0 | `packages/reactive-intelligence/src/skills/skill-resolver.ts:164-168` | Tentative skills leaked through relevance branch — no confidence gate. Root: `dc8274fb` added relevance path without filtering tentative tier. |
+| HS-201 | P1 | `packages/tools/src/skills/{web-search,http-client,file-operations,crypto-price}.ts` | Tool error `${e}` produced double-prefix "Error: Error: ...". New `toToolError` combinator in `errors.ts`. 4 new tests. |
+| HS-202 | P1 | 9 files in `packages/memory/src/services/` + `search.ts` | `JSON.parse` on SQLite TEXT columns with no try/catch — corrupt row = unrecoverable Effect defect. 35 call sites wrapped with `safeJsonParse`. 5 new tests (unit + corrupt-row integration). |
+| HS-203 | P1 | `packages/runtime/src/sigterm.ts:38-40` | Missing `.catch()` on shutdown promise — if `stop()`/`dispose()` threw, `process.exit(0)` never reached. |
+| HS-204 | P1 | `packages/runtime/src/agent/gateway-runner.ts` | `.catch(() => {})` silently swallowed gateway startup rejection. Now logs. |
+| HS-205 | P1 | `packages/reasoning/src/kernel/capabilities/act/guard.ts:130-171` | `duplicateGuard` ran two identical O(N) scans with JSON.stringify each. Collapsed to single pass. |
+| HS-206 | P1 | `packages/reasoning/src/kernel/capabilities/decide/arbitrator.ts` + `kernel/loop/iterate-pass.ts` | 6 residual `as Record<string, unknown>` casts on already-typed `KernelMeta`. Pure deletion. |
+
+### FILED for planning (P1 unfixed)
+
+| ID | Severity | File | Description |
+|----|----------|------|-------------|
+| HS-207 | P1 | `packages/tools/src/mcp/mcp-client.ts:64` | `activeConnections` Map has no Ref/lock while sibling `serversRef` IS Ref-guarded. Race under concurrent connect/disconnect. |
+| HS-208 | P1 | `packages/runtime/src/builder.ts` (withLayers/withReplayLLM) | `Layer<any, any>` type erasure on public builder API — loses error channel guarantees at composition boundary. |
+
+### FILED for planning (P2)
+
+| ID | Severity | Description |
+|----|----------|-------------|
+| HS-209 | P2 | 5.42GB `.reactive-agents/` test debris. Root: `resolveDefaultDbPath()` defaults CWD-relative. |
+| HS-210 | P2 | `as-unknown-as-ceiling` test drift: 83 vs 75 (pre-existing, not session regression). |
+| HS-211 | P2 | `replaySSE` missing catch in `journal.ts:132-152`. |
+| HS-212 | P2 | `NODE_ENV === "test"` production branch in `runtime-construction.ts:454-458`. |
+| HS-213 | P2 | Dead `poll()` loop in `a2a/streaming.ts:33-39`. |
+| HS-214 | P2 | 19 dead barrel exports across packages. |
+| HS-215 | P2 | 47 `as any` casts, 83 `as unknown as` code-position casts in `packages/*/src` (ceiling test threshold: 75). |
+| HS-216 | P2 | 2 unused dependencies (`@noble/ed25519`, `@opentelemetry/semantic-conventions`). |

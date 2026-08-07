@@ -145,13 +145,13 @@ type KernelError =
 
 ### Known Architecture Debt (audit these first)
 
-Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below were last aligned with the tree in **2026-04**.
+Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below were last aligned with the tree on **2026-08-06**.
 
-1. **`KernelState.meta` is an open bag** — `meta: Readonly<Record<string, unknown>>` in `packages/reasoning/src/kernel/state/kernel-state.ts` forces `(state.meta as any).entropy` and related casts across `think.ts`, `act.ts`, `runner.ts`, `reactive-observer.ts`. High ROI: introduce a structured `KernelMeta` (or typed slices) and migrate call sites incrementally.
+1. **`KernelState.meta` — typed but residual casts remain** — `KernelMeta` interface now exists and most sites access typed fields directly. Residual `as Record<string, unknown>` casts in `arbitrator.ts` and `iterate-pass.ts` were removed in the 2026-08-06 sweep (HS-206). **Remaining:** some `as unknown as` casts persist for import-cycle avoidance (e.g. `budgetLimits`). Medium ROI to resolve via re-export or shared types package.
 
-2. **`buildDynamicContext` is dead in the live kernel path** — Implemented and exported from `packages/reasoning/src/context/context-engine.ts`, but the think phase uses **`buildStaticContext` only**. Tests (`packages/reasoning/tests/strategies/kernel/phases/think-system-prompt.test.ts`) assert `think.ts` does not reference `buildDynamicContext`. **`buildStaticContext` is active**, not legacy. Decide: wire dynamic context into FC messages, or deprecate/remove the export and shrink the public surface.
+2. ~~**`buildDynamicContext` is dead in the live kernel path**~~ — **RESOLVED.** `buildDynamicContext` was already removed prior to this audit refresh. `buildStaticContext` remains the sole active path.
 
-3. **`context-engine.ts` size** — On the order of **~500 LOC** (not ~690). It holds scoring, environment/rules/tool-reference builders, **both** static and dynamic context builders, and helpers. The maintenance issue is the **unused dynamic path**, not “mostly dead file.”
+3. **`context-engine.ts` size** — On the order of **~500 LOC** (not ~690). It holds scoring, environment/rules/tool-reference builders, static context builder, and helpers. Maintenance concern reduced after dynamic path removal.
 
 4. **Provider adapter hooks — 4-hook system, all wired** — `ProviderAdapter` in `packages/llm-provider/src/adapter.ts` now has 4 guidance hooks + `parseToolCalls` (`taskFraming`/`toolGuidance`/`systemPromptPatch` were removed in v0.14), consumed in the kernel as follows (confirm with `rg` if paths move):
    - `continuationHint`, `qualityCheck` → `packages/reasoning/src/kernel/capabilities/reason/think-guards.ts`
@@ -161,9 +161,11 @@ Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below
 
 5. **Adaptive meta-strategy defaults off** — Routing exists (`packages/reasoning/src/strategies/adaptive.ts`, selected when `config.adaptive.enabled` in `packages/reasoning/src/services/reasoning-service.ts`). **`defaultReasoningConfig` sets `adaptive.enabled: false`** in `packages/reasoning/src/types/config.ts`. That is a product/default choice, not absent multi-step routing code.
 
-6. **Duplicated output-quality gate** — `enforceOutputQualityGate` is copy-pasted in `plan-execute.ts` and `reflexion.ts` with a behavioral drift risk (e.g. `stripThinking` on synthesized content in one path but not the other). Candidate for one shared kernel util module.
+6. ~~**Duplicated output-quality gate**~~ — **RESOLVED.** `enforceOutputQualityGate` unified in `finalize.ts`. Both `plan-execute.ts` and `reflexion.ts` now call the shared version.
 
-7. **`ContextProfile` vs runtime `maxTokens`** — Call sites use `(contextProfile as any)?.maxTokens` because `ContextProfileSchema` in `packages/reasoning/src/context/context-profile.ts` does not declare `maxTokens`. Optional schema field or adjacent limits type removes the cast.
+7. ~~**`ContextProfile` vs runtime `maxTokens`**~~ — **RESOLVED.** `ContextProfile.maxTokens` is now declared (zero `as any` casts for this field).
+
+8. **`Layer<any, any>` on public builder API (NEW, HS-208)** — `withLayers()` and `withReplayLLM()` erase the error channel via `Layer<any, any>`, losing composition-time type safety. Tighten to `Layer.Layer<LLMService, unknown, never>` or appropriate bounds.
 
 ### Keeping this skill accurate
 
