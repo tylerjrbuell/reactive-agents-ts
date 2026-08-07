@@ -552,10 +552,32 @@ At that point, we expect to see:
 | ID | Severity | Description |
 |----|----------|-------------|
 | HS-209 | P2 | 5.42GB `.reactive-agents/` test debris. Root: `resolveDefaultDbPath()` defaults CWD-relative. |
-| HS-210 | P2 | `as-unknown-as-ceiling` test drift: 83 vs 75 (pre-existing, not session regression). |
+| HS-210 | P2 | `as-unknown-as-ceiling` test drift: 84 vs 75 (pre-existing breach). Needs design-it-out work (expand AgentEvent union, extend LLMConfig schema, sub-agent-executor reuse). NOT a ceiling bump per [[feedback_no_metric_gaming_refactor]]. |
 | HS-211 | P2 | `replaySSE` missing catch in `journal.ts:132-152`. |
 | HS-212 | P2 | `NODE_ENV === "test"` production branch in `runtime-construction.ts:454-458`. |
 | HS-213 | P2 | Dead `poll()` loop in `a2a/streaming.ts:33-39`. |
 | HS-214 | P2 | 19 dead barrel exports across packages. |
-| HS-215 | P2 | 47 `as any` casts, 83 `as unknown as` code-position casts in `packages/*/src` (ceiling test threshold: 75). |
+| HS-215 | P2 | `as any`: 11 remaining code casts (all justified — 1 Readonly bypass, 1 cross-pkg type gap, 1 dynamic import, 1 Ollama SDK, 1 test provider generic, 2 benchmark stdout suppression, 4 test-double boundaries). Prior "6 remaining" was glob artifact. `as unknown as`: 84 code-position casts vs ceiling 75 (need design-it-out, NOT ceiling bump per [[feedback_no_metric_gaming_refactor]]). |
 | HS-216 | P2 | 2 unused dependencies (`@noble/ed25519`, `@opentelemetry/semantic-conventions`). |
+
+## Health Sweep — 2026-08-07 (continued from 2026-08-06)
+
+**Baseline:** Build 37/37 GREEN. Tests 8765 pass / 1 fail (WS-5b ceiling, pre-existing).
+**Final:** Build 37/37 GREEN. Tests 8765 pass / 1 fail. WS-5b still failing (84 vs 75, net 0 change).
+
+### FIXED this sweep
+
+| ID | Severity | Files | Description |
+|----|----------|-------|-------------|
+| HS-217 | P1 | channel-service.ts, compose-bridge.ts, reactive-agent.ts, measurement.ts | 8 silent `Effect.catchAll(() => Effect.void)` migrated to `emitErrorSwallowed` — errors now observable via EventBus. Non-void fallback at `runChatTurn` preserved. |
+| HS-218 | P1 | health/service.ts | Bare `Effect.runPromise` on health/readiness endpoints could throw unhandled. Wrapped in try/catch returning 503. |
+| HS-219 | P1 | validation.ts, local.ts, gemini.ts, entropy-sensor-service.ts, find.ts, pulse.ts, calibration-store.ts, telemetry-client.ts, learning-engine.ts, database.ts | Gratuitous `as any` removal: 13 casts replaced with typed narrowing, plain annotation, structural identity, spread-copy, or unreachable guard removal. Net `as any` count 24 → 11 (all 11 remaining justified). Prior "19 → 6" was glob artifact — `**/*.ts` without globstar missed deep nesting. |
+
+### FILED for planning (not fixed this sweep)
+
+| ID | Severity | Description |
+|----|----------|-------------|
+| HS-220 | P1 | LLM retry/timeout combinator duplication — 5 providers have repeated retry+timeout Effect pipelines. HIGH ROI extraction candidate. Requires byte-diff of all 5 blocks before extracting. |
+| HS-221 | P2 | Tagged error classes for pricing.ts and structured-output/pipeline.ts — untyped throws in domain logic. |
+| HS-222 | P2 | 5 console.warn/error sites that should use Effect.log*. |
+| HS-223 | P2 | Testing mock `as any` (4 sites in packages/testing/src/mocks/) — test-double boundary casts. Proper fix: typed partial mock helpers matching full service interfaces. Same pattern as reasoning/src/testing/tool-service-mock.ts solution. |
