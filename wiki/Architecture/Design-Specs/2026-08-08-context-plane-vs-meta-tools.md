@@ -1,6 +1,8 @@
 # Context management without meta-tools — a design, not a bandaid
 
-**Status:** DESIGN (proposed). Answers: should meta-tools (`recall`/`discover-tools`/`final-answer`) exist at all, or do they compensate for a design leading harnesses avoid?
+**⚠️ SUPERSEDED by [[2026-08-08-control-plane-vs-meta-tools]]** (the elegant unifying form: one invariant — the FC array is domain-only). This doc is retained as the EVIDENCE APPENDIX (tool-taxonomy table §3a, wire-probe attribution §3b/§3f, leading-harness patterns §2). The per-tool framing here is subsumed by the single invariant in the successor.
+
+**Status:** SUPERSEDED (evidence appendix). Was: DESIGN (proposed). Answers: should meta-tools (`recall`/`discover-tools`/`final-answer`) exist at all, or do they compensate for a design leading harnesses avoid?
 **Trigger:** meta-tool floor is a measured +73% per-call token tax on the kernel path (`tool-surface.ts:232`; see [[../../Planning/Implementation-Plans/2026-08-08-move-1-single-loop|Move 1 plan §3b]]) AND an extra-step temptation. Gating them is a bandaid; this is the redesign.
 **Does NOT** rewrite 09 (amend it if sequencing changes) or bundle into the Move 1 branch.
 
