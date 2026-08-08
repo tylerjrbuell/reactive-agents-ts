@@ -31,7 +31,17 @@ When a tool result is derived from a re-fetchable source, the ref should BE the 
 - `web-search`/query/grep → ref = the query → re-run.
 - The `ResultStore` keeps such results as **source-pointers**, not opaque blobs; the projector renders "preview + how to re-fetch with the tool you have," not `recall("res_ab12")`.
 
-**This is the strong half — it needs no harness intelligence, cannot lock the agent out (the affordance is a normal tool), and deletes `recall` for the reproducible majority.** Scope honestly: the *reproducible ratio* (file reads / searches / greps = reproducible; one-shot MUTATING API calls = not) determines how much of `recall` disappears — a tool-taxonomy pass (`produces` markers exist: `data`/`file`) quantifies it. Expectation: most read/search results are reproducible.
+**This is the strong half — it needs no harness intelligence, cannot lock the agent out (the affordance is a normal tool), and deletes `recall` for the reproducible majority.**
+
+**Tool-taxonomy pass (2026-08-08) — quantified.** Real domain tools (meta/pseudo excluded), by result-reproducibility:
+
+| Reproducible — ref = tool+args, re-fetch via origin tool | One-shot result — keep store / gated rehydrate | Mutation — no result to recall |
+|---|---|---|
+| file-read, list-directory, web-search, rag-search, http-get, crypto-price, scratchpad-read | shell-execute stdout, code/docker-execute stdout, request-user-input | file-write, scratchpad-write, rag-ingest |
+
+**The results large enough to be compressed to preview+ref — files, search sets, HTTP payloads, directory listings — are overwhelmingly REPRODUCIBLE.** The non-reproducible residue (shell/code stdout, a user's answer) is small or rare. So `recall` disappears for the majority of its actual use; the store + gated auto-rehydration (§3b) survive only for the residue.
+
+**Feasibility:** `StoredResult` (`result-store.ts`) already carries `tool`; the originating **args are available at store-construction** (`gather-dedup.ts:96` `argsByCallId` by toolCallId; `from-kernel-state.ts` `toolName` per storedKey). So building a reproducible ref = thread args onto `StoredResult` + render "re-fetch via `<tool>(<locator>)`" in place of `recall("res_<hash>")`. No deep plumbing.
 
 ### 3b. GATED: auto-rehydration for the non-reproducible residue
 For genuinely one-shot results (a mutating API call's response), keep an internal store but **re-inject the full result automatically when the step needs it** (curation from the ledger/assessment) — the agent never calls a tool.
@@ -46,6 +56,12 @@ Measured: `discover-tools` "buys nothing" locally (prune-only ≈ prune+discover
 
 ### 3e. NOT proposed: prompt caching as the escape hatch
 Checked: the default path caches **nothing** — inline `cacheRead=0`, shipped kernel default (`prune+discover`) `cacheRead=0`; only opt-in `no-prune`/`stable-surface` achieve reads (pruning churns the cached prefix — the F10 tension). So "keep more, cache makes it cheap" is NOT available on the default today. Out of scope here; it's the separate F10 question.
+
+## 3f. Measured priority correction (RA_WIRE_PROBE, 2026-08-08)
+Wire-level probe of the actual FC array (gemma4 native-fc) reorders the fixes by measured impact — and corrects a confound:
+- **`recall` is NOT in the wire FC array** (gated out by the recall-overflow gate; visible ≠ callable ≠ wire). So §3a/§3b (reproducible refs / rehydration) are sound DESIGN but are **not** the current native-fc token tax — they matter only when `recall` is actually surfaced (large recallable results). Lower priority than believed.
+- **The native-fc wire tax is `final-answer` (~1713 chars ≈ 428t/call) + `discover-tools` (~1000 chars).** So **§3d (final-answer dialect-gate) is the single highest-value cut** — on native-fc it is pure waste (no-tool-call = done). **§3c (right-size discover-tools) is second.** Both are prediction-free.
+- Revised sequence: **§3d → §3c** (measured native-fc wins, prediction-free) → **§3a** (reproducible refs, when recall is surfaced) → **§3b** (rehydration, lift-gated).
 
 ## 4. The principle (one line)
 **Context management is the harness's job or the world's — never the agent's.** A meta-tool that makes the agent manage its own memory/tools/termination is a design smell: it taxes every call and burdens the agent. Move the responsibility to the harness (deterministic, free) or the world (reproducible refs, normal tools).

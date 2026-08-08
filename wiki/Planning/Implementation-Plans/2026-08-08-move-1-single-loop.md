@@ -45,7 +45,17 @@ The plan's original P2 premise (double-render + synthesize) is **FALSIFIED by me
 | inline | 1103t | 2 | `file-write` (1) | ~551t |
 | kernel (`.withReasoning`) | 1903t | 2 | `file-write, recall, discover-tools`, +`final-answer` (~4) | ~951t |
 
-**+73%, SAME call count.** The tax is ~400t MORE PER CALL, not extra calls (do NOT cite `it=6` vs `it=3` — iterations ≠ LLM round-trips). Driver: the kernel injects **meta-tools (`recall`, `discover-tools`, `final-answer`) into the FC array on every call** — a **"meta-floor"** (`tool-surface.ts:232`, documented at `:62`) that fires regardless of task need. Confirmed NOT a bench-arm artifact: the arm enables neither memory nor discovery (`builtins:"file-write"`, only `.withReasoning`), yet `recall` was offered **with memory OFF**.
+**+73–100%, SAME call count.** The tax is ~400–500t MORE PER CALL, not extra calls (do NOT cite `it=6` vs `it=3` — iterations ≠ LLM round-trips).
+
+**WIRE-LEVEL GROUND TRUTH (RA_WIRE_PROBE, gemma4 native-fc) — corrects an earlier confound.** The actual FC array sent to the provider:
+```
+iter0: wireTools=[file-write, discover-tools]               toolsChars=1740
+iter1: wireTools=[file-write, discover-tools, final-answer]  toolsChars=3453   sys=451  msgs=823
+```
+- **`recall` is NOT in the wire array** — it is gated out by the recall-overflow gate (no recallable key). An earlier claim that `recall` was in the FC array was the tool-surface confound (`feedback_tool_surface_confound`: visible ≠ callable ≠ wire). The wire array = `callable` = `gatedToolSchemas` (`think.ts:656/735`), NOT the visible/projected set.
+- **The real wire tax = `discover-tools` + `final-answer` schemas.** On native-fc the tool schemas (3453 chars ≈ 863t) DOMINATE the ~950t/call input (sys=451ch, msgs=823ch). **`final-answer` alone = 3453−1740 = 1713 chars ≈ 428t/call**, and on native-fc it is **not even needed** (no-tool-call = done). `discover-tools` ≈ 1000 chars and "buys nothing" (measured).
+
+Confirmed NOT a bench-arm artifact: the arm enables neither memory nor discovery (`builtins:"file-write"`, only `.withReasoning`).
 
 **This IS dialect-blindness #1** (catalogued OPEN: "meta-tools flattened into domain tool list… flat map of ALL schemas incl. meta into provider `tools:`"). The measurement independently confirms it and gives it a number.
 
