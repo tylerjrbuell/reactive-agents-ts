@@ -1071,6 +1071,27 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
   };
 }
 
+// ─── Semantic abstention detection ───────────────────────────────────────────
+//
+// Detects when a final-answer tool output is semantically an abstention — the
+// model is honestly declining rather than answering. Patterns are narrow to
+// avoid false positives on legitimate answers that mention inability in passing.
+// A long output (>500 chars) is assumed substantive, not a refusal.
+
+const ABSTENTION_PATTERNS: readonly RegExp[] = [
+  /\bi (?:cannot|can't|am unable to|'m unable to) (?:complete|perform|accomplish|fulfill|do|carry out|execute|access|connect to|reach|query) /i,
+  /\bi (?:do not|don't) have (?:access to|the ability to|the capability to|the tools to|the means to|a connection to|a way to)/i,
+  /\bnot possible for me to (?:complete|perform|accomplish|access|connect|do)/i,
+  /\bbeyond my (?:capabilities|ability|capacity)\b/i,
+  /\bi lack (?:the (?:ability|access|tools|capability) to|access to)/i,
+  /\bno (?:access|ability|way|means) to (?:complete|perform|accomplish|access|connect|query|execute)/i,
+];
+
+function looksLikeSemanticAbstention(output: string): boolean {
+  if (output.length > 500) return false;
+  return ABSTENTION_PATTERNS.some((p) => p.test(output));
+}
+
 // ─── F1 — Grounded-terminal invariant gate (2026-07-02) ──────────────────────
 //
 // Bench root cause (wiki/Research/Harness-Reports/2026-07-02-cogito8b-
@@ -1335,9 +1356,17 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
       // Preserve the existing terminatedBy strings for downstream consumers
       // (react-kernel.ts, tests, telemetry): "final_answer_tool" / "final_answer"
       // / "end_turn" — the via discriminator picks the legacy name.
+      //
+      // Semantic abstention reclassification: when the model delivers an
+      // abstention through the final-answer tool (e.g. "I cannot access the
+      // database"), reclassify as "abstained" so goalAchieved correctly
+      // reports false. Guarded: if the model already produced substantive
+      // tool output, the "I cannot" is qualifying language, not a genuine
+      // abstention — mirrors decideForcedAbstention's hasDeliverable guard.
+      const hasDeliverable = hasSuccessfulSubstantiveToolCall(ctx.steps);
       const terminatedBy =
         intent.via === "tool"
-          ? "final_answer_tool"
+          ? (!hasDeliverable && looksLikeSemanticAbstention(intent.output) ? "abstained" : "final_answer_tool")
           : intent.via === "regex"
             ? "final_answer"
             : "end_turn";
@@ -1474,6 +1503,14 @@ export function applyTermination(
         state.scratchpad,
         state.iteration,
       );
+      // Semantic abstention via final-answer: populate the abstention metadata
+      // so AgentResult.abstention is present (contract: "iff terminatedBy ===
+      // abstained"). Harness-forced and model-initiated paths set this upstream;
+      // the reclassification path has no upstream site, so derive here.
+      const abstentionMeta =
+        verdict.terminatedBy === "abstained" && !extraMeta?.["abstention"]
+          ? { abstention: { reason: verdict.output.slice(0, 200), missing: [] as string[] } }
+          : {};
       const done = transitionState(state, {
         status: "done" as const,
         ledger: successLedger,
@@ -1482,6 +1519,7 @@ export function applyTermination(
           terminatedBy: verdict.terminatedBy,
           ...(terminalAuthorityClass ? { terminalAuthorityClass } : {}),
           ...(terminalEvidence ? { terminalEvidence } : {}),
+          ...abstentionMeta,
           ...(extraMeta ?? {}),
         },
       });

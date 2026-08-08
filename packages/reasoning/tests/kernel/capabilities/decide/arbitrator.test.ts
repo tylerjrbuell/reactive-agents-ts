@@ -330,6 +330,93 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
   });
 });
 
+describe("arbitrate — semantic abstention via final-answer tool", () => {
+  it("reclassifies as abstained when output is a clear refusal", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "I cannot access the PostgreSQL database to answer your question." },
+      baseCtx,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("abstained");
+    }
+  });
+
+  it("reclassifies for 'do not have access' pattern", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "I don't have access to the live API endpoint." },
+      baseCtx,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("abstained");
+    }
+  });
+
+  it("does NOT reclassify substantive answers that mention inability in passing", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "The answer is 42. While I cannot guarantee 100% accuracy, this matches the data from the file." },
+      baseCtx,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("final_answer_tool");
+    }
+  });
+
+  it("does NOT reclassify long outputs (>500 chars) even with abstention language", () => {
+    const longOutput = "I cannot complete this task. " + "x".repeat(500);
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: longOutput },
+      baseCtx,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("final_answer_tool");
+    }
+  });
+
+  it("does NOT reclassify regex-detected final answers", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "regex", output: "I cannot complete this task." },
+      baseCtx,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("final_answer");
+    }
+  });
+
+  it("does NOT reclassify when model has successful substantive tool calls (deliverable guard)", () => {
+    const successToolStep: ReasoningStep = {
+      id: "s-ok" as ReasoningStep["id"],
+      type: "observation",
+      content: "File written successfully",
+      timestamp: new Date(),
+      metadata: {
+        observationResult: {
+          success: true,
+          toolName: "file-write",
+          displayText: "File written successfully",
+          category: "success",
+          resultKind: "success",
+          preserveOnCompact: true,
+          trustLevel: "untrusted",
+        } as ObservationResult,
+      },
+    };
+    const ctxWithDeliverable = { ...baseCtx, steps: [successToolStep] };
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "I cannot access the database for section 3." },
+      ctxWithDeliverable,
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("final_answer_tool");
+    }
+  });
+});
+
 describe("arbitrate — loop-detected", () => {
   it("returns exit-success when loop detected without veto", () => {
     const v = arbitrate(
