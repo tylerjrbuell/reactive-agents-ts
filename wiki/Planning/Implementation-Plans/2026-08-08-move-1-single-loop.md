@@ -32,8 +32,26 @@ Reading the consumers (not the comments):
 
 **Classification:** a deliberate default-behavior change, blast radius bounded to deliverable tasks, safety resting on Move 2's disk grounding (in place + verified this session). **Handled by ablation-warden sign-off per 09 §6 — NOT by gating it off (that would delete the benefit and leave only the cost). No code prerequisite.**
 
-### 3b. The token tax — the ONE real prerequisite (P2)
-Move-0-measured (2026-08-05, `46f81696`): kernel vs inline = **+99% tokens local (gemma4), +469% cloud (gemini-2.5-flash)**, a FIXED ~3300–3500t scaffolding tax. Deterministic phases (contract-compile, assess) are ~0 tokens — the tax is **extra think + synthesize + dialect-blindness #2** (`system-prompt.ts:63 buildToolReference` gated on TIER not DIALECT → native-FC models get tool schemas TWICE: prose + FC array). This is **pure cost, no compensating benefit.** Ship Move 1 without addressing it and default users trade a correctness gain for a 2–6× token bill = more issues than benefits. **This is the prerequisite and the abort criterion.**
+### 3b. The token tax — the ONE real prerequisite (P2) — RE-DIAGNOSED FROM A FRESH RUN (2026-08-08)
+
+The plan's original P2 premise (double-render + synthesize) is **FALSIFIED by measurement on HEAD:**
+- The Move-0 numbers (+99% local / +469% cloud, `46f81696` @ 18:54 2026-08-05) **predate the dialect-#2 fix** (`4438a800` @ 21:06 same day) — they include the double-render that was removed 2h later. Stale.
+- `system-prompt.ts:28` already gates the in-prompt tool ref off for native-FC (`check-dialect-aware.sh` enforces). Double-render is NOT the current tax.
+
+**Fresh `harness-cost-attribution.ts`, gemma4:12b (native-fc), HEAD, n=1, file-write task:**
+
+| arm | tokens | LLM calls | tools offered | ~per-call |
+|---|---|---|---|---|
+| inline | 1103t | 2 | `file-write` (1) | ~551t |
+| kernel (`.withReasoning`) | 1903t | 2 | `file-write, recall, discover-tools`, +`final-answer` (~4) | ~951t |
+
+**+73%, SAME call count.** The tax is ~400t MORE PER CALL, not extra calls (do NOT cite `it=6` vs `it=3` — iterations ≠ LLM round-trips). Driver: the kernel injects **meta-tools (`recall`, `discover-tools`, `final-answer`) into the FC array on every call** — a **"meta-floor"** (`tool-surface.ts:232`, documented at `:62`) that fires regardless of task need. Confirmed NOT a bench-arm artifact: the arm enables neither memory nor discovery (`builtins:"file-write"`, only `.withReasoning`), yet `recall` was offered **with memory OFF**.
+
+**This IS dialect-blindness #1** (catalogued OPEN: "meta-tools flattened into domain tool list… flat map of ALL schemas incl. meta into provider `tools:`"). The measurement independently confirms it and gives it a number.
+
+**The fix converges the user's two asks (tax + extra steps) into one:** gate each meta-tool on actual need — `recall` only when memory is enabled (fix the memory-off leak); `discover-tools` only when tools are actually pruned/hidden (not on a small full-surface task); `final-answer` per the existing dynamic-injection logic. Removing them from the FC array on trivial runs cuts the per-call tax AND removes the extra-step temptation (agent can't thrash `discover-tools`/`recall` if not offered).
+
+**Caveats (honest):** n=1, one local model, one simple task; % may differ on cloud/native-FC frontier (Move-0 suggested worse on leaner models) and on multi-tool tasks. The "extra steps" claim is not yet demonstrated on a thrash task — the meta-floor is the *mechanism/temptation*; a task where the agent actually calls a needless meta-tool would evidence the behavior. **P2 target:** a `reactive`-kernel run offers only task-needed tools; token count approaches inline on the trivial task. **Abort criterion unchanged:** tax irreducible ⇒ Move 1 doesn't ship.
 
 ## 4. Execution (ordered)
 
