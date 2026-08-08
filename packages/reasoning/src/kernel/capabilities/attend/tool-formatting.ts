@@ -29,6 +29,18 @@ export interface ToolSchema {
   readonly name: string;
   readonly description: string;
   readonly parameters: readonly ToolParamSchema[];
+  /**
+   * Which channel this tool belongs to (control-plane design,
+   * 2026-08-08-control-plane-vs-meta-tools). `"domain"` (default) = the agent
+   * calls it to affect the world; `"harness"` = an agent↔harness coordination
+   * affordance (terminate / discover / recall). The invariant: no `"harness"`
+   * tool occupies a provider FC slot when the model's dialect is `native-fc`
+   * (there the harness reads control from the response shape — no-tool-call =
+   * done — so a harness tool is pure token tax + misuse temptation). Absent =>
+   * treated as `"domain"`; harness membership is otherwise derived from
+   * `META_TOOLS` (single source) at the wire-build site.
+   */
+  readonly scope?: "domain" | "harness";
 }
 
 /** Format tool schemas for LLM consumption.
