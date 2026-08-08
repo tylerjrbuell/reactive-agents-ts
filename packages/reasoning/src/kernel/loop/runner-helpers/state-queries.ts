@@ -11,6 +11,7 @@ import {
   type KernelInput,
 } from "../../../kernel/state/kernel-state.js";
 import { getEffectiveMissingRequiredTools } from "../../../kernel/capabilities/verify/requirement-state.js";
+import type { RunLedger } from "../../ledger/run-ledger.js";
 import { scratchpadRecallRefRe } from "../../../assembly/ref-grammar.js";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
@@ -26,11 +27,13 @@ export const RECALL_TOOL_KEY_RE = scratchpadRecallRefRe();
 export function missingRequiredToolsForInput(
   steps: KernelState["steps"],
   input: KernelInput,
+  ledger?: RunLedger,
 ): readonly string[] {
   return getEffectiveMissingRequiredTools(
     steps,
     input.requiredTools ?? [],
     input.requiredToolQuantities,
+    ledger,
   );
 }
 

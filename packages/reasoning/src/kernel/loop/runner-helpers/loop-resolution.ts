@@ -151,7 +151,7 @@ export function resolveDetectedLoop(
 
     const loopArtifactCount = countDeliverableCandidates(state);
     if (loopArtifactCount > 0) {
-      const missingRequiredByCount = missingRequiredToolsForInput(state.steps, currentInput);
+      const missingRequiredByCount = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
       if (missingRequiredByCount.length > 0) {
         requiredToolNudgeCount++;
         if (requiredToolNudgeCount > maxRequiredToolNudges) {

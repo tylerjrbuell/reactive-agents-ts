@@ -964,7 +964,7 @@ export function runKernel(
       !isBudgetTerminal
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
+      const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
       if (missingTools.length > 0) {
         const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
         const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);

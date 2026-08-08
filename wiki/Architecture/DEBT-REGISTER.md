@@ -554,6 +554,14 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
   spot-fix. The harness is otherwise clean on capable models (haiku rw-2 = 3
   iterations, 3 tools, 0 harness signals, no waste).
 
+### D-2026-08-07-M — Cascade B last authority: missing-required-tool gate was ledger-blind — ✅ RESOLVED
+
+**Class:** success-authority substrate divergence (Sys-audit 2026-07-29 RC#1 / Cascade B, the substrate-unification half). Move 2 (`49a1c94f`/`7dbb270d`/`92dc591e`) gave authorities #1 (post-condition terminal gate) and #4 (deliverable report → `goalAchieved`) disk ground-truth behind `verifyDelivery`. It did NOT touch authority #3 — the missing-required-tool gate (`runner.ts` §8) that fails the run and NULLS output — which read `missingRequiredToolsForInput` from `state.steps` only (+ one-level `delegatedToolsUsed`), while `isToolCalled` reads the run-scoped RunLedger (deep sub-agent merge, incl. grandchildren). Two authorities, two definitions of "called": a required tool a run delegated 2+ levels deep was CALLED per #1 and MISSING per #3 → false-fail + nulled deliverable.
+
+**Fix (2026-08-07):** threaded `state.ledger` into the requirement-state counters + the run-failing kernel call sites (§8 + `iterate-pass.ts:1561` in-loop redirect + `loop-resolution.ts` nudge); `low_delta_guard`'s site (`iterate-pass.ts:836`) deliberately left steps-blind (inverted polarity, unmeasured). Ledger tool-result successes de-duped against local steps by `toolCallId` (projected from the same `meta.toolCallId`, so no double-count); ledger-omitted ⇒ byte-identical. Reachability source-traced (`transitionState`→`stepToEntries` folds `subAgentLedger` in-loop). Report: `wiki/Research/Harness-Reports/2026-08-07-qa-sweep-findings.md#F6`.
+
+**Verdict:** PROVEN (unit) — 4 red-on-cut tests in `requirement-state.test.ts`, mutating the ledger read reddens 2. **Residual (honest):** no end-to-end kernel-delegation cell — blocked by test-provider scripting limits (the OB-3 "sub-agent merge on the kernel parent path untested" area); a false-negative *rate* drop is owner-gated live-arm work, not claimed.
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)

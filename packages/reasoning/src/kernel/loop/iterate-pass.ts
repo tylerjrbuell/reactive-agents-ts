@@ -1558,7 +1558,7 @@ export function runIterationPass(
         state.meta.terminatedBy !== "awaiting-approval" &&
         state.meta.terminatedBy !== "awaiting-interaction"
       ) {
-        const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
+        const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
         if (missingTools.length > 0) {
           requiredToolRedirects++;
           if (requiredToolRedirects > maxRequiredToolRetries) {

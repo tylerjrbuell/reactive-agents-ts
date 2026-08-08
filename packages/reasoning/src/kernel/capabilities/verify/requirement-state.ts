@@ -1,5 +1,6 @@
 import type { ReasoningStep } from "../../../types/index.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
+import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 
 interface ObservationResultLike {
   readonly success?: boolean;
@@ -26,17 +27,42 @@ function incrementCount(
  * Delegated tool usage is credited once per delegated tool for each successful
  * delegation observation, which allows parent delegation results to satisfy
  * required child-tool quotas.
+ *
+ * SUBSTRATE UNIFICATION (Cascade B root, Sys-audit 2026-07-29 RC#1). The
+ * post-condition authority (`isToolCalled`, post-conditions.ts) reads the
+ * run-scoped RunLedger's `tool-result` entries — which merge a sub-agent's
+ * calls into the parent (Wave C.2), including GRANDCHILDREN. This counter read
+ * `steps` only + one-level `delegatedToolsUsed`, so a required tool satisfied
+ * 2+ delegation levels deep was invisible here while visible to `isToolCalled`
+ * — two authorities, two definitions of "called", one blind. The missing-
+ * required-tool gate (runner.ts §8) then FAILS the run and NULLS the output on
+ * a deliverable a deeper agent had already produced. Threading the ledger here
+ * puts this counter on the SAME evidence substrate as `isToolCalled`.
+ *
+ * No double-count: the ledger grows a `tool-result` from every LOCAL
+ * observation step too, so a ledger entry is credited only when its
+ * `toolCallId` was not already counted from `steps` (delegated/merged entries
+ * carry a distinct child toolCallId absent from the parent's steps). A ledger
+ * entry with no `toolCallId` is skipped — it cannot be de-duplicated against a
+ * step, and counting it risks inflating a quantity>1 requirement. Union of two
+ * positive-evidence sources ⇒ can only turn a false-UNMET into MET, never open
+ * a false-MET. Ledger omitted ⇒ byte-identical to the prior steps-only count.
  */
 export function buildSuccessfulToolCallCounts(
   steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
 ): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
+  const countedToolCallIds = new Set<string>();
 
   for (const step of steps) {
     if (step.type !== "observation") continue;
 
     const result = step.metadata?.observationResult as ObservationResultLike | undefined;
     if (result?.success !== true) continue;
+
+    const linkId = step.metadata?.toolCallId;
+    if (typeof linkId === "string" && linkId.length > 0) countedToolCallIds.add(linkId);
 
     const observedTools = new Set<string>();
     if (typeof result.toolName === "string" && result.toolName.length > 0) {
@@ -52,6 +78,19 @@ export function buildSuccessfulToolCallCounts(
     for (const toolName of observedTools) {
       incrementCount(counts, toolName);
     }
+  }
+
+  // Ledger tool-result entries not already represented in `steps` — the
+  // delegated/merged calls (incl. grandchildren) that never reach the parent's
+  // steps. De-duplicated by toolCallId against the local steps above.
+  for (const entry of entriesOfKind(ledger, "tool-result")) {
+    if (entry.success !== true) continue;
+    if (typeof entry.toolName !== "string" || entry.toolName.length === 0) continue;
+    const id = entry.toolCallId;
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (countedToolCallIds.has(id)) continue;
+    countedToolCallIds.add(id);
+    incrementCount(counts, entry.toolName);
   }
 
   return counts;
@@ -74,13 +113,16 @@ export function getMissingRequiredToolsByCount(
 
 /**
  * Convenience wrapper that computes missing required tools directly from steps.
+ * When a run-scoped `ledger` is supplied, delegated/merged successful calls
+ * (incl. grandchildren) count too — the same substrate `isToolCalled` reads.
  */
 export function getMissingRequiredToolsFromSteps(
   steps: readonly ReasoningStep[],
   requiredTools: readonly string[],
   requiredToolQuantities?: Readonly<Record<string, number>>,
+  ledger?: RunLedger,
 ): readonly string[] {
-  const successfulCounts = buildSuccessfulToolCallCounts(steps);
+  const successfulCounts = buildSuccessfulToolCallCounts(steps, ledger);
   return getMissingRequiredToolsByCount(
     successfulCounts,
     requiredTools,
@@ -116,8 +158,11 @@ export function buildAttemptedToolCallCounts(
 export function getPermanentlyFailedRequiredTools(
   steps: readonly ReasoningStep[],
   requiredTools: readonly string[],
+  ledger?: RunLedger,
 ): readonly string[] {
-  const successfulCounts = buildSuccessfulToolCallCounts(steps);
+  // Ledger-aware success count: a tool that SUCCEEDED via delegation (incl. a
+  // grandchild) is not permanently failed, even if a local attempt failed.
+  const successfulCounts = buildSuccessfulToolCallCounts(steps, ledger);
   const attemptedCounts = buildAttemptedToolCallCounts(steps);
   return requiredTools.filter(
     (toolName) =>
@@ -137,8 +182,9 @@ export function getEffectiveMissingRequiredTools(
   steps: readonly ReasoningStep[],
   requiredTools: readonly string[],
   requiredToolQuantities?: Readonly<Record<string, number>>,
+  ledger?: RunLedger,
 ): readonly string[] {
-  const missing = getMissingRequiredToolsFromSteps(steps, requiredTools, requiredToolQuantities);
-  const permanentlyFailed = new Set(getPermanentlyFailedRequiredTools(steps, requiredTools));
+  const missing = getMissingRequiredToolsFromSteps(steps, requiredTools, requiredToolQuantities, ledger);
+  const permanentlyFailed = new Set(getPermanentlyFailedRequiredTools(steps, requiredTools, ledger));
   return missing.filter((toolName) => !permanentlyFailed.has(toolName));
 }
