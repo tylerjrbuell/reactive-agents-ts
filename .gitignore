@@ -98,3 +98,4 @@ graphify-out
 # bench task artifacts — real-world tasks write solution files into cwd
 /solution.ts
 packages/benchmarks/solution.ts
+note.md
