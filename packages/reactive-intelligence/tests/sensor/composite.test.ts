@@ -64,24 +64,26 @@ describe("composite entropy scorer", () => {
   });
 
   describe("short-run bypass (≤2 iterations)", () => {
-    test("returns low composite 0.15 for iteration 1", () => {
+    test("computes real weighted composite for iteration 1 with low confidence", () => {
       const result = computeCompositeEntropy({
         token: null, structural: 0.9, semantic: null, behavioral: 0.9,
         contextPressure: 0.5, logprobsAvailable: false,
         iteration: 1, maxIterations: 10,
       });
-      expect(result.composite).toBe(0.15);
-      expect(result.confidence).toBe("high");
+      expect(result.composite).toBeGreaterThan(0);
+      expect(result.composite).toBeLessThanOrEqual(1);
+      expect(result.confidence).toBe("low");
     });
 
-    test("returns low composite 0.15 for iteration 2", () => {
+    test("computes real weighted composite for iteration 2 with low confidence", () => {
       const result = computeCompositeEntropy({
         token: null, structural: 0.9, semantic: null, behavioral: 0.9,
         contextPressure: 0.5, logprobsAvailable: false,
         iteration: 2, maxIterations: 10,
       });
-      expect(result.composite).toBe(0.15);
-      expect(result.confidence).toBe("high");
+      expect(result.composite).toBeGreaterThan(0);
+      expect(result.composite).toBeLessThanOrEqual(1);
+      expect(result.confidence).toBe("low");
     });
 
     test("does NOT bypass at iteration 3 — normal scoring applies", () => {
@@ -102,6 +104,17 @@ describe("composite entropy scorer", () => {
       expect(result.sources.structural).toBe(0.8);
       expect(result.sources.semantic).toBe(0.7);
       expect(result.sources.token).toBe(0.5);
+    });
+
+    test("does NOT mutate module-level weight constants across calls (logprobs + null semantic)", () => {
+      const input = {
+        token: 0.3, structural: 0.5, semantic: null as number | null,
+        behavioral: 0.4, contextPressure: 0.2,
+        logprobsAvailable: true, iteration: 1, maxIterations: 10,
+      };
+      const first = computeCompositeEntropy(input);
+      const second = computeCompositeEntropy(input);
+      expect(second.composite).toBe(first.composite);
     });
   });
 });

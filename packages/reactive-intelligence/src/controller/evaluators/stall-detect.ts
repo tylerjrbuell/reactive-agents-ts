@@ -32,11 +32,15 @@ export function evaluateStallDetect(
   const window = STALL_WINDOW_BY_TIER[tier ?? "local"] ?? 3;
   if (iteration < window) return null;
 
-  // Check if all recent entropy values are flat near the baseline
+  // Check if all recent entropy values are flat near the baseline.
+  // Skip entries with "low" confidence — these are from the short-run bypass
+  // (composite.ts ≤2 iterations) where the composite is preliminary, not a
+  // reliable stall signal.
   const recent = entropyHistory.slice(-window);
   if (recent.length < window) return null;
   const allFlat = recent.every((e) => e.composite <= FLAT_ENTROPY_THRESHOLD);
   if (!allFlat) return null;
+  if (recent.some((e) => e.confidence === "low")) return null;
 
   // Tool-progress gate (rw-9 fix) — flat entropy is only a STALL if the agent
   // is NOT making tool progress. The detector's contract is "flat entropy AS A

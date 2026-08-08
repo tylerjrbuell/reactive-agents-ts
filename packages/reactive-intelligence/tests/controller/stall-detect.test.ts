@@ -152,3 +152,31 @@ describe("evaluateStallDetect — tool-progress gate (rw-9 regression)", () => {
     expect(r).not.toBeNull();
   });
 });
+
+describe("evaluateStallDetect — low-confidence entropy skipping", () => {
+  it("does NOT fire when any entry in window has low confidence (short-run bypass)", () => {
+    const r = evaluateStallDetect(makeParams({
+      tier: "local",
+      iteration: 2,
+      entropyHistory: [
+        { composite: 0.10, trajectory: { shape: "flat", derivative: 0, momentum: 0 }, confidence: "low" as const },
+        { composite: 0.10, trajectory: { shape: "flat", derivative: 0, momentum: 0 }, confidence: "low" as const },
+      ],
+      consecutiveThoughtsWithoutAction: 2,
+    }));
+    expect(r).toBeNull();
+  });
+
+  it("DOES fire when all entries have high confidence and are flat", () => {
+    const r = evaluateStallDetect(makeParams({
+      tier: "local",
+      iteration: 2,
+      entropyHistory: [
+        { composite: 0.15, trajectory: { shape: "flat", derivative: 0, momentum: 0 }, confidence: "high" as const },
+        { composite: 0.15, trajectory: { shape: "flat", derivative: 0, momentum: 0 }, confidence: "high" as const },
+      ],
+      consecutiveThoughtsWithoutAction: 2,
+    }));
+    expect(r).not.toBeNull();
+  });
+});

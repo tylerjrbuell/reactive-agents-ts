@@ -54,14 +54,36 @@ export function computeCompositeEntropy(input: CompositeInput): EntropyScore {
   } = input;
 
   // Short-run bypass: ≤2 iterations doesn't have enough data points for meaningful
-  // trajectory analysis — treat the run as clean completion to avoid false "stalled" grades.
+  // trajectory analysis. Compute a real weighted composite from available sources
+  // but mark confidence as "low" so decision-makers (stall-detect) know the
+  // signal is preliminary. Previously hardcoded composite to 0.15 with "high"
+  // confidence — stall-detect's local-tier window=2 evaluated entirely on that
+  // synthetic value, and Grade B "stalled" messages were misleading on 1-2
+  // iteration runs that completed successfully.
   if (iteration <= 2) {
     const iWeight = iterationWeight(iteration, maxIterations);
     const defaultTrajectory: EntropyTrajectory = {
       history: [], derivative: 0, momentum: 0.15, shape: "flat",
     };
+    // Compute a real composite from available sources rather than hardcoding
+    const shortRunWeights = logprobsAvailable
+      ? { ...WEIGHTS_WITH_LOGPROBS }
+      : { ...WEIGHTS_WITHOUT_LOGPROBS };
+    if (semantic === null) {
+      const redistribution = shortRunWeights.semantic;
+      shortRunWeights.semantic = 0;
+      shortRunWeights.structural += redistribution * 0.5;
+      shortRunWeights.behavioral += redistribution * 0.5;
+    }
+    const shortRunComposite = Math.max(0, Math.min(1,
+      (token ?? 0) * shortRunWeights.token +
+      structural * shortRunWeights.structural +
+      (semantic ?? 0) * shortRunWeights.semantic +
+      behavioral * shortRunWeights.behavioral +
+      contextPressure * shortRunWeights.contextPressure,
+    ));
     return {
-      composite: 0.15,
+      composite: shortRunComposite,
       sources: {
         token: token,
         structural,
@@ -70,7 +92,7 @@ export function computeCompositeEntropy(input: CompositeInput): EntropyScore {
         contextPressure,
       },
       trajectory: trajectory ?? defaultTrajectory,
-      confidence: "high" as const,
+      confidence: "low" as const,
       modelTier,
       iteration,
       iterationWeight: iWeight,

@@ -230,6 +230,7 @@ export type ControllerEvalParams = {
   readonly entropyHistory: readonly {
     readonly composite: number;
     readonly trajectory: { readonly shape: string; readonly derivative: number; readonly momentum: number };
+    readonly confidence?: "high" | "medium" | "low";
   }[];
   readonly iteration: number;
   readonly maxIterations: number;
