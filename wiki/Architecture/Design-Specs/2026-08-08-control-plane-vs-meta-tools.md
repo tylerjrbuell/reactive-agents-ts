@@ -44,6 +44,22 @@ The fix is NOT "a smarter resolver curates per step" — that IS the tool-releva
 ### 4d. NOT load-bearing here: auto-rehydration / resolver prediction
 Any harness *prediction* of what the agent needs (rehydrate this result, hide that tool) is gated by the lift rule with the classifier/pruning failures as the prior. The elegant design stands entirely on prediction-free parts (4a/4b-stable/4c); prediction is upside, never the foundation.
 
+## 4e. Meta-tool keep/waste AUDIT (2026-08-08) — the seam is THIN
+
+All 12 META_TOOLS by DEFAULT-path footprint (`.withReasoning`, no extra config):
+
+| meta-tool | default state | in the wire? | verdict |
+|---|---|---|---|
+| **discover-tools** | on (`toolDiscoveryEnabled()`) | **YES** | WASTE ("buys nothing" measured) — dropped native-FC (shipped); flip default off generally |
+| **final-answer** | on (dynamic) | **YES** (late) | text-parse KEEP (sentinel); native-FC WASTE (end_turn) — dropped (shipped) |
+| recall | on (`recall:true`, `runtime-construction.ts:293`) | no — recall-overflow gate suppresses | ≈0 default cost; opaque-store → refs = SIMPLIFICATION, not a token win |
+| brief | on (`brief:true`, `withers/tools.ts:153`) | no — needs indexed docs (`think.ts:391`) | ≈0 default cost; earns keep only with the indexed-docs feature |
+| pulse, todo, find, checkpoint, context-status, activate-skill, task-complete, write_result_to_file | **off** (opt-in `metaTools?.X`) | no | zero default tax; earn keep per their own feature's lift |
+
+**Verdict: the default meta-tool WIRE tax is exactly TWO tools (discover-tools + final-answer) — both already handled on native-FC by §2.** recall/brief are default-*enabled* but wire-*suppressed* (≈0 cost); the other 8 are opt-in. The meta-tool surface is already lean.
+
+**Corollary — where the token cost actually is:** the multi-tool run was 3419t with tool schemas a small slice, dominated by MESSAGE/CONTEXT growth (accumulated tool results). If the goal is reducing default token cost, the lever is context management (curation/compression/Projector), NOT the meta-tool surface. 4b (reproducible refs) retires the opaque-keyed store (worth doing as SIMPLIFICATION) but is NOT a token win and must be verified BEHAVIORALLY on a window-filling task (large read), not a small one.
+
 ## 5. Why this is what leading harnesses do
 Native tool-use loop (Claude Code, Anthropic API, OpenAI): continue while the model returns tool calls; **stop on a plain text message** (`stop_reason:end_turn`/no `tool_calls`) — the final text is the answer. Structured output is a *separate* mechanism (`response_format`/schema). Provenance is the message role. **None ship a termination/discovery/recall tool** — because their FC channel is domain-only and control is read from the response or owned by the harness. §2 is that invariant, made explicit and dialect-adaptive (RA must serve text-parse models too, which they mostly don't).
 
