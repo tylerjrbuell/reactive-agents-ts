@@ -1,0 +1,3 @@
+# Project Summary: Reactive Agents
+
+The **Reactive Agents** project is a modular JavaScript application designed to work with Bun as its package manager. It utilizes a workspace structure that organizes various packages and applications, facilitating efficient builds and management. The project includes a comprehensive set of scripts for building, testing, linting, type-checking, and generating documentation. Additionally, it is equipped with benchmarking and probing capabilities, allowing for performance analysis and improvements. The project is open-source, licensed under MIT, and can be found on GitHub at [reactive-agents-ts](https://github.com/tylerjrbuell/reactive-agents-ts.git).
