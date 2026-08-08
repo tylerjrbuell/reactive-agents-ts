@@ -207,6 +207,7 @@ export function fromKernelState(
     capability,
     store,
     persona: personaWithEnv,
+    ...(state.skillsContext ? { skillsContext: state.skillsContext } : {}),
     tools: toolsWithPolicy,
     ...(priorContext?.trim() ? { priorContext } : {}),
     ...dagInputs,

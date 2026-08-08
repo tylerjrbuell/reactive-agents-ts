@@ -58,6 +58,7 @@ export type CrossCuttingInput = Pick<
   | "toolElaboration"
   | "nextMovesPlanning"
   | "briefResolvedSkills"
+  | "skillsContext"
   | "synthesisConfig"
   | "observationSummary"
   | "auditRationale"

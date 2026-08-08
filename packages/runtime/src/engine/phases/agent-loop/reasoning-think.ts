@@ -97,21 +97,21 @@ export const runReasoningThink = (
   return Effect.gen(function* () {
     // ── Self-improvement read-back: surface prior strategy outcomes ──
     let memCtx = String(asThinkContext(c).memoryContext?.semanticContext ?? "");
+    // Skills are extracted as a SEPARATE channel — they are procedural
+    // instructions, not memory. Previously they were prepended to memCtx,
+    // which fenced them as "untrusted reference material, NOT instructions"
+    // via fenceRecalledMemory(). Now they flow through skillsContext to the
+    // system prompt's own labeled skills section.
     const skillMeta = c.metadata as
       | { skillCatalogXml?: string; activatedSkillsXml?: string }
       | undefined;
-    const skillCatalogXml = skillMeta?.skillCatalogXml;
-    if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
-      memCtx = `${skillCatalogXml.trim()}\n\n${memCtx}`;
-    }
-    // Activated skills' FULL instructions — prepended AFTER the catalog so they
-    // sit closest to the task. This is what makes a skill actually usable: the
-    // agent reads the procedure before acting instead of discovering the CLI by
-    // trial and error.
-    const activatedSkillsXml = skillMeta?.activatedSkillsXml;
-    if (activatedSkillsXml && activatedSkillsXml.trim().length > 0) {
-      memCtx = `${activatedSkillsXml.trim()}\n\n${memCtx}`;
-    }
+    const skillsContext =
+      skillMeta?.skillCatalogXml || skillMeta?.activatedSkillsXml
+        ? {
+            catalogXml: skillMeta.skillCatalogXml?.trim() || undefined,
+            activatedXml: skillMeta.activatedSkillsXml?.trim() || undefined,
+          }
+        : undefined;
     // Episodic rows from bootstrap must reach the LLM — previously only
     // strategy-outcome/reflexion (with enableSelfImprovement) were injected,
     // so default logEpisode "task-completed" lines were invisible (e.g. gateway
@@ -313,6 +313,7 @@ export const runReasoningThink = (
       briefResolvedSkills: briefResolvedSkillsFromMetadata(
         c.metadata as Record<string, unknown>,
       ),
+      skillsContext,
       initialMessages,
       resumeState,
       // Cascade Task 5: the HITL rails (approvalDecision / interactionResponse /

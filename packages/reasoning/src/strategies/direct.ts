@@ -30,7 +30,7 @@ import {
   type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
+import type { KernelInput, KernelMessage, SkillsContext } from "../kernel/state/kernel-state.js";
 import {
   resolveCompletionStatus,
   honestPartialMetadata,
@@ -61,6 +61,7 @@ export interface DirectInput {
    *  dispatch + final response" UX wants 2. Maximum 3 — anything more should
    *  use reactive strategy. */
   readonly maxIterations?: 1 | 2 | 3;
+  readonly skillsContext?: SkillsContext;
   readonly initialMessages?: readonly KernelMessage[];
   readonly modelId?: string;
   readonly taskCategory?: string;
@@ -160,6 +161,7 @@ export const executeDirect = (
       // Direct strategy intentionally omits: requiredTools, requiredToolQuantities,
       // relevantTools, maxCallsPerTool, maxRequiredToolRetries, briefResolvedSkills,
       // synthesisConfig, observationSummary. These are multi-iteration concerns.
+      skillsContext: input.skillsContext,
       environmentContext: input.environmentContext,
       // toolElaboration / nextMovesPlanning omitted — single-turn doesn't need them
       initialMessages: input.initialMessages,

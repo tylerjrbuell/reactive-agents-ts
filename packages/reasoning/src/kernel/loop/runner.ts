@@ -332,6 +332,9 @@ export function runKernel(
     if (effectiveInput.environmentContext) {
       state = transitionState(state, { environmentContext: effectiveInput.environmentContext });
     }
+    if (effectiveInput.skillsContext) {
+      state = transitionState(state, { skillsContext: effectiveInput.skillsContext });
+    }
     // HS-115 — seed nominated tools BEFORE other meta-merging blocks so
     // subsequent meta updates compose cleanly. Skipped when no nominations
     // were produced to avoid spurious meta churn.

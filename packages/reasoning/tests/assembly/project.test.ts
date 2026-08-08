@@ -22,3 +22,75 @@ describe("project — pure total assembler", () => {
     expect(trace.stages.map((s) => s.name)).toEqual(["systemPrompt", "selectTools", "projectResults", "compactHistory", "volatileTail", "finalize"]);
   });
 });
+
+describe("skill/tool separation in system prompt", () => {
+  const textParseCap = resolveCapability({ window: 15360, outputBudget: 2000, dialect: "text-parse", tier: "local" });
+  const nativeFcCap = resolveCapability({ window: 15360, outputBudget: 2000, dialect: "native-fc", tier: "mid" });
+
+  const catalogXml = '<available_skills>\n<skill name="deploy" description="Deploy to prod" />\n</available_skills>';
+  const activatedXml = '<skill_content name="deploy" version="1" source="project">\nRun `npm run deploy`\n</skill_content>';
+  const toolSchemas = [{ name: "file-read", description: "Read a file", parameters: [{ name: "path", type: "string", description: "File path", required: true }] }];
+
+  it("skills render in system prompt, separate from tools (text-parse)", () => {
+    const log = new EventLog().append({ kind: "goal", text: "deploy the app" });
+    const { request } = project({
+      log,
+      capability: textParseCap,
+      store: new ResultStore(),
+      persona: { system: "You are an agent." },
+      skillsContext: { catalogXml, activatedXml },
+      tools: { schemas: toolSchemas },
+    });
+    expect(request.systemPrompt).toContain("## Skills (procedural instructions");
+    expect(request.systemPrompt).toContain("<available_skills>");
+    expect(request.systemPrompt).toContain('<skill_content name="deploy"');
+    expect(request.systemPrompt).toContain("file-read");
+    const skillsIdx = request.systemPrompt.indexOf("## Skills");
+    const toolIdx = request.systemPrompt.indexOf("file-read");
+    expect(skillsIdx).toBeGreaterThan(toolIdx);
+  });
+
+  it("skills render for native-fc (tools skip, skills don't)", () => {
+    const log = new EventLog().append({ kind: "goal", text: "deploy the app" });
+    const { request } = project({
+      log,
+      capability: nativeFcCap,
+      store: new ResultStore(),
+      persona: { system: "You are an agent." },
+      skillsContext: { catalogXml, activatedXml },
+      tools: { schemas: toolSchemas },
+    });
+    expect(request.systemPrompt).toContain("## Skills (procedural instructions");
+    expect(request.systemPrompt).toContain("<available_skills>");
+    expect(request.systemPrompt).not.toContain("file-read");
+  });
+
+  it("no skills section when skillsContext is absent", () => {
+    const log = new EventLog().append({ kind: "goal", text: "read a file" });
+    const { request } = project({
+      log,
+      capability: textParseCap,
+      store: new ResultStore(),
+      persona: { system: "You are an agent." },
+      tools: { schemas: toolSchemas },
+    });
+    expect(request.systemPrompt).not.toContain("## Skills");
+    expect(request.systemPrompt).not.toContain("<available_skills>");
+  });
+
+  it("skills are NOT inside retrieved_memory fence", () => {
+    const log = new EventLog().append({ kind: "goal", text: "deploy" });
+    const { request } = project({
+      log,
+      capability: textParseCap,
+      store: new ResultStore(),
+      persona: { system: "Agent" },
+      skillsContext: { catalogXml },
+      tools: { schemas: [] },
+      priorContext: "Some fenced memory content",
+    });
+    expect(request.systemPrompt).toContain("<available_skills>");
+    const allMessages = request.messages.map((m) => m.content).join("\n");
+    expect(allMessages).not.toContain("<available_skills>");
+  });
+});

@@ -11,7 +11,7 @@ import type { LLMService } from "@reactive-agents/llm-provider";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import type { ThoughtKernel } from "../kernel/state/kernel-state.js";
+import type { ThoughtKernel, SkillsContext } from "../kernel/state/kernel-state.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { executeReactive } from "../strategies/reactive.js";
 import { executeReflexion } from "../strategies/reflexion.js";
@@ -72,6 +72,7 @@ export type StrategyFn = (input: {
   readonly metaTools?: KernelMetaToolsConfig;
   /** Runtime-resolved skills merged into `brief` alongside static catalog. */
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  readonly skillsContext?: SkillsContext;
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;

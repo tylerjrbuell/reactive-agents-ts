@@ -33,6 +33,7 @@ import {
 } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import {
   makeStep,
@@ -132,6 +133,7 @@ interface TreeOfThoughtInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  readonly skillsContext?: SkillsContext;
   /** Model tier for tier-adaptive iteration limits. */
   readonly tier?: "local" | "mid" | "large" | "frontier";
   /**
@@ -214,6 +216,7 @@ export const executeTreeOfThought = (
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
       briefResolvedSkills: input.briefResolvedSkills,
+      skillsContext: input.skillsContext,
       modelId: input.modelId,
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,

@@ -103,6 +103,7 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly metaTools?: KernelMetaToolsConfig;
       /** Runtime-resolved skills merged into `brief` alongside static catalog. */
       readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+      readonly skillsContext?: import("../kernel/state/kernel-state.js").SkillsContext;
       /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
       readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
       /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint;

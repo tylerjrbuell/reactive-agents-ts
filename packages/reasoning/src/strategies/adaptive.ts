@@ -14,6 +14,7 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
+import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
@@ -82,6 +83,7 @@ interface AdaptiveInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  readonly skillsContext?: SkillsContext;
   /**
    * Pre-computed task classification from the upstream `comprehend` pass.
    * When provided, adaptive reads complexity/intent here and threads it to

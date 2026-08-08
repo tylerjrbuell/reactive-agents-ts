@@ -28,7 +28,7 @@ import {
   continueWith,
   terminateWith,
 } from "../kernel/loop/iterate-until.js";
-import type { KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
+import type { KernelMessage, KernelState, SkillsContext } from "../kernel/state/kernel-state.js";
 import {
   makeStrategyEmitLog,
   emitPhaseEnd,
@@ -119,6 +119,7 @@ interface ReflexionInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  readonly skillsContext?: SkillsContext;
   /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
   // FM-I (#195): cross-cutting fields that MUST reach every kernel sub-pass.
@@ -201,6 +202,7 @@ export const executeReflexion = (
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
       briefResolvedSkills: input.briefResolvedSkills,
+      skillsContext: input.skillsContext,
       modelId: input.modelId,
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,

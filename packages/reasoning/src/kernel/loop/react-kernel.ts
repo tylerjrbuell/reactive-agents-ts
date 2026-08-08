@@ -159,6 +159,7 @@ export const executeReActKernel = (
           environmentContext: input.environmentContext,
           modelId: input.modelId,
           auditRationale: input.auditRationale,
+          skillsContext: input.skillsContext,
           calibration: input.calibration,
           harnessPipeline: input.harnessPipeline,
           budgetLimits: input.budgetLimits,

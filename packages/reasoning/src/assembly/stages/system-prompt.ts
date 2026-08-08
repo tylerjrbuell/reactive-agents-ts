@@ -69,6 +69,23 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
       buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
     );
   }
+  // ── Skills section — procedural instructions, NOT callable functions ──
+  // Skills are SKILL.md procedures activated for this run. They render in
+  // the cached system prefix (run-stable) with clear disambiguation from
+  // tools. This section is dialect-independent: native-FC models get tools
+  // via the FC array but have no other skills channel.
+  if (c.skillsContext?.activatedXml || c.skillsContext?.catalogXml) {
+    const skillParts: string[] = [
+      "\n## Skills (procedural instructions — follow these, do NOT call them as tools)",
+    ];
+    if (c.skillsContext.catalogXml) {
+      skillParts.push(c.skillsContext.catalogXml);
+    }
+    if (c.skillsContext.activatedXml) {
+      skillParts.push(c.skillsContext.activatedXml);
+    }
+    parts.push(skillParts.join("\n"));
+  }
   if (goal) parts.push(`\nGoal: ${goal}`);
   // F10: the standing frame and the remaining-steps line used to be pushed
   // here. They change every iteration, and everything in this string is inside

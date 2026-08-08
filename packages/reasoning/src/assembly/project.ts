@@ -6,6 +6,7 @@ import { emptyTrace, type AssemblyTrace } from "./trace.js";
 import type { StandingFrameSection } from "./standing-frame.js";
 import type { RunContract } from "../kernel/contract/run-contract.js";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import type { RunAssessment } from "../kernel/assessment/assess.js";
 import { systemPromptStage } from "./stages/system-prompt.js";
 import { selectToolsStage } from "./stages/select-tools.js";
@@ -42,6 +43,12 @@ export interface AssemblyInput {
   readonly ledger?: RunLedger;
   readonly assessment?: RunAssessment;
   readonly longHorizon?: boolean;
+  /**
+   * Pre-rendered skill XML. Skills are procedural instructions (SKILL.md
+   * files), distinct from tools (callable functions). Rendered by
+   * systemPromptStage in a labeled section separate from the tool reference.
+   */
+  readonly skillsContext?: SkillsContext;
   readonly tools: {
     schemas: readonly unknown[];
     /** Tools the dispatcher requires — drives the tier-adaptive in-prompt

@@ -38,6 +38,13 @@ export const asKernelStateLike = (s: Readonly<KernelState>): Readonly<KernelStat
 
 export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed" | "evaluating";
 
+// ── SkillsContext — pre-rendered skill XML for system-prompt injection ────────
+
+export interface SkillsContext {
+  readonly catalogXml?: string;
+  readonly activatedXml?: string;
+}
+
 // ── KernelMessage — Provider-agnostic conversation message ───────────────────
 
 /** Provider-agnostic conversation message for the kernel's native FC conversation history. */
@@ -607,6 +614,13 @@ export interface KernelState {
   readonly environmentContext?: Readonly<Record<string, string>>;
 
   /**
+   * Pre-rendered skill XML for system-prompt injection. Seeded once from
+   * KernelInput.skillsContext by runner.ts; read by fromKernelState so
+   * systemPromptStage renders skills in their own labeled section.
+   */
+  readonly skillsContext?: SkillsContext;
+
+  /**
    * The last meta-tool that was called (brief, pulse, find, recall).
    * Used by the meta-tool dedup guard to detect consecutive identical calls.
    */
@@ -863,6 +877,19 @@ export interface KernelInput {
    * `metaTools.staticBriefInfo.availableSkills` — resolved wins on name collision.
    */
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  /**
+   * Pre-rendered skill XML for system-prompt injection. Skills are
+   * procedural instructions (SKILL.md files) — distinct from tools
+   * (callable functions). Threaded separately from memoryContext so
+   * they render in their own labeled system-prompt section, never
+   * inside the `<retrieved_memory>` fence (skills ARE instructions,
+   * memory is untrusted reference data).
+   *
+   * `catalogXml` is the `<available_skills>` listing; `activatedXml`
+   * is the full `<skill_content>` blocks for skills activated this run.
+   * Seeded on KernelState by runner.ts (like environmentContext).
+   */
+  readonly skillsContext?: SkillsContext;
   /**
    * When enabled, runs a lightweight LLM extraction pass on large tool results
    * to distill key facts before compression. The extracted summary is prepended

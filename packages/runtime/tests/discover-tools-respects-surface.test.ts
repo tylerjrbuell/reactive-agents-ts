@@ -76,7 +76,7 @@ async function run(
     // tool name lives in step.metadata, not on the step, so match the listing's
     // own header rather than a field that is not there.
     const discovery = (steps as readonly { type?: string; content?: string }[])
-      .filter((s) => s.type === "observation" && (s.content ?? "").includes("tools available"))
+      .filter((s) => s.type === "observation" && (s.content ?? "").toLowerCase().includes("tools available"))
       .map((s) => s.content ?? "")
       .join("\n");
     return { text, discovery };

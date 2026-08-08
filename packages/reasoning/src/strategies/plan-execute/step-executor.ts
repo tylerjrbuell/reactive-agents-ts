@@ -135,6 +135,7 @@ export interface StepExecutorInput {
   readonly maxRequiredToolRetries?: number;
   readonly modelId?: string;
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
+  readonly skillsContext?: import("../../kernel/state/kernel-state.js").SkillsContext;
   // FM-I (#195): cross-cutting fields forwarded to each per-step ReAct kernel.
   // Previously omitted from this narrowed interface → Compose hooks,
   // killswitches, and calibration were dead during plan-execute steps.
@@ -478,6 +479,7 @@ export function executeStep(
     // FM-I (#195): forward cross-cutting fields so Compose hooks, killswitches,
     // and model calibration are live during per-step execution. executeReActKernel
     // forwards these through buildKernelInput to the kernel.
+    skillsContext: input.skillsContext,
     harnessPipeline: input.harnessPipeline,
     budgetLimits: input.budgetLimits,
     calibration: input.calibration,

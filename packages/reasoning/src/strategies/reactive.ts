@@ -18,7 +18,7 @@ import {
   type JudgedReasoningResult,
 } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
+import type { KernelInput, KernelMessage, KernelState, SkillsContext } from "../kernel/state/kernel-state.js";
 import {
   honestPartialMetadata,
   resolveCompletionStatus,
@@ -104,6 +104,7 @@ interface ReactiveInput {
   readonly metaTools?: KernelMetaToolsConfig;
   /** Runtime-resolved skills merged into `brief` (SkillResolver, etc.). */
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  readonly skillsContext?: SkillsContext;
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly KernelMessage[];
   /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint.
@@ -232,6 +233,7 @@ export const executeReactive = (
       toolElaboration: input.config.strategies.reactive.toolElaboration,
       nextMovesPlanning: input.config.strategies.reactive.nextMovesPlanning,
       briefResolvedSkills: input.briefResolvedSkills,
+      skillsContext: input.skillsContext,
       initialMessages: input.initialMessages,
       resumeState: input.resumeState,
       synthesisConfig: input.synthesisConfig,

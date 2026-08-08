@@ -55,6 +55,7 @@ const childRunLedgerOf = (result: unknown): RunLedger | undefined => {
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
+// No skillsContext — code-action uses gatewayComplete, not the kernel system prompt.
 export interface CodeActionInput {
   readonly taskDescription: string;
   readonly taskType: string;

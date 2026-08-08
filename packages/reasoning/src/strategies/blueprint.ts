@@ -77,6 +77,7 @@ const STRATEGY = "blueprint" as const;
 // Mirrors PlanExecuteInput's shape (the registry widens via `as unknown as
 // StrategyFn`, so the extra fields beyond the base StrategyFn input are safe).
 
+// No skillsContext — blueprint uses gatewayComplete, not the kernel system prompt.
 interface BlueprintInput {
   readonly taskDescription: string;
   readonly taskType: string;

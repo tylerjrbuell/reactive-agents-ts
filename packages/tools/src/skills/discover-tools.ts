@@ -38,7 +38,8 @@ export interface DiscoverToolsState {
 export const discoverToolsTool: ToolDefinition = {
   name: "discover-tools",
   description:
-    "List tools you can call. Use when the tool you need isn't in your current visible list. " +
+    "List callable TOOLS (functions with parameters you invoke). Use when the tool you need isn't in your current visible list. " +
+    "This does NOT list skills — skills are procedural instructions in your system prompt (## Skills section), not callable functions. " +
     "Pass `query` to filter by intent (e.g. 'read file', 'search web', 'run code') — returns the top matches. " +
     "Omit `query` to see every available tool. " +
     "Tools you discover become callable in your next response.",
@@ -80,7 +81,8 @@ export const makeDiscoverToolsHandler =
       if (!query || query.length === 0) {
         yield* markDiscovered(state, all);
         return [
-          `${all.length} tools available (now callable):`,
+          `${all.length} TOOLS available (callable functions — invoke by name with arguments):`,
+          `(Skills are separate — they are procedural instructions in your system prompt, not listed here.)`,
           ...all.map(formatToolLine),
         ].join("\n");
       }
@@ -106,10 +108,12 @@ export const makeDiscoverToolsHandler =
         // it. This converts an infinite misleading dead-end into one honest turn.
         yield* markDiscovered(state, all);
         return [
-          `No tool clearly matches "${query}". This is the COMPLETE set of tools ` +
-            `available to you — if none does what you need, that capability is NOT ` +
-            `available; do not assume a hidden tool exists. Proceed with these or, ` +
-            `if the task cannot be done, say so via final-answer.`,
+          `No tool clearly matches "${query}". This is the COMPLETE set of TOOLS ` +
+            `(callable functions) available to you — if none does what you need, ` +
+            `that capability is NOT available as a tool; do not assume a hidden tool exists. ` +
+            `Check the ## Skills section in your system prompt for procedural instructions ` +
+            `(skills are NOT callable tools). Proceed with these or, if the task cannot ` +
+            `be done, say so via final-answer.`,
           ...all.map(formatToolLine),
         ].join("\n");
       }
@@ -117,7 +121,8 @@ export const makeDiscoverToolsHandler =
       const matches = confident.map((r) => r.tool);
       yield* markDiscovered(state, matches);
       return [
-        `Top ${matches.length} tools matching "${query}" (now callable):`,
+        `Top ${matches.length} TOOLS matching "${query}" (callable functions — invoke by name with arguments):`,
+        `(Skills are separate — they are procedural instructions in your system prompt, not listed here.)`,
         ...matches.map(formatToolLine),
       ].join("\n");
     });

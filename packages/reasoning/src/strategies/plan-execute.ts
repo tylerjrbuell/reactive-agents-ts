@@ -136,6 +136,7 @@ interface PlanExecuteInput {
   readonly modelId?: string;
   /** LLM temperature override */
   readonly temperature?: number;
+  readonly skillsContext?: import("../kernel/state/kernel-state.js").SkillsContext;
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
