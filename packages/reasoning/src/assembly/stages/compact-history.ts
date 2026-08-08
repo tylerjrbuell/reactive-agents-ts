@@ -17,7 +17,28 @@ import { compact, type ResultInfo, type CompactMessage } from "../compaction.js"
  * step) into the per-callId `ResultInfo` map `compact()` reads.
  */
 export const compactHistoryStage = (c: AssemblyCtx): AssemblyCtx => {
-  const limitChars = c.capability.window * 4; // window (tokens) → chars
+  // Budget the MESSAGE thread against the space actually left in the window
+  // AFTER the non-message sections of the assembled prompt. `capability.window`
+  // is the raw model window (input+output combined); compaction previously
+  // budgeted messages at the FULL window (×4 chars), ignoring the system prompt,
+  // the tool schemas, and the output reserve that ride alongside messages in the
+  // same window — so a thread "within budget" could still overflow once
+  // assembled (tight defect, robust path). Reserve that headroom so the valve
+  // matches its stated intent: keep the ASSEMBLED prompt within the window.
+  //
+  // Over-reservation is the safe direction (compacts slightly earlier, never
+  // under-budgets): for text-parse the tool reference is rendered INTO the
+  // system prompt AND counted again here via toolSchemas — a deliberate
+  // conservative double-count, not a bug. The ×4 chars/token proxy matches the
+  // heuristic used everywhere else in assembly.
+  const inputBudgetTokens = Math.max(0, c.capability.window - c.capability.outputBudget);
+  const nonMessageChars =
+    c.systemPrompt.length + JSON.stringify(c.toolSchemas).length;
+  const MIN_MESSAGE_CHARS = 2000; // never starve the thread below a floor
+  const limitChars = Math.max(
+    MIN_MESSAGE_CHARS,
+    inputBudgetTokens * 4 - nonMessageChars,
+  );
 
   // Build callId → {ref, preserve} from the EventLog so compaction can protect
   // preserved results and enumerate dropped refs — no parallel per-message array.
