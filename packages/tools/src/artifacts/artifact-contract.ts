@@ -185,6 +185,18 @@ function extractShellFacts(args: Record<string, unknown>): ArtifactFact[] {
 export function extractArtifactFacts(
   toolName: string,
   args: Record<string, unknown>,
+  /**
+   * The tool's declared `produces` kind. When a tool DECLARES `"file"` but is
+   * not one of the named builtins below, fall back to the generic path-arg
+   * extractor rather than minting nothing.
+   *
+   * Without this, `produces` was only half declaration-driven: the produces
+   * MAP was derived from declarations, but path extraction stayed a
+   * hand-maintained name switch whose `default` returned `[]`. A user tool
+   * declaring `produces:"file"` therefore still minted no artifact, so a task
+   * naming a deliverable path could never mark it satisfied (FM-15).
+   */
+  produces?: ProducesKind,
 ): ArtifactFact[] {
   switch (toolName) {
     case "file-write":
@@ -199,6 +211,8 @@ export function extractArtifactFacts(
     case "docker-execute":
       return extractShellFacts(args);
     default:
-      return [];
+      // Declaration-driven fallback: the tool said it writes a file, so read the
+      // path from the same restricted PATH_ARG_KEYS contract the builtins use.
+      return produces === "file" ? extractPathArgFacts(args) : [];
   }
 }

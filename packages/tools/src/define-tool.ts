@@ -65,6 +65,21 @@ export interface DefineToolOptions<A> {
   requiresApproval?: boolean;
   /** Functional category for discovery. */
   category?: ToolDefinition["category"];
+  /**
+   * Deliverable-truth declaration — what KIND of durable output a successful
+   * call produces. This is how the harness's artifact ledger recognizes a
+   * produced file.
+   *
+   * Set `"file"` on any tool that writes a durable artifact. Without it the
+   * resolver treats the tool as `"data"`, so a task that names a deliverable
+   * path (`"write the report to ./out.md"`) can never mark that requirement
+   * satisfied — the run shows zero evidence progress, `low_delta_guard` fires,
+   * and a fully correct run is reported as failed with its output nulled.
+   *
+   * Defaults to omitted (`"data"` at the resolver) — the safe, false-UNMET
+   * direction, so an undeclared tool never fabricates an artifact.
+   */
+  produces?: ToolDefinition["produces"];
   /** Human-readable return type description. */
   returnType?: string;
   /** Whether results can be cached. */
@@ -549,6 +564,7 @@ export function defineTool<A>(options: DefineToolOptions<A>): DefinedTool {
     timeoutMs = 30_000,
     requiresApproval = false,
     category,
+    produces,
     returnType,
     isCacheable,
     cacheTtlMs,
@@ -565,6 +581,7 @@ export function defineTool<A>(options: DefineToolOptions<A>): DefinedTool {
     requiresApproval,
     source: "function",
     ...(category !== undefined ? { category } : {}),
+    ...(produces !== undefined ? { produces } : {}),
     ...(returnType !== undefined ? { returnType } : {}),
     ...(isCacheable !== undefined ? { isCacheable } : {}),
     ...(cacheTtlMs !== undefined ? { cacheTtlMs } : {}),

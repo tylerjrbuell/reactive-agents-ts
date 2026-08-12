@@ -19,6 +19,7 @@ import {
   runHealingPipeline,
   getFileRoot,
   resolveProduces,
+  type ProducesKind,
   REQUEST_USER_INPUT_TOOL_NAME,
 } from "@reactive-agents/tools";
 import { deriveArtifactEntries } from "../../../kernel/ledger/artifact-projection.js";
@@ -1150,9 +1151,34 @@ export function handleActing(
       // tool-invocation/tool-result entries on top. The chokepoint itself is
       // untouched (C1 owns it). Only the NEW steps of this round are scanned.
       const roundNewSteps = allSteps.slice(state.steps.length);
+
+      // FM-15: `resolveProduces` is a STATIC map built from the builtin roster,
+      // so a user-authored tool declaring `produces:"file"` resolved to "data"
+      // and never minted an artifact — the run then held `deliverablesMissing`
+      // forever, starved `evidenceDelta`, and `low_delta_guard` failed a fully
+      // correct run. Prefer the LIVE registry's declaration; fall back to the
+      // static map. Absent/unknown still yields "data" (safe false-UNMET).
+      const declaredProduces = new Map<string, ProducesKind>();
+      if (toolService._tag === "Some") {
+        const roundToolNames = new Set<string>();
+        for (const step of roundNewSteps) {
+          const tc = step.metadata?.toolCall as { name?: unknown } | undefined;
+          if (typeof tc?.name === "string" && tc.name.length > 0) roundToolNames.add(tc.name);
+        }
+        for (const toolName of roundToolNames) {
+          const declared = yield* toolService.value.getTool(toolName).pipe(
+            Effect.map((d) => d.produces),
+            Effect.catchAll(() => Effect.succeed(undefined)),
+          );
+          if (declared !== undefined) declaredProduces.set(toolName, declared);
+        }
+      }
+      const producesResolver = (toolName: string): ProducesKind =>
+        declaredProduces.get(toolName) ?? resolveProduces(toolName);
+
       const artifactInputs = deriveArtifactEntries(
         roundNewSteps,
-        resolveProduces,
+        producesResolver,
         state.iteration + 1,
       );
       // Seed the ledger via patch.ledger (the C1-owned chokepoint then appends

@@ -78,7 +78,7 @@ export function deriveArtifactEntries(
     if (typeof linkId !== "string") continue;
     const action = fileActions.get(linkId);
     if (!action) continue;
-    for (const fact of extractArtifactFacts(action.toolName, action.args)) {
+    for (const fact of extractArtifactFacts(action.toolName, action.args, produces(action.toolName))) {
       out.push({
         kind: "artifact",
         iteration,
