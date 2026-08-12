@@ -30,19 +30,20 @@
 
 **That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical).
 
-## 2026-08-10 convergence proposals — vetted, not standing docs
+## 2026-08-10 convergence proposals — absorbed and deleted
 
-Two design-specs (`run-supervisor-architecture-deep-dive`,
-`agentic-powerhouse-simplification-north-star`) plus a harness report
-(`../../Research/Harness-Reports/2026-08-10-new-user-adversarial-review.md`)
-proposed a large `RunSupervisor`/`AgentSpec` convergence architecture. Per
-`../../Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md`:
-13/14 cited defects verified accurate against source, but **the documents
-are not indexed here as a 4th/5th north star** — that would repeat the exact
-"parallel authorities" disease they diagnose. Their content is absorbed into
-the decision doc above and into `09-UNIFIED-PROGRAM.md`'s existing sequencing.
-Read the decision doc for the ruling; the two source files are pending
-deletion after this amendment lands.
+Two design-specs proposed a large `RunSupervisor`/`AgentSpec` convergence
+architecture. 13 of 14 cited defects verified accurate against source — so the
+**content** was absorbed into `09-UNIFIED-PROGRAM.md` §6 (the architecture
+smells, now named and cited there) and §7 (the ordered path), and the two source
+files were **deleted 2026-08-12** rather than indexed as a 4th/5th north star,
+which would repeat the parallel-authorities disease they diagnose. Commit
+`767c44fd` holds the originals.
+
+Surviving records: the ruling and full 14-row fact-check in
+`../../Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md`, and
+the primary evidence in
+`../../Research/Harness-Reports/2026-08-10-new-user-adversarial-review.md`.
 
 ---
 

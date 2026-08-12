@@ -5,9 +5,11 @@ created: 2026-08-11
 tags: [north-star, architecture, simplification, vetting, amendment]
 amends:
   - [[../Architecture/Specs/09-UNIFIED-PROGRAM]]
-supersedes-status-of:
-  - [[../Architecture/Design-Specs/2026-08-10-agentic-powerhouse-simplification-north-star]]
-  - [[../Architecture/Design-Specs/2026-08-10-run-supervisor-architecture-deep-dive]]
+absorbed-and-deleted:
+  # Both content-absorbed into 09 §6/§7 and deleted 2026-08-12 (commit 767c44fd
+  # holds them if the originals are ever needed):
+  #   Design-Specs/2026-08-10-agentic-powerhouse-simplification-north-star.md
+  #   Design-Specs/2026-08-10-run-supervisor-architecture-deep-dive.md
 related:
   - [[../Research/Harness-Reports/2026-08-10-new-user-adversarial-review]]
   - [[../../.claude memory/project_move_1_single_loop_2026_08_08]]
