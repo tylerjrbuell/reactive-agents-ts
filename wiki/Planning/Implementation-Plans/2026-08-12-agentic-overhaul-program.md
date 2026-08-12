@@ -204,29 +204,67 @@ path** and it dies as a side effect of FM-1.
 **Fix:** Phase 3 deletes the primitive manager. **Script:** `check-single-context-manager.sh`
 (cannot land until the inline arm is gone).
 
-### FM-3 — The +1 structural LLM call
-See §2. Both tiers, worse on the leaner model.
+### FM-3 — The +1 structural LLM call — **DISSOLVED into FM-15**
+**ROOT CAUSE FOUND 2026-08-12 via `rax diagnose diff` + the assessment stream.** The
++1 call is not an independent failure mode and not a termination-logic bug. Both arms
+were flailing because progress was never credited (FM-15); the arm with `final-answer`
+on the wire merely reached `low_delta_guard`'s threshold sooner, because a
+`final-answer` call counts as a tool call:
 
-**INVESTIGATED 2026-08-12 — the +1 call is CONFIRMED and its two obvious causes are
-FALSIFIED.** Controlled A/B, `gemma4:12b` native-FC, one-tool task, n=3 per arm,
-every arm deterministic 3/3:
+| arm | consecutiveLowDeltaCount at fire | round-trips |
+|---|---:|---:|
+| A — P2 as shipped | 4 | 3 |
+| B — `final-answer` restored | 2 | 2 |
 
-| arm | LLM round-trips |
-|---|---:|
-| A — P2 as shipped (harness tools off wire) | **3** |
-| B — counterfactual (`final-answer` restored to wire) | **2** |
-| C — deterministic `end_turn` promotion (bypass `looksLikeFinalAnswer`) | 3 |
-| D — evidence-keyed terminal-gate exemption (not channel-keyed) | 3 |
-| C+D | 3 |
+Both terminated `low_delta_guard → status=failed, outputLen=0` **on runs that had
+written the correct file and returned correct text.** Do not "fix" FM-3 directly; fix
+FM-15 and re-measure. The earlier candidate causes (`looksLikeFinalAnswer` gating, the
+terminal gate's channel-keyed exemption) were patched and measured — neither moved it,
+which is consistent with this diagnosis.
 
-So the extra call is exactly +1, perfectly reproducible, and **caused by neither**
-`looksLikeFinalAnswer`'s gating (`state.iteration > 0`, 100-char floor, positive-signal
-requirement) **nor** the terminal gate's channel-keyed exemption
-(`isDeliberateToolExit === "final_answer_tool"`). Both were patched and measured; both
-made no difference. This **retires the branch's stated "only lever"** (aggressive
-`looksLikeFinalAnswer` promotion, which carried false-positive risk) — it is not the
-lever. Root cause still OPEN; next probes are the post-tool-result projection and
-whether the loop re-enters `think` before consulting the terminal gate at all.
+### FM-15 — Custom tools cannot satisfy deliverables, so correct runs are marked failed **[P0]**
+**The single decisive root cause behind FM-3 and much of FM-14.**
+
+`defineTool()` — the canonical, documented public API for user tools
+(`DefineToolOptions`, `define-tool.ts:43-74`) — **has no `produces` field.**
+`ToolDefinition` supports it and builtins use it (`file-write` declares
+`produces:"file"`, `file-operations.ts:240`). Artifact facts are minted only from that
+declared field (`act.ts:1146`, `resolveProduces`). Therefore a custom tool can never
+mint an artifact fact, no matter what it actually writes to disk.
+
+Controlled A/B, identical task/model, file genuinely written in both:
+
+| tool | requirements | deliverable | terminated by |
+|---|---|---|---|
+| builtin `file-write` | `reqSat=2, outstanding=1` | `produced=1, missing=0` | `harness_deliverable` ✅ |
+| custom `defineTool` | `reqSat=0, outstanding=3` (whole run) | `produced=0, missing=1` | `low_delta_guard` → **failed** |
+
+**Failure chain:** task names a path → contract derives an `artifact:<path>` requirement
+→ custom tool runs and writes the file → **no artifact fact minted** → assessment holds
+`deliverablesMissing:1` and `evidenceDelta` flat → `low_delta_guard` fires → run reported
+`status=failed` with output nulled, despite being fully correct.
+
+**Ordering defect underneath it:** Move 2's disk grounding (`verifyDelivery` →
+`nodeFileExists`, positive-only) runs only at the **terminal gate**, while the guard that
+prevents the run from ever reaching the terminal gate reads the **ledger**. Disk truth
+can never rescue a run the guard kills first.
+
+**Fix (three parts, in order):**
+1. Expose `produces` on `DefineToolOptions` and thread it to `ToolDefinition`. One field;
+   unblocks the entire public extension point.
+2. Consult disk truth in mid-run assessment, not only at the terminal gate — or make the
+   guard defer to a pending deliverable check before terminating.
+3. Make "a declared requirement no tool can satisfy" a **build-time or first-iteration
+   diagnostic**, not a silent 12-iteration drift.
+
+**Script:** a red-on-cut test asserting a custom `produces:"file"` tool satisfies an
+artifact requirement, plus one asserting `low_delta_guard` cannot mark a run failed while
+a declared deliverable exists on disk.
+
+**Blast radius:** every user who writes a custom tool that produces a deliverable — the
+framework's primary extension point. This also re-frames the `low_delta_guard` misfire
+note in project memory ("11 of 12 runs killed mid-progress"): the guard is firing
+correctly on a starved evidence signal; the starvation is the bug.
 
 ### FM-4 — Terminal truth reconstructed three times
 Kernel produces terminal state; `reactive-agent.ts:1458-1522` re-derives tool calls,
