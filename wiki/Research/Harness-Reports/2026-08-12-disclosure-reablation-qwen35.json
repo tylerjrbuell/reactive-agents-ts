@@ -1,0 +1,210 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.5:latest",
+  "runs": 2,
+  "generatedAt": "2026-08-12T14:19:20.765Z",
+  "cells": [
+    {
+      "arm": "inline",
+      "tokens": 11815,
+      "calls": 4,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 12685,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 11463
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 11672,
+      "calls": 4,
+      "iterations": 12,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 8457,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 11132
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 14498,
+      "calls": 5,
+      "iterations": 15,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write",
+        "code-execute",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 13573,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 13457
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 18601,
+      "calls": 6,
+      "iterations": 12,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "harness_deliverable",
+      "durationMs": 22927,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 16732
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 14255,
+      "calls": 4,
+      "iterations": 12,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 7275,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 13795
+    },
+    {
+      "arm": "inline",
+      "tokens": 11877,
+      "calls": 4,
+      "iterations": 5,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write"
+      ],
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 6363,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 11463
+    },
+    {
+      "arm": "prune+discover",
+      "tokens": 11641,
+      "calls": 4,
+      "iterations": 12,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "code-execute",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 6647,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 11231
+    },
+    {
+      "arm": "prune-only",
+      "tokens": 8020,
+      "calls": 3,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 5194,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 7670
+    },
+    {
+      "arm": "no-prune",
+      "tokens": 9972,
+      "calls": 3,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 5669,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 9593
+    },
+    {
+      "arm": "stable-surface",
+      "tokens": 14136,
+      "calls": 4,
+      "iterations": 11,
+      "discoverCalls": 0,
+      "wroteFile": true,
+      "correct": true,
+      "tools": [
+        "file-read",
+        "file-write",
+        "final-answer"
+      ],
+      "status": "success",
+      "terminatedBy": "final_answer_tool",
+      "durationMs": 6754,
+      "costUsd": 0,
+      "cacheRead": 0,
+      "freshIn": 13720
+    }
+  ]
+}

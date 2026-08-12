@@ -1,6 +1,6 @@
 # Document Index — `wiki/Architecture/Specs/`
 
-> **Last updated:** 2026-07-12 (authority hierarchy rewritten; 08/09 indexed; 04 deprecated as state read).
+> **Last updated:** 2026-08-11 (2026-08-10 convergence proposals vetted and absorbed into 09 via decision doc; not indexed as standing docs — see §ruling below).
 > **Purpose:** Map every document in this directory to its purpose. Ranked from "read first" to "reference when needed."
 >
 > **Authority:** Uniform numbering `NN-NAME.md` (00–09). Single source of truth for agent guidance per AGENTS.md.
@@ -29,6 +29,20 @@
 - If docs conflict: amend lower-authority doc, never silent drift. Changing a higher doc is a ratification event (decision doc).
 
 **That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical).
+
+## 2026-08-10 convergence proposals — vetted, not standing docs
+
+Two design-specs (`run-supervisor-architecture-deep-dive`,
+`agentic-powerhouse-simplification-north-star`) plus a harness report
+(`../../Research/Harness-Reports/2026-08-10-new-user-adversarial-review.md`)
+proposed a large `RunSupervisor`/`AgentSpec` convergence architecture. Per
+`../../Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md`:
+13/14 cited defects verified accurate against source, but **the documents
+are not indexed here as a 4th/5th north star** — that would repeat the exact
+"parallel authorities" disease they diagnose. Their content is absorbed into
+the decision doc above and into `09-UNIFIED-PROGRAM.md`'s existing sequencing.
+Read the decision doc for the ruling; the two source files are pending
+deletion after this amendment lands.
 
 ---
 
