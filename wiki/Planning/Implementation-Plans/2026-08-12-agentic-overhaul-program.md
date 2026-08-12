@@ -206,7 +206,21 @@ path** and it dies as a side effect of FM-1.
 
 ### FM-3 — The +1 structural LLM call
 See §2. Both tiers, worse on the leaner model.
-**Fix:** Phase 1. **Script:** a turn-count assertion in the golden corpus.
+
+**Concrete lead (found 2026-08-12).** `looksLikeFinalAnswer` promotion is gated at
+`think.ts:1476-1478` on **`state.iteration > 0`**, and the helper itself returns
+`false` for anything under **100 characters** (`think.ts:142`). So a first-turn
+response that IS a complete answer structurally cannot terminate the run — the
+kernel must take a second turn to notice. That matches the traced behaviour exactly
+(iteration 1 spent on a non-terminal think, clean `end_turn` at iteration 2) and it
+matches why the effect is worse on leaner models, which answer sooner and more
+tersely. `nextMovesPlanning` defaults `{enabled:true, maxBatchSize:4}`
+(`types/config.ts:88`) and is the second suspect.
+
+**Fix:** Phase 1 — test the `iteration > 0` gate and the 100-char floor as the two
+knobs, in that order. Both are false-positive risks (a planning turn misread as an
+answer), so this is **lift-gated, not a free change**. **Script:** a turn-count
+assertion on the golden corpus.
 
 ### FM-4 — Terminal truth reconstructed three times
 Kernel produces terminal state; `reactive-agent.ts:1458-1522` re-derives tool calls,
@@ -280,6 +294,16 @@ move to procedure files on the existing skills rail (`dc8274fb`). Realistic targ
 **Gate:** replay-golden byte-parity on `reactive`-as-policy. If that diverges, the
 abstraction is wrong.
 
+### FM-13 — A provider factory exists; one provider reimplements it
+`makeOpenAICompatProvider` (`providers/openai.ts:245`) is the shared OpenAI-compat
+wire adapter, and `OpenAIProviderLive`, `GroqProviderLive` and `XAIProviderLive` are
+all thin calls to it. **`litellm.ts` (766 LOC) does not import it** and reimplements
+the same surface (15 openai-compat markers). `local.ts` (1,087 LOC) is also separate
+but has genuine Ollama wire quirks, so it is not the same case.
+**Fix:** fold `litellm` onto the factory; keep only its genuine deltas.
+**Script:** extend `check-cross-cutting.sh` — one openai-compat wire assembly point.
+**Risk:** low; behind the provider gateway, and `litellm` is not on the default path.
+
 ### FM-11 — Config represented seven ways
 Builder fields → `BuilderState` → `BuilderRuntimeStateView` → `RuntimeOptions` →
 `ReactiveAgentsConfig` → `AgentConfig` → hand serializer. **4,310 LOC** across
@@ -300,7 +324,6 @@ be stated with every INERT verdict.
 
 | id | lead | what would settle it |
 |---|---|---|
-| H-1 | Provider layer duplication — `local.ts` 1,087 / `openai.ts` 953 / `litellm.ts` 766 | diff the three for shared OpenAI-compat surface |
 | H-2 | `iterate-pass.ts` 1,642 + `think.ts` 1,788 + `kernel-state.ts` 1,458 | decompose after Phases 4-6 remove their reasons to exist |
 | H-3 | Frontier native-FC domain-only-FC win (bigger schemas ⇒ likely bigger than −9%) | UNMEASURED — needs credits |
 | H-4 | Harder golden corpus (current is trivial: haiku 15/15) | blocks FM-9 and the lift gate's accuracy leg |
