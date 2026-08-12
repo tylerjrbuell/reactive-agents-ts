@@ -207,20 +207,26 @@ path** and it dies as a side effect of FM-1.
 ### FM-3 — The +1 structural LLM call
 See §2. Both tiers, worse on the leaner model.
 
-**Concrete lead (found 2026-08-12).** `looksLikeFinalAnswer` promotion is gated at
-`think.ts:1476-1478` on **`state.iteration > 0`**, and the helper itself returns
-`false` for anything under **100 characters** (`think.ts:142`). So a first-turn
-response that IS a complete answer structurally cannot terminate the run — the
-kernel must take a second turn to notice. That matches the traced behaviour exactly
-(iteration 1 spent on a non-terminal think, clean `end_turn` at iteration 2) and it
-matches why the effect is worse on leaner models, which answer sooner and more
-tersely. `nextMovesPlanning` defaults `{enabled:true, maxBatchSize:4}`
-(`types/config.ts:88`) and is the second suspect.
+**INVESTIGATED 2026-08-12 — the +1 call is CONFIRMED and its two obvious causes are
+FALSIFIED.** Controlled A/B, `gemma4:12b` native-FC, one-tool task, n=3 per arm,
+every arm deterministic 3/3:
 
-**Fix:** Phase 1 — test the `iteration > 0` gate and the 100-char floor as the two
-knobs, in that order. Both are false-positive risks (a planning turn misread as an
-answer), so this is **lift-gated, not a free change**. **Script:** a turn-count
-assertion on the golden corpus.
+| arm | LLM round-trips |
+|---|---:|
+| A — P2 as shipped (harness tools off wire) | **3** |
+| B — counterfactual (`final-answer` restored to wire) | **2** |
+| C — deterministic `end_turn` promotion (bypass `looksLikeFinalAnswer`) | 3 |
+| D — evidence-keyed terminal-gate exemption (not channel-keyed) | 3 |
+| C+D | 3 |
+
+So the extra call is exactly +1, perfectly reproducible, and **caused by neither**
+`looksLikeFinalAnswer`'s gating (`state.iteration > 0`, 100-char floor, positive-signal
+requirement) **nor** the terminal gate's channel-keyed exemption
+(`isDeliberateToolExit === "final_answer_tool"`). Both were patched and measured; both
+made no difference. This **retires the branch's stated "only lever"** (aggressive
+`looksLikeFinalAnswer` promotion, which carried false-positive risk) — it is not the
+lever. Root cause still OPEN; next probes are the post-tool-result projection and
+whether the loop re-enters `think` before consulting the terminal gate at all.
 
 ### FM-4 — Terminal truth reconstructed three times
 Kernel produces terminal state; `reactive-agent.ts:1458-1522` re-derives tool calls,
@@ -268,6 +274,24 @@ harness declining to decide. Also note the control plane is `longHorizon`-gated 
 **dark on the default path**, so this lands with FM-1.
 **Fix:** Phase 6. Collapse `steer` to genuinely-ambiguous cases; every control result
 appends one `control-decision` ledger fact.
+
+### FM-14 — `final-answer` is a fabrication channel (measured 2026-08-12)
+Same A/B as FM-3, but with a tool that only *claims* to write the file and does not:
+
+- **Arm B (`final-answer` on the wire): exits in 3 calls reporting SUCCESS with no file
+  on disk.** The `isDeliberateToolExit` exemption bypasses the deliverable gate entirely.
+- **Arm A (P2, no `final-answer`): correctly refuses** — assessment holds
+  `requirementsOutstanding:3, deliverablesMissing:1` for the whole run — **but then has no
+  deterministic no-progress termination.** It burns 9 calls, re-invokes the same tool,
+  fires three entropy `tool-inject` interventions, and finally exits via
+  `loop_resolution → harness_synthesis`.
+
+**Both arms are wrong, in opposite directions**, and which one you get depends only on
+which channel the answer arrived through. This is the sharpest evidence yet for the
+program's thesis, and it means P2 did not merely cost a call — it **closed a fabrication
+hole** and exposed the missing no-progress control underneath (FF-4).
+**Fix:** FF-4 (deterministic no-progress termination) + FM-7 (one evidence semantic).
+**Do not "fix" FM-3 by restoring `final-answer` to the wire** — that re-opens this.
 
 ### FM-9 — Success is existence, never content (the grounding ceiling)
 Verified by deterministic probe: the success authority accepts **wrong-content, empty,
