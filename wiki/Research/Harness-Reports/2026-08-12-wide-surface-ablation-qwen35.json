@@ -1,0 +1,179 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.5:latest",
+  "runs": 2,
+  "sizes": [
+    12,
+    44
+  ],
+  "cells": [
+    {
+      "surfaceSize": 12,
+      "arm": "pruned(default)",
+      "tokens": 4063,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 8,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 4789,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current metric value for 'latency_p99' is 873. A report containing this exact value has been filed successfully."
+    },
+    {
+      "surfaceSize": 12,
+      "arm": "no-prune",
+      "tokens": 4648,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 13,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 4833,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current metric 'latency_p99' has a value of 873. A report containing this exact value was successfully filed using the report tool."
+    },
+    {
+      "surfaceSize": 44,
+      "arm": "pruned(default)",
+      "tokens": 6246,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 20,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 5688,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current metric 'latency_p99' has a value of 873. A report was successfully filed containing this exact value."
+    },
+    {
+      "surfaceSize": 44,
+      "arm": "no-prune",
+      "tokens": 10378,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 45,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 6199,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The latency_p99 metric value is 873. A report containing this exact value has been filed using the report tool."
+    },
+    {
+      "surfaceSize": 12,
+      "arm": "pruned(default)",
+      "tokens": 4057,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 8,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 4590,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current latency_p99 metric value is 873. A report containing this exact value has been successfully filed using the report tool."
+    },
+    {
+      "surfaceSize": 12,
+      "arm": "no-prune",
+      "tokens": 4664,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 13,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 5014,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The metric 'latency_p99' has a current value of 873. A report containing this exact value was successfully filed using the report tool."
+    },
+    {
+      "surfaceSize": 44,
+      "arm": "pruned(default)",
+      "tokens": 6188,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 20,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 5099,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current metric 'latency_p99' has a value of 873. A report containing this exact value has been filed successfully."
+    },
+    {
+      "surfaceSize": 44,
+      "arm": "no-prune",
+      "tokens": 10378,
+      "iterations": 9,
+      "discoverCalls": 0,
+      "calledNeeded": 2,
+      "correct": true,
+      "offeredNeededMin": 2,
+      "offeredNeededFirst": 2,
+      "offeredMax": 45,
+      "status": "success",
+      "terminatedBy": "unknown",
+      "durationMs": 6341,
+      "toolsCalled": [
+        "metrics_fetch",
+        "report_file",
+        "final-answer"
+      ],
+      "output": "The current latency_p99 metric value is: 873"
+    }
+  ]
+}
