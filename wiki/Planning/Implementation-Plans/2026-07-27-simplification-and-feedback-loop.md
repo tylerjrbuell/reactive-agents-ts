@@ -5,6 +5,12 @@ status: ACTIVE — the simplification program
 governed-by: "[[../../Architecture/Specs/09-UNIFIED-PROGRAM|09 §6 lift rule]]"
 ---
 
+> **SUPERSEDED 2026-08-12 — absorbed into [[2026-08-12-agentic-overhaul-program|The Agentic Overhaul Program]].**
+> This plan is retained for provenance only. Do not execute from it; its content,
+> including any still-open items, is carried in that program's failure-mode register.
+> Three plans each declared themselves the sole active program — that is why one
+> running plan now replaces them.
+
 # Simplification + the Feedback Loop That Makes It Affordable
 
 **One sentence:** we cannot simplify what we cannot measure, measurement currently
