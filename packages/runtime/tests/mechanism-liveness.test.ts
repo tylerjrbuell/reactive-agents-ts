@@ -40,7 +40,7 @@ import { join } from "node:path";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { ReactiveAgents } from "../src/index.js";
 
-const STEP_KEYS = ["alpha", "beta"] as const;
+const STEP_KEYS = ["alpha", "beta", "gamma", "delta"] as const;
 const STEP_PATHS = STEP_KEYS.map((k) => `./.liveness-${k}.tmp.md`);
 const TASK = "TERSE_TRIGGER: perform the multi-step write work, one file per step.";
 

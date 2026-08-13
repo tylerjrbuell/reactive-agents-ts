@@ -338,6 +338,38 @@ export function guardQualityCheck(
     return undefined;
   }
 
+  // FM-3/overhaul-program §2 (2026-08-13): a RunContract whose CONCRETE
+  // requirements are already satisfied (no missing deliverables, no outstanding
+  // tool-coverage/artifact requirements — the same facts the Arbitrator's own
+  // `llmEndTurnEvaluator` terminal gate re-checks on this exact candidate answer)
+  // means there is nothing left for a blanket "review your answer" nudge to
+  // catch. Firing it anyway forces one guaranteed extra LLM round-trip on every
+  // contract-bearing run with tool use, regardless of whether the answer is
+  // already correct — measured as the kernel's structural "+1 call" overhead.
+  // Deferring to the contract instead of a blanket English nudge is the FM-8
+  // discipline (compute a fact, don't ask again). Contractless / open-ended
+  // tasks (no `state.meta.runContract`) are UNCHANGED — those are exactly the
+  // shape this adapter hook exists for.
+  //
+  // `run-contract.ts`'s "answer" requirement (kind `question-answered`,
+  // `acceptance:"self-critique"`, no `condition`) is a FLOOR present on every
+  // contract — it has no deterministic satisfaction path pre-terminal, so it is
+  // always "outstanding" right up to the model's own terminal turn and is not
+  // evidence of remaining checkable work. Filter it out before deciding whether
+  // anything CONCRETE (a tool-coverage / artifact requirement) is still open.
+  const assessment = state.meta.assessment;
+  const concreteOutstanding = (assessment?.requirements.outstanding ?? []).filter(
+    (id) => id !== "answer",
+  );
+  if (
+    state.meta.runContract !== undefined &&
+    assessment !== undefined &&
+    concreteOutstanding.length === 0 &&
+    assessment.deliverables.missing.length === 0
+  ) {
+    return undefined;
+  }
+
   const qcMsg = adapter.qualityCheck?.({
     task: input.task,
     requiredTools: input.requiredTools ?? [],
