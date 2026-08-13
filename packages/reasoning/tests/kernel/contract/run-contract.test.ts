@@ -243,3 +243,27 @@ describe("compileRunContract — availableWritingTools (FM-15 layer 4)", () => {
     expect(writer?.id).toBe("tool:custom_writer_b");
   });
 });
+
+describe("compileRunContract — enumeration hint (FM-16 layer A)", () => {
+  it("parses a literal count from enumerating task language", () => {
+    const contract = compileRunContract(
+      "Find and list all three episode names for season 1.",
+    );
+    const answer = contract.requirements.find((r) => r.id === "answer");
+    expect(answer?.spec.enumeration).toEqual({ expectedCount: 3, itemShape: "list-entry" });
+  });
+
+  it("marks expectedCount unknown when the task enumerates without a literal count", () => {
+    const contract = compileRunContract(
+      "Research and find all the episode names and descriptions for season 1, list them in a table.",
+    );
+    const answer = contract.requirements.find((r) => r.id === "answer");
+    expect(answer?.spec.enumeration).toEqual({ expectedCount: "unknown", itemShape: "table-row" });
+  });
+
+  it("omits the enumeration field for a non-list task (byte-identical contract)", () => {
+    const contract = compileRunContract("What is the capital of France?");
+    const answer = contract.requirements.find((r) => r.id === "answer");
+    expect(answer?.spec.enumeration).toBeUndefined();
+  });
+});

@@ -46,6 +46,13 @@ export type RequirementKind =
   | "constraint-held"
   | "tool-coverage";
 
+/** How many distinct items a `question-answered` enumeration requirement expects. */
+export interface EnumerationHint {
+  /** A literal count parsed from the task text, or "unknown" when none is derivable. */
+  readonly expectedCount: number | "unknown";
+  readonly itemShape: "list-entry" | "table-row";
+}
+
 /**
  * How a requirement is verified. `condition` is the GRAFT onto the live
  * PostCondition vocabulary — present when the requirement is deterministically
@@ -60,6 +67,8 @@ export interface RequirementSpec {
   readonly condition?: PostCondition;
   /** Verification tier for this requirement. */
   readonly acceptance: AcceptanceTier;
+  /** Present only on enumeration-shaped `question-answered` requirements (FM-16). */
+  readonly enumeration?: EnumerationHint;
 }
 
 /** One thing that must be true for the run to count as DONE. */
@@ -176,6 +185,40 @@ function freezeContract(contract: RunContract): RunContract {
 
 // ─── The compiler (deterministic core = the FLOOR) ───────────────────────────
 
+const ENUMERATING_PATTERN = /\b(all|every|each|list(?:ing)?)\b/i;
+const LITERAL_COUNT_PATTERN =
+  /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
+const WORD_TO_NUMBER: Readonly<Record<string, number>> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+const TABLE_PATTERN = /\btable\b/i;
+
+/**
+ * Deterministic classifier: does this task ask for an enumeration, and if so,
+ * how many items and in what shape? Returns undefined for non-enumerating tasks
+ * (FM-16 layer A) — additive, no behavior change for the common case.
+ */
+function classifyEnumeration(task: string): EnumerationHint | undefined {
+  if (!ENUMERATING_PATTERN.test(task)) return undefined;
+  const itemShape: EnumerationHint["itemShape"] = TABLE_PATTERN.test(task) ? "table-row" : "list-entry";
+
+  // Look for a literal count in proximity to the enumerating pattern
+  // (within a 50-character window after the enumerating keyword).
+  const enumeratingMatch = ENUMERATING_PATTERN.exec(task);
+  if (!enumeratingMatch) return { expectedCount: "unknown", itemShape };
+
+  const startPos = enumeratingMatch.index;
+  const windowEnd = Math.min(startPos + 50, task.length);
+  const window = task.substring(startPos, windowEnd);
+
+  const countMatch = window.match(LITERAL_COUNT_PATTERN);
+  if (!countMatch) return { expectedCount: "unknown", itemShape };
+  const raw = countMatch[1]!.toLowerCase();
+  const n = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : WORD_TO_NUMBER[raw];
+  return { expectedCount: n ?? "unknown", itemShape };
+}
+
 /**
  * Compile the RunContract from task inputs. Deterministic, pure, NO LLM, NO fs —
  * this is the FLOOR that guarantees a non-empty contract without any model call.
@@ -282,12 +325,14 @@ export function compileRunContract(
   //    contract for every task (even a bare Q&A with no tools / files), and
   //    anchors "the answer must actually address the task" as a first-class
   //    requirement the checker / self-critique tier judges.
+  const enumeration = classifyEnumeration(task);
   requirements.push({
     id: "answer",
     kind: "question-answered",
     spec: {
       description: "produce a substantive answer that addresses the task",
       acceptance: "self-critique",
+      ...(enumeration !== undefined ? { enumeration } : {}),
     },
   });
 
