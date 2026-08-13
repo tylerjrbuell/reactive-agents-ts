@@ -170,6 +170,16 @@ export interface CompactionMarkerEntry extends LedgerEntryBase {
   readonly reason?: string;
 }
 
+/**
+ * A tool result was rendered as `preview+ref` this iteration — the model did NOT
+ * see it in full (FM-17). Carries the ENUMERATION of truncated refs so assess()
+ * can compute per-requirement stall without re-deriving from raw trace data.
+ */
+export interface ResultTruncatedEntry extends LedgerEntryBase {
+  readonly kind: "result-truncated";
+  readonly truncatedRefs: readonly string[];
+}
+
 /** The append-only entry union. */
 export type LedgerEntry =
   | ToolInvocationEntry
@@ -180,7 +190,8 @@ export type LedgerEntry =
   | VerdictEntry
   | HarnessSignalEntry
   | HandoffEntry
-  | CompactionMarkerEntry;
+  | CompactionMarkerEntry
+  | ResultTruncatedEntry;
 
 /**
  * The fact families the ledger can record — DERIVED from {@link LedgerEntry}

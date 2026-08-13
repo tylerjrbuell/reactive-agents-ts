@@ -31,7 +31,7 @@ import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { Projection } from "../../../assembly/project.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
-import { recordCompactionMarker, recordCompactionNoShrink } from "../../ledger/emit.js";
+import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
@@ -516,6 +516,19 @@ export function handleThinking(
           ledger: recordCompactionNoShrink(state.ledger, state.iteration),
         });
       }
+    }
+
+    // ── FM-17 layer 1: record the result-truncated fact ─────────────────────
+    // Mirrors the compaction-marker block above but reads per-MESSAGE projection
+    // (project-results.ts), not the whole-thread compaction outcome — a result
+    // can be individually truncated on a turn where compaction never ran.
+    const truncatedRefs = trace.messages
+      .filter((m) => m.projection === "preview+ref" && m.ref !== undefined)
+      .map((m) => m.ref as string);
+    if (truncatedRefs.length > 0) {
+      state = transitionState(state, {
+        ledger: recordResultTruncation(state.ledger, truncatedRefs, state.iteration),
+      });
     }
     // ── D1: projection-rendered trace event (the projector boundary) ──────────
     // The Projector is the last DAG node; emit its render as a replayable trace

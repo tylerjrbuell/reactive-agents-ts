@@ -122,6 +122,33 @@ export function recordCompactionMarker(
 }
 
 /**
+ * Record which tool-result refs rendered as `preview+ref` this iteration
+ * (FM-17 layer 1). De-duped against the most recent `result-truncated` entry —
+ * projection re-runs every render, so an identical truncated set would
+ * otherwise append a redundant fact each turn.
+ */
+export function recordResultTruncation(
+  ledger: RunLedger | undefined,
+  truncatedRefs: readonly string[],
+  iteration: number,
+): RunLedger {
+  if (truncatedRefs.length === 0) return ledger ?? [];
+  const base = ledger ?? [];
+  const last = [...base].reverse().find((e) => e.kind === "result-truncated");
+  if (last && last.kind === "result-truncated") {
+    const prev = last.truncatedRefs;
+    if (prev.length === truncatedRefs.length && prev.every((r, i) => r === truncatedRefs[i])) {
+      return base;
+    }
+  }
+  return appendEntry(base, {
+    kind: "result-truncated",
+    iteration,
+    truncatedRefs: [...truncatedRefs],
+  });
+}
+
+/**
  * Record a compaction that ran but could NOT shrink the window — everything in
  * the thread was a protected class (C4 shrink self-check). A `harness-signal`
  * fact so the run is never silently stuck at the window ceiling. De-duped so a
