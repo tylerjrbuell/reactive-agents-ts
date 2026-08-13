@@ -43,6 +43,7 @@ const steadyAssessment = (over: Partial<RunAssessment["health"]> & { evidenceDel
     iterationsSinceEvidence: over.iterationsSinceEvidence ?? 0,
     failureArgVariety: over.failureArgVariety ?? 0,
   },
+  requirementProgress: new Map(),
 });
 
 // ─── compileHarnessPlan ──────────────────────────────────────────────────────

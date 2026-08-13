@@ -35,6 +35,7 @@ function make(overrides: {
       iterationsSinceEvidence: 0,
       failureArgVariety: overrides.failureArgVariety ?? 0,
     },
+    requirementProgress: new Map(),
   };
 }
 

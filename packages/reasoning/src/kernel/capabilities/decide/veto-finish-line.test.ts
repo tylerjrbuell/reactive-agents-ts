@@ -88,6 +88,7 @@ function synthAssessment(): RunAssessment {
       iterationsSinceEvidence: 0,
       failureArgVariety: 0,
     },
+    requirementProgress: new Map(),
   };
 }
 

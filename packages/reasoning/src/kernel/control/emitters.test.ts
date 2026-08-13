@@ -33,6 +33,7 @@ function mkAssessment(over: Partial<RunAssessment> = {}): RunAssessment {
       iterationsSinceEvidence: 0,
       failureArgVariety: 0,
     },
+    requirementProgress: new Map(),
     ...over,
   };
 }
