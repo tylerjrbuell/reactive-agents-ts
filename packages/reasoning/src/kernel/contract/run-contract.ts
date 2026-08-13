@@ -130,6 +130,26 @@ export interface CompileRunContractOptions {
   readonly taskContract?: TaskContract;
   /** Override the derived horizon (else classifyTaskHorizon(task)). */
   readonly horizon?: TaskHorizon;
+  /**
+   * Tools ACTUALLY available to this run that can write a file artifact —
+   * builtins in `WRITING_TOOL_NAMES` plus any registered tool declaring
+   * `produces: "file"`.
+   *
+   * A derived artifact implies a writing tool was called, but the writer was
+   * previously guessed as the builtin `"file-write"` regardless of what the
+   * agent actually had. An agent with only a custom writer therefore carried a
+   * permanently unsatisfiable `tool:file-write` requirement: the contract could
+   * never be met, the terminal gate never passed, and a correct run was
+   * reported failed (FM-15 layer 4).
+   *
+   * - provided & non-empty → require one of these instead of guessing.
+   * - provided & EMPTY     → no tool can write; the requirement is
+   *   unsatisfiable, so it is NOT created (the artifact requirement still
+   *   stands and is disk-checkable).
+   * - omitted              → legacy behaviour (guess `"file-write"`), so
+   *   callers that cannot supply the set are byte-identical to before.
+   */
+  readonly availableWritingTools?: readonly string[];
 }
 
 // ─── Freeze helpers ──────────────────────────────────────────────────────────
@@ -215,9 +235,14 @@ export function compileRunContract(
     deliverables.push({ id: `artifact:${path}`, kind: "file", matcher: condition });
     pushCondition(condition);
   }
-  // A derived artifact implies a writing tool must have been called.
-  if (paths.length > 0) {
-    const writer = pickWritingTool(requiredTools);
+  // A derived artifact implies a writing tool must have been called — but only
+  // if the run HAS one. See `availableWritingTools` above (FM-15 layer 4).
+  const available = opts.availableWritingTools;
+  const writer =
+    available === undefined
+      ? pickWritingTool(requiredTools)
+      : (requiredTools.find((t) => available.includes(t)) ?? available[0]);
+  if (paths.length > 0 && writer !== undefined) {
     const writerCond = toolCalled(writer);
     if (!seenCond.has(JSON.stringify(writerCond))) {
       requirements.push({
