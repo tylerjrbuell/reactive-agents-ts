@@ -80,7 +80,12 @@ describe("the inline (default) path only executes tools it exposed", () => {
     // Before the fix this contained MARKER — the registry resolved `file-read`
     // even though only `file-write` was exposed.
     expect(toolText).not.toContain(MARKER);
-    expect(toolText).toContain("was not exposed");
+    // Move 1 merge (2026-08-13): the bare builder now runs the kernel arm
+    // (inline-act.ts's "was not exposed" message is unreachable from it), which
+    // rejects with its own wording. The SECURITY property is unchanged and
+    // still verified above (marker never leaks) -- this only re-pins the
+    // observation text to the kernel's actual rejection message.
+    expect(toolText).toContain("unavailable name");
   }, 20000);
 
   it("CONTROL: the same tool executes normally once it IS exposed", async () => {
