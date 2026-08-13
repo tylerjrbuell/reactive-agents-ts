@@ -118,7 +118,14 @@ export function enumerationIncompleteProposal(
     const proposal = proposeFromEnumerationIncomplete({
       horizonActive,
       requirement: { id: r.id, enumeration: r.spec.enumeration },
-      itemsFound: 0, // v1: no per-item extraction yet — see plan note below
+      // v1 scope boundary: no per-item extraction mechanism exists yet (that
+      // requires structured extraction, out of scope for this plan), so this
+      // is always 0, never a real count. Practically that means the emitter
+      // fires "abstain" for ANY stalled numeric-count enumeration, not
+      // specifically a *partial* one distinguishable from a *zero-progress*
+      // one — still strictly better than silently fabricating the missing
+      // items (FM-14's status quo). Recorded as an open follow-up.
+      itemsFound: 0,
       stallCount: progress.stallCount,
     });
     if (proposal) return proposal;

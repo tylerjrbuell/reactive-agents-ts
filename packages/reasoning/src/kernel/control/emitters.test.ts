@@ -166,7 +166,7 @@ describe("proposeFromEnumerationIncomplete (FM-16 layer D-control)", () => {
   it("proposes abstain when a numeric enumeration is provably short and stalled at exhaustion", () => {
     const proposal = proposeFromEnumerationIncomplete({
       horizonActive: true,
-      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } },
       itemsFound: 0,
       stallCount: 4,
     });
@@ -177,7 +177,7 @@ describe("proposeFromEnumerationIncomplete (FM-16 layer D-control)", () => {
   it("returns null when stallCount has not reached exhaustion", () => {
     const proposal = proposeFromEnumerationIncomplete({
       horizonActive: true,
-      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } },
       itemsFound: 0,
       stallCount: 1,
     });
@@ -187,7 +187,7 @@ describe("proposeFromEnumerationIncomplete (FM-16 layer D-control)", () => {
   it("returns null when the profile is not long-horizon (OFF by default, matches every other emitter)", () => {
     const proposal = proposeFromEnumerationIncomplete({
       horizonActive: false,
-      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } },
       itemsFound: 0,
       stallCount: 10,
     });
