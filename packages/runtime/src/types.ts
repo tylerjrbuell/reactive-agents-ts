@@ -262,6 +262,17 @@ export interface ExecutionContextMetadata {
       llmCalls?: number;
       terminatedBy?: string;
       /**
+       * #40 honesty channel (kernel's own onlyHarnessAuthorshipFailed degrade,
+       * runner.ts): true when the verifier caught the terminal output as
+       * harness-assembled rather than model-synthesized. Was already present
+       * on the runtime value (passed through verbatim from
+       * ReasoningService.execute()'s result) but undeclared here, so the
+       * execution engine's own result-boundary assembly could not read it —
+       * found via engine-empty-output-invariant.test.ts, Move 1 merge triage
+       * 2026-08-13.
+       */
+      harnessAuthoredOutput?: boolean;
+      /**
        * Open-string channel preserving raw kernel `state.meta.terminatedBy`
        * BEFORE narrowing to the closed TerminatedBy 5-value enum. Carries
        * dynamic killswitch reasons (e.g. "budget-limit:tokens:1/0") and the
