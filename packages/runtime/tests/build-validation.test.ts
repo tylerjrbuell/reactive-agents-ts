@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { ReactiveAgents } from "../src";
-import { validateProviderConnection } from "../src/build-validation";
+import { validateProviderConnection, logBuildInfo } from "../src/build-validation";
 
 describe("Build-time validation", () => {
   const originalEnv = { ...process.env };
@@ -89,6 +89,22 @@ describe("Build-time validation", () => {
       // Ollama is not running — should be a connection error, NOT an API key error
       expect(e.message).toMatch(/Cannot connect to Ollama|Provider connection failed/);
     }
+  });
+
+  test("logBuildInfo never prints an API key prefix or substring (FF-1)", () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant-super-secret-value-12345";
+    const lines: string[] = [];
+    const origLog = console.log;
+    console.log = (msg: string) => lines.push(msg);
+    try {
+      logBuildInfo("anthropic", "claude-sonnet-4-6");
+    } finally {
+      console.log = origLog;
+    }
+    expect(lines.length).toBe(1);
+    expect(lines[0]).not.toContain("sk-ant");
+    expect(lines[0]).not.toContain(process.env.ANTHROPIC_API_KEY!.slice(0, 8));
+    expect(lines[0]).toContain("(set)");
   });
 
   test("skips validation for test provider", async () => {

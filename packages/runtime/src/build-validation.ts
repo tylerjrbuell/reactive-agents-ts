@@ -339,7 +339,7 @@ export function logBuildInfo(provider: ProviderName, resolvedModel: string): voi
   const key = readProviderApiKey(provider);
   const keyDisplay =
     key
-      ? `${key.slice(0, 8)}...***`
+      ? "(set)"
       : NO_KEY_PROVIDERS.has(provider)
         ? "(not required)"
         : "(missing)";

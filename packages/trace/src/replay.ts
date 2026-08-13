@@ -1,7 +1,7 @@
 // packages/trace/src/replay.ts
 
 import { readFile } from "node:fs/promises"
-import type { TraceEvent } from "./events"
+import { isTraceEvent, type TraceEvent } from "./events"
 
 export interface Trace {
   readonly runId: string
@@ -11,6 +11,11 @@ export interface Trace {
 /**
  * Load a JSONL trace file and parse it into a Trace object.
  * Each line must be valid JSON representing a TraceEvent.
+ *
+ * `isTraceEvent` only checks that `kind`/`runId` are present — it is not a
+ * full per-kind schema check. This rejects malformed lines (parse failures,
+ * objects missing the two fields every event carries) but does not validate
+ * that a given `kind`'s payload has the right shape.
  */
 export async function loadTrace(path: string): Promise<Trace> {
   const text = await readFile(path, "utf8")
@@ -19,7 +24,8 @@ export async function loadTrace(path: string): Promise<Trace> {
     .filter(Boolean)
     .flatMap((line) => {
       try {
-        return [JSON.parse(line) as TraceEvent]
+        const parsed: unknown = JSON.parse(line)
+        return isTraceEvent(parsed) ? [parsed] : []
       } catch {
         return []
       }
