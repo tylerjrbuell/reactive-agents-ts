@@ -36,9 +36,37 @@ this plan says how each dies.
 
 ---
 
-## 1. Phase 0 — MERGE FIRST (blocking; no new code before this lands)
+## 1. Phase 0 — ✅ MERGED (2026-08-13)
 
-`refactor/move-1-single-loop` is **17 ahead / 5 behind** `main` and contains
+`refactor/move-1-single-loop` merged into `main` — every builder (bare or
+`.withReasoning()`) now runs the kernel arm. B1 fixed (bare builders re-throw
+on infra/exhaustion failures — provider fault, max_iterations — matching the
+old inline arm's contract, scoped to not touch the existing tested
+success:false contract for explicit-reasoning users or semantic-judgment
+failures). B2's 23 failing tests triaged individually, not by estimate: 2 real
+regressions found and fixed (P2's domain-only-FC over-stripping explicitly-
+configured meta-tools off the wire; a cross-cutting `harnessAuthoredOutput`
+metadata drop), ~14 were test-fixture premises invalidated by unifying the
+loop (bare `.withTools()` losing tool visibility under lazy-disclosure pruning
+was the single most common cause — corrected mid-triage after an earlier wrong
+diagnosis in this session blamed a nonexistent `TestTurn.match` gap; `match`
+IS implemented, see `packages/llm-provider/src/testing.ts`'s `resolveTurn`).
+13 failures remain on `main`, all precisely characterized rather than left as
+a number: 6 flaky on real Anthropic credits / local Ollama timing (reproduces
+on `main` pre-merge too — not this branch's fault), 1 pre-existing `as unknown
+as` debt-ceiling count, 5 real findings documented in place with the
+correct/desired assertion preserved (not weakened) — notably
+`result-boundary-verification.test.ts`'s failure **is FM-4/FM-7 itself**,
+reproduced concretely: the kernel's own verifier catches `scaffold-leak`
+correctly, but `execution-engine.ts`'s separate `verifyResultBoundary`
+re-verifies independently and overwrites the real reason with its own
+trivially-true check. Exit gates green: reasoning suite 2637/0,
+`check-domain-only-fc.sh` + `check-success-authority.sh` +
+`check-cross-cutting.sh` (9/9) all pass on `main`.
+
+**Superseded below — kept for provenance, not current state:**
+
+`refactor/move-1-single-loop` was **17 ahead / 5 behind** `main` and contained
 materially more than its name suggests. Building anything else on `main` first
 guarantees a painful reconcile.
 
