@@ -479,6 +479,7 @@ const LEDGER_ENTRY_KINDS: Record<LedgerEntryKind, true> = {
   "harness-signal": true,
   handoff: true,
   "compaction-marker": true,
+  "result-truncated": true,
 };
 
 /**
