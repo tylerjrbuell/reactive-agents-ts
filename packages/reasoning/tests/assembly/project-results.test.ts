@@ -4,6 +4,8 @@ import { EventLog } from "../../src/assembly/event-log.js";
 import { ResultStore } from "../../src/assembly/result-store.js";
 import { resolveCapability } from "../../src/assembly/capability.js";
 import { emptyTrace } from "../../src/assembly/trace.js";
+import type { RunContract } from "../../src/kernel/contract/run-contract.js";
+import type { RunAssessment } from "../../src/kernel/assessment/assess.js";
 
 function ctxWith(value: unknown) {
   // Test pins overflow→preview path via the small per-result preserve cap
@@ -117,5 +119,57 @@ describe("projectResults — full | preview+ref | cleared", () => {
     const projections = ctx.trace.messages.filter((m) => m.role === "tool_result").map((m) => m.projection);
     expect(projections[0]).toBe("preview+ref");
     expect(projections[1]).toBe("full");
+  });
+
+  it("escalates the render budget for a ref backing a stalled enumeration requirement (FM-17 layer 3)", () => {
+    // window 1000 → recencyBudgetChars = floor(1000 * 0.35 * 4) = 1400 (sole/
+    // latest result → recency budget, not the tighter preserve cap). bigResult
+    // (5000 chars) overflows that base budget, so without escalation this
+    // renders preview+ref bounded to ~1400 chars.
+    const cap = resolveCapability({ window: 1000, outputBudget: 100, dialect: "native-fc", tier: "local" });
+    const bigResult = "x".repeat(5000); // exceeds the base budget (1400) and even the escalated one only barely
+    const store = new ResultStore();
+    const ref = store.put("web-search", bigResult);
+    const log = new EventLog()
+      .append({ kind: "tool_called", tool: "web-search", callId: "c1", args: {} })
+      .append({ kind: "tool_result", callId: "c1", ref, shape: "String" });
+
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "answer",
+          kind: "question-answered",
+          spec: {
+            description: "answer the question",
+            condition: { kind: "ToolCalled", tool: "web-search" },
+            acceptance: "deterministic",
+            enumeration: { expectedCount: "unknown", itemShape: "list-entry" },
+          },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "long",
+      postConditions: [],
+    };
+    const assessment = {
+      requirementProgress: new Map([["answer", { stallCount: 2 }]]),
+    } as unknown as RunAssessment;
+
+    const ctx = projectResultsStage({
+      log,
+      capability: cap,
+      store,
+      persona: { system: "" },
+      tools: { schemas: [] },
+      contract,
+      assessment,
+      systemPrompt: "",
+      messages: [],
+      toolSchemas: [],
+      trace: emptyTrace(cap),
+    });
+    const rendered = ctx.messages.find((m) => m.role === "tool_result");
+    expect(rendered?.content.length).toBeGreaterThan(bigResult.length * 0.5); // escalated, not clipped to base budget
   });
 });

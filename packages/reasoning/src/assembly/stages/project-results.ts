@@ -105,9 +105,23 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
       // content stripped by preview+ref. Older results compress aggressively
       // (legacy tier cap) so the message thread doesn't accumulate stale
       // full payloads across iterations.
-      const budget = isLatest
-        ? c.capability.recencyBudgetChars
-        : c.capability.toolResultPreserveBudget;
+      const ESCALATION_FACTOR = 1.5;
+      const baseBudget = isLatest ? c.capability.recencyBudgetChars : c.capability.toolResultPreserveBudget;
+      // FM-17 layer 3: widen the budget for a ref backing a stalled enumeration
+      // requirement. Matched via the requirement's condition tool (tool-coverage
+      // requirements only carry a ToolCalled condition naming the producing
+      // tool) — the same matching primitive assess() already uses for
+      // requirement satisfaction, not a new inference.
+      const backingRequirement = c.contract?.requirements.find(
+        (r) =>
+          r.spec.enumeration !== undefined &&
+          (r.spec.condition === undefined || (r.spec.condition.kind === "ToolCalled" && r.spec.condition.tool === call?.tool)),
+      );
+      const stallCount = backingRequirement
+        ? (c.assessment?.requirementProgress.get(backingRequirement.id)?.stallCount ?? 0)
+        : 0;
+      const budget =
+        stallCount > 0 ? Math.round(baseBudget * (1 + ESCALATION_FACTOR * stallCount)) : baseBudget;
       let content: string;
       let projection: "full" | "preview+ref";
       if (fullText.length <= budget) {
