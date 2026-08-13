@@ -229,6 +229,20 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const threshold = Math.max(quantityLimit, defaultCeiling);
   if (priorCallsOfSameTool < threshold) return { pass: true };
 
+  // FM-16 layer D-guard: don't force a stop while escalation (FM-17 layer 3)
+  // hasn't exhausted its widened budget yet — the model may not have actually
+  // SEEN enough of the prior results to know it's done. Consult the SAME
+  // stallCount the projector escalates on, so the two mechanisms agree by
+  // construction. ESCALATION_EXHAUSTED mirrors project-results.ts's own
+  // ESCALATION_FACTOR cadence — a stallCount this high means the ref has
+  // already been rendered at (1 + 1.5*4) = 7x its base budget with no progress.
+  const ESCALATION_EXHAUSTED = 4;
+  const stalledRequirement = [...(state.meta?.assessment?.requirementProgress ?? new Map())]
+    .find(([, p]) => p.stallCount > 0);
+  if (stalledRequirement && stalledRequirement[1].stallCount < ESCALATION_EXHAUSTED) {
+    return { pass: true };
+  }
+
   // Converging-retry carve-out (root fix 2026-08-06). A call that ADAPTS to a
   // prior failure — distinct arguments after the tool's last call failed — is
   // progress, not repetition. This is the natural schema→attempt→correct loop
@@ -262,7 +276,10 @@ export const repetitionGuard: Guard = (tc, state, input) => {
         return `${t} (${actual}/${needed} calls done)`;
       }).join(", ")}. Do that now instead of repeating ${tc.name}.`
     : " Use final-answer to respond now.";
-  const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}`;
+  const stallSuffix = stalledRequirement
+    ? ` The harness has shown you everything it has on requirement "${stalledRequirement[0]}"; this line of evidence is exhausted.`
+    : "";
+  const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}${stallSuffix}`;
 
   return {
     pass: false,
