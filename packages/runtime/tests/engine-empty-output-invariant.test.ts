@@ -40,7 +40,13 @@ describe("engine empty-output invariant", () => {
       expect(r.success).toBe(true);
       // The silence is replaced by a deterministic note…
       expect(String(r.output ?? "").trim().length).toBeGreaterThan(0);
-      expect(String(r.output)).toContain("./qa-test-empty/x.txt");
+      // Move 1 merge (2026-08-13): the note is synthesized from the kernel's
+      // own normalized tool observation (tool-execution.ts's
+      // normalizeObservation, pre-existing and unrelated to this merge --
+      // deliberately keeps only the basename: `rawPath.split("/").pop()`),
+      // which a bare builder never routed through before. Assert the
+      // basename, not the full relative path, to match.
+      expect(String(r.output)).toContain("x.txt");
       // …and honestly labeled as harness-authored, not model prose.
       expect(
         (r.metadata as { harnessAuthoredOutput?: boolean }).harnessAuthoredOutput,
