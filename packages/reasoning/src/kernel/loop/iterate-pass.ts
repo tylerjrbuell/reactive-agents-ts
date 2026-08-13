@@ -81,7 +81,7 @@ import {
   proposeFromLoopDetector,
   proposeFromStallGuard,
 } from "../control/emitters.js";
-import { inLoopAbstentionProposal } from "../control/abstention-proposal.js";
+import { enumerationIncompleteProposal, inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
@@ -1063,9 +1063,13 @@ export function runIterationPass(
                 requiredTools,
                 currentOptions.maxIterations,
               );
+              const enumProposal = enumerationIncompleteProposal(
+                state.meta.runContract, state.meta.assessment, horizon !== undefined,
+              );
               const proposals: ControlProposal[] = [];
               if (recoveryProposal) proposals.push(recoveryProposal);
               if (abstainProposal) proposals.push(abstainProposal);
+              if (enumProposal) proposals.push(enumProposal);
               if (proposals.length > 0) {
                 const resolution = resolveControlPlane(proposals);
                 yield* emitControlResolution({
@@ -1213,9 +1217,13 @@ export function runIterationPass(
           requiredTools,
           currentOptions.maxIterations,
         );
+        const enumProposal = enumerationIncompleteProposal(
+          state.meta.runContract, state.meta.assessment, horizon !== undefined,
+        );
         const proposals: ControlProposal[] = [];
         if (stallProposal) proposals.push(stallProposal);
         if (abstainProposal) proposals.push(abstainProposal);
+        if (enumProposal) proposals.push(enumProposal);
         if (proposals.length > 0) {
           const resolution = resolveControlPlane(proposals);
           yield* emitControlResolution({
@@ -1456,9 +1464,13 @@ export function runIterationPass(
                   requiredTools,
                   currentOptions.maxIterations,
                 );
+                const enumProposal = enumerationIncompleteProposal(
+                  state.meta.runContract, state.meta.assessment, horizon !== undefined,
+                );
                 const proposals: ControlProposal[] = [];
                 if (switchProposal) proposals.push(switchProposal);
                 if (abstainProposal) proposals.push(abstainProposal);
+                if (enumProposal) proposals.push(enumProposal);
                 if (proposals.length > 0) {
                   const resolution = resolveControlPlane(proposals);
                   yield* emitControlResolution({

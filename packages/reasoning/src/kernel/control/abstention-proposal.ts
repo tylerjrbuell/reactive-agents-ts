@@ -24,8 +24,10 @@ import {
 } from "../loop/runner-helpers/force-abstention.js";
 import { countArtifacts, countDeliverableCandidates } from "../loop/runner-helpers/deliverable.js";
 import { hasSuccessfulSubstantiveToolCall } from "../loop/runner-helpers/grounded-terminal.js";
-import { proposeFromForcedAbstention } from "./emitters.js";
+import { proposeFromEnumerationIncomplete, proposeFromForcedAbstention } from "./emitters.js";
 import type { ControlProposal } from "./control-plane.js";
+import type { RunAssessment } from "../assessment/assess.js";
+import type { RunContract } from "../contract/run-contract.js";
 
 /**
  * Derive the in-loop forced-abstention decision (or null when it does not
@@ -94,4 +96,32 @@ export function inLoopAbstentionProposal(
 ): { readonly proposal: ControlProposal | null; readonly forced: ForcedAbstention | null } {
   const forced = deriveInLoopForcedAbstention(state, input, requiredTools, maxIterations);
   return { proposal: proposeFromForcedAbstention(forced), forced };
+}
+
+/**
+ * The in-loop enumeration-incomplete abstain proposal (FM-16 layer D-control).
+ * Checks every enumeration-shaped requirement on the contract; returns the
+ * first one that qualifies (or null). Multiple simultaneous stalled
+ * enumerations are rare enough that "first" is an acceptable tie-break —
+ * `resolveControlPlane` only needs ONE abstain proposal to act.
+ */
+export function enumerationIncompleteProposal(
+  contract: RunContract | undefined,
+  assessment: RunAssessment | undefined,
+  horizonActive: boolean,
+): ControlProposal | null {
+  if (contract === undefined || assessment === undefined) return null;
+  for (const r of contract.requirements) {
+    if (r.spec.enumeration === undefined) continue;
+    const progress = assessment.requirementProgress.get(r.id);
+    if (progress === undefined) continue;
+    const proposal = proposeFromEnumerationIncomplete({
+      horizonActive,
+      requirement: { id: r.id, enumeration: r.spec.enumeration },
+      itemsFound: 0, // v1: no per-item extraction yet — see plan note below
+      stallCount: progress.stallCount,
+    });
+    if (proposal) return proposal;
+  }
+  return null;
 }

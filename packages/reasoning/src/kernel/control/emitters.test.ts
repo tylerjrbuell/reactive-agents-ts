@@ -11,6 +11,7 @@ import {
   proposeFromBudgetMonitor,
   proposeFromControllerVeto,
   proposeFromDispatcher,
+  proposeFromEnumerationIncomplete,
   proposeFromErrorRecovery,
   proposeFromForcedAbstention,
   proposeFromGroundedTerminal,
@@ -158,5 +159,52 @@ describe("terminal / veto / abstain / dispatcher mappings", () => {
     expect(
       proposeFromGroundedTerminal({ ungroundedTerminal: false, redirectSpent: false, guidance: "", requiredTools: [] }),
     ).toBeNull();
+  });
+});
+
+describe("proposeFromEnumerationIncomplete (FM-16 layer D-control)", () => {
+  it("proposes abstain when a numeric enumeration is provably short and stalled at exhaustion", () => {
+    const proposal = proposeFromEnumerationIncomplete({
+      horizonActive: true,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      itemsFound: 0,
+      stallCount: 4,
+    });
+    expect(proposal?.action).toBe("abstain");
+    expect(proposal?.remedy?.kind).toBe("coverage");
+  });
+
+  it("returns null when stallCount has not reached exhaustion", () => {
+    const proposal = proposeFromEnumerationIncomplete({
+      horizonActive: true,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      itemsFound: 0,
+      stallCount: 1,
+    });
+    expect(proposal).toBeNull();
+  });
+
+  it("returns null when the profile is not long-horizon (OFF by default, matches every other emitter)", () => {
+    const proposal = proposeFromEnumerationIncomplete({
+      horizonActive: false,
+      requirement: { id: "answer", enumeration: { expectedCount: 3, itemShape: "list-entry" } } as any,
+      itemsFound: 0,
+      stallCount: 10,
+    });
+    expect(proposal).toBeNull();
+  });
+
+  it("scratch.ts regression: a stalled 'find all episodes' contract proposes abstain, not silent continue", () => {
+    const proposal = proposeFromEnumerationIncomplete({
+      horizonActive: true,
+      requirement: { id: "answer", enumeration: { expectedCount: "unknown", itemShape: "table-row" } },
+      itemsFound: 0,
+      stallCount: 6,
+    });
+    // expectedCount "unknown" (the scratch.ts case — no literal count in the task
+    // text) is explicitly OUT of this emitter's scope per Step 3's doc comment —
+    // asserting null here is the scope boundary, not a bug. The "unknown" case is
+    // covered by the terminal gate's AcceptanceTier downgrade, not this emitter.
+    expect(proposal).toBeNull();
   });
 });

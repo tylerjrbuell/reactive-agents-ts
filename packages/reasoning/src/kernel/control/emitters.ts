@@ -75,6 +75,51 @@ export function proposeFromForcedAbstention(
   };
 }
 
+// ─── N. Enumeration-incomplete (FM-16/FM-14) ─────────────────────────────────
+
+/**
+ * A `question-answered` requirement with a numeric `enumeration.expectedCount`
+ * that has genuinely stalled (escalation exhausted, per guard.ts's
+ * ESCALATION_EXHAUSTED=4 threshold — kept in sync by convention, not import,
+ * since guard.ts and this module are on different sides of the DAG) proposes an
+ * honest `abstain` rather than letting the model reach `final-answer` and
+ * fabricate the missing items (closes the exact FM-14 gap: `scratch.ts`
+ * accepted a fabricated table with `confidence:"medium"` and zero verifier
+ * involvement). `expectedCount:"unknown"` is deliberately NOT handled here —
+ * an unverifiable count cannot support a confident "incomplete" claim either;
+ * it stays the terminal gate's `AcceptanceTier` downgrade (FM-16's other half,
+ * not this emitter's job).
+ */
+export function proposeFromEnumerationIncomplete(input: {
+  readonly horizonActive: boolean;
+  readonly requirement: {
+    readonly id: string;
+    readonly enumeration?: {
+      readonly expectedCount: number | "unknown";
+      readonly itemShape?: "list-entry" | "table-row";
+    };
+  };
+  readonly itemsFound: number;
+  readonly stallCount: number;
+}): ControlProposal | null {
+  if (!input.horizonActive) return null;
+  const expected = input.requirement.enumeration?.expectedCount;
+  if (typeof expected !== "number") return null;
+  const ESCALATION_EXHAUSTED = 4;
+  if (input.stallCount < ESCALATION_EXHAUSTED) return null;
+  if (input.itemsFound >= expected) return null;
+  return {
+    source: "enumeration-incomplete",
+    action: "abstain",
+    reason: `requirement "${input.requirement.id}" expects ${expected} items, found ${input.itemsFound}, no progress for ${input.stallCount} iterations`,
+    confidence: "high",
+    remedy: {
+      kind: "coverage",
+      detail: `${input.requirement.id}: ${input.itemsFound}/${expected} items found, evidence exhausted`,
+    },
+  };
+}
+
 // ─── 3. Budget monitor (pre-guard) ───────────────────────────────────────────
 
 /**
