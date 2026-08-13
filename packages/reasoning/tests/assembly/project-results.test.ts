@@ -152,8 +152,13 @@ describe("projectResults — full | preview+ref | cleared", () => {
       horizon: "long",
       postConditions: [],
     };
+    // Escalation is keyed BY REF (finding C2): assess() only lists refs that a
+    // `result-truncated` ledger fact actually named, so a requirement's mere
+    // existence can no longer widen an unrelated result.
     const assessment = {
-      requirementProgress: new Map([["answer", { stallCount: 2 }]]),
+      requirementProgress: new Map([
+        ["answer", { stallCount: 2, refEscalation: new Map([[ref, 2]]) }],
+      ]),
     } as unknown as RunAssessment;
 
     const ctx = projectResultsStage({
@@ -171,5 +176,60 @@ describe("projectResults — full | preview+ref | cleared", () => {
     });
     const rendered = ctx.messages.find((m) => m.role === "tool_result");
     expect(rendered?.content.length).toBeGreaterThan(bigResult.length * 0.5); // escalated, not clipped to base budget
+  });
+
+  it("does NOT escalate a ref that was never itself truncated (finding C2)", () => {
+    // Same stalled enumeration requirement, same generous stallCount — but this
+    // result's ref is absent from `refEscalation`, so it must stay at the base
+    // budget. The old predicate matched on `condition === undefined`, which is
+    // vacuously true for the compiler's floor `answer` requirement (the only
+    // requirement that ever carries an enumeration hint and it never carries a
+    // condition), so EVERY tool result in the thread widened at once.
+    const cap = resolveCapability({ window: 1000, outputBudget: 100, dialect: "native-fc", tier: "local" });
+    const bigResult = "x".repeat(5000);
+    const store = new ResultStore();
+    const ref = store.put("web-search", bigResult);
+    const log = new EventLog()
+      .append({ kind: "tool_called", tool: "web-search", callId: "c1", args: {} })
+      .append({ kind: "tool_result", callId: "c1", ref, shape: "String" });
+
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "answer",
+          kind: "question-answered",
+          spec: {
+            description: "answer the question",
+            acceptance: "self-critique",
+            enumeration: { expectedCount: "unknown", itemShape: "list-entry" },
+          },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "long",
+      postConditions: [],
+    };
+    const assessment = {
+      requirementProgress: new Map([
+        ["answer", { stallCount: 4, refEscalation: new Map([["some_other_ref", 4]]) }],
+      ]),
+    } as unknown as RunAssessment;
+
+    const ctx = projectResultsStage({
+      log,
+      capability: cap,
+      store,
+      persona: { system: "" },
+      tools: { schemas: [] },
+      contract,
+      assessment,
+      systemPrompt: "",
+      messages: [],
+      toolSchemas: [],
+      trace: emptyTrace(cap),
+    });
+    const rendered = ctx.messages.find((m) => m.role === "tool_result");
+    expect(rendered?.content.length).toBeLessThan(bigResult.length * 0.5);
   });
 });

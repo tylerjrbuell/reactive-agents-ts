@@ -107,21 +107,34 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
       // full payloads across iterations.
       const ESCALATION_FACTOR = 1.5;
       const baseBudget = isLatest ? c.capability.recencyBudgetChars : c.capability.toolResultPreserveBudget;
-      // FM-17 layer 3: widen the budget for a ref backing a stalled enumeration
-      // requirement. Matched via the requirement's condition tool (tool-coverage
-      // requirements only carry a ToolCalled condition naming the producing
-      // tool) — the same matching primitive assess() already uses for
-      // requirement satisfaction, not a new inference.
-      const backingRequirement = c.contract?.requirements.find(
-        (r) =>
-          r.spec.enumeration !== undefined &&
-          (r.spec.condition === undefined || (r.spec.condition.kind === "ToolCalled" && r.spec.condition.tool === call?.tool)),
-      );
-      const stallCount = backingRequirement
-        ? (c.assessment?.requirementProgress.get(backingRequirement.id)?.stallCount ?? 0)
-        : 0;
+      // FM-17 layer 3: widen the budget for a ref that is ITSELF stalling.
+      //
+      // The escalation level is looked up BY REF in `requirementProgress`, which
+      // assess() populates only for enumeration-shaped requirements and only
+      // from refs that actually appear in a `result-truncated` ledger fact. Both
+      // halves of the invariant therefore hold by construction: the ref was
+      // truncated, and it backs a stalled enumeration requirement.
+      //
+      // This replaces a requirement-CONDITION match (finding C2). The compiler's
+      // floor `answer` requirement is the only one that ever carries an
+      // `enumeration` hint and it has no `condition`, so `condition === undefined`
+      // was vacuously true and the predicate degenerated to "any tool result at
+      // all" — applying the escalated budget to every result in the thread
+      // simultaneously. There is nothing to match a condition against here; ref
+      // membership is the real signal.
+      //
+      // The level is monotonic per ref (finding I2): a ref that renders in full
+      // this turn records no new truncation fact, and a trailing-run counter
+      // would snap back to 0 and re-clip it next turn. See
+      // RequirementProgress.refEscalation.
+      let escalationLevel = 0;
+      for (const p of c.assessment?.requirementProgress.values() ?? []) {
+        escalationLevel = Math.max(escalationLevel, p.refEscalation.get(e.ref) ?? 0);
+      }
       const budget =
-        stallCount > 0 ? Math.round(baseBudget * (1 + ESCALATION_FACTOR * stallCount)) : baseBudget;
+        escalationLevel > 0
+          ? Math.round(baseBudget * (1 + ESCALATION_FACTOR * escalationLevel))
+          : baseBudget;
       let content: string;
       let projection: "full" | "preview+ref";
       if (fullText.length <= budget) {

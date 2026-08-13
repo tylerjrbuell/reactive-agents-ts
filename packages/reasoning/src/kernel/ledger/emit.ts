@@ -123,9 +123,16 @@ export function recordCompactionMarker(
 
 /**
  * Record which tool-result refs rendered as `preview+ref` this iteration
- * (FM-17 layer 1). De-duped against the most recent `result-truncated` entry —
- * projection re-runs every render, so an identical truncated set would
- * otherwise append a redundant fact each turn.
+ * (FM-17 layer 1).
+ *
+ * De-dupe key is `(iteration, refs)`, NOT `refs` alone (finding I4). Keying on
+ * refs alone made this emitter silently drop an iteration whose truncated set
+ * happened to be byte-identical to the previous one — a pure-thought turn, or
+ * the same still-too-large ref re-rendered. `assess()` reads "no entry at
+ * iteration N" as "the model saw everything that turn" and resets the stall run,
+ * so the very condition the fact exists to track erased itself the moment it
+ * became STABLE. A repeated render WITHIN one iteration is still a true
+ * duplicate and still no-ops.
  */
 export function recordResultTruncation(
   ledger: RunLedger | undefined,
@@ -135,7 +142,7 @@ export function recordResultTruncation(
   if (truncatedRefs.length === 0) return ledger ?? [];
   const base = ledger ?? [];
   const last = [...base].reverse().find((e) => e.kind === "result-truncated");
-  if (last && last.kind === "result-truncated") {
+  if (last && last.kind === "result-truncated" && last.iteration === iteration) {
     const prev = last.truncatedRefs;
     if (prev.length === truncatedRefs.length && prev.every((r, i) => r === truncatedRefs[i])) {
       return base;

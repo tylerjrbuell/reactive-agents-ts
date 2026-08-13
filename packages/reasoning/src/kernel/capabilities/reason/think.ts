@@ -526,8 +526,21 @@ export function handleThinking(
       .filter((m) => m.projection === "preview+ref" && m.ref !== undefined)
       .map((m) => m.ref as string);
     if (truncatedRefs.length > 0) {
+      // PHASE (finding C1): stamp the NEXT index, matching act.ts:1182/1205 and
+      // kernel-state.ts's `projectStepsToLedger(patch.iteration)` convention.
+      // `assess()` runs at the TOP of the pass (iterate-pass.ts) with
+      // `currentIter = state.iteration`, i.e. BEFORE this projection — so a fact
+      // stamped `state.iteration` here is never at `currentIter` when the next
+      // assess() reads it, and the trailing-run stall computation sees
+      // `has(currentIter) === false` forever. MEASURED before this fix on a real
+      // 6-iteration run: stallCount was 0 on EVERY pass, so Layer C never fired.
+      //
+      // Holds for both return shapes of this function: the paths handing off
+      // with `status: "acting"` leave the bump to act.ts, and the paths staying
+      // "thinking" bump here — either way the state that reaches the next
+      // assess() carries `state.iteration + 1`.
       state = transitionState(state, {
-        ledger: recordResultTruncation(state.ledger, truncatedRefs, state.iteration),
+        ledger: recordResultTruncation(state.ledger, truncatedRefs, state.iteration + 1),
       });
     }
     // ── D1: projection-rendered trace event (the projector boundary) ──────────

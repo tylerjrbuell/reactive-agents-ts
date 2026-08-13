@@ -231,11 +231,18 @@ export const repetitionGuard: Guard = (tc, state, input) => {
 
   // FM-16 layer D-guard: don't force a stop while escalation (FM-17 layer 3)
   // hasn't exhausted its widened budget yet — the model may not have actually
-  // SEEN enough of the prior results to know it's done. Consult the SAME
-  // stallCount the projector escalates on, so the two mechanisms agree by
-  // construction. ESCALATION_EXHAUSTED mirrors project-results.ts's own
-  // ESCALATION_FACTOR cadence — a stallCount this high means the ref has
-  // already been rendered at (1 + 1.5*4) = 7x its base budget with no progress.
+  // SEEN enough of the prior results to know it's done. Reads `stallCount`,
+  // which is deliberately the CURRENT-stall signal: it resets on any clean
+  // iteration, because the question this guard asks is "is the run stalling
+  // RIGHT NOW".
+  //
+  // NOTE: that is a DIFFERENT clock from the projector's render escalation,
+  // which keys on `RequirementProgress.refEscalation` — a monotonic per-ref
+  // level that never resets (assess.ts, finding I2). The two share a numeric
+  // ceiling of 4 but NOT a meaning: `MAX_ESCALATION_LEVEL` bounds render COST
+  // per ref; `ESCALATION_EXHAUSTED` gates a CONTROL action. A ref can sit at a
+  // fully-widened 7x budget while `stallCount` is 0 — correctly so, because a
+  // clean iteration means the model just saw something it had not seen before.
   const ESCALATION_EXHAUSTED = 4;
   const stalledRequirement = [...(state.meta?.assessment?.requirementProgress ?? new Map())]
     .find(([, p]) => p.stallCount > 0);

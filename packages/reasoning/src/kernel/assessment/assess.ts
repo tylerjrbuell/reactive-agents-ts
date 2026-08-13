@@ -49,9 +49,49 @@ export interface RequirementAssessment {
 
 /** Per-requirement stall tracking (FM-17 layer 2) — enumeration-shaped requirements only. */
 export interface RequirementProgress {
-  /** Consecutive iterations ending at `currentIter` with a truncated result and no reset. */
+  /**
+   * Consecutive iterations ending at `currentIter` with a truncated result and
+   * no reset. This is the CURRENT-stall signal the control plane reads
+   * (`guard.ts`'s repetition ceiling, `enumerationIncompleteProposal`) — it
+   * resets on a clean iteration by design, because "is this run stalling right
+   * now" is the question those two consumers ask.
+   *
+   * NOTE (deferred finding I1): this counter is not truly per-requirement — the
+   * `result-truncated` ledger fact carries no requirement attribution, so every
+   * enumeration-shaped requirement receives the same run-wide count. The name
+   * overstates the resolution. Left as-is pending an owner call.
+   */
   readonly stallCount: number;
+  /**
+   * Per-ref RENDER escalation level (FM-17 layer 3 / finding I2's hysteresis
+   * latch), keyed by `result_ref`. Defined as the number of DISTINCT iterations
+   * at or before `currentIter` on which that ref was recorded as truncated,
+   * capped at `MAX_ESCALATION_LEVEL`.
+   *
+   * Deliberately monotonic where `stallCount` is not. The render decision must
+   * not oscillate: once a ref's budget widens far enough for the model to see
+   * it in full, that turn records no truncation for it, which would drive a
+   * trailing-run counter back to 0 and re-clip the very next turn — a
+   * full/preview flip-flop on alternating iterations. Counting distinct
+   * truncated iterations instead of a trailing run makes the level non-
+   * decreasing, and it stops GROWING as soon as the ref renders in full (no
+   * further truncation facts), so it latches rather than runs away.
+   */
+  readonly refEscalation: ReadonlyMap<string, number>;
 }
+
+/**
+ * Ceiling on `refEscalation` (FM-17 layer 3). At 4 the render budget is
+ * `1 + 1.5*4 = 7x` base. Capping bounds the context cost of a ref that can never
+ * fit however wide the budget gets.
+ *
+ * Shares the numeric value 4 with `guard.ts`'s `ESCALATION_EXHAUSTED` but NOT
+ * its meaning, and the two run on different clocks BY DESIGN: this bounds RENDER
+ * cost and is measured on the monotonic `refEscalation`; that gates a CONTROL
+ * action and is measured on the resetting `stallCount`. A ref can therefore be
+ * fully escalated while `stallCount` is 0. Do not "unify" them.
+ */
+export const MAX_ESCALATION_LEVEL = 4;
 
 /** A produced deliverable + its ledger provenance. */
 export interface ArtifactRef {
@@ -418,9 +458,28 @@ export function assess(
   // that each recorded a `result-truncated` fact. A gap (an iteration with no
   // truncation) resets the count — the model saw everything that turn, so any
   // earlier stall is stale.
-  const truncationEntries = entriesOfKind(ledger, "result-truncated");
+  const truncationEntries = entriesOfKind(ledger, "result-truncated").filter(
+    (e) => e.iteration <= currentIter,
+  );
   const truncatedIterations = new Set(truncationEntries.map((e) => e.iteration));
-  const requirementProgress = new Map<string, { stallCount: number }>();
+  // Per-ref escalation level: distinct truncated iterations per ref, capped.
+  // Monotonic by construction (see RequirementProgress.refEscalation) — this is
+  // the I2 hysteresis latch, and it is also the C2 membership test: only a ref
+  // that was ITSELF recorded truncated appears here, so escalation can never
+  // spill onto an unrelated tool result.
+  const refIterations = new Map<string, Set<number>>();
+  for (const e of truncationEntries) {
+    for (const ref of e.truncatedRefs) {
+      const seen = refIterations.get(ref) ?? new Set<number>();
+      seen.add(e.iteration);
+      refIterations.set(ref, seen);
+    }
+  }
+  const refEscalation = new Map<string, number>();
+  for (const [ref, iters] of refIterations) {
+    refEscalation.set(ref, Math.min(iters.size, MAX_ESCALATION_LEVEL));
+  }
+  const requirementProgress = new Map<string, RequirementProgress>();
   for (const r of contract.requirements) {
     if (r.spec.enumeration === undefined) continue;
     let stallCount = 0;
@@ -428,7 +487,7 @@ export function assess(
       if (!truncatedIterations.has(iter)) break;
       stallCount++;
     }
-    requirementProgress.set(r.id, { stallCount });
+    requirementProgress.set(r.id, { stallCount, refEscalation });
   }
 
   return {
