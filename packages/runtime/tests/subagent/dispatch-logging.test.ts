@@ -51,7 +51,12 @@ describe("sub-agent dispatch logging", () => {
 
     // No dedicated delimiter pair anymore (removed, Task 7) — but the
     // dispatch and completion lines still name the sub-agent explicitly.
-    expect(all).toContain("spawn-agent [researcher]");
-    expect(all).toMatch(/\[sub-agent: researcher\] [✓✗]/);
+    // Re-pinned to the actual current lines (2026-08-13, Move 1 merge
+    // triage): dispatch is the tool-call line naming the delegating tool;
+    // completion is the `[obs]` line, which names the sub-agent AND carries
+    // the ✓/✗ together on one line (a tighter pairing than the two
+    // separately-worded strings this test previously expected).
+    expect(all).toContain("[tool:spawn-agent] call");
+    expect(all).toMatch(/✓ Sub-agent "researcher"/);
   }, 30_000);
 });

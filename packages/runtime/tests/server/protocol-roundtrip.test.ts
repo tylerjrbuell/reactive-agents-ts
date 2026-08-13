@@ -33,6 +33,21 @@ describe("client/server protocol round-trip", () => {
       state = reduceRunState(state, e);
     }
     expect(state.status).toBe("completed");
+    // OPEN FINDING (Move 1 merge triage, 2026-08-13), NOT resolved, likely
+    // unrelated to Move 1 itself (probed directly): the wire StreamCompleted
+    // event's own `output` field is the literal string "text" -- not empty,
+    // not the real answer, the STRING "text" (same as a valid OutputFormat
+    // enum value, suggesting a field mix-up somewhere upstream of
+    // execute-stream.ts:559's `output: String(taskResult.output ?? "")`,
+    // where `taskResult.output` itself already holds "text" by the time this
+    // reads it). `state.text` (reduceRunState's OTHER, separate field) does
+    // correctly hold "final answer text" -- so the real content isn't lost,
+    // just also duplicated into the wrong field under a wrong value. This
+    // test is the only one in the suite combining .withDurableRuns() with
+    // the streaming/server path, which is the plausible but UNVERIFIED
+    // distinguishing factor -- did not chase further given the depth this
+    // session already spent on adjacent findings. Left asserting the
+    // correct/desired value.
     expect(state.output).toBe("final answer text");
     expect(state.runId).toBeDefined();
     expect(state.lastSeq).toBeGreaterThan(0);
