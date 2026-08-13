@@ -778,22 +778,42 @@ export class ReactiveAgent<TOut = unknown> {
                       runSignal ? { signal: runSignal } : undefined,
                   )
 
-            // B1 (Move 1 merge, 2026-08-12): the kernel arm resolves a provider
-            // fault as a graceful status:"failed"/terminatedBy:"llm_error" result
-            // (think.ts's Effect.either around the LLM stream) instead of an
-            // Effect failure. `.withReasoning()` users have ALWAYS gotten this —
-            // it is the kernel's existing, deliberately-tested contract
+            // B1 (Move 1 merge, 2026-08-12/13): the kernel arm resolves an
+            // infrastructure/exhaustion failure — a provider fault
+            // (terminatedBy:"llm_error") or running out of budget without
+            // completing (terminatedBy:"max_iterations") — as a graceful
+            // status:"failed" result instead of an Effect failure.
+            // `.withReasoning()` users have ALWAYS gotten this — it is the
+            // kernel's existing, deliberately-tested contract
             // (error-reporting.test.ts: "hard LLM failure surfaces as
-            // success:false, not silent swallow"). The BARE builder's old inline
-            // arm instead let a provider fault propagate uncaught, so run()
-            // REJECTED and withErrorHandler fired (tool-loop-behavioral.test.ts).
-            // Move 1 routes bare builders through the same kernel arm, which
-            // would silently flip that public contract for every bare-builder
-            // caller. Preserve it explicitly: only a bare builder (no explicit
-            // .withReasoning()) re-throws a provider fault here.
-            if (result.terminatedBy === 'llm_error' && this.config['enableReasoning'] !== true) {
+            // success:false"; agent-config.test.ts's maxIterations cases). The
+            // BARE builder's old inline arm instead let both classes of
+            // failure propagate uncaught, so run() REJECTED and
+            // withErrorHandler fired (tool-loop-behavioral.test.ts: "error turn
+            // causes agent.run() to throw", "agent exceeds max iterations when
+            // tool calls never terminate"). Move 1 routes bare builders through
+            // the same kernel arm, which would silently flip that public
+            // contract for every bare-builder caller. Preserve it explicitly —
+            // only a bare builder (no explicit .withReasoning()) re-throws.
+            //
+            // Deliberately NOT extended to every success:false reason: semantic
+            // judgment failures (abstention, fabrication-guard rejection, empty
+            // output with no verified deliverable) are the agent COMPLETING and
+            // being graded, not the agent failing to run — those stay
+            // success:false without a throw on both bare and explicit builders
+            // (engine-empty-output-invariant.test.ts, abstention-is-not-success
+            // .test.ts, fabrication-guard-rail.test.ts, verification-outcome
+            // .test.ts — all bare, none expect a throw). Only extend this list
+            // with another terminatedBy value if a bare-builder test explicitly
+            // documents the old inline arm throwing for it.
+            const BARE_BUILDER_THROWS_ON = new Set(['llm_error', 'max_iterations']);
+            if (
+                result.terminatedBy !== undefined &&
+                BARE_BUILDER_THROWS_ON.has(result.terminatedBy) &&
+                this.config['enableReasoning'] !== true
+            ) {
                 throw new ExecutionError({
-                    message: result.error ?? 'LLM provider error',
+                    message: result.error ?? `Agent run failed: ${result.terminatedBy}`,
                     taskId: result.taskId,
                     phase: 'execution',
                 })
