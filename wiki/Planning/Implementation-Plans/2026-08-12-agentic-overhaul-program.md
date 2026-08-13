@@ -105,6 +105,40 @@ Three options:
 
 ---
 
+**RE-MEASURED 2026-08-13, after FM-15 (both layers) shipped
+(`da7d9860`, `f3f32903`).** `harness-cost-attribution.ts`, gemma4:12b, n=3, the
+canonical file-deliverable task:
+
+| arm | mean tokens | vs inline | deliverable | guards |
+|---|---:|---:|---:|---|
+| inline | 1,087t | — | 3/3 | none |
+| kernel | 1,949t | **+79%** | 3/3 | `terminal_decision` (clean exit, no misfire) |
+| kernel+RI | 2,055t | +89% | 3/3 | `terminal_decision` |
+
+**+76% → +79%, unchanged within noise. FM-15 did not move this number.**
+Explanation, not surprise: this canonical benchmark exercises the **builtin**
+`file-write` tool throughout, and FM-15's break was specifically that
+`compileRunContract`/`deriveConditions` hardcoded a guess of `"file-write"` with
+no availability check — which was already correct for a run that actually has
+`file-write` registered. FM-15 was real and severe (it broke every **custom**
+deliverable-writing tool, the framework's primary extension point, and forced
+correct runs to `failed` with output nulled), but it does not touch this
+particular measurement because the measurement never exercised a custom writer.
+
+**Consequence: the FM-3/FM-14 diagnosis stands on its own.** The +1 structural
+LLM call (kernel takes 2 calls / 6 iterations where inline takes 1 call / 3
+iterations, `file-write` then `final-answer`) is independent of FM-15 and was
+never conflated with it once traced — FM-15 was found chasing the WRONG task
+shape (a custom tool), and its fix was correct and necessary regardless of
+whether it moved this number. Root cause of the +1 call itself remains open
+(§FM-3): `looksLikeFinalAnswer` gating and the terminal gate's channel exemption
+were both patched and falsified as causes; the next probes are the post-tool
+projection and whether `think` re-enters before the terminal gate is consulted.
+
+**The owner call in the table below is now made on solid ground**: the +79% is
+not contaminated by FM-15, and FM-15 is fixed and shipped regardless of which
+option is chosen.
+
 ## 3. Priority order of operations
 
 Ordered by (evidence strength × leverage) ÷ risk. Each phase is independently
