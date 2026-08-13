@@ -920,5 +920,64 @@ and Task 6's `proposeFromEnumerationIncomplete` input — no renamed duplicates.
 
 **Plan complete and saved to `wiki/Planning/Implementation-Plans/2026-08-12-deterministic-remedy-layer.md`.**
 
-Not to be executed yet — blocked behind Phase 0 (branch merge) and the Phase 1 owner
-call per this plan's own Global Constraints and the governing program's Standing Rule 1.
+---
+
+## Status: ✅ SHIPPED (2026-08-13, branch `feat/deterministic-remedy-layer`)
+
+Phase 0 (branch merge) and Phase 1 (owner call: Option A, investigate+fix the +1 call —
+`fix(kernel): guardQualityCheck skips nudge when RunContract already satisfied`, `e008a9c7`)
+both closed same-day, unblocking this plan per its own Global Constraints. Executed via
+subagent-driven-development: 6 tasks, 4 task-level fix rounds (Task 3 x2, Task 6 x1), all
+individually reviewed clean.
+
+**Final whole-branch review caught a real Critical bug the 6 per-task reviews could not see**
+(every task-level test hand-injected `assessment`/`ledger` state at a fixed iteration; none
+drove the real loop): the `result-truncated` ledger fact (Task 1) was stamped one iteration
+behind the phase `assess()` reads it on, making Layer C (Evidence Escalation) structurally
+unreachable while Layer D-guard's repetition-ceiling relaxation fired live on every acting pass
+without its compensating remedy. Fixed in one wave (`3b281391`): `+1` stamp phase-alignment,
+ref-scoped escalation (was matching ANY tool result, not just the stalled one), a monotonic
+per-ref escalation latch (was self-cancelling/flip-flopping), and a `(iteration, refs)`-keyed
+ledger de-dupe (was silently resetting a genuinely ongoing stall). Landed with the first
+real end-to-end test in this plan (`evidence-escalation-e2e.test.ts`, drives the actual kernel
+loop with a real `ToolService` and scripted provider — confirmed red on the pre-fix commit by
+independent re-review, not just by the implementer's own claim).
+
+**Live verification (2026-08-13, `ollama gemma4:e4b`, the exact scratch.ts task shape — "find
+all the episode names... list them in a table"):** confirmed the shipped mechanism engages on a
+real model run, not just in unit tests — 4 `result-truncated` ledger facts across iterations 3/5/7/8,
+control-plane `decision-evaluated`/`intervention-dispatched` active under `.withLongHorizon()`,
+run terminated honestly via `controller_early_stop:dispatcher_early_stop` (entropy/knowledge-gap
+detected) rather than a confident-looking fabrication — the model's own final answer visibly
+hedges ("N/A" episode numbers, "Example Plot" labels, "elusive... rather than an exhaustive
+official season guide"). The task's enumeration hint classified as `expectedCount:"unknown"`
+(no literal count in the task text), so Task 6's documented v1 scope boundary correctly kept
+`enumerationIncompleteProposal` from firing — this is the case explicitly deferred to FM-9's
+terminal-gate `AcceptanceTier` downgrade (Task 7 in this plan), not a bug.
+
+**One review concern moved from "unmeasured/plausible" to empirically observed**: projection
+size spiked to 53,141 chars at iteration 6 (window is 32,768) — consistent with escalation
+widening a result and pushing the thread over the compaction threshold, exactly the interaction
+the final-review re-reviewer flagged as unmeasured (§7.4 of `final-review-fix-report.md` in the
+plan's SDD workspace, since deleted — see git history commit `3b281391`'s fix report for detail).
+Worth a dedicated probe before broad rollout, not a blocker for this branch.
+
+**Deferred, not fixed, filed as follow-ups (need an owner decision, not urgent):**
+- **I1** — `requirementProgress`/`refEscalation` are run-wide, not truly per-requirement (no
+  requirement attribution on the ledger fact itself); harmless today since there is only ever
+  one enumeration-hinted requirement per contract, but the field names overstate their resolution.
+- **I3** — Layer D-control's `enumerationIncompleteProposal` has no dedicated trigger seam; it is
+  nested inside 3 pre-existing conditions (tool-failure recovery, stall-with-no-new-evidence,
+  strategy-switch-eligible) that rarely match its actual target scenario (a tool succeeding
+  repeatedly with truncated output) — close to unreachable in practice until it gets a seam of
+  its own.
+- A literal NUL byte in `assess.ts:217` (pre-existing, predates this plan) makes plain `grep`
+  silently return no matches on that file without `-a` — a real auditing hazard, not fixed here.
+- Escalation's aggregate cost across multiple simultaneously-truncated refs is uncapped and
+  unablated against a live model — worth a proper ablation (per this project's lift rule) before
+  any default-on rollout beyond enumeration-hinted contracts, which is the only case that reaches
+  this code today.
+
+Full task-by-task and review history: `.superpowers/sdd/2026-08-12-deterministic-remedy-layer/progress.md`
+on the feature branch (workspace deleted per SDD convention once this review lands — history
+lives in git from here).
