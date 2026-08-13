@@ -152,7 +152,7 @@ shippable and independently revertible.
 | 3 | Delete the inline arm | `check-single-loop.sh` | needs Phase 1 verdict |
 | 4 | One terminal outcome | run/stream parity test | kills 3 reconstruction sites |
 | 5 | One execution boundary | policy/ledger parity | kills the batch bypass |
-| 6 | Steering prose → typed control | control-decision ledger fact | the non-determinism cure |
+| 6 | Steering prose → typed control (spec: §6b) | control-decision ledger fact | the non-determinism cure |
 | 7 | Profiles | cross-tier lift | where per-model adaptation lands |
 | 8 | Reasoning policies (strategy dissolution) | replay byte-parity | needs 4+5 first |
 | 9 | Context/allocator economy | token accounting | after one manager exists |
@@ -256,6 +256,30 @@ FM-15 and re-measure. The earlier candidate causes (`looksLikeFinalAnswer` gatin
 terminal gate's channel-keyed exemption) were patched and measured — neither moved it,
 which is consistent with this diagnosis.
 
+**Post-FM-15 re-measure (2026-08-12):** canonical `harness-cost-attribution.ts`,
+`gemma4:12b`, n=3, after the FM-15 fix landed — overhead is **unchanged** (inline 1,087t,
+kernel 1,949t, +79%, was +76%; all arms 3/3 deliverable, no guard misfire). Expected: this
+benchmark's task uses the builtin `file-write` tool, which `WRITING_TOOL_NAMES` already
+covered before FM-15 — the fix targeted custom tools, so this number was never
+contaminated by it. The +79% is real overhead, independent of FM-15, and still
+unattributed to a specific mechanism.
+
+**New lead, single-sample (`rax diagnose diff`, `gemma4:12b`, inline vs kernel, same
+task):** `llm exchanges` were IDENTICAL (2 → 2) — the "+1 call" did not show up as an
+extra LLM round-trip in this trace. What differed: `tool calls` 1 → 2 (inline ends on a
+free-text response; kernel spends a dedicated `final-answer` **tool call** as its own
+`tool-call-start`/`tool-call-end` pair) and `iterations` 0 → 3, `assessment` events 0 → 4,
+`kernel-state-snapshot` 0 → 9. Net tokens were actually *lower* for kernel this sample
+(4,507 vs 5,310) — consistent with the program's own Bernoulli-noise warning (n=1, do not
+generalize); **this single sample cannot explain a +79% aggregate and is not presented as
+having done so.** It is a structural observation only: kernel's `llm-exchange` events
+carry a materially larger `systemPrompt` (an "Environment / role / Goal" header block)
+vs. inline's one-line `"You are a helpful AI assistant."` — qualitatively consistent with
+per-exchange overhead living in system-prompt size rather than exchange count, but this
+was eyeballed from the raw trace field, not measured as `tokensIn` deltas across n=3. The
+next concrete step, not yet done: diff `tokensIn` per matched exchange index across the
+canonical n=3 bench's saved traces before treating this as more than a hypothesis.
+
 ### FM-15 — Custom tools cannot satisfy deliverables, so correct runs are marked failed **[P0]**
 **The single decisive root cause behind FM-3 and much of FM-14.**
 
@@ -344,7 +368,10 @@ is deterministically actionable:
 **This is the non-determinism cure.** Same disease as strategy multiplicity: the
 harness declining to decide. Also note the control plane is `longHorizon`-gated —
 **dark on the default path**, so this lands with FM-1.
-**Fix:** Phase 6. Collapse `steer` to genuinely-ambiguous cases; every control result
+**Fix:** designed in full at §6b (Layer D) — two new proposal sources
+(`repetition-ceiling`, `enumeration-incomplete`) feed the existing `resolveControlPlane`
+total order via the existing `coverage`/`loop` remedy kinds; no new `ControlAction` or
+`RemedyKind` needed. Collapse `steer` to genuinely-ambiguous cases; every control result
 appends one `control-decision` ledger fact.
 
 ### FM-14 — `final-answer` is a fabrication channel (measured 2026-08-12)
@@ -364,6 +391,82 @@ program's thesis, and it means P2 did not merely cost a call — it **closed a f
 hole** and exposed the missing no-progress control underneath (FF-4).
 **Fix:** FF-4 (deterministic no-progress termination) + FM-7 (one evidence semantic).
 **Do not "fix" FM-3 by restoring `final-answer` to the wire** — that re-opens this.
+§6b Layer D's `enumeration-incomplete` proposal is the acceptance-gate half in full
+detail; FF-4/FM-7 remain the no-progress-termination half.
+
+**Confirming evidence — default path, real model, 2026-08-12 (`scratch.ts`, `gemma4:e4b`,
+`.withLongHorizon()`, traced run `01KZW8AY1XM65P1B288K6F9C6H`):** an open-ended research
+task ("find all episode names/descriptions for season 1, list in a table") ran to
+`final-answer` accepted with `confidence:"medium"` and `status:"done"` — the output is a
+table of **invented placeholder episode names labelled "(Example)"/"(General Premise)"**,
+not the requested data. No verifier rejected it; the model's own summary admits the data
+was never extracted, and the harness recorded the run as a normal success. Same disease as
+FM-14 (final-answer as an ungated fabrication channel), on a task shape with no artifact to
+check disk truth against — proof the gap is not limited to file-deliverable tasks.
+
+Two contributing mechanisms found in this trace, upstream of FM-14 itself:
+
+- **Requirement-blind repetition ceiling.** `guard.ts:226-230` caps any parallel-batch-safe
+  tool at `max(quantityLimit, maxBatchSize=4)` calls, then nudges *"Use final-answer to
+  respond now"* — regardless of whether the task's actual information need is met. Here it
+  fired after 4 `web-search` calls that had returned nothing but truncated snippets, forcing
+  a premature answer on a task that legitimately needed more rounds (a different source, or
+  the `recall()`/`result_ref` escape hatch actually being used — it wasn't).
+- **Requirement decomposition too coarse to detect incompleteness.** `compileRunContract`
+  produced exactly one generic requirement (`[answer] produce a substantive answer that
+  addresses the task`) for an exhaustive-enumeration task. Nothing in the contract can
+  express "N items expected, M found" for open-ended list/research tasks, so nothing could
+  have flagged the answer as partial even if fabrication weren't also in play.
+
+**Fix:** covered by FF-4 + FM-7 for the acceptance-gate half. The repetition ceiling and
+requirement-decomposition gaps are new — filed as FM-16 below rather than folded in, since
+their fix is independent of the `final-answer` channel.
+
+### FM-16 — Repetition ceiling and requirement decomposition are both requirement-blind
+`guard.ts:226-230`'s tool-call ceiling and `compileRunContract`'s requirement derivation
+share one defect: neither reads the actual outstanding information need before acting.
+The ceiling nudges "stop and answer" purely on a call-count threshold; the contract
+compiler collapses open-ended enumeration tasks ("find all X, list them") into a single
+opaque `[answer]` requirement with no count or coverage semantics. Together they let a
+run get capped and forced to answer *before* evidence is sufficient, with no requirement
+capable of catching the shortfall on the way out — a structural precondition for FM-14's
+fabrication path on non-artifact tasks. Confirming trace: `01KZW8AY1XM65P1B288K6F9C6H`
+(§FM-14 evidence above).
+**Fix:** designed in full at §6b (Layers A + D) — enumeration hint on the contract,
+`stallCount`-gated control proposal replacing the bare nudge. Do not re-derive here.
+**Priority:** unscheduled — file under Phase 6 (control plane) alongside FM-8; needs the
+same `RunAssessment`-driven remedy table, not a bespoke patch.
+
+### FM-17 — Result visibility is model-initiated, not requirement-driven
+Same disease as FM-8/FM-16 one layer earlier: an overflowing tool result is fully held
+server-side (`ResultStore.put`/`putWithRef`, `result-store.ts:22-39`) but the model only
+gets a bounded preview + a text hint to call `recall(ref)` or `write_result_to_file(ref,
+path)` (`summarize()`/`preview()`, `result-store.ts:49-95`). Nothing checks whether the
+outstanding contract requirement this result would satisfy is still open before deciding
+how much to show — the compression budget is uniform regardless of load-bearing-ness.
+Confirmed in the `scratch.ts` trace (§FM-14 evidence): four `web-search` results were each
+truncated to ~2KB previews, the model never called `recall()`, and the run terminated
+without ever seeing the full data — not because the model refused to look, but because
+looking was optional and the repetition ceiling (FM-16) closed the window first.
+
+This is the harness delegating a mechanical decision — "is this data still needed, and
+does the model have room to see it" — to the model's own initiative, on top of already
+delegating the *reading*. The correct owner is the projector: it already has the
+assessment (`requirementsOutstanding`) and the contract at render time
+(`renderStandingFrame`, `standing-frame.ts:162`); a ref backing an open requirement should
+get materialized (bumped preview budget, or auto-inlined up to the token budget) on
+render, not deferred to a tool call that competes with the repetition ceiling for turns.
+**Fix:** designed in full at §6b (Layer C, Evidence Escalation) — a `stallCount`-indexed
+render budget in `project-results.ts`, keyed on `requirementsSatisfied` staying flat
+(verified against the trace: `evidenceDelta` does NOT discriminate this — it sat flat at
+1 every iteration while `requirementsSatisfied` sat flat at 0, so the escalation trigger
+uses the latter). Model-agnostic by construction: every input is harness-computed, none
+of it depends on the model choosing to call `recall()` or comply with a nudge. Do not
+re-derive here.
+**Priority:** unscheduled — same Phase 6 control-plane bucket as FM-8/FM-16; all four
+(guard ceiling, requirement decomposition, result visibility, evidence escalation) read
+the same `RunAssessment` and ship as one deterministic remedy layer (§6b), not four
+bespoke patches.
 
 ### FM-9 — Success is existence, never content (the grounding ceiling)
 Verified by deterministic probe: the success authority accepts **wrong-content, empty,
@@ -413,6 +516,155 @@ Rung-1 replay buckets `RA_LAZY_TOOLS`/`RA_TOOL_DISCOVERY` INERT for a **corpus**
 reason (builtins sets too small to hide anything), not a mechanism reason — this must
 be stated with every INERT verdict.
 **Fix:** FF-2 + grow the golden corpus.
+
+---
+
+## 6b. Phase 6 spec — the Deterministic Remedy Layer (FM-8 + FM-16 + FM-17, unified)
+
+**Task-level implementation plan:** [[2026-08-12-deterministic-remedy-layer]] — 6 TDD
+tasks (+ 1 filed follow-up) in dependency order against this spec's Layers A-D, with
+exact file:line references. Not yet executed — blocked behind Phase 0 + the Phase 1
+owner call, same as everything else in this program.
+
+**This is not a new subsystem.** The meta-loop DAG (09, this doc's header law) already
+declares `RunContract → RunLedger → RunAssessment → Control → Actuators → Projector`.
+FM-8, FM-16, and FM-17 are three empty or half-wired slots in that DAG — a control plane
+with the right vocabulary and nothing feeding it (FM-8), a contract that can't express
+"how many" (FM-16), and a projector that ignores the contract it's handed (FM-17). The
+spec below fills the slots that exist; it does not draw a new box.
+
+**Design principle, stated once so every layer below inherits it:** any mechanism that
+computes a fact from `RunContract`/`RunLedger`/`RunAssessment` and then writes English
+asking the model to act on it is the disease this whole program exists to cure (09 §6,
+FM-8's own framing). Every layer below ends in either a deterministic actuator (block,
+widen, terminate) or a `ControlProposal` — never a bare nudge string with no fallback.
+
+### Layer A — Contract: enumeration requirements (closes FM-16's decomposition half)
+
+`RequirementKind` (`run-contract.ts:43-47`) stays a closed 4-set — `question-answered`
+is not replaced, it's given an optional shape for the "how many" case:
+
+```ts
+// run-contract.ts — extend RequirementSpec, no new RequirementKind
+export interface EnumerationHint {
+  /** Parsed from the task text ("all", "each", a literal count) when derivable. */
+  readonly expectedCount: number | "unknown";
+  /** What the model must supply per item, for the assessment's counting pass. */
+  readonly itemShape: "list-entry" | "table-row";
+}
+
+export interface RequirementSpec {
+  readonly description: string;
+  readonly condition?: PostCondition;
+  readonly acceptance: AcceptanceTier;
+  readonly enumeration?: EnumerationHint;   // NEW — present only on list/research asks
+}
+```
+
+`compileRunContract` gains one deterministic classifier: task text matching an
+enumeration pattern ("find all X", "list every Y", "the N episodes") mints
+`enumeration: { expectedCount: <parsed literal or "unknown">, itemShape: ... }` on the
+`question-answered` requirement instead of leaving it opaque. `"unknown"` is not a
+failure of the classifier — it's an honest signal Layer C's control proposals must
+respect (a requirement with no derivable count can never be marked `satisfied` by count,
+only by an explicit abstain-eligible checker tier).
+
+**Red-on-cut:** a task containing "list all three X" compiles `expectedCount: 3`; a task
+with no enumerating language compiles no `enumeration` field (byte-identical contract to
+today — this is additive, not a behavior change for non-list tasks).
+
+### Layer B — Assessment: count-aware satisfaction, requirement-stall as the trigger
+
+`assess()` already recomputes `requirements.satisfied`/`requirementsOutstanding` every
+iteration (`standing-frame.ts:130-139` reads it as authoritative). It gains one more
+field, computed from Layer A's hint and the ledger's minted evidence facts — **not** from
+`evidenceDelta**, which the scratch.ts trace (`01KZW8AY1XM65P1B288K6F9C6H`) proved sits
+flat at a nonzero constant on pure-research runs and therefore cannot discriminate a
+stall (verified before this spec was written, not assumed):
+
+```ts
+// assess.ts — RunAssessment gains:
+readonly requirementProgress: ReadonlyMap<string, {
+  readonly itemsFound: number;              // count of distinct evidence facts minted
+  readonly stallCount: number;               // iterations since itemsFound last grew
+}>;
+```
+
+`stallCount` is the ONE new signal every downstream layer keys on. It replaces ad hoc
+per-mechanism heuristics (the guard's raw call counter, the projector's recency-only
+budget) with a single, ledger-derived number computed once per iteration.
+
+### Layer C — Projection: Evidence Escalation (FM-17, mechanism as previously specced)
+
+`project-results.ts:108-110`'s two-tier recency budget gains a third input:
+
+```ts
+const stalled = c.assessment?.requirementProgress.get(backingRequirementId(e.ref))?.stallCount ?? 0;
+const budget = stalled > 0
+  ? Math.max(baseBudget, baseBudget * (1 + ESCALATION_FACTOR * stalled))
+  : baseBudget;   // stallCount 0 (satisfied, or not load-bearing) → unchanged today's behavior
+```
+
+capped at remaining context window minus reserve (the existing compaction budget already
+enforces this ceiling elsewhere — reuse it, don't reinvent). `backingRequirementId(ref)`
+is a deterministic match on the tool name that produced the ref against
+`contract.requirements[].condition` — already-available data, no new inference.
+
+No control action here. This layer only widens what the model sees; it never decides to
+stop, steer, or abstain — that's Layer D's job, and keeping the split means a widened
+render can never itself cause a termination side-effect.
+
+### Layer D — Control: the proposals FM-8 already has slots for
+
+Two new `ControlProposal` sources, both consuming `stallCount` and both routing through
+the EXISTING `resolveControlPlane` total order (`control-plane.ts:120-160`) — no new
+action kind needed, `RemedyKind` already has `coverage` and `loop`:
+
+1. **`repetition-ceiling`** replaces `guard.ts:226-230`'s bare nudge string. Same
+   threshold trigger (`priorCallsOfSameTool >= max(quantityLimit, defaultCeiling)`), but
+   the outcome now branches on `stallCount` instead of unconditionally nudging:
+   - `stallCount` unchanged this iteration and an unescalated load-bearing ref still
+     exists (Layer C hasn't widened it to its cap yet) → propose `continue` (let
+     escalation do its job before spending a control decision).
+   - `stallCount` unchanged AND the load-bearing ref is already at its escalation
+     ceiling → propose `steer` (`RemedyKind: "coverage"`) naming the specific
+     unsatisfied requirement — replaces "Stop repeating this tool" with "the harness
+     has shown you everything it has; this line of evidence is exhausted."
+   - `stallCount` exceeds a hard iteration budget even after full escalation → propose
+     `abstain` (`RemedyKind: "coverage"`, `enumeration.expectedCount` in the detail) —
+     an honest partial-list decline instead of FM-14's fabricated table.
+
+2. **`enumeration-incomplete`** fires at the terminal gate only: a `question-answered`
+   requirement with an `enumeration` hint whose `itemsFound < expectedCount` (numeric
+   case) can never resolve `satisfied` from a bare `final-answer` call — it proposes
+   `abstain` (numeric case, provably short) or, for `expectedCount:"unknown"`, downgrades
+   `AcceptanceTier` to `"checker"` so a bare pattern-match cannot silently pass an
+   unverifiable claim (closes the exact FM-14 gap `scratch.ts` hit: `confidence:"medium"`
+   accepted with zero verifier involvement).
+
+Both sources are pure functions of `RunAssessment` + `RunContract`, per the control
+plane's own DAG law (`control-plane.ts:15-18`, "proposals CONSUME assessment, never
+recompute it") — no new coupling.
+
+### Build order (inside Phase 6, after Phase 0-5 land)
+
+1. Layer A (contract) — additive, zero behavior change until B/C/D consume it. Ships
+   alone, red-on-cut only.
+2. Layer B (assessment field) — additive alongside A. Ships alone.
+3. Layer C (projection) — first layer with an observable behavior change (bigger
+   previews on stalled requirements). Ships with the `scratch.ts` scenario as a named
+   regression test: same task, assert the run either surfaces real episode data or
+   abstains — never the FM-14 placeholder table.
+4. Layer D (control proposals) — depends on A+B+C; replaces `guard.ts`'s nudge string
+   and adds the terminal-gate enumeration check. This is the layer with veto power over
+   FM-14's fabrication path, so it ships last and gets the lift-gate treatment (09 §2)
+   before going default-on, same as everything else in this program.
+
+**Non-goals for this spec:** does not touch `recall()`'s existence (stays available,
+demoted to exploratory use per FM-17); does not change the `low_delta_guard`'s own
+threshold (FM-15 already fixed its data source — this spec feeds it better inputs, not a
+different guard); does not add a new `RequirementKind` or `ControlAction` (both closed
+sets stay closed — everything here is new data on existing shapes).
 
 ---
 
