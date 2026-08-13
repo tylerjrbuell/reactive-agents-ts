@@ -47,6 +47,12 @@ export interface RequirementAssessment {
   readonly blocked: readonly string[];
 }
 
+/** Per-requirement stall tracking (FM-17 layer 2) — enumeration-shaped requirements only. */
+export interface RequirementProgress {
+  /** Consecutive iterations ending at `currentIter` with a truncated result and no reset. */
+  readonly stallCount: number;
+}
+
 /** A produced deliverable + its ledger provenance. */
 export interface ArtifactRef {
   /** The owning deliverable id (mirrors the contract deliverable id). */
@@ -106,6 +112,8 @@ export interface RunAssessment {
   readonly phase: RunPhase;
   readonly pace: PaceAssessment;
   readonly health: RunHealth;
+  /** NEW (FM-17 layer 2) — stall tracking for enumeration-shaped requirements. */
+  readonly requirementProgress: ReadonlyMap<string, RequirementProgress>;
 }
 
 // ─── Budget input (the spec's `BudgetState`) ────────────────────────────────
@@ -405,6 +413,24 @@ export function assess(
   const iterationsSinceEvidence =
     lastEvidenceIter < 0 ? Math.max(0, currentIter) : Math.max(0, currentIter - lastEvidenceIter);
 
+  // ── requirementProgress (FM-17 layer 2) — enumeration-shaped requirements only.
+  // stallCount = the trailing run of consecutive iterations, ending at currentIter,
+  // that each recorded a `result-truncated` fact. A gap (an iteration with no
+  // truncation) resets the count — the model saw everything that turn, so any
+  // earlier stall is stale.
+  const truncationEntries = entriesOfKind(ledger, "result-truncated");
+  const truncatedIterations = new Set(truncationEntries.map((e) => e.iteration));
+  const requirementProgress = new Map<string, { stallCount: number }>();
+  for (const r of contract.requirements) {
+    if (r.spec.enumeration === undefined) continue;
+    let stallCount = 0;
+    for (let iter = currentIter; iter >= 0; iter--) {
+      if (!truncatedIterations.has(iter)) break;
+      stallCount++;
+    }
+    requirementProgress.set(r.id, { stallCount });
+  }
+
   return {
     requirements: { satisfied, outstanding, blocked },
     deliverables: { produced, missing },
@@ -418,5 +444,6 @@ export function assess(
       iterationsSinceEvidence,
       failureArgVariety,
     },
+    requirementProgress,
   };
 }
