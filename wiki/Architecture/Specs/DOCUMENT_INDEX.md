@@ -1,6 +1,6 @@
 # Document Index — `wiki/Architecture/Specs/`
 
-> **Last updated:** 2026-07-12 (authority hierarchy rewritten; 08/09 indexed; 04 deprecated as state read).
+> **Last updated:** 2026-08-11 (2026-08-10 convergence proposals vetted and absorbed into 09 via decision doc; not indexed as standing docs — see §ruling below).
 > **Purpose:** Map every document in this directory to its purpose. Ranked from "read first" to "reference when needed."
 >
 > **Authority:** Uniform numbering `NN-NAME.md` (00–09). Single source of truth for agent guidance per AGENTS.md.
@@ -29,6 +29,21 @@
 - If docs conflict: amend lower-authority doc, never silent drift. Changing a higher doc is a ratification event (decision doc).
 
 **That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical).
+
+## 2026-08-10 convergence proposals — absorbed and deleted
+
+Two design-specs proposed a large `RunSupervisor`/`AgentSpec` convergence
+architecture. 13 of 14 cited defects verified accurate against source — so the
+**content** was absorbed into `09-UNIFIED-PROGRAM.md` §6 (the architecture
+smells, now named and cited there) and §7 (the ordered path), and the two source
+files were **deleted 2026-08-12** rather than indexed as a 4th/5th north star,
+which would repeat the parallel-authorities disease they diagnose. Commit
+`767c44fd` holds the originals.
+
+Surviving records: the ruling and full 14-row fact-check in
+`../../Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md`, and
+the primary evidence in
+`../../Research/Harness-Reports/2026-08-10-new-user-adversarial-review.md`.
 
 ---
 

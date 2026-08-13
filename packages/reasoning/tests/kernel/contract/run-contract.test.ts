@@ -205,3 +205,41 @@ describe("LLM decomposition — floor invariant (deterministic core stands alone
     expect(merged.find((r) => r.id === "answer")).toEqual(floor.find((r) => r.id === "answer")!);
   });
 });
+
+describe("compileRunContract — availableWritingTools (FM-15 layer 4)", () => {
+  it("legacy behavior when omitted: guesses the builtin file-write", () => {
+    const c = compileRunContract("Write the summary to ./out.md.", {});
+    const writer = c.requirements.find((r) => r.kind === "tool-coverage");
+    expect(writer?.id).toBe("tool:file-write");
+  });
+
+  it("uses the run's actual custom writer when declared available", () => {
+    const c = compileRunContract("Write the summary to ./out.md.", {
+      availableWritingTools: ["write_note"],
+    });
+    const writer = c.requirements.find((r) => r.kind === "tool-coverage");
+    expect(writer?.id).toBe("tool:write_note");
+  });
+
+  it("does NOT demand an unavailable writer when the run has none", () => {
+    // The bug: this used to unconditionally require the builtin `file-write`
+    // even when it was never registered, making the requirement permanently
+    // unsatisfiable and failing a fully correct run (FM-15).
+    const c = compileRunContract("Write the summary to ./out.md.", {
+      availableWritingTools: [],
+    });
+    const writer = c.requirements.find((r) => r.kind === "tool-coverage");
+    expect(writer).toBeUndefined();
+    // The disk-checkable artifact requirement still stands.
+    expect(c.requirements.some((r) => r.kind === "artifact-produced")).toBe(true);
+  });
+
+  it("prefers an already-required tool over the first available writer", () => {
+    const c = compileRunContract("Write the summary to ./out.md.", {
+      requiredTools: ["custom_writer_b"],
+      availableWritingTools: ["custom_writer_a", "custom_writer_b"],
+    });
+    const writer = c.requirements.find((r) => r.kind === "tool-coverage" && r.id.startsWith("tool:custom"));
+    expect(writer?.id).toBe("tool:custom_writer_b");
+  });
+});

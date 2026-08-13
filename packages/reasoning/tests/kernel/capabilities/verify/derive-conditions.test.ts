@@ -188,3 +188,28 @@ describe("deriveConditions — non-file mutation (SideEffectLanded)", () => {
     expect(kinds(c)).not.toContain("SideEffectLanded");
   }, 15000);
 });
+
+describe("deriveConditions — availableWritingTools (FM-15 layer 5)", () => {
+  it("legacy behavior when omitted: guesses the builtin file-write", () => {
+    const c = deriveConditions("Write the summary to ./out.md.", []);
+    expect(c).toContainEqual(toolCalled("file-write"));
+  });
+
+  it("requires the run's actual custom writer when declared available", () => {
+    const c = deriveConditions("Write the summary to ./out.md.", [], ["write_note"]);
+    expect(c).toContainEqual(toolCalled("write_note"));
+    expect(c).not.toContainEqual(toolCalled("file-write"));
+  });
+
+  it("does NOT demand an unavailable writer — this was FM-15's terminal-gate half", () => {
+    // compileRunContract (layer 4) and deriveConditions (layer 5) are two
+    // authorities over the SAME fact and must agree, or the terminal gate
+    // demands a tool the compiled contract never required — which is exactly
+    // what force-failed a correct run: the runner passed the shared
+    // availability signal to compileRunContract but not to deriveConditions,
+    // so the gate still read the hardcoded guess.
+    const c = deriveConditions("Write the summary to ./out.md.", [], []);
+    expect(c).not.toContainEqual(toolCalled("file-write"));
+    expect(c).toContainEqual(artifactProduced("./out.md"));
+  });
+});

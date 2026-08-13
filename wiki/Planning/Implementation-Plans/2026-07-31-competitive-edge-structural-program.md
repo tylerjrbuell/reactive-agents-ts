@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12 — absorbed into [[2026-08-12-agentic-overhaul-program|The Agentic Overhaul Program]].**
+> This plan is retained for provenance only. Do not execute from it; its content,
+> including any still-open items, is carried in that program's failure-mode register.
+> Three plans each declared themselves the sole active program — that is why one
+> running plan now replaces them.
+
 # The Competitive-Edge Structural Program (2026-07-31)
 
 **Status:** PROPOSED — strategic plan, owner ratification required before it re-orders the [[../../Architecture/Specs/09-UNIFIED-PROGRAM|09 Unified Program]] sequence.

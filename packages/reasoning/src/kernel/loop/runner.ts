@@ -12,6 +12,7 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
+import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
 import { Effect, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -366,6 +367,37 @@ export function runKernel(
     // ONCE here (deterministic, NO LLM, NO fs) and store on state.meta so BOTH
     // gates read the SAME set: the Arbitrator's mid-loop steer gate (via
     // arbitrationContextFromState) and the terminal hard-stop in terminate().
+    // FM-15 layers 4+5: which tools available to THIS run can write a file?
+    // Builtins in WRITING_TOOL_NAMES plus any registered tool declaring
+    // `produces:"file"`. Without this the compiler guessed the builtin
+    // `file-write`, so an agent with only a custom writer carried a
+    // permanently unsatisfiable requirement. Omitted (undefined) when we have
+    // no schema list at all, which preserves the legacy guess.
+    // Shared by BOTH derivations below (deriveConditions -> state.meta.postConditions
+    // and compileRunContract -> contract requirements). They are two authorities
+    // over one fact and must agree, or the terminal gate demands a tool the
+    // contract never required.
+    const availableSchemas =
+      effectiveInput.allToolSchemas ?? effectiveInput.availableToolSchemas;
+    let availableWritingTools: readonly string[] | undefined;
+    if (availableSchemas !== undefined) {
+      const names = availableSchemas.map((s) => s.name);
+      const writers: string[] = [];
+      for (const n of names) {
+        if (WRITING_TOOL_NAMES.has(n.toLowerCase())) {
+          writers.push(n);
+          continue;
+        }
+        if (toolService._tag !== "Some") continue;
+        const declared = yield* toolService.value.getTool(n).pipe(
+          Effect.map((d) => d.produces),
+          Effect.catchAll(() => Effect.succeed(undefined)),
+        );
+        if (declared === "file") writers.push(n);
+      }
+      availableWritingTools = writers;
+    }
+
     // Sprint-1 A4 (2026-06-02): unconditional. Derived from
     // effectiveInput.requiredTools + the task text; conservative — empty set
     // falls back to the prose verdict.
@@ -373,6 +405,7 @@ export function runKernel(
       const derived = deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
+        availableWritingTools,
       );
       if (derived.length > 0) {
         state = transitionState(state, {
@@ -396,6 +429,7 @@ export function runKernel(
     {
       const runContract = compileRunContract(effectiveInput.task, {
         requiredTools: effectiveInput.requiredTools ?? [],
+        ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
         // C2 ruling: RunContract absorbs the declared TaskContract — its
         // required/forbidden tools + outputShape become requirements +
         // constraints. Threaded from the runtime layer (KernelInput.taskContract);

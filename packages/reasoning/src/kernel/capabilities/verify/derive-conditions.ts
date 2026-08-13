@@ -323,6 +323,16 @@ export function deriveDeliverablePaths(task: string): string[] {
 export function deriveConditions(
   task: string,
   requiredTools: readonly string[],
+  /**
+   * Tools ACTUALLY available to this run that can write a file (FM-15 layer 5).
+   * `compileRunContract` takes the same signal; both derive the "a file was
+   * written implies a writing tool was called" condition, and they must agree —
+   * they are two authorities over one fact. Omitted → legacy guess.
+   *
+   * Empty means no tool can write, so the condition is UNSATISFIABLE and is not
+   * pushed: `ArtifactProduced`'s disk truth still grounds the deliverable.
+   */
+  availableWritingTools?: readonly string[],
 ): PostCondition[] {
   const conditions: PostCondition[] = [];
   const seen = new Set<string>();
@@ -342,7 +352,12 @@ export function deriveConditions(
   const path = deriveDeliverablePath(task);
   if (path) {
     push(artifactProduced(path));
-    push(toolCalled(pickWritingTool(requiredTools)));
+    const writer =
+      availableWritingTools === undefined
+        ? pickWritingTool(requiredTools)
+        : (requiredTools.find((t) => availableWritingTools.includes(t)) ??
+           availableWritingTools[0]);
+    if (writer !== undefined) push(toolCalled(writer));
   } else if (MUTATION_VERB.test(task) && EXTERNAL_RESOURCE_NOUN.test(task)) {
     // 3. non-file mutation (create/send/… a note/email/event) -> the side-effect
     //    must LAND. Excluded when a file path derived above: ArtifactProduced's

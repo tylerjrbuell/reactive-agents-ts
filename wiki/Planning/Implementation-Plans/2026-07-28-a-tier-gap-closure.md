@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12 — absorbed into [[2026-08-12-agentic-overhaul-program|The Agentic Overhaul Program]].**
+> This plan is retained for provenance only. Do not execute from it; its content,
+> including any still-open items, is carried in that program's failure-mode register.
+> Three plans each declared themselves the sole active program — that is why one
+> running plan now replaces them.
+
 # A-Tier Gap Closure Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
