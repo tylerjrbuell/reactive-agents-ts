@@ -31,7 +31,7 @@ import {
 } from './agent/gateway-runner.js'
 import type { ExecutionContext, RunLedgerEntryShape } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './errors.js'
+import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
@@ -777,6 +777,27 @@ export class ReactiveAgent<TOut = unknown> {
                       this.buildRunTaskEffect(taskInput, taskIdOpt),
                       runSignal ? { signal: runSignal } : undefined,
                   )
+
+            // B1 (Move 1 merge, 2026-08-12): the kernel arm resolves a provider
+            // fault as a graceful status:"failed"/terminatedBy:"llm_error" result
+            // (think.ts's Effect.either around the LLM stream) instead of an
+            // Effect failure. `.withReasoning()` users have ALWAYS gotten this —
+            // it is the kernel's existing, deliberately-tested contract
+            // (error-reporting.test.ts: "hard LLM failure surfaces as
+            // success:false, not silent swallow"). The BARE builder's old inline
+            // arm instead let a provider fault propagate uncaught, so run()
+            // REJECTED and withErrorHandler fired (tool-loop-behavioral.test.ts).
+            // Move 1 routes bare builders through the same kernel arm, which
+            // would silently flip that public contract for every bare-builder
+            // caller. Preserve it explicitly: only a bare builder (no explicit
+            // .withReasoning()) re-throws a provider fault here.
+            if (result.terminatedBy === 'llm_error' && this.config['enableReasoning'] !== true) {
+                throw new ExecutionError({
+                    message: result.error ?? 'LLM provider error',
+                    taskId: result.taskId,
+                    phase: 'execution',
+                })
+            }
 
             // Tier 2 — same-process convenience: drive pause→decide→resume in one
             // call. Loops so multi-gate runs (a resume that pauses again) are handled.

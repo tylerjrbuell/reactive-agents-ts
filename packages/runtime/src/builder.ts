@@ -2661,6 +2661,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     // resolve it via resolveReceiptSigningKey (config wins over
                     // RA_RECEIPT_KEY env var).
                     receiptSigningKey: self._receiptSigningKey,
+                    // B1 (Move 1 merge, 2026-08-12): whether .withReasoning() was
+                    // called explicitly. Used only to decide the provider-fault
+                    // error contract in run() — see reactive-agent.ts's execute().
+                    enableReasoning: self._enableReasoning,
                 },
             })
         }) as Effect.Effect<ReactiveAgent<TOut>, Error>
