@@ -34,13 +34,33 @@ interface LedgerShape {
 const REL_PATH = "./.ledger-artifact-parity.tmp.md";
 
 describe("the inline path records artifact facts on the ledger", () => {
+  // RETITLED (Move 1 merge, 2026-08-13): "the inline path" is now a misnomer
+  // -- every builder (bare or .withReasoning()) runs the kernel arm, so
+  // there is no separate inline-act.ts path left to guard parity against.
+  // The underlying property (the kernel mints an `artifact` fact from a
+  // tool's declared `produces:"file"`) is still real and still worth a
+  // direct test; this file now exercises it via the kernel path plainly.
+  //
+  // CORRECTED (2026-08-13, was wrong in an earlier commit this session):
+  // this test's CONTROL check failing was NOT a `TestTurn.match`
+  // implementation gap -- `match` IS implemented (packages/llm-provider/src
+  // /testing.ts's `resolveTurn`, with a proper agent/harness channel split
+  // via `channelOf(purpose)` so harness-internal calls like strategy-switch
+  // evaluation cannot steal a scripted agent turn). The real cause: bare
+  // `.withTools()` with no `required`/`allowedTools` leaves `file-write`
+  // REGISTERED but not VISIBLE under the kernel's lazy-disclosure pruning
+  // (confirmed via a debug trace: `[tools] visible: recall, discover-tools`
+  // -- file-write absent) -- so the scripted `file-write` toolCall was
+  // rejected as an unavailable tool name and the run fell through to the
+  // trailing text turn. Fixed by declaring `file-write` required, matching
+  // every other passing test that scripts a specific tool call.
   it("mints an `artifact` entry for a direct file-write, in BOTH views", async () => {
     const traceDir = await mkdtemp(join(tmpdir(), "ra-artifact-parity-"));
     const agent = await ReactiveAgents.create()
       .withName("artifact-parity")
       .withProvider("test")
       .withModel("test-model")
-      .withTools()
+      .withTools({ required: ["file-write"] })
       .withObservability({ tracing: { dir: traceDir } })
       .withTestScenario([
         {

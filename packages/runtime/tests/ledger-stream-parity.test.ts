@@ -46,20 +46,40 @@ const build = async (dir: string, kernel: boolean) => {
     .withName(kernel ? "parity-kernel" : "parity-inline")
     .withProvider("test")
     .withModel("test-model")
-    .withTools()
+    // scratchpad-write (this file's original scripted tool) is defined in
+    // packages/tools/src/skills/scratchpad.ts but never wired into
+    // packages/runtime's tool registration for a bare builder -- swapped for
+    // file-write (always-registered builtin), matching
+    // ledger-artifact-parity.test.ts's fix (2026-08-13).
+    .withTools({ required: ["file-write"] })
     .withMaxIterations(3)
     .withObservability({ tracing: { dir } });
   if (kernel) b = b.withReasoning({ defaultStrategy: "reactive" });
   return b
     .withTestScenario([
-      { match: "PARITY_TRIGGER", toolCalls: [{ name: "scratchpad-write", args: { key: "k", value: "v" } }] },
+      { match: "PARITY_TRIGGER", toolCalls: [{ name: "file-write", args: { path: "./.parity-probe.tmp.md", content: "v" } }] },
       { text: "Done." },
     ])
     .build();
 };
 
 describe("the run ledger's object and stream views agree", () => {
-  // The load-bearing case: the DEFAULT path, previously stream-blind.
+  // RETITLED (Move 1 merge, 2026-08-13): "inline path" (kernel:false) no
+  // longer exercises a different code path than "kernel path" below -- every
+  // builder now runs the kernel arm (runtime.ts's bareReasoningConfig), so
+  // this case is now equivalent to (not a distinct regression guard from)
+  // "kernel path streams every entry it puts on the object ledger" below.
+  // Kept rather than deleted: cheap, and pins that the bare-builder door
+  // specifically still gets full stream parity, not just the explicit-
+  // reasoning door.
+  //
+  // CORRECTED (2026-08-13, was wrong in an earlier commit this session):
+  // the CONTROL check failing was not a `TestTurn.match` implementation gap
+  // -- `match` IS implemented (testing.ts's `resolveTurn` with a proper
+  // agent/harness channel split). The real cause, same as
+  // ledger-artifact-parity.test.ts: bare `.withTools()` left the scripted
+  // tool unavailable under lazy-disclosure pruning. Fixed by declaring it
+  // required in the shared `build()` helper above.
   it("inline path streams every entry it puts on the object ledger", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ra-parity-inline-"));
     const agent = await build(dir, false);

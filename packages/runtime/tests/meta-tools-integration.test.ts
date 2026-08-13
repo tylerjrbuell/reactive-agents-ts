@@ -127,13 +127,20 @@ describe("Conductor's Suite — integration", () => {
   });
 
   it("pulse tool returns structured response", async () => {
+    // `recall` was dropped from this scenario (Move 1 merge, 2026-08-13): the
+    // kernel arm gates `recall`'s visibility on overflow (filterRecallByOverflow,
+    // default-on since Phase-3, meta-tools-default-surface.test.ts's own header
+    // comment) — nothing is recallable before any result has overflowed, so a
+    // scripted FIRST-action `recall` call is correctly rejected as unavailable.
+    // The old inline arm never applied this gate; this test only ever exercised
+    // that simpler surface. `pulse` alone is sufficient to exercise this test's
+    // actual subject.
     const agent = await ReactiveAgents.create()
       .withTestScenario([
-        { toolCall: { name: "recall", args: { key: "work", content: "some work done" } } },
         { toolCall: { name: "pulse", args: {} } },
         { text: "Pulse checked." },
       ])
-      .withMetaTools({ pulse: true, recall: true })
+      .withMetaTools({ pulse: true })
       .build();
 
     let result;

@@ -380,7 +380,6 @@
       "name": "@reactive-agents/identity",
       "version": "0.10.6",
       "dependencies": {
-        "@noble/ed25519": "^2.0.0",
         "@reactive-agents/core": "workspace:*",
       },
       "devDependencies": {
@@ -475,7 +474,6 @@
         "@opentelemetry/resources": "^2.6.0",
         "@opentelemetry/sdk-metrics": "^2.6.0",
         "@opentelemetry/sdk-trace-base": "^2.6.0",
-        "@opentelemetry/semantic-conventions": "^1.40.0",
         "@reactive-agents/core": "workspace:*",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
@@ -1346,8 +1344,6 @@
     "@mongodb-js/saslprep": ["@mongodb-js/saslprep@1.4.8", "", { "dependencies": { "sparse-bitfield": "^3.0.3" } }, "sha512-kpjr2jy2w71w0oqAMI8oibBmiF9lXxWkEQs5gMkW4hVE48bsqINGLxnCSYW62ck/NHXJQpQEfA9WlJ1sY0eqBg=="],
 
     "@neon-rs/load": ["@neon-rs/load@0.0.4", "", {}, "sha512-kTPhdZyTQxB+2wpiRcFWrDcejc4JI6tkPuS7UZCG4l6Zvc5kU/gGQ/ozvHTh1XR5tS+UlfAfGuPajjzQjCiHCw=="],
-
-    "@noble/ed25519": ["@noble/ed25519@2.3.0", "", {}, "sha512-M7dvXL2B92/M7dw9+gzuydL8qn/jiqNHaoR3Q+cb1q1GHV7uwE17WCyFMG+Y+TZb5izcaXk5TdJRrDUxHXL78A=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

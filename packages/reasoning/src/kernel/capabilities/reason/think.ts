@@ -731,8 +731,22 @@ export function handleThinking(
     if (guidanceText) parts.push(guidanceText);
     const systemPromptWithDriver = parts.join("\n\n");
 
-    // ── STREAM (with text delta emission) ──────────────────────────────────
-    const llmTools = gatedToolSchemas.map((ts) => ({
+    // ── Control-plane invariant: the FC array is DOMAIN-ONLY on native-FC ────
+    // (2026-08-08-control-plane-vs-meta-tools). A harness-scope tool
+    // (terminate/discover/recall) in a native-FC tool slot is pure token tax +
+    // misuse temptation — the harness reads control from the response shape
+    // (no-tool-call = the `end_turn` terminal, arbitrator.ts:286/427) instead.
+    // Text-parse/none KEEP them: those models cannot signal control by shape,
+    // so the sentinels are load-bearing. Harness membership: the `scope` field
+    // when set, else `META_TOOLS` (single source). Domain tools always stay, so
+    // an in-progress task never loses a real affordance.
+    const isNativeFC = context.toolCallingDriver.mode === "native-fc";
+    const wireToolSchemas = isNativeFC
+      ? gatedToolSchemas.filter(
+          (ts) => ts.scope === "domain" || (ts.scope !== "harness" && !META_TOOL_SET.has(ts.name)),
+        )
+      : gatedToolSchemas;
+    const llmTools = wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       description: ts.description,
       inputSchema: {

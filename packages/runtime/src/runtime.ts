@@ -40,6 +40,28 @@ import type { ReasoningOptions } from "./types.js";
 import { withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { ContextProfile } from "@reactive-agents/reasoning";
+
+/**
+ * Move 1 (single agent loop): the reasoning config for a BARE builder — one
+ * that never called `.withReasoning()`. The ReasoningService is now ALWAYS
+ * provided so the kernel arm is the only agent loop (the inline arm is gone);
+ * a bare builder therefore routes through `reactive` (multi-turn), which is the
+ * config `.withReasoning()` already defaults to. `maxIterations` is threaded so
+ * the default matches the old inline loop's `maxIterations ?? 10` seam.
+ * `defaultStrategy` is pinned explicitly (not inherited) so a future change to
+ * `defaultReasoningConfig` cannot silently switch the default path's strategy.
+ */
+const bareReasoningConfig = (maxIterations: number | undefined): ReasoningConfig => ({
+  ...defaultReasoningConfig,
+  defaultStrategy: "reactive",
+  strategies: {
+    ...defaultReasoningConfig.strategies,
+    reactive: {
+      ...defaultReasoningConfig.strategies.reactive,
+      ...(maxIterations !== undefined ? { maxIterations } : {}),
+    },
+  },
+});
 import {
   createObservabilityLayer,
   MetricsCollectorLive,
@@ -720,10 +742,17 @@ export const createRuntime = (options: RuntimeOptions) => {
   const promptLayer = options.enablePrompts ? createPromptLayer() : null;
 
   // ── Reasoning ──
-  const reasoningOptLayer = options.enableReasoning
-    ? (() => {
+  // Move 1: ALWAYS build the reasoning layer so `reasoningOpt` is always `Some`
+  // in the engine — the kernel arm is the sole agent loop. A bare builder gets
+  // the `reactive` default (see `bareReasoningConfig`); `.withReasoning()` users
+  // get the opt-in config unchanged. `enableReasoning` no longer selects the
+  // loop; it only gates reasoning EXTRAS (calibration auto-on, features flag,
+  // durable runs) elsewhere.
+  const reasoningOptLayer = (() => {
         // Build reasoning config from defaults + user overrides
-        const reasoningConfig: ReasoningConfig = options.reasoningOptions
+        const reasoningConfig: ReasoningConfig = !options.enableReasoning
+          ? bareReasoningConfig(options.maxIterations)
+          : options.reasoningOptions
           ? {
               ...defaultReasoningConfig,
               ...(options.reasoningOptions.defaultStrategy
@@ -772,8 +801,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         return createReasoningLayer(reasoningConfig).pipe(
           Layer.provide(reasoningDeps),
         );
-      })()
-    : Layer.empty;
+      })();
 
   // ── Observability ──
   const observabilityOptLayer = options.enableObservability
@@ -1278,9 +1306,13 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     : Layer.empty;
 
   // ── Optional reasoning layer ──
-  const lightReasoningOptLayer = options.enableReasoning
-    ? (() => {
-        const reasoningConfig: ReasoningConfig = options.reasoningOptions
+  // Move 1: ALWAYS build (see the main-runtime site above). The light runtime is
+  // the sub-agent runtime; sub-agents already force `enableReasoning`, but always
+  // building keeps the single-loop invariant true from every door.
+  const lightReasoningOptLayer = (() => {
+        const reasoningConfig: ReasoningConfig = !options.enableReasoning
+          ? bareReasoningConfig(options.maxIterations)
+          : options.reasoningOptions
           ? {
               ...defaultReasoningConfig,
               ...(options.reasoningOptions.defaultStrategy
@@ -1324,8 +1356,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
         return createReasoningLayer(reasoningConfig).pipe(
           Layer.provide(reasoningDeps),
         );
-      })()
-    : Layer.empty;
+      })();
 
   // ── Optional heavy layers (parent-toggleable) ──
   const lightGuardrailsOptLayer = options.enableGuardrails

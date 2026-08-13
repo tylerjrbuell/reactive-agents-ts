@@ -1498,9 +1498,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       terminatedByRaw,
                     ),
                     llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
-                    // #40 honesty channel: the empty-output completion note is
-                    // harness-authored, not model prose — say so on the result.
-                    ...(ctx.metadata.harnessAuthoredOutput === true
+                    // #40 honesty channel: a harness-synthesized completion note
+                    // is not model prose — say so on the result. Two independent
+                    // producers: this engine's OWN empty-output branch
+                    // (ctx.metadata.harnessAuthoredOutput, set above when every
+                    // declared deliverable landed but the model's final turn was
+                    // empty) and the KERNEL's own onlyHarnessAuthorshipFailed
+                    // degrade (runner.ts — the model's turn was NON-empty but the
+                    // verifier caught it as harness-assembled, e.g. a normalized
+                    // tool observation standing in for a synthesized answer).
+                    // Before this fix only the former reached the result — the
+                    // kernel's own, already-correctly-set flag on
+                    // rr?.metadata.harnessAuthoredOutput was silently dropped at
+                    // this exact boundary (found via engine-empty-output-
+                    // invariant.test.ts, Move 1 merge triage 2026-08-13).
+                    ...(ctx.metadata.harnessAuthoredOutput === true || rr?.metadata?.harnessAuthoredOutput === true
                       ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
                       : {}),
                     // Result-boundary verification: the verdict rides to the

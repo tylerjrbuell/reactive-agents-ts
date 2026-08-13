@@ -205,6 +205,19 @@ describe("nested dashboard rollup (sub-agent dashboard prints once, at the root)
     await reused.run("SPAWN_WRITER: delegate a writing task.");
     console.log = realLog;
     const out2 = lines2.join("\n");
+    // OPEN FINDING (Move 1 merge triage, 2026-08-13), NOT resolved: run 2's
+    // dashboard shows NO "Sub-agent:" heading at all (neither writer nor
+    // researcher) even though spawn-agent genuinely dispatched (the tool
+    // execution summary shows "spawn-agent 1 calls, succeeded"). The root's
+    // own execution took a materially higher iteration count than run 1
+    // (7 entropy iterations vs run 1's ~2), consistent with the kernel
+    // making more internal LLM calls against this run's position in the
+    // SHARED, never-resetting TestLLMService scenario cursor than the test's
+    // careful layout assumed when it was written -- but that is a plausible
+    // lead, not a traced root cause; did not chase further given the depth
+    // (this touches the SAME registry-lifetime mechanism the test exists to
+    // guard, so a rushed fix risks masking the real bug rather than fixing
+    // it). Left asserting the correct/desired behavior.
     expect(out2).toContain("Sub-agent: writer");
     expect(out2).not.toContain("Sub-agent: researcher");
 

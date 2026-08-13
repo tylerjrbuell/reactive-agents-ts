@@ -49,6 +49,17 @@ function toToolSchema(definition: {
       description: parameter.description ?? "",
       required: Boolean(parameter.required),
     })),
+    // Every caller of this helper appends a schema ONLY when the caller
+    // explicitly opted in (`input.metaTools?.brief` etc.) — these are
+    // genuinely user-configured, model-callable tools, not harness-internal
+    // protocol tools. Without this, P2's native-FC wire filter
+    // (think.ts:746, `ts.scope !== "harness" && !META_TOOL_SET.has(ts.name)`)
+    // strips them unconditionally because `META_TOOLS` (kernel-constants.ts)
+    // lists brief/pulse/todo/find/recall/checkpoint alongside the TRUE
+    // protocol-only tools (final-answer, discover-tools) it was meant to
+    // catch — silently dropping an explicitly-configured tool from the wire
+    // regardless of `.withMetaTools()`.
+    scope: "domain",
   };
 }
 

@@ -121,20 +121,35 @@ const META_LOOP = ["contract-compiled", "assessment", "projection-rendered"] as 
 const CONTROL_PLANE = ["decision-evaluated", "intervention-dispatched"] as const;
 
 describe("meta-loop reachability, per configuration", () => {
-  it("the DEFAULT path runs none of the meta-loop", async () => {
-    const inline = await observe("inline-default", agentTurns(), (b) => b);
+  // RETITLED + INVERTED (Move 1 merge, 2026-08-13): `_enableReasoning`
+  // defaulting to false no longer means "runs the 1,579-LOC inline arm" --
+  // runtime.ts's bareReasoningConfig means EVERY builder (bare or
+  // .withReasoning()) now runs the kernel arm; `_enableReasoning` only gates
+  // extras (calibration auto-on, durable runs). The default path therefore
+  // reaches the SAME meta-loop mechanisms as an explicit kernel run.
+  //
+  // The CONTROL check was failing for an unrelated reason, corrected here
+  // (2026-08-13, was misdiagnosed as a `TestTurn.match` gap in an earlier
+  // commit this session -- `match` IS implemented, see testing.ts's
+  // resolveTurn): bare `.withTools()` with no `allowedTools`/`required`
+  // leaves `file-write` registered but not VISIBLE under lazy-disclosure
+  // pruning, so the scripted tool call was rejected as unavailable. Fixed by
+  // adding `allowedTools: ["file-write"]`, matching the "KERNEL path" test
+  // below exactly -- which is the point: they are now the same arm.
+  it("the DEFAULT path runs the SAME meta-loop as an explicit kernel run", async () => {
+    const inline = await observe("inline-default", agentTurns(), (b) =>
+      b.withTools({ allowedTools: ["file-write"] }),
+    );
 
-    // Control first: this arm did real work, so the absences below mean
-    // "not reached", not "nothing happened".
+    // Control first: this arm did real work, so the presences below mean
+    // "reached", not "coincidence".
     expect(inline.toolInvocations).toBeGreaterThan(0);
 
-    // `_enableReasoning` is false unless `.withReasoning()` is called, so a
-    // default run compiles no contract, computes no assessment, renders no
-    // projection and fires no guards. Everything Waves B/D/E/F built is dark
-    // for the configuration most users get.
-    for (const kind of [...META_LOOP, ...CONTROL_PLANE, "guard-fired"]) {
-      expect(inline.kinds.has(kind)).toBe(false);
-    }
+    for (const kind of META_LOOP) expect(inline.kinds.has(kind)).toBe(true);
+    expect(inline.kinds.has("guard-fired")).toBe(true);
+    // Wave F (control plane) stays gated behind the long-horizon profile
+    // regardless of door -- unaffected by Move 1, still pinned here.
+    for (const kind of CONTROL_PLANE) expect(inline.kinds.has(kind)).toBe(false);
   }, 60_000);
 
   it("the KERNEL path runs the meta-loop but NOT the control plane", async () => {
