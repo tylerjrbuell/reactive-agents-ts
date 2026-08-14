@@ -19,24 +19,22 @@ import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
-  computeTrustReceipt,
-  deriveInterventionsFromSteps,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import type { ReactiveAgentsConfig, RunLedgerEntryShape } from "../types.js";
+import type { ReactiveAgentsConfig } from "../types.js";
 import type { AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
-import { resolveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from "../builder/helpers.js";
+import { deriveReceiptModelId } from "../builder/helpers.js";
+import { deriveTaskOutcome } from "./finalize/derive-outcome.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
-import type { ReasoningStep } from "@reactive-agents/reasoning";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -620,74 +618,26 @@ export const makeExecuteStream =
           // buildRunTaskEffect's signing step): signing failure degrades to
           // the unsigned receipt and must NEVER fail the stream.
           const isPausedRun = gate !== undefined || interaction !== undefined;
-          const receiptSource = taskResult as {
-            terminatedBy?: TerminatedBy
-            success?: boolean
-            metadata?: {
-              reasoningSteps?: ReadonlyArray<{
-                readonly type: string
-                readonly metadata?: Record<string, unknown>
-              }>
-              receiptToolCalls?: ReadonlyArray<{
-                readonly name: string
-                readonly ok: boolean
-              }>
-              // Wave C1 (task 5) — same in-memory TaskResult as run()'s site
-              // (`execute` is the shared factory dependency, see
-              // ExecuteStreamDeps); execution-engine.ts forwards this from
-              // `rr.metadata.runLedger`. deriveReceiptToolCalls prefers it
-              // over reasoningSteps when non-empty.
-              runLedger?: ReadonlyArray<RunLedgerEntryShape>
-            }
-          };
-          // B2 (meta-loop 4a): declared deliverables × produced-status, from the
-          // run's RunContract (recompiled from the task inputs) × the reasoning
-          // steps. Partial multi-file runs name their missing files.
-          const receiptDeliverables = isPausedRun
+          // Single terminal-outcome computation (FM-4 part 1) — shared with
+          // reactive-agent.ts's run() path via deriveTaskOutcome
+          // (finalize/derive-outcome.ts), so the two paths cannot silently
+          // diverge on deliverables, goalAchieved, or the trust receipt.
+          // SUPPRESSED on pause paths (awaiting-approval / awaiting-
+          // interaction): receipts belong to terminal results only — a
+          // paused run is unfinished, and the resumed run emits its own
+          // receipt on completion. Mirrors the receipt suppression in
+          // reactive-agent.ts.
+          const unsignedReceipt: TrustReceipt | undefined = isPausedRun
             ? undefined
-            : deriveReceiptDeliverables({
+            : deriveTaskOutcome(taskResult, {
                 task: String((task.input as { question?: unknown })?.question ?? task.id),
                 ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
                 ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
-                reasoningSteps: (taskResult as { metadata?: { reasoningSteps?: readonly ReasoningStep[] } }).metadata?.reasoningSteps,
-                // Wave C1 (task 6) — same runLedger the receipt's
-                // deriveReceiptToolCalls reads below; a ledger `artifact` entry
-                // marks a declared deliverable produced without re-scanning
-                // reasoningSteps.
-                runLedger: receiptSource.metadata?.runLedger,
-                output: String((taskResult as { output?: unknown }).output ?? ""),
-              });
-          const unsignedReceipt: TrustReceipt | undefined = isPausedRun
-            ? undefined
-            : computeTrustReceipt({
-                toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
-                ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
-                // Spec §5b — harness interventions recorded on reasoning steps.
-                ...((): { interventions?: readonly import('@reactive-agents/core').InterventionReceipt[] } => {
-                  const iv = deriveInterventionsFromSteps(
-                    (receiptSource.metadata as { reasoningSteps?: readonly ReasoningStep[] }).reasoningSteps,
-                  )
-                  return iv.length > 0 ? { interventions: iv } : {}
-                })(),
-                ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
-                // Result-boundary verification — same source as run().
-                ...((receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict !== undefined
-                  ? { verifierVerdict: (receiptSource.metadata as { verifierVerdict?: string }).verifierVerdict }
-                  : {}),
-                // A semantic-cache hit ran nothing. Say so on the receipt —
-                // same source as the non-streaming site.
-                replayed: (receiptSource.metadata as { cacheHit?: boolean }).cacheHit === true,
-                // Deterministic upgrade over the terminatedBy heuristic — the
-                // declared-deliverable evidence resolves end_turn's "maybe"
-                // (resolveGoalAchieved JSDoc; single shared rule with run()).
-                goalAchieved: resolveGoalAchieved(receiptSource.terminatedBy, receiptDeliverables),
-                abstained: receiptSource.terminatedBy === "abstained",
-                success: receiptSource.success ?? true,
                 // Single shared source with the non-streaming site — see
                 // deriveReceiptModelId's JSDoc (builder/helpers.ts).
                 modelId: deriveReceiptModelId(config.defaultModel, config.provider),
                 now: Date.now(),
-              });
+              }).receipt;
           const signingKey = unsignedReceipt !== undefined
             ? resolveReceiptSigningKey(config.receiptSigningKey)
             : undefined;

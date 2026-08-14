@@ -19,7 +19,8 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { resolveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from './builder/helpers.js'
+import { deriveReceiptModelId } from './builder/helpers.js'
+import { deriveTaskOutcome } from './engine/finalize/derive-outcome.js'
 import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
 import {
     CapabilityRegistry,
@@ -29,13 +30,13 @@ import {
     startGateway,
     queryGatewayStatus,
 } from './agent/gateway-runner.js'
-import type { ExecutionContext, RunLedgerEntryShape } from './types.js'
+import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, computeTrustReceipt, deriveInterventionsFromSteps, type TrustReceipt } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, type TrustReceipt } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
@@ -1532,81 +1533,37 @@ export class ReactiveAgent<TOut = unknown> {
                 const isPausedRun =
                     r.awaitingApprovalFor !== undefined ||
                     r.awaitingInteractionFor !== undefined
-                // B2 (meta-loop 4a): declared deliverables × produced-status,
-                // computed from the run's RunContract (recompiled here from the
-                // same task inputs) × the reasoning-step artifact scan. A partial
-                // multi-file run names its missing files on the receipt.
-                const receiptDeliverables = isPausedRun
-                    ? undefined
-                    : deriveReceiptDeliverables({
-                          task: input,
-                          ...((this.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
-                              ? { requiredTools: (this.config['requiredTools'] as { tools?: readonly string[] }).tools }
-                              : {}),
-                          ...(this.config['taskContract'] !== undefined
-                              ? { taskContract: this.config['taskContract'] as import('@reactive-agents/core').TaskContract }
-                              : {}),
-                          reasoningSteps: (rawMetadata as {
-                              reasoningSteps?: readonly ReasoningStep[]
-                          }).reasoningSteps,
-                          // Wave C1 (task 6) — same forwarded ledger deriveReceiptToolCalls
-                          // reads below; a ledger `artifact` entry marks a declared
-                          // deliverable produced without re-scanning reasoningSteps.
-                          runLedger: (rawMetadata as {
-                              runLedger?: ReadonlyArray<RunLedgerEntryShape>
-                          }).runLedger,
-                          output: String(r.output ?? ''),
-                      })
-                // Deterministic upgrade over the terminatedBy heuristic: the
-                // declared-deliverable evidence resolves end_turn's "maybe"
-                // (see resolveGoalAchieved's JSDoc, builder/helpers.ts).
-                const goalAchieved = resolveGoalAchieved(r.terminatedBy, receiptDeliverables)
-                const receipt: TrustReceipt | undefined = isPausedRun
-                    ? undefined
-                    : computeTrustReceipt({
-                          toolCalls: deriveReceiptToolCalls(
-                              rawMetadata as {
-                                  reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>
-                                  receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
-                                  // Wave C1 (task 5) — forwarded by execution-engine.ts
-                                  // from `rr.metadata.runLedger` (task 4's strategy
-                                  // forwarding); deriveReceiptToolCalls prefers this
-                                  // over reasoningSteps when non-empty.
-                                  runLedger?: ReadonlyArray<RunLedgerEntryShape>
-                              },
-                          ),
-                          ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
-                          // Spec §5b — harness interventions recorded on the
-                          // reasoning steps become a receipt surface.
-                          ...((): { interventions?: readonly import('@reactive-agents/core').InterventionReceipt[] } => {
-                              const iv = deriveInterventionsFromSteps(
-                                  (rawMetadata as { reasoningSteps?: readonly ReasoningStep[] }).reasoningSteps,
-                              )
-                              return iv.length > 0 ? { interventions: iv } : {}
-                          })(),
-                          ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
-                          // Result-boundary verification (2026-07-12) — the
-                          // verifier now reaches EVERY path, so this field has
-                          // a writer outside the react kernel for the first time.
-                          ...((rawMetadata as { verifierVerdict?: string }).verifierVerdict !== undefined
-                              ? { verifierVerdict: (rawMetadata as { verifierVerdict?: string }).verifierVerdict }
-                              : {}),
-                          // A semantic-cache hit short-circuits the loop: no LLM
-                          // call, no tools, no steps. The receipt says so rather
-                          // than letting a replay read like an ordinary run.
-                          replayed: (rawMetadata as { cacheHit?: boolean }).cacheHit === true,
-                          goalAchieved,
-                          abstained: r.terminatedBy === 'abstained',
-                          success: r.success,
-                          // Single shared source with the streaming site — see
-                          // deriveReceiptModelId's JSDoc (builder/helpers.ts).
-                          modelId: deriveReceiptModelId(this.config.model, this.config.provider),
-                          ...(this._durableResume?.configHash !== undefined
-                              ? { configHash: this._durableResume.configHash }
-                              : {}),
-                          ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
-                          now: Date.now(),
-                      })
+                // Single terminal-outcome computation (FM-4 part 1) — shared
+                // with execute-stream.ts's runStream() path via
+                // deriveTaskOutcome (engine/finalize/derive-outcome.ts), so
+                // the two paths cannot silently diverge on deliverables,
+                // goalAchieved, or the trust receipt. Computed unconditionally
+                // (pure function, no side effects) — but the RECEIPT is
+                // discarded below on a paused run: a receipt belongs to a
+                // TERMINAL result only (see the isPausedRun comment above;
+                // mirrors execute-stream.ts). goalAchieved is still reported
+                // on paused runs, matching prior behavior (it falls back to
+                // the terminatedBy-only heuristic when deliverables are
+                // effectively absent).
+                const outcome = deriveTaskOutcome(r, {
+                    task: input,
+                    ...((this.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
+                        ? { requiredTools: (this.config['requiredTools'] as { tools?: readonly string[] }).tools }
+                        : {}),
+                    ...(this.config['taskContract'] !== undefined
+                        ? { taskContract: this.config['taskContract'] as import('@reactive-agents/core').TaskContract }
+                        : {}),
+                    // Single shared source with the streaming site — see
+                    // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                    modelId: deriveReceiptModelId(this.config.model, this.config.provider),
+                    ...(this._durableResume?.configHash !== undefined
+                        ? { configHash: this._durableResume.configHash }
+                        : {}),
+                    ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                    now: Date.now(),
+                })
+                const goalAchieved = outcome.goalAchieved
+                const receipt: TrustReceipt | undefined = isPausedRun ? undefined : outcome.receipt
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
