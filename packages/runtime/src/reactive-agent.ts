@@ -1538,13 +1538,18 @@ export class ReactiveAgent<TOut = unknown> {
                 // deriveTaskOutcome (engine/finalize/derive-outcome.ts), so
                 // the two paths cannot silently diverge on deliverables,
                 // goalAchieved, or the trust receipt. Computed unconditionally
-                // (pure function, no side effects) — but the RECEIPT is
-                // discarded below on a paused run: a receipt belongs to a
-                // TERMINAL result only (see the isPausedRun comment above;
-                // mirrors execute-stream.ts). goalAchieved is still reported
-                // on paused runs, matching prior behavior (it falls back to
-                // the terminatedBy-only heuristic when deliverables are
-                // effectively absent).
+                // (pure function, no side effects) — but `isPausedRun` is
+                // threaded through so deriveTaskOutcome itself suppresses
+                // `deliverables` (and, transitively, `goalAchieved`'s
+                // deliverable-evidence upgrade) on a paused run — see
+                // DeriveTaskOutcomeCtx.isPausedRun's JSDoc for why this must
+                // happen INSIDE the shared function rather than only being
+                // gated by the RECEIPT discard below: a paused run with
+                // declared-but-not-yet-produced deliverables would otherwise
+                // read as a definitive "goal not achieved" (false) instead of
+                // the correct ambiguous (null). goalAchieved is still
+                // reported on paused runs, matching prior behavior (it falls
+                // back to the terminatedBy-only heuristic).
                 const outcome = deriveTaskOutcome(r, {
                     task: input,
                     ...((this.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
@@ -1560,9 +1565,17 @@ export class ReactiveAgent<TOut = unknown> {
                         ? { configHash: this._durableResume.configHash }
                         : {}),
                     ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                    isPausedRun,
                     now: Date.now(),
                 })
                 const goalAchieved = outcome.goalAchieved
+                // A receipt belongs to a TERMINAL result only — suppressed
+                // separately here even though `isPausedRun` already forced
+                // `deliverables`/`goalAchieved`'s upgrade off inside
+                // deriveTaskOutcome, because the receipt carries other
+                // terminal-only evidence (tool calls, interventions,
+                // verifier verdict) that shouldn't be stamped on an
+                // unfinished run either.
                 const receipt: TrustReceipt | undefined = isPausedRun ? undefined : outcome.receipt
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),

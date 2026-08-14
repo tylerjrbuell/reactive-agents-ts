@@ -38,4 +38,42 @@ describe("deriveTaskOutcome", () => {
     expect(outcome.receipt.verdict).toBe("ungrounded");
     expect(outcome.receipt.computedAt).toBe(1_700_000_000_000);
   });
+
+  // Task review fix (2026-08-14) — see pause-goal-achieved.test.ts for the
+  // full end-to-end regression via agent.run(). This pins the same fix at
+  // the deriveTaskOutcome level: a paused run (no terminatedBy yet) with a
+  // declared-but-not-yet-produced deliverable must resolve to `null`
+  // (ambiguous), not `false` ("goal not achieved") — a paused run is
+  // unfinished, not failed.
+  it("ctx.isPausedRun forces deliverables undefined, so goalAchieved falls back to the terminatedBy heuristic (null) instead of reading an unproduced deliverable as a definitive false", () => {
+    const taskResult = {
+      // No terminatedBy yet — the run is still paused, not terminal.
+      success: true,
+      output: "",
+      metadata: { reasoningSteps: [] },
+    } as unknown as TaskResult;
+    // A file-path deliverable literal in the task text (deriveDeliverablePaths,
+    // reasoning/src/kernel/capabilities/verify/derive-conditions.ts) compiles
+    // into a RunContract deliverable that the artifact scan can mark
+    // produced/missing — unlike a bare requiredTools declaration, which only
+    // feeds the RunContract's `requirements` list, not its `deliverables[]`.
+    const ctx = {
+      task: "Write the results to ./report.md",
+      now: 1_700_000_000_000,
+    };
+
+    // WITHOUT isPausedRun: ./report.md was declared but the output/steps show
+    // no evidence it was produced (the write tool never ran — gated), so
+    // resolveGoalAchieved reads it as a definitive false — this is the
+    // regression this test guards against.
+    const withoutFlag = deriveTaskOutcome(taskResult, ctx);
+    expect(withoutFlag.deliverables).toBeDefined();
+    expect(withoutFlag.goalAchieved).toBe(false);
+
+    // WITH isPausedRun: deliverables is suppressed entirely, so goalAchieved
+    // falls back to deriveGoalAchieved(undefined) === null.
+    const withFlag = deriveTaskOutcome(taskResult, { ...ctx, isPausedRun: true });
+    expect(withFlag.deliverables).toBeUndefined();
+    expect(withFlag.goalAchieved).toBeNull();
+  });
 });
