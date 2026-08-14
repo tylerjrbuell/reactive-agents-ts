@@ -1213,13 +1213,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (rr?.metadata?.rawTerminatedBy !== undefined) {
                   ctx.metadata.rawTerminatedBy = rr.metadata.rawTerminatedBy;
                 }
-                // Forward the kernel's verification warning (if any) so the
-                // boundary verifier doesn't overwrite a specific reason with
-                // a generic one (FM-4 part 2).
-                const rrMeta = rr?.metadata as { verificationWarning?: string } | undefined;
-                if (typeof rrMeta?.verificationWarning === "string") {
-                  (ctx.metadata as Record<string, unknown>).verificationWarning = rrMeta.verificationWarning;
-                }
 
                 // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
                 const dialectObserved = ((rr?.metadata as { lastDialectObserved?: string } | undefined)?.lastDialectObserved ?? "none") as
@@ -1382,12 +1375,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // authority-bounded — it never upgrades, it stamps the receipt
                 // and (on reject/escalate) names itself in verificationWarning.
                 // See engine/finalize/result-verification.ts.
-
-                // Extract the kernel's verification reason if available (FM-4 part 2).
-                // The kernel's verifier may reject with a specific reason (e.g.,
-                // "scaffold-leak") and set rr.error to "Verifier rejected output: ...".
-                // When the boundary verifier re-verifies an already-failed result,
-                // its own "action-success" check should not overwrite this specific reason.
+                //
+                // FM-4 part 2 (2026-08-13): when the kernel's verifier rejects
+                // output with a specific reason (e.g., "scaffold-leak"), the
+                // kernel now sets state.meta.verificationWarning. This flows
+                // through the strategy result as rr.metadata.verificationWarning
+                // and is forwarded to the boundary verifier so it doesn't
+                // overwrite the specific reason with a generic "action-success".
+                // Extract the kernel's verification reason from its error message (FM-4 part 2).
+                // The kernel's verifier may reject with a specific reason (e.g., "scaffold-leak")
+                // embedded in the error message "Verifier rejected output: <verdict.summary>".
+                // This becomes the prior rejection reason so the result-boundary verifier doesn't
+                // overwrite it with a generic "action-success" message.
+                //
+                // Note: The kernel's state.meta.verificationWarning should carry this,
+                // but it's being dropped due to schema constraints on ReasoningMetadata.
+                // Extracting from the error message is a temporary workaround until that's resolved.
                 let priorRejectionReason: string | undefined;
                 if (rr?.status === "failed" && typeof rr?.error === "string") {
                   const match = rr.error.match(/Verifier (?:rejected|escalated) output: (.+)/);
@@ -1413,18 +1416,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ? { priorRejectionReason }
                     : {}),
                 });
-                if (boundaryVerification?.warning !== undefined) {
-                  // Preserve the kernel's specific rejection reason (e.g., "scaffold-leak")
-                  // instead of overwriting it with a generic boundary-verifier reason like
-                  // "action-success" that only fails because actionSuccess is already false.
-                  const isOnlyActionSuccess = boundaryVerification.warning.includes("action-success") &&
-                                              !boundaryVerification.warning.includes(";");
-                  const alreadyHasKernelWarning = ctx.metadata.verificationWarning !== undefined;
-
-                  if (!alreadyHasKernelWarning || !isOnlyActionSuccess) {
-                    ctx.metadata.verificationWarning = boundaryVerification.warning;
-                  }
-                }
 
                 const result: TaskResult & {
                   format?: string;

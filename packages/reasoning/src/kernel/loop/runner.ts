@@ -1370,9 +1370,16 @@ export function runKernel(
           // `failed` completionStatus; `receipt.verifierVerdict` is owned by the
           // result-boundary verifier (result-verification.ts), NOT by a meta
           // field dropped here (B4/§5.3).
+          // However, set verificationWarning so the result-boundary verifier
+          // can preserve this specific reason instead of overwriting it with a
+          // generic "action-success" message (FM-4 part 2).
           state = transitionState(state, {
             status: "failed",
             error: `Verifier rejected output: ${verdict.summary}`,
+            meta: {
+              ...state.meta,
+              verificationWarning: verdict.summary,
+            },
           });
         }
 
