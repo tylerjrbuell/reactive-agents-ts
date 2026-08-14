@@ -187,6 +187,39 @@ describe("deriveConditions — non-file mutation (SideEffectLanded)", () => {
     expect(kinds(c)).toContain("ArtifactProduced");
     expect(kinds(c)).not.toContain("SideEffectLanded");
   }, 15000);
+
+  // Regression (2026-08-14): MUTATION_VERB and EXTERNAL_RESOURCE_NOUN used to
+  // share "draft"/"invite" -- a SINGLE word present in both lists satisfies
+  // both independent .test() calls, so any task mentioning it derives a
+  // phantom SideEffectLanded with no real second word required. This bit
+  // every .withOutputSchema() task: its auto-injected prompt names the
+  // JSON-Schema meta-schema URI (".../draft-07/schema#"), so "draft" alone
+  // manufactured an unsatisfiable requirement on a task with nothing to
+  // mutate. Once bare builders started throwing on max_iterations (B1,
+  // 2026-08-13), this surfaced as a hard failure instead of silent churn.
+  it("a lone word present in BOTH lists does not derive SideEffectLanded on its own", () => {
+    const c = deriveConditions(
+      'Answer this. Schema: {"$schema":"http://json-schema.org/draft-07/schema#"}',
+      [],
+    );
+    expect(kinds(c)).not.toContain("SideEffectLanded");
+  });
+
+  it("MUTATION_VERB and EXTERNAL_RESOURCE_NOUN word lists stay disjoint", () => {
+    const source = require("node:fs").readFileSync(
+      require.resolve("../../../../src/kernel/capabilities/verify/derive-conditions.ts"),
+      "utf8",
+    ) as string;
+    const extract = (name: string): string[] => {
+      const m = source.match(new RegExp(`const ${name} =\\s*\\n?\\s*\\/\\\\b\\(([^)]+)\\)\\\\b\\/i`));
+      if (!m) throw new Error(`could not locate ${name} pattern in derive-conditions.ts`);
+      return m[1]!.split("|");
+    };
+    const verbs = extract("MUTATION_VERB");
+    const nouns = extract("EXTERNAL_RESOURCE_NOUN");
+    const overlap = verbs.filter((w) => nouns.includes(w));
+    expect(overlap).toEqual([]);
+  });
 });
 
 describe("deriveConditions — availableWritingTools (FM-15 layer 5)", () => {

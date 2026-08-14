@@ -32,10 +32,22 @@ import {
 // it cannot tell a read from a failed write. Require BOTH a mutation verb AND an
 // external-resource noun so a READ ("get the events", "summarise the note") and
 // a bare "create a function" never derive a side-effect condition.
+// "draft" and "invite" are deliberately verb-only (not also in the noun list
+// below): `MUTATION_VERB.test(task) && EXTERNAL_RESOURCE_NOUN.test(task)`
+// each run independently against the WHOLE task text, so a single word
+// present in both lists satisfies both tests on its own — no genuine second
+// word required. This bit a real run: `.withOutputSchema()`'s auto-injected
+// prompt names the JSON-Schema meta-schema URI
+// (`http://json-schema.org/draft-07/schema#`), and "draft" used to be in
+// both lists, so EVERY structured-output task spuriously derived an
+// unsatisfiable SideEffectLanded condition — the run then redirected to
+// max_iterations trying to satisfy a requirement that names no real
+// side-effect, surfaced as a hard failure once bare builders started
+// throwing on max_iterations (2026-08-13, B1). Keep both lists disjoint.
 const MUTATION_VERB =
   /\b(create|send|add|post|delete|remove|update|schedule|assign|upload|publish|rename|archive|move|share|invite|draft|reply|forward|submit|set)\b/i;
 const EXTERNAL_RESOURCE_NOUN =
-  /\b(note|email|e-mail|message|event|issue|pull[\s-]?request|pr|record|reminder|todo|task|label|calendar|comment|page|row|entry|ticket|memo|invite|meeting|contact|folder|group|channel|list|draft|thread)\b/i;
+  /\b(note|email|e-mail|message|event|issue|pull[\s-]?request|pr|record|reminder|todo|task|label|calendar|comment|page|row|entry|ticket|memo|meeting|contact|folder|group|channel|list|thread)\b/i;
 
 // Tools that count as "writing" a file artifact — shared with post-conditions.ts
 // (WRITING_TOOL_NAMES) so derive/produce vocabularies stay in lockstep. If a
