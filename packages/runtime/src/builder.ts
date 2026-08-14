@@ -2186,6 +2186,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Advanced feature for adding custom services or dependencies.
      * Layers are merged into the main runtime layer stack.
      *
+     * Does NOT reach `LLMService`: this merges at terminal composition and only
+     * overrides late-bound tags, but `LLMService` is captured upstream of that,
+     * at construction time, for every builder (kernel arm, since Move 1,
+     * 2026-08-13). A layer providing `LLMService` here silently binds nothing —
+     * the real configured provider still answers every call. Use
+     * `withReplayLLM()` to override `LLMService` (e.g. for deterministic
+     * replay/recording in tests).
+     *
      * @param layers - Effect-TS Layer(s) to add
      * @returns `this` for chaining
      */
