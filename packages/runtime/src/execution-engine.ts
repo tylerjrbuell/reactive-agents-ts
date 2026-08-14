@@ -1375,13 +1375,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // authority-bounded — it never upgrades, it stamps the receipt
                 // and (on reject/escalate) names itself in verificationWarning.
                 // See engine/finalize/result-verification.ts.
-                //
-                // FM-4 part 2 (2026-08-13): when the kernel's verifier rejects
-                // output with a specific reason (e.g., "scaffold-leak"), the
-                // kernel now sets state.meta.verificationWarning. This flows
-                // through the strategy result as rr.metadata.verificationWarning
-                // and is forwarded to the boundary verifier so it doesn't
-                // overwrite the specific reason with a generic "action-success".
+
                 // Extract the kernel's verification reason from its error message (FM-4 part 2).
                 // The kernel's verifier may reject/escalate with a specific reason (e.g., "scaffold-leak")
                 // carried in the error message. This becomes the prior rejection reason so the
