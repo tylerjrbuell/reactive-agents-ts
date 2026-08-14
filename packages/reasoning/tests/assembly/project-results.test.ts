@@ -232,4 +232,76 @@ describe("projectResults — full | preview+ref | cleared", () => {
     const rendered = ctx.messages.find((m) => m.role === "tool_result");
     expect(rendered?.content.length).toBeLessThan(bigResult.length * 0.5);
   });
+
+  it("caps AGGREGATE escalation extra across several simultaneously-stalled refs (2026-08-14)", () => {
+    // Live-observed: several refs escalating in the same pass can push the
+    // total render past the compaction threshold (window * 4 chars), and
+    // compaction can then drop the very exchange escalation just widened.
+    // The per-ref cap (MAX_ESCALATION_LEVEL, ~7x one ref's base budget)
+    // doesn't bound the SUM across refs — this test pins that the sum IS
+    // now bounded, at 50% of the compaction threshold.
+    const cap = resolveCapability({ window: 1000, outputBudget: 100, dialect: "native-fc", tier: "local" });
+    const bigResult = "x".repeat(5000);
+    const store = new ResultStore();
+    const refs = ["r1", "r2", "r3", "r4"].map((name) => store.put(`tool-${name}`, bigResult));
+    let log = new EventLog();
+    for (const [i, ref] of refs.entries()) {
+      log = log
+        .append({ kind: "tool_called", tool: `tool-r${i + 1}`, callId: `c${i + 1}`, args: {} })
+        .append({ kind: "tool_result", callId: `c${i + 1}`, ref, shape: "String" });
+    }
+
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "answer",
+          kind: "question-answered",
+          spec: {
+            description: "answer the question",
+            acceptance: "self-critique",
+            enumeration: { expectedCount: "unknown", itemShape: "list-entry" },
+          },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "long",
+      postConditions: [],
+    };
+    // All 4 refs stalled at the same (near-max) level — the worst case: every
+    // ref independently qualifies for the full ~7x per-ref escalation.
+    const assessment = {
+      requirementProgress: new Map([
+        ["answer", { stallCount: 4, refEscalation: new Map(refs.map((r) => [r, 4])) }],
+      ]),
+    } as unknown as RunAssessment;
+
+    const ctx = projectResultsStage({
+      log,
+      capability: cap,
+      store,
+      persona: { system: "" },
+      tools: { schemas: [] },
+      contract,
+      assessment,
+      systemPrompt: "",
+      messages: [],
+      toolSchemas: [],
+      trace: emptyTrace(cap),
+    });
+
+    // Each ref independently qualifies for ~7x its own base budget (well
+    // over 5000 chars, enough to render fully) — WITHOUT an aggregate cap
+    // all 4 would render "full". With the cap, the aggregate extra runs out
+    // partway through the pass: escalation still helps the first ref(s) in
+    // thread order, but not every ref gets the full requested widening.
+    const projections = ctx.trace.messages.filter((m) => m.role === "tool_result").map((m) => m.projection);
+    expect(projections).toHaveLength(4);
+    expect(projections.filter((p) => p === "full").length).toBeLessThan(4);
+    // And escalation still did SOMETHING — the first ref in thread order
+    // got real benefit from its full requested widening (mechanism isn't
+    // neutered by the cap).
+    const first = ctx.messages.find((m) => m.role === "tool_result")!;
+    expect(first.content.length).toBeGreaterThan(bigResult.length * 0.5);
+  });
 });

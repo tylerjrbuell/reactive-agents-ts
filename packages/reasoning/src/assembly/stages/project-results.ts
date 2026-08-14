@@ -28,6 +28,26 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   let full = 0;
   let summarized = 0;
 
+  // Aggregate escalation cap (2026-08-14): the per-ref escalation cap
+  // (ESCALATION_FACTOR × MAX_ESCALATION_LEVEL below, ≈7x a ref's base budget)
+  // bounds ONE ref. Nothing bounded the SUM when several refs stall at once —
+  // live-observed pushing a render to 53K chars against a 32K-token window,
+  // which can trigger `compactHistoryStage` (fires at `window × 4` chars) and
+  // drop the very exchange escalation just widened, partially defeating the
+  // remedy it was supposed to deliver. This caps the TOTAL extra chars this
+  // stage will grant across every ref it escalates in one render pass — the
+  // first stalled ref (thread order) gets its full requested widening if the
+  // aggregate allowance covers it; later stalled refs in the same pass get a
+  // reduced or zero grant once the allowance is spent. Deliberately NOT an
+  // exemption from compaction (no lifecycle state to release later) and NOT
+  // a "yield near the window" backoff (escalation still fires reliably on
+  // long runs where only one or two refs are actually stalling at a time —
+  // the common case); it only degrades when MANY refs stall simultaneously,
+  // which is exactly the case that was overflowing the window.
+  const AGGREGATE_ESCALATION_FRACTION = 0.5;
+  const aggregateEscalationCap = Math.round(c.capability.window * 4 * AGGREGATE_ESCALATION_FRACTION);
+  let escalationCharsGranted = 0;
+
   // 1. Opening user turn = goal. Provider threads must begin with a user message.
   // project-results is the SOLE builder of c.messages, so it is also the SOLE
   // trace recorder — record each turn here, in thread order (finalize must NOT
@@ -131,10 +151,13 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
       for (const p of c.assessment?.requirementProgress.values() ?? []) {
         escalationLevel = Math.max(escalationLevel, p.refEscalation.get(e.ref) ?? 0);
       }
-      const budget =
-        escalationLevel > 0
-          ? Math.round(baseBudget * (1 + ESCALATION_FACTOR * escalationLevel))
-          : baseBudget;
+      let budget = baseBudget;
+      if (escalationLevel > 0) {
+        const requestedExtra = Math.round(baseBudget * ESCALATION_FACTOR * escalationLevel);
+        const grantedExtra = Math.max(0, Math.min(requestedExtra, aggregateEscalationCap - escalationCharsGranted));
+        budget = baseBudget + grantedExtra;
+        escalationCharsGranted += grantedExtra;
+      }
       let content: string;
       let projection: "full" | "preview+ref";
       if (fullText.length <= budget) {
