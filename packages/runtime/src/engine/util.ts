@@ -305,7 +305,7 @@ export type ExecutionReasoningResult = {
   /** Kernel failure detail (provider 413/400 message) carried through normalization. */
   error?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] };
+  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; /** #40 honesty channel (Task 3): the kernel's own harness-authorship flag, present iff `onlyHarnessAuthorshipFailed` fired at the terminal verifier gate. */ harnessAuthoredOutput?: boolean; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] };
     /** Cross-cutting cascade Task 9: terminal judgment record, preserved through normalization so the engine can forward it onto `TaskResult.metadata.verdict`. */
     verdict?: { enforced: boolean; groundedOnRequired?: boolean; contractSatisfied?: boolean; failed: readonly string[]; auxiliaryPass?: boolean; repairGaps?: readonly string[] };
     /** Cross-cutting cascade Task 9: the typed extension slot (DEBT-REGISTER §3), preserved through normalization so the engine can forward it onto `TaskResult.metadata.extensions` verbatim. */
@@ -370,6 +370,17 @@ export function normalizeReasoningResult(
       llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
       terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
       rawTerminatedBy: typeof md.rawTerminatedBy === "string" ? md.rawTerminatedBy : undefined,
+      // #40 honesty channel (Task 3, 2026-08-13): preserve the kernel's own
+      // harness-authorship flag through normalization. Same failure mode
+      // DEBT-REGISTER §3 documents for `runLedger`/`verdict`/`abstention`
+      // below — a whitelist rebuild silently drops any field not explicitly
+      // listed. Without this, `runner.ts`'s `onlyHarnessAuthorshipFailed`
+      // degrade (state.meta.harnessAuthoredOutput = true, honestPartialMetadata
+      // forwards it into the strategy result's metadata) never survived this
+      // boundary, so `execution-engine.ts`'s `rr?.metadata?.harnessAuthoredOutput`
+      // read (added to fix the SAME symptom from the other producer) always
+      // saw `undefined` — found via engine-empty-output-invariant.test.ts.
+      harnessAuthoredOutput: typeof md.harnessAuthoredOutput === "boolean" ? md.harnessAuthoredOutput : undefined,
       // Durable HITL (Phase D): preserve the paused-gate descriptor through
       // normalization so the engine can surface pendingApproval + persist.
       awaitingApprovalFor:

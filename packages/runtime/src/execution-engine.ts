@@ -1263,7 +1263,28 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // with a real cause. Deliverable flags come from the
                 // RunContract × step-ledger scan — no model judgment.
                 let emptyOutputCompletionNote: string | undefined;
-                if (executionSucceeded) {
+                // Task 3 (2026-08-14): this deliverable-honesty scan used to run
+                // ONLY when `executionSucceeded` was already true — but a plain
+                // empty final turn with no tool artifacts already forces
+                // `executionSucceeded = false` above (HS-106's output/status
+                // coherence guard flips a strategy result to `status:"failed"`
+                // the moment output is empty, independent of WHY it's empty), so
+                // the richer "no output and no verified deliverable" diagnosis
+                // below never ran and the generic `rr?.error`/"Reasoning failed"
+                // fallback at the result-assembly step shipped instead. Widen the
+                // gate to also enter when output is empty and the kernel supplied
+                // no real failure detail of its own (`rr?.error` empty) — i.e. the
+                // ONLY reason this run isn't "succeeded" is the empty output
+                // itself, not a genuine kernel/provider error. Additive: does not
+                // touch the `executionSucceeded === true` path (test coverage:
+                // engine-empty-output-invariant.test.ts's first case), and does
+                // not let a real kernel error (rr.error non-empty) be shadowed by
+                // this branch — that detail still wins via the `rr?.error` check
+                // in the result's `error` field below.
+                const emptyOutputNoErrorDetail =
+                  !hasSubstantiveOutput &&
+                  !(typeof rr?.error === "string" && rr.error.trim().length > 0);
+                if (executionSucceeded || emptyOutputNoErrorDetail) {
                   const declaredDeliverables = deriveReceiptDeliverables({
                     task: String((task.input as { question?: unknown })?.question ?? task.id),
                     ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
