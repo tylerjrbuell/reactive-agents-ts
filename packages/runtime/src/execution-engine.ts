@@ -1213,6 +1213,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (rr?.metadata?.rawTerminatedBy !== undefined) {
                   ctx.metadata.rawTerminatedBy = rr.metadata.rawTerminatedBy;
                 }
+                // Forward the kernel's verification warning (if any) so the
+                // boundary verifier doesn't overwrite a specific reason with
+                // a generic one (FM-4 part 2).
+                const rrMeta = rr?.metadata as { verificationWarning?: string } | undefined;
+                if (typeof rrMeta?.verificationWarning === "string") {
+                  (ctx.metadata as Record<string, unknown>).verificationWarning = rrMeta.verificationWarning;
+                }
 
                 // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
                 const dialectObserved = ((rr?.metadata as { lastDialectObserved?: string } | undefined)?.lastDialectObserved ?? "none") as
@@ -1375,6 +1382,20 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // authority-bounded — it never upgrades, it stamps the receipt
                 // and (on reject/escalate) names itself in verificationWarning.
                 // See engine/finalize/result-verification.ts.
+
+                // Extract the kernel's verification reason if available (FM-4 part 2).
+                // The kernel's verifier may reject with a specific reason (e.g.,
+                // "scaffold-leak") and set rr.error to "Verifier rejected output: ...".
+                // When the boundary verifier re-verifies an already-failed result,
+                // its own "action-success" check should not overwrite this specific reason.
+                let priorRejectionReason: string | undefined;
+                if (rr?.status === "failed" && typeof rr?.error === "string") {
+                  const match = rr.error.match(/Verifier (?:rejected|escalated) output: (.+)/);
+                  if (match?.[1]) {
+                    priorRejectionReason = match[1];
+                  }
+                }
+
                 const boundaryVerification = yield* verifyResultBoundary({
                   config,
                   taskId: String(task.id),
@@ -1388,9 +1409,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     : {}),
                   iteration: ctx.iteration,
                   replayed: ctx.metadata.cacheHit === true,
+                  ...(priorRejectionReason !== undefined
+                    ? { priorRejectionReason }
+                    : {}),
                 });
                 if (boundaryVerification?.warning !== undefined) {
-                  ctx.metadata.verificationWarning = boundaryVerification.warning;
+                  // Preserve the kernel's specific rejection reason (e.g., "scaffold-leak")
+                  // instead of overwriting it with a generic boundary-verifier reason like
+                  // "action-success" that only fails because actionSuccess is already false.
+                  const isOnlyActionSuccess = boundaryVerification.warning.includes("action-success") &&
+                                              !boundaryVerification.warning.includes(";");
+                  const alreadyHasKernelWarning = ctx.metadata.verificationWarning !== undefined;
+
+                  if (!alreadyHasKernelWarning || !isOnlyActionSuccess) {
+                    ctx.metadata.verificationWarning = boundaryVerification.warning;
+                  }
                 }
 
                 const result: TaskResult & {

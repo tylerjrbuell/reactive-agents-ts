@@ -54,6 +54,12 @@ export interface ResultVerificationArgs {
    * verifier declines rather than passing vacuously; see the note at the guard.
    */
   readonly replayed?: boolean;
+  /**
+   * A prior rejection reason from the kernel's own verification (FM-4 part 2).
+   * When present and more specific than the boundary verifier's findings,
+   * this takes precedence over generic reasons like "action-success".
+   */
+  readonly priorRejectionReason?: string;
 }
 
 export interface ResultVerificationOutcome {
@@ -137,14 +143,28 @@ export const verifyResultBoundary = (
 
     const verdict = result.severity ?? (result.verified ? "pass" : "reject");
     const failed = result.checks.filter((c) => !c.passed && c.reason !== undefined);
+
+    // When the boundary verifier's only failure is "action-success" (which fails
+    // trivially because actionSuccess is already false), and there's a prior,
+    // more-specific rejection reason from the kernel, use that instead. The
+    // action-success check exists to catch FIRST discovery of failure, not to
+    // re-explain an already-known one (FM-4 part 2).
+    const isOnlyActionSuccess =
+      failed.length === 1 && failed[0]?.name === "action-success";
+    const hasPriorReason =
+      args.priorRejectionReason !== undefined &&
+      args.priorRejectionReason.trim().length > 0;
+
     return {
       result,
       verdict,
       ...(verdict === "reject" || verdict === "escalate"
         ? {
-            warning: `Result verification ${verdict}ed: ${failed
-              .map((c) => `${c.name} — ${c.reason}`)
-              .join("; ")}`,
+            warning: isOnlyActionSuccess && hasPriorReason
+              ? `Result verification ${verdict}ed: ${args.priorRejectionReason}`
+              : `Result verification ${verdict}ed: ${failed
+                  .map((c) => `${c.name} — ${c.reason}`)
+                  .join("; ")}`,
           }
         : {}),
     };
