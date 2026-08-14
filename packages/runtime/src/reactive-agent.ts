@@ -2030,6 +2030,19 @@ export class ReactiveAgent<TOut = unknown> {
         signal?.addEventListener('abort', onAbort)
 
         let iterationsCompleted = 0
+        // FM-5 (Phase 4 Task 4, review fix): true only once the CONSUMER effect
+        // itself finished (a terminal StreamCompleted/StreamError/StreamCancelled
+        // was already pushed onto itemQueue, or the underlying Effect errored).
+        // Every OTHER way this generator stops — the caller's `for await` loop
+        // doing a bare `break`/`return`/`throw`, which the async-generator
+        // protocol turns into `.return()` on this generator and unwinds
+        // straight to `finally` — leaves this `false`. That distinguishes a
+        // natural completion (producer already finished on its own, nothing
+        // left to stop) from an abandoned run (producer may still be mid-flight
+        // in execute-stream.ts's daemon-forked fiber) so `finally` below knows
+        // when it must force a real terminate(), not just interrupt the local
+        // consumer fiber.
+        let reachedTerminal = false
 
         try {
             while (true) {
@@ -2048,6 +2061,7 @@ export class ReactiveAgent<TOut = unknown> {
                 if (item === undefined) continue
 
                 if (item.done) {
+                    reachedTerminal = true
                     if (item.error !== undefined) {
                         // The fiber errored — let the stream end (StreamError was already pushed).
                     }
@@ -2089,6 +2103,26 @@ export class ReactiveAgent<TOut = unknown> {
             signal?.removeEventListener('abort', onAbort)
             // Ensure the fiber is interrupted on generator early exit (break/throw/return).
             Effect.runFork(Fiber.interrupt(fiber))
+            // FM-5 (Phase 4 Task 4, review fix): interrupting the fiber above only
+            // stops the CONSUMER (this generator's `EStream.runForEach` read loop)
+            // — it does nothing to the PRODUCER, execute-stream.ts's daemon-forked
+            // pipeline, which only stops when `controller`'s AbortController fires
+            // (execute-stream.ts's signal listener + iterate-pass.ts's checkpoint
+            // both key off that). A caller that just stops consuming — breaks out
+            // of its `for await` loop, throws, or gets interrupted upstream —
+            // WITHOUT calling `handle.terminate()`/aborting its own signal never
+            // fires that AbortController, so the producer ran on unobserved before
+            // this fix (confirmed by a reviewer repro: 1→4 provider calls over
+            // ~800ms after an un-terminated early break). Force it here whenever
+            // this generator stops WITHOUT the consumer effect having reached a
+            // terminal item itself — i.e. any exit that is not a natural
+            // completion. Calling terminate() when the run already terminated
+            // (explicit handle.terminate()/aborted signal) is a safe no-op: both
+            // `_status = "terminated"` and `AbortController.abort()` are
+            // idempotent.
+            if (!reachedTerminal) {
+                controller.terminate()
+            }
             controller.markCompleted()
         }
     }
