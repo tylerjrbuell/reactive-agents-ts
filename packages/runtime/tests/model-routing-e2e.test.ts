@@ -1,21 +1,27 @@
 // Run: bun test packages/runtime/tests/model-routing-e2e.test.ts --timeout 20000
 /**
  * Headline cross-path verification: .withModelRouting() routes a simple task
- * to the haiku tier on the inline path, and without routing the configured
- * sonnet model reaches the LLM unchanged (gut-check).
+ * to the haiku tier, and without routing the configured sonnet model reaches
+ * the LLM unchanged (gut-check).
  *
- * INJECTION SEAM (option a): The builder's .withLayers() accepts a Layer that
- * is merged AFTER the runtime's built-in LLMService in Layer.mergeAll — the
- * last provider wins in Effect's context-merge semantics. We inject a
- * recording LLMService (wrapping TestLLMService for deterministic responses)
- * that captures request.model on every complete()/stream() call.
+ * INJECTION SEAM: .withReplayLLM(), not .withLayers(). This file originally
+ * relied on ".withLayers() merges AFTER the runtime's built-in LLMService,
+ * last wins" and an "inline (non-reasoning) path" that resolved LLMService
+ * late enough for that shadow to reach it. Move 1 (2026-08-13,
+ * `bareReasoningConfig`) made EVERY builder run the kernel arm regardless of
+ * `.withReasoning()` — LLMService is now captured upstream, at construction,
+ * for every builder, so `.withLayers()` no longer reaches it (0 requests
+ * captured, silently green-then-network-dependent since the real credential
+ * path took over — this is how the live-credit dependency was introduced).
+ * `.withReplayLLM()` swaps LLMService in upstream of that construction,
+ * which is what this seam actually needs.
  *
  * PROVIDER CONFIG: .withProvider("anthropic") keeps config.provider="anthropic"
  * so the cost-route phase uses the real anthropic tier table and selects
  * "claude-haiku-4-5-20251001" for a simple task. Using .withTestScenario()
  * instead would override provider to "test", which causes cost-route to degrade
  * gracefully to the default model (no routing happens) — we must inject the
- * fake LLM via .withLayers() rather than .withTestScenario().
+ * fake LLM via .withReplayLLM() rather than .withTestScenario().
  *
  * NON-VACUITY PROOF: The gut-check (test 2) captures "claude-sonnet-4-6" — the
  * configured model, without routing — which is DISTINCT from the
@@ -23,9 +29,8 @@
  * the selectedModel→request.model wire (C1) would collapse test 1 into the
  * gut-check state, making test 1's "contains haiku" assertion RED. The
  * `captured.length > 0` guard on both tests ensures the recording layer is
- * actually shadowing the built-in LLMService — if .withLayers() did NOT
- * override it, the recording layer would never be called and both tests would
- * fail on that guard.
+ * actually bound — if it were not, the recording layer would never be called
+ * and both tests would fail on that guard.
  */
 import { describe, it, expect } from "bun:test";
 import { Layer } from "effect";
@@ -34,10 +39,10 @@ import { LLMService, TestLLMService } from "@reactive-agents/llm-provider";
 
 /**
  * Build a Layer that wraps TestLLMService and records request.model on every
- * complete() and stream() call. Injected via .withLayers() so it shadows the
- * runtime's built-in LLMService (last-in-Layer.mergeAll wins in Effect v3's
- * context-merge semantics). Returns deterministic "FINAL ANSWER: 4" responses
- * so the agent terminates after a single iteration without real API calls.
+ * complete() and stream() call. Injected via .withReplayLLM() so it replaces
+ * LLMService upstream of construction. Returns deterministic "FINAL ANSWER: 4"
+ * responses so the agent terminates after a single iteration without real API
+ * calls.
  */
 function makeCapturingLayer(captured: string[]): Layer.Layer<LLMService> {
   const base = TestLLMService([{ text: "FINAL ANSWER: 4" }]);
@@ -68,16 +73,15 @@ describe("model routing — inline path + gut-check", () => {
       .withProvider("anthropic")
       .withModel("claude-sonnet-4-6")
       .withModelRouting() // enables cost-route phase; anthropic haiku = "claude-haiku-4-5-20251001"
-      // No .withReasoning() → inline (non-reasoning) path
-      .withLayers(makeCapturingLayer(captured))
+      .withReplayLLM(makeCapturingLayer(captured))
       .build();
 
     const r = await agent.run("What is 2 + 2?");
 
     expect(r.success).toBe(true);
     // Non-vacuity guard: recording layer was actually called.
-    // If .withLayers() did NOT shadow the built-in LLMService, captured would
-    // be empty and this assertion would fail RED.
+    // If .withReplayLLM() did NOT replace LLMService, captured would be empty
+    // and this assertion would fail RED.
     expect(captured.length).toBeGreaterThan(0);
     // C3 (cost-route) selects "claude-haiku-4-5-20251001" for anthropic haiku
     // tier. C1 (selectedModel→request.model) wires it into the LLM call.
@@ -95,8 +99,8 @@ describe("model routing — inline path + gut-check", () => {
       .withModel("claude-sonnet-4-6")
       // No .withModelRouting() — cost-route phase is skipped entirely;
       // selectedModel stays as config.defaultModel == "claude-sonnet-4-6".
-      // No .withReasoning() — same inline path as test 1 (identical seam).
-      .withLayers(makeCapturingLayer(captured))
+      // Same injection seam as test 1.
+      .withReplayLLM(makeCapturingLayer(captured))
       .build();
 
     const r = await agent.run("What is 2 + 2?");

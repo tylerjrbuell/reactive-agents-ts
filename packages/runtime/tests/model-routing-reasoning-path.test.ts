@@ -92,15 +92,24 @@ describe("model routing — reasoning path (C2)", () => {
  * On the REASONING PATH, ReasoningService captures LLMService at construction
  * time via `yield* LLMService` inside ReasoningServiceLive (reasoning-service.ts:150).
  * That construction uses observableLlmLayer (baked into reasoningOptLayer via
- * Layer.provide(reasoningDeps)). A later .withLayers() shadow cannot reach it.
+ * Layer.provide(reasoningDeps)). A later .withLayers() shadow cannot reach it —
+ * use .withReplayLLM() instead, which swaps LLMService in UPSTREAM of that
+ * construction (see builder.ts's own doc comment on withReplayLLM).
  *
- * The EventBus seam bypasses this: observableLlmLayer DOES emit LLMExchangeEmitted
- * to the shared EventBus on every LLM call, and agent.subscribe() listens to that
- * same bus — proving C1+C2 without faking the LLM.
+ * The EventBus seam still verifies the chain: observableLlmLayer wraps
+ * whatever LLMService is actually bound (real or replayed) and emits
+ * LLMExchangeEmitted to the shared EventBus on every call; agent.subscribe()
+ * listens to that same bus — proving C1+C2 without a live network call.
  *
- * REAL API CALLS: This test exercises the real Anthropic provider (requires
- * ANTHROPIC_API_KEY). The .withReasoning() path uses the baked-in LLM. Tokens
- * are minimal ("What is 2 + 2?" terminates in 1 iteration).
+ * NO LIVE CALLS (2026-08-14): previously required ANTHROPIC_API_KEY and
+ * skipped via a live-probe when credits were unusable — meaning a healthy
+ * local run still silently skipped the moment the account ran low, which is
+ * exactly the "no test should require cloud credits" failure mode this was
+ * meant to guard against. .withReplayLLM() replaces LLMService with a
+ * deterministic layer (same TestLLMService the rest of this file already
+ * uses); cost-route's routing computation itself is pure (no network) and
+ * runs unaffected with provider "anthropic" still configured, so the C1
+ * seam this test exists to pin is still genuinely exercised.
  *
  * Non-vacuity proof:
  *   Reverting C1 (reasoning-think.ts:256) back to
@@ -111,49 +120,10 @@ describe("model routing — reasoning path (C2)", () => {
  *   The gut-check test confirms "claude-sonnet-4-6" flows through on the same
  *   path without routing, proving the two states are distinct.
  */
-// CI-parity: CI has NO API keys — these two tests call live Anthropic, so they
-// must skip when the API is unusable (mirrors the ollamaState probe pattern in
-// llm-timeout-builder.test.ts). Key presence alone is NOT enough: a drained
-// credit balance 400s every call ("credit balance is too low"), which would
-// leave the suite red for account reasons. Probe once at module load with a
-// 1-output-token haiku call; skip on any non-OK outcome (no key, bad key,
-// drained credits, network down).
-// They CANNOT convert to .withProvider("test"): cost-route.ts explicitly
-// degrades non-routable providers (incl. "test") to defaultModel (T2 guard,
-// cost-route.ts:44-48), so the routed-haiku assertion would be unexercisable —
-// the live provider is the only path on which this test is RED-capable.
-const anthropicLive = await (async (): Promise<boolean> => {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return false;
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 1,
-        messages: [{ role: "user", content: "hi" }],
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) {
-      console.warn(
-        `[model-routing-reasoning-path] live-Anthropic probe non-OK (${res.status}) — skipping C1 live tests`,
-      );
-    }
-    return res.ok;
-  } catch {
-    return false;
-  }
-})();
-
-describe.skipIf(!anthropicLive)("model routing — builder reasoning path (C1 gate, EventBus seam)", () => {
+describe("model routing — builder reasoning path (C1 gate, EventBus seam)", () => {
   it("C1: .withModelRouting().withReasoning() routes to haiku (LLMExchangeEmitted)", async () => {
     const capturedModels: string[] = [];
+    const streamed: Array<string | undefined> = [];
 
     const agent = await ReactiveAgents.create()
       .withName("reasoning-routing-e2e-c1")
@@ -161,6 +131,7 @@ describe.skipIf(!anthropicLive)("model routing — builder reasoning path (C1 ga
       .withModel("claude-sonnet-4-6")
       .withModelRouting() // C3: cost-route selects haiku for a trivial task
       .withReasoning()    // forces reasoning-think.ts path (C1 seam)
+      .withReplayLLM(makeRecordingLayer(streamed, [{ text: "FINAL ANSWER: 4" }]))
       .build();
 
     // Subscribe BEFORE run so we don't miss events.
@@ -191,6 +162,7 @@ describe.skipIf(!anthropicLive)("model routing — builder reasoning path (C1 ga
 
   it("GUT-CHECK: without .withModelRouting(), sonnet reaches the LLM on the reasoning path", async () => {
     const capturedModels: string[] = [];
+    const streamed: Array<string | undefined> = [];
 
     const agent = await ReactiveAgents.create()
       .withName("reasoning-no-routing-gut-check-c1")
@@ -198,6 +170,7 @@ describe.skipIf(!anthropicLive)("model routing — builder reasoning path (C1 ga
       .withModel("claude-sonnet-4-6")
       // No .withModelRouting() — cost-route skipped; selectedModel = defaultModel
       .withReasoning()
+      .withReplayLLM(makeRecordingLayer(streamed, [{ text: "FINAL ANSWER: 4" }]))
       .build();
 
     const unsub = await agent.subscribe("LLMExchangeEmitted", (event) => {

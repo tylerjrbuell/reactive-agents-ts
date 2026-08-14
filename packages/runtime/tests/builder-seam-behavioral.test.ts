@@ -59,10 +59,21 @@ async function inlineCapture(
   apply: (b: ReturnType<typeof ReactiveAgents.create>) => ReturnType<typeof ReactiveAgents.create>,
 ): Promise<{ req: Req | undefined; result: Awaited<ReturnType<Awaited<ReturnType<ReturnType<typeof ReactiveAgents.create>["build"]>>["run"]>> }> {
   const captured: Req[] = [];
+  // provider "test" (not "anthropic"): the capturing LLMService layer only
+  // intercepts the completion call, not build-time provider validation /
+  // capability priming, which pings the REAL provider endpoint regardless
+  // of the injected layer -- an "anthropic" provider here silently required
+  // live credits (2026-08-14 fix). "test" skips all live validation.
+  // .withReplayLLM(), not .withLayers(): withLayers merges at terminal
+  // composition and only overrides late-bound tags -- LLMService is captured
+  // upstream of that, at construction, for every builder now that the kernel
+  // arm is the only arm (Move 1, 2026-08-13). withLayers happened to still
+  // reach LLMService under the old inline arm's later binding; post-Move-1 it
+  // silently captures nothing (0 requests), which is how this was caught.
   const agent = await apply(
-    ReactiveAgents.create().withName("seam").withProvider("anthropic").withModel("claude-sonnet-4-6"),
+    ReactiveAgents.create().withName("seam").withProvider("test").withModel("test-model"),
   )
-    .withLayers(capturingLayer(captured))
+    .withReplayLLM(capturingLayer(captured))
     .build();
   try {
     const result = await agent.run("What is 2 + 2?");
@@ -99,8 +110,12 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
       b.withPersona({ role: "SEAM_PIRATE_ROLE", tone: "gruff" }),
     );
     const without = await inlineCapture((b) => b);
+    // The kernel arm (every builder, post Move 1 merge 2026-08-13) carries the
+    // system prompt in the dedicated `systemPrompt` field, not as `messages[0]`
+    // (that was the old inline arm's shape) -- check both so this helper works
+    // under either.
     const sys = (r: Req | undefined) =>
-      typeof r?.messages?.[0]?.content === "string" ? (r.messages[0].content as string) : "";
+      r?.systemPrompt ?? (typeof r?.messages?.[0]?.content === "string" ? (r.messages[0].content as string) : "");
     expect(sys(withPersona.req)).toContain("SEAM_PIRATE_ROLE");
     expect(sys(without.req)).not.toContain("SEAM_PIRATE_ROLE");
   });
@@ -108,13 +123,19 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
   // 2. withTaskContext — wiring: `taskContext: state._taskContext` in
   //    runtime-construction.ts. Cut it → the grounding block never reaches the
   //    system message → RED.
-  it("withTaskContext() grounds the system message with the provided keys", async () => {
+  it("withTaskContext() grounds the request with the provided keys", async () => {
     const withCtx = await inlineCapture((b) => b.withTaskContext({ SEAM_TASK_KEY: "seam-ctx-val" }));
     const without = await inlineCapture((b) => b);
-    const sys = (r: Req | undefined) =>
-      typeof r?.messages?.[0]?.content === "string" ? (r.messages[0].content as string) : "";
-    expect(sys(withCtx.req)).toContain("SEAM_TASK_KEY");
-    expect(sys(without.req)).not.toContain("SEAM_TASK_KEY");
+    // Under the kernel arm (every builder, post Move 1 merge 2026-08-13),
+    // taskContext is NOT rendered into `systemPrompt` -- reasoning-think.ts
+    // folds it into `memoryContext`, which reactive.ts maps to `priorContext`
+    // and fences into the user turn's content as "Prior context" (see
+    // fenceRecalledMemory). Check the whole request, not one field, since
+    // where grounding content lands is an implementation detail this test
+    // should not pin.
+    const wholeRequest = (r: Req | undefined) => JSON.stringify(r ?? {});
+    expect(wholeRequest(withCtx.req)).toContain("SEAM_TASK_KEY");
+    expect(wholeRequest(without.req)).not.toContain("SEAM_TASK_KEY");
   });
 
   // 3. withTools — wiring: `enableTools`/`builtins`/tools → createRuntime. Cut it
