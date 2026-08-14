@@ -28,12 +28,6 @@ export const ReasoningMetadataSchema = Schema.Struct({
   effectiveness: Schema.optional(Schema.Number), // 0-1 (learned)
   selectedStrategy: Schema.optional(ReasoningStrategy), // for adaptive
   /**
-   * Kernel-set verification warning for hard failures (FM-4 part 2). The kernel's
-   * verifier may reject with a specific reason (e.g., "scaffold-leak") which
-   * should take precedence over the result-boundary verifier's generic checks.
-   */
-  verificationWarning: Schema.optional(Schema.String),
-  /**
    * Terminal judgment record (cross-cutting cascade, 2026-07-22). Computed by
    * finalizeStrategyResult on EVERY result. `enforced: false` ⇒ informational
    * (no wither configured, or judgment found nothing). Enforcement flips

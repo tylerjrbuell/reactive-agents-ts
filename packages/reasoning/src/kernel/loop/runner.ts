@@ -13,6 +13,7 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
+import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
 import { Effect, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
@@ -1353,7 +1354,7 @@ export function runKernel(
           // meta writes had zero readers — deleted in B4/§5.3.
           state = transitionState(state, {
             status: "failed",
-            error: `Verifier escalated output: ${verdict.summary}`,
+            error: `${VERIFIER_ESCALATION_PREFIX}${verdict.summary}`,
           });
         } else if (verdict.softFail) {
           // Advisory failure: grounding check missed compressed observation.
@@ -1370,16 +1371,11 @@ export function runKernel(
           // `failed` completionStatus; `receipt.verifierVerdict` is owned by the
           // result-boundary verifier (result-verification.ts), NOT by a meta
           // field dropped here (B4/§5.3).
-          // However, set verificationWarning so the result-boundary verifier
-          // can preserve this specific reason instead of overwriting it with a
-          // generic "action-success" message (FM-4 part 2).
+          // The error message carries the verdict summary so result-boundary
+          // verification can extract and preserve the specific rejection reason.
           state = transitionState(state, {
             status: "failed",
-            error: `Verifier rejected output: ${verdict.summary}`,
-            meta: {
-              ...state.meta,
-              verificationWarning: verdict.summary,
-            },
+            error: `${VERIFIER_REJECTION_PREFIX}${verdict.summary}`,
           });
         }
 

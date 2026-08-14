@@ -80,6 +80,12 @@ export {
 } from "./errors/errors.js";
 export type { ReasoningErrors } from "./errors/errors.js";
 
+// ─── Verifier (FM-4 part 2: durable string coupling) ───
+export {
+  VERIFIER_REJECTION_PREFIX,
+  VERIFIER_ESCALATION_PREFIX,
+} from "./kernel/verifier-message-prefixes.js";
+
 // ─── Services ───
 export {
   ReasoningService,

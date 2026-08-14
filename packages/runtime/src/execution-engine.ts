@@ -24,7 +24,7 @@ import {
 import type { Task, TaskResult, TerminatedBy } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { classifyToolRelevance, filterToolsByRelevance, ReasoningService } from "@reactive-agents/reasoning";
+import { classifyToolRelevance, filterToolsByRelevance, ReasoningService, VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "@reactive-agents/reasoning";
 import {
   ToolService,
   BUILTIN_TOOL_NAMES,
@@ -1383,19 +1383,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // and is forwarded to the boundary verifier so it doesn't
                 // overwrite the specific reason with a generic "action-success".
                 // Extract the kernel's verification reason from its error message (FM-4 part 2).
-                // The kernel's verifier may reject with a specific reason (e.g., "scaffold-leak")
-                // embedded in the error message "Verifier rejected output: <verdict.summary>".
-                // This becomes the prior rejection reason so the result-boundary verifier doesn't
-                // overwrite it with a generic "action-success" message.
+                // The kernel's verifier may reject/escalate with a specific reason (e.g., "scaffold-leak")
+                // carried in the error message. This becomes the prior rejection reason so the
+                // result-boundary verifier doesn't overwrite it with a generic "action-success" message.
                 //
-                // Note: The kernel's state.meta.verificationWarning should carry this,
-                // but it's being dropped due to schema constraints on ReasoningMetadata.
-                // Extracting from the error message is a temporary workaround until that's resolved.
+                // String coupling is made durable via shared constants (VERIFIER_REJECTION_PREFIX
+                // and VERIFIER_ESCALATION_PREFIX, both defined in @reactive-agents/reasoning).
+                // A rename in the kernel now breaks the build instead of silently regressing receipts.
                 let priorRejectionReason: string | undefined;
                 if (rr?.status === "failed" && typeof rr?.error === "string") {
-                  const match = rr.error.match(/Verifier (?:rejected|escalated) output: (.+)/);
-                  if (match?.[1]) {
-                    priorRejectionReason = match[1];
+                  if (rr.error.startsWith(VERIFIER_REJECTION_PREFIX)) {
+                    priorRejectionReason = rr.error.slice(VERIFIER_REJECTION_PREFIX.length);
+                  } else if (rr.error.startsWith(VERIFIER_ESCALATION_PREFIX)) {
+                    priorRejectionReason = rr.error.slice(VERIFIER_ESCALATION_PREFIX.length);
                   }
                 }
 
