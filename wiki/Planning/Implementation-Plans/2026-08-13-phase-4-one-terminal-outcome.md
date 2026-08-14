@@ -17,6 +17,56 @@
 
 ---
 
+## Status: ✅ SHIPPED (2026-08-14, branch `phase-4-one-terminal-outcome`)
+
+All four tasks completed and merged. Executed via subagent-driven-development: 4 core
+fixes, multiple review cycles per task, with real critical bugs caught during review that
+unit tests missed.
+
+**Task 1 — Outcome computation unification (`fd962de3..4a57ee87`):** Created single
+`deriveTaskOutcome` helper lifting identical four-helper computation block out of
+`reactive-agent.ts` and `execute-stream.ts`, unifying the `run()`/`runStream()` paths.
+One review round: caught and fixed a real regression where paused-run `goalAchieved`
+backslid from correct ambiguous `null` to incorrect definitive `false`.
+
+**Task 2 — Verifier reason preservation (`4a57ee87..825be72e`):** Fixed result-boundary
+verifier overwriting kernel's specific rejection reason with a generic one. Three review
+rounds total: first two left dead code and a broken production build (`packages/reasoning`
+dist not rebuilt after adding exports); final fix introduced shared constant module
+(`verifier-message-prefixes.ts`) making the string-coupling compiler-checked instead of
+silent. One critical finding in final review: if this fix had shipped without the
+constants refactor, it would have been a ticking bomb (string-coupled semantics in two
+files, no compiler guard).
+
+**Task 3 — Empty-output invariant fix (`825be72e..542c907b`):** Fixed kernel synthesis
+backfill defeating empty-output honesty checks. **Important correction from field
+testing:** The plan's own stated root cause (§9 kernel synthesis backfill "never fires"
+`harnessAuthoredOutput` signal) was empirically WRONG; kernel-side check fires correctly.
+Real bugs were both runtime-side: `normalizeReasoningResult`'s metadata whitelist
+silently dropped `harnessAuthoredOutput` in transit, and an unrelated coherence guard
+pre-empted the "no output" error-detail scan. Required ZERO changes to `packages/reasoning`.
+
+**Task 4 — Stream termination enforcement (`542c907b..e518dca4`):** Fixed FM-5 (stream
+termination didn't stop the underlying run). Two independent gaps: (1) `checkpoint()`
+never observed a hard `terminate()` call (only cooperative `stop()`), and (2) the
+`execute-stream.ts` producer ran on an orphaned `Effect.forkDaemon` fiber. One review
+round found a critical bug the first fix missed: daemon fiber still leaked when a stream
+consumer walked away (`break`/throw) without calling `.terminate()` — fixed by adding
+forced `terminate()` in `reactive-agent.ts`'s `_runStreamImpl` `finally` block.
+
+**Deferred minor findings (no merge blockers, filed for follow-up):**
+- `packages/runtime/tests/result-boundary-verification.test.ts:60-64`: stale "KNOWN ISSUE"
+  comment contradicting current (correct, passing) behavior.
+- `packages/runtime/src/execution-engine.ts` (~line 292, ~312): redundant duplicate comment
+  pair, both labeled "(FM-4 part 2)".
+- `packages/runtime/tests/engine-empty-output-invariant.test.ts:56-77`: inline comment
+  claiming `onlyHarnessAuthorshipFailed` "never fires" is now factually wrong; Task 3
+  proved it fires (the bug was downstream).
+- `budgetTerminalPartial` metadata field has the same whitelist-drop gap `harnessAuthoredOutput`
+  had before Task 3's fix — same bug class, worth its own targeted follow-up.
+
+---
+
 ### Task 1: Single outcome-computation helper for `run()` and `runStream()`
 
 **Files:**

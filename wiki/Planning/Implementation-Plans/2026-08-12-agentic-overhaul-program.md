@@ -518,13 +518,20 @@ framework's primary extension point. This also re-frames the `low_delta_guard` m
 note in project memory ("11 of 12 runs killed mid-progress"): the guard is firing
 correctly on a starved evidence signal; the starvation is the bug.
 
-### FM-4 — Terminal truth reconstructed three times
+### FM-4 — Terminal truth reconstructed in two downstream sites (verifier double-checks)
 
-Kernel produces terminal state; `reactive-agent.ts:1458-1522` re-derives tool calls,
-deliverables and goal-achieved from `reasoningSteps`; `execute-stream.ts:535-814` does
-it again. `arbitrator.ts` (1,800 LOC, 84 branches) is a third post-condition site —
-found by E2E after unit tests missed it.
-**Fix:** Phase 4, one `RunOutcome`, everything else a projection (09 C7).
+Kernel produces terminal state via `arbitrator.ts` (single-owner per `terminate.ts`'s
+header, canonical upstream producer). Two independent downstream re-derivations: (1)
+`reactive-agent.ts:1478-1626` re-derives tool calls, deliverables, goal-achieved from
+`reasoningSteps` for the `run()` path; (2) `execute-stream.ts:535-814` duplicates the
+identical computation for the `runStream()` path (same four helper calls, same logic,
+no disagreement algorithms — just unguarded duplication). Additionally: (3)
+`result-verification.ts:73-151`'s `verifyResultBoundary` re-verifies the already-failed
+result at the boundary and overwrites the kernel's specific rejection reason (e.g.
+`scaffold-leak`) with a less-informative generic one (`action-success`).
+**Fix:** Phase 4, unify Sites 1-2 via single `deriveTaskOutcome` helper and fix Site 3
+verifier-overwrite ordering so more-specific reasons are preserved (one `RunOutcome`
+type not introduced; computation made single-owner instead per 09 C7).
 
 ### FM-5 — Stream execution detached from its caller
 
