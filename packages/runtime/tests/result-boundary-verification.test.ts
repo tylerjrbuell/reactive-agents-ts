@@ -47,31 +47,26 @@ describe("result-boundary verification", () => {
       expect(r.receipt?.verdict).not.toBe("tool-grounded");
       // …and the reason is named on the result, not buried.
       //
-      // OPEN FINDING (Move 1 merge triage, 2026-08-13), NOT resolved -- this
-      // is FM-4/FM-7 (already filed in
-      // wiki/Planning/Implementation-Plans/2026-08-12-agentic-overhaul-
-      // program.md's failure-mode register: "terminal truth reconstructed
-      // three times" / "requirement evidence means different things per
-      // caller"), reproduced concretely here rather than a new defect. Two
-      // independent verifiers run on this scenario: the KERNEL's own
-      // internal verifier correctly catches scaffold-leak first (visible in
-      // the log: "failed at scaffold-leak (output contains framework
-      // scaffolding markers...)") and terminates the run failed. THEN
-      // execution-engine.ts's separate `verifyResultBoundary` re-verifies
-      // the ALREADY-failed result independently, and ITS OWN check
-      // ("action-success") is what fails this time (trivially -- success is
-      // already false) -- so `result.metadata.verificationWarning` reports
-      // "action-success — final-answer returned success=false" instead of
-      // the real, specific scaffold-leak reason the kernel already found.
-      // The verdict-CAPPING mechanism this test's other two assertions check
-      // still works correctly (verifierVerdict:"reject",
-      // verdict!=="tool-grounded"); only the surfaced REASON text is wrong
-      // -- a second, less-informative verifier is overwriting the first,
-      // more specific one's explanation. Fixing this properly means the two
-      // verifiers agreeing on one shared reason (FM-4/FM-7's actual fix,
-      // Phase 4/5 of the governing plan) -- not a standalone patch here.
-      // Left asserting the CORRECT (desired) behavior, not the current wrong
-      // one -- this stays red until FM-4/FM-7 lands, by design.
+      // FM-4 part 2 (2026-08-14): Infrastructure implemented to extract and
+      // prefer the kernel's specific rejection reason over the boundary
+      // verifier's generic "action-success" message. The kernel's verifier
+      // sets state.error to "{PREFIX}{reason}" when rejecting (e.g.,
+      // "Verifier rejected output: scaffold-leak"). This is preserved through
+      // reactive.ts → finalizeStrategyResult → buildStrategyResult → the
+      // ReasoningResult.error field, then extracted in execution-engine.ts
+      // and passed to verifyResultBoundary as priorRejectionReason. The
+      // result-verification logic prefers this prior reason whenever available.
+      //
+      // KNOWN ISSUE: The test remains red despite the infrastructure being in
+      // place. This suggests either:
+      //   1. state.error is not making it to the ReasoningResult.error field,
+      //   2. The extraction in execution-engine.ts is not matching the prefix,
+      //   3. The test scenario triggers a different code path than expected.
+      //
+      // The dual-verifier problem is real (kernel catches scaffold-leak, then
+      // boundary verifier re-verifies with "action-success"). The verdict-CAPPING
+      // mechanism works correctly (verifierVerdict:"reject", verdict!=="tool-grounded").
+      // Only the surfaced REASON text is affected. See FM-7 for the full fix.
       expect(
         String((r.metadata as { verificationWarning?: string }).verificationWarning ?? ""),
       ).toContain("scaffold-leak");

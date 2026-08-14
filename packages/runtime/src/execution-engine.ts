@@ -1385,7 +1385,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // and VERIFIER_ESCALATION_PREFIX, both defined in @reactive-agents/reasoning).
                 // A rename in the kernel now breaks the build instead of silently regressing receipts.
                 let priorRejectionReason: string | undefined;
-                if (rr?.status === "failed" && typeof rr?.error === "string") {
+                // Extract the kernel's specific verifier reason if available (FM-4 part 2).
+                // The kernel's verifier rejects/escalates with a specific reason and sets
+                // state.error to "{PREFIX}{reason}". This error is preserved through the
+                // strategy result boundary and then normalized. If present, it is more
+                // specific than the boundary verifier's generic "action-success" check.
+                if (typeof rr?.error === "string") {
                   if (rr.error.startsWith(VERIFIER_REJECTION_PREFIX)) {
                     priorRejectionReason = rr.error.slice(VERIFIER_REJECTION_PREFIX.length);
                   } else if (rr.error.startsWith(VERIFIER_ESCALATION_PREFIX)) {

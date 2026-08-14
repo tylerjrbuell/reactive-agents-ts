@@ -143,28 +143,42 @@ export const verifyResultBoundary = (
 
     const verdict = result.severity ?? (result.verified ? "pass" : "reject");
     const failed = result.checks.filter((c) => !c.passed && c.reason !== undefined);
-
-    // When the boundary verifier's only failure is "action-success" (which fails
-    // trivially because actionSuccess is already false), and there's a prior,
-    // more-specific rejection reason from the kernel, use that instead. The
-    // action-success check exists to catch FIRST discovery of failure, not to
-    // re-explain an already-known one (FM-4 part 2).
-    const isOnlyActionSuccess =
-      failed.length === 1 && failed[0]?.name === "action-success";
     const hasPriorReason =
       args.priorRejectionReason !== undefined &&
       args.priorRejectionReason.trim().length > 0;
+
+    // FM-4 part 2: When the kernel's own verifier found a specific rejection reason
+    // (e.g., "scaffold-leak"), prefer that over generic boundary-verifier reasons
+    // (e.g., "action-success"). The kernel ran terminal checks; the boundary
+    // verifier acts as a safeguard and names itself for clarity when *it* finds
+    // something new. Since the kernel already failed the run with a specific reason,
+    // that reason is more informative and should lead the warning message.
+    //
+    // Rationale: The boundary verifier's failure checks (action-success,
+    // non-empty-content) are "generic" — they apply to any action. The kernel's
+    // verifier ran output-quality checks (scaffold-leak, harness-parrot, etc.)
+    // with full context. When the kernel's reason exists, it is more specific and
+    // carries more debugging value than re-explaining that the action failed.
+    //
+    // Edge case: If the boundary verifier found failures beyond action-success
+    // (e.g., both action-success and harness-parrot), both should appear. Use the
+    // prior reason as the primary explanation and append any boundary-specific
+    // findings that aren't action-success.
+    const otherFailures = failed.filter((c) => c.name !== "action-success");
+    const failureMessage = hasPriorReason
+      ? otherFailures.length > 0
+        ? `${args.priorRejectionReason}; boundary also detected: ${otherFailures
+            .map((c) => `${c.name} — ${c.reason}`)
+            .join("; ")}`
+        : args.priorRejectionReason
+      : failed.map((c) => `${c.name} — ${c.reason}`).join("; ");
 
     return {
       result,
       verdict,
       ...(verdict === "reject" || verdict === "escalate"
         ? {
-            warning: isOnlyActionSuccess && hasPriorReason
-              ? `Result verification ${verdict}ed: ${args.priorRejectionReason}`
-              : `Result verification ${verdict}ed: ${failed
-                  .map((c) => `${c.name} — ${c.reason}`)
-                  .join("; ")}`,
+            warning: `Result verification ${verdict}ed: ${failureMessage}`,
           }
         : {}),
     };
