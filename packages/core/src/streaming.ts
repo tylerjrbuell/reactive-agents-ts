@@ -52,7 +52,24 @@ export const CurrentRunContext = FiberRef.unsafeMake<
 
 /** Minimal interface accessed by runner.ts for pause/stop control. */
 export interface RunControllerLike {
-  checkpoint(): Promise<{ stop: true } | undefined>;
+  /**
+   * Polled at each kernel iteration boundary. Resolves `{ stop: true }` for a
+   * graceful stop() and `{ stop: true; terminate: true }` for a hard
+   * terminate() — both exit the loop before its next provider call, but
+   * `terminate` lets the loop route the kernel's own `terminate()` helper
+   * through a distinct reason (FM-5) rather than mislabeling a hard abort as
+   * `stop_requested`.
+   */
+  checkpoint(): Promise<{ stop: true; terminate?: boolean } | undefined>;
+  /**
+   * Optional abort signal mirroring `terminate()` (FM-5). When present, a
+   * caller that owns the producer side of a run (e.g. the streaming engine's
+   * forked pipeline fiber) can listen for `"abort"` to interrupt in-flight
+   * work immediately rather than waiting for the next cooperative
+   * `checkpoint()` poll. Absent on controllers that don't back a real
+   * AbortController (e.g. simple test doubles) — always optional.
+   */
+  readonly signal?: AbortSignal;
   /**
    * Optional durable-checkpoint observer. The kernel invokes it at each
    * iteration boundary (same point as checkpoint()) with a LOSSLESS serialized

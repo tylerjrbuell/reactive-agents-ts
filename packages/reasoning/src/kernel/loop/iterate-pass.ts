@@ -396,8 +396,14 @@ export function runIterationPass(
           // output string to commitDeliverable. Preserve any prior committed
           // output as a passthrough; an empty output becomes a structured
           // sentinel (NOT a raw empty string).
+          //
+          // FM-5 (Phase 4 Task 4): a hard terminate() (RunHandle.terminate())
+          // is distinguished from a graceful stop() via `ctl.terminate` — both
+          // exit the loop here, before the next provider call, but the reason
+          // differs so `state.meta.terminatedBy` doesn't mislabel an abort as
+          // a graceful stop (see terminate-reason.ts).
           state = terminate(state, {
-            reason: "stop_requested",
+            reason: ctl.terminate ? "terminate_requested" : "stop_requested",
             deliverable: passthroughOutputDeliverable(state.output),
           });
           sync(); return "break";

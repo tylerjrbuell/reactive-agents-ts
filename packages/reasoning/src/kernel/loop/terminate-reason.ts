@@ -33,6 +33,12 @@ export type TerminateReason =
   // routed through terminate() so the stop-checkpoint path stops bypassing the
   // single-owner termination + output-writer invariants).
   | "stop_requested"
+  // User-initiated HARD terminate() via the RunController checkpoint (FM-5,
+  // Phase 4 Task 4). Distinct from "stop_requested" so the raw
+  // `state.meta.terminatedBy` channel doesn't mislabel a hard abort as a
+  // graceful stop; both narrow to the same public "end_turn" terminatedBy
+  // via `deriveTerminatedBy`'s whitelist (no public-surface change).
+  | "terminate_requested"
   // Durable HITL (Phase D): the act capability gated a flagged tool call and
   // paused the run for human approval. A NON-FAILURE terminal reason — the
   // terminal post-condition gate passes it through (a paused run has

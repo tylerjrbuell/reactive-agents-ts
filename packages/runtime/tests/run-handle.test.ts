@@ -99,8 +99,14 @@ describe("RunController", () => {
         ctrl.terminate(); // hard abort, releases pause
         const result = await checkpointPromise;
 
-        // After terminate, stopRequested is NOT set — terminate uses abort, not stop
-        expect(result).toBeUndefined();
+        // FM-5 (Phase 4 Task 4): checkpoint() now reports a hard terminate
+        // distinctly from a graceful stop — { stop: true, terminate: true } —
+        // so the kernel loop (iterate-pass.ts) exits before its next provider
+        // call instead of the daemon-forked pipeline running on unobserved.
+        // Previously terminate() left no trace on checkpoint() at all
+        // (stopRequested stayed false), which was exactly the "no reader for
+        // terminate()'s abort" gap FM-5 closes.
+        expect(result).toEqual({ stop: true, terminate: true });
         expect(ctrl.status()).toBe("terminated");
     });
 

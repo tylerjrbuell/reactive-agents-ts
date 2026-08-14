@@ -9,7 +9,7 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
-import { Effect, Layer, Option, Queue, Stream as EStream } from "effect";
+import { Effect, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
 import type { TaskError } from "@reactive-agents/core";
@@ -530,7 +530,7 @@ export const makeExecuteStream =
         durableFlush = installed.flush;
       }
 
-      yield* execute(task).pipe(
+      const producerFiber = yield* execute(task).pipe(
         Effect.tap((taskResult) => {
           // Durable HITL: detect if the run paused for approval.
           const gate = (taskResult as { awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown } }).awaitingApprovalFor;
@@ -762,6 +762,34 @@ export const makeExecuteStream =
         Effect.locally(RunControllerRef, options?.runController ?? null),
         Effect.forkDaemon,
       );
+
+      // FM-5 (Phase 4 Task 4) — give terminate()'s abort a reader on the
+      // PRODUCER side. `_runStreamImpl` (reactive-agent.ts) already
+      // interrupts the STREAM CONSUMER fiber when the controller's signal
+      // fires, but that only stops delivery to the caller — it leaves this
+      // daemon fiber (and any in-flight provider call inside it) running
+      // orphaned in the background, because `Effect.forkDaemon` deliberately
+      // detaches from the caller's fiber tree. Swapping to a scope-attached
+      // `Effect.fork` isn't available here without threading `Scope` through
+      // `ManagedRuntime.runPromise`/`ExecutionEngine.executeStream` (outside
+      // this task's file list) — nothing else reads the forked fiber's
+      // handle today (confirmed), so capturing it and interrupting it
+      // directly on abort is the minimal fix. `checkpoint()`'s cooperative
+      // terminate check (iterate-pass.ts) additionally stops the loop before
+      // its NEXT provider call — this listener covers the case where a call
+      // is already in flight, mirroring the same `Fiber.interrupt` pattern
+      // reactive-agent.ts's `_runStreamImpl` already uses for the consumer.
+      const ctlSignal = options?.runController?.signal;
+      if (ctlSignal) {
+        const interruptProducer = (): void => {
+          Effect.runFork(Fiber.interrupt(producerFiber));
+        };
+        if (ctlSignal.aborted) {
+          interruptProducer();
+        } else {
+          ctlSignal.addEventListener("abort", interruptProducer, { once: true });
+        }
+      }
 
       // Stream reads from queue, stops after terminal event.
       return EStream.unfoldEffect(false as boolean, (done) => {

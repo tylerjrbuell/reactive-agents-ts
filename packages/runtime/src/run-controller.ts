@@ -258,11 +258,19 @@ export class RunController implements RunControllerLike { // RunControllerLike f
 
     /**
      * Called by runner.ts at each iteration boundary via Effect.promise().
-     * Awaits resume() when paused, then signals whether a soft stop was requested.
+     * Awaits resume() when paused, then signals whether a soft stop or a hard
+     * terminate() was requested. `terminate` takes priority over `stop` — the
+     * two are mutually exclusive statuses (terminate() never checks
+     * `_stopRequested`) — so the loop's caller can route a hard terminate
+     * through a distinct `terminatedBy` reason (FM-5) instead of the
+     * graceful-stop one.
      */
-    async checkpoint(): Promise<{ stop: true } | undefined> {
+    async checkpoint(): Promise<{ stop: true; terminate?: boolean } | undefined> {
         if (this._pausePromise) {
             await this._pausePromise;
+        }
+        if (this._status === "terminated") {
+            return { stop: true, terminate: true };
         }
         if (this._stopRequested) {
             return { stop: true };
