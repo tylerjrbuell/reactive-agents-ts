@@ -12,6 +12,54 @@
 
 ## Projects — Aug 2026
 
+**2026-08-15: Deterministic evidence grounding across kernel termination paths (`fa609992`,`68e0b0d5`,`f2ff6a17`).**
+User explicitly rejected a recall()-advisory approach ("this won't work for smaller models... not a
+good strategy") — demanded a fully deterministic fix, not model-compliance-dependent. Added
+`unconsumed-evidence.ts` (`findUnconsumedStoredKeys`/`resolveUnconsumedEvidence`: scans `state.steps`
+for `storedKey` observations never followed by a `recall` action) and wired it deterministically into
+4 termination paths (final-answer tool guard, terminal-gate evidence check, contentStability/finalAnswerRegex
+via `contractCoverageProposal`, `reactiveControllerEarlyStopEvaluator`) — each redirects at most once.
+**None of those 4 fired on the live scratch.ts run.** Root cause was actually in `assembleDeliverable`
+(`runner-helpers/deliverable.ts`) — priority 1 shipped the model's trailing thought verbatim whenever
+≥100 chars, with zero check against unconsumed scratchpad evidence, unconditionally beating the already-
+deterministic `tool_artifact`/`harness_synthesis` paths below it. This is the single funnel every
+non-final-answer termination (`end_turn`, `dispatcher-early-stop`, `low_delta_guard`, `controller_early_stop`,
+the §8.8 fallback) passes through. Fixed by skipping the bare-thought priority when unconsumed evidence
+exists and grounded observations are available. Live-verified against trace `01M03N0B34D3X7X4CMEFS8WKC0`:
+model's final response WAS a substantive >100-char synthesis, 4 scratchpad keys never recalled (0 recall
+calls all run) — yet shipped output was the harness-assembled content, not that thought, confirming the
+override actually fired. Known remaining gap (not fixed here): the harness-assembled fallback itself can
+be a raw search-result dump rather than a coherent synthesis — see the react final-answer degeneration
+item in the next entry. Full detail: Claude memory `project_deterministic_evidence_grounding_2026_08_15.md`.
+
+**2026-08-15: scratch.ts research-task triage — 3 root causes, 1 fixed (`b13550f2`).** `rax diagnose`
+on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode names/descriptions" task)
+found: (1) **FIXED** — `evaluateToolInject` (reactive-intelligence) unconditionally suggested another
+`web-search` on knowledge-gap entropy even when the model already fetched real content (HTTP 200 from
+Wikipedia/TVGuide) compressed to the scratchpad and never called `recall()` to read it back. Fixed by
+threading `hasUnconsumedStoredEvidence` (`computeHasUnconsumedStoredEvidence` in `reactive-observer.ts`)
+so the evaluator now prefers `recall(key, full:true)` over redundant search. (2) **OPEN, high-value** —
+fabrication guards (`evidence-grounding.ts`) are NUMERIC-ONLY; plan-execute-reflect invented 9 complete
+fake episode titles from 5 vague search snippets and the verifier reported "9 checks passed" — zero
+grounding coverage for narrative/factual fabrication, likely the framework's biggest trust gap for
+research tasks. (3) **OPEN** — react's final-answer path can degenerate to a raw ✓-prefixed dump of tool
+observations with no LLM synthesis pass at all. Also noted: `http-get` on IMDb returns 202/empty body
+(bot mitigation) with no signal to the model that the fetch was wasted. Full detail: Claude memory
+`project_scratch_ts_research_task_triage_2026_08_15.md`.
+
+**2026-08-15: `repetitionGuard` distinct-target carve-out (`1b4a3f1f`).** `file-write` is excluded
+from `isParallelBatchSafeTool` (tool-gating.ts), so its repetition ceiling was 2 calls — blocking
+the 3rd `file-write` on ANY task needing 3+ file edits, regardless of target path. Root-caused via
+`rax diagnose` on a live cogito:14b rw-7 trace (multi-file bugfix task): the model correctly read
+all 3 buggy files but its 3rd write was rejected by the guard before it ever touched the source,
+forcing a broken `code-execute` workaround. Same defect class already fixed once for
+`shell-execute` (tool-gating.ts:113-119 comment), never generalized. Fixed with `hasDistinctTarget()`
+in `guard.ts`: a call whose `path`/`file`/`target`/`url`/`id` argument differs from every prior call
+to the same tool passes regardless of ceiling; same-target thrashing still blocks. Verified live —
+3rd file-write now succeeds; rw-7's residual 0% is now cleanly isolated to genuine cogito:14b
+capability (writes its own `__tests__/*.test.ts` instead of editing `src/*.ts` in place), not a
+framework bug. Structural fix — affects every multi-file-edit task, any model.
+
 **2026-08-13 UPDATE (supersedes the "Move 1 NOT merged" claim below): Move 1 MERGED to `main`
 (`be71c87b`), Phase 1 token-tax fixed (`e008a9c7`, +109%→+36%), Deterministic Remedy Layer (FM-8/
 16/17) SHIPPED (`main` HEAD `45267632`).** `runtime.ts`'s `bareReasoningConfig` now makes every
