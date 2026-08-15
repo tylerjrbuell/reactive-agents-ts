@@ -13,6 +13,7 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
+import { findUnconsumedStoredKeys } from "../capabilities/verify/unconsumed-evidence.js";
 import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
 import { Effect, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
@@ -1085,7 +1086,19 @@ export function runKernel(
     //
     // Only fills from lastThought when status=done. Failed runs were already
     // forced to output=null by the transitionState invariant.
-    if (state.status === "done" && !state.output) {
+    //
+    // 2026-08-15 root fix (5th funnel): this ran BEFORE §8.8 and unconditionally
+    // accepted ANY non-empty lastThought — including runs where terminatedBy is
+    // null/outside the §8.5 whitelist (e.g. no explicit terminal reason at all,
+    // measured live on a gemini-2.5-flash trace). Because it always satisfies
+    // `!state.output`, §8.8's assembleDeliverable() call — which HAS the
+    // unconsumed-evidence check from 68e0b0d5 — never ran on this path. Skip
+    // here when unconsumed evidence exists and there are grounded observations
+    // to fall back to, so §8.8 gets the case instead.
+    const skip87ForUnconsumedEvidence =
+      findUnconsumedStoredKeys(state.steps).length > 0 &&
+      countDeliverableCandidates(state) > 0;
+    if (state.status === "done" && !state.output && !skip87ForUnconsumedEvidence) {
       const lastThought = [...state.steps]
         .filter((s) => s.type === "thought")
         .pop();

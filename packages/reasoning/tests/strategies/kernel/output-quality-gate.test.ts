@@ -159,6 +159,59 @@ function makeQuotaSatisfyingSearchKernel(toolOutputs: readonly string[]): Though
   };
 }
 
+/**
+ * Kernel that stores a compressed tool preview (unrecalled), then jumps
+ * straight to status:"done" with output:"" and terminatedBy left UNSET —
+ * reproducing the 5th termination funnel found live on gemini-2.5-flash
+ * (trace 01M03X8GBDV7QYMBHWW9XR0M2F): no explicit terminal reason at all,
+ * so §8.5's terminatedBy-whitelist check never runs, and only runner.ts
+ * §8.7 (lastThought fallback, pre-fix bypassed assembleDeliverable
+ * entirely) or §8.8 (assembleDeliverable, evidence-checked) can fill it.
+ */
+function makeUnconsumedEvidenceThenBareDoneKernel(
+  key: string,
+  fullText: string,
+  preview: string,
+  thought: string,
+): ThoughtKernel {
+  return (state, _ctx) => {
+    const nextIter = state.iteration + 1;
+    if (nextIter === 1) {
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: nextIter,
+          toolsUsed: new Set([...state.toolsUsed, "web-search"]),
+          scratchpad: new Map([...state.scratchpad, [key, fullText]]),
+          steps: [
+            ...state.steps,
+            makeStep("action", "web-search"),
+            makeStep("observation", preview, {
+              storedKey: key,
+              observationResult: {
+                success: true,
+                toolName: "web-search",
+                displayText: "preview",
+                category: "web-search" as const,
+                resultKind: "data" as const,
+                preserveOnCompaction: false,
+              },
+            }),
+          ],
+        }),
+      );
+    }
+    return Effect.succeed(
+      transitionState(state, {
+        status: "done",
+        output: "",
+        iteration: nextIter,
+        steps: [...state.steps, makeStep("thought", thought)],
+      }),
+    );
+  };
+}
+
 const defaultOptions = {
   taskId: "test-task",
   strategy: "reactive",
@@ -244,6 +297,26 @@ describe("output quality gate", () => {
     expect(state.meta.terminatedBy).toBe("harness_deliverable");
     // The harness should have assembled the tool artifacts
     expect(state.output).toContain("BTC price");
+  });
+
+  it("ships grounded content, not a bare thought, when done arrives with terminatedBy unset and unconsumed evidence (2026-08-15 5th-funnel fix)", async () => {
+    const key = "_tool_result_x";
+    const fullText = "Bitcoin: 70836.96\nEthereum: 3850.00";
+    const preview = "[web-search result — compressed preview]\n  — full object is stored.";
+    const thought =
+      "Synthesizing the findings: BTC is at $71,000 and ETH is at $3,900, " +
+      "reflecting current market snapshots across major exchanges.";
+    const kernel = makeUnconsumedEvidenceThenBareDoneKernel(key, fullText, preview, thought);
+    const state = await runWithTestLLM(
+      runKernel(
+        kernel,
+        { task: "what are the crypto prices?" },
+        { ...defaultOptions, maxIterations: 5 },
+      ),
+    );
+    expect(state.status).toBe("done");
+    expect(state.output).toContain("Bitcoin: 70836.96");
+    expect(state.output).not.toContain("Synthesizing the findings");
   });
 
   it("does not auto-deliver stalled artifacts when required tool quantity is still missing", async () => {
