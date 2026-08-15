@@ -354,12 +354,13 @@ const DEFAULT_LOCAL_TIMEOUT_MS = 300_000
  *   config.ollamaTimeoutMs — provider-wide override (OLLAMA_TIMEOUT_MS env)
  *   DEFAULT_LOCAL_TIMEOUT_MS — cold-load-tolerant floor
  *
- * NOTE (denied-by-authority follow-up for runtime-warden): the builder's
  * `.withTimeout()` maps to the execution-engine whole-run timeout, NOT to
- * `LLMConfig.ollamaTimeoutMs`. Threading `.withTimeout()` (or a dedicated
- * `.withLlmTimeout()`) into this field is a runtime/builder change outside
- * llm-provider's authority. Until then the value is reachable via
- * `request.timeoutMs` or `OLLAMA_TIMEOUT_MS`.
+ * this. `.withLlmTimeout()` is the dedicated per-call builder method that
+ * reaches `config.ollamaTimeoutMs` here (via `_ollamaTimeoutMs` →
+ * `RuntimeOptions.ollamaTimeoutMs` → `createLLMProviderLayer`). Used by both
+ * `complete()` and `stream()` — the latter applies it as a per-chunk idle
+ * timeout via `Stream.timeoutFail`, since stream() has no single "whole call"
+ * moment to wrap.
  */
 function resolveLocalTimeoutMs(
     request: { readonly timeoutMs?: number },
@@ -642,6 +643,18 @@ export const LocalProviderLive = Layer.effect(
                         typeof request.model === 'string'
                             ? request.model
                             : request.model?.model ?? defaultModel
+                    // Per-chunk idle timeout (mirrors complete()'s whole-call
+                    // Effect.timeout, but Stream.timeoutFail measures gaps
+                    // between emissions — the right shape for a stream, since
+                    // a cold-load hang before the first token and a stall
+                    // mid-generation both need to trip it, not just a total
+                    // wall-clock ceiling). Previously unset on this path:
+                    // .withLlmTimeout()/OLLAMA_TIMEOUT_MS reached only
+                    // complete(), leaving stream() (the kernel's actual call
+                    // path) unbounded — a cold-load or contended GPU could
+                    // hang a run forever with no way to configure it away.
+                    const timeoutMs = resolveLocalTimeoutMs(request, config)
+                    const startedAt = Date.now()
 
                     return retryStreamBeforeFirstEmission(Stream.async<StreamEvent, LLMErrors>((emit) => {
                         // Track the abortable iterator so stream interruption
@@ -885,7 +898,24 @@ export const LocalProviderLive = Layer.effect(
                             aborted = true
                             ollamaStream?.abort()
                         })
-                    }))
+                    })).pipe(
+                        Stream.timeoutFail(
+                            () =>
+                                new LLMTimeoutError({
+                                    message:
+                                        `Local LLM request for model "${model}" timed out after ` +
+                                        `${Date.now() - startedAt}ms (limit ${timeoutMs}ms). The model may be ` +
+                                        `cold-loading or the GPU is contended — warm it first (a ` +
+                                        `single call to load it), raise the timeout via ` +
+                                        `request.timeoutMs / OLLAMA_TIMEOUT_MS, or reduce contention.`,
+                                    provider: 'ollama',
+                                    timeoutMs,
+                                    model,
+                                    elapsedMs: Date.now() - startedAt,
+                                }),
+                            Duration.millis(timeoutMs),
+                        ),
+                    )
                 }),
 
             completeStructured: (request) =>

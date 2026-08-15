@@ -21,6 +21,7 @@ import { subAgentResultForDisplay, subAgentChildLedgerEntries, resolveProduces }
 import { BehavioralContractViolationError } from "../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 type ProgressLoggerLike = {
   logToolExecution: (
@@ -62,7 +63,7 @@ export const runInlineAct = (
   deps: InlineActDeps,
 ): Effect.Effect<ExecutionContext, BehavioralContractViolationError> => {
   const { config, pendingCalls, eb, obs, isNormal, progressLogger } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect<BehavioralContractViolationError>(Effect.gen(function* () {
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
 
     const toolResults: unknown[] = yield* Effect.all(
@@ -394,5 +395,5 @@ export const runInlineAct = (
         ...(runLedger.length > 0 ? { runLedger } : {}),
       },
     };
-  }) as unknown as Effect.Effect<ExecutionContext, BehavioralContractViolationError>;
+  }));
 };

@@ -20,6 +20,7 @@ import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 export interface VerificationQualityGateDeps {
   readonly config: ReactiveAgentsConfig;
@@ -33,7 +34,7 @@ export const runVerificationQualityGate = (
   deps: VerificationQualityGateDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, obs, fireGuardedThinkRetry, runVerifyAgain } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     let ctx = initialCtx;
     if (!config.enableVerification) return ctx;
 
@@ -138,5 +139,5 @@ export const runVerificationQualityGate = (
     }
 
     return ctx;
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

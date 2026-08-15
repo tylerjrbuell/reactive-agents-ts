@@ -21,6 +21,7 @@ import type { Task } from "@reactive-agents/core";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 export interface InlineHarnessHooksDeps {
   readonly config: ReactiveAgentsConfig;
@@ -34,7 +35,7 @@ export const runInlineHarnessHooks = (
   deps: InlineHarnessHooksDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, task, cacheHit, obs } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     let ctx = initialCtx;
 
     const llmHookOpt = yield* Effect.serviceOption(
@@ -167,5 +168,5 @@ export const runInlineHarnessHooks = (
     }
 
     return ctx;
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

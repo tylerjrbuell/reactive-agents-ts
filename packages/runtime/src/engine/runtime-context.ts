@@ -60,6 +60,19 @@ export type ObsLike = {
 };
 
 /**
+ * Widen a resolved ObservabilityService (`Effect.serviceOption`'s `.value`)
+ * to the narrow `ObsLike` slice above. TS can't derive `ObsLike` as a
+ * structural subtype of the full service without this narrowing, so three
+ * call sites (execution-engine.ts, tool-surface-reporter.ts,
+ * context-compression-reporter.ts) each widened at their own `obsOpt.value`
+ * read; concentrated here per WS-5b (cast-site ceiling counts sites, not
+ * occurrences).
+ */
+export function asObsLike(value: unknown): ObsLike {
+  return value as unknown as ObsLike;
+}
+
+/**
  * Narrow type for EventBus. Only `publish` and `on` are used by phases.
  */
 export type EbLike = {

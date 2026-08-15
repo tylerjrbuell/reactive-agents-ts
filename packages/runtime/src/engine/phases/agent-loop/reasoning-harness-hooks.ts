@@ -28,6 +28,7 @@ import {
   isEnforcedAbstention,
   normalizeReasoningResult,
 } from "../../util.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
@@ -77,7 +78,7 @@ export const runReasoningHarnessHooks = (
     obs,
   } = deps;
 
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     let ctx = initialCtx;
 
     // Cross-cutting cascade (2026-07-22) — the run-wide envelope for the
@@ -369,5 +370,5 @@ export const runReasoningHarnessHooks = (
     }
 
     return ctx;
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

@@ -23,6 +23,7 @@ import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { asThinkContext, getSelectedModelName } from "./think-context.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import {
   briefResolvedSkillsFromMetadata,
   extractTaskText,
@@ -94,7 +95,7 @@ export const runReasoningThink = (
     obs,
   } = deps;
 
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     // ── Self-improvement read-back: surface prior strategy outcomes ──
     let memCtx = String(asThinkContext(c).memoryContext?.semanticContext ?? "");
     // Skills are extracted as a SEPARATE channel — they are procedural
@@ -425,5 +426,5 @@ export const runReasoningThink = (
         [RUN_LEDGER_METADATA_KEY]: seedRunLedger(result),
       },
     };
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

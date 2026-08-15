@@ -100,27 +100,19 @@ describe("t0-deterministic — per-commit harness-behavior gate", () => {
     expect(cells.length).toBe(8);
     for (const c of cells) expect(c.runs.length).toBe(1);
 
-    // KNOWN pre-existing gap (found 2026-07-26 while fixing the sibling
-    // execution-timeout scoring defect — see judge.ts scoreErrorCell). The
-    // bare-llm variant registers ZERO tools (config.tools unset →
-    // runner.ts:670 never calls withTools) and caps maxIterations at 1
-    // (runner.ts:653), but cs-recall-temptation/cs-overflow-transcribe's
-    // script always opens with a toolCall turn regardless of variant — the
-    // resulting "tool not found" observation consumes the only iteration,
-    // leaving no budget for the model's follow-up text, so the run genuinely
-    // throws "exceeded max iterations (1)". This is NOT caused by the
-    // scoring fix: the run has always errored here; scoreErrorCell used to
-    // stamp no scoreState, so it silently entered aggregation as a measured
-    // 0 instead of being counted honestly. Fixing the scenario/maxIterations
-    // mismatch itself is a separate, unrelated change (out of scope here) —
-    // pinned explicitly (not `toEqual([])`) so a NEW/different inconclusive
-    // cell still fails this gate.
+    // FIXED (2026-08-15). Was: bare-llm registers zero tools and caps
+    // maxIterations at 1, but cs-recall-temptation/cs-overflow-transcribe's
+    // script always opens with a toolCall turn — the "tool not found"
+    // observation consumed the only iteration, leaving no budget for the
+    // model's follow-up text, so the run threw "exceeded max iterations (1)"
+    // (found 2026-07-26, see judge.ts scoreErrorCell history). The Phase 4 /
+    // Move 1 kernel-loop work landed since then now lets that cell finish
+    // instead of throwing (verified directly against runSession — both cells
+    // return real scores, reliability=1, no thrown error). Re-pinned to the
+    // empty case so a NEW/different inconclusive cell still fails this gate.
     const inconclusive = [...(report.inconclusiveCells ?? [])]
       .sort((a, b) => a.taskId.localeCompare(b.taskId));
-    expect(inconclusive).toEqual([
-      { taskId: "cs-overflow-transcribe", modelVariantId: "scripted-test", variantId: "bare-llm", reason: "execution-error" },
-      { taskId: "cs-recall-temptation", modelVariantId: "scripted-test", variantId: "bare-llm", reason: "execution-error" },
-    ]);
+    expect(inconclusive).toEqual([]);
   });
 
   it("finishes well inside the CI budget (<90s)", () => {

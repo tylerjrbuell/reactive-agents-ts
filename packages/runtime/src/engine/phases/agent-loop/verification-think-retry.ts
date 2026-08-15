@@ -24,6 +24,7 @@ import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 
@@ -44,7 +45,7 @@ export const runVerificationThinkRetry = (
   deps: VerificationThinkRetryDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, task, reasoningOpt, taskCategory, resolvedCalibration, obs, eb } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     // Review C1 mirror: the retry pass is fenced from enforcement (it cannot
     // call a tool), so re-running it against an ENFORCED honest abstention
     // would replace the sentinel with ungrounded prose. A run that honestly
@@ -233,5 +234,5 @@ export const runVerificationThinkRetry = (
         isComplete: retryDone,
       },
     };
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

@@ -987,6 +987,8 @@ export type ToolServiceInstance = {
   }) => Effect.Effect<{ result: unknown; success?: boolean }, unknown>;
   readonly getTool: (name: string) => Effect.Effect<{
     parameters: Array<{ name: string; type: string; required?: boolean }>;
+    /** Durable output kind a successful call produces (mirrors ToolDefinition.produces). */
+    produces?: "file" | "data" | "none";
   }, unknown>;
   readonly listTools: (filter?: {
     category?: string;

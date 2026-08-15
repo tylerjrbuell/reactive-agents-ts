@@ -7,8 +7,21 @@
 
 // ── Final Answer Parsing ──────────────────────────────────────────────────────
 
-/** Expanded regex matching FINAL ANSWER with optional markdown bold and various colon forms. */
-export const FINAL_ANSWER_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]?\s*/i;
+/**
+ * Regex matching the "FINAL ANSWER" sentinel prefix. Two accepted forms:
+ *   - markdown-bold-wrapped ("**Final Answer**" / "**Final Answer**:") — the
+ *     bold markers are themselves a deliberate marker, so the colon is optional
+ *     (some models, e.g. Qwen3, emit "**Final Answer** 105" with no colon);
+ *   - plain "final answer" — the colon is REQUIRED here, or the pattern
+ *     matches the ordinary English phrase inside real prose (e.g. an answer
+ *     that itself contains the words "the final answer is..."), silently
+ *     truncating the response down to whatever follows those two words.
+ *     Found via packages/runtime/tests/server/protocol-roundtrip.test.ts:
+ *     the scripted response "final answer text" — plain prose, not a
+ *     sentinel — was stripped down to the single word "text" because the
+ *     colon used to be optional unconditionally.
+ */
+export const FINAL_ANSWER_RE = /(?:\*{2}final\s*answer\*{0,2}\s*[:：]?|final\s*answer\s*[:：])\s*/i;
 
 export function hasFinalAnswer(thought: string): boolean {
   return FINAL_ANSWER_RE.test(thought);

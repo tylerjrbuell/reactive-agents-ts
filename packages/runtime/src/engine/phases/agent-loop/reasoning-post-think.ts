@@ -27,6 +27,7 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
 import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 export interface ReasoningPostThinkDeps {
   readonly config: ReactiveAgentsConfig;
@@ -48,7 +49,7 @@ export const runReasoningPostThink = (
   deps: ReasoningPostThinkDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, task, obs, isNormal, fireActObserveHooks } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     let ctx = initialCtx;
 
     // ── Log think summary ──
@@ -242,5 +243,5 @@ export const runReasoningPostThink = (
     }
 
     return ctx;
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

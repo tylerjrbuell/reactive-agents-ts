@@ -17,6 +17,7 @@ import { subAgentResultForDisplay } from "@reactive-agents/tools";
 import type { ExecutionContext } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 export interface InlineObserveDeps {
   readonly pendingCallCount: number;
@@ -42,7 +43,7 @@ export const runInlineObserve = (
   deps: InlineObserveDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { pendingCallCount, obs, isVerbose } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     const recentResults = c.toolResults.slice(-pendingCallCount);
 
     // H5: Log tool results as episodic memory items
@@ -149,5 +150,5 @@ export const runInlineObserve = (
       cost: c.cost + subAgentCost,
       iteration: c.iteration + 1,
     };
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

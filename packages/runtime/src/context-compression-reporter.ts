@@ -1,7 +1,7 @@
 import { Effect, Layer, Ref } from 'effect'
 import { EventBus } from '@reactive-agents/core'
 import { ObservabilityService } from '@reactive-agents/observability'
-import type { ObsLike } from './engine/runtime-context.js'
+import { asObsLike, type ObsLike } from './engine/runtime-context.js'
 import { emitErrorSwallowed, errorTag } from '@reactive-agents/core'
 
 /**
@@ -44,7 +44,7 @@ export const RuntimeContextCompressionReporterLive = Layer.scopedDiscard(
             )
             const obs: ObsLike | null =
                 obsOpt._tag === 'Some'
-                    ? (obsOpt.value as unknown as ObsLike)
+                    ? asObsLike(obsOpt.value)
                     : null
             if (!obs) return () => {}
 

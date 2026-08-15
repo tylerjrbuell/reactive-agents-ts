@@ -25,6 +25,7 @@ import {
   getResponseModel,
   getSelectedModelName,
 } from "./think-context.js";
+import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 
 /**
  * Narrow interface shim for the ContextWindowManager service. The error
@@ -70,7 +71,7 @@ export const runInlineThink = (
   deps: InlineThinkDeps,
 ): Effect.Effect<ExecutionContext, never> => {
   const { config, functionCallingTools, availableToolNames, contextManagerOpt, eb, obs, isVerbose, effectiveContextTokens } = deps;
-  return Effect.gen(function* () {
+  return asExecutionContextEffect(Effect.gen(function* () {
     const llm = yield* Context.GenericTag<{
       complete: (req: unknown) => Effect.Effect<{
         content: string;
@@ -474,5 +475,5 @@ export const runInlineThink = (
         llmCalls: ((c.metadata.llmCalls as number | undefined) ?? 0) + 1,
       },
     };
-  }) as unknown as Effect.Effect<ExecutionContext, never>;
+  }));
 };

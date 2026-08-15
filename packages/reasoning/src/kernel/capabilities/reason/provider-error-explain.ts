@@ -29,6 +29,15 @@ export function explainProviderError(
   const ctx = provider ? ` (${provider}${model ? `:${model}` : ""})` : "";
   const lower = rawMessage.toLowerCase();
 
+  // Every branch below leads with the classification line INLINING
+  // `rawMessage` (not appending it as a trailing "Original error:" line).
+  // The caller boundary (`packages/runtime/src/errors.ts`'s
+  // `firstMeaningfulLine`) collapses a thrown error down to its first
+  // non-empty line for console conciseness — a trailing "Original error:"
+  // line put the raw specifics (timeout limits, status codes, model names)
+  // exactly where that collapse discards them. Leading with them keeps the
+  // classification AND the specifics on the line that survives.
+
   // Connection refused / fetch failed → service not running or unreachable
   if (
     lower.includes("econnrefused") ||
@@ -39,9 +48,9 @@ export function explainProviderError(
     lower.includes("network request failed")
   ) {
     if (provider === "ollama") {
-      return `Cannot connect to Ollama${ctx}. Is the service running?\n  Start it with: ollama serve\n  Or set OLLAMA_ENDPOINT to a different host.\n  Original error: ${rawMessage}`;
+      return `Cannot connect to Ollama${ctx}: ${rawMessage}\n  Is the service running? Start it with: ollama serve\n  Or set OLLAMA_ENDPOINT to a different host.`;
     }
-    return `Cannot reach ${provider ?? "LLM provider"}${ctx}. Connection refused or network unreachable.\n  Check network connectivity and provider endpoint.\n  Original error: ${rawMessage}`;
+    return `Cannot reach ${provider ?? "LLM provider"}${ctx}: ${rawMessage}\n  Check network connectivity and provider endpoint.`;
   }
 
   // 5xx server errors — checked BEFORE auth so a 5xx body that happens to
@@ -54,7 +63,7 @@ export function explainProviderError(
     lower.includes("bad gateway") ||
     lower.includes("gateway timeout")
   ) {
-    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
+    return `${provider ?? "LLM provider"}${ctx} returned a server error: ${rawMessage}\n  This is likely transient — try again in a moment.`;
   }
 
   // Auth errors
@@ -76,7 +85,7 @@ export function explainProviderError(
     };
     const envHint =
       apiKeyEnvByProvider[provider ?? ""] ?? "the appropriate API key env var";
-    return `Authentication failed for ${provider ?? "LLM provider"}${ctx}.\n  Verify ${envHint} is set correctly and has not been revoked.\n  Original error: ${rawMessage}`;
+    return `Authentication failed for ${provider ?? "LLM provider"}${ctx}: ${rawMessage}\n  Verify ${envHint} is set correctly and has not been revoked.`;
   }
 
   // Rate limit
@@ -86,7 +95,7 @@ export function explainProviderError(
     lower.includes("too many requests") ||
     lower.includes("quota")
   ) {
-    return `Rate limit hit for ${provider ?? "LLM provider"}${ctx}.\n  Slow down requests or upgrade your provider tier.\n  Original error: ${rawMessage}`;
+    return `Rate limit hit for ${provider ?? "LLM provider"}${ctx}: ${rawMessage}\n  Slow down requests or upgrade your provider tier.`;
   }
 
   // Timeout / abort
@@ -97,7 +106,7 @@ export function explainProviderError(
     lower.includes("timeout") ||
     lower.includes("etimedout")
   ) {
-    return `Request to ${provider ?? "LLM provider"}${ctx} timed out.\n  Provider may be slow or unreachable. Check network and provider status.\n  Original error: ${rawMessage}`;
+    return `Request to ${provider ?? "LLM provider"}${ctx} timed out: ${rawMessage}\n  Provider may be slow or unreachable. Check network and provider status.`;
   }
 
   // Generic fallthrough — preserve raw message with provider context

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-06-16T23:59:20.725Z",
+  "capturedAt": "2026-08-15T03:34:07.243Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -19,7 +19,7 @@
     },
     "cf-10-error-swallowed-event-emitted": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -36,7 +36,7 @@
     },
     "cf-11-redactor-strips-secrets": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -53,7 +53,7 @@
     },
     "cf-13-no-advisory-only-dispatches": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -69,7 +69,7 @@
     },
     "cf-14-w4-maxiterations-honored": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -84,7 +84,7 @@
     },
     "cf-15-num-ctx-from-capability": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -104,7 +104,7 @@
     },
     "cf-16-capability-cache-roundtrip": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -120,7 +120,7 @@
     },
     "cf-17-tier-derived-from-capability": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -134,7 +134,7 @@
     },
     "cf-18-meta-tools-trusted": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -161,7 +161,7 @@
     },
     "cf-21-failure-detected-from-controller-signal": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -182,7 +182,7 @@
     },
     "cf-22-kernel-internal-structure": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -201,7 +201,7 @@
     },
     "cf-23-verifier-runs-after-effector": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -227,7 +227,7 @@
     },
     "cf-24-all-termination-flows-through-arbitrator": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
@@ -253,7 +253,7 @@
     },
     "cf-25-capability-registry-violations-bounded": {
       "status": "success",
-      "iterations": 0,
+      "iterations": 2,
       "terminatedBy": "unknown",
       "goalAchieved": null,
       "toolCallsObserved": [],
