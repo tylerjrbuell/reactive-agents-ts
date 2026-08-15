@@ -1221,6 +1221,21 @@ Phase 3: Write a data generator (generate.ts) that creates 5 sample records of e
 Phase 4: Write a validator (validate.ts) that checks all constraints are met
 Phase 5: Run the validator against the generated data and report results`,
     requiresTools: true,
+    // Tool contract (added 2026-08-15, root-caused via a real cogito:14b
+    // n=3 lift run: 0% on BOTH bare-llm and ra-full, 3/3 runs each. `rax
+    // diagnose grep` on a ra-full trace found ZERO tool-call events despite
+    // the model's final answer narrating all 5 phases as complete ("The
+    // data processing pipeline has been successfully completed...") — pure
+    // fabrication with no grounding. Same root cause as rw-4: no `tools:`
+    // field and no `fixtures:` (only `hiddenFixtures`, which the builtins
+    // heuristic in runner.ts doesn't look at), so builtins came back empty
+    // and the harness fell through to the bare `.withTools()` no-arg path,
+    // which classifier-based pruning then failed to surface for a weak
+    // local model. Same fix as rw-4/rw-7's 2026-07-07 migration.
+    tools: [
+      { kind: "required", name: "file-write" },
+      { kind: "required", name: "code-execute" },
+    ],
     maxIterations: 25,
     // 2026-07-07 verifiable-criteria audit: the previous command
     // `bun run generate.ts && bun run validate.ts` was spawned WITHOUT a
