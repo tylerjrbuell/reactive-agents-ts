@@ -79,16 +79,16 @@ function toValidatedObservation(toolName: string, content: string): ValidatedObs
  * guard-block text patterns (see getDeliverableObservationContent).
  */
 export function assembleDeliverable(state: KernelState): Deliverable {
-  const observations = collectValidatedObservations(state);
-
   // 2026-08-15 root fix: a long model thought is not evidence it read the
   // full tool output — small models routinely write a plausible-sounding
   // synthesis off a compressed preview alone. Bare thought text is never
   // grounded against `state.scratchpad`, so trusting it whenever unconsumed
-  // stored evidence still exists reproduces the same fabrication this run
-  // fixed at every other termination path. Fall through to the
-  // deterministically-resolved observations (tool_artifact/harness_synthesis,
-  // already scratchpad-resolved by getDeliverableObservationContent) instead.
+  // stored evidence still exists (and there's grounded content to fall back
+  // to) reproduces the same fabrication this run fixed at every other
+  // termination path. Fall through to the deterministically-resolved
+  // observations (tool_artifact/harness_synthesis, already scratchpad-resolved
+  // by getDeliverableObservationContent) instead. Computed lazily — only the
+  // (common) case where a thought exists needs this check at all.
   const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
 
   const lastThought = [...state.steps]
@@ -98,7 +98,7 @@ export function assembleDeliverable(state: KernelState): Deliverable {
         s.type === "thought" &&
         (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
     );
-  if (lastThought?.content && !(hasUnconsumedEvidence && observations.length > 0)) {
+  if (lastThought?.content && !(hasUnconsumedEvidence && countDeliverableCandidates(state) > 0)) {
     return modelSynthesisDeliverable({
       type: "thought",
       content: lastThought.content,
@@ -106,6 +106,7 @@ export function assembleDeliverable(state: KernelState): Deliverable {
     });
   }
 
+  const observations = collectValidatedObservations(state);
   if (observations.length === 1) {
     return toolArtifactDeliverable(observations[0]!);
   }
