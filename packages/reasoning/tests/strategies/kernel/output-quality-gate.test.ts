@@ -547,6 +547,78 @@ describe("output quality gate", () => {
     expect(deliverableToContent(d)).toContain("Synthesizing the findings");
   });
 
+  it("assembleDeliverable prefers grounded observations over a bare thought when evidence is unconsumed (2026-08-15 root fix)", () => {
+    // A substantive trailing thought alone is not proof the model read the
+    // full tool output — it may be a plausible-sounding synthesis off the
+    // compressed preview. When a storedKey was never recalled, the bare
+    // thought must lose to the deterministically scratchpad-resolved
+    // observation instead of shipping ungrounded.
+    const key = "_tool_result_9";
+    const fullText = "Bitcoin: 70836.96\nEthereum: 3850.00";
+    const preview = [
+      "[web-search result — compressed preview]",
+      "Type: Object(2 keys)",
+      "  — full object is stored.",
+    ].join("\n");
+    const obs = makeStep("observation", preview, {
+      storedKey: key,
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "preview",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const thought =
+      "Synthesizing the findings: BTC is at $71,000 and ETH is at $3,900. " +
+      "These reflect current market conditions across the major exchanges surveyed.";
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-unconsumed" });
+    const st = transitionState(base, {
+      steps: [makeStep("action", "web-search"), obs, makeStep("thought", thought)],
+      toolsUsed: new Set(["web-search"]),
+      scratchpad: new Map([[key, fullText]]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
+    expect(assembled).toContain("Bitcoin: 70836.96");
+    expect(assembled).not.toContain("Synthesizing the findings");
+  });
+
+  it("assembleDeliverable still trusts the thought once recall() consumed the stored evidence", () => {
+    const key = "_tool_result_10";
+    const fullText = "Bitcoin: 70836.96\nEthereum: 3850.00";
+    const preview = "[web-search result — compressed preview]\n  — full object is stored.";
+    const obs = makeStep("observation", preview, {
+      storedKey: key,
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "preview",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const recallAction = makeStep("action", "recall", {
+      toolCall: { id: "c1", name: "recall", arguments: { key } },
+    });
+    const thought =
+      "Synthesizing the findings: BTC is at $70,836.96 and ETH is at $3,850.00, " +
+      "grounded in the recalled full data.";
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-consumed" });
+    const st = transitionState(base, {
+      steps: [makeStep("action", "web-search"), obs, recallAction, makeStep("thought", thought)],
+      toolsUsed: new Set(["web-search"]),
+      scratchpad: new Map([[key, fullText]]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("model_synthesis");
+    expect(deliverableToContent(d)).toContain("grounded in the recalled full data");
+  });
+
   it("assembleDeliverable returns sentinel when no validated artifacts or thought exist", () => {
     const base = initialKernelState({ ...defaultOptions, taskId: "t-empty" });
     const st = transitionState(base, { steps: [] });

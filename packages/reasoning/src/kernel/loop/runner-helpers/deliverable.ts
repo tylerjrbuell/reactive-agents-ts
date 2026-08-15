@@ -37,6 +37,7 @@ import {
 } from "@reactive-agents/core";
 import type { TerminateReason } from "../terminate-reason.js";
 import { resolveStoredToolObservation } from "./state-queries.js";
+import { findUnconsumedStoredKeys } from "../../capabilities/verify/unconsumed-evidence.js";
 
 /** Minimum thought length to be treated as a model-authored final synthesis. */
 export const MIN_MODEL_SYNTHESIS_LENGTH = 100;
@@ -78,6 +79,18 @@ function toValidatedObservation(toolName: string, content: string): ValidatedObs
  * guard-block text patterns (see getDeliverableObservationContent).
  */
 export function assembleDeliverable(state: KernelState): Deliverable {
+  const observations = collectValidatedObservations(state);
+
+  // 2026-08-15 root fix: a long model thought is not evidence it read the
+  // full tool output — small models routinely write a plausible-sounding
+  // synthesis off a compressed preview alone. Bare thought text is never
+  // grounded against `state.scratchpad`, so trusting it whenever unconsumed
+  // stored evidence still exists reproduces the same fabrication this run
+  // fixed at every other termination path. Fall through to the
+  // deterministically-resolved observations (tool_artifact/harness_synthesis,
+  // already scratchpad-resolved by getDeliverableObservationContent) instead.
+  const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
+
   const lastThought = [...state.steps]
     .reverse()
     .find(
@@ -85,7 +98,7 @@ export function assembleDeliverable(state: KernelState): Deliverable {
         s.type === "thought" &&
         (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
     );
-  if (lastThought?.content) {
+  if (lastThought?.content && !(hasUnconsumedEvidence && observations.length > 0)) {
     return modelSynthesisDeliverable({
       type: "thought",
       content: lastThought.content,
@@ -93,7 +106,6 @@ export function assembleDeliverable(state: KernelState): Deliverable {
     });
   }
 
-  const observations = collectValidatedObservations(state);
   if (observations.length === 1) {
     return toolArtifactDeliverable(observations[0]!);
   }
