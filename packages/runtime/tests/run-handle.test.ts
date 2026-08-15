@@ -209,6 +209,33 @@ describe("RunHandle", () => {
         await agent.dispose();
     });
 
+    // Final-review fix: a consumer that breaks out of `for await` the
+    // instant it sees StreamCompleted — the normal CLI pattern — used to
+    // leave `reachedTerminal` false inside `_runStreamImpl` (that flag was
+    // only set when the internal queue's `item.done` sentinel got consumed,
+    // which never happens because the loop was already exited). The
+    // `finally` block then force-called `controller.terminate()` on an
+    // already-successful run, so `status()` wrongly reported "terminated"
+    // instead of "completed". Fixed by also marking `reachedTerminal` true
+    // at the point a terminal event (StreamCompleted/StreamError/
+    // StreamCancelled) is yielded to the consumer, not only when the
+    // producer's done-sentinel is drained.
+    it("status() is completed when consumer breaks immediately after StreamCompleted", async () => {
+        const agent = await ReactiveAgents.create()
+            .withTestScenario([{ text: "done" }])
+            .build();
+
+        const handle = agent.runStream("test");
+        for await (const ev of handle) {
+            if (ev._tag === "StreamCompleted") {
+                break;
+            }
+        }
+
+        expect(handle.status()).toBe("completed");
+        await agent.dispose();
+    });
+
     it("terminate() via RunHandle aborts stream → StreamCancelled", async () => {
         const agent = await ReactiveAgents.create()
             .withName("run-handle-terminate")

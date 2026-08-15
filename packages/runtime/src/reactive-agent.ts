@@ -2077,6 +2077,33 @@ export class ReactiveAgent<TOut = unknown> {
                         iterationsCompleted
                 }
 
+                // FM-5 follow-up (Phase 4 final review fix): a consumer doing the
+                // normal `for await (... ) { if (ev._tag === 'StreamCompleted') break }`
+                // pattern exits its loop right after receiving a terminal event.
+                // Under the async-generator protocol, a `break` in the consumer's
+                // `for await` turns into `.return()` on THIS generator, which
+                // resumes execution at the `yield` below not by falling through
+                // to the next statement but by treating the yield itself as a
+                // `return` — so any code placed AFTER `yield event` never runs on
+                // that exit path (verified empirically: placing this check after
+                // the yield left `reachedTerminal` false). This generator also
+                // never loops back around to shift the producer's `item.done`
+                // sentinel off `itemQueue` in that case. Both together left
+                // `reachedTerminal` false for a run that had actually completed
+                // naturally, so `finally` below incorrectly force-terminated it
+                // (RunHandle.status() then reported "terminated" instead of
+                // "completed" for a successful run). Fix: mark it terminal BEFORE
+                // yielding — once a terminal event is about to be handed to the
+                // consumer, the run has reached a terminal outcome regardless of
+                // whether the consumer keeps reading afterward.
+                if (
+                    event._tag === 'StreamCompleted' ||
+                    event._tag === 'StreamError' ||
+                    event._tag === 'StreamCancelled'
+                ) {
+                    reachedTerminal = true
+                }
+
                 yield event
 
                 // Check signal after yield returns (covers between-event abort).

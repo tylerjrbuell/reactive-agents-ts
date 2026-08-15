@@ -1397,20 +1397,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // and (on reject/escalate) names itself in verificationWarning.
                 // See engine/finalize/result-verification.ts.
 
-                // Extract the kernel's verification reason from its error message (FM-4 part 2).
-                // The kernel's verifier may reject/escalate with a specific reason (e.g., "scaffold-leak")
-                // carried in the error message. This becomes the prior rejection reason so the
-                // result-boundary verifier doesn't overwrite it with a generic "action-success" message.
+                // Extract the kernel's specific verification reason from its error message
+                // (FM-4 part 2). The kernel's verifier may reject/escalate with a specific
+                // reason (e.g., "scaffold-leak") carried in state.error as "{PREFIX}{reason}",
+                // preserved through the strategy result boundary and then normalized. When
+                // present it becomes the prior rejection reason so the result-boundary
+                // verifier doesn't overwrite it with its generic "action-success" message.
                 //
                 // String coupling is made durable via shared constants (VERIFIER_REJECTION_PREFIX
                 // and VERIFIER_ESCALATION_PREFIX, both defined in @reactive-agents/reasoning).
                 // A rename in the kernel now breaks the build instead of silently regressing receipts.
                 let priorRejectionReason: string | undefined;
-                // Extract the kernel's specific verifier reason if available (FM-4 part 2).
-                // The kernel's verifier rejects/escalates with a specific reason and sets
-                // state.error to "{PREFIX}{reason}". This error is preserved through the
-                // strategy result boundary and then normalized. If present, it is more
-                // specific than the boundary verifier's generic "action-success" check.
                 if (typeof rr?.error === "string") {
                   if (rr.error.startsWith(VERIFIER_REJECTION_PREFIX)) {
                     priorRejectionReason = rr.error.slice(VERIFIER_REJECTION_PREFIX.length);

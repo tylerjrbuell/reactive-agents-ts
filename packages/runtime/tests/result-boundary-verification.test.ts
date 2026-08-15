@@ -57,11 +57,9 @@ describe("result-boundary verification", () => {
       // and passed to verifyResultBoundary as priorRejectionReason. The
       // result-verification logic prefers this prior reason whenever available.
       //
-      // KNOWN ISSUE: The test remains red despite the infrastructure being in
-      // place. This suggests either:
-      //   1. state.error is not making it to the ReasoningResult.error field,
-      //   2. The extraction in execution-engine.ts is not matching the prefix,
-      //   3. The test scenario triggers a different code path than expected.
+      // Fixed 2026-08-14 (Phase 4 final review) — this test now passes: the
+      // kernel's specific rejection reason correctly surfaces through to
+      // verificationWarning.
       //
       // The dual-verifier problem is real (kernel catches scaffold-leak, then
       // boundary verifier re-verifies with "action-success"). The verdict-CAPPING
