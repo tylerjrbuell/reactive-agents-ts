@@ -434,10 +434,17 @@ describe("executeNativeToolCall recall store alignment", () => {
   });
 });
 
-// ── Bug 1: FC path preserves recall hint ──────────────────────────────────────
+// ── Bug 1 (2026-08-16 superseded): FC path stores the full result under
+// `storedKey`/`fullContent` WITHOUT an inline recall-hint nudge — grounding is
+// now enforced deterministically by `unconsumedEvidenceGuard`
+// (act/guard.ts), which resolves `storedKey` → full scratchpad content
+// itself before `final-answer` can succeed, rather than depending on the
+// model choosing to call recall() off a text hint (measured unreliable:
+// fired correctly 5/5 times in a live run, ignored 5/5 times). The FC
+// message content stays a clean compressed preview with no hint text.
 
-describe("executeNativeToolCall FC recall hint preservation", () => {
-  it("preserves a recall hint line after compression in FC mode", async () => {
+describe("executeNativeToolCall FC compression (no recall-hint dependency)", () => {
+  it("stores the full result under storedKey and keeps the FC message content hint-free", async () => {
     await Effect.runPromise(Ref.set(scratchpadStoreRef, new Map()));
 
     const longResult = "Line " + Array.from({ length: 60 }, (_, i) => `Result line ${i}: data-${i}`).join("\n");
@@ -461,10 +468,11 @@ describe("executeNativeToolCall FC recall hint preservation", () => {
     );
 
     expect(execResult.storedKey).toBeDefined();
-    // FC path should include a recall hint referencing the stored key
-    expect(execResult.content).toContain("full text is stored");
-    expect(execResult.content).toContain(execResult.storedKey!);
-    expect(execResult.content).toContain("recall");
+    // The full content is deterministically recoverable via storedKey/fullContent,
+    // not via a text hint the model has to notice and act on.
+    expect(execResult.fullContent).toBe(longResult);
+    expect(execResult.content).not.toContain("full text is stored");
+    expect(execResult.content).not.toContain("recall(");
   });
 });
 

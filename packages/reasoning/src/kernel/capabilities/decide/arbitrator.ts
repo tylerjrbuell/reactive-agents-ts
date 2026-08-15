@@ -13,6 +13,7 @@ import type { ToolSchema } from "../attend/tool-formatting.js";
 import { FINAL_ANSWER_RE, extractFinalAnswer } from "../../utils/tool-parsing.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 import { emitBudgetSignalCollected } from "../../utils/diagnostics.js";
+import { resolveUnconsumedEvidence } from "../verify/unconsumed-evidence.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -103,6 +104,15 @@ export interface TerminationContext {
    * `ArtifactProduced` requirement. Absent → steps-only (prior behaviour).
    */
   readonly ledger?: import("../../ledger/run-ledger.js").RunLedger;
+  /**
+   * 2026-08-16 root fix — the run's scratchpad (from `state.scratchpad`),
+   * threaded by think.ts. `llmEndTurnEvaluator` resolves unconsumed stored
+   * evidence through it so an `end_turn` candidate answer is redirected once,
+   * with the full fetched content injected, when the model has evidence in
+   * hand it never read back. Absent → the evidence check is inert
+   * (byte-identical for any caller that omits it).
+   */
+  readonly scratchpad?: ReadonlyMap<string, string>;
 }
 
 export interface SignalVerdict {
@@ -300,6 +310,29 @@ export const reactiveControllerEarlyStopEvaluator: TerminationSignalEvaluator = 
     if (!ctx.controllerDecisions) return null;
     const earlyStop = ctx.controllerDecisions.find((d) => d.decision === "early-stop");
     if (!earlyStop) return null;
+    // 2026-08-16 root fix: this was an UNCONDITIONAL high-confidence exit —
+    // no terminal-gate call at all, so it short-circuits `evaluateTermination`
+    // before contentStability/finalAnswerRegex/llmEndTurn's evidence checks
+    // ever run. Measured as the DOMINANT termination path in live gemma4:e4b
+    // traces this session ("Approaching maxIterations... flat trajectory"
+    // fires almost every run) — every other evaluator's evidence-grounding
+    // fix was reachable in principle but preempted in practice by this one.
+    // One-shot, same budget semantics as the other checks: redirect at most
+    // once (gated on ctx.redirectCount), so a run genuinely out of budget
+    // still exits on the next tick rather than looping forever.
+    if (ctx.redirectCount === 0 && ctx.scratchpad) {
+      const unconsumedEvidence = resolveUnconsumedEvidence(ctx.steps, ctx.scratchpad);
+      if (unconsumedEvidence !== null) {
+        return {
+          action: "redirect",
+          confidence: "high",
+          reason:
+            `Before finalizing: earlier tool results were shown to you only as short previews. ` +
+            `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
+            `invent details not present here), then give your final answer again:\n\n${unconsumedEvidence}`,
+        };
+      }
+    }
     return { action: "exit", confidence: "high", reason: `controller_early_stop: ${earlyStop.reason}`, output: ctx.thought.trim() };
   },
 };
@@ -320,15 +353,34 @@ export const reactiveControllerEarlyStopEvaluator: TerminationSignalEvaluator = 
  *
  * Mirrors llmEndTurnEvaluator's contract path (same gate call, same coverage
  * wording) so all three exit proposals judge the frozen contract identically.
+ *
+ * 2026-08-16 root fix: this function used to early-return `null` for every
+ * contractless run, so `contentStabilityEvaluator`/`finalAnswerRegexEvaluator`
+ * exited UNCONDITIONALLY on the common case (no RunContract) — never
+ * consulting the terminal gate at all. That let those two evaluators win
+ * `evaluateTermination`'s exit-vs-redirect tie-break (exit wins at equal
+ * confidence) over `llmEndTurnEvaluator`'s evidence-grounding redirect fired
+ * the SAME tick, so an ungrounded candidate shipped anyway. The gate now
+ * always runs; contract fields are simply omitted when absent (grounding/
+ * coverage stay vacuously true/empty, byte-identical for those two checks),
+ * so evidence-grounding — which needs no contract — applies universally.
  */
 function contractCoverageProposal(
   ctx: TerminationContext,
   candidate: string,
 ): string | null {
-  if (ctx.runContract === undefined) return null;
+  const unconsumedEvidence = ctx.scratchpad
+    ? resolveUnconsumedEvidence(ctx.steps, ctx.scratchpad)
+    : null;
+  if (ctx.runContract === undefined && unconsumedEvidence === null) return null;
   const gate = evaluateTerminalGate({
     terminatedBy: "end_turn",
-    requiredTools: ctx.requiredTools,
+    // Coverage must stay vacuous for a contractless run — this function's
+    // long-standing contract, preserved verbatim: only the NEW evidence check
+    // participates when there is no contract. Passing real requiredTools here
+    // for a contractless run would resurrect a coverage check that was never
+    // active on this path before 2026-08-16.
+    requiredTools: ctx.runContract !== undefined ? ctx.requiredTools : [],
     coveredTools: ctx.toolsUsed,
     // Grounding (F1) is owned by applyGroundedTerminalGate on the arbitrate
     // path; the lexical proposal is gated on contract COVERAGE only.
@@ -336,8 +388,15 @@ function contractCoverageProposal(
     redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
     ...(ctx.redirectBudget !== undefined ? { redirectBudget: ctx.redirectBudget } : {}),
     coverageExhaustionPolicy: "accept",
-    contract: ctx.runContract,
-    evidence: { steps: ctx.steps, output: candidate, ledger: ctx.ledger },
+    hasUnconsumedEvidence: unconsumedEvidence !== null,
+    evidenceRedirectsSpent: ctx.redirectCount,
+    buildEvidenceGuidance: () =>
+      `Before finalizing: earlier tool results were shown to you only as short previews. ` +
+      `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
+      `invent details not present here), then give your final answer again:\n\n${unconsumedEvidence ?? ""}`,
+    ...(ctx.runContract !== undefined
+      ? { contract: ctx.runContract, evidence: { steps: ctx.steps, output: candidate, ledger: ctx.ledger } }
+      : {}),
     buildGroundingGuidance: () => "",
     buildCoverageGuidance: (missing) =>
       `outstanding requirements not yet satisfied: ${missing.join("; ")} — address them, or state explicitly why they are unnecessary and give your final answer`,
@@ -392,6 +451,14 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
     // gate's coverage check (kernel semantics: covered = attempted, policy =
     // accept on exhaustion; the F1 arm downstream still guards the
     // zero-substantive-grounding case, so grounding is held true here).
+    // 2026-08-16 root fix: resolve unconsumed stored evidence deterministically
+    // (no recall() dependency) so an end_turn candidate synthesized from a
+    // compressed preview gets redirected ONCE with the real fetched content,
+    // instead of shipping ungrounded. Absent scratchpad (caller didn't thread
+    // it) → inert, byte-identical.
+    const unconsumedEvidence = ctx.scratchpad
+      ? resolveUnconsumedEvidence(ctx.steps, ctx.scratchpad)
+      : null;
     const gate = evaluateTerminalGate({
       terminatedBy: "end_turn",
       requiredTools: ctx.requiredTools,
@@ -400,6 +467,19 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
       redirectBudget: ctx.redirectBudget,
       coverageExhaustionPolicy: "accept",
+      hasUnconsumedEvidence: unconsumedEvidence !== null,
+      // Reuses the SAME generic "⚠️ Not done yet" redirect counter grounding/
+      // coverage already share (think.ts:1787 wraps every redirect reason
+      // identically) rather than a dedicated counter. Trade-off: if a prior
+      // turn already spent a grounding/coverage redirect, the evidence check
+      // will not ALSO get its own extra turn this run — conservative (caps
+      // total extra cost at one redirect per run), not incorrect; the common
+      // case this fixes is a clean run where evidence is the ONLY gap.
+      evidenceRedirectsSpent: ctx.redirectCount,
+      buildEvidenceGuidance: () =>
+        `Before finalizing: earlier tool results were shown to you only as short previews. ` +
+        `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
+        `invent details not present here), then give your final answer again:\n\n${unconsumedEvidence ?? ""}`,
       // B2 check 2.5: when a RunContract is present, coverage consumes
       // requirement satisfaction (verify against the ledger + this candidate
       // answer) instead of the tool-name diff. Absent → tool-name path.

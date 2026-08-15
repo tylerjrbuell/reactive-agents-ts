@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { repetitionGuard } from "../../../../src/kernel/capabilities/act/guard.js";
+import { repetitionGuard, unconsumedEvidenceGuard } from "../../../../src/kernel/capabilities/act/guard.js";
 import type { KernelState, KernelInput } from "../../../../src/kernel/state/kernel-state.js";
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {
@@ -60,5 +60,70 @@ describe("repetitionGuard — distinct-target carve-out (2026-08-15 rw-7 finding
     const thirdCall = { name: "file-write", arguments: { path: "/tmp/validator.ts", content: "retry" } } as any;
     const outcome = repetitionGuard(thirdCall, stateWithFileWrites(["/tmp/validator.ts", "/tmp/processor.ts"]), fwInput);
     expect(outcome.pass).toBe(false);
+  });
+});
+
+describe("unconsumedEvidenceGuard — deterministic grounding, no recall() required (2026-08-16 root fix)", () => {
+  const finalAnswerCall = { name: "final-answer", arguments: { output: "done" } } as any;
+
+  function observationStep(storedKey: string | undefined) {
+    return { type: "observation", metadata: { toolCallId: "c1", ...(storedKey ? { storedKey } : {}) } };
+  }
+  function actionStep(name: string, args: Record<string, unknown>) {
+    return { type: "action", metadata: { toolCall: { id: "c1", name, arguments: args } } };
+  }
+
+  it("passes final-answer through when there is no unconsumed stored evidence", () => {
+    const state = makeState({ steps: [], scratchpad: new Map() } as any);
+    expect(unconsumedEvidenceGuard(finalAnswerCall, state).pass).toBe(true);
+  });
+
+  it("blocks the FIRST final-answer attempt and injects the FULL stored content when evidence is unconsumed", () => {
+    const state = makeState({
+      steps: [
+        actionStep("http-get", { url: "https://example.com" }),
+        observationStep("_tool_result_1"),
+      ] as any,
+      scratchpad: new Map([["_tool_result_1", "THE REAL EPISODE DATA: S1E1 Shark Survivor — real synopsis text"]]),
+    } as any);
+    const outcome = unconsumedEvidenceGuard(finalAnswerCall, state);
+    expect(outcome.pass).toBe(false);
+    if (!outcome.pass) {
+      expect(outcome.observation).toContain("THE REAL EPISODE DATA");
+      expect(outcome.observation).not.toContain("call recall");
+    }
+  });
+
+  it("passes on the SECOND final-answer attempt even with evidence still unconsumed (no retry trap)", () => {
+    const state = makeState({
+      steps: [
+        actionStep("http-get", { url: "https://example.com" }),
+        observationStep("_tool_result_1"),
+        // A prior final-answer attempt already happened (guard-rejected or not).
+        actionStep("final-answer", { output: "first attempt" }),
+      ] as any,
+      scratchpad: new Map([["_tool_result_1", "full content"]]),
+    } as any);
+    expect(unconsumedEvidenceGuard(finalAnswerCall, state).pass).toBe(true);
+  });
+
+  it("does not fire once the storedKey was actually recall()'d", () => {
+    const state = makeState({
+      steps: [
+        actionStep("http-get", { url: "https://example.com" }),
+        observationStep("_tool_result_1"),
+        actionStep("recall", { key: "_tool_result_1", full: true }),
+      ] as any,
+      scratchpad: new Map([["_tool_result_1", "full content"]]),
+    } as any);
+    expect(unconsumedEvidenceGuard(finalAnswerCall, state).pass).toBe(true);
+  });
+
+  it("ignores non-final-answer tool calls entirely", () => {
+    const state = makeState({
+      steps: [actionStep("http-get", {}), observationStep("_tool_result_1")] as any,
+      scratchpad: new Map([["_tool_result_1", "full content"]]),
+    } as any);
+    expect(unconsumedEvidenceGuard(tc, state).pass).toBe(true);
   });
 });

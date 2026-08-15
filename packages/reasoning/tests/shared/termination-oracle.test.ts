@@ -213,6 +213,57 @@ describe("reactiveControllerEarlyStopEvaluator", () => {
     const ctx = makeCtx({ controllerDecisions: [] });
     expect(reactiveControllerEarlyStopEvaluator.evaluate(ctx)).toBeNull();
   });
+
+  // 2026-08-16 root fix: this is THE dominant termination path measured live
+  // this session ("Approaching maxIterations... flat trajectory" fired in
+  // nearly every gemma4:e4b trace). It used to be an UNCONDITIONAL
+  // high-confidence exit with no terminal-gate call at all — completely
+  // bypassing every other evaluator's evidence-grounding check, since a
+  // high-confidence exit short-circuits evaluateTermination's resolver
+  // before content-stability/final-answer-regex/llmEndTurn ever run.
+  test("early-stop + unconsumed evidence + no prior redirect → redirects with full content instead of exiting", () => {
+    const ctx = makeCtx({
+      controllerDecisions: [{ decision: "early-stop", reason: "flat trajectory" }],
+      thought: "Here is the table based on what I found.",
+      redirectCount: 0,
+      steps: [
+        { type: "action", metadata: { toolCall: { id: "c1", name: "http-get", arguments: {} } } } as never,
+        { type: "observation", metadata: { toolCallId: "c1", storedKey: "_tool_result_1" } } as never,
+      ],
+      scratchpad: new Map([["_tool_result_1", "THE REAL FETCHED CONTENT"]]),
+    });
+    const result = reactiveControllerEarlyStopEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("redirect");
+    expect(result!.reason).toContain("THE REAL FETCHED CONTENT");
+  });
+
+  test("early-stop + unconsumed evidence but a redirect ALREADY happened this run → exits (no retry trap)", () => {
+    const ctx = makeCtx({
+      controllerDecisions: [{ decision: "early-stop", reason: "flat trajectory" }],
+      thought: "Here is the table based on what I found.",
+      redirectCount: 1,
+      steps: [
+        { type: "action", metadata: { toolCall: { id: "c1", name: "http-get", arguments: {} } } } as never,
+        { type: "observation", metadata: { toolCallId: "c1", storedKey: "_tool_result_1" } } as never,
+      ],
+      scratchpad: new Map([["_tool_result_1", "content"]]),
+    });
+    const result = reactiveControllerEarlyStopEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+  });
+
+  test("early-stop + no scratchpad threaded → exits exactly as before (inert)", () => {
+    const ctx = makeCtx({
+      controllerDecisions: [{ decision: "early-stop", reason: "flat trajectory" }],
+      thought: "Here is the table based on what I found.",
+    });
+    const result = reactiveControllerEarlyStopEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+    expect(result!.confidence).toBe("high");
+  });
 });
 
 // ── ContentStability evaluator ───────────────────────────────────────────────
@@ -277,6 +328,44 @@ describe("contentStabilityEvaluator", () => {
       priorThought: undefined,
     });
     expect(contentStabilityEvaluator.evaluate(ctx)).toBeNull();
+  });
+
+  // 2026-08-16 root fix: a CONTRACTLESS run with an exact-repeat (would
+  // otherwise be a HIGH-confidence immediate exit) must still redirect when
+  // there is unconsumed stored evidence — this was the actual gap a live
+  // trace surfaced: `contractCoverageProposal` used to return null
+  // unconditionally for contractless runs, so this evaluator's HIGH-confidence
+  // exit shipped an ungrounded answer before `llmEndTurnEvaluator` (which DID
+  // have the evidence check) ever got a chance to out-rank it.
+  test("contractless run + exact-repeat + unconsumed evidence → redirects instead of exiting", () => {
+    const ctx = makeCtx({
+      thought: "The answer is Paris.",
+      priorThought: "The answer is Paris.",
+      toolRequest: null,
+      runContract: undefined,
+      steps: [
+        { type: "action", metadata: { toolCall: { id: "c1", name: "http-get", arguments: {} } } } as never,
+        { type: "observation", metadata: { toolCallId: "c1", storedKey: "_tool_result_1" } } as never,
+      ],
+      scratchpad: new Map([["_tool_result_1", "THE REAL FETCHED CONTENT"]]),
+    });
+    const result = contentStabilityEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("redirect");
+    expect(result!.reason).toContain("THE REAL FETCHED CONTENT");
+  });
+
+  test("contractless run + exact-repeat + NO unconsumed evidence → exits high exactly as before", () => {
+    const ctx = makeCtx({
+      thought: "The answer is Paris.",
+      priorThought: "The answer is Paris.",
+      toolRequest: null,
+      runContract: undefined,
+    });
+    const result = contentStabilityEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+    expect(result!.confidence).toBe("high");
   });
 });
 
@@ -368,6 +457,74 @@ describe("llmEndTurnEvaluator", () => {
     expect(result).not.toBeNull();
     expect(result!.action).toBe("exit");
   });
+
+  // 2026-08-16 root fix: the model's `end_turn` prose exit — measured live
+  // as the common termination path for reactive/react strategies, far more
+  // common than an explicit `final-answer` tool call — is now checked for
+  // unconsumed stored evidence the same way the terminal gate checks
+  // grounding/coverage. Production step shapes: `storedKey` on observation
+  // steps, `toolCall` on action steps (matches tool-execution.ts/act.ts).
+  describe("unconsumed-evidence redirect (2026-08-16 root fix)", () => {
+    function observationStep(storedKey: string | undefined) {
+      return { type: "observation", metadata: { toolCallId: "c1", ...(storedKey ? { storedKey } : {}) } } as never;
+    }
+    function actionStep(name: string, args: Record<string, unknown>) {
+      return { type: "action", metadata: { toolCall: { id: "c1", name, arguments: args } } } as never;
+    }
+
+    test("redirects with the FULL stored content when evidence is unconsumed", () => {
+      const ctx = makeCtx({
+        stopReason: "end_turn",
+        thought: "Here is the table based on what I found: | 1 | Title | Description |",
+        steps: [actionStep("http-get", { url: "https://example.com" }), observationStep("_tool_result_1")],
+        scratchpad: new Map([["_tool_result_1", "THE REAL SOURCE CONTENT, never shown to the model directly"]]),
+      });
+      const result = llmEndTurnEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("redirect");
+      expect(result!.reason).toContain("THE REAL SOURCE CONTENT");
+    });
+
+    test("exits normally when the storedKey was recall()'d", () => {
+      const ctx = makeCtx({
+        stopReason: "end_turn",
+        thought: "Here is the table based on what I found: | 1 | Title | Description |",
+        steps: [
+          actionStep("http-get", { url: "https://example.com" }),
+          observationStep("_tool_result_1"),
+          actionStep("recall", { key: "_tool_result_1", full: true }),
+        ],
+        scratchpad: new Map([["_tool_result_1", "content"]]),
+      });
+      const result = llmEndTurnEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("exit");
+    });
+
+    test("exits normally when no scratchpad is threaded (caller opted out — inert)", () => {
+      const ctx = makeCtx({
+        stopReason: "end_turn",
+        thought: "Here is the table based on what I found: | 1 | Title | Description |",
+        steps: [actionStep("http-get", { url: "https://example.com" }), observationStep("_tool_result_1")],
+      });
+      const result = llmEndTurnEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("exit");
+    });
+
+    test("does not re-redirect once a redirect already happened this run (no retry trap)", () => {
+      const ctx = makeCtx({
+        stopReason: "end_turn",
+        thought: "Here is the table based on what I found: | 1 | Title | Description |",
+        steps: [actionStep("http-get", { url: "https://example.com" }), observationStep("_tool_result_1")],
+        scratchpad: new Map([["_tool_result_1", "content"]]),
+        redirectCount: 1,
+      });
+      const result = llmEndTurnEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("exit");
+    });
+  });
 });
 
 // ── FinalAnswerRegex evaluator ───────────────────────────────────────────────
@@ -406,6 +563,25 @@ describe("finalAnswerRegexEvaluator", () => {
   test("no match → null", () => {
     const ctx = makeCtx({ thought: "I need to search for more information." });
     expect(finalAnswerRegexEvaluator.evaluate(ctx)).toBeNull();
+  });
+
+  // 2026-08-16 root fix: same gap as contentStabilityEvaluator — an explicit
+  // "FINAL ANSWER:" match on a contractless run must redirect, not exit,
+  // when there is unconsumed stored evidence.
+  test("FINAL ANSWER match + unconsumed evidence → redirects instead of exiting", () => {
+    const ctx = makeCtx({
+      thought: "FINAL ANSWER: 42",
+      runContract: undefined,
+      steps: [
+        { type: "action", metadata: { toolCall: { id: "c1", name: "http-get", arguments: {} } } } as never,
+        { type: "observation", metadata: { toolCallId: "c1", storedKey: "_tool_result_1" } } as never,
+      ],
+      scratchpad: new Map([["_tool_result_1", "THE REAL FETCHED CONTENT"]]),
+    });
+    const result = finalAnswerRegexEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("redirect");
+    expect(result!.reason).toContain("THE REAL FETCHED CONTENT");
   });
 
   test("match in thinking field → exit", () => {

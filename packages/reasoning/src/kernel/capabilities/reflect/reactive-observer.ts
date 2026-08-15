@@ -16,28 +16,18 @@ import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 import type { ModelTier } from "../../../context/context-profile.js";
 import { evaluateVerbosity } from "./verbosity-detector.js";
+import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 
 /**
  * True when the ledger holds a tool observation compressed to `metadata.storedKey`
  * that no later action step's `recall({ key })` call ever actually retrieved.
- * Exported (rather than inlined) so it can be pinned against production-shaped
- * `KernelState.steps` directly — see reactive-observer-unconsumed-evidence.test.ts.
+ * Thin wrapper over the canonical scan in `verify/unconsumed-evidence.ts`
+ * (shared with `act/guard.ts` and `decide/arbitrator.ts`) — kept exported
+ * under this name for the existing pin, see
+ * reactive-observer-unconsumed-evidence.test.ts.
  */
 export function computeHasUnconsumedStoredEvidence(steps: KernelState["steps"]): boolean {
-  const storedKeys = new Set<string>();
-  const recalledKeys = new Set<string>();
-  for (const st of steps) {
-    if (st.type === "observation") {
-      const key = (st.metadata as { storedKey?: string } | undefined)?.storedKey;
-      if (key) storedKeys.add(key);
-    } else if (st.type === "action") {
-      const stepTc = st.metadata?.toolCall as { name?: string; arguments?: Record<string, unknown> } | undefined;
-      if (stepTc?.name === "recall" && typeof stepTc.arguments?.key === "string") {
-        recalledKeys.add(stepTc.arguments.key);
-      }
-    }
-  }
-  return [...storedKeys].some((k) => !recalledKeys.has(k));
+  return findUnconsumedStoredKeys(steps).length > 0;
 }
 
 /**

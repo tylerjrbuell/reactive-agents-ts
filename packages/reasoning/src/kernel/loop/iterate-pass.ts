@@ -86,6 +86,8 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../utils/observation-helpers.js";
+import { resolveUnconsumedEvidence } from "../capabilities/verify/unconsumed-evidence.js";
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { serializeKernelState } from "../state/kernel-codec.js";
 import {
@@ -913,6 +915,33 @@ export function runIterationPass(
       // a "framework giving up because of approaching maxIterations"
       // early-stop into status:failed when there's tool-failure evidence.
       if (state.meta.terminatedBy === "dispatcher-early-stop") {
+        // 2026-08-16 root fix: measured live as the DOMINANT termination path
+        // for local models under entropy/iteration pressure — it interrupts
+        // the loop directly, mid-iteration, entirely outside think.ts's
+        // per-turn termination oracle (arbitrator.ts's evaluator chain never
+        // runs here). Give the run ONE grace turn to ground its answer in
+        // evidence it already fetched but never read back (storedKey/recall),
+        // rather than honoring the forced stop and shipping whatever the
+        // model wrote from a compressed preview. One-shot via
+        // `evidenceGraceGiven`: a run genuinely out of budget still honors
+        // the NEXT dispatcher-early-stop.
+        if (!state.meta.evidenceGraceGiven) {
+          const unconsumedEvidence = resolveUnconsumedEvidence(state.steps, state.scratchpad);
+          if (unconsumedEvidence !== null) {
+            const evidenceMsg =
+              `⚠️ Before finalizing: earlier tool results were shown to you only as short previews. ` +
+              `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
+              `invent details not present here), then give your final answer now:\n\n${unconsumedEvidence}`;
+            const evidenceStep = makeStep("observation", evidenceMsg, {
+              observationResult: makeObservationResult("evidence-grounding-guard", false, evidenceMsg),
+            });
+            state = transitionState(state, {
+              steps: [...state.steps, evidenceStep],
+              meta: { ...state.meta, terminatedBy: undefined, evidenceGraceGiven: true },
+            });
+            sync(); return "continue";
+          }
+        }
         const arbCtx = arbitrationContextFromState(state, {
           task: input.task,
           requiredTools: input.requiredTools,

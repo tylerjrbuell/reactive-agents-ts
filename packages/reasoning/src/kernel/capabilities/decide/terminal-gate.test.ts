@@ -180,6 +180,62 @@ describe("coverage (P3 plan-execute semantics: exhaustion → abstain)", () => {
   });
 });
 
+describe("evidence grounding (2026-08-16 root fix — deterministic, no recall() dependency)", () => {
+  it("no unconsumed evidence signal supplied → inert, accept", () => {
+    const d = evaluateTerminalGate(baseInput({}));
+    expect(d.decision).toBe("accept");
+  });
+
+  it("unconsumed evidence present → one redirect carrying the full-content guidance", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        hasUnconsumedEvidence: true,
+        buildEvidenceGuidance: () => "FULL-EVIDENCE-CONTENT",
+      }),
+    );
+    expect(d).toEqual({
+      decision: "redirect",
+      check: "evidence",
+      guidance: "FULL-EVIDENCE-CONTENT",
+      missing: [],
+    });
+  });
+
+  it("second attempt (evidenceRedirectsSpent=1) → accepts even with evidence still unconsumed (no retry trap)", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        hasUnconsumedEvidence: true,
+        evidenceRedirectsSpent: 1,
+        buildEvidenceGuidance: () => "FULL-EVIDENCE-CONTENT",
+      }),
+    );
+    expect(d.decision).toBe("accept");
+  });
+
+  it("runs only after grounding AND coverage pass — a grounding violation wins first", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        requiredTools: ["web-search"],
+        hasSubstantiveGrounding: false,
+        hasUnconsumedEvidence: true,
+        buildEvidenceGuidance: () => "FULL-EVIDENCE-CONTENT",
+      }),
+    );
+    expect(d.check).toBe("grounding");
+  });
+
+  it("outranks the checker slot: both fire → evidence redirect wins", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        hasUnconsumedEvidence: true,
+        buildEvidenceGuidance: () => "FULL-EVIDENCE-CONTENT",
+        checkerVerdict: { approved: false, critique: "irrelevant here" },
+      }),
+    );
+    expect(d.check).toBe("evidence");
+  });
+});
+
 describe("checker slot (P6b)", () => {
   it("no checker configured → inert, accept", () => {
     const d = evaluateTerminalGate(baseInput({}));

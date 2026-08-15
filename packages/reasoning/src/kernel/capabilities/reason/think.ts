@@ -1704,6 +1704,9 @@ export function handleThinking(
         // Move 2 / RC#1 — the run-scoped ledger so the terminal gate's coverage
         // check sees delegated writes (steps hold only `spawn-agent`).
         ledger: state.ledger,
+        // 2026-08-16 root fix — lets llmEndTurnEvaluator resolve unconsumed
+        // stored evidence deterministically (evaluateTerminalGate's evidence check).
+        scratchpad: state.scratchpad,
         priorThought: state.priorThought,
         entropy: state.meta.entropy?.latestScore as TerminationContext["entropy"],
         trajectory: state.meta.entropy?.latestTrajectory as TerminationContext["trajectory"],

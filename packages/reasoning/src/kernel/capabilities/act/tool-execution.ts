@@ -699,9 +699,15 @@ export function executeNativeToolCall(
           }
 
           // In FC mode, clean up the compressed content for native message format:
-          // - Replace verbose [STORED: ...] header with a clean preview header
-          // - Strip ALL recall/storage hints (covers every compressToolResult variant)
-          // - Append one concise retrieval line if stored
+          // replace the verbose [STORED: ...] header with a clean preview header
+          // and strip every recall/storage hint variant. 2026-08-16: this used to
+          // strip the hint then unconditionally re-add the exact same text two
+          // lines later — dead code, the strip never survived. Removed the re-add
+          // rather than the strip: grounding is no longer advisory-text-dependent
+          // now that `unconsumedEvidenceGuard` (act/guard.ts) deterministically
+          // injects the full stored content before `final-answer` can succeed, so
+          // this hint was never load-bearing for correctness — only for the
+          // model's (measured-unreliable) choice to call recall() proactively.
           content = content
             .replace(/^\[STORED: [^\]]+\]\n?/m, `[${toolCall.name} result — compressed preview]\n`)
             .replace(/— use recall\("[^"]+",? ?(?:full: ?true)?\)[^\n]*/g, "")
@@ -712,10 +718,6 @@ export function executeNativeToolCall(
             .replace(/✓ Preview (?:covers|includes)[^\n]*/g, "")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
-
-          if (storedKey) {
-            content += `\n  — full text is stored. Use recall("${storedKey}") to retrieve.`;
-          }
         }
 
         return { content, success, storedKey, delegatedToolsUsed, ...(subAgentLedger ? { subAgentLedger } : {}), extractedFact, fullContent };

@@ -15,6 +15,7 @@ import {
   getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
+import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -120,6 +121,61 @@ function hasDistinctTarget(tc: ToolCallSpec, state: KernelState): boolean {
   }
   return true;
 }
+
+/** Cap on total injected evidence chars — keeps the deterministic injection
+ *  from blowing a local model's context window on a large fetched page. */
+const UNCONSUMED_EVIDENCE_INJECT_CHAR_CAP = 6000;
+
+/**
+ * Deterministic evidence-grounding guard (2026-08-16 root fix). Root cause
+ * (traced live against gemma4:e4b via `rax diagnose`): the harness's only
+ * remedy for unread compressed evidence was an ADVISORY nudge suggesting the
+ * model call `recall()` — measured firing correctly 5/5 times in one run and
+ * being ignored 5/5 times. Soft nudges have no enforcement power over a weak
+ * local model; the model went on to write a final answer from memory instead
+ * of the evidence it had already fetched (in one traced case, fabricating
+ * episode descriptions never present in any tool observation).
+ *
+ * This guard makes grounding deterministic instead of advisory: on the FIRST
+ * `final-answer` attempt with unconsumed stored evidence, it blocks the call
+ * and substitutes the model's own advisory-text budget for the ACTUAL full
+ * content (via the same scratchpad the harness's own deliverable-assembly
+ * fallback already resolves through — `runner-helpers/deliverable.ts`'s
+ * `resolveStoredToolObservation`) — no tool call, no model compliance
+ * required. Fires at most ONCE: a second `final-answer` attempt passes
+ * regardless of remaining unconsumed keys, so the model can never be trapped
+ * in a retry loop — it has now been shown the evidence directly; what it does
+ * with it from there is the verifier's job, not this guard's.
+ */
+export const unconsumedEvidenceGuard: Guard = (tc, state) => {
+  if (tc.name !== "final-answer") return { pass: true };
+  const priorFinalAnswerAttempts = state.steps.some((step) => {
+    if (step.type !== "action") return false;
+    const stepTc = step.metadata?.toolCall as { name?: string } | undefined;
+    return stepTc?.name === "final-answer";
+  });
+  if (priorFinalAnswerAttempts) return { pass: true };
+
+  const keys = findUnconsumedStoredKeys(state.steps);
+  if (keys.length === 0) return { pass: true };
+  const payloads = keys
+    .map((k) => state.scratchpad.get(k))
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  if (payloads.length === 0) return { pass: true };
+
+  let joined = payloads.join("\n\n---\n\n");
+  if (joined.length > UNCONSUMED_EVIDENCE_INJECT_CHAR_CAP) {
+    joined = `${joined.slice(0, UNCONSUMED_EVIDENCE_INJECT_CHAR_CAP)}\n…(truncated)`;
+  }
+
+  return {
+    pass: false,
+    observation:
+      `Before finalizing: earlier tool results were shown to you only as short previews. ` +
+      `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
+      `invent details not present here), then call final-answer again:\n\n${joined}`,
+  };
+};
 
 /** Re-export for backward compatibility. */
 export const META_TOOL_SET = INTROSPECTION_META_TOOLS;
@@ -376,6 +432,7 @@ export const defaultGuards: Guard[] = [
   sideEffectGuard,
   repetitionGuard,
   metaToolDedupGuard,
+  unconsumedEvidenceGuard,
 ];
 
 // ─── Pipeline Runner ──────────────────────────────────────────────────────────

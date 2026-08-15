@@ -187,6 +187,14 @@ export interface KernelMeta {
   readonly dispatchedTemperature?: number;
   /** Strategy switch requested by the intervention dispatcher — kernel-runner executes the switch. */
   readonly dispatchedStrategySwitch?: { readonly to: string; readonly reason: string };
+  /**
+   * 2026-08-16 root fix — set once `dispatcher-early-stop` has already been
+   * given a single grace turn to ground its answer in unconsumed stored
+   * evidence (iterate-pass.ts). Keeps the grace one-shot: a run genuinely out
+   * of budget still honors the forced stop on the NEXT dispatcher-early-stop,
+   * rather than looping forever waiting for the model to use the evidence.
+   */
+  readonly evidenceGraceGiven?: boolean;
 
   // ── Native FC handoff between think → act ──
   readonly pendingNativeToolCalls?: readonly ToolCallSpec[];

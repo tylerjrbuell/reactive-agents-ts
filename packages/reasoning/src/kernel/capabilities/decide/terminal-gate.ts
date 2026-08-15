@@ -47,7 +47,7 @@ import { verifyDelivery } from "../verify/delivery-authority.js";
 // ── Decision vocabulary ───────────────────────────────────────────────────────
 
 /** Which ordered check produced the decision. */
-export type TerminalGateCheck = "exemption" | "grounding" | "coverage" | "checker";
+export type TerminalGateCheck = "exemption" | "grounding" | "coverage" | "evidence" | "checker";
 
 export type TerminalGateDecision =
   | {
@@ -169,9 +169,24 @@ export type TerminalGateInput = {
     readonly approved: boolean;
     readonly critique: string;
   };
+  /**
+   * Evidence-grounding check (2026-08-16 root fix). True when the ledger
+   * holds a tool observation compressed to `storedKey` that no `recall()`
+   * call ever retrieved — the candidate answer may be synthesized from a
+   * truncated preview instead of the real fetched content. `undefined` = no
+   * evidence signal supplied — slot is inert (byte-identical for every
+   * caller that does not thread it; see `decide/arbitrator.ts`'s
+   * `llmEndTurnEvaluator` for the one wired caller). One-shot, same as
+   * grounding/coverage: `evidenceRedirectsSpent` must be 0 for the redirect
+   * to fire, so a candidate can never be trapped in a retry loop over this
+   * check — it is shown the evidence once, then judged on what it does with it.
+   */
+  readonly hasUnconsumedEvidence?: boolean;
+  readonly evidenceRedirectsSpent?: number;
   /** Guidance builders — injected so this module stays dependency-light. */
   readonly buildGroundingGuidance: () => string;
   readonly buildCoverageGuidance: (missing: readonly string[]) => string;
+  readonly buildEvidenceGuidance?: () => string;
 };
 
 /**
@@ -296,6 +311,20 @@ export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDeci
       };
     }
     // B1 exhaustion: accept the next substantive answer — fall through to 3.
+  }
+
+  // 2.5) Evidence grounding (2026-08-16 root fix): unconsumed stored evidence
+  // exists — the candidate may be synthesized from a compressed preview
+  // rather than the real fetched content. One-shot: fires only while
+  // `evidenceRedirectsSpent` is 0, so the model is shown the evidence exactly
+  // once and can never be trapped in a retry loop over this check.
+  if (input.hasUnconsumedEvidence && (input.evidenceRedirectsSpent ?? 0) === 0) {
+    return {
+      decision: "redirect",
+      check: "evidence",
+      guidance: input.buildEvidenceGuidance?.() ?? "",
+      missing: [],
+    };
   }
 
   // 3) Independent checker (P6b slot): only when configured AND consulted.
