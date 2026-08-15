@@ -970,6 +970,26 @@ Write your final analysis to analysis.md in your working directory with exactly 
     strategy: "react",
     prompt: `Using the JSONPlaceholder API at https://jsonplaceholder.typicode.com, fetch all posts by user ID 3, enrich each post with its comment count, and write a TypeScript module to output.ts that exports a typed EnrichedPost[] array as a const. The module must compile without errors.`,
     requiresTools: true,
+    // Tool contract (added 2026-08-15, root-caused via a real cogito:14b
+    // n=3 lift run: 0% on BOTH bare-llm and ra-full, and `rax diagnose grep`
+    // on the ra-full trace showed the visible tool surface was
+    // ["recall","discover-tools","final-answer"] on every one of 8
+    // iterations — http-get and file-write were never offered. Root cause:
+    // this task declared no `tools:` field, so runner.ts's builtins
+    // computation fell through to the fixtures-heuristic (`task.fixtures`
+    // is unset here — only `hiddenFixtures`), which only ever adds
+    // file-read/file-write, never http-get; with no explicit contract,
+    // `withRequiredTools` also never fires (runner.ts:704's `if
+    // (task.requiresTools)` block is nested inside `if (builtins &&
+    // builtins.length > 0)`, which was false). The model in run 0 wasn't
+    // hallucinating when it said "there are no tools available" — it was
+    // reporting the trace accurately. Same root-cause class as the
+    // rw-7/rw-8/rw-9 2026-07-07 reward-hack fix; this task was simply never
+    // migrated to the explicit contract.
+    tools: [
+      { kind: "required", name: "http-get" },
+      { kind: "required", name: "file-write" },
+    ],
     maxIterations: 15,
     // 2026-07-07 verifiable-criteria audit: `bun check output.ts` was not a
     // real bun subcommand ("error: Script not found \"check\"") — the task
