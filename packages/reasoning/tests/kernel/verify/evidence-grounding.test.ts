@@ -3,6 +3,7 @@ import {
   validateNumericGrounding,
   buildEvidenceCorpusFromSteps,
   detectFabricatedMeasurement,
+  detectContradictedTestClaim,
   resolveFabricationGuardMode,
 } from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
@@ -96,6 +97,33 @@ describe("detectFabricatedMeasurement (always-on fabrication guard)", () => {
 
   it("grounds within tolerance (90 ms claim vs 90 in corpus)", () => {
     expect(detectFabricatedMeasurement("took 90 ms", "measured 90 milliseconds").ok).toBe(true);
+  });
+});
+
+describe("detectContradictedTestClaim (2026-08-15 rw-7 real-model finding)", () => {
+  it("flags 'all tests passed' contradicted by a non-zero exit code in evidence", () => {
+    const out = "All tests have passed successfully after fixing the bugs in each file.";
+    const evidence = '{"executed":true,"result":{"exitCode":1,"output":"bun test v1.3.10"},"output":"(no output)","exitCode":0}';
+    const r = detectContradictedTestClaim(out, evidence);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.violations[0]).toContain("exiting with code 1");
+  });
+
+  it("passes when the evidence shows a zero exit code (a real pass)", () => {
+    const out = "All tests have passed successfully.";
+    const evidence = '{"executed":true,"result":{"exitCode":0,"output":"5 pass, 0 fail"},"exitCode":0}';
+    expect(detectContradictedTestClaim(out, evidence).ok).toBe(true);
+  });
+
+  it("passes when the output makes no test-success claim (never false-fires)", () => {
+    const out = "I fixed the off-by-one error in processor.ts.";
+    const evidence = '{"result":{"exitCode":1}}';
+    expect(detectContradictedTestClaim(out, evidence).ok).toBe(true);
+  });
+
+  it("passes when there is no exit-code signal in evidence at all", () => {
+    const out = "All tests have passed successfully.";
+    expect(detectContradictedTestClaim(out, "no test runner was invoked").ok).toBe(true);
   });
 });
 

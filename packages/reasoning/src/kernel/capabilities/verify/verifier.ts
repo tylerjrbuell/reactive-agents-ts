@@ -35,6 +35,7 @@ import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
   detectFabricatedMeasurement,
+  detectContradictedTestClaim,
   resolveFabricationGuardMode,
   type FabricationGuardMode,
 } from "./evidence-grounding.js";
@@ -584,6 +585,21 @@ export const defaultVerifier: Verifier = {
           passed: fab.ok,
           severity: fab.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
           reason: fab.ok ? undefined : fab.violations.join("; "),
+        });
+
+        // Check 4d: contradicted-test-claim guard. Same fabrication-guard
+        // family/gating as 4c, but polices a CONTRADICTED boolean claim
+        // ("all tests passed") against an explicit non-zero exit code in the
+        // evidence, rather than an ungrounded numeric one. See
+        // detectContradictedTestClaim's docstring for the real-model trace
+        // that surfaced this gap (harness_synthesis reformats state.output's
+        // prose without ever re-consulting the tool evidence).
+        const testClaim = detectContradictedTestClaim(ctx.content, corpus);
+        checks.push({
+          name: "output-not-contradicted-test-claim",
+          passed: testClaim.ok,
+          severity: testClaim.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
+          reason: testClaim.ok ? undefined : testClaim.violations.join("; "),
         });
       }
 

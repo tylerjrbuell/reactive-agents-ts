@@ -235,6 +235,46 @@ export function detectFabricatedMeasurement(
   return { ok: false, violations };
 }
 
+/**
+ * Test-suite claim contradicted by the tool evidence — e.g. the answer says
+ * "all tests have passed" while the last test-runner invocation in the
+ * evidence corpus actually exited non-zero. Distinct from
+ * {@link detectFabricatedMeasurement} (which polices UNGROUNDED numeric
+ * claims — nothing in the corpus supports them) — this polices a
+ * CONTRADICTED boolean claim, where the corpus contains the opposite of what
+ * the model asserts. High-precision by construction: only fires when BOTH an
+ * explicit test-suite-success phrase appears in the output AND an explicit
+ * non-zero exit code appears in the evidence corpus; a corpus with no
+ * exit-code signal (or only zero) never trips it, so a real pass is silent.
+ *
+ * Found via a real-model benchmark trace (cogito:14b, rw-7, 2026-08-15): the
+ * model's code-execute call for `bun test` returned
+ * `{"result":{"exitCode":1,...}}` (the test run failed), and the model's
+ * final answer nonetheless read "All tests have passed successfully after
+ * fixing the bugs in each file" — routed through `harness_synthesis`, which
+ * only reformats `state.output`'s prose and never re-consults the tool
+ * evidence, so nothing in the pipeline caught the contradiction.
+ */
+const TEST_SUCCESS_CLAIM_RE =
+  /\ball\s+tests?\s+(?:have\s+)?(?:passed|pass(?:es|ing)?|succeed(?:ed)?)\b|tests?\s+(?:all\s+)?passed?\s+successfully\b|test\s+suite\s+passes?\b/i;
+/** Matches a JSON-shaped non-zero exit code from a code-execute/test-runner tool result. */
+const NONZERO_EXIT_CODE_RE = /"exitCode"\s*:\s*(-?[1-9]\d*)/;
+
+export function detectContradictedTestClaim(
+  output: string,
+  evidence: string,
+): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[] } {
+  if (!TEST_SUCCESS_CLAIM_RE.test(output)) return { ok: true };
+  const exitMatch = evidence.match(NONZERO_EXIT_CODE_RE);
+  if (!exitMatch) return { ok: true };
+  return {
+    ok: false,
+    violations: [
+      `claimed tests passed, but the tool evidence shows a test run exiting with code ${exitMatch[1]} (failure)`,
+    ],
+  };
+}
+
 /** An empirical claim classified against the tool-observation corpus. */
 export interface ClassifiedClaim {
   readonly phrase: string;

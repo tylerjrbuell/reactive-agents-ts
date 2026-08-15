@@ -50,6 +50,58 @@ describe("ToolRegistry", () => {
     await Effect.runPromise(program);
   });
 
+  it("should self-heal a near-miss tool name (≤2 edits) instead of failing", async () => {
+    // Regression proof for the 2026-08-15 real-world benchmark finding:
+    // cogito:14b called "file/write" for the registered "file-write" (1 edit)
+    // on every retry and never self-corrected because the shared registry
+    // hard-failed with no healing. get() must now resolve the near miss.
+    const program = Effect.gen(function* () {
+      const registry = yield* makeToolRegistry;
+      yield* registry.register(
+        {
+          name: "file-write",
+          description: "Write a file",
+          parameters: [],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        },
+        () => Effect.succeed("written"),
+      );
+
+      const tool = yield* registry.get("file/write");
+      expect(tool.definition.name).toBe("file-write");
+      const result = yield* tool.handler({});
+      expect(result).toBe("written");
+    });
+
+    await Effect.runPromise(program);
+  });
+
+  it("does not heal a name too far from any registered tool", async () => {
+    const program = Effect.gen(function* () {
+      const registry = yield* makeToolRegistry;
+      yield* registry.register(
+        {
+          name: "file-write",
+          description: "Write a file",
+          parameters: [],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        },
+        () => Effect.succeed("written"),
+      );
+
+      const error = yield* registry.get("completely-different-tool").pipe(Effect.flip);
+      expect(error._tag).toBe("ToolNotFoundError");
+    });
+
+    await Effect.runPromise(program);
+  });
+
   it("should list all tools", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* makeToolRegistry;

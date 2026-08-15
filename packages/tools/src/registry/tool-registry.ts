@@ -2,6 +2,7 @@ import { Effect, Ref } from "effect";
 
 import type { ToolDefinition, FunctionCallingTool } from "../types.js";
 import { ToolNotFoundError, ToolExecutionError } from "../errors.js";
+import { healToolName } from "../healing/tool-name-healer.js";
 
 export interface RegisteredTool {
   readonly definition: ToolDefinition;
@@ -33,6 +34,20 @@ export const makeToolRegistry = Effect.gen(function* () {
       const tool = tools.get(name);
       if (!tool) {
         const available = [...tools.keys()];
+        // Self-heal near-miss tool names (wrong separator, minor typo — ≤2
+        // edits) instead of hard-failing. Was previously only wired into the
+        // blueprint strategy's own plan-verify step (a local reimplementation
+        // of this same edit-distance logic); every other strategy (reactive,
+        // plan-execute, direct, adaptive) routed calls through this registry
+        // directly and got zero healing — a model calling "file/write" for
+        // the registered "file-write" (1 edit) hard-failed on every retry
+        // with no self-correction, observed burning a full budget on a
+        // real-world stress task (rw-1, cogito:14b, 2026-08-15 benchmark).
+        const healed = healToolName(name, available, {});
+        if (healed.resolved !== null) {
+          const healedTool = tools.get(healed.resolved);
+          if (healedTool) return healedTool;
+        }
         return yield* Effect.fail(
           new ToolNotFoundError({
             message: `Tool "${name}" not found`,
