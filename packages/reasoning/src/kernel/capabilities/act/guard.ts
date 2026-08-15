@@ -87,6 +87,40 @@ function lastCallToTool(
   return null;
 }
 
+/**
+ * Candidate argument keys identifying WHAT a call targets (file path, URL,
+ * resource id). Used to tell "3 calls to file-write, 3 different files" (not
+ * repetition) apart from "3 calls to file-write, same path" (actually stuck).
+ */
+const TARGET_ARG_KEYS = ["path", "file", "target", "url", "id"] as const;
+
+/**
+ * True when `tc`'s target argument (path/file/target/url/id) differs from
+ * every PRIOR call to the same tool. Root fix for the 2026-08-15 rw-7 finding:
+ * `repetitionGuard`'s ceiling of 2 for non-parallel-safe tools blocked a 3rd
+ * `file-write` call on a task that legitimately required fixing 3 separate
+ * source files — the guard counted calls by tool name alone, with no notion
+ * of "different target = different unit of work". A tool call carrying no
+ * recognized target-ish argument (targetKey undefined) is conservatively
+ * treated as NOT distinct, preserving prior behavior for tools this doesn't
+ * apply to.
+ */
+function hasDistinctTarget(tc: ToolCallSpec, state: KernelState): boolean {
+  const args = tc.arguments as Record<string, unknown> | undefined;
+  const targetKey = TARGET_ARG_KEYS.find((k) => typeof args?.[k] === "string");
+  if (!targetKey) return false;
+  const targetValue = args![targetKey] as string;
+  for (const step of state.steps) {
+    if (step.type !== "action") continue;
+    const stepTc = step.metadata?.toolCall as
+      | { name?: string; arguments?: Record<string, unknown> }
+      | undefined;
+    if (stepTc?.name !== tc.name) continue;
+    if (stepTc.arguments?.[targetKey] === targetValue) return false;
+  }
+  return true;
+}
+
 /** Re-export for backward compatibility. */
 export const META_TOOL_SET = INTROSPECTION_META_TOOLS;
 
@@ -228,6 +262,10 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const defaultCeiling = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 2;
   const threshold = Math.max(quantityLimit, defaultCeiling);
   if (priorCallsOfSameTool < threshold) return { pass: true };
+
+  // Distinct-target carve-out: a call to a new file/URL/resource is a new
+  // unit of work, not repetition of the ceiling-triggering pattern.
+  if (hasDistinctTarget(tc, state)) return { pass: true };
 
   // FM-16 layer D-guard: don't force a stop while escalation (FM-17 layer 3)
   // hasn't exhausted its widened budget yet — the model may not have actually

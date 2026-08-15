@@ -38,3 +38,27 @@ describe("repetitionGuard — stall-aware ceiling (FM-16 layer D-guard)", () => 
     }
   });
 });
+
+describe("repetitionGuard — distinct-target carve-out (2026-08-15 rw-7 finding)", () => {
+  function stateWithFileWrites(paths: string[]): KernelState {
+    const steps = paths.map((path) => ({
+      type: "action",
+      metadata: { toolCall: { name: "file-write", arguments: { path, content: "x" } } },
+    }));
+    return makeState({ steps: steps as any, meta: {} as any });
+  }
+
+  it("does not block a 3rd file-write call when it targets a NEW path (multi-file edit task)", () => {
+    const fwInput = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
+    const thirdCall = { name: "file-write", arguments: { path: "/tmp/pipeline.ts", content: "fixed" } } as any;
+    const outcome = repetitionGuard(thirdCall, stateWithFileWrites(["/tmp/validator.ts", "/tmp/processor.ts"]), fwInput);
+    expect(outcome.pass).toBe(true);
+  });
+
+  it("still blocks a 3rd file-write call when it re-targets an ALREADY-written path (genuine repetition)", () => {
+    const fwInput = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
+    const thirdCall = { name: "file-write", arguments: { path: "/tmp/validator.ts", content: "retry" } } as any;
+    const outcome = repetitionGuard(thirdCall, stateWithFileWrites(["/tmp/validator.ts", "/tmp/processor.ts"]), fwInput);
+    expect(outcome.pass).toBe(false);
+  });
+});
