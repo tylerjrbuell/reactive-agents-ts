@@ -644,15 +644,32 @@ export const LocalProviderLive = Layer.effect(
                             ? request.model
                             : request.model?.model ?? defaultModel
                     // Per-chunk idle timeout (mirrors complete()'s whole-call
-                    // Effect.timeout, but Stream.timeoutFail measures gaps
-                    // between emissions — the right shape for a stream, since
-                    // a cold-load hang before the first token and a stall
-                    // mid-generation both need to trip it, not just a total
-                    // wall-clock ceiling). Previously unset on this path:
-                    // .withLlmTimeout()/OLLAMA_TIMEOUT_MS reached only
-                    // complete(), leaving stream() (the kernel's actual call
-                    // path) unbounded — a cold-load or contended GPU could
-                    // hang a run forever with no way to configure it away.
+                    // Effect.timeout, but measured as a gap between emissions
+                    // — the right shape for a stream, since a cold-load hang
+                    // before the first token and a stall mid-generation both
+                    // need to trip it, not just a total wall-clock ceiling).
+                    // Previously unset on this path: .withLlmTimeout()/
+                    // OLLAMA_TIMEOUT_MS reached only complete(), leaving
+                    // stream() (the kernel's actual call path) unbounded — a
+                    // cold-load or contended GPU could hang a run forever
+                    // with no way to configure it away.
+                    //
+                    // Implemented as a manual `setTimeout`, NOT `Stream.
+                    // timeoutFail` — `Stream.timeoutFail` wrapping this
+                    // `Stream.async` reproducibly triggered an unrelated,
+                    // silently-recovered Effect internal defect (`Cause.Fail`
+                    // with `Option.none()` as the failure, logged every
+                    // "Fiber terminated with an unhandled error" once per
+                    // iteration) on every real run, bisected via `rax
+                    // diagnose` + a `git worktree` A/B test against the
+                    // pre-`Stream.timeoutFail` commit (0 occurrences without
+                    // it, 10 with it on the exact same task/model; moving it
+                    // to wrap the retry-inner stream instead of the outer one
+                    // made it worse, not better — an Effect Stream/library
+                    // interaction, not a call-site ordering bug). The manual
+                    // timer reuses the SAME abort/suppress machinery this
+                    // producer already has for interruption, so it carries no
+                    // new failure mode.
                     const timeoutMs = resolveLocalTimeoutMs(request, config)
                     const startedAt = Date.now()
 
@@ -664,6 +681,32 @@ export const LocalProviderLive = Layer.effect(
                         // AbortError from surfacing as a spurious stream failure.
                         let ollamaStream: { abort: () => void } | undefined
                         let aborted = false
+                        let idleTimer: ReturnType<typeof setTimeout> | undefined
+                        const clearIdleTimer = () => {
+                            if (idleTimer !== undefined) clearTimeout(idleTimer)
+                            idleTimer = undefined
+                        }
+                        const resetIdleTimer = () => {
+                            clearIdleTimer()
+                            idleTimer = setTimeout(() => {
+                                aborted = true
+                                ollamaStream?.abort()
+                                emit.fail(
+                                    new LLMTimeoutError({
+                                        message:
+                                            `Local LLM request for model "${model}" timed out after ` +
+                                            `${Date.now() - startedAt}ms (limit ${timeoutMs}ms). The model may be ` +
+                                            `cold-loading or the GPU is contended — warm it first (a ` +
+                                            `single call to load it), raise the timeout via ` +
+                                            `request.timeoutMs / OLLAMA_TIMEOUT_MS, or reduce contention.`,
+                                        provider: 'ollama',
+                                        timeoutMs,
+                                        model,
+                                        elapsedMs: Date.now() - startedAt,
+                                    }),
+                                )
+                            }, timeoutMs)
+                        }
                         const doStream = async () => {
                             try {
                                 const client = await getClient()
@@ -728,12 +771,14 @@ export const LocalProviderLive = Layer.effect(
                                     },
                                 })
                                 ollamaStream = stream
+                                resetIdleTimer()
 
                                 let fullContent = ''
                                 const accumulatedLogprobs: TokenLogprob[] = []
                                 const accumulatedToolCalls: ToolCall[] = []
 
                                 for await (const chunk of stream) {
+                                    resetIdleTimer()
                                     if (chunk.message?.content) {
                                         fullContent += chunk.message.content
                                         emit.single({
@@ -881,12 +926,18 @@ export const LocalProviderLive = Layer.effect(
                                                 ? { resolvedParams: { contextWindow: numCtx } }
                                                 : {}),
                                         })
+                                        clearIdleTimer()
                                         emit.end()
                                     }
                                 }
                             } catch (error) {
+                                clearIdleTimer()
                                 // Suppress the AbortError that `abort()` raises
                                 // on interruption — it is not a real failure.
+                                // Also suppresses the abort error our OWN idle
+                                // timer's `ollamaStream?.abort()` provokes,
+                                // since it already emitted the richer
+                                // LLMTimeoutError itself.
                                 if (!aborted) {
                                     emit.fail(ollamaError(error, model))
                                 }
@@ -895,27 +946,11 @@ export const LocalProviderLive = Layer.effect(
                         void doStream()
                         // Finalizer: run on stream interruption/scope close.
                         return Effect.sync(() => {
+                            clearIdleTimer()
                             aborted = true
                             ollamaStream?.abort()
                         })
-                    })).pipe(
-                        Stream.timeoutFail(
-                            () =>
-                                new LLMTimeoutError({
-                                    message:
-                                        `Local LLM request for model "${model}" timed out after ` +
-                                        `${Date.now() - startedAt}ms (limit ${timeoutMs}ms). The model may be ` +
-                                        `cold-loading or the GPU is contended — warm it first (a ` +
-                                        `single call to load it), raise the timeout via ` +
-                                        `request.timeoutMs / OLLAMA_TIMEOUT_MS, or reduce contention.`,
-                                    provider: 'ollama',
-                                    timeoutMs,
-                                    model,
-                                    elapsedMs: Date.now() - startedAt,
-                                }),
-                            Duration.millis(timeoutMs),
-                        ),
-                    )
+                    }))
                 }),
 
             completeStructured: (request) =>
