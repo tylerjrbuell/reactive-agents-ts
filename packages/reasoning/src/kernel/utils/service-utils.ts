@@ -81,6 +81,9 @@ type ReactiveControllerInstance = {
      *  reactive-observer so stall-detect uses the tier-scaled window. Optional → synthetic
      *  outer-loop callers (plan-execute/ToT) that omit it keep prior behavior. */
     readonly tier?: "local" | "mid" | "large" | "frontier";
+    /** Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.hasUnconsumedStoredEvidence
+     *  (2026-08-15 root fix) — true when a compressed tool result's storedKey was never recalled. */
+    readonly hasUnconsumedStoredEvidence?: boolean;
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

@@ -90,4 +90,37 @@ describe("evaluateToolInject", () => {
   it("returns null without available tools", () => {
     expect(evaluateToolInject(baseParams)).toBeNull();
   });
+
+  // 2026-08-15 root fix (scratch.ts research-task finding): a knowledge gap
+  // can mean "already fetched the answer, never read it back" — not always
+  // "need more data". When unconsumed stored evidence exists, prefer recall
+  // over re-searching.
+  it("prefers recall over web-search when unconsumed stored evidence exists", () => {
+    const result = evaluateToolInject({
+      ...baseParams,
+      availableToolNames: ["web-search", "recall", "file-read"],
+      hasUnconsumedStoredEvidence: true,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.toolName).toBe("recall");
+    expect(result!.reason).toContain("recall");
+  });
+
+  it("still suggests web-search when no unconsumed stored evidence exists", () => {
+    const result = evaluateToolInject({
+      ...baseParams,
+      availableToolNames: ["web-search", "recall", "file-read"],
+      hasUnconsumedStoredEvidence: false,
+    });
+    expect(result!.toolName).toBe("web-search");
+  });
+
+  it("falls back to web-search when recall is unavailable even with unconsumed evidence", () => {
+    const result = evaluateToolInject({
+      ...baseParams,
+      availableToolNames: ["web-search", "file-read"],
+      hasUnconsumedStoredEvidence: true,
+    });
+    expect(result!.toolName).toBe("web-search");
+  });
 });

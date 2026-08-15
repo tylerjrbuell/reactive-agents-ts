@@ -18,6 +18,29 @@ import type { ModelTier } from "../../../context/context-profile.js";
 import { evaluateVerbosity } from "./verbosity-detector.js";
 
 /**
+ * True when the ledger holds a tool observation compressed to `metadata.storedKey`
+ * that no later action step's `recall({ key })` call ever actually retrieved.
+ * Exported (rather than inlined) so it can be pinned against production-shaped
+ * `KernelState.steps` directly — see reactive-observer-unconsumed-evidence.test.ts.
+ */
+export function computeHasUnconsumedStoredEvidence(steps: KernelState["steps"]): boolean {
+  const storedKeys = new Set<string>();
+  const recalledKeys = new Set<string>();
+  for (const st of steps) {
+    if (st.type === "observation") {
+      const key = (st.metadata as { storedKey?: string } | undefined)?.storedKey;
+      if (key) storedKeys.add(key);
+    } else if (st.type === "action") {
+      const stepTc = st.metadata?.toolCall as { name?: string; arguments?: Record<string, unknown> } | undefined;
+      if (stepTc?.name === "recall" && typeof stepTc.arguments?.key === "string") {
+        recalledKeys.add(stepTc.arguments.key);
+      }
+    }
+  }
+  return [...storedKeys].some((k) => !recalledKeys.has(k));
+}
+
+/**
  * Compute the adaptive entropy floor for the intervention suppression gate.
  *
  * Priority:
@@ -235,6 +258,12 @@ export function runReactiveObserver(
           }
         }
 
+        // Unconsumed-stored-evidence signal (2026-08-15 root fix) — see
+        // computeHasUnconsumedStoredEvidence above. evaluateToolInject uses
+        // this to prefer "recall" over "web-search" as its knowledge-gap
+        // remedy.
+        const hasUnconsumedStoredEvidence = computeHasUnconsumedStoredEvidence(s.steps);
+
         const decisions = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
@@ -256,6 +285,7 @@ export function runReactiveObserver(
           consecutiveThoughtsWithoutAction,
           // FM-A3 backstop — empty-output invariant for RI early-stop.
           hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,
+          hasUnconsumedStoredEvidence,
           // DEFECT 1 fix — thread the real model tier so stall-detect uses the
           // correct tier-scaled stall window (mid=3/large=4/frontier=5) instead
           // of the hardcoded local=2 that caused premature give-up at iter 2.

@@ -4,7 +4,7 @@ import type { ControllerDecision, ControllerEvalParams } from "../../types.js";
 export function evaluateToolInject(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "tool-inject" }) | null {
-  const { entropyHistory, availableToolNames } = params;
+  const { entropyHistory, availableToolNames, hasUnconsumedStoredEvidence } = params;
   if (!availableToolNames || availableToolNames.length === 0) return null;
   // Need at least 3 iterations to distinguish a sustained knowledge gap from
   // normal early-run exploration (which also produces moderate entropy).
@@ -19,14 +19,27 @@ export function evaluateToolInject(
   if (latest.composite < 0.5 || prev.composite < 0.5) return null;
   if (latest.trajectory.shape === "converging") return null;
 
-  // Suggest web-search if available, otherwise first available tool
-  const toolName = availableToolNames.includes("web-search")
-    ? "web-search"
-    : availableToolNames[0]!;
+  // 2026-08-15 root fix (scratch.ts research-task finding): a "knowledge gap"
+  // is not always a MISSING-evidence gap — the model may already have fetched
+  // the answer and compressed it to the scratchpad without ever calling
+  // recall() to read it back. Suggesting another web-search in that case
+  // burns a redundant fetch while the real evidence sits unread. Prefer
+  // recall over web-search whenever unconsumed stored evidence exists.
+  const toolName =
+    hasUnconsumedStoredEvidence && availableToolNames.includes("recall")
+      ? "recall"
+      : availableToolNames.includes("web-search")
+        ? "web-search"
+        : availableToolNames[0]!;
+
+  const reason =
+    toolName === "recall"
+      ? `High entropy (${latest.composite.toFixed(3)}) with ${latest.trajectory.shape} trajectory — you already fetched evidence that was compressed to the scratchpad; call recall(key, full: true) to read the COMPLETE stored content (plain recall(key) only returns a short preview) before searching again`
+      : `High entropy (${latest.composite.toFixed(3)}) with ${latest.trajectory.shape} trajectory — knowledge gap detected`;
 
   return {
     decision: "tool-inject",
     toolName,
-    reason: `High entropy (${latest.composite.toFixed(3)}) with ${latest.trajectory.shape} trajectory — knowledge gap detected`,
+    reason,
   };
 }

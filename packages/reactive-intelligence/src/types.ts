@@ -305,6 +305,19 @@ export type ControllerEvalParams = {
    * → prior behavior is byte-identical.
    */
   readonly phase?: "orient" | "gather" | "execute" | "synthesize" | "verify";
+  /**
+   * True when the ledger holds a tool observation compressed to a `storedKey`
+   * (a "full text is stored, use recall(key)" hint) that no later action step
+   * ever actually recalled. Caller (kernel `reactive-observer`) computes this
+   * from `state.steps`.
+   *
+   * 2026-08-15 root fix: `evaluateToolInject`'s knowledge-gap remedy defaulted
+   * to re-suggesting `web-search` unconditionally, even when the model already
+   * fetched the answer (e.g. a real HTTP 200 page body) and simply never called
+   * `recall()` to read it back out of the scratchpad — driving the model to
+   * fetch redundant new evidence while ignoring evidence already in hand.
+   */
+  readonly hasUnconsumedStoredEvidence?: boolean;
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
