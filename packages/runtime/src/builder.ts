@@ -647,9 +647,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
      * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))`
-     *   reaches the same prompt-augmentation chokepoint when you need
-     *   full control over the injected text.
+     * No composable equivalent yet: the `Environment:` block (auto date/time/
+     *   timezone/platform + whatever you pass here) is assembled from a
+     *   separate `environmentContext` channel (assembly/stages/system-prompt.ts),
+     *   not the `input.systemPrompt` that `.compose(h => h.on('prompt.system',
+     *   ...))` sees — that hook cannot see or override this block today.
      */
     withEnvironment(context: Record<string, string>): this {
         this._environmentContext = { ...this._environmentContext, ...context }
