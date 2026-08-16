@@ -16,7 +16,7 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 | **Anthropic**     | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.8    |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
 | **OpenAI**        | GPT-4o, GPT-4o-mini                                     |     Yes      |    Yes    |       Yes       | Yes (automatic) |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro      |     Yes      |    Yes    |       No        | Yes (automatic) |
-| **Groq**          | Llama 3.3 70B Versatile, Llama 3.1 8B Instant           |     Yes      |    Yes    |       No        | No              |
+| **Groq**          | GPT-OSS 120B, GPT-OSS 20B, Qwen3.6 27B (Llama 3.3/3.1 deprecated by Groq 2026-08-16) |     Yes      |    Yes    |       No        | No              |
 | **xAI**           | Grok 4, Grok 3                                           |     Yes      |    Yes    |       No        | Yes             |
 | **Ollama**        | Any locally hosted model — see [Local Models Guide](/guides/local-models/) |     Yes      |    Yes    |       Yes       | No              |
 | **LiteLLM**       | 40+ models via LiteLLM proxy                            |     Yes      |    Yes    |       No        | Depends         |
@@ -89,22 +89,25 @@ that provider's endpoint at **runtime**, without predefining
 - a **LiteLLM proxy** running somewhere other than `localhost:4000`
 - any endpoint that needs a **custom auth header** beyond a bearer token
 
-<!-- docs-skip-typecheck -->
 ```typescript
 // llama.cpp server
-const agent = await ReactiveAgents.create()
-  .withProvider("litellm", { baseUrl: "http://localhost:8080/v1" })
-  .withModel("your-local-model")
-  .build();
+{
+  const agent = await ReactiveAgents.create()
+    .withProvider("litellm", { baseUrl: "http://localhost:8080/v1" })
+    .withModel("your-local-model")
+    .build();
+}
 
 // Deepseek — direct via the openai adapter (same OpenAI-compatible dialect)
-const agent = await ReactiveAgents.create()
-  .withProvider("openai", {
-    baseUrl: "https://api.deepseek.com/v1",
-    apiKey: process.env.DEEPSEEK_API_KEY,
-  })
-  .withModel("deepseek-chat")
-  .build();
+{
+  const agent = await ReactiveAgents.create()
+    .withProvider("openai", {
+      baseUrl: "https://api.deepseek.com/v1",
+      apiKey: process.env.DEEPSEEK_API_KEY,
+    })
+    .withModel("deepseek-chat")
+    .build();
+}
 
 // Custom auth header, e.g. an internal proxy requiring an org header
 const agent = await ReactiveAgents.create()

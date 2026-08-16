@@ -50,29 +50,11 @@ const rules: Rule[] = [
   {
     file: "README.md",
     subs: [
-      // "30 packages + 5 apps"
-      {
-        label: "packages + apps inline",
-        pattern: /\d+ packages \+ \d+ apps/,
-        replacement: `${metrics.packagesTotal} packages + ${metrics.apps} apps`,
-      },
-      // "**5,028 tests · 556 files**"
-      {
-        label: "tests · files header",
-        pattern: /\*\*[\d,]+ tests · \d+ files\*\*/,
-        replacement: `**${fmt(metrics.tests)} tests · ${metrics.testFiles} files**`,
-      },
       // "5,028 tests across 556 files" prose
       {
         label: "tests across files prose",
         pattern: /\*\*[\d,]+ tests\*\* across \d+ files/,
         replacement: `**${fmt(metrics.tests)} tests** across ${metrics.testFiles} files`,
-      },
-      // Comparison table row "5,028 tests"
-      {
-        label: "comparison table tests",
-        pattern: /\|\s+[\d,]+ tests\s+\|/,
-        replacement: `|   ${fmt(metrics.tests)} tests   |`,
       },
       // bun test command help "(5,028 tests / 556 files, ~65s)"
       {
@@ -80,9 +62,22 @@ const rules: Rule[] = [
         pattern: /\([\d,]+ tests \/ \d+ files,/,
         replacement: `(${fmt(metrics.tests)} tests / ${metrics.testFiles} files,`,
       },
+      // Hero stats table "| **5,028 tests**             |"
+      {
+        label: "hero stats table tests",
+        pattern: /\| \*\*[\d,]+ tests\*\*\s+\|/,
+        replacement: `| **${fmt(metrics.tests)} tests**             |`,
+      },
     ],
   },
 ];
+
+// Removed 2026-08-16: "packages + apps inline" (headline package count
+// deliberately dropped from the hero — see the "Reframe as architecture"
+// framing decision) and "comparison table tests" (the comparison table was
+// trimmed to defensible structural-differentiator rows only; a raw test-count
+// row read as a bragging metric, not a comparison). Both patterns no longer
+// have a corresponding line in README.md by design, not by drift.
 
 let driftDetected = false;
 

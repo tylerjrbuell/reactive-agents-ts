@@ -3,7 +3,7 @@ title: Reactive Agents
 description: A TypeScript framework for building LLM agents on Effect-TS — typed, observable, and composable, with the same code running on local and frontier models.
 template: splash
 hero:
-    tagline: 'A composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs the full agent loop on a local 4B model or a frontier API, and every step is a typed event you can hook into, inspect, and steer.'
+    tagline: 'A harness you fully control for agent loops that actually finish — on any model, with proof. Transparent (every step is a typed event you can inspect and steer), reliable across model tiers (the same code runs on a local 4B model or a frontier API), composable (opt in one layer at a time), and accountable (every run returns a signed evidence receipt, not just prose).'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -134,25 +134,21 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## New in v0.12
+## New in v0.15
 
-Two headline capabilities just landed: **typed structured output** and **durable crash-resume**.
+Two headline capabilities just landed: **sub-agents inherit your safety constraints** and **dynamic provider config at runtime**.
 
 <div class="ra-v12-cards">
 <CardGrid>
-    <Card title="Typed Structured Output" icon="seti:typescript">
-        Attach any Standard Schema (Zod, Valibot, ArkType, Effect) and read a fully-typed value off the result — no prompt engineering, no manual parsing. Streams field-by-field with `streamObject()`.
+    <Card title="Sub-Agents Inherit Judgment + Safety" icon="approve-check">
+        A delegated sub-agent now runs under the parent's `taskContract`, `fabricationGuard`, `grounding`, and `approvalPolicy` — a true sub-agent, not a rubber-stamped one. A `requiresApproval` tool it calls is refused, not executed unattended.
 
-        `.withOutputSchema(schema)` → typed `result.object`
-
-        [Read the guide →](/guides/structured-output/)
+        [Read the guide →](/guides/sub-agents/)
     </Card>
-    <Card title="Durable Execution" icon="setting">
-        Persist runs to disk and resume a crashed or paused run from its last checkpoint — across process boundaries.
+    <Card title="Dynamic Provider Config" icon="setting">
+        `.withProvider(provider, { baseUrl, apiKey, headers })` now works at runtime for the whole OpenAI-compatible family — point at llama.cpp, Deepseek, or a custom proxy without predefining env vars.
 
-        `.withDurableRuns()` → `agent.resumeRun(runId)`
-
-        [Read the guide →](/guides/durable-execution/)
+        [See What's New →](/guides/whats-new/)
     </Card>
 </CardGrid>
 </div>
@@ -256,6 +252,8 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
   <div class="ra-panel-inner">
 
 ## Why Reactive Agents?
+
+Everything below is evidence for four things: **transparent** (nothing happens off the record), **reliable** (the same code finishes on any model tier), **composable** (you own the loop, nothing runs uninvited), and **accountable** (every run returns proof, not just prose).
 
 <CardGrid stagger>
     <Card title="Type-Safe from End to End" icon="seti:typescript">

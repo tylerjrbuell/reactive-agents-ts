@@ -84,4 +84,4 @@ When synthesis runs, the framework publishes a **`ContextSynthesized`** event on
 
 - [Reasoning guide](/guides/reasoning/) — strategy overview
 - [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions)
-- Design spec: [`wiki/Architecture/Design-Specs/2026-03-28-intelligent-context-synthesis-design.md`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Architecture/Design-Specs/2026-03-28-intelligent-context-synthesis-design.md)
+- Design spec: [`wiki/Architecture/Design-Specs/_archive/2026-03-28-intelligent-context-synthesis-design.md`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Architecture/Design-Specs/_archive/2026-03-28-intelligent-context-synthesis-design.md)

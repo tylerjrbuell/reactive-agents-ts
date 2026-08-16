@@ -59,16 +59,16 @@ You can also gate by predicate instead of (or in addition to) a name list:
 common case if you haven't opted into crash-resume. A gated call is decided
 **in process**, synchronously, with no pause/resume round trip:
 
-<!-- docs-skip-typecheck -->
 ```ts
 const agent = await ReactiveAgents.create()
-  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
-  .withTools({ tools: [/* ... */] })
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
   .withApprovalPolicy({
     tools: ["shell-execution", "file-write"],
     mode: "block",
     onApprove: async ({ toolName, args, iteration }) => {
-      return confirm(`Run ${toolName}(${JSON.stringify(args)})?`);
+      // Your approval UI/logic here — e.g. a Slack prompt, a CLI confirm, a policy check.
+      return true;
     },
   })
   .build();

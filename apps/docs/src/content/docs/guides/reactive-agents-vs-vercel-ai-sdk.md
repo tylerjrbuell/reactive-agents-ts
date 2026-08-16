@@ -24,7 +24,7 @@ They are frequently **complementary, not strictly either/or**. Plenty of teams u
 | Text + structured output | ✅ `.withOutputSchema(zod)` → `result.object` | ✅ `generateObject` / `streamObject` |
 | Tool calling | ✅ + MCP-native | ✅ `tool()` + MCP support |
 | Agent loop / multi-step | ✅ 12-phase deterministic engine | ✅ `ToolLoopAgent`, `stopWhen`, `prepareStep` |
-| Reasoning strategies | ✅ 6 (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action) | — [^1] |
+| Reasoning strategies | ✅ 8 (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action) | — [^1] |
 | Memory (multi-layer) | ✅ 4-layer (working/semantic/episodic/procedural) | — [^1] |
 | Guardrails | ✅ built-in | — [^1] |
 | Cost routing + budgets | ✅ | — [^1] |
@@ -52,7 +52,7 @@ These layers stack cleanly. A very common pattern: **use the AI SDK's `useChat` 
 If your "agent" is one model call plus a short tool loop, the AI SDK's primitives are likely all you need. The harness layer earns its keep when the loop grows up:
 
 - **Deterministic 12-phase execution engine** — every run flows through the same observable phases, with hooks at each boundary, so behavior is inspectable and reproducible rather than ad hoc.
-- **Six reasoning strategies** — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action (experimental) — selectable per agent instead of hand-rolled.
+- **Eight reasoning strategies** — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, and Code-Action (experimental) — selectable per agent instead of hand-rolled.
 - **Four-layer memory** — working, semantic, episodic, and procedural memory as a first-class subsystem.
 - **Guardrails** — input/output validation and policy enforcement built into the loop.
 - **Cost routing + budgets** — route to cheaper models and enforce spend ceilings.

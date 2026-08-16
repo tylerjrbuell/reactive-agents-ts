@@ -26,7 +26,7 @@ Neither is strictly "better" — they sit at different altitudes. The SDK is the
 | Local models | First-class — same code on 4B Ollama and frontier | Generally not a goal |
 | Type model | Typed effect runtime (errors as values, structured concurrency) | Idiomatic SDK types |
 | Execution model | Deterministic 12-phase engine + per-phase hooks | The SDK's loop |
-| Reasoning strategies | 7 (ReAct, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action, Blueprint) | The SDK's loop |
+| Reasoning strategies | 8 (ReAct, Blueprint, Reflexion, Plan-Execute, ToT, Adaptive, Direct, Code-Action) | The SDK's loop |
 | Tools | MCP-native + typed builder | Vendor tools (+ MCP on some) |
 | Guardrails / cost routing / budgets | Built in | Bring your own |
 | Durable execution + crash-resume | Built in | Bring your own |

@@ -8,9 +8,9 @@ sidebar:
   order: 22
 ---
 
-Both Reactive Agents and [Mastra](https://mastra.ai) are TypeScript-first frameworks for building AI agents, and both are genuinely good. The core difference is one of emphasis: Reactive Agents leans on **Effect-TS for end-to-end, compile-time type safety**, plus **reasoning-strategy depth** and **local-to-frontier model parity**; Mastra leans on **batteries-included DX** — a mature graph workflow engine, a polished local studio, a broad RAG/vector ecosystem, and a hosted cloud story. If you want maximum type rigor and pluggable reasoning, read on. If you want the fastest path from zero to a running, well-tooled agent app, Mastra is a strong default and we say so plainly below.
+Both Reactive Agents and [Mastra](https://mastra.ai) are TypeScript-first frameworks for building AI agents, and both are genuinely good. The core difference is one of emphasis: Reactive Agents is a **transparent, typed harness** — Effect-TS end-to-end, reasoning-strategy depth, and local-to-frontier model parity, with every run returning a checkable receipt instead of just prose; Mastra leans on **batteries-included DX** — a mature graph workflow engine, a polished local studio, a broad RAG/vector ecosystem, and a hosted cloud story. If you want maximum type rigor and pluggable reasoning, read on. If you want the fastest path from zero to a running, well-tooled agent app, Mastra is a strong default and we say so plainly below.
 
-> Mastra moves fast. Details below were verified against [mastra.ai](https://mastra.ai) and its docs as of June 2026; if something is out of date, corrections are welcome via PR.
+> Mastra moves fast. Details below were verified against [mastra.ai](https://mastra.ai) and its docs as of August 2026; if something is out of date, corrections are welcome via PR.
 
 ## At a glance
 
@@ -19,7 +19,7 @@ Both Reactive Agents and [Mastra](https://mastra.ai) are TypeScript-first framew
 | Language | TypeScript on Effect-TS | TypeScript (Vercel AI SDK lineage) |
 | Type model | End-to-end typed: schema-validated boundaries, tagged errors, typed effects | Strong TypeScript types; standard async/throw error handling |
 | Agent definition | `ReactiveAgents.create().withProvider(...).build()` | `new Agent({ id, name, instructions, model })` |
-| Reasoning strategies | 6 pluggable (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action) | Single tool-calling agent loop; multi-step logic via the workflow engine |
+| Reasoning strategies | 8 pluggable (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action) | Single tool-calling agent loop; multi-step logic via the workflow engine |
 | Workflow engine | 12-phase execution engine with per-phase hooks | Graph workflows (`.then()`, `.branch()`, `.parallel()`) |
 | RAG / vector stores | Via tools + memory; bring your own store | First-party RAG pipeline (chunk, embed, store, rerank) across many vector DBs |
 | Memory | 4 layers (working / semantic / episodic / procedural) | Conversation history, semantic recall, working + observational memory |
@@ -46,7 +46,7 @@ Mastra is also written in TypeScript with strong types, but it follows conventio
 
 ### Reasoning strategies
 
-Reactive Agents ships **six pluggable reasoning strategies** — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action (experimental) — selectable per agent, plus an Adaptive strategy that switches based on the task. The reasoning loop is a 12-phase deterministic engine with `before`/`after`/`on-error` hooks at every phase.
+Reactive Agents ships **eight pluggable reasoning strategies** — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, and Code-Action (experimental) — selectable per agent, plus an Adaptive strategy that switches based on the task. The reasoning loop is a 12-phase deterministic engine with `before`/`after`/`on-error` hooks at every phase.
 
 Mastra's agent is a **single tool-calling loop** that iterates until the model emits a final answer or a stop condition is met. For multi-step or branching logic, Mastra steers you to its **graph workflow engine** (`.then()`, `.branch()`, `.parallel()`), which is mature and explicit. So both can do multi-step work — Reactive Agents expresses it as swappable reasoning policies inside the agent; Mastra expresses it as an explicit workflow graph around the agent.
 
@@ -134,10 +134,10 @@ Mastra is the better fit when:
 Reactive Agents is the better fit when:
 
 - **End-to-end type safety matters.** Effect-TS gives schema-validated boundaries, tagged errors in the type signature, and typed effects — the compiler catches wiring mistakes before runtime.
-- **You want pluggable reasoning.** Six strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action) selectable per agent, on a 12-phase engine with per-phase hooks.
+- **You want pluggable reasoning.** Eight strategies (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action) selectable per agent, on a 12-phase engine with per-phase hooks.
 - **Local-to-frontier parity is a requirement.** The same code runs on a 4B Ollama model and on Claude/GPT/Gemini, with 4-tier context profiles tuned to make small local models reliable.
 - **You need durable execution and HITL as agent primitives.** Crash-resume runs plus `.withApprovalPolicy()` approval gates, persisted across restarts.
-- **You like composable, opt-in layers.** Memory, guardrails (injection/PII/toxicity), cost routing + budgets, structured output, and OpenTelemetry observability are `.with*()` additions you turn on only when you need them. MIT-licensed, 33 packages, Bun + Node.js 22.5+.
+- **You like composable, opt-in layers.** Memory, guardrails (injection/PII/toxicity), cost routing + budgets, structured output, and OpenTelemetry observability are `.with*()` additions you turn on only when you need them. MIT-licensed, 34 packages, Bun + Node.js 22.5+.
 
 ---
 
