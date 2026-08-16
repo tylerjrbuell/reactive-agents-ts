@@ -549,3 +549,83 @@ describe("extractObservationFacts", () => {
     expect(result).toBeUndefined();
   });
 });
+
+// ── #58: a tool result that fails JSON.stringify fails loudly, at the point
+// of cause, naming the tool — not silently (undefined) or generically
+// (uncaught circular-structure TypeError) downstream.
+
+describe("non-JSON-serializable tool results (#58)", () => {
+  it("executeToolCall: undefined result fails with a message naming the tool", async () => {
+    const mockToolService: MaybeService<ToolServiceInstance> = {
+      _tag: "Some",
+      value: {
+        execute: (_input) => Effect.succeed({ result: undefined, success: true }),
+        getTool: (_name) => Effect.succeed({ parameters: [] }),
+      },
+    };
+
+    const result = await Effect.runPromise(
+      executeToolCall(mockToolService, { tool: "bad-tool", input: "{}" }, {}),
+    );
+    expect(result.observationResult.success).toBe(false);
+    expect(result.content).toContain("bad-tool");
+    expect(result.content).toContain("undefined");
+  });
+
+  it("executeToolCall: circular-reference result fails with a message naming the tool, not an uncaught throw", async () => {
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    const mockToolService: MaybeService<ToolServiceInstance> = {
+      _tag: "Some",
+      value: {
+        execute: (_input) => Effect.succeed({ result: circular, success: true }),
+        getTool: (_name) => Effect.succeed({ parameters: [] }),
+      },
+    };
+
+    const result = await Effect.runPromise(
+      executeToolCall(mockToolService, { tool: "circular-tool", input: "{}" }, {}),
+    );
+    expect(result.observationResult.success).toBe(false);
+    expect(result.content).toContain("circular-tool");
+  });
+
+  it("executeNativeToolCall: undefined result fails with a message naming the tool", async () => {
+    const mockToolService: ToolServiceInstance = {
+      execute: (_input) => Effect.succeed({ result: undefined, success: true }),
+      getTool: (_name) => Effect.succeed({ parameters: [] }),
+    };
+
+    const result = await Effect.runPromise(
+      executeNativeToolCall(
+        mockToolService,
+        { id: "call-1", name: "bad-tool", arguments: {} },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("bad-tool");
+    expect(result.content).toContain("undefined");
+  });
+
+  it("executeNativeToolCall: circular-reference result fails with a message naming the tool, not an uncaught throw", async () => {
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    const mockToolService: ToolServiceInstance = {
+      execute: (_input) => Effect.succeed({ result: circular, success: true }),
+      getTool: (_name) => Effect.succeed({ parameters: [] }),
+    };
+
+    const result = await Effect.runPromise(
+      executeNativeToolCall(
+        mockToolService,
+        { id: "call-1", name: "circular-tool", arguments: {} },
+        "reasoning-agent",
+        "reasoning-session",
+      ),
+    );
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("circular-tool");
+  });
+});

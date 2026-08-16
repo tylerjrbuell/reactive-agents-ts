@@ -13,6 +13,7 @@ import {
 import { getEffectiveMissingRequiredTools } from "../../../kernel/capabilities/verify/requirement-state.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
 import { scratchpadRecallRefRe } from "../../../assembly/ref-grammar.js";
+import { resolveScratchpadValue } from "@reactive-agents/tools";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 export const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
@@ -54,7 +55,8 @@ export function resolveStoredToolObservation(
   if (keys.length === 0) return content;
   const payloads = keys
     .map((k) => scratchpad.get(k))
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .map(resolveScratchpadValue);
   if (payloads.length === 0) return content;
   return payloads.join("\n\n---\n\n");
 }

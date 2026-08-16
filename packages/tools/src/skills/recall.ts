@@ -1,6 +1,7 @@
 import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { resolveScratchpadValue } from "../scratchpad-spill.js";
 
 export interface RecallConfig {
   previewLength?: number;
@@ -106,7 +107,8 @@ export const makeRecallHandler =
         if (terms.length === 0) return { query, matches: [], totalMatches: 0 };
 
         const matches = [...store.entries()]
-          .map(([k, v]) => {
+          .map(([k, raw]) => {
+            const v = resolveScratchpadValue(raw);
             const lower = v.toLowerCase();
             let score = 0;
             for (const term of terms) {
@@ -124,8 +126,9 @@ export const makeRecallHandler =
 
       // ── Read mode
       if (key !== undefined) {
-        const value = store.get(key);
-        if (value === undefined) return { found: false, key };
+        const rawValue = store.get(key);
+        if (rawValue === undefined) return { found: false, key };
+        const value = resolveScratchpadValue(rawValue);
 
         // JSON array slice mode for large structured payloads
         if (arrayStart !== undefined) {

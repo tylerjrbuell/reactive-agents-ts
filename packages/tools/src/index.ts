@@ -45,6 +45,13 @@ export type { RegisteredTool } from "./registry/tool-registry.js";
 // ─── MCP Client ───
 export { makeMCPClient, cleanupMcpTransport, buildMcpSubprocessEnv } from "./mcp/mcp-client.js";
 
+// ─── Scratchpad spill (#47) ───
+export {
+  setScratchpadBounded,
+  resolveScratchpadValue,
+  DEFAULT_SCRATCHPAD_SPILL_THRESHOLD_BYTES,
+} from "./scratchpad-spill.js";
+
 // ─── Function Calling ───
 export {
   adaptFunction,

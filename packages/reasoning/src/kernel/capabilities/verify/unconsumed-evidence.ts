@@ -1,4 +1,5 @@
 import type { ReasoningStep } from "../../../types/index.js";
+import { resolveScratchpadValue } from "@reactive-agents/tools";
 
 /**
  * Shared, canonical scan for the "unconsumed stored evidence" signal
@@ -47,7 +48,8 @@ export function resolveUnconsumedEvidence(
   if (keys.length === 0) return null;
   const payloads = keys
     .map((k) => scratchpad.get(k))
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .map(resolveScratchpadValue);
   if (payloads.length === 0) return null;
   return payloads.join("\n\n---\n\n");
 }
