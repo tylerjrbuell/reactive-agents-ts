@@ -252,12 +252,7 @@ export const executeCodeAction = (
       // threw away both the recovery chance AND the tokens already spent
       // (probe p7 2026-07-11: one syntax error ⇒ run failed with
       // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
-      const sandboxExit = yield* Effect.either(
-        Effect.tryPromise({
-          try: () => runInSandbox(generatedCode, toolHandlers),
-          catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-        }),
-      );
+      const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers));
 
       if (sandboxExit._tag === "Left") {
         lastSandboxError = sandboxExit.left.message;

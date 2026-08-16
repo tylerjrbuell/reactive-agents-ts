@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { Effect } from "effect";
 import { buildToolParamNames } from "./tool-binding.js";
 
 export interface ToolCallRecord {
@@ -31,18 +32,44 @@ interface WorkerToolCallMessage {
 
 type WorkerMessage = WorkerDoneMessage | WorkerErrorMessage | WorkerToolCallMessage;
 
-export async function runInSandbox(
+/**
+ * Run generated code in a `node:worker_threads` sandbox, dispatching its
+ * `tool-call` messages through `toolHandlers` (each closure captures the
+ * live `ToolService` directly — the runtime execute call, not the sandboxed
+ * code, decides what a tool actually does).
+ *
+ * Returns an `Effect` (not a bare `Promise`) specifically so the Worker's
+ * lifecycle is tied to Effect's own interruption: the `Effect.async`
+ * register callback below returns a finalizer that terminates the Worker
+ * when the calling fiber is interrupted (run cancelled, kill switch,
+ * timeout race lost elsewhere). Before this, `code-action.ts` wrapped a
+ * plain `Promise`-returning version with `Effect.tryPromise` — interruption
+ * abandoned AWAITING the promise, but the Worker itself (a real OS thread)
+ * and whatever tool call it had in flight kept running unsupervised,
+ * potentially completing a side-effecting tool (`shell-execute`,
+ * `file-write`) after the run was supposed to have stopped (#35).
+ *
+ * Residual limitation, not fixed here: a tool call already mid-execution
+ * (inside a `toolHandlers` closure's own `Effect.runPromise`, dispatched
+ * from the Worker's `"message"` listener — itself outside any Effect fiber)
+ * is not itself interrupted by terminating the Worker. It may still finish
+ * in the background; its result is simply discarded, since nothing is
+ * listening for the Worker's messages anymore. True cancellation of an
+ * in-flight tool call would need an interrupt signal threaded into
+ * `ToolService.execute` itself — cross-cutting beyond this sandbox.
+ */
+export function runInSandbox(
   code: string,
   toolHandlers: Map<string, (args: unknown) => Promise<unknown>>,
   timeoutMs = 30_000,
-): Promise<SandboxResult> {
-  return new Promise((resolve, reject) => {
+): Effect.Effect<SandboxResult, Error> {
+  return Effect.async<SandboxResult, Error>((resume) => {
     const worker = new Worker(new URL("./sandbox-worker.ts", import.meta.url));
     const toolCalls: ToolCallRecord[] = [];
 
     const killTimer = setTimeout(() => {
       void worker.terminate();
-      reject(new Error(`code-action sandbox timed out after ${timeoutMs}ms`));
+      resume(Effect.fail(new Error(`code-action sandbox timed out after ${timeoutMs}ms`)));
     }, timeoutMs);
 
     worker.on("message", async (msg: WorkerMessage) => {
@@ -73,20 +100,20 @@ export async function runInSandbox(
       if (msg.type === "done") {
         clearTimeout(killTimer);
         await worker.terminate();
-        resolve({ finalResult: msg.result, toolCalls });
+        resume(Effect.succeed({ finalResult: msg.result, toolCalls }));
         return;
       }
 
       if (msg.type === "error") {
         clearTimeout(killTimer);
         await worker.terminate();
-        reject(new Error(msg.message));
+        resume(Effect.fail(new Error(msg.message)));
       }
     });
 
     worker.on("error", (err) => {
       clearTimeout(killTimer);
-      reject(err);
+      resume(Effect.fail(err instanceof Error ? err : new Error(String(err))));
     });
 
     const toolNames = Array.from(toolHandlers.keys());
@@ -99,6 +126,15 @@ export async function runInSandbox(
       // invalid JS identifiers) while dispatching under the ORIGINAL names.
       // Computed host-side so the worker needs no imports.
       paramNames: buildToolParamNames(toolNames),
+    });
+
+    // Interrupt finalizer: fiber interruption (run cancelled, kill switch,
+    // Effect.race loss) runs this instead of resume() — terminates the
+    // Worker so the sandboxed code and the OS thread it runs on actually
+    // stop, rather than continuing unsupervised in the background.
+    return Effect.sync(() => {
+      clearTimeout(killTimer);
+      void worker.terminate();
     });
   });
 }

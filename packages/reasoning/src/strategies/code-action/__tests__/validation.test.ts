@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { Effect } from "effect";
 import { runInSandbox } from "../sandbox.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ describe("CodeAgentStrategy validation suite (10 tasks, offline)", () => {
 
   for (const task of tasks) {
     it(`Task ${task.id}: ${task.name}`, async () => {
-      const result = await runInSandbox(task.codeActionCode, task.toolHandlers);
+      const result = await Effect.runPromise(runInSandbox(task.codeActionCode, task.toolHandlers));
       expect(task.validate(result.finalResult)).toBe(true);
 
       // Token estimate: code length as rough proxy (1 char ≈ 0.25 tokens)
