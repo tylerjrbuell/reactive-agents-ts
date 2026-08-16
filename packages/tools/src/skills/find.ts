@@ -27,7 +27,7 @@ export const findTool: ToolDefinition = {
     "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. " +
     "scope 'documents': search only files/documents loaded with .withDocuments(). " +
     "scope 'web': search the internet directly. " +
-    "scope 'memory': search your bootstrapped semantic memory. " +
+    "scope 'memory': search ingested/remembered content — bootstrapped semantic memory plus anything loaded via .withDocuments() or agent.ingest(). " +
     "scope 'all': search every source and merge results. " +
     "Large result sets are automatically stored in recall — check recall() to retrieve them.",
   parameters: [
@@ -79,7 +79,17 @@ export const makeFindHandler =
       }> = [];
 
       // ── Documents (RAG) search
-      const shouldSearchDocs = scope === "auto" || scope === "documents" || scope === "all";
+      // `scope: "memory"` is included here (not just "auto"/"documents"/"all")
+      // because `agent.ingest()` itself labels ingested content with a
+      // `source` of "memory" by convention (see DocumentSpec usage), and the
+      // bootstrapped-semantic-context branch below is a DIFFERENT, unrelated
+      // store that's empty for any fresh agent using only .withDocuments()/
+      // .ingest(). Without this, a query like "what's in your memory?" — a
+      // reasonable model choice for scope given this tool's own description
+      // — dead-ends with zero results and zero fallback, even though the
+      // ingested content is sitting right there under scope "documents".
+      const shouldSearchDocs =
+        scope === "auto" || scope === "documents" || scope === "memory" || scope === "all";
       if (shouldSearchDocs && state.ragStore.size > 0) {
         sourcesSearched.push("documents");
         const searchCallback = makeInMemorySearchCallback(state.ragStore);
