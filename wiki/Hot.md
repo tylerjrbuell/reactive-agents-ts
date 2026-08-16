@@ -10,6 +10,20 @@ updated: 2026-08-16
 
 ---
 
+## 2026-08-16 — code-action-worker-interruption bundle
+
+Closed #35 (real, current bug — not stale): `code-action`'s sandbox Worker
+kept running unsupervised after the run's fiber was interrupted, since
+`runInSandbox` wrapped a bare `Promise` via `Effect.tryPromise`. Now returns
+an `Effect.async` with an interrupt finalizer that terminates the Worker.
+Regression test proves it behaviorally (RED-confirmed against pre-fix code).
+Residual, documented limitation: an already-in-flight tool call itself isn't
+interrupted, only the Worker stops making further progress. Skill amended
+(v14): fiber-interruption regression tests must keep fork+wait+interrupt in
+one `Effect.gen`, or the fork's own ephemeral scope self-interrupts the
+child before the test can observe it. Retro:
+[[Research/Debriefs/2026-08-16-code-action-worker-interruption-execution-debrief]].
+
 ## 2026-08-16 — replay-determinism-revalidation bundle
 
 Closed #30 + #53. #30 turned out already-shipped (PR #196/#197, never closed

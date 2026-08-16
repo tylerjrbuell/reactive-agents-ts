@@ -13,6 +13,24 @@
 
 ## Projects — Aug 2026
 
+**2026-08-16: `bundle/code-action-worker-interruption` shipped — #35 closed (`c010a50e`).**
+`/execute-backlog` (highest-leverage pick from the observability scan). Real, current bug, not stale:
+`code-action`'s sandbox `runInSandbox` (`packages/reasoning/src/strategies/code-action/sandbox.ts`)
+spawned a real `node:worker_threads` Worker and returned a bare `Promise`; `code-action.ts` wrapped it
+with `Effect.tryPromise`, which respects fiber interruption for AWAITING the promise but can't cancel
+the Promise itself — so an interrupted/killed run left the Worker (and any in-flight tool call it had
+dispatched, e.g. `shell-execute`/`file-write`) running unsupervised to completion. Fixed:
+`runInSandbox` now returns `Effect.async<SandboxResult, Error>` whose interrupt finalizer terminates
+the Worker. New behavioral regression test (not a mock) proves it: sandboxed code calls a "started"
+tool, sleeps 800ms, calls "finished"; fiber interrupted mid-sleep, asserts "finished" never fires.
+RED-confirmed via `git stash` against the old Promise-based signature. Residual, documented limitation:
+an already-in-flight tool call itself isn't interrupted (only the Worker stops), since that needs a
+signal threaded into `ToolService.execute` — cross-cutting, out of scope. Skill amended (v14): fiber-
+interruption regression tests must keep fork+wait+interrupt in ONE `Effect.gen` — a bare
+`Effect.runPromise(Effect.fork(effect))`'s ephemeral scope self-interrupts the child immediately.
+Merged to local main (hold-until-tag). Retro:
+`wiki/Research/Debriefs/2026-08-16-code-action-worker-interruption-execution-debrief.md`.
+
 **2026-08-16: `bundle/replay-determinism-revalidation` shipped — #30/#53 closed, no code change.**
 `/execute-backlog labels=area:observability`. #30 (replay E2E determinism test) turned out already
 shipped via PR #196/#197 (merged to `origin/main` before this session, never closed against the work) —
