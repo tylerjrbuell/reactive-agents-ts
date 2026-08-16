@@ -10,6 +10,21 @@ updated: 2026-08-16
 
 ---
 
+## 2026-08-16 — health sweep (pre-release cleanliness pass)
+
+User asked for a DX/cleanliness pass before v0.15.0. 4 parallel scan agents
+found a real correctness bug in earlier-this-session code (HS-224: 3 of 5
+scratchpad-spill read sites bypassed marker resolution — the grounding guard
+could inject the raw `[SPILLED_TO_DISK:...]` marker into the model's evidence
+prompt), 2 crash-instead-of-degrade robustness fixes (HS-225/226), and a
+dead-export deletion + DX doc/error-suggestion gap. A reported P0 ("tool
+validation doesn't fire on the real path") turned out FALSE on independent
+repro — registration is lazy (fires at `run()`, not `build()`), and it
+correctly throws. Filed as a finding-shape for future sweeps rather than
+fixed. Full findings:
+[[Issues/Running Issues Log#Health Sweep — 2026-08-16 (v0.15.0 release-prep)]].
+Debrief: [[Research/Debriefs/2026-08-16-health-sweep-debrief]].
+
 ## 2026-08-16 — code-action-worker-interruption bundle
 
 Closed #35 (real, current bug — not stale): `code-action`'s sandbox Worker

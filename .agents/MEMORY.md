@@ -8,10 +8,27 @@
 **Last commit:** `a42e2490` "docs(debt): catalog 2026-07-30 harness-improvement hunt — K✅ (observability gaps) + L (open) + memory sync". Active thread = the **harness-improvement-loop** (`/harness-improvement-loop` skill): a 2026-07-29 systems audit found 8 root causes; as of today most are shipped (TE-1, EH-1, RC7, CT-4/CT-5 partial, ctx-window-divergence, 3 observability gaps K); **D-2026-07-30-L catalog is still open** (`wiki/Architecture/DEBT-REGISTER.md` §5) — read that file for exact open items before starting new harness work, do not re-derive from old audit text.
 **Canonical docs, priority order:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) > `Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified). **Canonical debt ledger = `wiki/Architecture/DEBT-REGISTER.md`** — verdict taxonomy (PROVEN/SILENT/ORPHAN/INERT/FALSE), §1 ratchet counts only go down. Do not write a new north-star doc — amend 09.
 **Stale references confirmed dead:** `AUDIT-overhaul-2026.md` (cited in the old "Architecture debt" section below and in prior memory) **no longer exists anywhere in the repo** — superseded by DEBT-REGISTER.md. `wiki/Architecture/Specs/04-PROJECT-STATE.md` and `05-DESIGN-NORTH-STAR.md` still exist on disk but are superseded by 09/08 per the priority order above — check before trusting either as current.
-**Verified 2026-08-16 (v0.15.0 release-prep pass, post tools-result-handling bundle):** test suite = **8,902 pass / 0 fail / 26 skip / 4 todo / 1,157 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages); local `main` is now **359 commits ahead of `origin/main`, 0 behind** (not tagged yet — v0.15.0 still in release-prep). memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable), all green. Structured-output/durable-execution/HITL still live (not re-run, carried).
+**Verified 2026-08-16 (v0.15.0 release-prep pass, post health-sweep):** test suite = **8,905 pass / 0 fail / 26 skip / 4 todo / 1,157 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages, 12 changesets); local `main` is now **368+ commits ahead of `origin/main`, 0 behind** (not tagged yet — v0.15.0 still in release-prep). memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable), all green. Structured-output/durable-execution/HITL still live (not re-run, carried).
 **Repo-workflow reminder (re-confirmed 2026-08-16):** this repo holds unreleased work on local `main`, unpushed, until a release/tag event — do NOT assume `origin/main` reflects current state, and do NOT open a GitHub PR against `origin/main` for interim work (it'll show every unpushed commit as part of the diff). Merge feature/bundle branches to local `main` directly instead; push happens at tag time.
 
 ## Projects — Aug 2026
+
+**2026-08-16: Health sweep (pre-release) — HS-224..228 fixed, HS-229..232 filed, 1 false P0.**
+User-requested DX/cleanliness pass before v0.15.0. 4 parallel scan agents. **Real correctness bug in
+this session's own earlier work:** HS-224 — scratchpad-spill's `resolveScratchpadValue` was wired into
+only 2 of 5 real read sites; `unconsumedEvidenceGuard` (act/guard.ts), `arbitrator.ts`'s grounding
+corpus, and `assembly/from-kernel-state.ts`'s ResultStore hydration all bypassed it, so
+`unconsumedEvidenceGuard` could inject the literal `[SPILLED_TO_DISK:...]` marker into the model-facing
+grounding prompt once the 5MB threshold triggered — RED-confirmed via `git stash`. HS-225/226: unguarded
+sync fs I/O in `setScratchpadBounded` (Effect defect on ENOSPC/EACCES) and an unhandled-promise-rejection
+race in code-action's Worker message listener — both now degrade instead of crash. HS-227/228: DX doc
+gap + dead export. **A reported P0 turned out FALSE**: "tool-definition validation doesn't fire on the
+real `.withTools()` path" — independent repro (not trusting the sub-agent's script) showed registration
+is lazy (fires at `run()`, not `build()`) and throws correctly with the right message; the sub-agent's
+own repro had a bug. Filed as a finding-shape in the Issues Log so future sweeps don't rediscover it —
+**lesson: independently verify a sub-agent's highest-severity finding before triaging it as the top
+priority.** Merged to local main (`a67cd20d`). Suite 8905/0 fail (+2). Retro:
+`wiki/Research/Debriefs/2026-08-16-health-sweep-debrief.md`.
 
 **2026-08-16: `bundle/code-action-worker-interruption` shipped — #35 closed (`c010a50e`).**
 `/execute-backlog` (highest-leverage pick from the observability scan). Real, current bug, not stale:

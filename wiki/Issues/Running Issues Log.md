@@ -581,3 +581,36 @@ At that point, we expect to see:
 | HS-221 | P2 | Tagged error classes for pricing.ts and structured-output/pipeline.ts — untyped throws in domain logic. |
 | HS-222 | P2 | 5 console.warn/error sites that should use Effect.log*. |
 | HS-223 | P2 | Testing mock `as any` (4 sites in packages/testing/src/mocks/) — test-double boundary casts. Proper fix: typed partial mock helpers matching full service interfaces. Same pattern as reasoning/src/testing/tool-service-mock.ts solution. |
+
+## Health Sweep — 2026-08-16 (v0.15.0 release-prep)
+
+**Baseline:** Build 37/37 GREEN. Tests 8903 pass / 0 fail / 1157 files (post tools-result-handling + code-action-worker-interruption bundles, same session).
+**Final:** Build 37/37 GREEN. Tests 8905 pass / 0 fail / 1157 files (+2, 0 regressions). One `packages/health` port-binding test flake seen mid-sweep, confirmed pre-existing via isolation rerun + clean full-suite rerun (workspace-test-flake protocol).
+
+Scope: 4 parallel scan agents (type safety, bug patterns, dead code/inefficiency, test coverage + DX pain points), triggered by user request for a pre-release DX/cleanliness pass. Cross-checked against HS-207–223 (2026-08-06/07 sweeps) first — none re-filed; HS-211/HS-213 confirmed resolved (not re-opened, noted for log cleanup).
+
+### FIXED this sweep
+
+| ID | Severity | File(s) | Description |
+|----|----------|---------|-------------|
+| HS-224 | P1 | `guard.ts`, `arbitrator.ts`, `assembly/from-kernel-state.ts` | Today's earlier scratchpad-spill feature (`packages/tools/src/scratchpad-spill.ts`) wired `resolveScratchpadValue` into only 2 of 5 real read sites. The other 3 would silently inject/use the raw `[SPILLED_TO_DISK:...]` marker string instead of real content once the spill threshold triggers — `unconsumedEvidenceGuard` literally injects it into the model-facing grounding prompt. RED-confirmed via `git stash` on the pre-fix guard.ts. |
+| HS-225 | P1 | `packages/tools/src/scratchpad-spill.ts` | `setScratchpadBounded`'s `mkdirSync`/`writeFileSync` unguarded, called from synchronous `Effect.map` callbacks (not `Effect.try`) — a disk failure became an unstructured Effect defect, crashing the whole tool-execution fiber. Now degrades to in-memory storage on write failure. |
+| HS-226 | P1 | `packages/reasoning/src/strategies/code-action/sandbox.ts` | Worker `"message"` listener is an unawaited Node EventEmitter callback — a `postMessage`/`terminate()` racing a prior termination threw, becoming an unhandled promise rejection. Added a `terminated` flag + safe wrappers. |
+| HS-227 | P2 | `packages/runtime/src/errors.ts`, `apps/docs/.../builder-api.md` | `ToolDefinitionError` wasn't in `KNOWN_TAGS` (fell through to the generic "Unexpected error" suggestion instead of naming the tool + field), and the `.withTools()` docs never mentioned registration-time validation exists at all. |
+| HS-228 | P2 | `packages/reasoning/src/kernel/loop/runner-helpers/deliverable.ts` | Dead export `collectDeliverableArtifacts` — zero callers anywhere in the monorepo, superseded by `collectValidatedObservations`. Pure deletion. |
+
+### Investigated, NOT a bug (false positive, documented for future sweeps)
+
+| Claim | Why it looked real | What was actually true |
+|-------|--------------------|-----------------------|
+| P0: registration-time tool-definition validation (#57 fix, shipped earlier same session) doesn't fire on the real `.withTools({tools:[...]})` → `.build()` → `.run()` path — a malformed tool registers and executes silently | A sub-agent's repro showed `.build()` succeeding with no error and the tool executing successfully | Registration is **lazy** — it happens on first actual use inside `run()`, not at `.build()`. Reproduced directly (own script, not trusting the sub-agent's exact repro): `.build()` succeeds (correct — nothing has tried to use the tool yet), `.run()` throws the exact `ToolDefinitionError` message naming the tool and missing field. The sub-agent's specific repro script likely didn't actually call `run()` correctly or swallowed the throw. **Lesson: verify a sub-agent's P0 finding with your own independent repro before triaging it as real, especially before treating it as the top-priority fix** — this one would have burned significant effort chasing a phantom "runtime silently swallows layer-construction defects" bug that doesn't exist. |
+
+### FILED for planning (not fixed this sweep)
+
+| ID | Severity | Description |
+|----|----------|-------------|
+| HS-229 | P2 | `packages/reasoning/src/strategies/blueprint/plan-verify.ts:51-90` — hand-rolled Levenshtein edit-distance tool-name healer duplicates `packages/tools/src/healing/edit-distance.ts` + `tool-name-healer.ts`, which `packages/reasoning` already depends on and uses elsewhere. `tool-registry.ts`'s own comment already calls this out. |
+| HS-230 | P2 | `packages/reasoning/src/kernel/capabilities/verify/unconsumed-evidence.ts`'s `findUnconsumedStoredKeys` — unmemoized O(N) scan over `state.steps`, called from 5+ distinct sites that can all fire within one decide/verify pass. Grows with run length; no caching. |
+| HS-231 | P2 | `packages/tools/src/scratchpad-spill.ts`'s `resolveScratchpadValue` — synchronous `existsSync`/`readFileSync`, invoked from the kernel decide/verify hot path. Only triggers once the 5MB spill threshold is crossed (rare), but blocking when it does. |
+| HS-232 | P2 | `packages/runtime/src/errors.ts`'s `unwrapErrorWithSuggestion` is exported but has zero internal callers — `agent.run()`/`runStream()` call the plain `unwrapError` (no suggestion) at all 3 call sites. The HS-227 fix's `errorContext` suggestion is only reachable if a caller explicitly imports and calls `unwrapErrorWithSuggestion`. Worth a design decision: wire it into `run()`'s catch path, or document it as opt-in tooling. |
+| — | — | HS-211 (`replaySSE` missing catch) and HS-213 (`a2a/streaming.ts` dead poll loop) confirmed **resolved** since the 08-06/07 sweeps — `journal.ts:132-152` now has a full try/catch, and `a2a/streaming.ts` no longer exists in the tree. Not re-opened; flagging for whoever next touches this log to mark them closed in a future pass. |
