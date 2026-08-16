@@ -2632,6 +2632,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 sessionPersist,
                 sessionMaxAgeDays,
                 ragStore,
+                kernelMetaTools: kernelMetaTools
+                    ? (kernelMetaTools as {
+                          find?: boolean
+                          staticBriefInfo?: {
+                              indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>
+                          }
+                      })
+                    : undefined,
                 channelsConfig: self._channelsConfig,
                 capabilities: {
                     minIterations: self._minIterations,

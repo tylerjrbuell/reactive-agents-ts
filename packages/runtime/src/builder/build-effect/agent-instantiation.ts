@@ -84,6 +84,19 @@ export interface AgentInstantiationDeps {
    * Exposed on `ReactiveAgent.config` for tests + diagnostics.
    */
   readonly runtimeConfig?: Record<string, unknown>;
+  /**
+   * Mutable `kernelMetaTools` reference (read per-run, not a build-time
+   * snapshot). Forwarded so `ReactiveAgent.ingest()` can flip `find` on and
+   * backfill `staticBriefInfo.indexedDocuments` at runtime the same way
+   * `.withDocuments()` does at build time (`builder/build-effect/rag-ingestion.ts`,
+   * `runtime-construction.ts`).
+   */
+  readonly kernelMetaTools?: {
+    find?: boolean;
+    staticBriefInfo?: {
+      indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>;
+    };
+  };
 }
 
 /**
@@ -138,5 +151,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.outputSchemaConfig,
     deps.enableTools,
     deps.runtimeConfig ?? {},
+    deps.kernelMetaTools,
   );
 };
