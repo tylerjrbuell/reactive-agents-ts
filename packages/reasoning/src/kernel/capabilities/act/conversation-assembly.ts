@@ -187,8 +187,10 @@ export function assembleConversation(args: {
     return { messages: baseMessages, actReminder: progressContent, errorRecovery: undefined, completionNudgeSent: false };
   }
 
-  // All required tools called — tell model to finish (but not while previews still hide data behind recall).
-  // Only send this nudge ONCE per run to avoid contradictory repeated messages.
+  // Required tools called (or, absent any tools contract, at least one tool
+  // was used) — tell the model it may finish, but not while previews still
+  // hide data behind recall. Only send this nudge ONCE per run to avoid
+  // contradictory repeated messages.
   //
   // Sequential mode (all quantities ≤ 1): the "satisfied" condition only means each
   // tool was called once — a weak signal, so this branch used to say NOTHING at
@@ -204,7 +206,20 @@ export function assembleConversation(args: {
   // outright. Unlike the multi-quantity nudge below, this one is informational
   // ("you may finish"), not mandatory ("FINAL ANSWER now") — it still leaves
   // the model free to keep researching.
-  if (reqTools.length > 0) {
+  //
+  // No-tools-contract extension (2026-08-16): a plain `agent.run()` call with
+  // no declared `requiredTools` used to get NO nudge at all — reqTools.length
+  // was 0, so this whole block was skipped regardless of tool use. Live QA
+  // repro: gemma4:e4b, `.run('Whats the price of XRP and bitcoin?')` (no
+  // tools contract), called crypto-price, got real data, then stopped without
+  // writing a closing sentence — 100% preventable harness_deliverable
+  // fallback + an extra output-gate LLM resynthesis call for what should have
+  // been the model's own one-line answer. Firing the same soft nudge whenever
+  // ANY tool succeeded (not just a declared-required one) closes that gap
+  // without touching the missing-required-tools mandatory push above, which
+  // still only fires when a real contract exists.
+  const hasNoContractButUsedTools = reqTools.length === 0 && usedSoFar.length > 0;
+  if (reqTools.length > 0 || hasNoContractButUsedTools) {
     const hasMultiQuantity = Object.values(reqQuantities ?? {}).some((n) => n > 1);
     const alreadySentCompletion = state.meta.completionNudgeSent === true;
 
@@ -215,13 +230,16 @@ export function assembleConversation(args: {
       const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
         (s) => s.name === "recall",
       );
+      const satisfiedPrefix = hasNoContractButUsedTools
+        ? "You have tool results above"
+        : REQUIRED_TOOLS_SATISFIED_PREFIX;
       const finishText = hasMultiQuantity
         ? (overflowPreview && recallAvailable
-          ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
-          : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`)
+          ? `${satisfiedPrefix}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
+          : `${satisfiedPrefix}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`)
         : (overflowPreview && recallAvailable
-          ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; call recall("<that-key>", full: true) for the stored keys shown in the [STORED: …] header if you need the full content. If you have what you need, give your final answer now — otherwise continue.`
-          : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. If you have what you need from the results above, give your final answer now — you don't need to call anything else unless more information is genuinely required.`);
+          ? `${satisfiedPrefix}. The observations above are compressed previews; call recall("<that-key>", full: true) for the stored keys shown in the [STORED: …] header if you need the full content. If you have what you need, give your final answer now — otherwise continue.`
+          : `${satisfiedPrefix}. If you have what you need from the results above, give your final answer now — you don't need to call anything else unless more information is genuinely required.`);
       return { messages: baseMessages, actReminder: finishText, errorRecovery: undefined, completionNudgeSent: true };
     }
 

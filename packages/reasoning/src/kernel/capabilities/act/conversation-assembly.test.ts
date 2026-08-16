@@ -174,4 +174,58 @@ describe("assembleConversation — required-tools-satisfied completion nudge", (
 
     expect(result.actReminder).toBeUndefined();
   });
+
+  it("sends the finish nudge even with no requiredTools contract, once any tool succeeds", () => {
+    // Live QA repro, 2026-08-16: gemma4:e4b, `.run('Whats the price of XRP
+    // and bitcoin?')` — no `.withRequiredTools()`, no task-level tools
+    // contract. It called crypto-price, got real data, then stopped without
+    // writing a closing sentence, because reqTools.length === 0 skipped this
+    // whole nudge branch outright regardless of tool use. The harness had to
+    // fall back to harness_deliverable + an extra output-gate LLM resynthesis
+    // call for what should have been the model's own one-line answer.
+    const state = baseState();
+    const obsStep = makeStep("observation", "[crypto-price result] BTC $63,093", {
+      toolCallId: "tc1",
+      observationResult: makeObservationResult("crypto-price", true, "[crypto-price result] BTC $63,093"),
+    });
+    const allSteps = [
+      makeStep("action", "[ACT] crypto-price", { toolCall: { id: "tc1", name: "crypto-price", arguments: {} } }),
+      obsStep,
+    ];
+    // No requiredTools in context.input at all — the plain bare-.run() shape.
+
+    const result = assembleConversation({
+      state,
+      context,
+      adapter,
+      allSteps,
+      normalizedPendingCalls: [{ id: "tc1", name: "crypto-price", arguments: {} }],
+      newToolsUsed: new Set(["crypto-price"]),
+      sharedScratchpad: new Map(),
+    });
+
+    expect(result.completionNudgeSent).toBe(true);
+    expect(result.actReminder).toBeDefined();
+    expect(result.actReminder).toContain("You have tool results above");
+    expect(result.actReminder).toContain("final answer");
+  });
+
+  it("does NOT send any nudge when no tools were used at all (nothing to finish from)", () => {
+    const state = baseState();
+    // No tool calls this turn — assembleConversation's early-return for
+    // zero toolCallsForHistory already covers this, but pin it explicitly
+    // so the no-contract broadening above can't accidentally regress it.
+    const result = assembleConversation({
+      state,
+      context,
+      adapter,
+      allSteps: [],
+      normalizedPendingCalls: [],
+      newToolsUsed: new Set(),
+      sharedScratchpad: new Map(),
+    });
+
+    expect(result.actReminder).toBeUndefined();
+    expect(result.completionNudgeSent).toBe(false);
+  });
 });
