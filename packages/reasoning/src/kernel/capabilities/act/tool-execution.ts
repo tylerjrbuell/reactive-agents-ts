@@ -24,7 +24,12 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
-import { ToolNotFoundError, subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
+import {
+  ToolNotFoundError,
+  subAgentResultForDisplay,
+  subAgentChildLedgerEntries,
+  setScratchpadBounded,
+} from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "../../utils/tool-parsing.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
@@ -581,7 +586,7 @@ export function executeToolCall(
             const transformed = evaluateTransform(toolRequest.transform, parsed);
             if ((compressionConfig?.autoStore ?? true) && scratchpadStore) {
               const key = nextToolResultKey();
-              scratchpadStore.set(key, normalized);
+              setScratchpadBounded(scratchpadStore, key, normalized, sessionId ?? "reasoning-session");
             }
             const isSuccess = resultOk && !transformed.startsWith("[Transform error:");
             return {
@@ -599,7 +604,12 @@ export function executeToolCall(
           const autoStore = compressionConfig?.autoStore ?? true;
           const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems);
           if (autoStore && compressed.stored && scratchpadStore) {
-            scratchpadStore.set(compressed.stored.key, compressed.stored.value);
+            setScratchpadBounded(
+              scratchpadStore,
+              compressed.stored.key,
+              compressed.stored.value,
+              sessionId ?? "reasoning-session",
+            );
           }
           const content = compressed.content;
           return {
@@ -751,7 +761,9 @@ export function executeNativeToolCall(
           content = compressed.content;
           if (compressed.stored) {
             storedKey = compressed.stored.key;
-            config.scratchpad?.set(compressed.stored.key, compressed.stored.value);
+            if (config.scratchpad) {
+              setScratchpadBounded(config.scratchpad, compressed.stored.key, compressed.stored.value, sessionId);
+            }
           }
 
           // In FC mode, clean up the compressed content for native message format:
