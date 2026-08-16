@@ -191,9 +191,14 @@ describe("no inert flags — every gated mechanism still does something", () => 
     const on = await observe("evidence-on", {
       REACTIVE_AGENTS_EVIDENCE_DELTA_RESET: "1",
     });
-    // Both arms must do the same work, or the guard difference is about one
-    // arm quitting early for an unrelated reason.
-    expect(on.toolInvocations).toBe(base.toolInvocations);
+    // The flag-off arm must never do LESS work than the base arm -- if it
+    // did, the guard difference would be about one arm quitting early for an
+    // unrelated reason. It may do MORE: base's low_delta_guard fires and ends
+    // the run early, while the flag-on arm (guard suppressed) keeps going and
+    // completes more of the scripted work (2026-08-16, after the
+    // repetitionGuard distinct-target fix removed an unrelated throttle that
+    // used to coincidentally cap both arms at the same count).
+    expect(on.toolInvocations).toBeGreaterThanOrEqual(base.toolInvocations);
     expect(base.guards).toContain("low_delta_guard");
     expect(on.guards).not.toContain("low_delta_guard");
   }, 120_000);

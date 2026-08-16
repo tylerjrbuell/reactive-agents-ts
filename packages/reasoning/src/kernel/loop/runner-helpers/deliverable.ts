@@ -37,7 +37,17 @@ import {
 } from "@reactive-agents/core";
 import type { TerminateReason } from "../terminate-reason.js";
 import { resolveStoredToolObservation } from "./state-queries.js";
-import { findUnconsumedStoredKeys } from "../../capabilities/verify/unconsumed-evidence.js";
+import {
+  findUnconsumedStoredKeys,
+  resolveUnconsumedEvidence,
+} from "../../capabilities/verify/unconsumed-evidence.js";
+
+/** Collapse whitespace runs so verbatim-content comparison survives markdown
+ * line-ending / spacing differences between how content was stored and how
+ * the model reproduced it in its thought. */
+function normalizeForContainment(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
 
 /** Minimum thought length to be treated as a model-authored final synthesis. */
 export const MIN_MODEL_SYNTHESIS_LENGTH = 100;
@@ -89,6 +99,18 @@ export function assembleDeliverable(state: KernelState): Deliverable {
   // observations (tool_artifact/harness_synthesis, already scratchpad-resolved
   // by getDeliverableObservationContent) instead. Computed lazily — only the
   // (common) case where a thought exists needs this check at all.
+  //
+  // 2026-08-16 root fix (t0-deterministic `cs-overflow-transcribe` regression):
+  // "unconsumed" is a bookkeeping fact (no `recall()` call was made), not a
+  // grounding fact — a thought can correctly transcribe stored evidence
+  // without the harness ever seeing a `recall`. The prior binary check
+  // discarded a thought that DID contain the full evidence verbatim (e.g. a
+  // transcribed table including its tail sentinel) in favor of the raw stored
+  // observation, which can itself be compressed/truncated on the stored path
+  // — losing content the thought actually had. Only override when the thought
+  // does NOT already contain the unconsumed evidence's content; a thought
+  // that demonstrably reproduces the evidence is grounded regardless of
+  // whether `recall()` was called.
   const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
 
   const lastThought = [...state.steps]
@@ -98,7 +120,24 @@ export function assembleDeliverable(state: KernelState): Deliverable {
         s.type === "thought" &&
         (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
     );
-  if (lastThought?.content && !(hasUnconsumedEvidence && countDeliverableCandidates(state) > 0)) {
+
+  const thoughtGroundsUnconsumedEvidence = (() => {
+    if (!hasUnconsumedEvidence || !lastThought?.content) return false;
+    const evidence = resolveUnconsumedEvidence(state.steps, state.scratchpad);
+    if (!evidence) return false;
+    return normalizeForContainment(lastThought.content).includes(
+      normalizeForContainment(evidence),
+    );
+  })();
+
+  if (
+    lastThought?.content &&
+    !(
+      hasUnconsumedEvidence &&
+      countDeliverableCandidates(state) > 0 &&
+      !thoughtGroundsUnconsumedEvidence
+    )
+  ) {
     return modelSynthesisDeliverable({
       type: "thought",
       content: lastThought.content,

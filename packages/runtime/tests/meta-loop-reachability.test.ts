@@ -205,10 +205,16 @@ describe("meta-loop reachability, per configuration", () => {
       b.withReasoning({ defaultStrategy: "reactive" }).withLongHorizon().withTools({ allowedTools: ["file-write"] }),
     );
 
-    // Control: both arms did the same real work, so the guard difference is
-    // about the guard and not about one arm doing nothing.
+    // Control: the long-horizon arm must never do LESS work than the base
+    // kernel arm, or the guard difference would be about one arm doing
+    // nothing rather than about the guard. It may do MORE: kernel's
+    // low_delta_guard fires and ends the run early, while horizon (guard
+    // suppressed) keeps going and completes more of the scripted work
+    // (2026-08-16, after the repetitionGuard distinct-target fix removed an
+    // unrelated throttle that used to coincidentally cap both arms at the
+    // same count).
     expect(kernel.toolInvocations).toBeGreaterThan(0);
-    expect(horizon.toolInvocations).toBe(kernel.toolInvocations);
+    expect(horizon.toolInvocations).toBeGreaterThanOrEqual(kernel.toolInvocations);
 
     // Without the profile the diminishing-returns guard ends a run that is
     // still producing artifacts. With it, the evidence-delta reset keeps the
