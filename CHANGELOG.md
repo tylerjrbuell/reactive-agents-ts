@@ -1,3 +1,352 @@
+## [0.15.0] — 2026-08-16
+
+Fixed — repetition guard no longer blocks legitimate multi-file work
+
+`repetitionGuard`'s call ceiling on `file-write` used to trip on the 3rd call
+regardless of target path, hard-stopping any task that needed to edit 3+
+files with "Stop repeating this tool." It now passes calls whose target
+argument (`path`/`file`/`target`/`url`/`id`) differs from every prior call to
+the same tool, so legitimate multi-file work is never penalized while
+same-target thrashing still hits the ceiling.
+
+Fixed — Groq default model swapped off deprecated `llama-3.3-70b-versatile`
+
+Groq shut down `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` on
+2026-08-16. The Groq provider's default/fallback model (used when no
+`.withModel()` is given) and the `create-reactive-agent` scaffold default
+now point to `openai/gpt-oss-120b`, Groq's recommended replacement — same
+131K context window, native tool calling, lower cost. Callers who already
+pass an explicit model are unaffected.
+
+Fixed — the harness no longer discards a model's correct answer for a redundant reconstruction
+
+The single biggest source of unnecessary "the model didn't produce a final
+answer itself" warnings: a post-loop step fired unconditionally whenever a
+run ended in a non-final-answer termination (`end_turn` and similar) with
+any tool artifact present — without ever checking whether the model had
+already written a real answer. For native function-calling models, ending a
+turn with substantive text and no further tool calls is the *normal*
+completion shape (no `final-answer` tool is even offered to them), so this
+was overfiring on the common path, not an edge case. Traced live: a
+correct, complete, model-authored answer was being thrown away and
+replaced with a raw tool-artifact reconstruction, then mislabeled
+"harness-authored" — costing an extra LLM resynthesis call and a false
+honesty warning for content that was already right.
+
+Now only falls back to reconstruction when the model's own output is empty
+or reads as a genuine non-answer (a short apology/incapability statement).
+Live-verified: the exact repro scenario now completes ~2.5x faster with
+zero warnings.
+
+Also: the proactive "you may finish now" nudge (added earlier this
+release) now also fires when a task declares no `requiredTools` contract
+at all, as long as at least one tool call has succeeded — previously it
+only fired when a formal tools contract existed.
+
+Fixed — a failed tool call inside a parallel batch showed no error message
+
+Found via live-model QA: when the kernel dispatches multiple tool calls in
+parallel (a model requesting more than one tool in the same turn) and one
+fails, the terminal/verbose log printed a bare `✗ tool 0.00s` with nothing
+after it — the error text was there in the result, it just never made it
+into the log event at this one call site. Sequential tool calls always
+showed their error; parallel ones silently didn't. Now consistent.
+
+Improved — sub-agent dispatch logging is followable
+
+- A sub-agent's log lines now carry a **depth- and name-tagged prefix** (one
+  `│ ` per nesting level plus the child's name, e.g. `  │ researcher · `)
+  instead of a flat `  │ ` for every child at every depth. Parallel and nested
+  sub-agents no longer collapse into one indistinct, unattributable stream — you
+  can tell which child, and how deep, every line came from.
+- Each delegation is **framed with delimiters** — `▶ delegate → <name>: <task>`
+  on dispatch and `◀ <name> ✓/✗ — <tokens> tok, <ms>ms` on completion — so a
+  child's block has a clear start and end.
+- The prefix now applies to **all** log levels: a sub-agent's `warn`/`error`
+  lines were previously unprefixed and appeared at the parent's indent level,
+  reading as the parent failing. They now indent and attribute like the rest.
+
+Added — sub-agents inherit the parent's judgment + safety constraints
+
+- A delegated sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()` /
+  `spawn-agent`) now runs under the parent's **`taskContract`**,
+  **`fabricationGuard`**, **`grounding`**, and **`approvalPolicy`** — a true
+  sub-agent, not a rubber-stamped one. Its answer is judged against the same
+  contract and fabrication guard, its claims are grounded, and a
+  `requiresApproval` tool it calls is refused rather than executed unattended.
+  Previously a child inherited none of these: it could fabricate freely and
+  execute gated tools with no decision.
+- **Approval is coerced to block/deny-by-default in sub-agents.** A sub-agent has
+  no durable store, so it cannot pause for cross-process (`detach`) approval —
+  it decides in process and denies by default. A `detach` parent policy no
+  longer strands a child at a gate; the child denies the gated tool instead. The
+  same auto-feed folds the child's `requiresApproval` built-ins into the gate.
+
+Fixed — status renderer no longer breaks a host app's readline (arrow-key history)
+
+The status renderer's keyboard handler unconditionally took over stdin raw
+mode, with no awareness that a host script's own `readline.createInterface()`
+might already own it. That left arrow-key history printing a literal
+`^[[A` after any run. It now defers entirely when stdin already has a
+listener attached.
+
+Improved — verifier rejection warnings are plain-English
+
+The terminal status line used to print the verifier's internal check-id and
+diagnostic phrasing verbatim (e.g. `output-is-model-authored`). It now shows
+a plain-English sentence, with the raw diagnostic still available to
+verbose/debug log consumers via the event's `context` field.
+
+Improved — status renderer glyphs are now colorized (✓ green, ✗ red, ⚠
+yellow, ℹ cyan), respecting `NO_COLOR`.
+
+Fixed — `agent.run()` errors now include a remediation suggestion
+
+Errors thrown from `agent.run()`, `resumeRun()`, `approveRun()`, and
+`denyRun()` now carry a one-line "→ suggestion" for known error types
+(e.g. `BudgetExceededError` → "wire `.withCostTracking()`"). The helper
+that builds this already existed but was never actually called from any
+`agent.run()` catch path, so no user ever saw it.
+
+Fixed — scratchpad disk-spill correctness and robustness (pre-release health sweep)
+
+The scratchpad disk-spill feature (this release) had 3 read sites that
+bypassed its marker-resolution helper — most notably the deterministic-
+grounding guard, which could inject the literal `[SPILLED_TO_DISK:...]`
+marker string into the model-facing evidence prompt instead of the real
+content once the spill threshold triggered. Fixed at all 3 sites.
+
+Also: `setScratchpadBounded`'s disk write and the `code-action` sandbox
+Worker's message-listener teardown could each turn a recoverable condition
+(a disk write failure, a termination race) into a crashed fiber or an
+unhandled promise rejection. Both now degrade gracefully instead.
+
+Fixed — `ToolDefinitionError` gets a proper remediation suggestion
+
+A malformed custom tool definition's error now names the tool and the
+offending field consistently with every other builder-surfaced error,
+instead of falling through to a generic "Unexpected error" message.
+
+Fixed — a paused run is no longer served back as a cached answer
+
+The semantic cache could serve a paused run's sentinel content back to
+`approveRun()` as if it were the completed answer. Paused runs are now
+excluded from the cache-hit path.
+
+Fixed — status line no longer prints `Done`/`Failed` twice per run
+
+Every reasoning strategy fired its own `completion` event in addition to
+the authoritative one the runtime fires at true run end, so the terminal
+status renderer always printed two summary lines (and stopped its elapsed
+timer early, before the run actually finished). Also fixed a status-line
+tool-error message that could cut off mid-word with no indication it was
+truncated.
+
+Added — bounded scratchpad with disk spill (#47)
+
+Tool-result auto-store (`ResultCompressionConfig`'s `autoStore`) writes overflow
+into the run's in-memory scratchpad, which had no aggregate size cap and no
+disk persistence — a long run accumulating many/large auto-stored tool
+results grew it unbounded, and content was lost if the process died without
+a durable checkpoint. Writes past a configurable aggregate byte threshold
+(default 5MB) now spill to `~/.reactive-agents/spill/<namespace>/<key>.txt`;
+reads (the `recall` tool, deliverable assembly, evidence grounding) resolve
+spilled entries back to their full content transparently. Namespaced by
+session/agent ID so concurrent runs' identically-named keys never collide.
+
+Fixed — tool definitions are validated at registration, not silently accepted (#57)
+
+`ToolService.register()` accepted any object typed `ToolDefinition` with zero
+runtime check — a raw object literal, an `as any` cast, or a definition
+assembled dynamically from an MCP server's advertised schema could all carry
+a malformed shape (missing description, a parameter with no name) that was
+silently stored and only failed much later, deep in execution, with no
+indication the definition itself was the problem. Registration now runs the
+definition through `Schema.decode` and fails immediately with a typed
+`ToolDefinitionError` naming the tool and the field.
+
+Fixed — a custom tool returning `undefined` or a circular reference fails clearly (#58)
+
+A custom tool's return value was serialized with a bare `JSON.stringify` and
+no error handling: `undefined` silently stringifies to the JS value
+`undefined` (not the string `"undefined"`), turning the tool's observation
+content into a non-string that broke downstream string operations far from
+the actual cause; a circular reference threw an uncaught generic `TypeError`
+with no tool-name context. Both now produce a clear, named tool-execution
+failure at the point of cause instead.
+
+Added — dynamic OpenAI-compatible provider config (#198)
+
+- `.withProvider(provider, { baseUrl, apiKey, headers })` now accepts a
+  runtime endpoint override for the whole OpenAI-compatible provider family —
+  `openai`, `groq`, `xai`, and `litellm` all speak the same Chat Completions
+  wire protocol. Point any of them at a llama.cpp server's `/v1` API,
+  Deepseek, a LiteLLM proxy on a non-default host, or any other
+  OpenAI-compatible endpoint at runtime, without predefining
+  `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc as env vars.
+- Custom headers now flow through: the raw-fetch header merge `litellm`
+  already had, and the openai-node SDK's `defaultHeaders` option for
+  `openai`/`groq`/`xai`.
+- An inline `apiKey` supplied this way now also satisfies
+  `.withStrictValidation()`'s missing-key check — previously it only read the
+  provider's env var, so a fully-configured custom endpoint with no matching
+  env var incorrectly failed strict validation.
+- Not propagated to `.withFallbacks()`-configured fallback providers — a
+  fallback is a different provider/endpoint by definition.
+
+RunLedger convergence (Wave C.1): all 8 reasoning strategies now forward `runLedger`
+across the result boundary (reflexion projects it from merged steps for completeness
+rather than dropping it), so a run's ledger is complete regardless of which strategy
+produced it. Receipt tool-call and deliverable evidence are re-based onto ledger queries
+first, with the prior steps-derived scan kept as a fallback for paths that have no
+ledger. A new `LedgerEntryAppended` live tap publishes ledger batches onto the EventBus
+as they're minted, feeding the public `stream(density: "full")` chunk stream and the
+`run_events` journal — previously these only existed retrospectively at run completion.
+An equivalence invariant (ledger ≡ projection of `steps[]`) is now pinned red-on-cut,
+and `steps[]` mutation is gated to a single chokepoint.
+
+Fixed — Ollama `OLLAMA_HOST` honored
+
+The capability-resolution probe only read `OLLAMA_ENDPOINT`, so `OLLAMA_HOST`
+(Ollama's own standard env var) was silently ignored, producing conservative
+2048-token fallback defaults against a live server. Both env vars are now
+honored, and an explicit `numCtx` the caller already supplied is no longer
+overridden by the fallback.
+
+Fixed — a plain script (no readline) could hang forever after `agent.run()` returned
+
+On a TTY, the status renderer's stdin cleanup called `resume()` on exit
+regardless of whether a host `readline` interface was still using stdin.
+For a bare script with no readline of its own, that left stdin actively
+flowing with nothing left to consume it — keeping the process alive
+indefinitely instead of exiting after the run completed.
+
+Fixed — `.withApprovalPolicy({ mode: "block" })` now enforces (security)
+
+- **`mode: "block"` was an inert safety switch.** Every approval gate keyed on
+  `mode === "detach"`; nothing read `"block"`, so a `requiresApproval` tool
+  executed with no human decision — and `"block"` is the mode you get from
+  `.withApprovalPolicy(...)` when `.withDurableRuns()` is not set (the common
+  case). Block mode now decides each gated call **in process** and **denies by
+  default**: without an `onApprove` handler, a gated call is refused (the tool
+  does not run) rather than silently executed.
+- **New `onApprove` option** on `.withApprovalPolicy()` — a synchronous or async
+  callback `({ toolName, args, iteration }) => boolean | { approve, reason }`
+  that decides each gated call in block mode. A throw/rejection denies
+  (fail-closed). Distinct from `run()`'s detach-mode `onApproval`.
+- **Behavior change:** a run using block mode (or the default without durable
+  runs) with a gated tool and no `onApprove` will now REFUSE that tool where it
+  previously executed it. Supply `onApprove`, or use `mode: "detach"` +
+  `.withDurableRuns()` for durable cross-process approval. `code-action` refuses
+  the run outright under any gating policy (its tools run past every gate).
+- The durable HITL approval gate now also applies uniformly across every
+  reasoning strategy (Blueprint, Reflexion, Plan-Execute, Tree-of-Thought,
+  Adaptive, Direct) — it was previously wired into `reactive` only, so a gated
+  tool could run unattended under any other strategy.
+
+Fixed — calling a nonexistent tool now suggests the tools you actually have
+
+When a model called a tool name that doesn't exist, the recovery hint used
+to narrow its suggestion to whichever available tools had "search"/"fetch"/
+"get"/"browse" in their name — even when those tools had nothing to do with
+what the model needed. Found via a live-model QA pass: a model hallucinating
+a `typescript-checker` tool got steered toward `web-search`/`http-get`
+instead of being told about `code-execute`, which it actually had, and
+burned its whole retry budget re-hallucinating tool names with no way to
+recover. Now always names the real available tools.
+
+Improved — verbose tool-call log lines no longer misread as a numbering bug
+
+`call N` labeled the kernel loop's iteration index, not a per-call sequence
+— two tools called in the same iteration both printed `call 0`. Relabeled
+to `iter N`.
+
+Fixed — deterministic evidence grounding, corrected
+
+The harness's deliverable assembly (`assembleDeliverable`) now grounds a
+model's terminal thought against unread stored tool evidence instead of
+trusting a long thought outright — closing a fabrication path where a
+plausible-sounding synthesis off a compressed tool-output preview could win
+over already-resolved tool observations, across every termination path
+(`end_turn`, `dispatcher-early-stop`, `low_delta_guard`,
+`controller_early_stop`).
+
+**Follow-up correction:** the initial version of this check discarded a
+thought whenever ANY tool evidence was formally unconsumed, even when the
+thought demonstrably reproduced that evidence verbatim (e.g. transcribing a
+large table back in full). It now only overrides the thought when the
+thought does NOT already contain the unread evidence's content — a thought
+that provably grounds the evidence is trusted regardless of whether the
+harness saw an explicit `recall()` call.
+
+Added — `prompt.guidance` compose tag
+
+Of the 9 harness-authored "Guidance:" text channels folded into the system
+prompt each turn (required-tools reminders, oracle/ICS nudges, error-
+recovery hints, the finish nudge, quality-gate hints, evidence-gap
+redirects), only one had any override point before this. `.compose(h =>
+h.on('prompt.guidance', (text, ctx) => ...))` can now inspect, replace, or
+suppress the entire rendered guidance block — the same level of control
+`prompt.system` already gives over your own base prompt, now extended to
+what the harness itself says on top of it.
+
+Fixed — corrected `withEnvironment()`'s docs, which incorrectly claimed the
+auto-injected `Environment:` block was reachable via the `prompt.system`
+compose hook. It isn't (assembled in a separate channel) — documented
+honestly rather than left misleading.
+
+Improved — agents finish more reliably once their required tools are satisfied
+
+Previously, once a task's required tools were all satisfied, the harness
+only proactively told the model it could finish when a tool needed to be
+called more than once. In the common single-call case it said nothing —
+smaller/local models frequently satisfied their required tools and then
+just stopped without calling `final-answer`, forcing the harness to
+reconstruct an answer from raw tool output instead of the model's own
+synthesis. Now sends a soft, informational nudge ("if you have what you
+need, give your final answer now") the first time this happens, without
+overriding the model's judgment on whether more research is needed.
+
+Fixed — LLM-level failures (bad model, connection refused, provider
+rejection) are now visible in the terminal/status output. Previously the
+diagnostic message was computed but only published to a programmatic
+event-bus channel — a run failing this way showed "Task failed" with no
+indication of why.
+
+Added — skill activation (auto + explicit)
+
+`.withSkills({ paths: [...], activate: [...] })`'s `activate` option now
+injects a named skill's full instructions into context at bootstrap, with
+task-relevance-based auto-activation on top — skills were previously only
+shown in a discoverable catalog, never actually loaded into the model's
+context.
+
+Fixed — code-action's sandbox Worker now actually stops on run cancellation (#35)
+
+`code-action`'s sandbox runs generated code in a real `node:worker_threads`
+Worker; the host-side function bridging it to Effect returned a bare
+`Promise`. Interrupting the run's fiber (cancellation, kill switch, a lost
+timeout race) abandoned *awaiting* that promise, but the underlying Worker —
+a real OS thread — and any tool call it had already dispatched kept running
+unsupervised. A cancelled run could leave a side-effecting tool call
+(`shell-execute`, `file-write`) completing its work after the run was
+supposed to have stopped. The sandbox now returns a proper `Effect` whose
+interrupt finalizer terminates the Worker, so cancelling a `code-action` run
+actually stops it.
+
+Fixed — repetition guard blocked a genuinely new CLI subcommand
+
+`repetitionGuard`'s distinct-target carve-out only recognized `path`,
+`file`, `target`, `url`, and `id` arguments. Tools whose entire call is one
+opaque `command` string (`gh-cli`, `git-cli`, `gws-cli`) never matched, so a
+second, completely different subcommand (e.g. `gh log ...` after `gh repo
+view ...`) was treated as pure repetition and blocked at the ceiling — the
+agent could establish the default branch but never actually fetch commits.
+`command` args are now compared by their leading subcommand tokens (`repo
+view` vs `repo log`) rather than key presence alone, so a new subcommand
+passes while same-subcommand churn (`keep notes get x` → `keep notes get
+y`) still hits the ceiling as intended.
+
 ## [0.14.0] — 2026-07-22
 
 ### Removed — dead built-in tools (v0.14)
