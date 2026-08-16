@@ -284,6 +284,54 @@ function cleanWebSnippet(text: string): string {
 }
 
 /**
+ * Serialize a custom tool's raw return value for the model, failing loudly
+ * and at the point of cause instead of downstream.
+ *
+ * `JSON.stringify` has two silent failure modes on a plain custom-tool
+ * return: `undefined` stringifies to the JS value `undefined` (not the
+ * string `"undefined"`), quietly turning `content` into a non-string that
+ * breaks later string operations far from the actual cause; a circular
+ * reference throws an uncaught generic `TypeError` with no tool-name context.
+ * Both are caught here and turned into a named, typed observation failure
+ * (`ok: false`) instead — visible to the model as a failed tool call, and
+ * to a developer as a clear message naming the tool and the actual problem.
+ *
+ * `alreadyFailed` (the tool call's own `success` field is already `false`)
+ * skips the `undefined`-specific message: an explicit failure with no
+ * `result` payload is a normal, valid failure shape (e.g.
+ * `{ success: false, error: "..." }`), not #58's bug (a nominally-successful
+ * call whose return value silently can't be shown). Reproduces the exact
+ * legacy value instead — `JSON.stringify(undefined)` evaluates to the JS
+ * value `undefined`, not a string, despite the `string` return type; plan-
+ * execute's grounded-terminal gate (and possibly other `??`-based fallbacks)
+ * distinguish that from an empty string, so this preserves it precisely
+ * rather than fixing an accidental typing gap this bundle isn't scoped to.
+ */
+function stringifyToolResultSafe(
+  toolName: string,
+  value: unknown,
+  alreadyFailed: boolean,
+): { readonly content: string; readonly ok: boolean } {
+  if (value === undefined) {
+    return alreadyFailed
+      ? { content: undefined as unknown as string, ok: true }
+      : {
+          content: `[Tool result error: "${toolName}" returned undefined — tools must return a JSON-serializable value]`,
+          ok: false,
+        };
+  }
+  try {
+    return { content: JSON.stringify(subAgentResultForDisplay(value)), ok: true };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return {
+      content: `[Tool result error: "${toolName}" returned a non-JSON-serializable value (${detail}) — tools must return a JSON-serializable value]`,
+      ok: false,
+    };
+  }
+}
+
+/**
  * Normalize tool-specific raw output to compact semantic representations.
  */
 function normalizeObservation(toolName: string, result: string): string {
@@ -515,8 +563,12 @@ export function executeToolCall(
           // own pending pattern cursor). `executeNativeToolCall` was fixed for
           // this; this sibling function serializes the same `SubAgentResult`
           // shape and was missed.
-          const raw = typeof r.result === "string" ? r.result : JSON.stringify(subAgentResultForDisplay(r.result));
-          const normalized = normalizeObservation(toolRequest.tool, raw);
+          const stringified =
+            typeof r.result === "string"
+              ? { content: r.result, ok: true }
+              : stringifyToolResultSafe(toolRequest.tool, r.result, r.success === false);
+          const resultOk = r.success !== false && stringified.ok;
+          const normalized = normalizeObservation(toolRequest.tool, stringified.content);
 
           // Pipe transform — evaluate in-process, inject only transformed result
           if (toolRequest.transform && (compressionConfig?.codeTransform ?? true)) {
@@ -531,7 +583,7 @@ export function executeToolCall(
               const key = nextToolResultKey();
               scratchpadStore.set(key, normalized);
             }
-            const isSuccess = !transformed.startsWith("[Transform error:");
+            const isSuccess = resultOk && !transformed.startsWith("[Transform error:");
             return {
               content: transformed,
               observationResult: makeObservationResult(toolRequest.tool, isSuccess, transformed, {
@@ -552,7 +604,7 @@ export function executeToolCall(
           const content = compressed.content;
           return {
             content,
-            observationResult: makeObservationResult(toolRequest.tool, r.success !== false, content, {
+            observationResult: makeObservationResult(toolRequest.tool, resultOk, content, {
               delegatedToolsUsed,
             }),
             delegatedToolsUsed,
@@ -664,9 +716,13 @@ export function executeNativeToolCall(
         const subAgentLedger = extractSubAgentLedger(r.result);
         // The child ledger crossed on `r.result`, but the MODEL must not see it
         // (large, noise); serialize the display-trimmed result instead.
-        let content = typeof r.result === "string" ? r.result : JSON.stringify(subAgentResultForDisplay(r.result));
+        const stringified =
+          typeof r.result === "string"
+            ? { content: r.result, ok: true }
+            : stringifyToolResultSafe(toolCall.name, r.result, r.success === false);
+        let content = stringified.content;
         if (config?.preprocess) content = config.preprocess(content);
-        const success = r.success !== false;
+        const success = r.success !== false && stringified.ok;
 
         // Apply tool-specific normalization (HTML stripping for http-get, etc.)
         content = normalizeObservation(toolCall.name, content);

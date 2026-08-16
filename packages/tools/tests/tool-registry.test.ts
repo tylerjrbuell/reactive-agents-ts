@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
 import { describe, it, expect } from "bun:test";
 
 import { makeToolRegistry } from "../src/registry/tool-registry.js";
@@ -230,5 +230,88 @@ describe("ToolRegistry", () => {
     });
 
     await Effect.runPromise(program);
+  });
+});
+
+// #57: register() runs the incoming definition through ToolDefinitionSchema
+// so a malformed definition (raw object literal, `as any` cast, or one
+// assembled dynamically from an MCP server) fails loudly and specifically at
+// registration, naming the tool and the field — not silently, to surface as
+// a generic failure later, deep in execution.
+describe("ToolRegistry — definition validation (#57)", () => {
+  it("registers a well-formed definition without incident", async () => {
+    const program = Effect.gen(function* () {
+      const registry = yield* makeToolRegistry;
+      yield* registry.register(
+        {
+          name: "well-formed",
+          description: "A valid tool",
+          parameters: [],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        },
+        () => Effect.succeed("ok"),
+      );
+      const tool = yield* registry.get("well-formed");
+      expect(tool.definition.name).toBe("well-formed");
+    });
+
+    await Effect.runPromise(program);
+  });
+
+  it("dies with a ToolDefinitionError naming the tool when 'description' is missing", async () => {
+    const program = Effect.gen(function* () {
+      const registry = yield* makeToolRegistry;
+      // Simulates a raw object literal / dynamically-assembled definition
+      // that bypasses TypeScript's compile-time check.
+      yield* registry.register(
+        {
+          name: "malformed",
+          parameters: [],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        } as never,
+        () => Effect.succeed("unreachable"),
+      );
+    });
+
+    const exit = await Effect.runPromiseExit(program);
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const defect = Cause.squash(exit.cause) as { _tag?: string; toolName?: string; field?: string };
+      expect(defect._tag).toBe("ToolDefinitionError");
+      expect(defect.toolName).toBe("malformed");
+      expect(defect.field).toBe("definition");
+    }
+  });
+
+  it("dies with a ToolDefinitionError naming the tool when a parameter entry has no 'name'", async () => {
+    const program = Effect.gen(function* () {
+      const registry = yield* makeToolRegistry;
+      yield* registry.register(
+        {
+          name: "bad-params",
+          description: "Missing parameter name",
+          parameters: [{ type: "string", required: true } as never],
+          riskLevel: "low",
+          timeoutMs: 5000,
+          requiresApproval: false,
+          source: "function",
+        },
+        () => Effect.succeed("unreachable"),
+      );
+    });
+
+    const exit = await Effect.runPromiseExit(program);
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const defect = Cause.squash(exit.cause) as { _tag?: string; toolName?: string };
+      expect(defect._tag).toBe("ToolDefinitionError");
+      expect(defect.toolName).toBe("bad-params");
+    }
   });
 });

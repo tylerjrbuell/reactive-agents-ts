@@ -1,7 +1,8 @@
-import { Effect, Ref } from "effect";
+import { Effect, Ref, Schema } from "effect";
 
 import type { ToolDefinition, FunctionCallingTool } from "../types.js";
-import { ToolNotFoundError, ToolExecutionError } from "../errors.js";
+import { ToolDefinitionSchema } from "../types.js";
+import { ToolNotFoundError, ToolExecutionError, ToolDefinitionError } from "../errors.js";
 import { healToolName } from "../healing/tool-name-healer.js";
 
 export interface RegisteredTool {
@@ -9,6 +10,35 @@ export interface RegisteredTool {
   readonly handler: (
     args: Record<string, unknown>,
   ) => Effect.Effect<unknown, ToolExecutionError>;
+}
+
+const decodeToolDefinition = Schema.decodeUnknownEither(ToolDefinitionSchema);
+
+/**
+ * A `ToolDefinition` arriving at `register()` is only compile-time typed —
+ * a raw object literal (`.withTools({ tools: [...] })`), an `as any` cast, or
+ * a definition assembled dynamically from an MCP server's advertised schema
+ * can all bypass TypeScript entirely. Previously `register()` accepted
+ * whatever it was handed with no runtime check, so a malformed definition
+ * (missing `description`, a `parameters` entry with no `name`, etc.) was
+ * silently stored and only surfaced much later — deep in execution, as a
+ * generic failure with no indication the definition itself was ever the
+ * problem (#57). Failing loudly here, at registration, names the tool and the
+ * exact decode error instead.
+ */
+function validateToolDefinition(definition: ToolDefinition): void {
+  const decoded = decodeToolDefinition(definition);
+  if (decoded._tag === "Left") {
+    const toolName =
+      typeof (definition as { name?: unknown })?.name === "string"
+        ? (definition as { name: string }).name
+        : "<unknown>";
+    throw new ToolDefinitionError({
+      message: `Invalid tool definition for "${toolName}": ${decoded.left.message}`,
+      toolName,
+      field: "definition",
+    });
+  }
 }
 
 export const makeToolRegistry = Effect.gen(function* () {
@@ -20,11 +50,15 @@ export const makeToolRegistry = Effect.gen(function* () {
       args: Record<string, unknown>,
     ) => Effect.Effect<unknown, ToolExecutionError>,
   ): Effect.Effect<void, never> =>
-    Ref.update(toolsRef, (tools) => {
-      const newTools = new Map(tools);
-      newTools.set(definition.name, { definition, handler });
-      return newTools;
-    });
+    Effect.sync(() => validateToolDefinition(definition)).pipe(
+      Effect.zipRight(
+        Ref.update(toolsRef, (tools) => {
+          const newTools = new Map(tools);
+          newTools.set(definition.name, { definition, handler });
+          return newTools;
+        }),
+      ),
+    );
 
   const get = (
     name: string,

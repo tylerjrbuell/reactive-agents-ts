@@ -20,6 +20,7 @@ const approvalDef: ToolDefinition = {
   riskLevel: "high",
   timeoutMs: 5_000,
   requiresApproval: true,
+  source: "function",
 };
 
 const safeDef: ToolDefinition = {
@@ -29,6 +30,7 @@ const safeDef: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 5_000,
   requiresApproval: false,
+  source: "function",
 };
 
 const baseLayer = ToolServiceLive.pipe(Layer.provide(EventBusLive));
