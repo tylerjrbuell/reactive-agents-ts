@@ -263,16 +263,6 @@ export function deliverableTerminationReason(
   return "harness_deliverable";
 }
 
-export function collectDeliverableArtifacts(state: KernelState): string[] {
-  const artifacts: string[] = [];
-  for (const step of state.steps) {
-    const content = getDeliverableObservationContent(state, step);
-    if (content) artifacts.push(content);
-  }
-
-  return artifacts;
-}
-
 /**
  * Collect validated tool observations as {@link ValidatedObservation}s, in
  * step order. Each carries its RESOLVED content (post STORED/recall scratchpad
