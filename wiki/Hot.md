@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-07-28
+updated: 2026-08-16
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,21 @@ updated: 2026-07-28
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-08-16 — v0.15.0 release-prep + tools-result-handling bundle
+
+Not yet tagged. Root-caused + fixed a `t0-deterministic` gate regression
+(`c2418864`) — see [[project_t0_deterministic_regression_2026_08_16]] in
+Claude memory. Reconciled `ROADMAP.md`'s version-to-arc mapping (was
+self-contradicting; v0.15 renamed to an interim "Stability & QOL" cut, Arc 2
+Boundary+Gate moved to v0.16). Shipped `bundle/tools-result-handling`
+(#47/#57/#58, merged `22547736`): bounded scratchpad with disk spill
+(`packages/tools/src/scratchpad-spill.ts`), registration-time tool-definition
+schema validation, clear tool-result error messages. Full suite 8902 pass /
+0 fail / 1157 files. Merged to local `main` directly (not a GitHub PR — this
+repo holds unreleased work locally until tag time; a PR against `origin/main`
+right now would show 357+ unrelated commits). Retro:
+[[Research/Debriefs/2026-08-16-tools-result-handling-execution-debrief]].
 
 ## Active program (2026-07-28)
 

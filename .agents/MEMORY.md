@@ -8,9 +8,30 @@
 **Last commit:** `a42e2490` "docs(debt): catalog 2026-07-30 harness-improvement hunt — K✅ (observability gaps) + L (open) + memory sync". Active thread = the **harness-improvement-loop** (`/harness-improvement-loop` skill): a 2026-07-29 systems audit found 8 root causes; as of today most are shipped (TE-1, EH-1, RC7, CT-4/CT-5 partial, ctx-window-divergence, 3 observability gaps K); **D-2026-07-30-L catalog is still open** (`wiki/Architecture/DEBT-REGISTER.md` §5) — read that file for exact open items before starting new harness work, do not re-derive from old audit text.
 **Canonical docs, priority order:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) > `Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified). **Canonical debt ledger = `wiki/Architecture/DEBT-REGISTER.md`** — verdict taxonomy (PROVEN/SILENT/ORPHAN/INERT/FALSE), §1 ratchet counts only go down. Do not write a new north-star doc — amend 09.
 **Stale references confirmed dead:** `AUDIT-overhaul-2026.md` (cited in the old "Architecture debt" section below and in prior memory) **no longer exists anywhere in the repo** — superseded by DEBT-REGISTER.md. `wiki/Architecture/Specs/04-PROJECT-STATE.md` and `05-DESIGN-NORTH-STAR.md` still exist on disk but are superseded by 09/08 per the priority order above — check before trusting either as current.
-**Verified 2026-08-16 (v0.15.0 release-prep pass):** test suite = **8,890 pass / 0 fail / 26 skip / 4 todo / 1,156 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages); local `main` fully synced with `origin/main` (merged external PR #197). memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable), all green. Structured-output/durable-execution/HITL still live (not re-run, carried).
+**Verified 2026-08-16 (v0.15.0 release-prep pass, post tools-result-handling bundle):** test suite = **8,902 pass / 0 fail / 26 skip / 4 todo / 1,157 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages); local `main` is now **359 commits ahead of `origin/main`, 0 behind** (not tagged yet — v0.15.0 still in release-prep). memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable), all green. Structured-output/durable-execution/HITL still live (not re-run, carried).
+**Repo-workflow reminder (re-confirmed 2026-08-16):** this repo holds unreleased work on local `main`, unpushed, until a release/tag event — do NOT assume `origin/main` reflects current state, and do NOT open a GitHub PR against `origin/main` for interim work (it'll show every unpushed commit as part of the diff). Merge feature/bundle branches to local `main` directly instead; push happens at tag time.
 
 ## Projects — Aug 2026
+
+**2026-08-16: `bundle/tools-result-handling` shipped — #47/#57/#58 (merged `4174138d`, `22547736`).**
+Backlog bundle via `/execute-backlog labels=area:tools`. None of the 3 issues carried `verified-by:`
+evidence (all predate the `packages/reactive-agents/src/tools/` → `packages/tools`/`packages/reasoning`
+restructuring); re-verified against current code before executing. #57's literal ask (ajv/raw JSON
+Schema) doesn't apply anymore — tools are typed via Effect `ToolDefinitionSchema` now — re-scoped to
+`Schema.decode` validation at `registry.register()`, which was a real, still-open gap (zero runtime
+check previously). #58: `stringifyToolResultSafe` in `tool-execution.ts` catches `undefined`/circular
+custom-tool returns at the point of cause; had to narrow it to skip an already-explicit `success:false`
+failure (a normal shape, not this bug) after it broke a plan-execute abstention test by changing a
+legacy accidentally-falsy value to a non-empty string. #47: `packages/tools/src/scratchpad-spill.ts` —
+scratchpad writes past a 5MB aggregate cap spill to `~/.reactive-agents/spill/<namespace>/<key>.txt`;
+wired into every read site (recall tool, deliverable assembly, evidence grounding). Lives in
+`packages/tools` not `packages/reasoning` because `recall.ts` (lower layer) needed the same resolver.
+Caught a real pre-existing bug along the way: `tool-approval-gate.test.ts` fixtures missing required
+`source` field, invisible because `packages/tools/tsconfig.json` excludes `tests/**` from typecheck.
+**Merged to local main directly, not a GitHub PR** — this repo holds work locally until tag time; a PR
+right now would show 357+ unrelated unpushed commits. Skill amended (v13): branch-from-local-main check
++ hold-until-tag merge exception, both now in `execute-backlog/SKILL.md`. Retro:
+`wiki/Research/Debriefs/2026-08-16-tools-result-handling-execution-debrief.md`.
 
 **2026-08-16: v0.15.0 release-prep — t0-deterministic regression root-caused + fixed (`c2418864`).**
 `bundle/providers-dynamic-config` (#198) merged clean to `main`, but `bun test` surfaced 4 real fails.

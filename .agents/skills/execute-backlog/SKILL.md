@@ -208,14 +208,28 @@ If adjacent improvement adopted, **update the plan doc's "Adjacent improvement f
 
 ## Phase 3.5 — BRANCH (mandatory)
 
-Before any code edits land, create a dedicated feature branch off `main` for the bundle:
+Before any code edits land, create a dedicated feature branch off `main` for the bundle.
+
+**Local-main-ahead check (added 2026-08-16 v13).** Some repos hold work on local `main` unpushed until a release/tag event (e.g. `reactive-agents-ts` itself — see `.agents/MEMORY.md`'s repo-workflow note). Branching from `origin/main` in that case silently drops every local-only commit from the new branch's base. Check first:
 
 ```bash
 git fetch origin main
+git log --oneline origin/main..main | wc -l
+```
+
+If non-zero, branch from local `main` instead — those commits are real, intentional, and the bundle should build on top of them:
+
+```bash
+git checkout -B bundle/<bundle-name> main
+```
+
+If zero (origin and local main agree), the original form is correct:
+
+```bash
 git checkout -B bundle/<bundle-name> origin/main
 ```
 
-Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR ships them together.
+Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR (or local merge, see Phase 6a's hold-until-tag note) ships them together.
 
 If the working tree is dirty when this skill is invoked, **stop** and surface the dirt — do not stash silently. The caller decides: commit, discard, or move out of the way. (Reason: per `feedback_commit_before_branch.md`, exploratory state must not get mixed into bundle commits.)
 
@@ -386,7 +400,7 @@ Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., 
 
 ## Phase 6 — UPDATE
 
-**6a — Open the PR (mandatory).** Every execution session ships its bundle as one PR. No direct-to-main pushes.
+**6a — Open the PR (mandatory) — OR merge to local main (hold-until-tag repos only, added 2026-08-16 v13).** Every execution session ships its bundle as one PR against `origin/main`. Exception: if Phase 3.5's local-main-ahead check found local `main` running ahead of `origin/main` (this repo's own convention), a PR against `origin/main` right now would show every one of those unrelated unpushed commits as part of the diff, not just the bundle. In that case, merge the bundle branch directly into local `main` instead (`git checkout main && git merge --no-ff bundle/<bundle-name>`), verify the merged result (build + test), delete the bundle branch (local and any pushed remote copy), and note the deviation + why in the retro. Everything else in this phase (issue close, board move, knowledge sync) still applies — it just runs against the local-main merge instead of a merged PR.
 
 ```bash
 git push -u origin bundle/<bundle-name>
