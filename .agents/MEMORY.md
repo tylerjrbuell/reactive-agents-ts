@@ -32,6 +32,25 @@ override actually fired. Known remaining gap (not fixed here): the harness-assem
 be a raw search-result dump rather than a coherent synthesis — see the react final-answer degeneration
 item in the next entry. Full detail: Claude memory `project_deterministic_evidence_grounding_2026_08_15.md`.
 
+**2026-08-15 (same-day follow-up): 2 more fixes shipped, 1 found-and-reverted (`59c72f20`, `7f5c6bb5`).**
+✅ **5th termination funnel** (`59c72f20`): live gemini-2.5-flash trace showed `terminatedBy: null` — no
+terminal reason at all, so `runner.ts` §8.5's whitelist check never runs. §8.7 (lastThought→output
+fallback) fires FIRST and unconditionally accepts any non-empty thought, satisfying `!state.output`
+before §8.8's evidence-checked `assembleDeliverable()` ever gets a turn. Fixed: §8.7 skips when
+unconsumed evidence + deliverable candidates exist. ✅ **Evidence-redirect budget starvation** (`7f5c6bb5`):
+`evidenceRedirectsSpent` reused the shared `ctx.redirectCount` grounding/coverage redirects also
+consume — a prior unrelated grounding/coverage redirect permanently starved the evidence check for the
+rest of the run (live-measured, trace `01M03XF7QQRXKPE71VT5T2C88J`). Fixed with a dedicated
+`evidenceRedirectCount`, counted via the evidence guidance's unique "Before finalizing:" text.
+⚠️ **REVERTED, do not retry naively** — `execution-engine.ts:1224-1230`'s `executionSucceeded` rule
+disagrees with the kernel's `completion-status.ts` H5 rule (user saw `bun run scratch.ts` print BOTH
+`✗ Failed` and `✓ Done` for the SAME run — two independent success computations). First fix attempt
+(blanket check on `harnessAuthoredOutput`) broke 11 tests: that flag has TWO semantically different
+producers — kernel's `onlyHarnessAuthorshipFailed` (verifier rejected ungrounded prose, should fail)
+vs. engine's own empty-output-but-all-deliverables-verified branch (legitimately still success, see
+`engine-empty-output-invariant.test.ts`). Needs the `allProduced` deliverable-completeness signal
+threaded earlier to distinguish them — **read that test file first** before touching this rule again.
+
 **2026-08-15: scratch.ts research-task triage — 3 root causes, 1 fixed (`b13550f2`).** `rax diagnose`
 on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode names/descriptions" task)
 found: (1) **FIXED** — `evaluateToolInject` (reactive-intelligence) unconditionally suggested another
