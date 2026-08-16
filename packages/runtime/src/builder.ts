@@ -799,14 +799,17 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Set the LLM provider for the agent.
      *
-     * The `config` argument (OpenAI-compatible endpoint override) currently only
-     * applies to the `"litellm"` provider, which speaks the OpenAI-compatible
-     * protocol — use it to point at a LiteLLM proxy, a llama.cpp server's `/v1`
-     * API, Deepseek, or any other OpenAI-compatible endpoint at runtime, without
-     * predefining `LITELLM_BASE_URL`/`LITELLM_API_KEY` env vars.
+     * The `config` argument (OpenAI-compatible endpoint override) applies to
+     * the whole OpenAI-compatible provider family — `"openai"`, `"groq"`,
+     * `"xai"`, and `"litellm"` — which all speak the same Chat Completions
+     * wire protocol. Use it to point at a LiteLLM proxy, a llama.cpp server's
+     * `/v1` API, Deepseek, or any other OpenAI-compatible endpoint at
+     * runtime, without predefining `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc.
+     * Silently ignored for `"anthropic"`, `"gemini"`, and `"ollama"` — those
+     * speak a different wire protocol.
      *
-     * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
-     * @param config - Optional OpenAI-compatible endpoint override (`"litellm"` provider only)
+     * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, `"groq"`, `"xai"`, or `"test"`
+     * @param config - Optional OpenAI-compatible endpoint override (applies to `"openai"`/`"groq"`/`"xai"`/`"litellm"`)
      * @returns `this` for chaining
      *
      * @example

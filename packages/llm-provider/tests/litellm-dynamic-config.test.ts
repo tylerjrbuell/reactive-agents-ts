@@ -105,7 +105,35 @@ describe("litellm dynamic provider config (#198)", () => {
     expect(lastHeaders?.["X-Custom"]).toBe("value");
   });
 
-  it("createLLMProviderLayer's modelParams.baseUrl/apiKey/headers map onto LLMConfig.litellm*", async () => {
+  it("LLMConfig.providerConfig takes precedence over litellmBaseUrl/litellmApiKey/litellmHeaders", async () => {
+    const layer = LiteLLMProviderLive.pipe(
+      Layer.provide(
+        Layer.succeed(
+          LLMConfig,
+          LLMConfig.of({
+            ...baseConfig,
+            litellmBaseUrl: "http://old-env-style:4000",
+            litellmApiKey: "sk-old",
+            litellmHeaders: { "X-Old": "yes" },
+            providerConfig: {
+              baseUrl: "http://localhost:8080/v1",
+              apiKey: "sk-local",
+              headers: { "X-Custom": "value" },
+            },
+          }),
+        ),
+      ),
+    );
+
+    await complete(layer);
+
+    expect(lastUrl).toBe("http://localhost:8080/v1/chat/completions");
+    expect(lastHeaders?.["Authorization"]).toBe("Bearer sk-local");
+    expect(lastHeaders?.["X-Custom"]).toBe("value");
+    expect(lastHeaders?.["X-Old"]).toBeUndefined();
+  });
+
+  it("createLLMProviderLayer's modelParams.baseUrl/apiKey/headers map onto LLMConfig.providerConfig", async () => {
     const layer = createLLMProviderLayer("litellm", undefined, undefined, {
       baseUrl: "http://localhost:9090/v1",
       apiKey: "sk-runtime",

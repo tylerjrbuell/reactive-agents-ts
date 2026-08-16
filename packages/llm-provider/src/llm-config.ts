@@ -99,11 +99,32 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly xaiBaseUrl?: string;
 
     /**
+     * Runtime endpoint override for the OpenAI-compatible provider family
+     * (`openai`, `groq`, `xai`, `litellm` — all speak the same Chat
+     * Completions wire format via `makeOpenAICompatProvider`/`litellm.ts`).
+     * Set via `.withProvider(provider, { baseUrl, apiKey, headers })`; takes
+     * precedence over every provider-specific field below and over env vars.
+     * The mechanism that lets `.withProvider("litellm", { baseUrl: "http://
+     * localhost:8080/v1" })` target a llama.cpp server, Deepseek, or any
+     * other OpenAI-compatible endpoint at runtime, without predefining
+     * `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc.
+     *
+     * Silently ignored by providers outside the OpenAI-compatible family
+     * (`anthropic`, `gemini`, `ollama`) — their adapters speak a different
+     * wire protocol and never read this field.
+     *
+     * @default undefined (falls back to the named per-provider fields below, then env vars)
+     */
+    readonly providerConfig?: {
+      readonly baseUrl?: string;
+      readonly apiKey?: string;
+      readonly headers?: Record<string, string>;
+    };
+
+    /**
      * Base URL override for the LiteLLM / OpenAI-compatible endpoint.
-     * Points the `litellm` provider at any OpenAI-compatible server —
-     * a LiteLLM proxy, a llama.cpp server's `/v1` API, Deepseek, etc.
-     * Retrieved from LITELLM_BASE_URL environment variable, or set at
-     * runtime via `.withProvider("litellm", { baseUrl })`.
+     * Retrieved from LITELLM_BASE_URL environment variable. Superseded by
+     * {@link providerConfig}`.baseUrl` when set.
      *
      * @default "http://localhost:4000"
      */
@@ -111,8 +132,8 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
 
     /**
      * API key for the LiteLLM / OpenAI-compatible endpoint.
-     * Retrieved from LITELLM_API_KEY environment variable, or set at
-     * runtime via `.withProvider("litellm", { apiKey })`.
+     * Retrieved from LITELLM_API_KEY environment variable. Superseded by
+     * {@link providerConfig}`.apiKey` when set.
      *
      * @default From LITELLM_API_KEY env var (undefined if not set)
      */
@@ -120,9 +141,8 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
 
     /**
      * Extra HTTP headers sent with every LiteLLM / OpenAI-compatible request.
-     * Merged alongside `Content-Type` and the `Authorization` bearer header
-     * derived from {@link litellmApiKey}. Set via
-     * `.withProvider("litellm", { headers })`.
+     * Merged alongside `Content-Type` and the `Authorization` bearer header.
+     * Superseded by {@link providerConfig}`.headers` when set.
      *
      * @default undefined (no extra headers)
      */

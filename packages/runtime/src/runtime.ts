@@ -442,6 +442,10 @@ export const createRuntime = (options: RuntimeOptions) => {
               Effect.provide(llmLayer as Layer.Layer<LLMService, never, never>),
             );
             const fallbacks = yield* Effect.all(
+              // Deliberately NOT threading options.providerConfig here — a
+              // fallback is a different provider/endpoint by definition, so
+              // inheriting the primary's baseUrl/apiKey override would be
+              // wrong (see RuntimeOptions.providerConfig JSDoc).
               fallbackProviders.map((fp) =>
                 LLMService.pipe(
                   Effect.provide(

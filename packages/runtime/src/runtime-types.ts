@@ -114,13 +114,19 @@ export interface RuntimeOptions {
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
 
   /**
-   * OpenAI-compatible endpoint override for the `"litellm"` provider — points
-   * it at a LiteLLM proxy, a llama.cpp server's `/v1` API, Deepseek, or any
-   * other OpenAI-compatible endpoint at runtime. Set via
-   * `.withProvider("litellm", { baseUrl, apiKey, headers })`.
+   * OpenAI-compatible endpoint override — applies to `"openai"`, `"groq"`,
+   * `"xai"`, and `"litellm"` (all four speak the same Chat Completions wire
+   * protocol). Points the active provider at a LiteLLM proxy, a llama.cpp
+   * server's `/v1` API, Deepseek, or any other OpenAI-compatible endpoint at
+   * runtime. Set via `.withProvider(provider, { baseUrl, apiKey, headers })`.
+   * Silently ignored for `"anthropic"`, `"gemini"`, `"ollama"`.
    *
-   * Default: undefined (falls back to `LITELLM_BASE_URL`/`LITELLM_API_KEY`
-   * env vars, then `http://localhost:4000`)
+   * NOT propagated to `fallbackConfig` providers (`runtime.ts`'s fallback-
+   * layer construction) — a fallback is a different provider/endpoint by
+   * definition, so inheriting the primary's override would be wrong.
+   *
+   * Default: undefined (falls back to each provider's own named field/env
+   * var — e.g. `LITELLM_BASE_URL`/`LITELLM_API_KEY`, `GROQ_BASE_URL`, etc.)
    */
   providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
 
@@ -928,7 +934,7 @@ export interface LightRuntimeOptions {
    */
   agentDisplayName?: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
-  /** OpenAI-compatible endpoint override for the `"litellm"` provider. See `RuntimeOptions.providerConfig`. */
+  /** OpenAI-compatible endpoint override (openai/groq/xai/litellm). See `RuntimeOptions.providerConfig`. */
   providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
   model?: string;
   thinking?: boolean;

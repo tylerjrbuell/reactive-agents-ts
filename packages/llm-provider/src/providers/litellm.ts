@@ -229,14 +229,16 @@ export const LiteLLMProviderLive = Layer.effect(
     const config = yield* LLMConfig;
 
     const baseURL =
+      config.providerConfig?.baseUrl ??
       config.litellmBaseUrl ??
       process.env.LITELLM_BASE_URL ??
       "http://localhost:4000";
     const apiKey =
+      config.providerConfig?.apiKey ??
       config.litellmApiKey ??
       process.env.LITELLM_API_KEY ??
       undefined;
-    const extraHeaders = config.litellmHeaders;
+    const extraHeaders = config.providerConfig?.headers ?? config.litellmHeaders;
 
     const defaultModel = config.defaultModel;
 

@@ -265,18 +265,25 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
       };
     };
     type OpenAIModule = {
-      default: new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
+      default: new (opts: { apiKey?: string; baseURL?: string; defaultHeaders?: Record<string, string> }) => OpenAIClient;
     };
 
     let _clientPromise: Promise<OpenAIClient> | null = null;
     const getClient = (): Promise<OpenAIClient> => {
       if (!_clientPromise) {
-        const baseURL = resolveBaseUrl?.(config);
+        // `config.providerConfig` is the runtime override set via
+        // `.withProvider(provider, { baseUrl, apiKey, headers })` — it wins
+        // over each provider's own named field/env-var resolution
+        // (`resolveApiKey`/`resolveBaseUrl`), same precedence as litellm.ts.
+        const baseURL = config.providerConfig?.baseUrl ?? resolveBaseUrl?.(config);
+        const apiKey = config.providerConfig?.apiKey ?? resolveApiKey(config);
+        const headers = config.providerConfig?.headers;
         _clientPromise = (
           import("openai") as unknown as Promise<OpenAIModule>
         ).then(({ default: OpenAI }) => new OpenAI({
-          apiKey: resolveApiKey(config),
+          apiKey,
           ...(baseURL ? { baseURL } : {}),
+          ...(headers ? { defaultHeaders: headers } : {}),
         }));
       }
       return _clientPromise;

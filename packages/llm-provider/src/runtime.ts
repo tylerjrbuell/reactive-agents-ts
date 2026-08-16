@@ -87,9 +87,15 @@ export const createLLMProviderLayer = (
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
   if (modelParams?.numCtx !== undefined) configOverrides.explicitNumCtx = modelParams.numCtx;
   if (modelParams?.ollamaTimeoutMs !== undefined) configOverrides.ollamaTimeoutMs = modelParams.ollamaTimeoutMs;
-  if (modelParams?.baseUrl !== undefined) configOverrides.litellmBaseUrl = modelParams.baseUrl;
-  if (modelParams?.apiKey !== undefined) configOverrides.litellmApiKey = modelParams.apiKey;
-  if (modelParams?.headers !== undefined) configOverrides.litellmHeaders = modelParams.headers;
+  // Single generic override, read by every OpenAI-compatible adapter
+  // (openai/groq/xai/litellm) — see LLMConfig.providerConfig JSDoc.
+  if (modelParams?.baseUrl !== undefined || modelParams?.apiKey !== undefined || modelParams?.headers !== undefined) {
+    configOverrides.providerConfig = {
+      baseUrl: modelParams?.baseUrl,
+      apiKey: modelParams?.apiKey,
+      headers: modelParams?.headers,
+    };
+  }
   if (pricingRegistry) configOverrides.pricingRegistry = pricingRegistry;
 
   const configLayer = Object.keys(configOverrides).length > 0
