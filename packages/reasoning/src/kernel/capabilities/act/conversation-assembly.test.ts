@@ -17,6 +17,7 @@ import { NativeFCDriver } from "@reactive-agents/tools";
 import { assembleConversation } from "./conversation-assembly.js";
 import { initialKernelState, noopHooks, type KernelContext } from "../../state/kernel-state.js";
 import { makeStep } from "../sense/step-utils.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { CONTEXT_PROFILES } from "../../../context/context-profile.js";
 
 const context: KernelContext = {
@@ -101,5 +102,76 @@ describe("assembleConversation — tool-result inline vs. compressed-preview fal
 
     const toolMsg = result.messages.find((m) => m.role === "tool_result" && m.toolCallId === "tc1");
     expect(toolMsg?.content).toBe(smallFullText);
+  });
+});
+
+describe("assembleConversation — required-tools-satisfied completion nudge", () => {
+  // Live-model QA, 2026-08-16 (cogito:8b/gemma4:e4b/qwen3:4b, rw-4/rw-8/rw-9 —
+  // all single-quantity required-tools tasks): this branch used to say
+  // NOTHING once the model's required tools were satisfied, on the theory
+  // that "called once" is too weak a signal to justify the aggressive
+  // "FINAL ANSWER now" push used for multi-quantity tasks. Measured cost:
+  // smaller local models routinely satisfied their required tools, then just
+  // stopped without ever calling final-answer, because nothing told them
+  // finishing was an option — the harness had to fall back to
+  // harness_deliverable + output-gate reformatting on nearly every run.
+  it("sends a soft, informational finish nudge (not silence) once single-quantity required tools are satisfied", () => {
+    const state = baseState();
+    const obsStep = makeStep("observation", "[http-get result] 200 OK", { toolCallId: "tc1", observationResult: makeObservationResult("http-get", true, "[http-get result] 200 OK") });
+    const allSteps = [
+      makeStep("action", "[ACT] http-get", { toolCall: { id: "tc1", name: "http-get", arguments: {} } }),
+      obsStep,
+    ];
+    const contextWithRequiredTools: KernelContext = {
+      ...context,
+      input: { ...context.input, requiredTools: ["http-get"] },
+    };
+
+    const result = assembleConversation({
+      state,
+      context: contextWithRequiredTools,
+      adapter,
+      allSteps,
+      normalizedPendingCalls: [{ id: "tc1", name: "http-get", arguments: {} }],
+      newToolsUsed: new Set(["http-get"]),
+      sharedScratchpad: new Map(),
+    });
+
+    expect(result.completionNudgeSent).toBe(true);
+    expect(result.actReminder).toBeDefined();
+    expect(result.actReminder).toContain("Required tool calls are satisfied");
+    expect(result.actReminder).toContain("final answer");
+    // Soft/optional phrasing — must NOT use the mandatory multi-quantity
+    // push, which would override the model's judgment on whether it's
+    // actually done researching.
+    expect(result.actReminder).not.toContain("FINAL ANSWER");
+  });
+
+  it("sends the nudge only once — state.meta.completionNudgeSent suppresses repeats", () => {
+    const state = {
+      ...baseState(),
+      meta: { ...baseState().meta, completionNudgeSent: true },
+    };
+    const obsStep = makeStep("observation", "[http-get result] 200 OK", { toolCallId: "tc1", observationResult: makeObservationResult("http-get", true, "[http-get result] 200 OK") });
+    const allSteps = [
+      makeStep("action", "[ACT] http-get", { toolCall: { id: "tc1", name: "http-get", arguments: {} } }),
+      obsStep,
+    ];
+    const contextWithRequiredTools: KernelContext = {
+      ...context,
+      input: { ...context.input, requiredTools: ["http-get"] },
+    };
+
+    const result = assembleConversation({
+      state,
+      context: contextWithRequiredTools,
+      adapter,
+      allSteps,
+      normalizedPendingCalls: [{ id: "tc1", name: "http-get", arguments: {} }],
+      newToolsUsed: new Set(["http-get"]),
+      sharedScratchpad: new Map(),
+    });
+
+    expect(result.actReminder).toBeUndefined();
   });
 });

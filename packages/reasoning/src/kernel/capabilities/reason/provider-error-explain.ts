@@ -109,6 +109,16 @@ export function explainProviderError(
     return `Request to ${provider ?? "LLM provider"}${ctx} timed out: ${rawMessage}\n  Provider may be slow or unreachable. Check network and provider status.`;
   }
 
+  // Model doesn't support tool/function calling (Ollama's exact wording:
+  // "<model> does not support tools"). Live QA, 2026-08-16 (gemma3:12b): the
+  // framework has no text-parse fallback for tool-incapable local models yet
+  // (capability.ts's `toolCallDialect: "none"` is data-only today — see its
+  // "Stage A, text-parse routing not yet built" note), so this reliably
+  // fails outright rather than degrading. Actionable until that lands.
+  if (lower.includes("does not support tools") || lower.includes("does not support function")) {
+    return `${provider ?? "LLM provider"}${ctx} rejected the request: ${rawMessage}\n  This model doesn't support tool/function calling. Use a tool-capable model, or drop tools with .withTools({ builtins: false }) and no custom tools.`;
+  }
+
   // Generic fallthrough — preserve raw message with provider context
   return `${provider ?? "LLM"} call failed${ctx}: ${rawMessage}`;
 }

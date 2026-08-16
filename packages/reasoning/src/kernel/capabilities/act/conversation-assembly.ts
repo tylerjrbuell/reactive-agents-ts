@@ -191,28 +191,42 @@ export function assembleConversation(args: {
   // Only send this nudge ONCE per run to avoid contradictory repeated messages.
   //
   // Sequential mode (all quantities ≤ 1): the "satisfied" condition only means each
-  // tool was called once — a weak signal. Skip the aggressive "FINAL ANSWER" push
-  // and let the model naturally continue researching until it decides it's done.
+  // tool was called once — a weak signal, so this branch used to say NOTHING at
+  // all rather than risk the aggressive "FINAL ANSWER" push cutting off
+  // legitimate continued research. Measured cost (live-model QA, 2026-08-16,
+  // cogito:8b/gemma4:e4b/qwen3:4b across rw-4/rw-8/rw-9 — all single-quantity
+  // required-tools tasks): smaller local models routinely satisfy their
+  // required tools, then just stop (`end_turn`) without ever calling
+  // final-answer, because nothing told them finishing was now an option. The
+  // harness's fallback (harness_deliverable + output-gate reformat) recovers
+  // an answer either way, but every one of those runs pays an extra
+  // stall-detection + reformatting pass a proactive, softer nudge avoids
+  // outright. Unlike the multi-quantity nudge below, this one is informational
+  // ("you may finish"), not mandatory ("FINAL ANSWER now") — it still leaves
+  // the model free to keep researching.
   if (reqTools.length > 0) {
     const hasMultiQuantity = Object.values(reqQuantities ?? {}).some((n) => n > 1);
+    const alreadySentCompletion = state.meta.completionNudgeSent === true;
 
+    if (!alreadySentCompletion) {
+      const overflowPreview = toolResultMessages.some(
+        (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
+      );
+      const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
+        (s) => s.name === "recall",
+      );
+      const finishText = hasMultiQuantity
+        ? (overflowPreview && recallAvailable
+          ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
+          : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`)
+        : (overflowPreview && recallAvailable
+          ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; call recall("<that-key>", full: true) for the stored keys shown in the [STORED: …] header if you need the full content. If you have what you need, give your final answer now — otherwise continue.`
+          : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. If you have what you need from the results above, give your final answer now — you don't need to call anything else unless more information is genuinely required.`);
+      return { messages: baseMessages, actReminder: finishText, errorRecovery: undefined, completionNudgeSent: true };
+    }
+
+    // Completion gate already sent but this turn had errors — nudge to retry or finish.
     if (hasMultiQuantity) {
-      const alreadySentCompletion = state.meta.completionNudgeSent === true;
-      if (!alreadySentCompletion) {
-        const overflowPreview = toolResultMessages.some(
-          (m) => typeof m.content === "string" && observationReferencesStoredOverflow(m.content),
-        );
-        const recallAvailable = (input.allToolSchemas ?? input.availableToolSchemas ?? []).some(
-          (s) => s.name === "recall",
-        );
-        const finishText =
-          overflowPreview && recallAvailable
-            ? `${REQUIRED_TOOLS_SATISFIED_PREFIX}. The observations above are compressed previews; the real command output is stored under keys like _tool_result_1. Before summarizing, call recall("<that-key>", full: true) for each key shown in the [STORED: …] header. Do not invent CLI flags, subcommands, or options — only report text you retrieved via recall.`
-            : `${REQUIRED_TOOLS_SATISFIED_PREFIX}. Review ALL of the tool results above carefully — extract the specific data points you need from each one. Then give your FINAL ANSWER using only data from these results.`;
-        return { messages: baseMessages, actReminder: finishText, errorRecovery: undefined, completionNudgeSent: true };
-      }
-
-      // Completion gate already sent but this turn had errors — nudge to retry or finish.
       const thisRoundHadErrors = newStepsThisTurn.some(
         (s) => s.type === "observation" &&
           (s.metadata?.observationResult as { success?: boolean } | undefined)?.success === false,

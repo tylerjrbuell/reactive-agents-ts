@@ -1569,6 +1569,15 @@ export function runKernel(
     if (state.status === "done") {
       yield* hooks.onDone(state);
     } else if (state.status === "failed") {
+      // `hooks.onError` only publishes to the EventBus (ReasoningFailed) — a
+      // programmatic-subscriber channel nothing in the terminal/status-line
+      // pipeline listens on. Without this, a run terminating via `llm_error`
+      // (bad model name, connection refused, malformed provider response —
+      // the real message is already computed in state.error) printed nothing
+      // more specific than "Task failed" anywhere a user could see. Live QA,
+      // 2026-08-16 (gemma3:12b, rw-4): zero diagnostic text for an instant
+      // `llm_error` failure.
+      yield* emitLog({ _tag: "error", message: state.error ?? "unknown error", timestamp: new Date() });
       yield* hooks.onError(state, state.error ?? "unknown error");
     }
 
