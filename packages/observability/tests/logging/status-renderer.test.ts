@@ -10,9 +10,13 @@ function makeMockStream(isTTY = true) {
     isTTY,
     write(chunk: string) {
       raw.push(chunk);
-      // Collect permanent lines (those ending in \n)
+      // Collect permanent lines (those ending in \n). Strips cursor-control
+      // AND color SGR codes (`\x1b[32m` ... `\x1b[0m`) so assertions can match
+      // on plain text regardless of whether color is on for this stream.
       if (chunk.includes("\n")) {
-        lines.push(chunk.replace(/\r\x1b\[2K/g, "").replace(/\n$/, "").trim());
+        lines.push(
+          chunk.replace(/\r\x1b\[2K/g, "").replace(/\x1b\[[0-9;]*m/g, "").replace(/\n$/, "").trim(),
+        );
       }
       return true;
     },
@@ -179,6 +183,7 @@ describe("makeStatusRenderer", () => {
       on: vi.fn(),
       off: vi.fn(),
       setEncoding: vi.fn(),
+      listenerCount: vi.fn(() => 0),
     };
     const original = process.stdin;
     Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
@@ -189,6 +194,39 @@ describe("makeStatusRenderer", () => {
       expect(resume).toHaveBeenCalled();
       expect(pause).not.toHaveBeenCalled();
       expect(setRawMode).toHaveBeenCalledWith(false);
+    } finally {
+      Object.defineProperty(process, "stdin", { value: original, configurable: true });
+    }
+  });
+
+  it("defers to a host readline interface instead of stealing raw mode", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const out = makeMockStream();
+    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+
+    const setRawMode = vi.fn();
+    const onData = vi.fn();
+    const stdin = {
+      isTTY: true,
+      setRawMode,
+      resume: vi.fn(),
+      pause: vi.fn(),
+      on: onData,
+      off: vi.fn(),
+      setEncoding: vi.fn(),
+      // A readline.Interface on a TTY attaches its own 'data' listener to
+      // decode keypresses — this is what setupKeyboard() must detect and
+      // defer to, rather than layering its own raw-mode ownership on top.
+      listenerCount: vi.fn(() => 1),
+    };
+    const original = process.stdin;
+    Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+
+    try {
+      await Effect.runPromise(renderer.start());
+      renderer.stop();
+      expect(setRawMode).not.toHaveBeenCalled();
+      expect(onData).not.toHaveBeenCalledWith("data", expect.anything());
     } finally {
       Object.defineProperty(process, "stdin", { value: original, configurable: true });
     }

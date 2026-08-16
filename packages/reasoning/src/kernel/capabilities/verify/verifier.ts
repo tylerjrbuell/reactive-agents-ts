@@ -272,6 +272,35 @@ function buildSummary(action: string, checks: readonly VerificationCheck[]): str
 }
 
 /**
+ * Plain-English translation of a check's internal `name`, for user-facing
+ * surfaces (the TTY status line, `agent.run()` warnings). `buildSummary()`
+ * above stays internal-jargon-verbatim on purpose — it's the diagnostic
+ * string traces/receipts key off — but that same string used to be piped
+ * straight into the runner's user-visible warning log, so a first-time user
+ * saw raw check-ids like `output-is-model-authored` instead of a sentence.
+ * Falls back to `undefined` for any check name not listed here (new checks
+ * degrade to the raw summary rather than silently going missing).
+ */
+const CHECK_NAME_EXPLANATIONS: Readonly<Record<string, string>> = {
+  "action-success": "the tool call behind this answer failed",
+  "non-empty-content": "the answer came back empty",
+  "output-is-model-authored":
+    "the model didn't produce a final answer itself — the framework assembled one from raw tool results instead",
+  "agent-took-action": "the agent answered without using a tool it was required to use",
+  "output-not-harness-parrot": "the output echoed an internal framework message instead of answering",
+  "output-not-shallow-giveup": "the agent gave up without trying tools that were still available",
+  "output-not-continuation-intent": "the output looked like a mid-thought, not a finished answer",
+  "scaffold-leak": "internal framework text leaked into the output",
+  "output-not-fabricated-measurement": "the output stated a measurement no tool actually produced",
+  "output-not-contradicted-test-claim": "the output's claim contradicted the actual tool result",
+  "evidence-grounded": "a number in the output didn't match the tool evidence",
+};
+
+export function humanizeVerifierFailure(checkName: string): string | undefined {
+  return CHECK_NAME_EXPLANATIONS[checkName];
+}
+
+/**
  * Default Verifier — wraps the existing quality / evidence / requirement
  * helpers under a single typed contract. Behavior is intentionally
  * conservative: today's checks are the same as today's scattered checks,

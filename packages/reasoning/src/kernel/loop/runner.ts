@@ -41,7 +41,7 @@ import { gatewayComplete } from "../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
+import { defaultVerifier, resolveResultSeverity, verifyAndEmit, humanizeVerifierFailure } from "../../kernel/capabilities/verify/verifier.js";
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
@@ -1317,9 +1317,19 @@ export function runKernel(
         // back-compat default so external Verifier implementations that
         // predate I5 still get a sensible classification.
         const verdictSeverity = resolveResultSeverity(verdict);
+        // User-facing message stays plain-English (see `humanizeVerifierFailure`
+        // docstring) — the raw check-id/reason string still rides along in
+        // `context`, which only the verbose/non-status log formats render, so
+        // debugging detail isn't lost, just no longer the first thing a user
+        // sees on a TTY status line.
+        const firstFailedCheck = verdict.checks.find((c) => !c.passed);
+        const friendlyReason = firstFailedCheck ? humanizeVerifierFailure(firstFailedCheck.name) : undefined;
         yield* emitLog({
           _tag: "warning",
-          message: `[verifier] terminal output rejected (severity=${verdictSeverity}): ${verdict.summary}`,
+          message: friendlyReason
+            ? `The model's answer needed a second look: ${friendlyReason}.`
+            : `[verifier] terminal output rejected (severity=${verdictSeverity}): ${verdict.summary}`,
+          context: friendlyReason ? `[verifier] severity=${verdictSeverity}: ${verdict.summary}` : undefined,
           timestamp: new Date(),
         });
         //   - escalate : structural failure (harness fallback, shallow give-up).
@@ -1504,7 +1514,12 @@ export function runKernel(
                 harnessSynthesisDeliverable([], undefined, synthContent),
                 { outputSynthesized: true, outputFormatValidated: true },
               );
-              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
+              yield* emitLog({
+                _tag: "warning",
+                message: `Rewrote the answer to match the requested ${synthesisFormat} format.`,
+                context: `[output-gate] synthesized output to match requested format: ${synthesisFormat}`,
+                timestamp: new Date(),
+              });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
               // Drift S11 (imperfect-but-better-than-raw branch): same provenance
               // truth as the formatOk&&contentOk branch — harness-orchestrated

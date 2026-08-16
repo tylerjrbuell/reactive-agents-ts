@@ -99,12 +99,21 @@ export interface StatusRenderer {
   readonly onAgentCompleted: (event: SubAgentCompletedLike) => void;
 }
 
+// ANSI SGR codes. Kept to the handful of icon colors this renderer needs —
+// a dependency (chalk/picocolors) is overkill for wrapping five glyphs.
+const ANSI = { green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m", cyan: "\x1b[36m", reset: "\x1b[0m" } as const;
+
 export function makeStatusRenderer(
   logger: ObservableLoggerService,
   out: NodeJS.WriteStream = process.stdout,
   eb?: EbLike | null,
 ): StatusRenderer {
   const isTTY = Boolean(out.isTTY);
+  // Respect NO_COLOR (https://no-color.org) same as every other color-aware
+  // CLI tool — plain ASCII glyphs already carry the meaning (✓/✗/⚠), color
+  // is a legibility bonus, not the only signal.
+  const useColor = isTTY && !process.env.NO_COLOR;
+  const color = (code: string, text: string): string => (useColor ? `${code}${text}${ANSI.reset}` : text);
 
   const s: RendererState = {
     phase: "starting",
@@ -126,6 +135,9 @@ export function makeStatusRenderer(
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsub: (() => void) | null = null;
   let ebUnsubs: Array<() => void> = [];
+  // Set only when setupKeyboard() actually took ownership of stdin's raw
+  // mode — cleanupKeyboard() must not release a mode it never claimed.
+  let ownsKeyboard = false;
 
   const subAgents = new Map<string, SubAgentLine>();
 
@@ -283,17 +295,29 @@ export function makeStatusRenderer(
   function setupKeyboard(): void {
     if (!isTTY) return;
     try {
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(true);
-        process.stdin.resume();
-        process.stdin.setEncoding("utf8");
-        process.stdin.on("data", onKey);
-      }
+      if (!process.stdin.isTTY) return;
+      // A host app's own `readline.createInterface({ input: process.stdin })`
+      // (or anything else reading stdin directly) already has a 'data'
+      // listener attached — that's how readline decodes raw bytes into
+      // keypress/line events. If we ALSO call `setRawMode` and attach our
+      // own listener here, our later `cleanupKeyboard()` forces the terminal
+      // out of raw mode out from under readline without readline knowing,
+      // desyncing its internal mode tracking — the next arrow-key press
+      // then arrives as a literal, undecoded escape sequence (`^[[A`) instead
+      // of recalling input history. Deferring to whoever got there first
+      // means we lose the `t`-toggle / Ctrl+C rebind for that run, but that's
+      // a fair trade for not breaking the host's own stdin handling.
+      if (process.stdin.listenerCount("data") > 0) return;
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", onKey);
+      ownsKeyboard = true;
     } catch { /* raw mode unavailable */ }
   }
 
   function cleanupKeyboard(): void {
-    if (!isTTY) return;
+    if (!isTTY || !ownsKeyboard) return;
     try {
       if (process.stdin.isTTY) {
         process.stdin.off("data", onKey);
@@ -303,7 +327,9 @@ export function makeStatusRenderer(
         // the second prompt with "readline was closed" / immediate EOF.
         process.stdin.resume();
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } finally {
+      ownsKeyboard = false;
+    }
   }
 
   // ─── Permanent line output ───────────────────────────────────────────────────
@@ -322,7 +348,7 @@ export function makeStatusRenderer(
     if (sa.status === "running") {
       return `├─ spawn-agent → ${sa.name}  ●  ${elapsed}`;
     }
-    const icon = sa.status === "done" ? "✓" : "✗";
+    const icon = sa.status === "done" ? color(ANSI.green, "✓") : color(ANSI.red, "✗");
     return `├─ spawn-agent → ${sa.name}  ${icon}  ${elapsed}  ${sa.tokens.toLocaleString()} tok`;
   }
 
@@ -387,9 +413,9 @@ export function makeStatusRenderer(
         s.toolCallCount++;
         const dur = `${(event.duration / 1000).toFixed(1)}s`;
         if (event.status === "success") {
-          printLine(`→  ${event.tool}  ✓ ${dur}`);
+          printLine(`→  ${event.tool}  ${color(ANSI.green, "✓")} ${dur}`);
         } else {
-          printLine(`→  ${event.tool}  ✗ ${dur}${event.error ? ` — ${event.error}` : ""}`);
+          printLine(`→  ${event.tool}  ${color(ANSI.red, "✗")} ${dur}${event.error ? ` — ${event.error}` : ""}`);
         }
         s.tool = null;
         break;
@@ -414,9 +440,9 @@ export function makeStatusRenderer(
         }
         break;
 
-      case "warning":  printLine(`⚠  ${event.message}`); break;
-      case "error":    printLine(`✗  ${event.message}`); break;
-      case "notice":   printLine(`ℹ  ${event.title} — ${event.message}`); break;
+      case "warning":  printLine(`${color(ANSI.yellow, "⚠")}  ${event.message}`); break;
+      case "error":    printLine(`${color(ANSI.red, "✗")}  ${event.message}`); break;
+      case "notice":   printLine(`${color(ANSI.cyan, "ℹ")}  ${event.title} — ${event.message}`); break;
 
       case "completion": {
         if (s.drawnLines > 0) { collapsePanel(); }
@@ -427,8 +453,8 @@ export function makeStatusRenderer(
         if (s.toolCallCount > 0) parts.push(`${s.toolCallCount} call${s.toolCallCount === 1 ? "" : "s"}`);
         parts.push(`$${s.costUsd.toFixed(4)}`);   // always show cost (even $0.0000 for local models)
         const line = event.success
-          ? `✓  Done  ·  ${parts.join("  ·  ")}`
-          : `✗  Failed  ·  ${parts.join("  ·  ")}`;
+          ? `${color(ANSI.green, "✓")}  Done  ·  ${parts.join("  ·  ")}`
+          : `${color(ANSI.red, "✗")}  Failed  ·  ${parts.join("  ·  ")}`;
         out.write(isTTY ? `\r\x1b[2K${line}\n` : `${line}\n`);
         break;
       }

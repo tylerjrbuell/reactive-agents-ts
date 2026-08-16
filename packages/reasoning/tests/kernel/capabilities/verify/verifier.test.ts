@@ -9,6 +9,7 @@ import { describe, it, expect } from "bun:test";
 import {
   defaultVerifier,
   contextFromObservation,
+  humanizeVerifierFailure,
   type VerificationContext,
   type Verifier,
 } from "../../../../src/kernel/capabilities/verify/verifier.js";
@@ -527,6 +528,34 @@ describe("defaultVerifier — multi-severity (GH #121)", () => {
       expect(checkSeverity({ name: "x", passed: true, severity: "warn" })).toBe("warn");
       expect(checkSeverity({ name: "x", passed: false, severity: "escalate" })).toBe("escalate");
     });
+  });
+});
+
+describe("humanizeVerifierFailure", () => {
+  it("translates every check name defaultVerifier can emit into a plain-English sentence", () => {
+    // Guards against a check being added to defaultVerifier without a
+    // matching entry here — the runner falls back to the raw jargon summary
+    // for anything unmapped, so a silent gap is a silent DX regression.
+    const knownCheckNames = [
+      "action-success",
+      "non-empty-content",
+      "output-is-model-authored",
+      "agent-took-action",
+      "output-not-harness-parrot",
+      "output-not-shallow-giveup",
+      "output-not-continuation-intent",
+      "scaffold-leak",
+      "output-not-fabricated-measurement",
+      "output-not-contradicted-test-claim",
+      "evidence-grounded",
+    ];
+    for (const name of knownCheckNames) {
+      expect(humanizeVerifierFailure(name)).toBeDefined();
+    }
+  });
+
+  it("returns undefined for an unknown check name so callers fall back to the raw summary", () => {
+    expect(humanizeVerifierFailure("some-future-check")).toBeUndefined();
   });
 });
 
