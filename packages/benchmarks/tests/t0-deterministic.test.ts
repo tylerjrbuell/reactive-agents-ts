@@ -137,15 +137,19 @@ describe("t0-deterministic — per-commit harness-behavior gate", () => {
     expect(accuracyOf(cells, "ab-trap-4", "bare-llm")).toBe(0);
     expect(accuracyOf(cells, "ab-trap-5", "bare-llm")).toBe(0);
 
-    // CURRENT TRUTH, pinned deliberately: the 29k-char report is inlined
-    // head-truncated at TOOL_RESULT_INLINE_CAP=4000 (conversation-assembly.ts),
-    // so the tail sentinel ZEBRA-CODA never reaches the model and the scripted
-    // model honestly declines (no fabrication). The honest recall() follow-up
-    // is not statically scriptable because scratchpad keys are process-
-    // monotonic (`_tool_result_N`). If context assembly ever surfaces the tail
-    // (bigger cap, tail-preserving compression, deterministic recall keys),
-    // this flips to 1 — update this pin and the baseline consciously.
-    expect(accuracyOf(cells, "cs-recall-temptation", "ra-full")).toBe(0);
+    // Flipped 0 → 1 (2026-08-16): NOT the context-assembly change this
+    // comment originally anticipated — the actual cause was runner.ts's §8.5
+    // non-authoritative-termination step. The scripted fixture's final turn
+    // DOES contain the correct answer (ZEBRA-CODA) as plain end_turn text,
+    // but §8.5 used to unconditionally discard any model output on an
+    // end_turn-shaped termination and replace it with a raw tool_artifact
+    // reconstruction whenever a tool call had happened — so the model's
+    // already-correct answer was thrown away and replaced with something
+    // that didn't contain the sentinel, scoring accuracy 0 despite the model
+    // having answered correctly. §8.5's root-cause fix (same commit series)
+    // now trusts substantive model output instead of discarding it, so the
+    // correct scripted answer survives to become the real output.
+    expect(accuracyOf(cells, "cs-recall-temptation", "ra-full")).toBe(1);
   });
 
   it("matches the committed per-cell baseline exactly (drift gate, both directions)", () => {

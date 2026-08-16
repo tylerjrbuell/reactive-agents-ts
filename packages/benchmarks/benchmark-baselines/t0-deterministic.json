@@ -1,5 +1,5 @@
 {
-  "gitSha": "86434842",
+  "gitSha": "f13b4ec4",
   "reports": [
     {
       "taskId": "ab-trap-5",
@@ -17,16 +17,16 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 236,
-      "meanDurationMs": 137,
+      "meanTokens": 235,
+      "meanDurationMs": 165,
       "passRate": 1,
       "solveRate": 0,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 236,
-          "durationMs": 137.083508,
+          "tokensUsed": 235,
+          "durationMs": 165.30093499999998,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -52,16 +52,16 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 656,
-      "meanDurationMs": 197,
+      "meanTokens": 726,
+      "meanDurationMs": 209,
       "passRate": 1,
       "solveRate": 1,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 656,
-          "durationMs": 196.54214500000006,
+          "tokensUsed": 726,
+          "durationMs": 208.71689100000015,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -87,7 +87,7 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 108,
+      "meanTokens": 107,
       "meanDurationMs": 28,
       "passRate": 1,
       "solveRate": 0,
@@ -95,8 +95,8 @@
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 108,
-          "durationMs": 27.825783,
+          "tokensUsed": 107,
+          "durationMs": 27.64273799999978,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -123,7 +123,7 @@
       ],
       "variance": 0,
       "meanTokens": 0,
-      "meanDurationMs": 84,
+      "meanDurationMs": 101,
       "passRate": 1,
       "solveRate": 1,
       "runs": [
@@ -131,7 +131,7 @@
           "runIndex": 0,
           "status": "pass",
           "tokensUsed": 0,
-          "durationMs": 84.28910199999996,
+          "durationMs": 101.41358600000012,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -157,16 +157,16 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 175,
-      "meanDurationMs": 28,
+      "meanTokens": 194,
+      "meanDurationMs": 25,
       "passRate": 1,
       "solveRate": 0,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 175,
-          "durationMs": 28.152180000000044,
+          "tokensUsed": 194,
+          "durationMs": 25.377342,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -192,16 +192,16 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 1766,
-      "meanDurationMs": 113,
+      "meanTokens": 1847,
+      "meanDurationMs": 128,
       "passRate": 1,
       "solveRate": 1,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 1766,
-          "durationMs": 113.31006300000001,
+          "tokensUsed": 1847,
+          "durationMs": 127.63699800000018,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -227,16 +227,16 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 190,
-      "meanDurationMs": 27,
+      "meanTokens": 209,
+      "meanDurationMs": 34,
       "passRate": 1,
       "solveRate": 0,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 190,
-          "durationMs": 27.290898999999968,
+          "tokensUsed": 209,
+          "durationMs": 33.74827600000003,
           "dimensions": [
             {
               "dimension": "accuracy",
@@ -254,7 +254,7 @@
       "meanScores": [
         {
           "dimension": "accuracy",
-          "score": 0
+          "score": 1
         },
         {
           "dimension": "reliability",
@@ -262,25 +262,25 @@
         }
       ],
       "variance": 0,
-      "meanTokens": 7772,
-      "meanDurationMs": 106,
+      "meanTokens": 7853,
+      "meanDurationMs": 118,
       "passRate": 1,
-      "solveRate": 0,
+      "solveRate": 1,
       "runs": [
         {
           "runIndex": 0,
           "status": "pass",
-          "tokensUsed": 7772,
-          "durationMs": 106.36698400000012,
+          "tokensUsed": 7853,
+          "durationMs": 117.69362999999998,
           "dimensions": [
             {
               "dimension": "accuracy",
-              "score": 0
+              "score": 1
             }
           ]
         }
       ]
     }
   ],
-  "savedAt": "2026-08-15T03:16:24.905Z"
+  "savedAt": "2026-08-16T18:34:11.148Z"
 }

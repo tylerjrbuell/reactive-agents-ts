@@ -66,15 +66,18 @@ describe("tool loop behavioral tests", () => {
     // when the MINIMAL loop (no .withReasoning()) produced no reasoningSteps,
     // so the receipt fell back to the engine's ToolCallCompleted log
     // (receiptToolCalls) and graded "tool-grounded" from that fallback alone.
-    // Move 1 merge (2026-08-13): every builder now runs the kernel arm, which
-    // DOES produce reasoningSteps and a real requirement/contract evaluation
-    // for this bare 2-step scenario -- richer signal than the old fallback
-    // had, and it grades "partially-grounded" instead (toolsUsed is still
-    // correct; the tool call and result.success:true assertions above both
-    // still pass unchanged, so tool execution itself is not in question).
-    // Updated to match current, more nuanced grading rather than the old
-    // fallback-only tier.
-    expect(result.receipt?.verdict).toBe("partially-grounded");
+    // Move 1 merge (2026-08-13) downgraded this to "partially-grounded": every
+    // builder now runs the kernel arm, but runner.ts's §8.5 non-authoritative-
+    // termination step unconditionally discarded the model's real closing
+    // text ("The tool returned the value.") and replaced it with a raw
+    // tool_artifact reconstruction whenever terminatedBy was end_turn-shaped
+    // — exactly this scenario (tool call, then real text, no final-answer
+    // call). §8.5's root-cause fix (2026-08-16) now trusts substantive
+    // model output instead of discarding it, so this grades back to the
+    // correct, higher "tool-grounded" tier (toolsUsed is still correct; the
+    // tool call and result.success:true assertions above both pass unchanged
+    // either way, so tool execution itself was never in question).
+    expect(result.receipt?.verdict).toBe("tool-grounded");
     expect(result.receipt?.toolsUsed).toEqual(["echo-tool"]);
   });
 
