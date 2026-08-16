@@ -31,7 +31,7 @@ import {
 } from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
-import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
+import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "../act/tool-execution.js";
 import { executeToolAndObserve, evaluateToolPolicy } from "./tool-observe.js";
 import { resolveBlockApproval } from "./approval-gate.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
@@ -722,6 +722,13 @@ export function handleActing(
                   tool: batchCall.name,
                   duration: durationMs,
                   status: execResult.success ? "success" : "error",
+                  // The parallel-batch path (this Effect.all) was the one
+                  // tool_result emit site missing `error` — a failed call in a
+                  // parallel batch printed a bare `✗ tool 0.00s` with no
+                  // message at all, while the sequential path showed one.
+                  // Live-model QA, 2026-08-16 (rw-9, cogito:8b): two parallel
+                  // file-read calls both failed silently in the transcript.
+                  ...(execResult.success ? {} : { error: truncateForStatusLine(execResult.content) }),
                   timestamp: new Date(),
                 });
                 return {

@@ -56,7 +56,7 @@ describe("sub-agent dispatch logging", () => {
     // completion is the `[obs]` line, which names the sub-agent AND carries
     // the ✓/✗ together on one line (a tighter pairing than the two
     // separately-worded strings this test previously expected).
-    expect(all).toContain("[tool:spawn-agent] call");
+    expect(all).toContain("[tool:spawn-agent] iter");
     expect(all).toMatch(/✓ Sub-agent "researcher"/);
   }, 30_000);
 });
