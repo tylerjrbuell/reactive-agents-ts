@@ -18,11 +18,18 @@
 //
 // RED-ON-CUT: delete the `eb.publish({_tag:"LedgerEntryAppended", ...})` block
 // from inline-act.ts and the inline case fails with 0 streamed entries.
-import { describe, expect, it } from "bun:test";
-import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { afterAll, describe, expect, it } from "bun:test";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReactiveAgents } from "../src/index.js";
+
+// The scripted "PARITY_TRIGGER" file-write call always lands at cwd (the
+// healing pipeline's path-resolver remaps hallucinated/relative paths to the
+// active file root, which defaults to process.cwd()) — clean it up here.
+afterAll(async () => {
+  await rm("./.parity-probe.tmp.md", { force: true });
+});
 
 type LedgerEntryish = { kind: string; seq: number; toolName?: string };
 

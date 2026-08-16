@@ -226,6 +226,7 @@ Reverse-chronological within the month; each links to nothing (detail lives in M
 - Keep this file AND the personal Claude memory (`~/.claude/projects/.../memory/MEMORY.md`) in sync so other AI agents/sessions have context.
 - Use native `git`/`grep`/`find`, bound output yourself (`| head`, `| wc -l`, `-c`). **Do not use `rtk`** — revised 2026-07-27, it silently truncated output with no marker (measured: `git log` 50 vs 145 real, `find` 5 vs 1510 real) and was costing correctness, not saving tokens. Do not restore it.
 - Frontier API keys live in the repo's `.env` (bun auto-loads it) — do not conclude "no keys" from `echo $VAR` against shell env.
+- On a working tree with other pending/staged branch work, re-check `git diff --cached --stat` as the LITERAL LAST STEP before `git commit` — a check done even a few tool calls earlier can go stale if other work gets staged in between (happened 2026-08-16: a commit briefly swept in unrelated `bundle/providers-dynamic-config` changes; fixed with `git reset --soft HEAD~1` + selective re-staging).
 
 ## Lost / pending re-implementation
 

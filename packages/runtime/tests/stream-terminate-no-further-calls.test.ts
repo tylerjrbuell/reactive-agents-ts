@@ -34,10 +34,22 @@
  * via `reachedTerminal`) — i.e. any exit that is not a natural completion.
  * The second test below is that scenario, formalized.
  */
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterAll } from "bun:test";
 import { Layer } from "effect";
+import { rmSync } from "node:fs";
 import { ReactiveAgents } from "../src/builder.js";
 import { LLMService, TestLLMService, type TestTurn } from "@reactive-agents/llm-provider";
+
+// Scripted file-write calls hit the real filesystem via the "file-write"
+// builtin, and the healing pipeline's path-resolver (packages/tools/src/
+// healing/path-resolver.ts) deliberately remaps any absolute path outside
+// the active file root back to a bare filename under it (anti-hallucination
+// guard) — so these calls always land relative to process.cwd(), not a
+// tmpdir we hand them. Clean up the directories they create instead.
+const SCENARIO_DIRS = ["fm5-terminate-test", "fm5-abandoned-consumer-test"];
+afterAll(() => {
+  for (const dir of SCENARIO_DIRS) rmSync(dir, { recursive: true, force: true });
+});
 
 /**
  * Build a Layer that wraps TestLLMService and counts every complete()/stream()
