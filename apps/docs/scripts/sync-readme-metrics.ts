@@ -73,7 +73,7 @@ const rules: Rule[] = [
 ];
 
 // Removed 2026-08-16: "packages + apps inline" (headline package count
-// deliberately dropped from the hero — see the "Reframe as architecture"
+// deliberately dropped from the hero: see the "Reframe as architecture"
 // framing decision) and "comparison table tests" (the comparison table was
 // trimmed to defensible structural-differentiator rows only; a raw test-count
 // row read as a bragging metric, not a comparison). Both patterns no longer

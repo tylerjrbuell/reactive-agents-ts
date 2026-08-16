@@ -67,7 +67,7 @@ const agent = await ReactiveAgents.create()
     tools: ["shell-execution", "file-write"],
     mode: "block",
     onApprove: async ({ toolName, args, iteration }) => {
-      // Your approval UI/logic here — e.g. a Slack prompt, a CLI confirm, a policy check.
+      // Your approval UI/logic here, e.g. a Slack prompt, a CLI confirm, a policy check.
       return true;
     },
   })

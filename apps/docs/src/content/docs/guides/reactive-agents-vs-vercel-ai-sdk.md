@@ -52,7 +52,7 @@ These layers stack cleanly. A very common pattern: **use the AI SDK's `useChat` 
 If your "agent" is one model call plus a short tool loop, the AI SDK's primitives are likely all you need. The harness layer earns its keep when the loop grows up:
 
 - **Deterministic 12-phase execution engine** — every run flows through the same observable phases, with hooks at each boundary, so behavior is inspectable and reproducible rather than ad hoc.
-- **Eight reasoning strategies** — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, and Code-Action (experimental) — selectable per agent instead of hand-rolled.
+- **Eight reasoning strategies**, selectable per agent instead of hand-rolled: ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, and Code-Action (experimental).
 - **Four-layer memory** — working, semantic, episodic, and procedural memory as a first-class subsystem.
 - **Guardrails** — input/output validation and policy enforcement built into the loop.
 - **Cost routing + budgets** — route to cheaper models and enforce spend ceilings.

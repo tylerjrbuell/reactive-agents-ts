@@ -19,17 +19,17 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 ## v0.15.0 — Hardening pass (August 2026)
 
 <Aside type="note" title="No breaking changes">
-v0.15 is a bugfix and hardening release — no builder-surface removals, no migration needed. One security-relevant fix: `.withApprovalPolicy({ mode: "block" })` now actually enforces.
+v0.15 is a bugfix and hardening release: no builder-surface removals, no migration needed. One security-relevant fix: `.withApprovalPolicy({ mode: "block" })` now actually enforces.
 </Aside>
 
 A cluster of fixes found through live-model QA and a pre-release health sweep, plus one security fix and two small additions.
 
-**Security fix — `.withApprovalPolicy({ mode: "block" })` now enforces.** `"block"` mode — what you get without `.withDurableRuns()` — was previously an inert switch: no gate read it, so a `requiresApproval` tool ran unattended. It now decides each gated call in process and **denies by default** unless you supply the new `onApprove` callback. This changes behavior: a gated tool that used to run silently is now refused until you wire `onApprove` or switch to `mode: "detach"` + `.withDurableRuns()`. The durable HITL gate also now applies uniformly across every reasoning strategy, not just `reactive`.
+**Security fix: `.withApprovalPolicy({ mode: "block" })` now enforces.** `"block"` mode (what you get without `.withDurableRuns()`) was previously an inert switch: no gate read it, so a `requiresApproval` tool ran unattended. It now decides each gated call in process and **denies by default** unless you supply the new `onApprove` callback. This changes behavior: a gated tool that used to run silently is now refused until you wire `onApprove` or switch to `mode: "detach"` + `.withDurableRuns()`. The durable HITL gate also now applies uniformly across every reasoning strategy, not just `reactive`.
 
 **Correctness fixes:**
-- The harness no longer discards a model's own correct answer to replace it with a raw tool-artifact reconstruction — the single biggest source of false "model didn't answer" warnings, live-verified at ~2.5x faster with zero warnings on the repro case.
+- The harness no longer discards a model's own correct answer to replace it with a raw tool-artifact reconstruction. This was the single biggest source of false "model didn't answer" warnings, live-verified at ~2.5x faster with zero warnings on the repro case.
 - Deterministic evidence grounding (added mid-cycle) got a follow-up correction: a thought that already reproduces unread tool evidence verbatim is now trusted instead of being overridden.
-- `repetitionGuard`'s distinct-target carve-out now recognizes `command`-shaped tool args (`gh-cli`, `git-cli`, `gws-cli`), so a genuinely new subcommand (`gh log` after `gh repo view`) is no longer blocked as repetition — same-subcommand churn still hits the ceiling.
+- `repetitionGuard`'s distinct-target carve-out now recognizes `command`-shaped tool args (`gh-cli`, `git-cli`, `gws-cli`), so a genuinely new subcommand (`gh log` after `gh repo view`) is no longer blocked as repetition; same-subcommand churn still hits the ceiling.
 - A failed tool call inside a parallel batch now shows its error message (previously silent for parallel, present for sequential).
 - Ollama's `OLLAMA_HOST` env var is now honored alongside `OLLAMA_ENDPOINT`.
 - `code-action`'s sandbox Worker now actually terminates on run cancellation instead of continuing unsupervised.
@@ -37,12 +37,12 @@ A cluster of fixes found through live-model QA and a pre-release health sweep, p
 - Status line no longer double-prints `Done`/`Failed` per run; no longer breaks a host script's `readline` arrow-key history.
 
 **Added:**
-- Dynamic OpenAI-compatible provider config — `.withProvider(provider, { baseUrl, apiKey, headers })` now works at runtime for `openai`/`groq`/`xai`/`litellm` alike, for pointing at llama.cpp, Deepseek, or a custom proxy without env vars.
-- `prompt.guidance` compose tag — override point for the harness's own "Guidance:" prompt text (required-tools reminders, nudges, hints), matching the control `prompt.system` already gives over your own prompt.
-- Bounded scratchpad with disk spill — tool-result auto-store now caps in-memory size and spills overflow to disk, transparently resolved back on read.
+- Dynamic OpenAI-compatible provider config: `.withProvider(provider, { baseUrl, apiKey, headers })` now works at runtime for `openai`/`groq`/`xai`/`litellm` alike, for pointing at llama.cpp, Deepseek, or a custom proxy without env vars.
+- `prompt.guidance` compose tag: override point for the harness's own "Guidance:" prompt text (required-tools reminders, nudges, hints), matching the control `prompt.system` already gives over your own prompt.
+- Bounded scratchpad with disk spill: tool-result auto-store now caps in-memory size and spills overflow to disk, transparently resolved back on read.
 - Sub-agents now inherit the parent's `taskContract`, `fabricationGuard`, `grounding`, and `approvalPolicy` instead of running unconstrained; sub-agent log lines are depth/name-prefixed and delimited for readability.
 
-**Also:** Groq's `llama-3.3-70b-versatile`/`llama-3.1-8b-instant` were deprecated by Groq on 2026-08-16 — the provider default now points to `openai/gpt-oss-120b`. Tool definitions are now validated at registration instead of failing silently later. Nonexistent-tool recovery hints now name your actual available tools instead of generic search/fetch tools.
+**Also:** Groq's `llama-3.3-70b-versatile`/`llama-3.1-8b-instant` were deprecated by Groq on 2026-08-16, so the provider default now points to `openai/gpt-oss-120b`. Tool definitions are now validated at registration instead of failing silently later. Nonexistent-tool recovery hints now name your actual available tools instead of generic search/fetch tools.
 
 ---
 

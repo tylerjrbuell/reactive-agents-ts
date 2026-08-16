@@ -4,20 +4,20 @@
 
 # Reactive Agents
 
-A harness you fully control for agent loops that actually finish — on any model, with proof.
+A harness you fully control for agent loops that actually finish, on any model, with proof.
 
 Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand you back prose you have to take on faith. Reactive Agents is built around four things instead:
 
-- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay — locally, no SaaS dashboard required. Not a black box you debug by reading logs.
-- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the *same code* finish the agent loop on a local 4B Ollama model and on Claude / GPT / Gemini — no per-model rewrites.
+- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay, all locally, no SaaS dashboard required. Not a black box you debug by reading logs.
+- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the *same code* finish the agent loop on a local 4B Ollama model and on Claude / GPT / Gemini, with no per-model rewrites.
 - 🧩 **Composable and controllable.** A typed builder of opt-in layers. Start with a model; add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
-- 🧾 **Accountable.** Every run returns a signed `receipt` — a claim→evidence record with a verdict and confidence, not just an answer you have to trust.
+- 🧾 **Accountable.** Every run returns a signed `receipt`: a claim→evidence record with a verdict and confidence, not just an answer you have to trust.
 
-Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped throws.
+Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throws.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **One import to start**      | Everything else — reasoning, memory, guardrails, cost routing — is opt-in, added one `.with()` call at a time |
+| **One import to start**      | Everything else (reasoning, memory, guardrails, cost routing) is opt-in, added one `.with()` call at a time |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **8 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Direct · Code-Action (@exp) |
 | **8,920 tests**             | Verified with `bun test` on every PR                            |
@@ -64,31 +64,31 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 
 ## Why Reactive Agents?
 
-Most AI agent frameworks pick a lane and make you live with it: dynamically typed, monolithic, opaque about what the model actually did, and tuned for one model tier. Reactive Agents is organized around four pillars instead — each one a direct answer to a specific way those frameworks fall short.
+Most AI agent frameworks pick a lane and make you live with it: dynamically typed, monolithic, opaque about what the model actually did, and tuned for one model tier. Reactive Agents is organized around four pillars instead, each one a direct answer to a specific way those frameworks fall short.
 
-**🔍 Transparent harness** — nothing happens off the record
+**🔍 Transparent harness**: nothing happens off the record
 | Where it falls short elsewhere | How Reactive Agents answers it |
 | --- | --- |
 | Opaque decisions, debugged by reading logs | 12-phase execution engine with `before`/`after`/`error` hooks on every phase |
 | No type safety at service boundaries | Effect-TS schemas validate every boundary at compile time |
 
-**🛡️ Reliable on every model tier** — same code, any model
+**🛡️ Reliable on every model tier**: same code, any model
 | Where it falls short elsewhere | How Reactive Agents answers it |
 | --- | --- |
 | Model lock-in, assumes GPT-4-class | Model-adaptive context profiles (4 tiers: local, mid, large, frontier) help smaller models punch above their weight |
 | Single reasoning mode | 8 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action @experimental) |
 
-**🧩 Composable and controllable** — you own the loop
+**🧩 Composable and controllable**: you own the loop
 | Where it falls short elsewhere | How Reactive Agents answers it |
 | --- | --- |
-| Monolithic, all-or-nothing | 15 independent layers — enable only what you need, one `.with()` call at a time |
+| Monolithic, all-or-nothing | 15 independent layers: enable only what you need, one `.with()` call at a time |
 | Unsafe by default | Guardrails block injection/PII/toxicity before the LLM sees input |
 | No cost control | Complexity router picks the cheapest capable model; budget enforcement at 4 levels |
 
-**🧾 Accountable** — an answer you can check, not just trust
+**🧾 Accountable**: an answer you can check, not just trust
 | Where it falls short elsewhere | How Reactive Agents answers it |
 | --- | --- |
-| "Trust me" prose output | `result.receipt` — signed claim→evidence record with verdict and confidence, generated every run |
+| "Trust me" prose output | `result.receipt`: signed claim→evidence record with verdict and confidence, generated every run |
 
 ## Cortex Studio
 
@@ -175,7 +175,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **8,920 tests** across 1158 files — verified `bun test` on every PR
+- **8,920 tests** across 1158 files, verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -444,7 +444,7 @@ Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`
 
 ## Comparison
 
-We'd rather ship a short, defensible comparison than a long one where a single wrong row undermines the rest. This is scoped to where Reactive Agents is structurally different, not a feature-count contest — most of these frameworks ship token streaming, tool calling, and multi-agent orchestration too.
+We'd rather ship a short, defensible comparison than a long one where a single wrong row undermines the rest. This is scoped to where Reactive Agents is structurally different, not a feature-count contest: most of these frameworks ship token streaming, tool calling, and multi-agent orchestration too.
 
 | Capability                       | Reactive Agents         | LangChain JS | Vercel AI SDK | Mastra    |
 | --------------------------------- | :----------------------: | :----------: | :-----------: | :-------: |
@@ -455,7 +455,7 @@ We'd rather ship a short, defensible comparison than a long one where a single w
 | Production guardrails             |           Yes            |      --      |      --       |  Partial (processors) |
 | Durable crash-resume              |           Yes            |      --      |      --       | Partial (Temporal-backed workflows) |
 
-<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-08. `--` means we found no first-party equivalent, not that none exists — these move fast. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
+<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-08. `--` means we found no first-party equivalent, not that none exists; these move fast. Corrections welcome: [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
 ## Use Cases
 
