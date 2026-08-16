@@ -421,6 +421,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
       ollamaTimeoutMs: options.ollamaTimeoutMs,
+      baseUrl: options.providerConfig?.baseUrl,
+      apiKey: options.providerConfig?.apiKey,
+      headers: options.providerConfig?.headers,
     },
     options.circuitBreakerConfig,
     options.pricingRegistry,
@@ -1244,6 +1247,9 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
+      baseUrl: options.providerConfig?.baseUrl,
+      apiKey: options.providerConfig?.apiKey,
+      headers: options.providerConfig?.headers,
     },
   ) as Layer.Layer<LLMService>;
 

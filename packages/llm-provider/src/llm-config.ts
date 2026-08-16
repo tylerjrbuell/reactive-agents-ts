@@ -99,6 +99,36 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly xaiBaseUrl?: string;
 
     /**
+     * Base URL override for the LiteLLM / OpenAI-compatible endpoint.
+     * Points the `litellm` provider at any OpenAI-compatible server —
+     * a LiteLLM proxy, a llama.cpp server's `/v1` API, Deepseek, etc.
+     * Retrieved from LITELLM_BASE_URL environment variable, or set at
+     * runtime via `.withProvider("litellm", { baseUrl })`.
+     *
+     * @default "http://localhost:4000"
+     */
+    readonly litellmBaseUrl?: string;
+
+    /**
+     * API key for the LiteLLM / OpenAI-compatible endpoint.
+     * Retrieved from LITELLM_API_KEY environment variable, or set at
+     * runtime via `.withProvider("litellm", { apiKey })`.
+     *
+     * @default From LITELLM_API_KEY env var (undefined if not set)
+     */
+    readonly litellmApiKey?: string;
+
+    /**
+     * Extra HTTP headers sent with every LiteLLM / OpenAI-compatible request.
+     * Merged alongside `Content-Type` and the `Authorization` bearer header
+     * derived from {@link litellmApiKey}. Set via
+     * `.withProvider("litellm", { headers })`.
+     *
+     * @default undefined (no extra headers)
+     */
+    readonly litellmHeaders?: Record<string, string>;
+
+    /**
      * Ollama server endpoint.
      * Retrieved from OLLAMA_ENDPOINT environment variable.
      * Used for local model serving.

@@ -314,6 +314,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
+    private _providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }
     private _model?: string
     private _thinking?: boolean
     private _thinkingOptions?: import('@reactive-agents/llm-provider').ThinkingOptions
@@ -798,11 +799,28 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Set the LLM provider for the agent.
      *
+     * The `config` argument (OpenAI-compatible endpoint override) currently only
+     * applies to the `"litellm"` provider, which speaks the OpenAI-compatible
+     * protocol — use it to point at a LiteLLM proxy, a llama.cpp server's `/v1`
+     * API, Deepseek, or any other OpenAI-compatible endpoint at runtime, without
+     * predefining `LITELLM_BASE_URL`/`LITELLM_API_KEY` env vars.
+     *
      * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
+     * @param config - Optional OpenAI-compatible endpoint override (`"litellm"` provider only)
      * @returns `this` for chaining
+     *
+     * @example
+     * ```typescript
+     * agent.withProvider("litellm", {
+     *   baseUrl: "http://localhost:8080/v1", // llama.cpp server
+     *   apiKey: process.env.MY_KEY,
+     *   headers: { "X-Custom": "value" },
+     * })
+     * ```
      */
-    withProvider(provider: ProviderName): this {
+    withProvider(provider: ProviderName, config?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }): this {
         this._provider = provider
+        this._providerConfig = config
         return this
     }
 

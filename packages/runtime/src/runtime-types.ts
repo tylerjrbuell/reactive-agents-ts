@@ -114,6 +114,17 @@ export interface RuntimeOptions {
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
 
   /**
+   * OpenAI-compatible endpoint override for the `"litellm"` provider — points
+   * it at a LiteLLM proxy, a llama.cpp server's `/v1` API, Deepseek, or any
+   * other OpenAI-compatible endpoint at runtime. Set via
+   * `.withProvider("litellm", { baseUrl, apiKey, headers })`.
+   *
+   * Default: undefined (falls back to `LITELLM_BASE_URL`/`LITELLM_API_KEY`
+   * env vars, then `http://localhost:4000`)
+   */
+  providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
+
+  /**
    * LLM model identifier (provider-specific).
    * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`
    *
@@ -917,6 +928,8 @@ export interface LightRuntimeOptions {
    */
   agentDisplayName?: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
+  /** OpenAI-compatible endpoint override for the `"litellm"` provider. See `RuntimeOptions.providerConfig`. */
+  providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
   model?: string;
   thinking?: boolean;
   /** Rich thinking configuration (effort level, explicit budget). Authoritative over `thinking` when present. */

@@ -88,6 +88,7 @@ export function resolveCalibrationSetting(
  */
 export interface BuilderRuntimeStateView {
   readonly _provider: ProviderName;
+  readonly _providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
   /** `.withDocuments()` accumulator — presence turns `find` on by default (its retrieval surface). */
   readonly _documents: ReadonlyArray<unknown>;
   readonly _model?: string;
@@ -387,6 +388,7 @@ export const buildBaseRuntimeAndEngine = (
     const baseRuntime = createRuntime({
       agentId,
       provider: state._provider,
+      providerConfig: state._providerConfig,
       model: state._model,
       receiptSigningKey: state._receiptSigningKey,
       thinking: state._thinking,

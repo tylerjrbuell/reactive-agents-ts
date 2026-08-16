@@ -196,9 +196,11 @@ const liteLLMFetch = async (
   path: string,
   body: unknown,
   apiKey?: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<unknown> => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...extraHeaders,
   };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
@@ -227,13 +229,14 @@ export const LiteLLMProviderLive = Layer.effect(
     const config = yield* LLMConfig;
 
     const baseURL =
-      (config as unknown as { litellmBaseUrl?: string }).litellmBaseUrl ??
+      config.litellmBaseUrl ??
       process.env.LITELLM_BASE_URL ??
       "http://localhost:4000";
     const apiKey =
-      (config as unknown as { litellmApiKey?: string }).litellmApiKey ??
+      config.litellmApiKey ??
       process.env.LITELLM_API_KEY ??
       undefined;
+    const extraHeaders = config.litellmHeaders;
 
     const defaultModel = config.defaultModel;
 
@@ -288,7 +291,7 @@ export const LiteLLMProviderLive = Layer.effect(
 
           const response = yield* Effect.tryPromise({
             try: () =>
-              liteLLMFetch(baseURL, "/chat/completions", requestBody, apiKey),
+              liteLLMFetch(baseURL, "/chat/completions", requestBody, apiKey, extraHeaders),
             catch: (error) => toEffectError(error),
           });
 
@@ -352,6 +355,7 @@ export const LiteLLMProviderLive = Layer.effect(
               try {
                 const headers: Record<string, string> = {
                   "Content-Type": "application/json",
+                  ...extraHeaders,
                 };
                 if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
@@ -662,6 +666,7 @@ export const LiteLLMProviderLive = Layer.effect(
                     messages: toLiteLLMMessages(msgs),
                   },
                   apiKey,
+                  extraHeaders,
                 ),
               catch: (error) => toEffectError(error),
             });
@@ -718,6 +723,7 @@ export const LiteLLMProviderLive = Layer.effect(
                   dimensions: config.embeddingConfig.dimensions,
                 },
                 apiKey,
+                extraHeaders,
               )) as { data: Array<{ embedding: number[] }> };
 
               results.push(

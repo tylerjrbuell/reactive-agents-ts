@@ -64,7 +64,7 @@ export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test" = "anthropic",
   testScenario?: TestTurn[],
   model?: string,
-  modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number; ollamaTimeoutMs?: number },
+  modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number; ollamaTimeoutMs?: number; baseUrl?: string; apiKey?: string; headers?: Record<string, string> },
   circuitBreaker?: Partial<CircuitBreakerConfig> | false,
   pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
 ) => {
@@ -87,6 +87,9 @@ export const createLLMProviderLayer = (
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
   if (modelParams?.numCtx !== undefined) configOverrides.explicitNumCtx = modelParams.numCtx;
   if (modelParams?.ollamaTimeoutMs !== undefined) configOverrides.ollamaTimeoutMs = modelParams.ollamaTimeoutMs;
+  if (modelParams?.baseUrl !== undefined) configOverrides.litellmBaseUrl = modelParams.baseUrl;
+  if (modelParams?.apiKey !== undefined) configOverrides.litellmApiKey = modelParams.apiKey;
+  if (modelParams?.headers !== undefined) configOverrides.litellmHeaders = modelParams.headers;
   if (pricingRegistry) configOverrides.pricingRegistry = pricingRegistry;
 
   const configLayer = Object.keys(configOverrides).length > 0
