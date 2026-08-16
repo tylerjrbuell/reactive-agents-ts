@@ -1,5 +1,5 @@
 {
-  "tests": 8294,
-  "updated": "2026-07-21",
-  "_note": "Latest bun test snapshot (post-build full run: 8267 pass / 23 skip / 4 todo / 0 fail = 8294 across 1061 files). NOT auto-refreshed by CI — update manually after running the suite locally when the count moves."
+  "tests": 8920,
+  "updated": "2026-08-16",
+  "_note": "Latest bun test snapshot (post-build full run: 8890 pass / 26 skip / 4 todo / 0 fail = 8920 across 1156 files). NOT auto-refreshed by CI — update manually after running the suite locally when the count moves."
 }

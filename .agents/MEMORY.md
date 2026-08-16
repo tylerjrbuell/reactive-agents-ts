@@ -8,9 +8,28 @@
 **Last commit:** `a42e2490` "docs(debt): catalog 2026-07-30 harness-improvement hunt — K✅ (observability gaps) + L (open) + memory sync". Active thread = the **harness-improvement-loop** (`/harness-improvement-loop` skill): a 2026-07-29 systems audit found 8 root causes; as of today most are shipped (TE-1, EH-1, RC7, CT-4/CT-5 partial, ctx-window-divergence, 3 observability gaps K); **D-2026-07-30-L catalog is still open** (`wiki/Architecture/DEBT-REGISTER.md` §5) — read that file for exact open items before starting new harness work, do not re-derive from old audit text.
 **Canonical docs, priority order:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) > `Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified). **Canonical debt ledger = `wiki/Architecture/DEBT-REGISTER.md`** — verdict taxonomy (PROVEN/SILENT/ORPHAN/INERT/FALSE), §1 ratchet counts only go down. Do not write a new north-star doc — amend 09.
 **Stale references confirmed dead:** `AUDIT-overhaul-2026.md` (cited in the old "Architecture debt" section below and in prior memory) **no longer exists anywhere in the repo** — superseded by DEBT-REGISTER.md. `wiki/Architecture/Specs/04-PROJECT-STATE.md` and `05-DESIGN-NORTH-STAR.md` still exist on disk but are superseded by 09/08 per the priority order above — check before trusting either as current.
-**Verified 2026-08-07:** test suite = **8,765 pass / 1 fail (WS-5b ceiling, pre-existing) / 26 skip / 1,142 files**; memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable). Structured-output/durable-execution/HITL still live (not re-run, carried).
+**Verified 2026-08-16 (v0.15.0 release-prep pass):** test suite = **8,890 pass / 0 fail / 26 skip / 4 todo / 1,156 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages); local `main` fully synced with `origin/main` (merged external PR #197). memory DEFAULT-OFF (`builder.ts:345 _enableMemory`); `.withLeanHarness()` at `builder.ts:1372`; `check-cross-cutting.sh` = **9 checks** (1–4 envelope, 5 sub-agent inheritance, 6 approval once, 7 ledger absorption, 8 volatile placement, 9 ablatable), all green. Structured-output/durable-execution/HITL still live (not re-run, carried).
 
 ## Projects — Aug 2026
+
+**2026-08-16: v0.15.0 release-prep — t0-deterministic regression root-caused + fixed (`c2418864`).**
+`bundle/providers-dynamic-config` (#198) merged clean to `main`, but `bun test` surfaced 4 real fails.
+Bisected: `68e0b0d5` (2026-08-15 evidence-grounding fix) broke `cs-overflow-transcribe` (baseline 1.000 →
+0.000) — its binary check discarded a model thought whenever ANY stored tool evidence was formally
+"unconsumed" (no `recall()` seen), even when the thought demonstrably transcribed that evidence verbatim.
+Fixed in `deliverable.ts`'s `assembleDeliverable`: only override the thought when it does NOT already
+contain the unconsumed evidence's content (`resolveUnconsumedEvidence` + substring-after-whitespace-
+normalize check) — a thought that provably grounds the evidence is trusted regardless of whether
+`recall()` was called. Verified against `output-quality-gate`/`fabrication-guard-rail`/`abstention-e2e`/
+`abstention-scored-e2e` (all green — the fabrication guard's real target is unaffected).
+Also fixed 2 stale test assertions (`mechanism-liveness.test.ts`, `meta-loop-reachability.test.ts`):
+their exact-equality tool-invocation "control" checks went stale after `1b4a3f1f` (repetitionGuard
+distinct-target carve-out, already shipped 2026-08-15) removed an unrelated throttle that used to
+coincidentally cap both compared arms at the same count — changed to `>=`, preserving the actual
+signal (guard presence/absence). **Lesson: don't wave off a "pre-existing" test fail as noise without
+bisecting** — `git stash` on an already-merged branch proves nothing about origin; check the baseline
+commit's ancestry (`git merge-base --is-ancestor`) and bisect to the actual introducing commit.
+Move 1 dead-code deletion (Steps 2-4) and live-model perf claims deferred to v0.16 per user call.
 
 **2026-08-16: `agent.ingest()` didn't work like `.withDocuments()` — 2 gaps, both fixed (pending commit).**
 User: "agent.ingest doesn't seem to work like .withDocuments does." Live-reproduced: `.withTools({builtins:true})`

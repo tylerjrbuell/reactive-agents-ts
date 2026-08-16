@@ -68,6 +68,62 @@
   `.withDurableRuns()` for durable cross-process approval. `code-action` refuses
   the run outright under any gating policy (its tools run past every gate).
 
+### Fixed — repetition guard no longer blocks legitimate multi-file work
+
+- `repetitionGuard`'s call ceiling on `file-write` used to trip on the 3rd call
+  regardless of target path, hard-stopping any task that needed to edit 3+
+  files with "Stop repeating this tool." It now passes calls whose target
+  argument (`path`/`file`/`target`/`url`/`id`) differs from every prior call to
+  the same tool, so legitimate multi-file work is never penalized while
+  same-target thrashing still hits the ceiling.
+
+### Fixed — deterministic evidence grounding, corrected
+
+- The harness's deliverable assembly (`assembleDeliverable`) now grounds a
+  model's terminal thought against unread stored tool evidence instead of
+  trusting a long thought outright — closing a fabrication path where a
+  plausible-sounding synthesis off a compressed tool-output preview could win
+  over already-resolved tool observations, across every termination path
+  (`end_turn`, `dispatcher-early-stop`, `low_delta_guard`,
+  `controller_early_stop`).
+- **Follow-up correction:** the initial version of this check discarded a
+  thought whenever ANY tool evidence was formally unconsumed, even when the
+  thought demonstrably reproduced that evidence verbatim (e.g. transcribing a
+  large table back in full). It now only overrides the thought when the
+  thought does NOT already contain the unread evidence's content — a thought
+  that provably grounds the evidence is trusted regardless of whether the
+  harness saw an explicit `recall()` call.
+
+### Fixed — Ollama `OLLAMA_HOST` honored
+
+- The capability-resolution probe only read `OLLAMA_ENDPOINT`, so
+  `OLLAMA_HOST` (Ollama's own standard env var) was silently ignored,
+  producing conservative 2048-token fallback defaults against a live server.
+  Both env vars are now honored, and an explicit `numCtx` the caller already
+  supplied is no longer overridden by the fallback.
+
+### Fixed — durable HITL approval gate applies to every strategy
+
+- The durable, cross-process approval gate for `requiresApproval` tools was
+  only wired into the `reactive` strategy's execution path; every other
+  strategy (Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive,
+  Direct) could execute a gated tool with no human decision. It now applies
+  uniformly.
+
+### Fixed — a paused run is no longer served back as a cached answer
+
+- The semantic cache could serve a paused run's sentinel content back to
+  `approveRun()` as if it were the completed answer. Paused runs are now
+  excluded from the cache-hit path.
+
+### Added — skill activation (auto + explicit)
+
+- `.withSkills({ paths: [...], activate: [...] })`'s `activate` option now
+  injects a named skill's full instructions into context at bootstrap, with
+  task-relevance-based auto-activation on top — skills were previously only
+  shown in a discoverable catalog, never actually loaded into the model's
+  context.
+
 ## [0.14.0] — 2026-07-22
 
 ### Removed — dead built-in tools (v0.14)

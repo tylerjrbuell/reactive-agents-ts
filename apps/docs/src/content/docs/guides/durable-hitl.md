@@ -53,6 +53,41 @@ You can also gate by predicate instead of (or in addition to) a name list:
 > durable store to persist it. `build()` throws if it is missing. Use
 > `mode: "block"` for the in-process approval gate (no durable pause).
 
+## Block mode (no durable store)
+
+`mode: "block"` is the default whenever `.withDurableRuns()` is not set — the
+common case if you haven't opted into crash-resume. A gated call is decided
+**in process**, synchronously, with no pause/resume round trip:
+
+<!-- docs-skip-typecheck -->
+```ts
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withTools({ tools: [/* ... */] })
+  .withApprovalPolicy({
+    tools: ["shell-execution", "file-write"],
+    mode: "block",
+    onApprove: async ({ toolName, args, iteration }) => {
+      return confirm(`Run ${toolName}(${JSON.stringify(args)})?`);
+    },
+  })
+  .build();
+```
+
+`onApprove` returns `boolean | { approve, reason }`, sync or async. A
+throw/rejection denies (fail-closed).
+
+> **Deny-by-default.** A gated call in block mode with no `onApprove` supplied
+> is **refused** — the tool does not run, and the agent's loop sees the
+> refusal rather than the tool's result. Earlier versions treated `"block"` as
+> inert (nothing read it, so gated tools ran unattended); if you rely on that
+> behavior, add `onApprove`, or switch to `mode: "detach"` +
+> `.withDurableRuns()` for a real durable pause.
+>
+> A sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()`) always runs in
+> block mode and inherits the parent's `onApprove` — it has no durable store
+> of its own, so it cannot pause for cross-process approval.
+
 ## Pausing
 
 When the agent hits a gated call, the run pauses durably and hands control back.
