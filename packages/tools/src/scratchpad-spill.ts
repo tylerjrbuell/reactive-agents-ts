@@ -50,6 +50,14 @@ function aggregateBytes(scratchpad: ReadonlyMap<string, string>): number {
  * scopes the spill directory (pass `sessionId` or `agentId` — whatever the
  * caller already threads) so concurrent runs' same-named keys
  * (`_tool_result_1`) never collide on disk.
+ *
+ * Callers invoke this from plain synchronous callbacks (`Effect.map`, not
+ * `Effect.try`), so a disk failure here (ENOSPC, EACCES, read-only FS) would
+ * become an unstructured Effect defect and crash the whole tool-execution
+ * fiber over what should be a degraded-but-recoverable condition — losing a
+ * memory-usage optimization is not worth killing the run. Falls back to
+ * keeping the value in memory (over the threshold, just this once) rather
+ * than throwing.
  */
 export function setScratchpadBounded(
   scratchpad: Map<string, string>,
@@ -63,10 +71,14 @@ export function setScratchpadBounded(
     scratchpad.set(key, value);
     return;
   }
-  const path = spillPath(namespace, key);
-  mkdirSync(spillDir(namespace), { recursive: true });
-  writeFileSync(path, value, "utf8");
-  scratchpad.set(key, `${SPILL_MARKER_PREFIX}${path}]`);
+  try {
+    const path = spillPath(namespace, key);
+    mkdirSync(spillDir(namespace), { recursive: true });
+    writeFileSync(path, value, "utf8");
+    scratchpad.set(key, `${SPILL_MARKER_PREFIX}${path}]`);
+  } catch {
+    scratchpad.set(key, value);
+  }
 }
 
 /**
