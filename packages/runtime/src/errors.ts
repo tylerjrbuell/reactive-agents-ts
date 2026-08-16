@@ -281,6 +281,16 @@ export function errorContext(error: unknown): ErrorContext {
           details: { timing: e.timing },
         };
       }
+      case "ToolDefinitionError": {
+        // Registered by ToolService.register() (packages/tools) — thrown for
+        // a malformed custom tool passed via .withTools({ tools: [...] }).
+        // Registration is lazy (first actual use, not build()), so this
+        // surfaces from agent.run()/runStream(), not .build().
+        return {
+          suggestion: `Invalid tool definition for "${e.toolName}" (field: "${e.field}"). Check the tool object passed to .withTools({ tools: [...] }) against ToolDefinition's required fields (name, description, parameters, riskLevel, timeoutMs, requiresApproval, source).`,
+          details: { toolName: e.toolName, field: e.field },
+        };
+      }
       case "ExecutionError": {
         const rootCause = e.cause instanceof Error ? e.cause.message : String(e.cause ?? "");
         return {
@@ -307,6 +317,7 @@ const KNOWN_TAGS = new Set([
   "KillSwitchTriggeredError",
   "BehavioralContractViolationError",
   "BudgetExceededError",
+  "ToolDefinitionError",
 ]);
 
 /**

@@ -12,6 +12,7 @@ import { EventLog } from "./event-log.js";
 import { ResultStore } from "./result-store.js";
 import { resolveCapability, type Tier } from "./capability.js";
 import type { AssemblyInput } from "./project.js";
+import { resolveScratchpadValue } from "@reactive-agents/tools";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
 
@@ -76,12 +77,13 @@ export function fromKernelState(
   }
 
   const store = new ResultStore();
-  for (const [storedKey, jsonStr] of state.scratchpad) {
+  for (const [storedKey, rawValue] of state.scratchpad) {
+    const value = resolveScratchpadValue(rawValue);
     let parsed: unknown;
     try {
-      parsed = JSON.parse(jsonStr);
+      parsed = JSON.parse(value);
     } catch {
-      parsed = jsonStr;
+      parsed = value;
     }
     const toolName = storedKeyToTool.get(storedKey) ?? "tool";
     store.putWithRef(storedKey, toolName, parsed);

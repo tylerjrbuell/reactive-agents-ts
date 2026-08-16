@@ -399,7 +399,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 
 | Field               | Description                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `tools`             | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**) |
+| `tools`             | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**). Each `definition` is validated against the `ToolDefinition` schema when the tool is registered (lazily, on first `run()`/`runStream()` — not at `.build()`); a malformed definition (missing `description`, a parameter with no `name`, etc.) throws a `ToolDefinitionError` naming the tool and the offending field, rather than being silently accepted and failing later during execution. |
 | `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms                                                           |
 | `allowedTools`      | If set, only these tool names are exposed to the model (others filtered) — and the allowlist is enforced at execution on every strategy: a call outside it is blocked, never run |
 | `adaptive`          | Adaptive tool listing from task text (heuristic), reduces noise for small models                                          |

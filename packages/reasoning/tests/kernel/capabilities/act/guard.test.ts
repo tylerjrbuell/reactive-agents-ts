@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { repetitionGuard, unconsumedEvidenceGuard } from "../../../../src/kernel/capabilities/act/guard.js";
 import type { KernelState, KernelInput } from "../../../../src/kernel/state/kernel-state.js";
+import { setScratchpadBounded } from "@reactive-agents/tools";
 
 function makeState(overrides: Partial<KernelState> = {}): KernelState {
   return {
@@ -91,6 +92,28 @@ describe("unconsumedEvidenceGuard — deterministic grounding, no recall() requi
     if (!outcome.pass) {
       expect(outcome.observation).toContain("THE REAL EPISODE DATA");
       expect(outcome.observation).not.toContain("call recall");
+    }
+  });
+
+  it("injects the full content of a SPILLED-TO-DISK evidence entry, not the raw marker string (health sweep 2026-08-16)", () => {
+    const scratchpad = new Map<string, string>();
+    const bigContent = "THE REAL EPISODE DATA: " + "x".repeat(200);
+    // Force a spill regardless of content size (threshold=1 byte).
+    setScratchpadBounded(scratchpad, "_tool_result_1", bigContent, "guard-test-spill", 1);
+    expect(scratchpad.get("_tool_result_1")!.startsWith("[SPILLED_TO_DISK:")).toBe(true);
+
+    const state = makeState({
+      steps: [
+        actionStep("http-get", { url: "https://example.com" }),
+        observationStep("_tool_result_1"),
+      ] as any,
+      scratchpad,
+    } as any);
+    const outcome = unconsumedEvidenceGuard(finalAnswerCall, state);
+    expect(outcome.pass).toBe(false);
+    if (!outcome.pass) {
+      expect(outcome.observation).toContain("THE REAL EPISODE DATA");
+      expect(outcome.observation).not.toContain("[SPILLED_TO_DISK:");
     }
   });
 

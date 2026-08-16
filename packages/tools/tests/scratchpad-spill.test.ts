@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "bun:test";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setScratchpadBounded, resolveScratchpadValue } from "../src/scratchpad-spill.js";
@@ -64,5 +64,23 @@ describe("setScratchpadBounded", () => {
       recursive: true,
       force: true,
     });
+  });
+
+  it("degrades to in-memory storage instead of throwing when the spill write fails (health sweep 2026-08-16)", () => {
+    // Make the spill directory's own path unusable: create a FILE where the
+    // spill dir needs to be a directory, so mkdirSync(..., {recursive}) fails.
+    const unwritableNamespace = `${NAMESPACE}-unwritable`;
+    const parentDir = join(homedir() || ".", ".reactive-agents", "spill");
+    mkdirSync(parentDir, { recursive: true });
+    const blockedPath = join(parentDir, unwritableNamespace);
+    writeFileSync(blockedPath, "blocking file");
+
+    const scratchpad = new Map<string, string>();
+    const bigValue = "y".repeat(200);
+    expect(() => setScratchpadBounded(scratchpad, "k1", bigValue, unwritableNamespace, 10)).not.toThrow();
+    // No disk spill possible -- falls back to storing the value directly.
+    expect(scratchpad.get("k1")).toBe(bigValue);
+
+    rmSync(blockedPath, { force: true });
   });
 });
