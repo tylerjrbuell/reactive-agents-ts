@@ -10,7 +10,7 @@
  * - Termination oracle evaluation
  * - Fast-path trivial task exit
  */
-import { Effect, Stream, FiberRef, Either, Ref } from "effect";
+import { Effect, Stream, FiberRef, Either, Ref, Option } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
@@ -920,6 +920,18 @@ export function handleThinking(
         }
       }),
     ).pipe(
+      // Providers (packages/llm-provider/src/providers/local.ts) implement
+      // retry-on-timeout by re-forking a fresh `Stream.async` producer per
+      // attempt (see `retryStreamBeforeFirstEmission`). Effect's own fiber
+      // bookkeeping logs "Fiber terminated with an unhandled error" for
+      // EVERY forked producer fiber that fails — including ones a *later*
+      // retry attempt recovers from, and ones the `catchAll` below already
+      // observes and converts into `streamConsumeError`/`terminatedBy:
+      // "llm_error"`. That duplicate print reads as a crash even when the
+      // run ultimately succeeds. Scoped to just this stream's pull (not a
+      // global suppression), since every real failure is already surfaced
+      // through the catchAll immediately below.
+      Effect.withUnhandledErrorLogLevel(Option.none()),
       Effect.catchAll((streamErr) => {
         streamConsumeError =
           streamErr && typeof streamErr === "object" && "message" in streamErr
