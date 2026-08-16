@@ -167,7 +167,16 @@ describe("makeStatusRenderer", () => {
     expect(out.raw.some((r) => r.includes("\r\x1b[2K"))).toBe(true);
   });
 
-  it("stop() resumes stdin so host REPLs can prompt again", async () => {
+  it("stop() pauses stdin (not resume) when the renderer owned it exclusively, so a plain script exits", async () => {
+    // `ownsKeyboard` is only ever true when setupKeyboard() found no
+    // existing stdin consumer — a host readline.createInterface() case
+    // bails out of setup entirely (see the next test) and never reaches
+    // this cleanup path. So this is exclusively "we were the only stdin
+    // reader" — a bare one-shot `agent.run()` script with no readline of
+    // its own. Live repro, 2026-08-16: `resume()` here left such a script
+    // hanging forever after printing its result, because a flowing stdin
+    // with nothing left to consume it keeps the TTY handle ref'd and the
+    // event loop alive. `pause()` lets the process exit normally.
     const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
     const out = makeMockStream();
     const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
@@ -190,9 +199,14 @@ describe("makeStatusRenderer", () => {
 
     try {
       await Effect.runPromise(renderer.start());
+      // setupKeyboard() legitimately calls resume() once, at start, to put
+      // stdin into flowing mode so raw keypress bytes can be read during the
+      // run — that's not the bug. The bug was cleanupKeyboard() calling it
+      // AGAIN at stop(), re-flowing a stream nothing was left to consume.
+      resume.mockClear();
       renderer.stop();
-      expect(resume).toHaveBeenCalled();
-      expect(pause).not.toHaveBeenCalled();
+      expect(pause).toHaveBeenCalled();
+      expect(resume).not.toHaveBeenCalled();
       expect(setRawMode).toHaveBeenCalledWith(false);
     } finally {
       Object.defineProperty(process, "stdin", { value: original, configurable: true });

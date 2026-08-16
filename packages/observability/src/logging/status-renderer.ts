@@ -322,10 +322,17 @@ export function makeStatusRenderer(
       if (process.stdin.isTTY) {
         process.stdin.off("data", onKey);
         process.stdin.setRawMode(false);
-        // Resume (not pause) so host REPLs (readline, playground) keep stdin
-        // flowing after a run. pause() left scratch/playground loops exiting on
-        // the second prompt with "readline was closed" / immediate EOF.
-        process.stdin.resume();
+        // `ownsKeyboard` is only ever true when setupKeyboard() found NO
+        // existing stdin consumer (see the listenerCount guard there) — a
+        // host readline.createInterface() case now bails out of setup
+        // entirely and never reaches this cleanup path at all. So this
+        // branch is exclusively "we were the only stdin reader"; resuming a
+        // flowing stdin with nothing left to consume it keeps the TTY
+        // handle ref'd and the process running forever after a plain
+        // one-shot script's `agent.run()` returns — live repro, 2026-08-16,
+        // a bare `.run()` script with no readline hung after printing its
+        // result. pause() lets the event loop drain and the process exit.
+        process.stdin.pause();
       }
     } catch { /* ignore */ } finally {
       ownsKeyboard = false;
