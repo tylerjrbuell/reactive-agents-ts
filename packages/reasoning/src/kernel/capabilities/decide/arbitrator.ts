@@ -13,6 +13,7 @@ import type { ToolSchema } from "../attend/tool-formatting.js";
 import { FINAL_ANSWER_RE, extractFinalAnswer } from "../../utils/tool-parsing.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 import { emitBudgetSignalCollected } from "../../utils/diagnostics.js";
+import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { resolveUnconsumedEvidence } from "../verify/unconsumed-evidence.js";
 
 // ── Local structural types ──────────────────────────────────────────────
@@ -1052,7 +1053,7 @@ function synthesisQualityRetry(
       const storedKey = s.metadata?.storedKey as string | undefined;
       const fullFromScratchpad =
         storedKey && ctx.scratchpad ? ctx.scratchpad.get(storedKey) : undefined;
-      return fullFromScratchpad ?? s.content;
+      return fullFromScratchpad ? resolveScratchpadValue(fullFromScratchpad) : s.content;
     })
     .join("\n\n");
 

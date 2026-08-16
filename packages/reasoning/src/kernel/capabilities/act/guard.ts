@@ -16,6 +16,7 @@ import {
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
 import { findUnconsumedStoredKeys } from "../verify/unconsumed-evidence.js";
+import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTool } from "../../../kernel/state/kernel-constants.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -160,7 +161,8 @@ export const unconsumedEvidenceGuard: Guard = (tc, state) => {
   if (keys.length === 0) return { pass: true };
   const payloads = keys
     .map((k) => state.scratchpad.get(k))
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .map(resolveScratchpadValue);
   if (payloads.length === 0) return { pass: true };
 
   let joined = payloads.join("\n\n---\n\n");
