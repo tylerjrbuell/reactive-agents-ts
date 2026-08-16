@@ -26,7 +26,7 @@ export function providerDefaultModel(p: Provider): string {
     case "google":
       return "gemini-2.5-flash";
     case "groq":
-      return "llama-3.3-70b-versatile";
+      return "openai/gpt-oss-120b";
     case "xai":
       return "grok-4";
     case "ollama":

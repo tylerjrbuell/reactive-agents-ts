@@ -94,7 +94,7 @@ function lastCallToTool(
  * resource id). Used to tell "3 calls to file-write, 3 different files" (not
  * repetition) apart from "3 calls to file-write, same path" (actually stuck).
  */
-const TARGET_ARG_KEYS = ["path", "file", "target", "url", "id"] as const;
+const TARGET_ARG_KEYS = ["path", "file", "target", "url", "id", "command"] as const;
 
 /**
  * True when `tc`'s target argument (path/file/target/url/id) differs from
@@ -107,18 +107,31 @@ const TARGET_ARG_KEYS = ["path", "file", "target", "url", "id"] as const;
  * treated as NOT distinct, preserving prior behavior for tools this doesn't
  * apply to.
  */
+/** For a `command`-shaped arg (a full CLI invocation string), the "target"
+ *  that matters is the subcommand (`repo view` vs `repo log`), not the whole
+ *  string — two calls varying only their trailing positional/flag args (e.g.
+ *  `keep notes get x` vs `keep notes get y`) are the SAME unit of work, not
+ *  distinct targets, and must still hit the repetition ceiling. */
+function commandTargetValue(key: string, value: string): string {
+  if (key !== "command") return value;
+  return value.trim().split(/\s+/).slice(0, 2).join(" ");
+}
+
 function hasDistinctTarget(tc: ToolCallSpec, state: KernelState): boolean {
   const args = tc.arguments as Record<string, unknown> | undefined;
   const targetKey = TARGET_ARG_KEYS.find((k) => typeof args?.[k] === "string");
   if (!targetKey) return false;
-  const targetValue = args![targetKey] as string;
+  const targetValue = commandTargetValue(targetKey, args![targetKey] as string);
   for (const step of state.steps) {
     if (step.type !== "action") continue;
     const stepTc = step.metadata?.toolCall as
       | { name?: string; arguments?: Record<string, unknown> }
       | undefined;
     if (stepTc?.name !== tc.name) continue;
-    if (stepTc.arguments?.[targetKey] === targetValue) return false;
+    const stepValue = stepTc.arguments?.[targetKey];
+    if (typeof stepValue === "string" && commandTargetValue(targetKey, stepValue) === targetValue) {
+      return false;
+    }
   }
   return true;
 }

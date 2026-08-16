@@ -94,8 +94,14 @@ function extractSearchText(
   // guards from firing (the run then fell through to the last turn and looked
   // inert). Everything before the last assistant turn is still excluded, so a
   // guard can never match an earlier turn's text.
-  const start =
-    messages.findLastIndex((m) => m.role === "assistant") + 1;
+  let lastAssistantIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+  const start = lastAssistantIndex + 1;
   const content = messages
     .slice(start)
     .map((m) => (typeof m.content === "string" ? m.content : ""))

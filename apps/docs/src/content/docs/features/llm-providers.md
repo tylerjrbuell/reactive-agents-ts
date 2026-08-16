@@ -53,7 +53,7 @@ const agent = await ReactiveAgents.create()
 // Groq — OpenAI-compatible LPU inference (fast)
 const agent = await ReactiveAgents.create()
   .withProvider("groq")
-  .withModel("llama-3.3-70b-versatile")
+  .withModel("openai/gpt-oss-120b")
   .build();
 
 // xAI — Grok models, OpenAI-compatible
@@ -202,7 +202,7 @@ const agent = await ReactiveAgents.create()
 | `gemini-2.0-flash`  | Gemini    | $0.10         | 1M             | 0.75    |
 | `gemini-2.5-flash`  | Gemini    | $0.15         | 1M             | 0.80    |
 | `gemini-2.5-pro`    | Gemini    | $1.25         | 1M             | 0.95    |
-| `llama-3.3-70b-versatile` | Groq | $0.59      | 131K           | 0.75    |
+| `openai/gpt-oss-120b` | Groq | $0.15      | 131K           | 0.80    |
 | `grok-4`            | xAI       | $3.00         | 256K           | 0.90    |
 
 ## Tool Calling

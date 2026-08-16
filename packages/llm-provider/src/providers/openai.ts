@@ -811,7 +811,7 @@ export const GroqProviderLive = makeOpenAICompatProvider({
   providerName: "groq",
   resolveApiKey: (c) => c.groqApiKey,
   resolveBaseUrl: (c) => c.groqBaseUrl ?? "https://api.groq.com/openai/v1",
-  fallbackModel: "llama-3.3-70b-versatile",
+  fallbackModel: "openai/gpt-oss-120b",
   supportsEmbeddings: false,
   supportsLogprobs: false,
 });
