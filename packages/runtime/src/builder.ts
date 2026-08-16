@@ -2405,7 +2405,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             defaultModel,
             this._strictValidation,
             this._lazyValidation,
-            taskContractInput
+            taskContractInput,
+            this._providerConfig?.apiKey
         )
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)
@@ -2420,7 +2421,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             throw new Error(`Provider connection failed: ${conn.error}`)
         }
 
-        logBuildInfo(this._provider, validation.resolvedModel)
+        logBuildInfo(this._provider, validation.resolvedModel, this._providerConfig?.apiKey)
 
         const agent = await Effect.runPromise(this.buildEffect()).catch((e) => {
             throw unwrapError(e)
@@ -2477,7 +2478,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     yield* Effect.promise(() => import('./build-validation.js'))
                 if (
                     providerRequiresApiKey(self._provider) &&
-                    !readProviderApiKey(self._provider)
+                    !readProviderApiKey(self._provider) &&
+                    !self._providerConfig?.apiKey
                 ) {
                     const keyName = providerApiKeyName(self._provider)
                     return yield* Effect.fail(

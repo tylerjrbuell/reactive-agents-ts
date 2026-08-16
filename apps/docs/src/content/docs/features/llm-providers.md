@@ -76,6 +76,61 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
+### Dynamic Provider Configuration (any OpenAI-compatible endpoint)
+
+`openai`, `groq`, `xai`, and `litellm` all speak the same OpenAI Chat
+Completions wire protocol. `.withProvider(provider, config)` accepts an
+optional second argument — `{ baseUrl, apiKey, headers }` — that overrides
+that provider's endpoint at **runtime**, without predefining
+`LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc as env vars. Use it to point at:
+
+- a **llama.cpp server**'s OpenAI-compatible `/v1` API
+- **Deepseek**, or any other OpenAI-compatible model host
+- a **LiteLLM proxy** running somewhere other than `localhost:4000`
+- any endpoint that needs a **custom auth header** beyond a bearer token
+
+<!-- docs-skip-typecheck -->
+```typescript
+// llama.cpp server
+const agent = await ReactiveAgents.create()
+  .withProvider("litellm", { baseUrl: "http://localhost:8080/v1" })
+  .withModel("your-local-model")
+  .build();
+
+// Deepseek — direct via the openai adapter (same OpenAI-compatible dialect)
+const agent = await ReactiveAgents.create()
+  .withProvider("openai", {
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: process.env.DEEPSEEK_API_KEY,
+  })
+  .withModel("deepseek-chat")
+  .build();
+
+// Custom auth header, e.g. an internal proxy requiring an org header
+const agent = await ReactiveAgents.create()
+  .withProvider("groq", {
+    apiKey: process.env.GROQ_API_KEY,
+    headers: { "X-Org-Id": "acct_123" },
+  })
+  .build();
+```
+
+`config` is silently ignored for `anthropic`, `gemini`, and `ollama` — those
+providers speak a different wire protocol and their adapters never read it.
+An inline `apiKey` also satisfies `.withStrictValidation()`'s missing-key
+check — you don't need the provider's env var set at all when the key is
+supplied this way.
+
+**Known limitation:** the mechanism is wire-protocol-generic (Chat
+Completions request/response shape, SSE streaming, tool-call encoding), so it
+should work against any vendor that implements that protocol faithfully — but
+it is only verified against dialect-exact mocks in this repo's test suite,
+not against every real vendor. A vendor with protocol drift (nonstandard
+streaming chunk shape, a `reasoning_effort`-equivalent field under a
+different name, etc.) may need its own adapter rather than this generic
+override. Embeddings only work if the vendor implements an OpenAI-shaped
+`/embeddings` endpoint (Groq and xAI do not).
+
 ### Environment Variables
 
 ```bash

@@ -211,6 +211,16 @@ export function validateBuild(
   strict: boolean,
   lazy: boolean,
   taskContract?: TaskContractValidationInput,
+  /**
+   * An API key supplied inline via `.withProvider(provider, { apiKey })`
+   * (`LLMConfig.providerConfig.apiKey`). When present, it satisfies the
+   * key requirement even though the provider's own env var
+   * (`PROVIDER_API_KEY_MAP`) is unset — `readProviderApiKey()` only reads
+   * `process.env` and has no visibility into the builder's runtime
+   * override, so without this the "Missing X_API_KEY" error/warning fires
+   * incorrectly for a fully-configured OpenAI-compatible endpoint.
+   */
+  providerApiKeyOverride?: string,
 ): BuildValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -225,7 +235,7 @@ export function validateBuild(
   // explicit `.withLazyValidation()` always keeps them as warnings even under
   // strict. Keyless providers (ollama/test/custom) are exempt from the key gate.
   const failFast = strict && !lazy;
-  if (providerRequiresApiKey(provider)) {
+  if (providerRequiresApiKey(provider) && !providerApiKeyOverride) {
     const keyName = providerApiKeyName(provider)!;
     if (!readProviderApiKey(provider)) {
       const msg =
@@ -335,11 +345,17 @@ export async function validateProviderConnection(
   return { ok: true };
 }
 
-export function logBuildInfo(provider: ProviderName, resolvedModel: string): void {
-  const key = readProviderApiKey(provider);
+export function logBuildInfo(
+  provider: ProviderName,
+  resolvedModel: string,
+  providerApiKeyOverride?: string,
+): void {
+  const key = readProviderApiKey(provider) ?? providerApiKeyOverride;
   const keyDisplay =
     key
-      ? "(set)"
+      ? providerApiKeyOverride
+        ? "(set via .withProvider config)"
+        : "(set)"
       : NO_KEY_PROVIDERS.has(provider)
         ? "(not required)"
         : "(missing)";

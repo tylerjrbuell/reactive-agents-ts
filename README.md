@@ -560,6 +560,12 @@ const agent2 = await ReactiveAgents.create()
 
 Switch providers with one line -- agent code stays the same.
 
+`openai`/`groq`/`xai`/`litellm` all speak the OpenAI-compatible wire protocol,
+so `.withProvider(provider, { baseUrl, apiKey, headers })` can point any of
+them at any OpenAI-compatible endpoint at runtime -- a llama.cpp server,
+Deepseek, a LiteLLM proxy on a non-default host -- without predefining env
+vars. See [LLM Providers](https://docs.reactiveagents.dev/features/llm-providers/) for details.
+
 ## Model-Adaptive Context
 
 Optimize prompt construction and context compaction for your model tier:
