@@ -276,6 +276,7 @@ export interface Harness {
 
 export const ALL_TAGS: readonly Tag[] = Object.freeze([
   'prompt.system',
+  'prompt.guidance',
   'nudge.loop-detected',
   'nudge.healing-failure',
   'message.tool-result',

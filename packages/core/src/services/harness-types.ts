@@ -25,9 +25,10 @@ export type Phase =
 
 // ── Tag catalog ───────────────────────────────────────────────────────────────
 
-/** All valid harness emission tags (Wave A: 7 initial tags). */
+/** All valid harness emission tags (Wave A: 7 initial tags, + prompt.guidance Wave A.1). */
 export type Tag =
   | 'prompt.system'
+  | 'prompt.guidance'
   | 'nudge.loop-detected'
   | 'nudge.healing-failure'
   | 'message.tool-result'
@@ -91,6 +92,16 @@ export type ControlStrategyEvaluatedPayload = {
 
 export interface TagMap {
   'prompt.system':              { payload: string;                        ctx: BaseCtx };
+  /**
+   * The rendered `Guidance:` block — every harness-authored steering signal
+   * the model sees this turn folded into one string (required-tools
+   * reminders, oracle/ICS nudges, error-recovery hints, the post-tool-call
+   * "you may finish now" nudge, quality-gate hints, evidence-gap redirects).
+   * `null` when no signal is active this turn (the common case). Payload is
+   * `null` when nothing would render — return `null` to suppress, a string
+   * to replace, `undefined` to pass the default through unchanged.
+   */
+  'prompt.guidance':            { payload: string | null;                 ctx: BaseCtx };
   'nudge.loop-detected':        { payload: string;                        ctx: NudgeCtx };
   'nudge.healing-failure':      { payload: string;                        ctx: NudgeCtx };
   'message.tool-result':        { payload: KernelMessageLike;             ctx: ToolResultCtx };

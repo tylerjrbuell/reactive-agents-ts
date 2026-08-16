@@ -753,7 +753,28 @@ export function handleThinking(
     // tail. GuidanceContext was previously assembled (and pendingGuidance
     // cleared) but never passed to assembly — every guidance-channel signal
     // was a silent no-op. Tail placement keeps the stable prefix intact.
-    const guidanceText = buildGuidanceText(guidance);
+    //
+    // `prompt.guidance` compose hook (2026-08-16): of the 9 guidance channels
+    // (required-tools reminders, oracle/ICS nudges, error-recovery, the
+    // post-tool-call finish nudge, quality-gate hints, evidence-gap
+    // redirects, etc.), only `loopDetected` had ANY override point before
+    // this — the other 8 were pure hardcoded text with zero composability,
+    // directly contradicting the "no black-box agents" design goal. This
+    // exposes the FULL rendered block as one hook so `.compose(h =>
+    // h.on('prompt.guidance', ...))` can inspect, replace, or suppress
+    // (return null) whatever the harness is about to tell the model, same
+    // as `prompt.system` already does for the user's own base prompt.
+    const defaultGuidanceText = buildGuidanceText(guidance);
+    const guidanceText = pipeline
+      ? yield* Effect.promise(() =>
+          pipeline.transform('prompt.guidance', defaultGuidanceText, {
+            iteration: state.iteration,
+            phase: 'think',
+            state: asKernelStateLike(state),
+            strategy,
+          })
+        )
+      : defaultGuidanceText;
     if (guidanceText) parts.push(guidanceText);
     const systemPromptWithDriver = parts.join("\n\n");
 
