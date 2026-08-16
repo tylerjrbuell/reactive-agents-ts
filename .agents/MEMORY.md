@@ -13,6 +13,17 @@
 
 ## Projects — Aug 2026
 
+**2026-08-16: `bundle/replay-determinism-revalidation` shipped — #30/#53 closed, no code change.**
+`/execute-backlog labels=area:observability`. #30 (replay E2E determinism test) turned out already
+shipped via PR #196/#197 (merged to `origin/main` before this session, never closed against the work) —
+`packages/replay/src/e2e.test.ts` satisfies its exact acceptance criteria (byte-identical replay same
+seed; corrupted tool result diverges at exactly one expected point). Closed with evidence. #53: re-ran
+every determinism-pinning suite (replay/replay-golden/replay-lane/t0-deterministic/north-star-gate, 44
+tests, 0 fail), published `wiki/Research/Harness-Reports/replay-determinism-revalidation-2026-08-16.md`.
+Descoped from #188 (AgentStreamEvent 3-way divergence — self-describes blocked on a
+`@reactive-agents/svelte` build-graph change) and #31/#32 (Langfuse/Braintrust exporters — sizable new
+external-SDK integrations). Merged to local main directly (hold-until-tag).
+
 **2026-08-16: `bundle/tools-result-handling` shipped — #47/#57/#58 (merged `4174138d`, `22547736`).**
 Backlog bundle via `/execute-backlog labels=area:tools`. None of the 3 issues carried `verified-by:`
 evidence (all predate the `packages/reactive-agents/src/tools/` → `packages/tools`/`packages/reasoning`

@@ -10,6 +10,16 @@ updated: 2026-08-16
 
 ---
 
+## 2026-08-16 — replay-determinism-revalidation bundle
+
+Closed #30 + #53. #30 turned out already-shipped (PR #196/#197, never closed
+against the work) — closed with evidence, no code change. #53 re-ran the
+full determinism-pinning suite cluster (44 tests, 0 fail), published
+`wiki/Research/Harness-Reports/replay-determinism-revalidation-2026-08-16.md`.
+Merged to local `main` directly (same hold-until-tag convention as the prior
+bundle). Retro:
+[[Research/Debriefs/2026-08-16-replay-determinism-revalidation-execution-debrief]].
+
 ## 2026-08-16 — v0.15.0 release-prep + tools-result-handling bundle
 
 Not yet tagged. Root-caused + fixed a `t0-deterministic` gate regression
