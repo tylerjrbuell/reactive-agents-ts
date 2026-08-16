@@ -1683,6 +1683,14 @@ export function handleThinking(
       const priorRedirects = newSteps.filter(
         (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F Not done yet"),
       ).length;
+      // 2026-08-15 \u2014 dedicated evidence-redirect budget: distinguished from
+      // priorRedirects (which counts every "Not done yet" redirect, grounding/
+      // coverage included) by the evidence guidance's unique "Before
+      // finalizing:" text, so a prior grounding/coverage redirect no longer
+      // starves the evidence check of its own one-shot turn.
+      const priorEvidenceRedirects = newSteps.filter(
+        (s) => s.type === "observation" && s.content.includes("Before finalizing:"),
+      ).length;
       const priorFAAttempts = state.steps.filter(
         (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F") && s.content.includes("final-answer"),
       ).length;
@@ -1731,6 +1739,7 @@ export function handleThinking(
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
         redirectCount: priorRedirects,
+        evidenceRedirectCount: priorEvidenceRedirects,
         priorFinalAnswerAttempts: priorFAAttempts,
         taskDescription: input.task,
         // B2 check 2.5: hand the compiled RunContract to the terminal gate's

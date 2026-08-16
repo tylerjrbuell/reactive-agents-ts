@@ -238,11 +238,13 @@ describe("reactiveControllerEarlyStopEvaluator", () => {
     expect(result!.reason).toContain("THE REAL FETCHED CONTENT");
   });
 
-  test("early-stop + unconsumed evidence but a redirect ALREADY happened this run → exits (no retry trap)", () => {
+  test("early-stop + unconsumed evidence but an EVIDENCE redirect ALREADY happened this run → exits (no retry trap)", () => {
     const ctx = makeCtx({
       controllerDecisions: [{ decision: "early-stop", reason: "flat trajectory" }],
       thought: "Here is the table based on what I found.",
-      redirectCount: 1,
+      // 2026-08-15: dedicated evidence budget, not the generic redirectCount —
+      // a prior grounding/coverage redirect must NOT starve this check.
+      evidenceRedirectCount: 1,
       steps: [
         { type: "action", metadata: { toolCall: { id: "c1", name: "http-get", arguments: {} } } } as never,
         { type: "observation", metadata: { toolCallId: "c1", storedKey: "_tool_result_1" } } as never,
@@ -512,13 +514,31 @@ describe("llmEndTurnEvaluator", () => {
       expect(result!.action).toBe("exit");
     });
 
-    test("does not re-redirect once a redirect already happened this run (no retry trap)", () => {
+    test("2026-08-15 root fix: a PRIOR generic (grounding/coverage) redirect does not starve the evidence check", () => {
       const ctx = makeCtx({
         stopReason: "end_turn",
         thought: "Here is the table based on what I found: | 1 | Title | Description |",
         steps: [actionStep("http-get", { url: "https://example.com" }), observationStep("_tool_result_1")],
         scratchpad: new Map([["_tool_result_1", "content"]]),
+        // A different, unrelated redirect already fired this run (grounding or
+        // coverage) — redirectCount is 1, but evidenceRedirectCount is still 0.
         redirectCount: 1,
+        evidenceRedirectCount: 0,
+      });
+      const result = llmEndTurnEvaluator.evaluate(ctx);
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe("redirect");
+      expect(result!.reason).toContain("Before finalizing:");
+    });
+
+    test("does not re-redirect once an EVIDENCE redirect already happened this run (no retry trap)", () => {
+      const ctx = makeCtx({
+        stopReason: "end_turn",
+        thought: "Here is the table based on what I found: | 1 | Title | Description |",
+        steps: [actionStep("http-get", { url: "https://example.com" }), observationStep("_tool_result_1")],
+        scratchpad: new Map([["_tool_result_1", "content"]]),
+        // 2026-08-15: dedicated evidence budget, not the generic redirectCount.
+        evidenceRedirectCount: 1,
       });
       const result = llmEndTurnEvaluator.evaluate(ctx);
       expect(result).not.toBeNull();

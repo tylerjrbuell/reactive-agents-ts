@@ -113,6 +113,20 @@ export interface TerminationContext {
    * (byte-identical for any caller that omits it).
    */
   readonly scratchpad?: ReadonlyMap<string, string>;
+  /**
+   * 2026-08-15 — dedicated one-shot budget for the evidence-grounding redirect,
+   * separate from `redirectCount` (which grounding/coverage share). Without
+   * this, a run that already spent its generic "Not done yet" redirect on an
+   * UNRELATED grounding/coverage gap permanently starves the evidence check
+   * for the rest of the run — measured live (gemini-2.5-flash, trace
+   * 01M03XF7QQRXKPE71VT5T2C88J): an end_turn candidate with 4 unconsumed
+   * scratchpad keys exited ungrounded because the evidence check never got
+   * its own turn. Counted by think.ts scanning for the evidence guidance's
+   * distinguishing "Before finalizing:" text, independent of the generic
+   * "⚠️ Not done yet" prefix every redirect shares. Absent → treated as 0
+   * (byte-identical for any caller that omits it).
+   */
+  readonly evidenceRedirectCount?: number;
 }
 
 export interface SignalVerdict {
@@ -317,10 +331,10 @@ export const reactiveControllerEarlyStopEvaluator: TerminationSignalEvaluator = 
     // traces this session ("Approaching maxIterations... flat trajectory"
     // fires almost every run) — every other evaluator's evidence-grounding
     // fix was reachable in principle but preempted in practice by this one.
-    // One-shot, same budget semantics as the other checks: redirect at most
-    // once (gated on ctx.redirectCount), so a run genuinely out of budget
-    // still exits on the next tick rather than looping forever.
-    if (ctx.redirectCount === 0 && ctx.scratchpad) {
+    // One-shot, own budget (2026-08-15: dedicated evidenceRedirectCount, not
+    // the shared ctx.redirectCount — a prior grounding/coverage redirect must
+    // not starve this check of its turn).
+    if ((ctx.evidenceRedirectCount ?? 0) === 0 && ctx.scratchpad) {
       const unconsumedEvidence = resolveUnconsumedEvidence(ctx.steps, ctx.scratchpad);
       if (unconsumedEvidence !== null) {
         return {
@@ -389,7 +403,8 @@ function contractCoverageProposal(
     ...(ctx.redirectBudget !== undefined ? { redirectBudget: ctx.redirectBudget } : {}),
     coverageExhaustionPolicy: "accept",
     hasUnconsumedEvidence: unconsumedEvidence !== null,
-    evidenceRedirectsSpent: ctx.redirectCount,
+    // 2026-08-15: dedicated budget, not ctx.redirectCount — see TerminationContext.evidenceRedirectCount.
+    evidenceRedirectsSpent: ctx.evidenceRedirectCount ?? 0,
     buildEvidenceGuidance: () =>
       `Before finalizing: earlier tool results were shown to you only as short previews. ` +
       `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
@@ -468,14 +483,13 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       redirectBudget: ctx.redirectBudget,
       coverageExhaustionPolicy: "accept",
       hasUnconsumedEvidence: unconsumedEvidence !== null,
-      // Reuses the SAME generic "⚠️ Not done yet" redirect counter grounding/
-      // coverage already share (think.ts:1787 wraps every redirect reason
-      // identically) rather than a dedicated counter. Trade-off: if a prior
-      // turn already spent a grounding/coverage redirect, the evidence check
-      // will not ALSO get its own extra turn this run — conservative (caps
-      // total extra cost at one redirect per run), not incorrect; the common
-      // case this fixes is a clean run where evidence is the ONLY gap.
-      evidenceRedirectsSpent: ctx.redirectCount,
+      // 2026-08-15: dedicated one-shot budget (evidenceRedirectCount), NOT the
+      // generic ctx.redirectCount grounding/coverage share. The prior version
+      // reused that shared counter, so a run whose ONLY earlier redirect was an
+      // unrelated grounding/coverage gap permanently starved this check —
+      // measured live (gemini-2.5-flash, trace 01M03XF7QQRXKPE71VT5T2C88J): an
+      // end_turn candidate with 4 unconsumed scratchpad keys exited ungrounded.
+      evidenceRedirectsSpent: ctx.evidenceRedirectCount ?? 0,
       buildEvidenceGuidance: () =>
         `Before finalizing: earlier tool results were shown to you only as short previews. ` +
         `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
