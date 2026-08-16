@@ -12,6 +12,63 @@
 
 ## Projects — Aug 2026
 
+**2026-08-16: `agent.ingest()` didn't work like `.withDocuments()` — 2 gaps, both fixed (pending commit).**
+User: "agent.ingest doesn't seem to work like .withDocuments does." Live-reproduced: `.withTools({builtins:true})`
++ `agent.ingest(...)` (no `.withDocuments()`) + `agent.run("What is my name? Check your memory.")` → model
+called ZERO tools, answered from parametric knowledge, `.withDocuments()`-only baseline succeeded 2/2 with the
+same query. Two DISTINCT, real gaps found via trace (`kernel-state-snapshot.toolsUsed:[]`) + source reading of
+`runtime-construction.ts`:
+1. `find`'s meta-tool flag is `state._documents.length > 0` at BUILD time (a deliberate, measured token-cost
+   tradeoff per the file's own "Wire measurement" comment) — `agent.ingest()`'s OWN JSDoc example never calls
+   `.withDocuments()`/`.withMetaTools({find:true})`, so the documented usage silently ingests content the model
+   has no tool to ever retrieve.
+2. `.withDocuments()` backfills `kernelMetaTools.staticBriefInfo.indexedDocuments` at build time
+   (`rag-ingestion.ts`) — feeds both the `brief` meta-tool AND the `isNonTrivial` harness-injection gate in
+   `think.ts` (`indexedDocuments.length>0` is one of 3 ORs). `agent.ingest()` never touched this at all.
+Fixed both by threading the SAME mutable `kernelMetaTools` object (read per-run, not a build snapshot — proven
+by the pre-existing build-time backfill already relying on this) through to the `ReactiveAgent` instance;
+`ingest()` now sets `kernelMetaTools.find = true` and recomputes `indexedDocuments` from the ragStore's current
+contents. Verified live: ingest-only scenario went from 0/3 tool-calls to 3/3 correct answers, matching the
+`.withDocuments()` baseline. Files: `reactive-agent.ts`, `builder/build-effect/agent-instantiation.ts`,
+`builder.ts` (ONE hunk — `builder.ts` had unrelated concurrent uncommitted work on this branch,
+`bundle/providers-dynamic-config`, staged via `git add -p` to avoid touching it). `packages/runtime` full
+suite: 1451 pass/2 fail — both fails confirmed PRE-EXISTING via `git stash` (mechanism-liveness.test.ts,
+meta-loop-reachability.test.ts count mismatches, unrelated to this change).
+
+**2026-08-16: `find` scope "memory" never searched RAG-ingested documents (`53804be3`).**
+Live-reproduced via `test.ts` (`.withDocuments()`+`.ingest()` then run "Whats in your memory?") —
+model called `find({scope:"memory"})`, got back completely empty `{results:[],sourcesSearched:[]}`
+even though the doc was correctly ingested (verified: the module-level `ragMemoryStore` singleton
+the `find` tool reads DID have the chunk the whole run — proved with a direct probe importing it
+alongside `reactive-agents`). Root cause: `find.ts`'s documents-search branch only fires for scope
+"auto"/"documents"/"all"; scope "memory" only ever searched `state.bootstrapMemoryContent` — a
+DIFFERENT store (semantic-memory bootstrap), empty for any fresh agent using only
+`.withDocuments()`/`.ingest()`. The tool's own description told the model "memory" = bootstrapped
+semantic context, and `agent.ingest()`'s default `source:"memory"` label reinforces the exact same
+naming — the API itself calls ingested content "memory," so scope "memory" not searching it was the
+dead end. Fixed: scope "memory" now also searches the documents/RAG store. **Separate, NOT fixed:**
+vague queries with zero keyword overlap with the ingested content still return 0 hits — a
+retrieval-relevance limit of the keyword-based in-memory matcher (`minRagScore` threshold), not a
+routing bug. `packages/tools` suite 1007 pass/0 fail.
+
+**2026-08-16: "Fiber terminated with an unhandled error" false-failure log suppressed (`3c4491a2`).**
+Live-reproduced via `test.ts` probe (XRP price+news task, gemma4/ollama) with `OLLAMA_TIMEOUT_MS=2000`
+against a cold-loading model: a recovered, retry-covered `LLMTimeoutError` printed a scary
+`[debug] Fiber terminated with an unhandled error` line to the console even though the run's real
+outcome was already correctly surfaced elsewhere. Root cause (confirmed against Effect's own
+`fiberRuntime.js:651` `reportExitValue` + `Effect.withUnhandledErrorLogLevel` JSDoc, not guesswork):
+`packages/llm-provider/src/providers/local.ts`'s `stream()` retries a timed-out request by re-forking a
+fresh `Stream.async` producer per attempt (`retryStreamBeforeFirstEmission`, `retry.ts`); Effect's default
+unhandled-error reporter logs EVERY forked child fiber that exits with an unobserved `Failure`, even one a
+sibling mechanism (`Stream.retry`'s resubscribe) already handles — this is documented, expected Effect
+behavior, not a bug in our retry logic, just noisy by architecture. Fixed by scoping
+`Effect.withUnhandledErrorLogLevel(Option.none())` to the `Stream.runForEach` pull site in
+`packages/reasoning/src/kernel/capabilities/reason/think.ts` (where the LLM stream is actually consumed) —
+narrow, not a global suppression; every real failure is still surfaced via the `catchAll` immediately below
+(`streamConsumeError` → `status:"failed"`, `terminatedBy:"llm_error"`). Verified: 0 "Fiber terminated" lines
+across 8 post-fix runs (cold+warm model, 3 timeout values) vs 1 confirmed pre-fix occurrence at identical
+config; `packages/reasoning` full suite 2702 pass/0 fail (no change); `tsc --noEmit` clean.
+
 **2026-08-15: Deterministic evidence grounding across kernel termination paths (`fa609992`,`68e0b0d5`,`f2ff6a17`).**
 User explicitly rejected a recall()-advisory approach ("this won't work for smaller models... not a
 good strategy") — demanded a fully deterministic fix, not model-compliance-dependent. Added

@@ -114,6 +114,23 @@ export interface RuntimeOptions {
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
 
   /**
+   * OpenAI-compatible endpoint override — applies to `"openai"`, `"groq"`,
+   * `"xai"`, and `"litellm"` (all four speak the same Chat Completions wire
+   * protocol). Points the active provider at a LiteLLM proxy, a llama.cpp
+   * server's `/v1` API, Deepseek, or any other OpenAI-compatible endpoint at
+   * runtime. Set via `.withProvider(provider, { baseUrl, apiKey, headers })`.
+   * Silently ignored for `"anthropic"`, `"gemini"`, `"ollama"`.
+   *
+   * NOT propagated to `fallbackConfig` providers (`runtime.ts`'s fallback-
+   * layer construction) — a fallback is a different provider/endpoint by
+   * definition, so inheriting the primary's override would be wrong.
+   *
+   * Default: undefined (falls back to each provider's own named field/env
+   * var — e.g. `LITELLM_BASE_URL`/`LITELLM_API_KEY`, `GROQ_BASE_URL`, etc.)
+   */
+  providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
+
+  /**
    * LLM model identifier (provider-specific).
    * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`
    *
@@ -917,6 +934,8 @@ export interface LightRuntimeOptions {
    */
   agentDisplayName?: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
+  /** OpenAI-compatible endpoint override (openai/groq/xai/litellm). See `RuntimeOptions.providerConfig`. */
+  providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };
   model?: string;
   thinking?: boolean;
   /** Rich thinking configuration (effort level, explicit budget). Authoritative over `thinking` when present. */

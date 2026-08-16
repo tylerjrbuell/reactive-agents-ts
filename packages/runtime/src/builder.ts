@@ -314,6 +314,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
+    private _providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }
     private _model?: string
     private _thinking?: boolean
     private _thinkingOptions?: import('@reactive-agents/llm-provider').ThinkingOptions
@@ -798,11 +799,31 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Set the LLM provider for the agent.
      *
-     * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
+     * The `config` argument (OpenAI-compatible endpoint override) applies to
+     * the whole OpenAI-compatible provider family — `"openai"`, `"groq"`,
+     * `"xai"`, and `"litellm"` — which all speak the same Chat Completions
+     * wire protocol. Use it to point at a LiteLLM proxy, a llama.cpp server's
+     * `/v1` API, Deepseek, or any other OpenAI-compatible endpoint at
+     * runtime, without predefining `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc.
+     * Silently ignored for `"anthropic"`, `"gemini"`, and `"ollama"` — those
+     * speak a different wire protocol.
+     *
+     * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, `"groq"`, `"xai"`, or `"test"`
+     * @param config - Optional OpenAI-compatible endpoint override (applies to `"openai"`/`"groq"`/`"xai"`/`"litellm"`)
      * @returns `this` for chaining
+     *
+     * @example
+     * ```typescript
+     * agent.withProvider("litellm", {
+     *   baseUrl: "http://localhost:8080/v1", // llama.cpp server
+     *   apiKey: process.env.MY_KEY,
+     *   headers: { "X-Custom": "value" },
+     * })
+     * ```
      */
-    withProvider(provider: ProviderName): this {
+    withProvider(provider: ProviderName, config?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }): this {
         this._provider = provider
+        this._providerConfig = config
         return this
     }
 
@@ -2384,7 +2405,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             defaultModel,
             this._strictValidation,
             this._lazyValidation,
-            taskContractInput
+            taskContractInput,
+            this._providerConfig?.apiKey
         )
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)
@@ -2399,7 +2421,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             throw new Error(`Provider connection failed: ${conn.error}`)
         }
 
-        logBuildInfo(this._provider, validation.resolvedModel)
+        logBuildInfo(this._provider, validation.resolvedModel, this._providerConfig?.apiKey)
 
         const agent = await Effect.runPromise(this.buildEffect()).catch((e) => {
             throw unwrapError(e)
@@ -2456,7 +2478,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     yield* Effect.promise(() => import('./build-validation.js'))
                 if (
                     providerRequiresApiKey(self._provider) &&
-                    !readProviderApiKey(self._provider)
+                    !readProviderApiKey(self._provider) &&
+                    !self._providerConfig?.apiKey
                 ) {
                     const keyName = providerApiKeyName(self._provider)
                     return yield* Effect.fail(
@@ -2632,6 +2655,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 sessionPersist,
                 sessionMaxAgeDays,
                 ragStore,
+                kernelMetaTools: kernelMetaTools
+                    ? (kernelMetaTools as {
+                          find?: boolean
+                          staticBriefInfo?: {
+                              indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>
+                          }
+                      })
+                    : undefined,
                 channelsConfig: self._channelsConfig,
                 capabilities: {
                     minIterations: self._minIterations,

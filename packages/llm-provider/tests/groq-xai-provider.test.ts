@@ -13,7 +13,7 @@ import { Effect, Layer } from "effect";
 
 // ─── Capture BOTH constructor opts and create() body ───
 
-let capturedCtor: { apiKey?: string; baseURL?: string } | null = null;
+let capturedCtor: { apiKey?: string; baseURL?: string; defaultHeaders?: Record<string, string> } | null = null;
 
 const mockCreate = mock(async () => ({
   choices: [
@@ -29,7 +29,7 @@ const mockCreate = mock(async () => ({
 
 mock.module("openai", () => ({
   default: class MockOpenAI {
-    constructor(opts: { apiKey?: string; baseURL?: string }) {
+    constructor(opts: { apiKey?: string; baseURL?: string; defaultHeaders?: Record<string, string> }) {
       capturedCtor = opts;
     }
     chat = { completions: { create: mockCreate } };
@@ -140,6 +140,67 @@ describe("OpenAI-compatible client construction", () => {
     );
     expect(capturedCtor?.baseURL).toBeUndefined();
     expect(capturedCtor?.apiKey).toBe("oai-secret");
+  }, 15000);
+});
+
+// ─── providerConfig override (#198) — same mechanism litellm.ts uses ───
+
+describe("providerConfig override wins over named per-provider fields (#198)", () => {
+  it("Groq: providerConfig.baseUrl/apiKey/headers override groqBaseUrl/groqApiKey", async () => {
+    await runComplete(
+      GroqProviderLive,
+      makeConfig({
+        groqApiKey: "old-groq-key",
+        groqBaseUrl: "https://old.groq.example/v1",
+        defaultModel: "llama-3.3-70b-versatile",
+        providerConfig: {
+          baseUrl: "http://localhost:8080/v1",
+          apiKey: "sk-local",
+          headers: { "X-Custom": "value" },
+        },
+      }),
+      "llama-3.3-70b-versatile",
+    );
+    expect(capturedCtor?.baseURL).toBe("http://localhost:8080/v1");
+    expect(capturedCtor?.apiKey).toBe("sk-local");
+    expect(capturedCtor?.defaultHeaders).toEqual({ "X-Custom": "value" });
+  }, 15000);
+
+  it("OpenAI: providerConfig.baseUrl points the default (unconfigurable) provider at a custom endpoint", async () => {
+    await runComplete(
+      OpenAIProviderLive,
+      makeConfig({
+        openaiApiKey: "old-oai-key",
+        providerConfig: { baseUrl: "https://api.deepseek.com/v1", apiKey: "sk-deepseek" },
+      }),
+      "deepseek-chat",
+    );
+    expect(capturedCtor?.baseURL).toBe("https://api.deepseek.com/v1");
+    expect(capturedCtor?.apiKey).toBe("sk-deepseek");
+  }, 15000);
+
+  it("createLLMProviderLayer('groq', ..., { baseUrl, apiKey, headers }) threads through to the SDK client", async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.complete({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: "hi" }],
+          maxTokens: 64,
+        });
+      }).pipe(
+        Effect.provide(
+          createLLMProviderLayer("groq", undefined, undefined, {
+            baseUrl: "http://localhost:9090/v1",
+            apiKey: "sk-runtime",
+            headers: { "X-Runtime": "yes" },
+          }),
+        ),
+      ),
+    );
+    expect(capturedCtor?.baseURL).toBe("http://localhost:9090/v1");
+    expect(capturedCtor?.apiKey).toBe("sk-runtime");
+    expect(capturedCtor?.defaultHeaders).toEqual({ "X-Runtime": "yes" });
   }, 15000);
 });
 

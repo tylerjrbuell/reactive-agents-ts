@@ -421,6 +421,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
       ollamaTimeoutMs: options.ollamaTimeoutMs,
+      baseUrl: options.providerConfig?.baseUrl,
+      apiKey: options.providerConfig?.apiKey,
+      headers: options.providerConfig?.headers,
     },
     options.circuitBreakerConfig,
     options.pricingRegistry,
@@ -439,6 +442,10 @@ export const createRuntime = (options: RuntimeOptions) => {
               Effect.provide(llmLayer as Layer.Layer<LLMService, never, never>),
             );
             const fallbacks = yield* Effect.all(
+              // Deliberately NOT threading options.providerConfig here — a
+              // fallback is a different provider/endpoint by definition, so
+              // inheriting the primary's baseUrl/apiKey override would be
+              // wrong (see RuntimeOptions.providerConfig JSDoc).
               fallbackProviders.map((fp) =>
                 LLMService.pipe(
                   Effect.provide(
@@ -1244,6 +1251,9 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
+      baseUrl: options.providerConfig?.baseUrl,
+      apiKey: options.providerConfig?.apiKey,
+      headers: options.providerConfig?.headers,
     },
   ) as Layer.Layer<LLMService>;
 

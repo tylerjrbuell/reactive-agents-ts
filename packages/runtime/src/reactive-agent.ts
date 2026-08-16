@@ -225,7 +225,32 @@ export class ReactiveAgent<TOut = unknown> {
          */
         private readonly _enableTools: boolean = false,
         /** @internal Runtime configuration snapshot (tests + diagnostics). Not part of the public API. */
-        private readonly config: Record<string, unknown> = {}
+        private readonly config: Record<string, unknown> = {},
+        /**
+         * @internal Mutable reference to the kernel's resolved meta-tools config
+         * (`runtime-construction.ts`'s `kernelMetaTools`), read per-run by
+         * `resolveExecutableToolCapabilities` — NOT a build-time snapshot.
+         * `ingest()` mutates two fields on it so runtime ingestion becomes
+         * discoverable the same way `.withDocuments()` is at build time:
+         *   - `find`: by design (see runtime-construction.ts's "Wire measurement"
+         *     comment — a deliberate, measured token-cost tradeoff), the `find`
+         *     tool is registered ONLY when `.withDocuments()` supplied entries
+         *     at build time. `agent.ingest()`'s own JSDoc example calls it with
+         *     no `.withDocuments()`/`.withMetaTools({find:true})` at all — that
+         *     documented usage silently ingests content the model has no tool
+         *     to ever retrieve. `ingest()` now flips `find` on so its own
+         *     documented example actually works.
+         *   - `staticBriefInfo.indexedDocuments`: same backfill `.withDocuments()`
+         *     does at build time (`builder/build-effect/rag-ingestion.ts`), so
+         *     the `brief` meta-tool and the `isNonTrivial` harness-injection
+         *     gate (`kernel/capabilities/reason/think.ts`) see it too.
+         */
+        private readonly _kernelMetaTools?: {
+            find?: boolean
+            staticBriefInfo?: {
+                indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>
+            }
+        }
     ) {}
 
     /**
@@ -476,6 +501,29 @@ export class ReactiveAgent<TOut = unknown> {
         await Effect.runPromise(
             ingestDocuments([{ content, ...options }], this._ragStore)
         )
+
+        // Mirror the build-time `.withDocuments()` wiring (see
+        // `builder/build-effect/rag-ingestion.ts` +
+        // `runtime-construction.ts`'s meta-tools resolution) so runtime
+        // ingestion is discoverable — and retrievable — the same way.
+        if (this._kernelMetaTools) {
+            // find is off-by-default unless .withDocuments() supplied entries
+            // at build time (a deliberate token-cost tradeoff) — but ingest()
+            // just gave the model something to retrieve, so make sure it can.
+            this._kernelMetaTools.find = true
+            if (this._kernelMetaTools.staticBriefInfo) {
+                // Recompute from the store's current contents (not just
+                // append) so it stays correct across repeated `ingest()`
+                // calls to the same source.
+                this._kernelMetaTools.staticBriefInfo.indexedDocuments = [
+                    ...(this._ragStore as Map<string, Array<{ metadata?: { format?: string } }>>).entries(),
+                ].map(([source, chunks]) => ({
+                    source,
+                    chunkCount: chunks.length,
+                    format: chunks[0]?.metadata?.format ?? 'text',
+                }))
+            }
+        }
     }
 
     /**
