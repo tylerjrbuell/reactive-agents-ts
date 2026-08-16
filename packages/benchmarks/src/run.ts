@@ -342,7 +342,13 @@ async function main() {
       const cells = report.inconclusiveCells ?? []
       console.error(`\nINCOMPLETE MEASUREMENT: ${cells.length} cell(s) were not measured.`)
       for (const c of cells) {
-        console.error(`  ${c.taskId} / ${c.modelVariantId} / ${c.variantId} — ${c.reason}`)
+        // `c.reason` is `PreFlightViolation | InconclusiveReason` — the former
+        // is an object (its human-readable text lives in `.message`), the
+        // latter a plain string. Interpolating the union directly stringified
+        // a PreFlightViolation to the literal text "[object Object]" — live QA,
+        // 2026-08-16 (gemma4:e4b / rw-4, capability-source fallback).
+        const reasonText = typeof c.reason === "string" ? c.reason : c.reason.message
+        console.error(`  ${c.taskId} / ${c.modelVariantId} / ${c.variantId} — ${reasonText}`)
       }
       console.error(`These cells are excluded from every mean, lift and pass^k above.`)
       process.exit(1)
