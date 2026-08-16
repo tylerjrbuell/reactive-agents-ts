@@ -180,3 +180,32 @@ export function sanitizeAgentOutput(text: string): string {
 
   return result.trim();
 }
+
+// Generic apology/incapability phrasing — deliberately broader than the
+// verifier's own `output-not-shallow-giveup` check (verifier.ts), which is
+// narrowly scoped to "no results found"-shaped data-search give-ups and
+// requires unused available tools before it fires. This one exists for a
+// different consumer: `runner.ts`'s §8.5 non-authoritative-termination step,
+// which needs to tell "the model wrote a real answer" from "the model wrote
+// an apology/gave up" BEFORE any tool-availability context is in scope.
+// Deliberately NOT merged into the verifier's list — that check is tuned
+// against its own regression suite and this is a different judgment call
+// (content-shape, not tool-usage-shape).
+const NON_ANSWER_PATTERNS: ReadonlyArray<RegExp> = [
+  /\b(sorry|apologies|apologize)\b.{0,40}\b(cannot|can't|could not|couldn't|unable)\b/i,
+  /\bi['']?m\s+(unable|not able)\s+to\s+(continue|complete|proceed|finish|answer)\b/i,
+  /\bi\s+(cannot|can't|could not|couldn't)\s+(continue|complete|proceed|finish)\b/i,
+];
+
+/**
+ * True when `text` reads as a genuine, content-bearing answer rather than an
+ * empty response or a short apology/incapability statement. Used to decide
+ * whether the model's own output should be trusted as-is, or whether the
+ * harness should fall back to reconstructing an answer from raw tool
+ * artifacts instead.
+ */
+export function looksSubstantive(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  return !NON_ANSWER_PATTERNS.some((p) => p.test(trimmed));
+}

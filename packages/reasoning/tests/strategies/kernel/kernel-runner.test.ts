@@ -1401,6 +1401,79 @@ describe("non-authoritative termination — harness deliverable promotion", () =
     expect(result.output).not.toBe(GARBAGE_END_TURN);
   });
 
+  it("keeps the model's own substantive answer instead of overwriting it with raw artifacts (terminatedBy=end_turn)", async () => {
+    // Root-cause fix, live QA 2026-08-16: this §8.5 step used to fire
+    // unconditionally on terminatedBy=end_turn + any tool artifact, with NO
+    // check of state.output first — a real, correct, model-authored answer
+    // (native-FC's normal completion shape: end_turn with substantive text,
+    // no final-answer TOOL call expected — see think.ts's control-plane
+    // comment) got silently discarded and replaced with a raw tool_artifact
+    // reconstruction, then mislabeled "harness-authored". Live repro:
+    // gemma4:e4b, `.run('Whats the price of XRP and bitcoin?')` — state.output
+    // was already "The current price of XRP is $0.999731 and the current
+    // price of Bitcoin (BTC) is $63,101." at the exact moment this ran.
+    const REAL_ANSWER = "The current price of XRP is $0.999731 and the current price of Bitcoin (BTC) is $63,101.";
+    const ARTIFACT_PAYLOAD = "[crypto-price result] XRP $0.999731, BTC $63,101";
+
+    const endTurnKernel: ThoughtKernel = (state, _ctx) => {
+      if (state.iteration === 0) {
+        return Effect.succeed(
+          transitionState(state, {
+            status: "thinking",
+            iteration: 1,
+            toolsUsed: new Set([...state.toolsUsed, "crypto-price"]),
+            steps: [
+              ...state.steps,
+              makeStep("action", `crypto-price({"coins":["XRP","BTC"]})`, {
+                toolCall: { id: "tc-1", name: "crypto-price", arguments: {} },
+              }),
+              makeStep("observation", ARTIFACT_PAYLOAD, {
+                toolCallId: "tc-1",
+                observationResult: {
+                  success: true,
+                  toolName: "crypto-price",
+                  displayText: ARTIFACT_PAYLOAD,
+                  category: "retrieval",
+                  resultKind: "data",
+                  preserveOnCompaction: true,
+                } as any,
+              }),
+            ],
+          }),
+        );
+      }
+      // Second pass: native-FC end_turn with a real, complete, model-authored
+      // answer — no final-answer tool call (the expected native-FC shape).
+      return Effect.succeed(
+        transitionState(state, {
+          status: "done",
+          output: REAL_ANSWER,
+          iteration: state.iteration + 1,
+          meta: { ...state.meta, terminatedBy: "end_turn" },
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(endTurnKernel, {
+        task: "Whats the price of XRP and bitcoin?",
+        availableToolSchemas: [
+          { name: "crypto-price", description: "get crypto prices", parameters: [] },
+        ],
+      }, {
+        maxIterations: 5,
+        strategy: "test",
+        kernelType: "test",
+      }).pipe(Effect.provide(TestLLMServiceLayer())),
+    );
+
+    expect(result.status).toBe("done");
+    expect(result.output).toBe(REAL_ANSWER);
+    // Not swapped — terminatedBy stays the honest "end_turn" it actually was,
+    // not falsely promoted to "harness_deliverable".
+    expect(result.meta.terminatedBy).not.toBe("harness_deliverable");
+  });
+
   it("leaves output untouched when terminatedBy is final_answer", async () => {
     const FINAL = "A proper synthesized answer.";
     const finalAnswerKernel: ThoughtKernel = (state, _ctx) => {

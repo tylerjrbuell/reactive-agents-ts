@@ -14,6 +14,7 @@
  */
 import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
 import { findUnconsumedStoredKeys } from "../capabilities/verify/unconsumed-evidence.js";
+import { looksSubstantive } from "../capabilities/verify/quality-utils.js";
 import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
 import { Effect, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
@@ -1051,6 +1052,34 @@ export function runKernel(
     // Scoped narrowly to explicit "model ended turn without final-answer"
     // markers so strategies that deliver their own output without setting
     // `terminatedBy` keep control of the output.
+    //
+    // ROOT-CAUSE FIX (2026-08-16, live QA): this used to fire unconditionally
+    // whenever `terminatedBy` matched AND any tool artifact existed — it never
+    // looked at `state.output` first. Traced with a raw prompt/state dump on a
+    // native-FC model (gemma4:e4b, `.run('Whats the price of XRP and
+    // bitcoin?')`, no requiredTools): at the exact moment this ran,
+    // `state.output` was ALREADY the model's own correct, complete answer
+    // ("The current price of XRP is $0.999731 and the current price of
+    // Bitcoin (BTC) is $63,101.") — this block clobbered it with a raw
+    // tool_artifact reconstruction anyway, purely because terminatedBy=
+    // "end_turn" and one tool call had happened, then labeled the model's own
+    // (discarded) answer "harness-authored" and paid for an extra output-gate
+    // LLM resynthesis pass to reproduce what the model had already written
+    // correctly. Native-FC's control-plane design (think.ts's `wireToolSchemas`
+    // filter, "the harness reads control from the response shape" — no
+    // `final-answer` TOOL is even offered) makes end_turn-with-real-text the
+    // EXPECTED, common completion shape for these models, not an edge case —
+    // so this was overfiring on the majority path, not a rare one.
+    // Now only steps in when state.output is empty OR reads as a non-answer
+    // (a short apology/incapability statement — `looksSubstantive`,
+    // quality-utils.ts) — the actual "apology, hallucination, or raw
+    // observation text" case the comment above describes. When the model DID
+    // write something substantive, §8.7 below promotes it as `model_synthesis`
+    // instead, and the verifier's other content-quality checks (harness-
+    // parrot, shallow-giveup, continuation-intent, scaffold-leak — verifier.ts
+    // checks 3c-3e, 4b) still run against whatever ships either way, so
+    // genuinely bad model text is still caught; it's just no longer thrown
+    // away UNSEEN the moment it happens to be non-empty.
     const nonFinalAnswerTerminations = new Set([
       "end_turn",
       "llm_end_turn",
@@ -1060,7 +1089,8 @@ export function runKernel(
     if (
       state.status === "done" &&
       typeof state.meta.terminatedBy === "string" &&
-      nonFinalAnswerTerminations.has(state.meta.terminatedBy)
+      nonFinalAnswerTerminations.has(state.meta.terminatedBy) &&
+      !looksSubstantive(state.output ?? "")
     ) {
       const artifactCount = countDeliverableCandidates(state);
       if (artifactCount > 0) {
