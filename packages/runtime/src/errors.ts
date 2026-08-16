@@ -377,7 +377,11 @@ export function unwrapErrorWithSuggestion(error: unknown): Error {
   const original = getOriginalTaggedError(base) ?? error;
   const ctx = errorContext(original);
   if (ctx.suggestion && !base.message.includes("Consider:") && !base.message.includes("Options:")) {
-    base.message = `${base.message}\n  → ${ctx.suggestion}`;
+    // Same line, not `\n  → `: `toRunBoundaryError()` (the actual console-facing
+    // boundary at `agent.run()`) collapses the message to its first
+    // meaningful line via `firstMeaningfulLine()` — a newline-separated
+    // suggestion would silently disappear right back out at that boundary.
+    base.message = `${base.message} — ${ctx.suggestion}`;
   }
   return base;
 }

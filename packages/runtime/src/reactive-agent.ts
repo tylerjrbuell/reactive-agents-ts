@@ -32,7 +32,7 @@ import {
 } from './agent/gateway-runner.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
+import { unwrapError, unwrapErrorWithSuggestion, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
@@ -914,7 +914,10 @@ export class ReactiveAgent<TOut = unknown> {
                     // Handler exceptions are silently ignored — never replace the original error
                 }
             }
-            throw toRunBoundaryError(unwrapped)
+            // Suggestion appended to a SEPARATE instance — the errorHandler above
+            // gets the plain message so programmatic `error.message === "..."`
+            // comparisons in consumer code aren't disturbed by a change here.
+            throw toRunBoundaryError(unwrapErrorWithSuggestion(e))
         }) as Promise<AgentResult & { object?: TOut }>
     }
 
@@ -1012,7 +1015,7 @@ export class ReactiveAgent<TOut = unknown> {
             await Effect.runPromise(
                 markRunStatus({ dbPath, runId, status: 'failed' }),
             )
-            throw unwrapError(e)
+            throw unwrapErrorWithSuggestion(e)
         }
     }
 
@@ -1482,7 +1485,7 @@ export class ReactiveAgent<TOut = unknown> {
             return result
         } catch (e) {
             await finish(false)
-            throw unwrapError(e)
+            throw unwrapErrorWithSuggestion(e)
         }
     }
 

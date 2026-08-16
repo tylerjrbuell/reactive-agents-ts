@@ -11,6 +11,7 @@ import {
   errorContext,
   unwrapError,
   unwrapErrorWithSuggestion,
+  toRunBoundaryError,
 } from "../src/errors";
 
 describe("Error context and suggestions", () => {
@@ -111,5 +112,15 @@ describe("unwrapError facade", () => {
     const err = new BudgetExceededError({ message: "over", taskId: "task-1", budgetType: "perRequest", limit: 1.0, current: 1.5 });
     const unwrapped = unwrapErrorWithSuggestion(err);
     expect(unwrapped.message).toContain("withCostTracking");
+  });
+
+  test("the suggestion survives toRunBoundaryError's console-facing collapse (agent.run() boundary)", () => {
+    // toRunBoundaryError() keeps only the first meaningful line of the
+    // message (`firstMeaningfulLine`) — a suggestion appended on its own
+    // newline would be silently stripped right back out at the exact
+    // boundary this function exists to serve (agent.run()'s catch).
+    const err = new BudgetExceededError({ message: "over", taskId: "task-1", budgetType: "perRequest", limit: 1.0, current: 1.5 });
+    const boundaryError = toRunBoundaryError(unwrapErrorWithSuggestion(err));
+    expect(boundaryError.message).toContain("withCostTracking");
   });
 });
