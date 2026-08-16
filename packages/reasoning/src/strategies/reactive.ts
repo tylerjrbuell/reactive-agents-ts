@@ -297,11 +297,10 @@ export const executeReactive = (
     });
 
     yield* emitLog({
-      _tag: "completion",
-      // Same honest rule as the returned status — the log must not claim a
-      // success the result does not.
-      success: resolveCompletionStatus(state) === "completed",
-      summary: `Reactive strategy terminated: ${terminatedBy}`,
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: `Reactive strategy terminated: ${terminatedBy}`,
       timestamp: new Date(),
     });
 

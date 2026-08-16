@@ -207,9 +207,10 @@ export const executeDirect = (
     });
 
     yield* emitLog({
-      _tag: "completion",
-      success: resolveCompletionStatus(state) === "completed",
-      summary: `Direct strategy completed (${maxIter} iter cap)`,
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: `Direct strategy completed (${maxIter} iter cap)`,
       timestamp: new Date(),
     });
 

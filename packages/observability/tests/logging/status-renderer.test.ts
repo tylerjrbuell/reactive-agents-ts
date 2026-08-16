@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
 import { makeObservableLogger } from "../../src/logging/observable-logger.js";
 import { makeStatusRenderer } from "../../src/logging/status-renderer.js";
@@ -161,5 +161,36 @@ describe("makeStatusRenderer", () => {
 
     // After stop, should have written the clear sequence
     expect(out.raw.some((r) => r.includes("\r\x1b[2K"))).toBe(true);
+  });
+
+  it("stop() resumes stdin so host REPLs can prompt again", async () => {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const out = makeMockStream();
+    const renderer = makeStatusRenderer(logger, out as unknown as NodeJS.WriteStream);
+
+    const resume = vi.fn();
+    const pause = vi.fn();
+    const setRawMode = vi.fn();
+    const stdin = {
+      isTTY: true,
+      setRawMode,
+      resume,
+      pause,
+      on: vi.fn(),
+      off: vi.fn(),
+      setEncoding: vi.fn(),
+    };
+    const original = process.stdin;
+    Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+
+    try {
+      await Effect.runPromise(renderer.start());
+      renderer.stop();
+      expect(resume).toHaveBeenCalled();
+      expect(pause).not.toHaveBeenCalled();
+      expect(setRawMode).toHaveBeenCalledWith(false);
+    } finally {
+      Object.defineProperty(process, "stdin", { value: original, configurable: true });
+    }
   });
 });

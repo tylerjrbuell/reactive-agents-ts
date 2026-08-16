@@ -298,7 +298,10 @@ export function makeStatusRenderer(
       if (process.stdin.isTTY) {
         process.stdin.off("data", onKey);
         process.stdin.setRawMode(false);
-        process.stdin.pause();
+        // Resume (not pause) so host REPLs (readline, playground) keep stdin
+        // flowing after a run. pause() left scratch/playground loops exiting on
+        // the second prompt with "readline was closed" / immediate EOF.
+        process.stdin.resume();
       }
     } catch { /* ignore */ }
   }

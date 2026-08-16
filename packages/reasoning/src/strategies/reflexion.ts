@@ -734,9 +734,10 @@ export const executeReflexion = (
 
     if (reason.kind === "satisfied") {
       yield* emitLog({
-        _tag: "completion",
-        success: true,
-        summary: `Reflexion completed successfully after ${iters} attempts`,
+        _tag: "log",
+        level: "debug",
+        source: "framework",
+        message: `Reflexion completed successfully after ${iters} attempts`,
         timestamp: new Date(),
       });
       yield* publishReasoningStep(ebOpt, {
@@ -750,9 +751,10 @@ export const executeReflexion = (
       });
     } else if (reason.kind === "max-iters") {
       yield* emitLog({
-        _tag: "completion",
-        success: false,
-        summary: `Reflexion reached max retries (${maxRetries}) without full satisfaction`,
+        _tag: "log",
+        level: "debug",
+        source: "framework",
+        message: `Reflexion reached max retries (${maxRetries}) without full satisfaction`,
         timestamp: new Date(),
       });
     }

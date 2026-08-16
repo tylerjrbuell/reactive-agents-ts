@@ -28,7 +28,7 @@ import {
   type TaskContract,
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { executeNativeToolCall, extractObservationFacts } from "./tool-execution.js";
+import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "./tool-execution.js";
 import { resolveBlockApproval } from "./approval-gate.js";
 import { makeStep } from "../sense/step-utils.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
@@ -451,7 +451,7 @@ export function executeToolAndObserve(
       tool: toolName,
       duration: durationMs,
       status: exec.success ? "success" : "error",
-      ...(exec.success ? {} : { error: exec.content.slice(0, 120) }),
+      ...(exec.success ? {} : { error: truncateForStatusLine(exec.content) }),
       timestamp: new Date(),
     });
 

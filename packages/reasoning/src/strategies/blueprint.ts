@@ -673,9 +673,10 @@ export const executeBlueprint = (
       timestamp: new Date(),
     });
     yield* emitLog({
-      _tag: "completion",
-      success: !!finalOutput,
-      summary: finalOutput
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: finalOutput
         ? "blueprint completed (plan→verify→execute→solve)"
         : "blueprint produced no output",
       timestamp: new Date(),

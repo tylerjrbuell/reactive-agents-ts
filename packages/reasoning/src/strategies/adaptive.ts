@@ -377,9 +377,10 @@ export const executeAdaptive = (
       finalSubResult === subResult ? selectedStrategy : "reactive";
 
     yield* emitLog({
-      _tag: "completion",
-      success: finalSubResult.status === "completed",
-      summary: `Adaptive selected ${activeStrategy}${fallbackOccurred ? " (fallback)" : ""}`,
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: `Adaptive selected ${activeStrategy}${fallbackOccurred ? " (fallback)" : ""}`,
       timestamp: new Date(),
     });
 

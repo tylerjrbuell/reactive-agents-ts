@@ -350,9 +350,10 @@ export const executeTreeOfThought = (
       const skipTb = deriveTerminatedBy(skipExecState);
 
       yield* emitLog({
-        _tag: "completion",
-        success: skipStatus === "completed",
-        summary: skipFinalOutput
+        _tag: "log",
+        level: "debug",
+        source: "framework",
+        message: skipFinalOutput
           ? "Tree-of-thought completed via cost-gated skip (trivial task)"
           : "Tree-of-thought failed via cost-gated skip path",
         timestamp: new Date(),
@@ -881,9 +882,10 @@ export const executeTreeOfThought = (
     const execTb = deriveTerminatedBy(execState);
 
     yield* emitLog({
-      _tag: "completion",
-      success: execStatus === "completed",
-      summary: finalOutput ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: finalOutput ? "Tree-of-thought completed successfully" : "Tree-of-thought failed to produce output",
       timestamp: new Date(),
     });
 

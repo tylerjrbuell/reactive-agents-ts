@@ -120,6 +120,16 @@ export function truncateForDisplay(result: string, maxChars: number): string {
   return `${result.slice(0, half)}\n[...${omitted} chars omitted...]\n${result.slice(-half)}`;
 }
 
+/**
+ * Single-line truncation for the status renderer's `→ tool ✗ ... — <error>`
+ * line. A bare `.slice(0, n)` cut error text mid-word with no indication it
+ * was cut (e.g. "Unable to connect. Is the computer ab"), reading as garbled
+ * rather than truncated. Marks the cut with an ellipsis instead.
+ */
+export function truncateForStatusLine(text: string, maxChars = 120): string {
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
+}
+
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 /** The recovery tool a failed file path points at, when the agent has it. */
@@ -656,7 +666,7 @@ export function executeToolCall(
       tool: toolRequest.tool,
       duration: Date.now() - toolStart,
       status: result.observationResult.success ? "success" : "error",
-      error: result.observationResult.success ? undefined : result.observationResult.displayText.slice(0, 120),
+      error: result.observationResult.success ? undefined : truncateForStatusLine(result.observationResult.displayText),
       timestamp: new Date(),
     });
 

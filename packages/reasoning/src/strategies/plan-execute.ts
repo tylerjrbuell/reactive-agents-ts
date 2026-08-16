@@ -596,9 +596,10 @@ export const executePlanExecute = (
       });
 
       yield* emitLog({
-        _tag: "completion",
-        success: !!scOutput,
-        summary: scOutput
+        _tag: "log",
+        level: "debug",
+        source: "framework",
+        message: scOutput
           ? "Plan execution completed (single-analysis-step short-circuit)"
           : "Plan execution failed to produce output",
         timestamp: new Date(),
@@ -1438,9 +1439,10 @@ export const executePlanExecute = (
     }
 
     yield* emitLog({
-      _tag: "completion",
-      success: !!finalOutput,
-      summary: finalOutput ? `Plan execution completed successfully` : `Plan execution failed to produce output`,
+      _tag: "log",
+      level: "debug",
+      source: "framework",
+      message: finalOutput ? `Plan execution completed successfully` : `Plan execution failed to produce output`,
       timestamp: new Date(),
     });
 
