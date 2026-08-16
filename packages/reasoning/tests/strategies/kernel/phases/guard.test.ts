@@ -92,6 +92,28 @@ describe("availableToolGuard", () => {
       expect(result.observation).toContain("web-search");
     }
   });
+
+  it("suggests the tool the model actually needs, not an unrelated search tool that happens to also exist", () => {
+    // Live-model QA repro (2026-08-16, rw-8/cogito:8b): the model hallucinated
+    // `typescript-checker`, and the old heuristic narrowed the suggestion to
+    // ANY available tool matching "search"/"fetch"/"get"/"browse" — so it got
+    // steered toward `web-search`/`http-get` (useless for code validation)
+    // instead of being told about `code-execute`, which was the tool it
+    // actually had and needed. It then re-hallucinated tool names across 3
+    // more retries with no way to recover.
+    const result = availableToolGuard(
+      makeTc("typescript-checker"),
+      makeState(),
+      {
+        ...baseInput,
+        availableToolSchemas: [{ name: "web-search" }, { name: "code-execute" }, { name: "file-write" }],
+      },
+    );
+    expect(result.pass).toBe(false);
+    if (!result.pass) {
+      expect(result.observation).toContain("code-execute");
+    }
+  });
 });
 
 // ── sideEffectGuard ───────────────────────────────────────────────────────────

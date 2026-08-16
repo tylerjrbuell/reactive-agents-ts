@@ -23,7 +23,13 @@ export function formatEvent(event: LogEvent): string {
     }
 
     case "tool_call": {
-      return `  → [tool:${event.tool}] call ${event.iteration}`;
+      // `event.iteration` is the kernel loop's iteration index, NOT a
+      // sequential per-call counter — two tools called within the same
+      // iteration (a parallel batch) both carry the same number, so a
+      // "call N" label reads as a bug (duplicate/non-monotonic call IDs)
+      // when it's actually working as designed. "iter N" states what the
+      // number really is.
+      return `  → [tool:${event.tool}] iter ${event.iteration}`;
     }
 
     case "tool_result": {

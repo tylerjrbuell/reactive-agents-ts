@@ -44,7 +44,17 @@ describe("formatEvent", () => {
       timestamp: new Date(),
     };
     const result = formatEvent(event);
-    expect(result).toBe("  → [tool:web-search] call 1");
+    expect(result).toBe("  → [tool:web-search] iter 1");
+  });
+
+  it("labels two tool_call events in the same iteration consistently (not implying a call sequence)", () => {
+    // `iteration` is the kernel loop's iteration index — two tools called in
+    // the same parallel batch legitimately share it. The old "call N" label
+    // read as a numbering bug ("call 0" printed twice); "iter N" doesn't.
+    const first: LogEvent = { _tag: "tool_call", tool: "http-get", iteration: 0, timestamp: new Date() };
+    const second: LogEvent = { _tag: "tool_call", tool: "http-get", iteration: 0, timestamp: new Date() };
+    expect(formatEvent(first)).toBe(formatEvent(second));
+    expect(formatEvent(first)).toBe("  → [tool:http-get] iter 0");
   });
 
   it("formats tool_result success with 2 decimal duration", () => {

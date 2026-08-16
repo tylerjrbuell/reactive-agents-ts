@@ -205,12 +205,11 @@ export const availableToolGuard: Guard = (tc, _state, input) => {
   );
   if (knownToolNames.has(tc.name)) return { pass: true };
 
-  const searchLike = [...knownToolNames].filter((name) =>
-    name.includes("search") || name.includes("fetch") || name.includes("get") || name.includes("browse"),
-  );
-  const suggestion = searchLike.length > 0
-    ? `For search/fetch tasks use: ${searchLike.slice(0, 4).join(", ")}.`
-    : `Available tools include: ${[...knownToolNames].slice(0, 5).join(", ")}.`;
+  // Always name the ACTUAL available tools rather than narrowing to a
+  // search/fetch-named subset whenever one happens to exist — see the
+  // matching fix + live-QA repro note in tool-execution.ts's ToolNotFoundError
+  // catch branch, the same heuristic duplicated here.
+  const suggestion = `Available tools include: ${[...knownToolNames].slice(0, 5).join(", ")}.`;
 
   return {
     pass: false,

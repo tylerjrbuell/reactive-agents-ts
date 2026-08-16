@@ -805,12 +805,17 @@ export function executeNativeToolCall(
         // ToolNotFoundError carries availableTools — surface them so the model can self-correct.
         const available = e instanceof ToolNotFoundError ? e.availableTools : undefined;
         if (available && available.length > 0 && msg.includes("not found")) {
-          const searchLike = available.filter((n) =>
-            n.includes("search") || n.includes("fetch") || n.includes("get") || n.includes("browse"),
-          );
-          const suggestion = searchLike.length > 0
-            ? `For search/fetch tasks use: ${searchLike.slice(0, 4).join(", ")}.`
-            : `Available tools include: ${available.slice(0, 5).join(", ")}.`;
+          // Always name the ACTUAL available tools — the previous heuristic
+          // narrowed the suggestion to search/fetch-named tools whenever any
+          // existed, regardless of what the model was trying to do. A model
+          // hallucinating `typescript-checker`/`code-fixes` got steered
+          // toward `web-search`/`http-get` (irrelevant) instead of being told
+          // about the `code-execute`/`file-write` it actually had, and burned
+          // its whole retry budget re-hallucinating tool names with no way to
+          // recover. Live-model QA, 2026-08-16 (rw-8, cogito:8b): 5 failed
+          // tool calls across 3 plan-refinement cycles, task shipped a false
+          // "completed" claim at 0% accuracy.
+          const suggestion = `Available tools include: ${available.slice(0, 5).join(", ")}.`;
           return Effect.succeed({
             content: `[Tool error: ${msg}. ${suggestion} Use EXACT tool names from the system prompt.]`,
             success: false,
