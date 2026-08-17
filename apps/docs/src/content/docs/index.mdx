@@ -111,8 +111,8 @@ import { createAgent } from 'reactive-agents'
 const agent = await createAgent({
   name: 'researcher',
   provider: 'anthropic',
-  reasoning: {},          // ReAct loop: Think → Act → Observe
-  tools: {},              // Built-in: web-search, file-read, code-execute
+  reasoning: {},                    // ReAct loop: Think → Act → Observe
+  tools: { builtins: true },        // opt in to web-search, file-read, code-execute, etc.
   observability: {},
 })
 
@@ -403,7 +403,7 @@ await session.chat("What's the population?");
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withGateway({
     heartbeat: { intervalMs: 3_600_000, policy: "adaptive" },
     crons: [{ schedule: "0 9 * * MON", instruction: "Weekly report" }],

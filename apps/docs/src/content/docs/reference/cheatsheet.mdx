@@ -69,7 +69,7 @@ const agent = await ReactiveAgents.create()
 | Method | Status | What it does |
 |--------|:------:|--------------|
 | `.withReasoning()` | <Badge text="essential" variant="success" size="small" /> | ReAct loop (default). Pass `{ defaultStrategy: "tree-of-thought" }` to switch. |
-| `.withTools()` | <Badge text="recommended" variant="note" size="small" /> | Built-in tools + meta-tools (`recall`, `find`, `brief`, `pulse`) |
+| `.withTools({ builtins: true })` | <Badge text="recommended" variant="note" size="small" /> | Opts in to built-in tools; also gives `recall` (`find`/`brief`/`pulse` are separately opt-in) |
 | `.withTools({ tools: [myTool] })` | <Badge text="opt-in" variant="tip" size="small" /> | Add custom tools to the registry |
 | `.withMemory()` | <Badge text="recommended" variant="note" size="small" /> | 4-layer memory, tier `"standard"` (FTS5 keyword search) |
 | `.withMemory({ tier: "enhanced" })` | <Badge text="opt-in" variant="tip" size="small" /> | + vector embeddings (needs `EMBEDDING_PROVIDER`) |
@@ -225,7 +225,7 @@ import { agentFn, pipe, parallel, race } from "reactive-agents";
 
 // Lazy agent functions
 const researcher = agentFn({ name: "researcher", provider: "anthropic" }, (b) =>
-  b.withReasoning().withTools()
+  b.withReasoning().withTools({ builtins: true })
 );
 
 // Sequential pipeline

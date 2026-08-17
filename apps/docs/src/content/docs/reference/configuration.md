@@ -171,6 +171,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `thinking` | `boolean` | no |  |
 | `tools.adaptive` | `boolean` | no |  |
 | `tools.allowedTools` | `array` | no |  |
+| `tools.builtins` | `unknown` | no |  |
 | `tools.focusedTools` | `array` | no |  |
 | `tools.terminal` | `boolean` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |

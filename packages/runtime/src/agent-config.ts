@@ -54,6 +54,7 @@ export const ToolsConfigSchema = Schema.Struct({
   focusedTools: Schema.optional(Schema.Array(Schema.String)),
   adaptive: Schema.optional(Schema.Boolean),
   terminal: Schema.optional(Schema.Boolean),
+  builtins: Schema.optional(Schema.Union(Schema.Boolean, Schema.Array(Schema.String))),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -605,6 +606,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(t?.focusedTools ? { focusedTools: t.focusedTools } : {}),
       ...(t?.adaptive !== undefined ? { adaptive: t.adaptive } : {}),
       ...(t?.terminal !== undefined ? { terminal: t.terminal } : {}),
+      ...(t?.builtins !== undefined ? { builtins: t.builtins } : {}),
     };
     builder = builder.withTools(Object.keys(opts).length > 0 ? opts : undefined);
   }

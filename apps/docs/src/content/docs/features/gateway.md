@@ -47,7 +47,7 @@ const agent = await ReactiveAgents.create()
   .withName("ops-agent")
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withGateway({
     heartbeat: {
       intervalMs: 1_800_000, // 30 minutes

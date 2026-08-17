@@ -263,8 +263,7 @@ let builder = ReactiveAgents.create()
     .withProvider('anthropic')
     .withProfile(HarnessProfile.intelligent())  // cross-session skills
     .withMemory({ tier: 'enhanced' })           // upgrade memory to vector embeddings
-    .withTools()
-
+    .withTools({ builtins: true })
 if (process.env.AUTONOMOUS) {
     builder = builder.withGateway({             // persistent autonomous harness
         heartbeat: { intervalMs: 1_800_000, policy: 'adaptive' },
@@ -330,7 +329,7 @@ import { agentFn, pipe, parallel, race } from 'reactive-agents'
 
 // Create lazy agent functions
 const researcher = agentFn({ name: 'researcher', provider: 'anthropic' }, (b) =>
-    b.withReasoning().withTools()
+    b.withReasoning().withTools({ builtins: true })
 )
 const summarizer = agentFn({ name: 'summarizer', provider: 'anthropic' })
 
@@ -415,7 +414,7 @@ import { ReactiveAgents } from 'reactive-agents'
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .withHook({
         phase: 'think',
         timing: 'after',
@@ -580,7 +579,7 @@ const agent = await ReactiveAgents.create()
     .withProvider('ollama')
     .withModel('qwen3:4b')
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .withContextProfile({ tier: 'local' }) // Lean prompts, aggressive compaction
     .build()
 ```
@@ -704,7 +703,7 @@ rax run "Task" --cortex --provider anthropic             # Stream events to Cort
 
 ## Register Custom Tools
 
-Tools are registered at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools include web search, file I/O, HTTP, and code execution; dynamic sub-agents add `spawn-agent`. With `.withTools()`, the Conductor's Suite also injects **`recall`**, **`find`**, **`brief`**, and **`pulse`** (override with `.withMetaTools(false)`).
+Tools are registered at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools (web search, file I/O, HTTP, code execution) are registered but hidden from the model by default; opt in with `.withTools({ builtins: true })` or `{ builtins: [...] }` for a named subset. Dynamic sub-agents add `spawn-agent`. `.withTools()` always injects **`recall`** by default; **`find`** auto-enables once you ingest documents via `.withDocuments()`; **`brief`** and **`pulse`** are opt-in via `.withMetaTools({ brief: true, pulse: true })` (or disable the whole suite with `.withMetaTools(false)`).
 
 Use `defineTool` — a schema plus a plain async handler with arg types inferred from the schema. `input` accepts an Effect `Schema.Struct` or any Standard Schema (Zod / Valibot / ArkType):
 
@@ -800,7 +799,7 @@ const agent = await ReactiveAgents.create()
     .withName('adaptive-agent')
     .withProvider('anthropic')
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .build()
 
 // Register a new tool at runtime
@@ -834,7 +833,7 @@ Use `.withDynamicSubAgents()` to let the model spawn ad-hoc sub-agents at runtim
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withModel('claude-sonnet-4-6')
-    .withTools()
+    .withTools({ builtins: true })
     .withDynamicSubAgents({ maxIterations: 5 })
     .build()
 ```

@@ -74,7 +74,7 @@ The agent talks to your local Ollama server — the prompt never leaves the mach
 
 ## Step 3 — Give the agent tools and reasoning
 
-A model that only chats isn't an agent. Add `.withReasoning()` to enable the Think → Act → Observe loop and `.withTools()` to register the built-in toolset (file read/write, HTTP, code execution, crypto prices, git, and more):
+A model that only chats isn't an agent. Add `.withReasoning()` to enable the Think → Act → Observe loop and `.withTools()` to reach the built-in toolset (file read/write, HTTP, code execution, crypto prices, git, and more). Naming tools in `allowedTools` (below) opts them into the model's schema directly, which also keeps the surface small for a local model:
 
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";

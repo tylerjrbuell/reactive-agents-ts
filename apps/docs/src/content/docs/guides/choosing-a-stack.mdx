@@ -21,7 +21,7 @@ import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 ```
 
@@ -42,7 +42,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory()
   .withGuardrails()
   .withCostTracking()

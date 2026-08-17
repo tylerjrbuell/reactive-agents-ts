@@ -244,7 +244,7 @@ There is no minimum token requirement for implicit caching — Google manages it
 const agent = await ReactiveAgents.create()
   .withProvider("gemini")
   .withModel("gemini-2.5-flash")
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 // Repeated system prompts and tool schemas are cached by Gemini automatically
 ```

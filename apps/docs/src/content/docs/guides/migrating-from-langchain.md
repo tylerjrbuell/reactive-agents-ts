@@ -47,7 +47,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 
 const agent = await ReactiveAgents.create()
   .withProvider("openai")
-  .withTools()
+  .withTools({ builtins: true })
   .withReasoning()
   .build();
 
@@ -150,7 +150,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withProvider("openai")
-  .withTools()
+  .withTools({ builtins: true })
   .withHook({
     phase: "think",
     timing: "before",

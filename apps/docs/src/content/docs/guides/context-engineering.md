@@ -28,7 +28,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("qwen3:4b")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withContextProfile({ tier: "local" })
   .build();
 
@@ -160,7 +160,7 @@ import { categorizeToolName, deriveResultKind } from "@reactive-agents/reasoning
 const coordinator = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withAgentTool("researcher", {
     name: "researcher",
     description: "Research specialist for web searches",
@@ -184,7 +184,7 @@ For ad-hoc delegation where you don't know ahead of time what sub-tasks the agen
 
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withTools()
+  .withTools({ builtins: true })
   .withDynamicSubAgents({ maxIterations: 5 })
   .build();
 ```

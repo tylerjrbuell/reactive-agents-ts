@@ -288,7 +288,7 @@ const agent = await ReactiveAgents.create()
 // Blueprint — static decomposable tasks (plan once → execute → solve)
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools()
+  .withTools({ builtins: true })
   .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
   .build();
 

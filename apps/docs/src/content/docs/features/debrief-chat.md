@@ -236,7 +236,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "reactive" })
   .withMemory({ tier: "enhanced", dbPath: "./memory-db" })  // Enables debrief
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Run a task

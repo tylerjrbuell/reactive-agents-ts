@@ -55,7 +55,7 @@ import { ReactiveAgents } from 'reactive-agents'
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .withCortex() // ← streams all events to http://localhost:4321
     .build()
 
@@ -208,7 +208,7 @@ const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withModel('claude-sonnet-4-6')
     .withReasoning({ defaultStrategy: 'plan-execute-reflect' })
-    .withTools()
+    .withTools({ builtins: true })
     .withCortex() // ← connects to http://localhost:4321
     .withCortex('http://my-cortex:4321') // ← or explicit URL
     .build()

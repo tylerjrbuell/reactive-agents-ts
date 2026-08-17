@@ -30,7 +30,7 @@ const agent = await ReactiveAgents.create()
   .withName("guarded-assistant")
   .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
-  .withTools()
+  .withTools({ builtins: true })
   .withReasoning({ defaultStrategy: "reactive" })
   .withDurableRuns()
   .withApprovalPolicy({

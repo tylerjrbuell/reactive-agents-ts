@@ -28,7 +28,7 @@ const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // In an interactive terminal: StatusRenderer starts automatically.
@@ -156,7 +156,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withReasoning({ maxIterations: 10 })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Run in an interactive terminal — StatusRenderer starts automatically.

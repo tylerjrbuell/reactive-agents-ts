@@ -38,7 +38,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()          // ReAct strategy by default
-  .withTools()              // Built-in tools (web search, file I/O, etc.)
+  .withTools({ builtins: true })  // opt in to built-in tools (web search, file I/O, etc.)
   .build();
 
 const result = await agent.run("What happened in AI this week?");
@@ -64,7 +64,7 @@ A ReWOO-style **Plan → Verify → Execute → Solve** strategy for static, dec
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const result = await agent.run("Create types.ts, generate.ts, and validate.ts for the schema");
@@ -129,7 +129,7 @@ A structured approach that generates a plan first, then executes each step:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect" })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const result = await agent.run("Compare the GDP growth of the top 5 economies over the last decade");
@@ -163,7 +163,7 @@ A two-phase **plan-then-execute** strategy that uses breadth-first tree search t
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "tree-of-thought" })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const result = await agent.run("Research and summarize recent commits in this repo");
@@ -197,7 +197,7 @@ The Adaptive strategy doesn't reason itself — it **analyzes the task and deleg
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Adaptive selects the best strategy per task
@@ -212,7 +212,7 @@ Alternatively, enable adaptive routing via the `adaptive.enabled` flag while kee
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ adaptive: { enabled: true } })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 // Every task is classified and routed to the best strategy automatically
 ```
@@ -495,7 +495,7 @@ const agent = await ReactiveAgents.create()
       },
     },
   })
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory()   // Enables PlanStoreService (SQLite plan persistence)
   .build();
 ```

@@ -112,7 +112,7 @@ Separate from the post-output checks above, `.withGrounding({ mode })` verifies 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools()
+  .withTools({ builtins: true })
   .withGrounding({ mode: "block" })  // "warn" = advisory; "block" = one corrective retry then degrade
   .build();
 ```

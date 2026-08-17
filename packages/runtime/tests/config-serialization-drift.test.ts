@@ -162,6 +162,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
     focusedTools: ["file-read"],
     adaptive: true,
     terminal: true,
+    builtins: true,
   },
   guardrails: {
     injection: true,

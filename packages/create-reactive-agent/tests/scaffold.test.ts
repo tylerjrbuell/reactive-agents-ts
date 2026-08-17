@@ -175,10 +175,10 @@ describe("template-specific output", () => {
     }
   }
 
-  test("with-tools template calls .withTools()", () => {
+  test("with-tools template calls .withTools({ builtins: true })", () => {
     const files = renderTemplate(baseOpts({ template: "with-tools" }));
     const idx = files.find((f) => f.path === "src/index.ts")!;
-    expect(idx.content).toContain(".withTools()");
+    expect(idx.content).toContain(".withTools({ builtins: true })");
   });
 
   test("streaming template uses runStream() with the real _tag event API", () => {

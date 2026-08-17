@@ -96,7 +96,7 @@ For code execution tools, the Docker sandbox provides container-level isolation:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools() // Code execution uses Docker sandbox when available
+  .withTools({ builtins: ["code-execute"] }) // Code execution uses Docker sandbox when available
   .build();
 ```
 
@@ -125,7 +125,7 @@ Ensure your agent calls critical tools before producing a final answer:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withRequiredTools({
     tools: ["web-search"],   // Must call web-search before answering
     maxRetries: 2,           // Retry up to 2 times if tool is missed

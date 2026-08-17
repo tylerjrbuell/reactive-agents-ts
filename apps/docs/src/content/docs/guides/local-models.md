@@ -38,7 +38,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama")
   .withModel("qwen3:14b")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withContextProfile({ tier: "local" })
   .build();
 ```

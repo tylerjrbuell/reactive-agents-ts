@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     .withProvider("anthropic")
     .withModel("claude-sonnet-4-6")
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .build();
 
   // toSSE() returns a standard Web API Response with a Server-Sent Events body.
@@ -69,7 +69,7 @@ What each call does:
 - `.withProvider("anthropic")` — picks the model provider. Swap in `"openai"`, `"google"`, `"ollama"`, etc.
 - `.withModel("claude-sonnet-4-6")` — selects the model.
 - `.withReasoning()` — enables the reasoning loop so the agent can plan across multiple steps.
-- `.withTools()` — enables the built-in tools (file, fetch, shell, and friends) so the agent can take actions, not just talk.
+- `.withTools({ builtins: true })` — opts in to the built-in tools (file, fetch, shell, and friends) so the agent can take actions, not just talk.
 - `agent.runStream(prompt)` — runs the agent and yields a stream of events (`TextDelta`, `IterationProgress`, `StreamCompleted`, …).
 - `AgentStream.toSSE(...)` — adapts that stream into an SSE `Response`. No manual `ReadableStream` wiring needed.
 

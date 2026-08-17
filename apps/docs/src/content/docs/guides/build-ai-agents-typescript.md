@@ -87,7 +87,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withProfile(HarnessProfile.balanced()) // memory + reactive intelligence + verifier
-  .withTools()                            // built-in tools + MCP
+  .withTools({ builtins: true })          // opt in to built-in tools + MCP
   .withMaxIterations(15)
   .withBudget({ tokenLimit: 100_000 })    // hard spend cap
   .build();

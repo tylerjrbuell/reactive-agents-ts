@@ -17,7 +17,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("assistant")
   .withProvider("anthropic")
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const reply = await agent.chat("What is the capital of France?");
@@ -140,7 +140,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("cli-bot")
   .withProvider("anthropic")
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const session = agent.session();

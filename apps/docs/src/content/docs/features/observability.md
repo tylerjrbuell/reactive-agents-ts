@@ -19,7 +19,7 @@ For real-time visibility while the agent runs, pass verbosity and live options:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withObservability({ verbosity: "verbose", live: true })
   .build();
 
@@ -408,7 +408,7 @@ When `verbosity` is set to `"normal"` or higher, a professional metrics dashboar
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withObservability({ verbosity: "normal", live: true })
   .build();
 ```

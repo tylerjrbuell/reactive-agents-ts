@@ -23,7 +23,7 @@ Reactive Intelligence monitors reasoning quality in real time and takes correcti
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withReactiveIntelligence()  // Enable entropy sensing + telemetry
   .build();
 ```

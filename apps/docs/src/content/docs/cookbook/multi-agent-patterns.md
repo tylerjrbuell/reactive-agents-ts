@@ -35,7 +35,7 @@ const researcher = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory()
   .build();
 
@@ -45,7 +45,7 @@ const seniorAgent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory({ tier: "enhanced" })
   .withGuardrails()
   .withVerification()
@@ -120,7 +120,7 @@ when and what to delegate.
 const parent = await ReactiveAgents.create()
   .withName("coordinator")
   .withProvider("anthropic")
-  .withTools()
+  .withTools({ builtins: true })
   .withDynamicSubAgents({ maxIterations: 5 })
   .build();
 

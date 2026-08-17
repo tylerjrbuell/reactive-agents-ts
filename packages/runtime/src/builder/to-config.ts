@@ -149,6 +149,9 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
       t["terminal"] =
         typeof to.terminal === "boolean" ? to.terminal : true;
     }
+    if (to?.builtins !== undefined) {
+      t["builtins"] = Array.isArray(to.builtins) ? [...to.builtins] : to.builtins;
+    }
     config["tools"] = t;
   }
 

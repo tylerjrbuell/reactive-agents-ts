@@ -43,7 +43,7 @@ The CLI detects your package manager automatically. Running without a project na
 │
 ◆  Template?
 │  ● minimal   — single-file agent, no tools
-│  ○ with-tools — agent with built-in tools (filesystem, fetch, math, shell)
+│  ○ with-tools — agent with built-in tools (web-search, http-get, file I/O, code-execute)
 │  ○ streaming  — token-by-token via agent.runStream()
 │
 ◆  Provider?
@@ -61,7 +61,7 @@ The CLI detects your package manager automatically. Running without a project na
 | Name | Description |
 |------|-------------|
 | `minimal` | Single-file agent. `ReactiveAgents.create()...build()` + `agent.run()`. Best starting point. |
-| `with-tools` | Adds `.withTools()` (built-in: filesystem, fetch, math, shell) and `.withReasoning({ defaultStrategy: "reactive" })`. |
+| `with-tools` | Adds `.withTools({ builtins: true })` (built-in: web-search, http-get, file I/O, code-execute) and `.withReasoning({ defaultStrategy: "reactive" })`. |
 | `streaming` | Uses `agent.runStream()` — emits `text-delta`, `tool-call`, `step-complete`, `completed`, and `error` events. |
 
 ### Minimal output

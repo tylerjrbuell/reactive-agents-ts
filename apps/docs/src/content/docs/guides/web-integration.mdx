@@ -34,7 +34,7 @@ The server-side is identical regardless of which client framework you use. `Agen
     const agent = await ReactiveAgents.create()
       .withProvider("anthropic")
       .withReasoning()
-      .withTools()
+      .withTools({ builtins: true })
       .build();
 
     return AgentStream.toSSE(agent.runStream(prompt));
@@ -52,7 +52,7 @@ The server-side is identical regardless of which client framework you use. `Agen
 
     const agent = await ReactiveAgents.create()
       .withProvider("anthropic")
-      .withTools()
+      .withTools({ builtins: true })
       .build();
 
     return AgentStream.toSSE(agent.runStream(prompt));
@@ -69,7 +69,7 @@ The server-side is identical regardless of which client framework you use. `Agen
 
     const agent = await ReactiveAgents.create()
       .withProvider("anthropic")
-      .withTools()
+      .withTools({ builtins: true })
       .build();
 
     // Return the Web API Response directly — h3 handles it
@@ -85,7 +85,7 @@ The server-side is identical regardless of which client framework you use. `Agen
     async fetch(req) {
       if (req.method === "POST" && new URL(req.url).pathname === "/agent") {
         const { prompt } = await req.json();
-        const agent = await ReactiveAgents.create().withProvider("anthropic").withTools().build();
+        const agent = await ReactiveAgents.create().withProvider("anthropic").withTools({ builtins: true }).build();
         return AgentStream.toSSE(agent.runStream(prompt));
       }
       return new Response("Not found", { status: 404 });

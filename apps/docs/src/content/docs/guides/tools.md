@@ -11,7 +11,7 @@ The tools layer lets agents call external functions, APIs, and MCP servers. Tool
 
 ## Built-in Tools vs Custom Tools
 
-When you call `.withTools()`, several built-in tools are automatically registered. You can also register custom tools at build time by passing options.
+`.withTools()` alone gives an agent zero built-in tools. Built-ins are registered internally (callable by name, and discoverable via the `discover-tools` meta-tool), but excluded from the model's prompt-level tool list unless you opt in with `builtins: true` (all of them) or `builtins: [...]` (a named subset). This is deliberate: unscoped built-in descriptions like "write to file" cause weaker models to reach for them on unrelated tasks. See [Built-in Tools](#built-in-tools) below for the full opt-in behavior. You can also register custom tools at build time by passing options.
 
 ### Using Built-in Tools
 
@@ -20,8 +20,8 @@ import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools()               // Built-in tools auto-registered
-  .withReasoning()           // Tools work with or without reasoning
+  .withTools({ builtins: true })  // opt in to all built-in tools
+  .withReasoning()                // Tools work with or without reasoning
   .build();
 
 const result = await agent.run("What is the population of Tokyo times 3?");
@@ -141,7 +141,7 @@ Both paths produce the same outcome — the agent uses tools to accomplish its t
 
 ## Built-in Tools
 
-When you enable `.withTools()`, these tools are automatically registered and available to the agent:
+These tools are registered internally as soon as you call `.withTools()`, but each one only reaches the model's prompt-level tool list if you opt in: pass `builtins: true` for all of them, `builtins: [...]` for a named subset, or list a tool by name in `allowedTools`/`requiredTools` (those bypass the opt-in gate on their own):
 
 | Tool | Category | Description | Requires |
 |------|----------|-------------|----------|

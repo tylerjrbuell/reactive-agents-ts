@@ -23,14 +23,15 @@ function renderIndex(opts: ScaffoldOptions): string {
 
 ${envCheck}
 
-// withTools() registers the built-in tool layer: web-search, http-get,
-// file-read/file-write, code-execute, and more. The agent picks tools by name —
-// e.g. it can run the arithmetic below through code-execute.
+// withTools({ builtins: true }) opts in to the built-in tool layer:
+// web-search, http-get, file-read/file-write, code-execute, and more.
+// The agent picks tools by name — e.g. it can run the arithmetic below
+// through code-execute.
 const agent = await ReactiveAgents.create()
   .withName("tool-using-assistant")
   .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
-  .withTools()
+  .withTools({ builtins: true })
   .withReasoning({ defaultStrategy: "reactive" })
   .withMaxIterations(6)
   .build();

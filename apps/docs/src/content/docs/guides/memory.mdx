@@ -100,7 +100,7 @@ const agent = await ReactiveAgents.create()
   .withMemory({ tier: "1", dbPath: "./memory-db" })
   .withExperienceLearning()   // Enable ExperienceStore
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 ```
 

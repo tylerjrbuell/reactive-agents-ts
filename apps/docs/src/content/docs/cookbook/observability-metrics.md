@@ -18,7 +18,7 @@ const agent = await ReactiveAgents.create()
   .withName("research-bot")
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withObservability({ verbosity: "normal" })
   .build();
 
@@ -73,7 +73,7 @@ Set `live: true` to stream phase events to the console as the agent runs, in add
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withObservability({ verbosity: "verbose", live: true })
   .build();
 
@@ -123,7 +123,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Subscribe to specific event types (fully typed)
@@ -177,7 +177,7 @@ await agent.dispose();
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Collect metrics from events

@@ -47,7 +47,7 @@ console.log(result.output);
 
 ## Stack B — ReAct + built-in tools
 
-Enables the reasoning kernel and the default tool registry (file I/O, web search when keys exist, etc.). With `.withTools()`, **Conductor meta-tools** (`brief`, `find`, `pulse`, `recall`) default **on** unless you pass `.withMetaTools(false)` — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/#metatoolsconfig).
+Enables the reasoning kernel. `.withTools({ builtins: true })` opts in to the built-in tool registry (file I/O, web search when keys exist, etc.); bare `.withTools()` registers them internally but keeps them out of the model's schema. The **`recall`** Conductor meta-tool defaults **on** either way (**`find`** turns on with `.withDocuments()`; **`brief`**/**`pulse`** need `.withMetaTools({ brief: true, pulse: true })`) — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/#metatoolsconfig).
 
 {/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
@@ -58,7 +58,7 @@ await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const result = await agent.run("Use web-search to find today's date in UTC and reply with one sentence.");
@@ -79,7 +79,7 @@ await using agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-6")
   .withMemory() // or .withMemory({ tier: "enhanced" })
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 const result = await agent.run("Summarize the project goals in three bullets.");
@@ -99,7 +99,7 @@ await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .withGuardrails({ toxicity: true, injection: true, pii: true })
   .withObservability({ verbosity: "normal", live: false })
   .withCostTracking({ perRequest: 0.25, daily: 10 })
@@ -169,7 +169,7 @@ await using agent = await ReactiveAgents.create()
     defaultStrategy: "adaptive",
     adaptive: { enabled: true },
   })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 await agent.run("Plan then execute: list two pros and two cons of serverless agents.");

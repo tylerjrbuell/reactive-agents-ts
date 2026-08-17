@@ -28,7 +28,7 @@ const agent = await ReactiveAgents.create()
   .withName('research-agent')
   .withProvider('anthropic')
   .withProfile(HarnessProfile.balanced())  // ← canonical entry
-  .withTools()
+  .withTools({ builtins: true })
   .build()
 ```
 :::
@@ -1167,7 +1167,7 @@ await using agent = await ReactiveAgents.create()
   })
   .withMemory()
   .withReasoning({ defaultStrategy: "adaptive", adaptive: { enabled: true } })
-  .withTools()              // Built-in tools (web search, file I/O, etc.)
+  .withTools({ builtins: true })  // opt in to built-in tools (web search, file I/O, etc.)
   .withGuardrails()
   .withVerification()
   .withCostTracking()

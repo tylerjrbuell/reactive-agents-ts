@@ -23,7 +23,7 @@ const agent = await ReactiveAgents.create()
 
   // Core capabilities
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()                // Built-in tools + any MCP servers
+  .withTools({ builtins: true })  // opt in to built-in tools + any MCP servers
   .withMemory({ tier: "enhanced" }) // Vector + FTS5 for rich memory
 
   // Safety
@@ -248,7 +248,7 @@ const agents = {
     .withName("researcher")
     .withProvider("anthropic")
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true })
     .build(),
 
   writer: await ReactiveAgents.create()
@@ -275,7 +275,7 @@ const agent = await ReactiveAgents.create()
   .withName("ops-agent")
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory()
   .withGuardrails()
   .withCostTracking()
