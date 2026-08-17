@@ -44,7 +44,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log("Run 1 (baseline — no prior episodic context)...");
 
   let agent1Builder = mkBase("self-improve-demo")
-    .withMemory("1")
+    .withMemory({ tier: "standard" })
     .withSelfImprovement()
     .withMaxIterations(5);
   if (provider === "test") {
@@ -66,7 +66,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log("\nRun 2 (with episodic learning from run 1)...");
 
   let agent2Builder = mkBase("self-improve-demo")
-    .withMemory("1")
+    .withMemory({ tier: "standard" })
     .withSelfImprovement()
     .withMaxIterations(5);
   if (provider === "test") {
@@ -88,7 +88,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log("\nRun 3 (different task — factual knowledge)...");
 
   let agent3Builder = mkBase("self-improve-demo")
-    .withMemory("1")
+    .withMemory({ tier: "standard" })
     .withSelfImprovement()
     .withMaxIterations(5);
   if (provider === "test") {

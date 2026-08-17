@@ -527,7 +527,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    * via `resolveReceiptSigningKey`.
    */
   receiptSigningKey: Schema.optional(Schema.Unknown),
-  /** Memory system tier: "1" (light) or "2" (full) */
+  /** Internal retrieval tier: "1" (FTS5) or "2" (FTS5 plus vector search) */
   memoryTier: Schema.Literal("1", "2"),
   /** Enable guardrails layer */
   enableGuardrails: Schema.Boolean,

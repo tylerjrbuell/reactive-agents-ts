@@ -18,7 +18,7 @@
 |---|---|
 | `.withGateway()` | Runs 24/7, heartbeat every 6 hours |
 | `.withTools()` | web-search, http-get, file-write, scratchpad |
-| `.withMemory("1")` | Remembers seen threads to avoid duplicates |
+| `.withMemory({ tier: "standard" })` | Remembers seen threads to avoid duplicates |
 | `.withReasoning()` | Adaptive strategy decides whether to respond |
 | `.withPersona()` | Friendly developer-advocate voice |
 

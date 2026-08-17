@@ -58,7 +58,7 @@ const agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-6")
   .withReasoning()         // ReAct loop with adaptive strategy switching
   .withTools()             // Built-in tools + MCP support + meta-tools
-  .withMemory("1")         // Persistent SQLite memory with FTS5 search
+  .withMemory({ tier: "standard" }) // Persistent SQLite memory with FTS5 search
   .withGuardrails()        // Block injection, PII, toxicity
   .withCostTracking()      // Budget enforcement + complexity routing
   .build();

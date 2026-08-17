@@ -1,6 +1,6 @@
 # @reactive-agents/runtime
 
-> Version: **0.10.3** — execution runtime for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.15.0** — execution runtime for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 The runtime package contains the 12-phase `ExecutionEngine`, the `ReactiveAgentBuilder` fluent API,
 `createRuntime()` for low-level Effect-TS layer composition, and the agent-level orchestration
@@ -42,7 +42,7 @@ const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withMemory("1")
+  .withMemory({ tier: "standard" })
   .withReasoning()
   .withGuardrails()
   .withCostTracking()
@@ -128,7 +128,7 @@ The full set of `.with*()` methods on `ReactiveAgentBuilder`:
 | `.withTerminalTools(cfg?)` | Add `shell-execute` (opt-in, allowlist-gated) |
 | `.withDynamicSubAgents(opts?)` | Add `spawn-agent` for runtime sub-agent dispatch |
 | `.withAgentTool(...)` / `.withRemoteAgent(...)` | Wrap another agent as a callable tool |
-| `.withMemory(tier)` | `"1"` (FTS5) or `"2"` (vec) memory |
+| `.withMemory(options?)` | Four-layer memory; `tier: "standard"` (FTS5) or `"enhanced"` (vector search) |
 | `.withDocuments(docs)` | RAG ingestion at build time |
 | `.withGuardrails(opts?)` | Input/output safety detectors |
 | `.withVerification(opts?)` | Verifier strategies (semantic, evidence, …) |
@@ -171,7 +171,7 @@ session with:
 const agent = await ReactiveAgents.create()
   .withName("ops-bot")
   .withProvider("anthropic")
-  .withMemory("1")
+  .withMemory({ tier: "standard" })
   .withGateway({
     accessControl: {
       mode: "chat",                 // 'chat' (default) or 'task'

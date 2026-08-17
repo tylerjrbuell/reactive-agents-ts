@@ -7,10 +7,10 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-Reactive Agents provides a four-tier memory architecture inspired by cognitive science.
+Reactive Agents provides a four-layer memory architecture inspired by cognitive science.
 
-<Aside type="tip" title="Two tiers, one decision">
-The four memory layers are bundled into two tiers you pick at build time: **`"standard"`** (working + episodic + FTS5 keyword search — works without an embedding provider) or **`"enhanced"`** (all four layers + vector embeddings — requires `EMBEDDING_PROVIDER=openai` or `ollama` in `.env`). Default is `"standard"`. Pick `"enhanced"` only if you need semantic similarity recall over old conversations or stored documents.
+<Aside type="tip" title="Two retrieval tiers, one decision">
+The four memory layers are available through two retrieval tiers you pick at build time: **`"standard"`** (FTS5 keyword search, with no embedding provider required) or **`"enhanced"`** (FTS5 + vector embeddings, requiring an embedding provider and `sqlite-vec`). Default is `"standard"`. Pick `"enhanced"` only if you need semantic similarity recall over old conversations or stored documents.
 </Aside>
 
 ## Memory Types
@@ -42,7 +42,7 @@ Event log of agent actions and experiences. Supports session snapshots for conve
 
 Stored workflows and learned procedures with success rate tracking. Agents improve their strategies over time.
 
-## Memory Tiers
+## Retrieval Tiers
 
 The runtime still labels tiers internally as `"1"` and `"2"`, but the builder API prefers:
 
@@ -97,7 +97,7 @@ The ExperienceStore records tool usage patterns and error recovery hints across 
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withMemory({ tier: "1", dbPath: "./memory-db" })
+  .withMemory({ tier: "standard", dbPath: "./memory-db" })
   .withExperienceLearning()   // Enable ExperienceStore
   .withReasoning()
   .withTools({ builtins: true })
@@ -153,7 +153,7 @@ console.log(patterns);
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withMemory({ tier: "1", dbPath: "./memory-db" })
+  .withMemory({ tier: "standard", dbPath: "./memory-db" })
   .withReasoning()
   .build();
 
@@ -200,7 +200,7 @@ The MemoryConsolidatorService runs background maintenance cycles on episodic mem
 {/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
-  .withMemory({ tier: "1", dbPath: "./memory-db" })
+  .withMemory({ tier: "standard", dbPath: "./memory-db" })
   .withMemoryConsolidation({
     threshold: 10,       // Trigger consolidation after 10 new episodic entries
     decayFactor: 0.95,   // Multiply importance × 0.95 each cycle

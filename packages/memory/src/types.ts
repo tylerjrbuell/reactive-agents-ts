@@ -6,14 +6,14 @@ import { Schema } from "effect";
 export const MemoryId = Schema.String.pipe(Schema.brand("MemoryId"));
 export type MemoryId = typeof MemoryId.Type;
 
-// ─── Memory Type (4 types) ───
+// ─── Memory Type (4 layers) ───
 
 /**
- * The four memory tiers in the 4-layer memory system.
+ * The four memory layers in the memory system.
  *
  * - `"working"` — In-process short-term slots (capacity: 7, eviction policy: fifo/lru/importance)
  * - `"episodic"` — Daily logs and session snapshots (SQLite, retained N days)
- * - `"semantic"` — Long-term knowledge facts with embeddings (requires EMBEDDING_PROVIDER)
+ * - `"semantic"` — Long-term knowledge facts with optional embeddings
  * - `"procedural"` — Learned workflows and patterns with success rates
  */
 export const MemoryType = Schema.Literal(
@@ -85,7 +85,8 @@ export type MemoryEntry = typeof MemoryEntrySchema.Type;
  * A long-term semantic knowledge entry with embedding vector support.
  *
  * Stored in SQLite with optional vector embeddings for similarity search.
- * Embeddings are required for KNN search (`.withMemory({ tier: "enhanced" })`).
+ * Embeddings are required for KNN search (retrieval Tier 2, plus an embedding provider and
+ * the `sqlite-vec` extension).
  * Access count and last access time enable importance decay over time.
  */
 export const SemanticEntrySchema = Schema.Struct({
@@ -360,9 +361,9 @@ export type SearchOptions = typeof SearchOptionsSchema.Type;
 /**
  * Result of the memory bootstrap phase at execution start.
  *
- * Contains pre-loaded context from all memory tiers injected into the
- * execution context before the reasoning loop begins. Working memory
- * items are always loaded; semantic/episodic/procedural only when tier 2.
+ * Contains pre-loaded context from all four memory layers injected into the
+ * execution context before the reasoning loop begins. The retrieval tier controls search
+ * capabilities, not which memory layers are bootstrapped.
  */
 export const MemoryBootstrapResultSchema = Schema.Struct({
   /** Agent whose memory was bootstrapped */
@@ -379,7 +380,7 @@ export const MemoryBootstrapResultSchema = Schema.Struct({
   activeSkills: Schema.optionalWith(Schema.Array(Schema.Unknown), { default: () => [] as unknown[] }),
   /** When the bootstrap completed */
   bootstrappedAt: Schema.DateFromSelf,
-  /** Memory tier that was bootstrapped */
+  /** Retrieval tier that was used for bootstrap */
   tier: Schema.Literal("1", "2"),
 });
 export type MemoryBootstrapResult = typeof MemoryBootstrapResultSchema.Type;
@@ -406,7 +407,7 @@ export type EvictionPolicy = typeof EvictionPolicy.Type;
  * Zettelkasten knowledge graph linking.
  */
 export const MemoryConfigSchema = Schema.Struct({
-  /** Memory tier: "1" = working memory only, "2" = full 4-layer system */
+  /** Retrieval tier: "1" = FTS5/keyword search, "2" = FTS5 plus vector search */
   tier: Schema.Literal("1", "2"),
   /** Agent identifier for memory isolation */
   agentId: Schema.String,

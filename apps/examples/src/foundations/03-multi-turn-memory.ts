@@ -46,7 +46,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     ]);
   }
   const agent = await b
-    .withMemory("1")
+    .withMemory({ tier: "standard" })
     .withMaxIterations(3)
     .build();
 

@@ -310,7 +310,7 @@ export interface PromptsOptions {
  * ```
  */
 export interface MemoryOptions {
-    /** Memory tier: `"standard"` (working only) or `"enhanced"` (full 4-layer + embeddings). Default: "standard" */
+    /** Retrieval tier: `"standard"` (FTS5 keyword search) or `"enhanced"` (FTS5 + vector search). Default: "standard" */
     readonly tier?: 'standard' | 'enhanced'
     /** Custom SQLite database path. Default: `.reactive-agents/memory/{agentId}/memory.db` */
     readonly dbPath?: string

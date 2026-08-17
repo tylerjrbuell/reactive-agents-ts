@@ -56,17 +56,71 @@
     --sl-color-black: #ffffff; /* white      — page bg        */
 }
 
-/* ── Layout — widen content, narrow sidebars (more room for tables & API tables) ─ */
+/* ── Layout ─────────────────────────────────────────────────────
+   Keep the reading column comfortable while reserving enough width for
+   the long, descriptive navigation labels used by this site. The previous
+   72rem content column made prose and small reference tables unnecessarily
+   wide, while the 15rem desktop sidebar forced awkward wrapping.           */
 :root {
-    /* Prose + markdown max width (was 55rem; Starlight default 45rem) */
-    --sl-content-width: 72rem;
-    --sl-sidebar-width: 15rem; /* default 18.75rem — a bit more for main column */
+    --sl-content-width: 58rem;
+    --sl-sidebar-width: 17.5rem;
 }
 
-/* Extra-wide viewports: use available space without absurd line length */
+/* Extra-wide viewports: add room for reference tables without stretching prose. */
 @media (min-width: 100rem) {
     :root {
-        --sl-content-width: 78rem;
+        --sl-content-width: 64rem;
+    }
+}
+
+/* Desktop sidebar fit. Starlight's defaults use `overflow-wrap: anywhere` on
+   nav items, which can split labels in the middle of words when a badge is
+   present. Keep the drawer full width on mobile and make the fixed desktop
+   rail a predictable, self-contained column. */
+@media (min-width: 50rem) {
+    .sidebar-pane {
+        overflow-x: hidden;
+    }
+
+    .sidebar-content {
+        padding-inline: 0.85rem;
+    }
+
+    .sidebar-pane li {
+        overflow-wrap: break-word;
+        word-break: normal;
+        hyphens: none;
+    }
+
+    .sidebar-pane ul ul li {
+        margin-inline-start: 0.35rem;
+        padding-inline-start: 0.35rem;
+    }
+
+    .sidebar-pane a,
+    .sidebar-pane summary {
+        min-width: 0;
+    }
+
+    .sidebar-pane a {
+        display: flex;
+        align-items: baseline;
+        gap: 0.25rem;
+    }
+
+    .sidebar-pane a > span:first-child,
+    .sidebar-pane .group-label {
+        min-width: 0;
+    }
+
+    .sidebar-pane a > span:first-child {
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    .sidebar-pane a > :last-child,
+    .sidebar-pane .group-label > :last-child {
+        flex: 0 0 auto;
     }
 }
 
@@ -772,8 +826,9 @@ html {
    ─────────────────────────────────────────────────────────────── */
 .sl-markdown-content table:not(:where(.not-content *)) {
     border-collapse: collapse;
-    /* Content-driven by default; cap to panel width and scroll if wider */
-    width: max-content;
+    /* Fill the reading column when possible; the wrapper below handles
+       genuinely wide API tables without causing page-level overflow. */
+    width: 100%;
     max-width: 100%;
     table-layout: auto;
 }
@@ -821,7 +876,19 @@ html {
 .sl-markdown-content
     :where(.sl-table-wrapper, .table-wrapper, figure.starlight-table) {
     overflow-x: auto;
+    max-width: 100%;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+/* Row contrast makes wide reference tables easier to scan without adding
+   heavy borders or competing with Starlight's accent color. */
+.sl-markdown-content tbody tr:nth-child(even) td:not(:where(.not-content *)) {
+    background: rgba(139, 92, 246, 0.025);
+}
+
+.sl-markdown-content tbody tr:hover td:not(:where(.not-content *)) {
+    background: rgba(6, 182, 212, 0.055);
 }
 
 /* Sensible per-column widths for the most common 2-column reference tables
@@ -838,6 +905,16 @@ html {
 
 [data-theme='light'] .sl-markdown-content td:not(:where(.not-content *)) {
     border-color: rgba(109, 40, 217, 0.07);
+}
+
+[data-theme='light']
+    .sl-markdown-content tbody tr:nth-child(even) td:not(:where(.not-content *)) {
+    background: rgba(109, 40, 217, 0.025);
+}
+
+[data-theme='light']
+    .sl-markdown-content tbody tr:hover td:not(:where(.not-content *)) {
+    background: rgba(8, 145, 178, 0.045);
 }
 
 /* ── Links ──────────────────────────────────────────────────── */
@@ -960,6 +1037,24 @@ html {
     }
     .ra-stat-label {
         font-size: 0.58rem;
+    }
+}
+
+/* Dense reference tables remain usable on phones without shrinking code and
+   method names to unreadable sizes. Only the table wrapper scrolls. */
+@media (max-width: 640px) {
+    .sl-markdown-content
+        :where(.sl-table-wrapper, .table-wrapper, figure.starlight-table) {
+        margin-inline: 0;
+        padding-bottom: 0.2rem;
+    }
+
+    .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+        padding: 0.55rem 0.7rem;
+    }
+
+    .sl-markdown-content th:not(:where(.not-content *)) {
+        font-size: 0.8rem;
     }
 }
 

@@ -1,9 +1,10 @@
 # @reactive-agents/memory
 
-> Version: **0.10.3** — memory system for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.15.0** — memory system for [Reactive Agents](https://docs.reactiveagents.dev/).
 
-Four memory tiers — **Working**, **Semantic**, **Episodic**, **Procedural** — backed by
-`bun:sqlite` with FTS5 full-text search (Tier 1) and optional `sqlite-vec` KNN vectors (Tier 2).
+Four memory layers — **Working**, **Semantic**, **Episodic**, **Procedural** — backed by
+SQLite. Retrieval has two tiers: FTS5 full-text search (Tier 1) and optional `sqlite-vec` KNN
+vectors (Tier 2).
 Plus an `ExperienceStore` for cross-agent learning, a background `MemoryConsolidator` (decay +
 summarization), a Zettelkasten link index, and the `SessionStore` that powers gateway chat mode.
 
@@ -13,10 +14,11 @@ summarization), a Zettelkasten link index, and the `SessionStore` that powers ga
 bun add @reactive-agents/memory
 ```
 
-> **Requires Bun** — uses `bun:sqlite` natively. Tier 2 also requires the `sqlite-vec` extension,
-> which `bun:sqlite` loads at runtime.
+> Bun provides native SQLite with FTS5. Node.js is also supported through the runtime shim; its
+> built-in SQLite lacks FTS5 and uses LIKE-based search instead. Tier 2 requires the `sqlite-vec`
+> extension and an embedding provider.
 
-## Memory tiers
+## Memory layers
 
 | Service | Purpose | Backend |
 |---|---|---|
@@ -39,7 +41,7 @@ Cross-cutting:
 - **`AgentMemoryFromMemoryService`** — port adapter that satisfies the narrow `AgentMemory` Tag in
   `@reactive-agents/core` from a `MemoryService` provider.
 
-## Two retrieval tiers
+## Retrieval tiers
 
 - **Tier 1 — FTS5.** Fast, deterministic keyword search; no embeddings required.
   Best for short, key-term queries. Verbose natural-language queries should be decomposed first.
@@ -55,15 +57,19 @@ const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withMemory("1") // "1" = FTS5; "2" = vector embeddings
+  .withMemory({ tier: "standard" }) // standard = Tier 1 retrieval
   .build();
 
 const r1 = await agent.run("Remember that my favorite color is blue.");
 const r2 = await agent.run("What's my favorite color?"); // recalls 'blue'
 ```
 
-For finer control, `withMemory({ tier, dbPath, working, semantic, episodic, procedural })`
-exposes per-service options.
+For enhanced retrieval, use `withMemory({ tier: "enhanced" })`. The named options also accept
+`dbPath`, `capacity`, `evictionPolicy`, `retainDays`, `importanceThreshold`,
+`experienceLearning`, and `memoryConsolidation`.
+
+The legacy `.withMemory("1")` and `.withMemory("2")` forms remain supported but are deprecated;
+use the named `tier` options for new code.
 
 ## Direct service usage
 
@@ -76,7 +82,7 @@ import {
   createMemoryLayer,
 } from "@reactive-agents/memory";
 
-const layer = createMemoryLayer({ tier: "1", dbPath: "./memory.db" });
+const layer = createMemoryLayer("1", { agentId: "my-agent", dbPath: "./memory.db" });
 
 await Effect.runPromise(
   Effect.gen(function* () {

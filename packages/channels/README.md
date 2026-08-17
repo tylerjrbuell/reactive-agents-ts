@@ -1,6 +1,6 @@
 # @reactive-agents/channels
 
-> Version: **0.10.3** — external channel layer for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.15.0** — external channel layer for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 The channels package provides the **inbound messaging surface** for agents: bot transports
 (Discord, Telegram Bot API, Signal, …), HTTPS webhooks, a trigger registry that maps inbound
@@ -60,7 +60,7 @@ const agent = await ReactiveAgents.create()
   .withName("ops-bot")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withMemory("1")
+  .withMemory({ tier: "standard" })
   .withGateway({
     accessControl: {
       mode: "chat",

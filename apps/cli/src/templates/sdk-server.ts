@@ -47,7 +47,7 @@ async function buildAgent() {
     .withModel(process.env.LLM_MODEL ?? "claude-sonnet-4-6")
     .withReasoning()
     .withTools()
-    .withMemory("1")
+    .withMemory({ tier: "standard" })
     .build();
   return a;
 }

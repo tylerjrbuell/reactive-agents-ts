@@ -162,7 +162,7 @@ Task categories are classified automatically: `code-generation`, `research`, `da
 
 ### Skill Synthesis
 
-When a run succeeds with converging entropy, the learning engine extracts a reusable skill fragment — a snapshot of the configuration that worked (strategy, temperature, tool filtering mode, memory tier) for that task category. These fragments feed into the **Living Skills System**: they are stored as `SkillRecord` entities in SQLite, evolve through LLM-based refinement in the memory consolidation background cycle, and are applied to future runs automatically. See the [Living Skills guide](/guides/agent-skills) for the full skill lifecycle.
+When a run succeeds with converging entropy, the learning engine may extract a reusable skill fragment — a snapshot of the configuration that worked (strategy, temperature, tool filtering mode, memory tier) for that task category. With memory and skill persistence enabled, qualifying fragments are stored as `SkillRecord` entities in SQLite. They are loaded and injected into later runs only when the skill resolver is configured, typically through `.withSkills({ paths: [...] })`; they are not automatically active in every agent. See the [Living Skills guide](/guides/agent-skills) for the full skill lifecycle.
 
 ## Telemetry
 
