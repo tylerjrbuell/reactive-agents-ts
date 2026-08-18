@@ -104,7 +104,7 @@ export interface VerificationContext {
    */
   readonly terminatedBy?: string;
   /** Opt-in grounding config. Absent ⇒ numeric grounding does NOT run. */
-  readonly grounding?: import("../../state/kernel-state.js").GroundingConfig;
+  readonly grounding?: import("../../state/grounding-config.js").GroundingConfig;
   /**
    * Fabricated-measurement guard mode. ALWAYS-ON by default (absent ⇒ `block`):
    * the high-precision fabrication check polices invented empirical

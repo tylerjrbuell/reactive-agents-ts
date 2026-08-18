@@ -47,11 +47,8 @@ export interface SkillsContext {
 
 // ── KernelMessage — Provider-agnostic conversation message ───────────────────
 
-/** Provider-agnostic conversation message for the kernel's native FC conversation history. */
-export type KernelMessage =
-  | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
-  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean; readonly storedKey?: string }
-  | { readonly role: "user"; readonly content: string };
+import type { KernelMessage } from "./kernel-message.js";
+export type { KernelMessage } from "./kernel-message.js";
 
 // ── PendingGuidance — harness signals for the next think turn ────────────────
 
@@ -643,15 +640,8 @@ export interface KernelState {
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
 
-/** Opt-in numeric evidence-grounding. Presence on KernelInput = enabled. */
-export interface GroundingConfig {
-  /** block: suppress + corrective retry → degrade to warn. warn: advisory only. */
-  readonly mode: "block" | "warn";
-  /** Numeric match tolerance as a fraction (rounding). Default 0.01 (1%). */
-  readonly tolerance?: number;
-  /** block mode: corrective retries before degrading to warn. Default 1. */
-  readonly maxRetries?: number;
-}
+import type { GroundingConfig } from "./grounding-config.js";
+export type { GroundingConfig } from "./grounding-config.js";
 
 /**
  * Stall / no-progress policy — bounds wasted iterations when the model ignores
