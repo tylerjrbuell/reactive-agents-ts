@@ -29,7 +29,7 @@
 // the strategy's deliverable or its evidence — a failed attempt that was fully
 // replaced by a later successful retry does not join (the retry does).
 
-import type { KernelState } from "./kernel-state.js";
+import type { CompletionAuthorityState } from "./completion-authority-state.js";
 import {
   honestPartialMetadata,
   resolveCompletionStatus,
@@ -73,7 +73,7 @@ export interface CompletionEnvelope {
  * than forking their logic. `abstained` is layered on top: an abstention meta
  * (O3) refines a non-failed terminal into the honest-decline status.
  */
-export function envelopeFromKernelState(state: KernelState): CompletionEnvelope {
+export function envelopeFromKernelState(state: CompletionAuthorityState): CompletionEnvelope {
   const base = resolveCompletionStatus(state);
   const completionStatus: CompletionEnvelope["completionStatus"] =
     base !== "failed" && state.meta.abstention !== undefined ? "abstained" : base;
