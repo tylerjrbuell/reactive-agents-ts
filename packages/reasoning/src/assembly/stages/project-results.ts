@@ -1,4 +1,4 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordMessage } from "../trace.js";
 import { thoughtContinuityEnabled } from "../../harness-flags.js";
 
