@@ -1,7 +1,8 @@
 // packages/health/tests/health-service.test.ts
 import { describe, test, expect, afterEach } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Context } from "effect";
 import type { HealthConfig } from "../src/index.js";
+import { Health, HealthServerError } from "../src/index.js";
 import { makeHealthService } from "../src/service.js";
 
 const testConfig: HealthConfig = { port: 0, agentName: "test-agent" };
@@ -126,5 +127,27 @@ describe("HealthService", () => {
       `http://localhost:${(service as any)._port}/unknown`,
     );
     expect(res.status).toBe(404);
+  });
+
+  test("Health is a valid Context.Tag usable in Effect layers", async () => {
+    expect(Context.isTag(Health)).toBe(true);
+
+    const service = await Effect.runPromise(makeHealthService(testConfig));
+    const program = Effect.gen(function* () {
+      const svc = yield* Health;
+      return svc;
+    }).pipe(Effect.provideService(Health, service));
+
+    const resolved = await Effect.runPromise(program);
+    expect(resolved).toBe(service);
+  });
+
+  test("HealthServerError is a tagged error carrying message/cause", () => {
+    const cause = new Error("boom");
+    const err = new HealthServerError({ message: "server failed", cause });
+
+    expect(err._tag).toBe("HealthServerError");
+    expect(err.message).toBe("server failed");
+    expect(err.cause).toBe(cause);
   });
 });
