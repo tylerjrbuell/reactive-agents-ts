@@ -36,7 +36,8 @@ export const asKernelStateLike = (s: Readonly<KernelState>): Readonly<KernelStat
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
-export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed" | "evaluating";
+import type { KernelStatus } from "./kernel-status.js";
+export type { KernelStatus } from "./kernel-status.js";
 
 // ── SkillsContext — pre-rendered skill XML for system-prompt injection ────────
 
