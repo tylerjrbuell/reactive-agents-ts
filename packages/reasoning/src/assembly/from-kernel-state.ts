@@ -11,7 +11,7 @@ import type { ContextProfile } from "../context/context-profile.js";
 import { EventLog } from "./event-log.js";
 import { ResultStore } from "./result-store.js";
 import { resolveCapability, type Tier } from "./capability.js";
-import type { AssemblyInput } from "./project.js";
+import type { AssemblyInput } from "./assembly-ctx.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────

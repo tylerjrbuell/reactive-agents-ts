@@ -1,4 +1,4 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, setTools } from "../trace.js";
 
 export const selectToolsStage = (c: AssemblyCtx): AssemblyCtx => {

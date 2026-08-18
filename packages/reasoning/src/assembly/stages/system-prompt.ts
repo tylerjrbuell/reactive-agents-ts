@@ -1,4 +1,4 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage } from "../trace.js";
 import { buildEnvironmentContext, buildToolReference, buildRules } from "../../context/context-engine.js";
 import { buildSystemPrompt } from "../../kernel/capabilities/attend/context-utils.js";

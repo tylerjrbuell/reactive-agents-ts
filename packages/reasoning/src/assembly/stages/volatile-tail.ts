@@ -1,4 +1,4 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage } from "../trace.js";
 import { renderStandingFrame, type StandingFrameSection } from "../standing-frame.js";
 
