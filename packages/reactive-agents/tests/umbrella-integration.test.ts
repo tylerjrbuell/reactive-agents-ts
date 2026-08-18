@@ -35,6 +35,31 @@ describe("Umbrella re-exports", () => {
     expect(typeof mod.registerShutdownHandlers).toBe("function");
   });
 
+  test("layer-factory and tool re-exports are functions", async () => {
+    const mod = await import("../src/index.js");
+
+    const factoryNames = [
+      "createCostLayer",
+      "createEvalLayer",
+      "createGuardrailsLayer",
+      "createIdentityLayer",
+      "createInteractionLayer",
+      "createMemoryLayer",
+      "createObservabilityLayer",
+      "createPromptLayer",
+      "createReasoningLayer",
+      "createToolsLayer",
+      "createVerificationLayer",
+      "defineTool",
+      "tool",
+      "ingestDocuments",
+    ] as const;
+
+    for (const name of factoryNames) {
+      expect(typeof (mod as Record<string, unknown>)[name]).toBe("function");
+    }
+  });
+
   test("core service exports are accessible", async () => {
     const mod = await import("../src/index.js");
 
