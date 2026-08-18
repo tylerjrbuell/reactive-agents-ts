@@ -24,7 +24,7 @@
 // live as pure FREE functions here (not methods) to honor that plain-data
 // contract and the codebase's readonly-immutable state convention.
 
-import type { PostCondition } from "../capabilities/verify/post-conditions.js";
+import type { PostCondition } from "../capabilities/verify/post-condition-types.js";
 
 // ─── Entry kinds ───────────────────────────────────────────────────────────────
 //
@@ -48,7 +48,7 @@ interface LedgerEntryBase {
    * sibling pass's ledger is absorbed, so a merged fact stays attributable to
    * the verification retry / continuation / sub-agent that recorded it.
    */
-  readonly pass?: import("./run-scope.js").LedgerPass;
+  readonly pass?: import("./ledger-pass.js").LedgerPass;
 }
 
 /** A tool call was issued (grown from an `action` step; enriched by C2). */
