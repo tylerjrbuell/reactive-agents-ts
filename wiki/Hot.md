@@ -114,5 +114,8 @@ tool-callers. Promotion requires rungs 2 and 3 to agree in sign.
 
 At session end: replace "Latest Session" with new date + key updates, demote prior to one-line pointers, update "What's Next." Keep under 120 lines.
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-08-18
 **Current Phase:** v0.14 launch line + wire-or-delete sweep (post root-cause fortnight)
+
+## Session Note (2026-08-18)
+Executed backlog bundle `health-export-surface` + `umbrella-export-surface` (issue #155). Re-verified all 4 sub-items natively (RTK/stale claims): HS-D-01 (observe) and HS-D-02 (vue) already dead — coverage landed since the 2026-05-27 sweep. HS-D-17 (health) and HS-D-19 (umbrella) fixed with additive shape tests (`adc3dbe1`, `f8063744`). Issue closed. Build 37/37, `bun test packages/health/` 9/0, `bun test packages/reactive-agents/` 20/0. See wiki/Research/Debriefs/2026-08-18-health-umbrella-export-surface-execution-debrief.md.
