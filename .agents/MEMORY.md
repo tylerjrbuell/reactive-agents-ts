@@ -305,7 +305,7 @@ Reverse-chronological within the month; each links to nothing (detail lives in M
 **Kernel:** `packages/reasoning/src/kernel/` = `capabilities/` (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify) + `loop/` (runner.ts, react-kernel.ts, terminate.ts = single terminal owner) + `state/` + `utils/`.
 **Two records:** `state.messages[]` = LLM-visible thread; `state.steps[]` = systems-observed (entropy/metrics/debrief).
 **Build patterns:** all providers pass `tools` to both `complete()` and `stream()`; Anthropic streaming uses raw `streamEvent` (helper events fire `inputJson` before `contentBlock`); Gemini needs `msg.toolName` (not hardcoded) for `functionResponse.name` and must walk `candidates[0].content.parts[]` directly (`chunk.text` strips functionCall parts); Ollama emits `tool_calls` on `chunk.done`. Loop detection: `maxConsecutiveThoughts:3`, only ACTION steps reset the streak (`kernel/capabilities/reflect/loop-detector.ts`).
-**Known open architecture debt:** ToT outer loop still doesn't honor `dispatcher-early-stop` (per-inner fixed; outer branches are separate sub-kernels) — long-standing, not verified fixed as of this condensation. Full historical debt list (mostly resolved) → MEMORY-ARCHIVE.md; current debt is DEBT-REGISTER.md, not this file.
+**Known open architecture debt:** none tracked here as of 2026-08-18 — the "ToT outer loop doesn't honor `dispatcher-early-stop`" item was RESOLVED by #127 (verified live in `tree-of-thought.ts:734-775`, closed #61). Full historical debt list (mostly resolved) → MEMORY-ARCHIVE.md; current debt is DEBT-REGISTER.md, not this file.
 
 ## Working rules (cross-cutting, keep applying)
 
