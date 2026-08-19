@@ -172,6 +172,36 @@ export function getPermanentlyFailedRequiredTools(
 }
 
 /**
+ * Step 3 item 3c (09 §6.5) — the ONE ledger-backed requirement-evidence
+ * derivation. Covered means COMPLETED SUCCESSFULLY, computed from the same
+ * substrate `buildSuccessfulToolCallCounts`/`isToolCalled` already read (local
+ * `steps` unioned with the run-scoped `RunLedger`'s `tool-result` entries, so a
+ * delegated/merged success counts too).
+ *
+ * This replaces caller-computed `coveredTools` sets that used ATTEMPTED
+ * semantics (e.g. `state.toolsUsed`, written before the tool executes —
+ * act.ts's `newToolsUsed.add(...)` sites). A required tool whose every call
+ * errored must NOT be covered — see
+ * wiki/Planning/Implementation-Plans/2026-08-18-step-3-one-execution-boundary.md
+ * §4 and the live probe `scripts/probes/step3-requirement-evidence-probe.ts`
+ * (a required tool with 2/2 failing calls previously produced a RunLedger
+ * `{kind:"requirement", status:"satisfied"}` entry — factually wrong).
+ */
+export interface RequirementEvidence {
+  /** Required tools that COMPLETED (at least one successful call). */
+  readonly coveredTools: ReadonlySet<string>;
+}
+
+export function deriveRequirementEvidence(
+  steps: readonly ReasoningStep[],
+  requiredTools: readonly string[],
+  ledger?: RunLedger,
+): RequirementEvidence {
+  const missing = new Set(getMissingRequiredToolsFromSteps(steps, requiredTools, undefined, ledger));
+  return { coveredTools: new Set(requiredTools.filter((t) => !missing.has(t))) };
+}
+
+/**
  * Like getMissingRequiredToolsFromSteps but excludes permanently-failed tools.
  *
  * Use this for nudge messages and completion guards — if a tool was attempted

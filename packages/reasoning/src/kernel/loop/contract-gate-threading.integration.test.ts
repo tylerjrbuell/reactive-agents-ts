@@ -215,17 +215,25 @@ describe("llmEndTurnEvaluator coverage — contract present vs absent", () => {
     expect(verdict?.reason).not.toContain("required tools not used yet");
   });
 
-  it("paths diverge: tool ATTEMPTED but never successful — fallback accepts, contract redirects", () => {
-    // `state.toolsUsed` is written before execution (attempted-semantics,
-    // act.ts): the tool-name diff counts this as covered. The contract's
-    // ToolCalled condition verifies against the LEDGER (successful
-    // observations) and stays unmet. Same facts, different verdicts — the
-    // proof that check 2.5 is requirement satisfaction, not a re-skinned diff.
+  it("paths AGREE: tool ATTEMPTED but never successful — both fallback and contract redirect (Step 3 item 3c fix)", () => {
+    // Step 3 item 3c (09 §6.5, fixed 2026-08-18): `state.toolsUsed` is written
+    // before execution (attempted semantics, act.ts). Before the fix the
+    // tool-name-diff fallback path passed `ctx.toolsUsed` straight through as
+    // `coveredTools`, so an attempted-but-never-successful tool counted as
+    // covered there while the contract's ToolCalled condition (verified
+    // against the ledger/steps' successful observations) correctly stayed
+    // unmet — same facts, two different verdicts. The fallback now derives
+    // `coveredTools` from `deriveRequirementEvidence` (ledger-backed,
+    // COMPLETED semantics), so both paths agree: `steps` is empty here (no
+    // successful observation backs the attempt), so neither path sees the
+    // tool as covered.
     const attempted = { toolsUsed: new Set(["web-search"]) };
 
     const fallbackVerdict = llmEndTurnEvaluator.evaluate(baseCtx(attempted));
-    expect(fallbackVerdict?.action).toBe("exit");
-    expect(fallbackVerdict?.reason).toBe("llm_end_turn");
+    expect(fallbackVerdict?.action).toBe("redirect");
+    expect(fallbackVerdict?.reason).toBe(
+      "required tools not used yet: web-search — use them, or state explicitly why they are unnecessary and give your final answer",
+    );
 
     const runContract = compileRunContract("Find the current population of France", {
       requiredTools: ["web-search"],
@@ -235,6 +243,25 @@ describe("llmEndTurnEvaluator coverage — contract present vs absent", () => {
     );
     expect(contractVerdict?.action).toBe("redirect");
     expect(contractVerdict?.reason).toContain("call the `web-search` tool");
+  });
+
+  it("RED-pin: a required tool attempted and FAILED (real failed observation) does not satisfy coverage", () => {
+    // The live-probe shape (scripts/probes/step3-requirement-evidence-probe.ts):
+    // a required tool whose only call errored must redirect, not exit.
+    const failedSteps = [
+      makeStep("action", "web-search({})", {
+        toolCall: { id: "tc-1", name: "web-search", arguments: {} },
+      }),
+      makeStep("observation", "error", {
+        toolCallId: "tc-1",
+        observationResult: makeObservationResult("web-search", false, "error"),
+      }),
+    ];
+    const verdict = llmEndTurnEvaluator.evaluate(
+      baseCtx({ steps: failedSteps, toolsUsed: new Set(["web-search"]) }),
+    );
+    expect(verdict?.action).toBe("redirect");
+    expect(verdict?.reason).toContain("web-search");
   });
 
   it("contract with an empty deterministic floor → exit unchanged (no phantom gating)", () => {

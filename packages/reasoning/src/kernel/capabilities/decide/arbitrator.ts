@@ -15,6 +15,7 @@ import { META_TOOLS } from "../../state/kernel-constants.js";
 import { emitBudgetSignalCollected } from "../../utils/diagnostics.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 import { resolveUnconsumedEvidence } from "../verify/unconsumed-evidence.js";
+import { deriveRequirementEvidence } from "../verify/requirement-state.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -388,15 +389,19 @@ function contractCoverageProposal(
     ? resolveUnconsumedEvidence(ctx.steps, ctx.scratchpad)
     : null;
   if (ctx.runContract === undefined && unconsumedEvidence === null) return null;
+  // Coverage must stay vacuous for a contractless run — this function's
+  // long-standing contract, preserved verbatim: only the NEW evidence check
+  // participates when there is no contract. Passing real requiredTools here
+  // for a contractless run would resurrect a coverage check that was never
+  // active on this path before 2026-08-16.
+  const effectiveRequiredTools = ctx.runContract !== undefined ? ctx.requiredTools : [];
   const gate = evaluateTerminalGate({
     terminatedBy: "end_turn",
-    // Coverage must stay vacuous for a contractless run — this function's
-    // long-standing contract, preserved verbatim: only the NEW evidence check
-    // participates when there is no contract. Passing real requiredTools here
-    // for a contractless run would resurrect a coverage check that was never
-    // active on this path before 2026-08-16.
-    requiredTools: ctx.runContract !== undefined ? ctx.requiredTools : [],
-    coveredTools: ctx.toolsUsed,
+    requiredTools: effectiveRequiredTools,
+    // Step 3 item 3c (09 §6.5): one ledger-backed derivation — covered means
+    // COMPLETED SUCCESSFULLY, not merely attempted (`ctx.toolsUsed`, the bug).
+    coveredTools: deriveRequirementEvidence(ctx.steps, effectiveRequiredTools, ctx.ledger)
+      .coveredTools,
     // Grounding (F1) is owned by applyGroundedTerminalGate on the arbitrate
     // path; the lexical proposal is gated on contract COVERAGE only.
     hasSubstantiveGrounding: true,
@@ -478,7 +483,10 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
     const gate = evaluateTerminalGate({
       terminatedBy: "end_turn",
       requiredTools: ctx.requiredTools,
-      coveredTools: ctx.toolsUsed,
+      // Step 3 item 3c (09 §6.5): one ledger-backed derivation — covered
+      // means COMPLETED SUCCESSFULLY, not merely attempted (`ctx.toolsUsed`).
+      coveredTools: deriveRequirementEvidence(ctx.steps, ctx.requiredTools, ctx.ledger)
+        .coveredTools,
       hasSubstantiveGrounding: true,
       redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
       redirectBudget: ctx.redirectBudget,
@@ -1242,7 +1250,12 @@ function applyGroundedTerminalGate(
   const gate = evaluateTerminalGate({
     terminatedBy: verdict.terminatedBy,
     requiredTools: ctx.requiredTools,
-    coveredTools: new Set(ctx.requiredTools),
+    // Step 3 item 3c (09 §6.5): this seam only consults the F1/grounding arm
+    // (see the function comment above) — express that explicitly rather than
+    // faking full coverage via `new Set(ctx.requiredTools)`, which was
+    // indistinguishable from a genuine covered verdict.
+    coveredTools: new Set<string>(),
+    coverageNotEvaluated: true,
     hasSubstantiveGrounding: false,
     redirectsSpent: {
       grounding: ctx.groundingRedirectCount ?? 0,
