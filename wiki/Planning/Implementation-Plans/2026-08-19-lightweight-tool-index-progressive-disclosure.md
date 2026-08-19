@@ -579,17 +579,122 @@ to put the tool where the API can see it:
   (§6d, `MODELS` parsing bug, now fixed) is the natural next data point, and should be
   read with this dialect distinction in mind rather than assumed to fail the same way.
 
+## 6f. Schema-promotion fix implemented + qwen3:14b retest (2026-08-19)
+
+**Fix shipped:** `buildToolIndexCallableSchemas()` (`think.ts`) promotes the same capped
+hidden-tool set `buildToolIndexText` renders into real `ToolSchema` entries — full
+parameters intact, description trimmed to first-sentence — unioned into `wireToolSchemas`
+/ `llmTools` whenever `RA_TOOL_INDEX` is on. This is the "put the tool where the API can
+see it" fix §6e called for. **Live repro of the exact previously-0%-solved case now
+solves on the first tool call** (gpt-4o-mini, small catalog, direct `zbx-rate-lk7` call,
+iteration 0). 3 new unit tests, full reasoning suite 2740/0.
+
+**qwen3:14b retest** (the tier the original ablation's `MODELS` parsing bug prevented —
+now fixed): raw data
+`wiki/Research/Ablations/2026-08-19-tool-index-qwen3-14b-postfix-raw.txt`, `REPS=5`, all
+7 cells.
+
+| Catalog | Mode | solvedRate | actedRate | avgTokens |
+|---|---|---|---|---|
+| small | `full` | 100% | 100% | 3,208 |
+| small | `discover` | **0%** | **0%** | 862 |
+| small | `index` | 40% | 40% | 2,509 |
+| small | `hybrid` | **0%** | **0%** | 1,398 |
+| large | `discover` | **0%** | **0%** | 868 |
+| large | `index` | 60% | 60% | 6,646 |
+| large | `hybrid` | **0%** | **0%** | 1,391 |
+
+**The single most striking fact in this table: `solvedRate` and `actedRate` are
+identical in every cell.** Every time qwen3:14b attempted the target tool at all, it got
+the right answer — 15/15 across `full` and `index`, zero misses. The schema-promotion
+fix isn't half-working here; it's working perfectly whenever the model tries. **The
+entire gap is an engagement problem, not a correctness problem.**
+
+### A third, distinct, genuine finding: `discover-tools`' mere presence — not its use — suppresses engagement on this tier
+
+`discover`/`hybrid` show **0% engagement across all 20 reps, both catalog sizes** —
+not "tried and failed," *never attempted any tool call at all*
+(`discoverCalled:false` and `actionCount:0` on every single one). A live debug trace of
+one failing `discover`-mode cell shows why, in the model's own words:
+
+```
+"I don't have access to package databases or inventory systems through the provided
+tools. None of the available functions (calendar, SMS, jokes, memory recall, or tool
+discovery) can retrieve package identifier information."
+```
+
+**The model read `discover-tools`' description, understood it lists other tools, and
+still dismissed it** — evaluating it like any other named domain capability ("does this
+literally retrieve package identifiers?") rather than recognizing its actual function
+(an escape hatch: "call this FIRST to reveal what else exists"). It never took the
+exploratory step. This reproduces reliably (checked via a second live trace, identical
+reasoning pattern) and is present in `hybrid` too, where `discover-tools` is also
+registered — its 0% result is the same failure, not the "give-up-after-honest-exhaustion"
+mechanism found on gpt-4o-mini in §6e's root cause 2 (that required the model to *call*
+discover-tools first; here it never does).
+
+This is a genuine model-capability ceiling, not an instrument artifact: `qwen3:14b`
+does not reliably infer a meta-tool's exploratory *purpose* from its description the way
+gpt-4o-mini does — it pattern-matches literal capability against the stated need and
+stops there. **Registering `discover-tools` at all, on this tier, is worse than not
+having any rescue mechanism** — `index` mode (no `discover-tools` in the tool list at
+all) engages 40-60% of the time on the exact same task; `discover`/`hybrid` (which
+register it) engage 0%. The mere presence of a meta-tool the model doesn't understand
+appears to depress engagement below the "just try something" baseline `index` gets by
+not offering that confusing option in the first place — though confirming that as
+causal (vs. some other confound) would need an isolated ablation of "index only" vs
+"index + discover-tools" while holding everything else fixed, which this pass doesn't
+provide.
+
+### What this means for the taxonomy — dialect/tier matters even more than §1 predicted
+
+The pre-registered hypothesis (§6b) was that mode-vs-tier interaction would be about
+*cost* (round-trip tax hurts local models more). The real qwen3:14b result is sharper:
+it's about *comprehension*, not cost. `full` mode wins outright on this tier (100%
+solved, no exploration required — the answer is just IN the flat list); `index` is a
+distant second but strictly beats `discover`/`hybrid`, which are actively harmful here
+by including a tool this model tier misunderstands. This is the opposite ranking from
+what a cost-only model would predict (`discover` should be "free" until invoked) and
+confirms the user's original instinct precisely: **the right mode depends on what the
+model tier can actually reason about, not just what it costs.**
+
+### Updated cross-tier verdict
+
+- **`index`: still REWORK for a DEFAULT**, but no longer for the reason originally
+  measured. The mechanism itself now works correctly (100% precision when engaged, both
+  tiers, post-fix) — the remaining gap is engagement rate, and engagement rate is a
+  property of how prose-only disclosure competes for attention against a flat tool list,
+  independent of the FC-callability bug this session fixed. Re-running gpt-4o-mini
+  post-fix (not yet done this pass) is the natural next check — the original 0% there
+  was fully explained by uncallability, which is now fixed, so that number is stale and
+  should not be cited going forward.
+- **`hybrid`: REWORK, confirmed on a second, independent tier and a second, independent
+  root cause.** Actively worse than no-rescue-at-all on `qwen3:14b` specifically because
+  it always registers `discover-tools`.
+- **`discover` (today's shipped default): REWORK-adjacent finding, not this plan's to
+  fix.** 0% engagement on `qwen3:14b` for a task requiring exploratory tool discovery is
+  a live defect in the shipped default's cross-tier behavior, independent of anything in
+  this plan — flagging for separate follow-up, not fixing here (out of scope, and not
+  this plan's mechanism).
+- **`full`: the strongest single data point in the whole investigation.** Wins outright
+  on both tiers measured, on every leg (accuracy AND, on the small catalog, tokens). The
+  `PRUNE_MIN_TOOLS=15` threshold flagged as suspect in §6d's gpt-4o-mini data is now
+  doubly suspect with a second tier's confirmation.
+
 ### What happens to the mechanism now
 
-The REWORK verdict in §6d stands — as built, `index`/`hybrid` do not work, confirmed by
-root cause, not just by outcome. Per 09 §2 ("falsified levers stay dead") and §8 ("no
-promoting a mechanism because it's elegant"): `RA_TOOL_INDEX` stays default OFF (already
-true), no `CONTEXT_PROFILES` tier gets `toolDisclosureMode` set (already true), and
-neither the current implementation nor a compact-schema-promotion redesign is built
-speculatively ahead of measurement. What changes is the next step's shape: a redesign
-with a specific, well-understood fix (schema promotion for FC dialects) plus a
-dialect-aware retest (the text-parse hypothesis above) is a *different, informed*
-hypothesis to measure — not "try the same thing again and hope for a better roll."
+`index`/`hybrid` stay default OFF, no `CONTEXT_PROFILES` tier gets `toolDisclosureMode`
+set — same as before, but the reasoning has changed from "REWORK, cause unclear" to
+"REWORK for two distinct, well-understood, tier-specific reasons, with a real fix
+already shipped for one of them." Per 09 §2/§8, this is not yet a PASS on either
+mechanism and nothing ships as a default from this pass. The concrete next steps, in
+priority order: (1) re-run gpt-4o-mini post-fix to get a clean two-tier read on `index`
+alone, now that its native-FC bug is fixed; (2) investigate whether `full` should simply
+become the default at low-tool-count catalogs regardless of tier — that's arguably not
+even this mechanism's territory anymore, it's a `PRUNE_MIN_TOOLS` question; (3) the
+`discover-tools`-comprehension gap on smaller models is worth its own investigation
+(better description wording? an explicit few-shot example of when to call it?) since it
+now has two independent live reproductions on this tier.
 
 ## 6. Open question for the owner
 
