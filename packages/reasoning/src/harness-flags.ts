@@ -85,6 +85,21 @@ export function toolIndexEnabled(): boolean {
 }
 
 /**
+ * Env-flag fallback for `ContextProfile.toolIndexMaxEntries` ("hybrid" mode's
+ * cap — see context-profile.ts) — no public builder API sets the field
+ * per-run yet, so this is the only way to drive it outside a
+ * `CONTEXT_PROFILES` tier default. `profile.toolIndexMaxEntries` always wins
+ * when set; this is consulted only as a fallback. Unset ⇒ undefined (no cap,
+ * "index" mode's behavior).
+ */
+export function toolIndexMaxEntriesFlag(): number | undefined {
+  const raw = readFlag("RA_TOOL_INDEX_MAX_ENTRIES");
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
  * The verbose ReAct RULES block in the system prompt.
  *
  * Default OFF. Historically it rode the INVERSE of `RA_LAZY_TOOLS` (`=== "0"`),

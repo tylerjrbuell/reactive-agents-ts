@@ -103,6 +103,7 @@ import {
   promptDumpPathPrefix,
   rationaleAuditEnabled,
   toolIndexEnabled,
+  toolIndexMaxEntriesFlag,
 } from "../../../harness-flags.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
@@ -802,7 +803,11 @@ export function handleThinking(
     // renders a cheap name+one-line index of the hidden set directly, no FC
     // schema tax. Default OFF pending an ablation-warden measurement.
     const toolIndexText = toolIndexEnabled()
-      ? buildToolIndexText(toolSurface.universe, toolSurface.visible, profile.toolIndexMaxEntries)
+      ? buildToolIndexText(
+          toolSurface.universe,
+          toolSurface.visible,
+          profile.toolIndexMaxEntries ?? toolIndexMaxEntriesFlag(),
+        )
       : "";
 
     const parts = [systemPromptText];

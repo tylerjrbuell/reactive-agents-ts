@@ -311,6 +311,45 @@ measurement, not before:**
   enough) is usable for the ablation probe today, but isn't documented/announced as a
   public feature until a mode is validated.
 
+## 6d-pre. Instrument validation (2026-08-19) — four confounds found and fixed
+
+Before handing this to a measurement pass, the probe itself was hardened through five
+single-rep smoke iterations. **Every one surfaced a real bug in the instrument, not the
+mechanism under test** — consistent with 09 §2's "a surprising measurement indicts the
+instrument first":
+
+1. **Guessable target-tool name** (`fx-convert`) — resolved via `toolSurface.universe`-
+   based healing (`think.ts:183`, deliberate — a hallucinated-but-real name should still
+   resolve) even with zero rescue mechanism active, silently equalizing every arm. Fixed
+   with an unguessable codename (`zbx-rate-lk7`).
+2. **World-knowledge-answerable task** — "convert 100 USD to EUR" is estimable by a
+   capable model without ever calling the tool, so `success` didn't require tool use at
+   all. Fixed by making the tool's output an arbitrary, unguessable value
+   (`QK-77219-ZM`) with no real-world meaning, and adding `taskWasActuallySolved()` — a
+   verbatim substring check against the output — as the primary accuracy metric,
+   independent of the (separately noisy) verifier's own success judgment.
+3. **Lexical-overlap heuristic rescue** — the fix for #2 introduced task wording
+   ("transaction ID") that shared a word with the tool's own description, triggering
+   `filterToolsByRelevance`'s free keyword heuristic (a single shared word >3 chars is
+   enough — no relevance floor, unlike `discover-tools`' own `RELEVANCE_FLOOR=2`) and
+   rescuing the tool regardless of mode, again equalizing every arm. Fixed with
+   deliberately disjoint vocabulary between task and tool description.
+4. **Wrong result field** — `taskWasActuallySolved` read `r.answer`, which is
+   `undefined` on `AgentResult`; the real field is `r.output`. Silent false-negative on
+   every cell until caught by manually inspecting one run's raw output.
+
+Also fixed, separately, as a real (non-probe) framework bug found along the way:
+`discoveredToolsStoreRef`'s reset was gated behind `RA_TOOL_DISCOVERY` instead of
+running unconditionally — shipped as its own commit, `packages/reasoning/src/kernel/capabilities/act/tool-capabilities.ts`.
+
+Post-fix, a full 1-rep-per-cell dry run (7 cells: 4 modes × small catalog, 3 modes ×
+large catalog) completed with the target tool correctly hidden by pruning in every
+non-`full` mode, correctly reachable across all modes, and `solved` correctly
+discriminating a tool-grounded answer from a guessed one. **The instrument is now sound
+enough to trust a real measurement's numbers** — which single-rep smoke runs are not
+(model-response variance alone makes n=1 uninterpretable; ~13pp SE at n=5 per this
+project's own Bernoulli-variance convention).
+
 ## 6d. Cross-tier ablation — dispatched, not yet returned
 
 Given how many live model calls a proper cross-tier, multi-catalog-size, multi-rep
