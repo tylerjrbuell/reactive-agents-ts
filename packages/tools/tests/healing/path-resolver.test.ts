@@ -18,10 +18,19 @@ describe("resolvePaths", () => {
     expect(result.actions).toHaveLength(0)
   })
 
-  it("hallucinated absolute path remapped to working dir", () => {
+  // F9 (09-UNIFIED-PROGRAM.md §6.6): the healer used to silently rewrite an
+  // out-of-root absolute path to `<workingDir>/<basename>` BEFORE the tool
+  // ever ran. The tool then wrote successfully at the rewritten path, but
+  // terminal verification checked the path the model originally referenced
+  // and reported the run FAILED next to a file that was written correctly.
+  // The single confinement authority is file-operations.ts's own
+  // `Path traversal detected:` throw — the healer must not pre-empt it by
+  // rewriting the argument. An out-of-root absolute path must pass through
+  // unchanged so that throw is what actually fires.
+  it("out-of-root absolute path passes through unchanged (no silent remap)", () => {
     const result = resolvePaths("file-read", { path: "/home/user/projects/main.ts" }, fileTools, workingDir)
-    expect(result.healed.path).toBe("/workspace/project/main.ts")
-    expect(result.actions).toHaveLength(1)
+    expect(result.healed.path).toBe("/home/user/projects/main.ts")
+    expect(result.actions).toHaveLength(0)
   })
 
   it("non-file tool paths not modified", () => {
