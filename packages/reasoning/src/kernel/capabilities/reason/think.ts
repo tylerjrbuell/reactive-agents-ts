@@ -149,12 +149,24 @@ export { computePromptSchemas } from "./tool-surface.js";
 export function buildToolIndexText(
   universe: readonly ToolSchema[],
   visible: readonly ToolSchema[],
+  /**
+   * "hybrid" mode's cap (ContextProfile.toolIndexMaxEntries) — truncate the
+   * index and defer the remainder to discover-tools' query search instead of
+   * letting an unbounded catalog turn the index itself into a wall of text.
+   * Undefined/0 ⇒ no cap ("index" mode's unbounded behavior).
+   */
+  maxEntries?: number,
 ): string {
   const visibleNames = new Set(visible.map((ts) => ts.name));
   const hidden = universe.filter((ts) => !visibleNames.has(ts.name));
   if (hidden.length === 0) return "";
 
-  const lines = hidden.map((ts) => {
+  const capped = maxEntries && maxEntries > 0 && hidden.length > maxEntries
+    ? hidden.slice(0, maxEntries)
+    : hidden;
+  const overflow = hidden.length - capped.length;
+
+  const lines = capped.map((ts) => {
     const params = ts.parameters
       .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
       .join(", ");
@@ -166,6 +178,9 @@ export function buildToolIndexText(
   return [
     "## Additional tools available (not shown above — call by name to use)",
     ...lines,
+    ...(overflow > 0
+      ? [`- …and ${overflow} more. Call discover-tools with a query to search them.`]
+      : []),
   ].join("\n");
 }
 
@@ -787,7 +802,7 @@ export function handleThinking(
     // renders a cheap name+one-line index of the hidden set directly, no FC
     // schema tax. Default OFF pending an ablation-warden measurement.
     const toolIndexText = toolIndexEnabled()
-      ? buildToolIndexText(toolSurface.universe, toolSurface.visible)
+      ? buildToolIndexText(toolSurface.universe, toolSurface.visible, profile.toolIndexMaxEntries)
       : "";
 
     const parts = [systemPromptText];

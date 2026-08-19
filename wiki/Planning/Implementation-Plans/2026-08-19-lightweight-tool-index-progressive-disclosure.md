@@ -240,6 +240,90 @@ the real proposal (see §3.5). **Next actual step is the full cross-tier ablatio
 run** (≥5 reps/cell, ≥2 model tiers per the project's measurement ladder, arm D as the
 primary comparison against A) — not committing to a verdict off this smoke test.
 
+## 6b. Design extension (2026-08-19) — per-tier mode, not a global toggle
+
+User pushback on treating this as one global on/off: task shape and model tier both
+change which mechanism wins, and the codebase already has the substrate for
+tier-scoped policy (`ContextProfileSchema` / `CONTEXT_PROFILES`, `Tier = "local" |
+"mid" | "large" | "frontier"`, `packages/reasoning/src/context/context-profile.ts`) —
+this pulls 09 §7 Step 4 ("profiles") forward, scoped to just tool disclosure.
+
+### The cost asymmetry driving the case split
+
+The index is a **recurring per-iteration cost** (small, paid every turn, however many
+turns the task runs). `discover-tools` is a **one-time cost when invoked**, but it costs
+a whole extra model round-trip. Which wins is genuinely task-shape-dependent — this is
+not resolvable by intuition alone, which is why §6a's measurement step exists rather
+than shipping a guess.
+
+### Mode taxonomy — shipped as a schema knob, `toolDisclosureMode` (§6c)
+
+| Mode | Pruning | `discover-tools` | Index | When it should win |
+|---|---|---|---|---|
+| `"full"` | OFF | — | — | Catalog small enough that pruning is pure overhead (below `PRUNE_MIN_TOOLS`-ish territory, or a frontier tier where cache-amortized full schemas may beat any disclosure machinery at all). |
+| `"discover"` | ON | ON | OFF | **Today's default**, unchanged. Kept as an explicit, back-compat choice. |
+| `"index"` | ON | OFF | ON, uncapped | Medium catalog, few iterations expected, or a tier (local/small) where an extra round-trip is disproportionately expensive. |
+| `"hybrid"` | ON | ON | ON, capped (`toolIndexMaxEntries`) | Large catalog where an uncapped index becomes its own wall of text — index covers the likely-near set, `discover-tools`' query search covers the long tail. |
+
+### Additional case not in §4's original design: the classifier
+
+When `.withRequiredTools({adaptive:true})`'s LLM tool-relevance classifier is on
+(opt-in, default off, per `wiki/Decisions/2026-08-11-...`), a paid judgment has already
+decided a tool is irrelevant — showing it in a free index second-guesses that judgment
+for tokens spent with no plausible gain, and the classifier's own `hasClassification`
+flag already suppresses the free keyword heuristic for exactly this reason
+(`tool-surface.ts:118`). The index should follow the same rule: `buildToolIndexText`
+should not render (or should render only the classifier's own "possibly relevant"
+tier, if the classifier expresses one) when `hasClassification` is true. **Not yet
+wired — flagged for the implementation that promotes a validated mode to a real
+per-tier default, not built speculatively ahead of the measurement.**
+
+### 6c. What's shipped now vs. what's still a knob with no default
+
+**Shipped, zero behavior change (verified: full `packages/reasoning` suite 2733/0,
+typecheck clean, both before and after):**
+- `ContextProfileSchema.toolDisclosureMode` / `.toolIndexMaxEntries`
+  (`context-profile.ts`) — additive optional fields, **no tier in `CONTEXT_PROFILES`
+  sets them**, so every tier's resolved profile is byte-identical to before this
+  change until something sets the field explicitly.
+- `buildToolIndexText`'s cap parameter (`maxEntries`) — the hybrid mechanic. New unit
+  tests (`tests/kernel/reason/tool-index-text.test.ts`, 4/4 pass) pin: no-cap lists
+  everything, cap truncates and names the overflow count, cap ≥ hidden-count is a
+  no-op.
+- `think.ts` threads `profile.toolIndexMaxEntries` into the existing (still
+  `RA_TOOL_INDEX`-flag-gated) call site.
+
+**Deliberately NOT done — this is the ratification step that comes AFTER
+measurement, not before:**
+- No code resolves `toolDisclosureMode` into the low-level `RA_LAZY_TOOLS` /
+  `RA_TOOL_DISCOVERY` / `RA_TOOL_INDEX` flags yet — `discover-tools` registration
+  (`tool-capabilities.ts`) doesn't currently receive `profile` at all, and wiring it
+  is a real (if small) refactor that should happen once a mode is validated, not
+  speculatively.
+- No `CONTEXT_PROFILES` tier sets `toolDisclosureMode` — the per-tier table in §6b is
+  a **hypothesis to measure against**, not a shipped default. Setting it now would be
+  a default-on behavior change with zero ablation-warden evidence, which is exactly
+  the mistake 09 §2's lift rule and §8's "no promoting a mechanism because it's
+  elegant" exist to prevent.
+- The user-facing builder method (something like `.withReasoning({ contextProfile: {
+  toolDisclosureMode: "hybrid" } })` already works today via the existing
+  `profileOverrides` mechanism — no NEW builder surface needed, the schema field is
+  enough) is usable for the ablation probe today, but isn't documented/announced as a
+  public feature until a mode is validated.
+
+## 6d. Cross-tier ablation — dispatched, not yet returned
+
+Given how many live model calls a proper cross-tier, multi-catalog-size, multi-rep
+measurement requires, this was handed to an `ablation-warden` agent (background) rather
+than run inline — see the session record for the dispatch brief. It covers: modes
+`full` / `discover` (baseline) / `index` / `hybrid`, catalog sizes matching §4's medium
+case and a large (60+ tool) case for the hybrid arm specifically, ≥2 tiers (a
+cloud/frontier-adjacent model given Anthropic's own key had no credit this session, and
+a local Ollama tool-caller), ≥5 reps/cell per this project's Bernoulli-variance
+convention (5 tasks × n≤5 has ~13pp SE — single-run smoke tests in §6a are NOT this
+measurement, only proof the probe itself works). Verdict to be appended here once it
+returns, per-tier, against the lift rule (§2: ≥3pp accuracy AND ≤15% token overhead).
+
 ## 6. Open question for the owner
 
 If the probe passes the lift rule, does the index render for **all** hidden tools

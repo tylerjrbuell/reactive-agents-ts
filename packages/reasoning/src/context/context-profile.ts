@@ -64,6 +64,41 @@ export const ContextProfileSchema = Schema.Struct({
    * turns → escalation thrash → timeout).
    */
   thinkingModel: Schema.optional(Schema.Boolean),
+  /**
+   * Tool-disclosure mode (2026-08-19 — counters 09-UNIFIED-PROGRAM.md §5.2's
+   * unconditional discover-tools removal ruling with a per-tier policy
+   * instead). See
+   * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+   * for the full case analysis this taxonomy is derived from.
+   *
+   *   "full"     — no lazy pruning (RA_LAZY_TOOLS=0 equivalent). Best when the
+   *                catalog is small enough that pruning is pure overhead.
+   *   "discover" — today's default: lazy pruning + the discover-tools meta-tool,
+   *                no index. Kept for back-compat / explicit choice.
+   *   "index"    — lazy pruning + an always-visible name+one-line index of
+   *                hidden tools (RA_TOOL_INDEX), no discover-tools registered.
+   *                Avoids the round-trip cost discovery pays, at the cost of a
+   *                small recurring per-iteration text block.
+   *   "hybrid"   — lazy pruning + a CAPPED index (see `toolIndexMaxEntries`)
+   *                AND discover-tools registered as the fallback for anything
+   *                beyond the cap. For catalogs too large for an unbounded
+   *                index to stay cheap.
+   *
+   * Unset ⇒ resolves from the per-tier default in CONTEXT_PROFILES (§4 of the
+   * plan doc's design — a PROPOSED default pending ablation-warden
+   * confirmation, not yet empirically validated). Explicit
+   * `.withReasoning({ contextProfile: { toolDisclosureMode } })` or a
+   * `profileOverrides` entry always wins over the tier default.
+   */
+  toolDisclosureMode: Schema.optional(Schema.Literal("full", "discover", "index", "hybrid")),
+  /**
+   * Cap on hidden-tool index entries before `"hybrid"` mode truncates and
+   * defers the remainder to discover-tools' query search. Ignored outside
+   * `"hybrid"` mode (`"index"` always renders the full hidden set — no
+   * catalog this project has measured yet is large enough for that to matter,
+   * but `"hybrid"` exists for the case where it does).
+   */
+  toolIndexMaxEntries: Schema.optional(Schema.Number),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 
