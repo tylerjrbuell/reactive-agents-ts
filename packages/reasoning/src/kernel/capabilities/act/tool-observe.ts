@@ -243,6 +243,78 @@ export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPo
   return { blocked: false };
 }
 
+/** One call in a batch, plus the per-call fields `ToolObserveContext` needs. */
+export interface ToolObserveBatchCall {
+  readonly toolName: string;
+  readonly args: Record<string, unknown>;
+  readonly rationale?: { readonly why: string; readonly confidence?: number };
+  readonly callId: string;
+  /** Same meaning as `ToolObserveContext.healed` — pre-healed upstream, or left
+   *  for `config.heal` to compute internally when that config is supplied. */
+  readonly healed?: boolean;
+}
+
+/** A single member's result, carrying back the call identity for the caller's
+ *  own per-call bookkeeping (action-step duration patch, toolsUsed, etc). */
+export interface ToolObserveBatchResult extends ToolObserveResult {
+  readonly callId: string;
+  readonly toolName: string;
+}
+
+/**
+ * Batch-capable entry point (one execution boundary, 2026-08-18). Runs N calls
+ * through the SAME per-call pipeline `executeToolAndObserve` runs for one call
+ * (heal/tool-policy/approval/execute/errorRecovery/fact-extraction/verification,
+ * each still config-gated exactly as before) — the single-call path is the
+ * degenerate `calls.length === 1` case of this same primitive, not a second
+ * implementation. Concurrency lets a caller keep today's "all members race in
+ * parallel" behavior (kernel parallel-batch loop) or force sequential (1).
+ *
+ * Consolidates the kernel act.ts parallel-batch loop's hand-duplicated
+ * `resolveBlockApproval` / `adapter.errorRecovery?.()` / `extractObservationFacts`
+ * / `defaultVerifier.verify()` call sites — see
+ * wiki/Planning/Implementation-Plans/2026-08-18-step-3-one-execution-boundary.md §3b.
+ *
+ * NOTE on verification ordering: when `config.verifierContext.priorSteps` is a
+ * single snapshot shared by every member (the natural way to call this for a
+ * concurrent batch), each member's `verify()` sees the SAME priorSteps — it does
+ * NOT accumulate sibling results within the same batch turn the way the old
+ * act.ts loop did (which verified sequentially in a post-processing `for`, so
+ * result[1]'s verify() saw result[0]'s freshly-appended obsStep). This is a
+ * known, deliberate, documented behavior delta — see the UpwardReport for this
+ * branch. It does not affect cross-turn behavior: the next iteration's
+ * `state.steps` still includes every member's obsStep as normal.
+ */
+export function executeToolAndObserveBatch(
+  toolService: MaybeService<ToolServiceInstance>,
+  calls: readonly ToolObserveBatchCall[],
+  ctx: Omit<ToolObserveContext, "callId" | "healed" | "schemas"> & {
+    readonly schemas?: readonly ToolSchemaLite[];
+  },
+  config: ToolObserveConfig,
+  concurrency: number,
+): Effect.Effect<readonly ToolObserveBatchResult[], never, LLMService> {
+  return Effect.all(
+    calls.map((call) =>
+      executeToolAndObserve(
+        toolService,
+        { toolName: call.toolName, args: call.args, rationale: call.rationale },
+        { ...ctx, callId: call.callId, healed: call.healed },
+        config,
+      ).pipe(
+        Effect.map(
+          (result): ToolObserveBatchResult => ({
+            ...result,
+            callId: call.callId,
+            toolName: call.toolName,
+          }),
+        ),
+      ),
+    ),
+    { concurrency: Math.max(1, concurrency) },
+  );
+}
+
 export function executeToolAndObserve(
   toolService: MaybeService<ToolServiceInstance>,
   call: {
