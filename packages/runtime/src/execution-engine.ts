@@ -744,6 +744,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const initialToolSchemas = cachedToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
+                    ...(t.returnType !== undefined ? { returnType: t.returnType as string } : {}),
                     parameters: (t.parameters ?? []).map((p: any) => ({
                       name: p.name as string,
                       type: p.type as string,
@@ -907,6 +908,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     availableToolSchemas: ((cachedToolDefs ?? []) as readonly any[]).map((t: any) => ({
                       name: t.name as string,
                       description: t.description as string,
+                      ...(t.returnType !== undefined ? { returnType: t.returnType as string } : {}),
                       // Custom tools may declare JSON-Schema-object parameters
                       // instead of the array shape — policy filtering only
                       // needs names, so degrade to [] rather than throw.

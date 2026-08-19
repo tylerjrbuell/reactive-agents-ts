@@ -29,6 +29,8 @@ export interface ToolSchema {
   readonly name: string;
   readonly description: string;
   readonly parameters: readonly ToolParamSchema[];
+  /** Human-readable return shape, when supplied by the tool definition. */
+  readonly returnType?: string;
   /**
    * Which channel this tool belongs to (control-plane design,
    * 2026-08-08-control-plane-vs-meta-tools). `"domain"` (default) = the agent

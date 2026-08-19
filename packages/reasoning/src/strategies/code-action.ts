@@ -154,6 +154,7 @@ export const executeCodeAction = (
       return {
         name: s.name,
         description: s.description,
+        ...(s.returnType !== undefined ? { returnType: s.returnType } : {}),
         parameters: { type: "object" as const, properties, required },
       };
     });

@@ -38,6 +38,7 @@ export type ToolSchema = {
   name: string;
   description: string;
   parameters: { name: string; type: string; description: string; required: boolean }[];
+  returnType?: string;
 };
 
 export interface PrepareToolSchemasArgs {
