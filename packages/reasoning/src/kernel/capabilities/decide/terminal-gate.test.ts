@@ -236,6 +236,48 @@ describe("evidence grounding (2026-08-16 root fix — deterministic, no recall()
   });
 });
 
+// ── 3c — explicit "coverage not evaluated" mode (arbitrator's F1-only seam) ──
+// `arbitrator.ts`'s `applyGroundedTerminalGate` only consults the grounding
+// arm; coverage must stay vacuously satisfied there (documented at
+// arbitrator.ts:1239-1241). Before this, that vacuity was expressed as
+// `coveredTools: new Set(requiredTools)` — indistinguishable from a genuine
+// full-coverage result. This mode makes "not evaluated" explicit instead.
+describe("coverage not-evaluated mode (3c — explicit vacuous seam)", () => {
+  it("coverageNotEvaluated=true skips coverage even with required tools and an empty coveredTools", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        requiredTools: ["file-write"],
+        coveredTools: new Set<string>(),
+        coverageNotEvaluated: true,
+      }),
+    );
+    expect(d.decision).toBe("accept");
+  });
+
+  it("coverageNotEvaluated does not suppress the grounding (F1) check ahead of it", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        requiredTools: ["web-search"],
+        coveredTools: new Set<string>(),
+        hasSubstantiveGrounding: false,
+        coverageNotEvaluated: true,
+      }),
+    );
+    expect(d.check).toBe("grounding");
+  });
+
+  it("absent (default false) → coverage still evaluates from coveredTools, byte-identical to today", () => {
+    const d = evaluateTerminalGate(
+      baseInput({
+        requiredTools: ["file-write"],
+        coveredTools: new Set<string>(),
+      }),
+    );
+    expect(d.decision).toBe("redirect");
+    expect(d.check).toBe("coverage");
+  });
+});
+
 describe("checker slot (P6b)", () => {
   it("no checker configured → inert, accept", () => {
     const d = evaluateTerminalGate(baseInput({}));

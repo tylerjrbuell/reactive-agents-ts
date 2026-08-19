@@ -29,10 +29,19 @@
  *      while the plan-execute/P3 path ABSTAINS. `coverageExhaustionPolicy`
  *      makes the caller choose explicitly instead of the two sites silently
  *      disagreeing.
- *   b) Coverage semantics: the kernel counts a required tool as covered when
- *      it was ATTEMPTED (`state.toolsUsed` is written before execution,
- *      act.ts:808) while plan-execute counts only COMPLETED steps. Callers
- *      pass `coveredTools` computed with their own semantics.
+ *   b) Coverage semantics — RESOLVED 2026-08-18 (Step 3 item 3c, 09 §6.5).
+ *      The kernel used to count a required tool as covered when it was merely
+ *      ATTEMPTED (`state.toolsUsed`, written before execution — act.ts's
+ *      `newToolsUsed.add(...)` sites) while plan-execute counted only
+ *      COMPLETED steps — three independent caller-computed derivations, one
+ *      of them provably wrong (a required tool whose every call errored still
+ *      "satisfied" the kernel's ledger requirement entry). Callers now derive
+ *      `coveredTools` from the single ledger-backed
+ *      `deriveRequirementEvidence` (capabilities/verify/requirement-state.ts)
+ *      instead of computing their own set. The one deliberate exception is
+ *      `arbitrator.ts`'s F1-only seam (`applyGroundedTerminalGate`), which
+ *      never evaluates coverage at all — it passes `coverageNotEvaluated:
+ *      true` rather than a coveredTools set (see that field's JSDoc).
  */
 
 import type { ReasoningStep } from "../../../types/index.js";
@@ -87,6 +96,19 @@ export type TerminalGateInput = {
    * COMPLETED tool_call step names.
    */
   readonly coveredTools: ReadonlySet<string>;
+  /**
+   * Step 3 item 3c (09 §6.5) — explicit "coverage not evaluated here" mode.
+   * `arbitrator.ts`'s `applyGroundedTerminalGate` only consults the grounding
+   * (F1) arm at that seam (coverage is B1's concern, evaluated earlier by
+   * `llmEndTurnEvaluator`); before this flag that vacuity was expressed by
+   * passing `coveredTools: new Set(requiredTools)`, which is indistinguishable
+   * from a genuine full-coverage verdict. `true` forces the coverage check
+   * (2) to report zero missing regardless of `coveredTools`/`contract`, same
+   * result as the old trick, but the caller's intent ("not evaluated", not
+   * "verified covered") is now legible in the input. Absent/`false` →
+   * byte-identical to today (coverage evaluates from `coveredTools`/contract).
+   */
+  readonly coverageNotEvaluated?: boolean;
   /**
    * F1 input: at least one substantive (non-meta) tool call succeeded.
    * Computed by the caller (`hasSuccessfulSubstantiveToolCall(steps)` in the
@@ -289,8 +311,9 @@ export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDeci
   //    B2 check 2.5: with a RunContract + evidence, coverage consumes
   //    REQUIREMENT satisfaction (verify against the ledger); otherwise the
   //    tool-name diff (byte-identical to pre-B2).
-  const missing =
-    input.contract && input.evidence
+  const missing = input.coverageNotEvaluated
+    ? []
+    : input.contract && input.evidence
       ? unsatisfiedRequirements(input.contract, input.evidence)
       : input.requiredTools.filter((t) => !input.coveredTools.has(t));
   if (!isDeliberateToolExit && missing.length > 0) {
