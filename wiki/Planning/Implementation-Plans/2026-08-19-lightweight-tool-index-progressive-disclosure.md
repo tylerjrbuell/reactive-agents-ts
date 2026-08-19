@@ -408,17 +408,22 @@ data."**
 `index` mode's collapse is not narrow-miss noise: 0/5 solved at both catalog sizes (10/10
 total), against a 60-100% baseline — well outside the ~13pp SE this project's own
 Bernoulli-variance convention would predict at n=5. Raw transcripts show the model
-consistently calling an unrelated visible tool (`joke-tell`) instead of the hidden,
-named target, despite `buildToolIndexText` being confirmed correctly wired into the
-prompt's dynamic tail (`think.ts:805-816`) and its cap flag confirmed to resolve
-"uncapped" correctly for non-hybrid modes (`harness-flags.ts:95-100`). `hybrid`'s small-
-catalog result (`discover-tools` called, then the model gives up without following
-through) matches the exact failure mode this plan's own §6a smoke test predicted — a
-competing-affordance problem, not this run's own artifact. A live prompt-dump diagnostic
-to 100% rule out a threading bug was attempted but blocked by the ablation-warden's
-read-only authority; the pattern (reproducible across catalog sizes, consistent with the
-prior independent smoke test) reads as genuine model behavior, not instrument noise, but
-this residual gap is worth closing before spending further ablation budget on either mode.
+consistently calling an unrelated visible tool (`joke-tell` in the ablation-warden's
+sample, `send-sms` in a follow-up repro run) instead of the hidden, named target, despite
+`buildToolIndexText` being confirmed correctly wired into the prompt's dynamic tail
+(`think.ts:805-816`) and its cap flag confirmed to resolve "uncapped" correctly for
+non-hybrid modes (`harness-flags.ts:95-100`).
+
+> **Correction (§6e, same day, post-verdict investigation):** the ablation-warden's
+> original read here — "reads as genuine model behavior, not instrument noise" — was a
+> reasonable inference from transcripts alone but turned out to be **wrong**. A follow-up
+> wire-level trace found the actual cause: the index-listed tool is never added to the
+> FC `tools:` array the provider API treats as callable — it's described in prose but
+> structurally uninvokable on native-FC dialects. The model isn't ignoring it; it
+> literally cannot call it. See §6e for the full trace and what this means for a
+> redesign. `hybrid`'s failure mode (discover-tools called, model gives up) is a
+> genuinely separate, still-unexplained behavior — §6e's finding is specific to `index`'s
+> collapse.
 
 `full` mode is not itself a default-on candidate under this ablation (09 §5.2 already
 treats small, unpruned catalogs as fine) — its result is included as context: on a
@@ -442,27 +447,149 @@ threshold even for a capable frontier model, independent of this mechanism.
 
 Do not set `toolDisclosureMode` to `"index"` or `"hybrid"` as a default on any
 `CONTEXT_PROFILES` tier — the data argues against both as currently implemented.
-Before any further measurement: (1) the `MODELS` parsing defect is now fixed
-(commit follows) — re-run the local tier on the actual `qwen3:14b`, not a substitute,
-before drawing any local-tier conclusion; (2) if `index`/`hybrid` are revisited, first
-understand why the model ignores the rendered index text in favor of an unrelated tool
-before spending more ablation budget — this looks like a genuine salience/format problem
-with the mechanism, not noise. Separately: `discover` (today's shipped default) beats
-both candidates here, which does NOT vindicate 09 §5.2's original "discover-tools is
-pure cost, REMOVE" ruling either — this plan's §1 diagnosis (invisible, not unneeded)
-may still be right even though neither of its proposed fixes clears the bar. That
-question is open, not resolved by this measurement.
+Separately: `discover` (today's shipped default) beats both candidates here, which does
+NOT vindicate 09 §5.2's original "discover-tools is pure cost, REMOVE" ruling either —
+this plan's §1 diagnosis (invisible, not unneeded) may still be right even though
+neither of its proposed fixes clears the bar as built. **§6e below identifies the exact,
+mechanical reason both failed** — this is not the "genuine salience/format problem" this
+section originally guessed at (see the strikethrough note in §6e); root-causing it
+changes what a follow-up should actually build.
+
+## 6e. Root cause (2026-08-19, post-verdict investigation) — a wiring bug, not a model-behavior problem
+
+The ablation-warden's transcript read ("the model consistently calling an unrelated
+visible tool instead of the hidden, named target... reads as genuine model behavior, not
+instrument noise") was a reasonable inference from transcripts alone, but it was **wrong**
+— confirmed by pulling a live debug trace and reading the actual wire-level request, not
+just the transcript.
+
+**The mechanical fact:** `think.ts:855-880` builds the FC `tools:` array (`llmTools`) —
+the literal list of functions the provider API will let the model invoke — from
+`gatedToolSchemas`, which derives from `toolSurface.callable`/`.visible`.
+**`buildToolIndexText` reads from `toolSurface.universe` — a completely different,
+unconnected list.** The index renders a hidden tool's name and description into prompt
+*prose*. It never adds that tool to the FC schema array. On a `native-fc` dialect model
+(gpt-4o-mini — the only clean tier this ablation measured), the provider's API contract
+is that a function call can only target a name present in that request's declared
+`tools:` list. **A tool named only in the index is structurally uncallable — not
+undiscoverable, not deprioritized, *impossible to invoke*, independent of anything the
+model wants to do.**
+
+A live debug trace of one failing `index`-mode cell shows this directly:
+
+```
+◉ [tools]  visible: calendar-create-event, send-sms, joke-tell, recall     ← the actual callable set
+── system ──
+...
+## Additional tools available (not shown above — call by name to use)
+- zbx-rate-lk7(entryId: string) — Retrieve the archived provenance stamp for a manifest entry.
+── response ──
+[tool_use: send-sms] {"query":"Please provide the identifier for package TX-88213."}
+...
+"I have requested the identifier for package TX-88213. Please wait for a response."
+```
+
+The model read the index, wanted `zbx-rate-lk7`, could not call it (not in the request's
+function list), and improvised a plausible-sounding workaround — faking a "request" via
+the nearest tool that could stand in for "ask someone." That is not indifference to the
+index; it is the expected behavior of a well-behaved model handed an API contract that
+describes a capability and then withholds it.
+
+**This also explains, precisely, why `discover`/`hybrid` succeed where `index` fails.**
+`discover-tools`' handler calls `markDiscovered()` (`discover-tools.ts`), which writes
+into `discoveredToolsStoreRef` — a Ref that `tool-surface.ts`'s visibility resolver
+reads as a genuine floor (`discoveredSet.has(name)` → visible), which propagates into
+`callable` and therefore into `llmTools` on the *next* iteration. Discovery doesn't just
+tell the model a name exists — it mechanically unlocks the function slot. The index
+never touches that Ref, or anything else that reaches `callable`. It is, as built, purely
+cosmetic on native-FC dialects.
+
+**Why this was hard to see without a wire-level trace:** `toolSurface.visible` (what
+renders in the *prompt's tool reference section*, if any) and `toolSurface.callable`
+(what's actually offered as invokable functions) are two different fields on the same
+resolver output (`tool-surface.ts:200-220`, `ResolvedToolSurface`) that usually track
+each other closely enough to blur together when reading transcripts alone — the index
+mechanism is exactly the case where they diverge, since it was built to add a THIRD,
+even-less-connected layer (`universe`) into the prompt without threading it through
+either of the two that matter for actual invocation.
+
+### Root cause 2 — `hybrid`'s failure is a THIRD, separate bug: `discover-tools`' own exhaustion message
+
+`hybrid`'s small-catalog regression (§6d: 40% vs 60% baseline, `discover-tools` called
+then the model gives up) is not the same defect as `index`'s. A follow-up debug trace
+(same task/tools, `RA_TOOL_DISCOVERY=1 RA_TOOL_INDEX=1 RA_TOOL_INDEX_MAX_ENTRIES=8`)
+shows:
+
+```
+[action] discover-tools({"query":"search package identifier"})
+[TOOL] No tool clearly matches "search package identifier". This is the COMPLETE set of
+       TOOLS (callable functions) available to you — if none does what you need, that
+       capability is NOT available as a tool; do not assume a hidden tool exists. ...
+       - zbx-rate-lk7(entryId: string) — Retrieve the archived provenance stamp for a manifest entry.
+       [... full catalog, all now genuinely marked discovered/callable ...]
+◉ [tools]  visible: ...,zbx-rate-lk7,...,discover-tools,final-answer     ← genuinely callable now
+[thought] I don't have access to a tool that can directly look up package identifiers.
+          Therefore, I'm unable to provide the identifier for package TX-88213.
+```
+
+The model's query ("search package identifier") doesn't lexically overlap with
+`zbx-rate-lk7`'s description — the SAME deliberate disjointness this session engineered
+to defeat the free keyword heuristic (§6d-pre confound #3) also defeats
+`discover-tools`' own internal `rankByQuery` scorer, which is equally keyword-based.
+That correctly triggers the handler's "honest exhaustion" branch (`discover-tools.ts`) —
+which dumps the **complete catalog**, target tool included, and correctly marks
+everything discovered (`visible:` confirms `zbx-rate-lk7` is genuinely callable on the
+next turn). But the accompanying message states, with total confidence, *"No tool
+clearly matches... if none does what you need, that capability is NOT available."* **The
+model takes that framing at face value and gives up without scanning the list it just
+received**, despite the correct tool sitting right there, now genuinely invokable. The
+verifier's own escalation confirms it: *"the agent gave up without trying tools that
+were still available... 17 available user tool(s) were never invoked."*
+
+This is a real, standalone `discover-tools` defect, independent of the index mechanism
+entirely: **the honest-exhaustion message is too confident about its own "no match"
+framing relative to the catalog dump it's attached to.** A model that queries in its own
+words (any paraphrase not lexically close to the target's own description — a common,
+unavoidable case for open-ended tasks) can get told "nothing exists" in the same breath
+as being handed the answer, and takes the former at face value. Worth its own fix
+(soften the message — "no confident match by keyword; here's the full list in case one
+of these is what you meant" — or drop the discouraging framing entirely and let the
+dumped list speak for itself) independent of anything else in this plan.
+
+### What a corrected design would need to do differently
+
+Not "make the index text more prominent" — that treats a protocol-hard constraint as a
+soft nudge problem, and no amount of rewording fixes an uncallable function. The fix has
+to put the tool where the API can see it:
+
+- **Promote index-listed tools into `llmTools` with a compact schema** — name + typed
+  parameters only, no long-form description (the description already lives in the index
+  prose, which the model reads for context even though the schema itself stays terse).
+  This is a real, different cost point from both existing options: cheaper than
+  `discover`/`hybrid`'s full verbose schema per hidden tool, but non-zero (unlike the
+  current index's near-zero prose-only cost) — and, critically, *actually callable*.
+- This changes the token-cost model this plan measured in §3.3 — worth re-deriving
+  before the next measurement pass, not assuming the old estimate holds.
+- **Untested on text-parse/sentinel dialects.** Those models emit tool calls as parsed
+  text, not structured API calls, and (per the healing-pipeline finding earlier this
+  session) a call naming any real tool in `universe` resolves regardless of the FC
+  schema array — so the *original* index design (prose-only, no schema promotion) may
+  already work correctly there, never having hit the native-FC constraint that broke it
+  on gpt-4o-mini. The `qwen3:14b` local-tier measurement this ablation couldn't complete
+  (§6d, `MODELS` parsing bug, now fixed) is the natural next data point, and should be
+  read with this dialect distinction in mind rather than assumed to fail the same way.
 
 ### What happens to the mechanism now
 
-Per 09 §2 ("falsified levers stay dead") and §8 ("no promoting a mechanism because it's
-elegant — eight lift attempts, zero passes"): `RA_TOOL_INDEX` stays default OFF (already
-true — no shipped behavior changes), `toolDisclosureMode`/`toolIndexMaxEntries` stay
-unset on every `CONTEXT_PROFILES` tier (already true), and this plan is **not
-promoted to an implementation task**. The knob, the probe, and this write-up remain as
-the record of a measured, falsified hypothesis — should the salience question in the
-recommendation above get resolved later, the instrument is ready to re-run without
-rebuilding it.
+The REWORK verdict in §6d stands — as built, `index`/`hybrid` do not work, confirmed by
+root cause, not just by outcome. Per 09 §2 ("falsified levers stay dead") and §8 ("no
+promoting a mechanism because it's elegant"): `RA_TOOL_INDEX` stays default OFF (already
+true), no `CONTEXT_PROFILES` tier gets `toolDisclosureMode` set (already true), and
+neither the current implementation nor a compact-schema-promotion redesign is built
+speculatively ahead of measurement. What changes is the next step's shape: a redesign
+with a specific, well-understood fix (schema promotion for FC dialects) plus a
+dialect-aware retest (the text-parse hypothesis above) is a *different, informed*
+hypothesis to measure — not "try the same thing again and hope for a better roll."
 
 ## 6. Open question for the owner
 
