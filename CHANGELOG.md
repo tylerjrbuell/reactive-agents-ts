@@ -1,5 +1,24 @@
 ## [0.15.0] — 2026-08-16
 
+Behavior change — the path-healing pipeline no longer silently rescues an out-of-root absolute path (F9)
+
+`resolvePaths` used to rewrite an out-of-root absolute path argument to
+`<root>/<basename>` BEFORE `file-write`/`file-read` ran, so the tool always
+succeeded at the rewritten path while terminal verification — checking the
+path the model originally referenced — reported the run FAILED next to a
+file that had actually been written correctly. Live-confirmed on gpt-4o-mini
+and qwen3:14b: both produced `outcome=REMAPPED, run.success=false`.
+`file-operations.ts`'s own `Path traversal detected:` throw was the intended
+single confinement authority, but the healer's silent rewrite ran first and
+made that throw effectively dead for any caller going through the normal
+healing path. The remap branch is now deleted (tilde expansion and
+relative→root resolution are unaffected — those are genuine healing, not
+the bug); an out-of-root absolute path now passes through unchanged and the
+tool's existing throw fires. This is a deliberate behavior change, not a
+silent bugfix: any caller that relied on a model's hallucinated absolute
+path being silently saved to a plausible in-root location will now see an
+honest, recoverable error instead.
+
 Fixed — repetition guard no longer blocks legitimate multi-file work
 
 `repetitionGuard`'s call ceiling on `file-write` used to trip on the 3rd call
