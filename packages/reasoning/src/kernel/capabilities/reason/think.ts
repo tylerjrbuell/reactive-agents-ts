@@ -102,6 +102,7 @@ import {
   assemblyDebugEnabled,
   promptDumpPathPrefix,
   rationaleAuditEnabled,
+  toolIndexEnabled,
 } from "../../../harness-flags.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
@@ -136,6 +137,37 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
 // resolver composes it with the pressure and gate-narrow stages. Re-exported
 // here so existing consumers/tests keep their import path.
 export { computePromptSchemas } from "./tool-surface.js";
+
+/**
+ * Lightweight tool index (2026-08-19, RA_TOOL_INDEX — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md).
+ * One line per hidden tool — name, params, first sentence of description —
+ * so the model always knows a hidden tool exists, without paying the FC
+ * schema tax `discover-tools` pays on every call. Empty when nothing is
+ * hidden (an unpruned surface renders nothing).
+ */
+export function buildToolIndexText(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+): string {
+  const visibleNames = new Set(visible.map((ts) => ts.name));
+  const hidden = universe.filter((ts) => !visibleNames.has(ts.name));
+  if (hidden.length === 0) return "";
+
+  const lines = hidden.map((ts) => {
+    const params = ts.parameters
+      .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
+      .join(", ");
+    const firstSentence = ts.description.split(/(?<=[.!?])\s/)[0] ?? ts.description;
+    const trimmed = firstSentence.length > 140 ? `${firstSentence.slice(0, 137)}…` : firstSentence;
+    return `- ${ts.name}(${params}) — ${trimmed}`;
+  });
+
+  return [
+    "## Additional tools available (not shown above — call by name to use)",
+    ...lines,
+  ].join("\n");
+}
 
 export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
@@ -746,9 +778,22 @@ export function handleThinking(
         ].join("\n")
       : "";
 
+    // Lightweight tool index (2026-08-19, RA_TOOL_INDEX — see
+    // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md).
+    // Counter-proposal to 09 §5.2's discover-tools removal: `discover-tools`
+    // never fires (§5.2's own evidence) because the model has no signal
+    // anything is hidden — tool-surface.ts's `reasons` map already computes
+    // WHY each tool is hidden, every iteration, but only for tracing. This
+    // renders a cheap name+one-line index of the hidden set directly, no FC
+    // schema tax. Default OFF pending an ablation-warden measurement.
+    const toolIndexText = toolIndexEnabled()
+      ? buildToolIndexText(toolSurface.universe, toolSurface.visible)
+      : "";
+
     const parts = [systemPromptText];
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
+    if (toolIndexText) parts.push(toolIndexText);
     // Hotfix 0.5-1 (2026-07-07): render harness guidance into the dynamic
     // tail. GuidanceContext was previously assembled (and pendingGuidance
     // cleared) but never passed to assembly — every guidance-channel signal

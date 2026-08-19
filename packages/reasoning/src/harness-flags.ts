@@ -66,6 +66,25 @@ export function toolDiscoveryEnabled(): boolean {
 }
 
 /**
+ * Always-visible lightweight index of hidden-but-permitted tools (progressive
+ * disclosure, 2026-08-19 — counter-proposal to 09-UNIFIED-PROGRAM.md §5.2's
+ * discover-tools removal ruling). `discover-tools` is a REACTIVE meta-tool —
+ * the model must already suspect something is hidden to think to call it,
+ * and `tool-surface.ts`'s own reason map (why each tool is hidden) is
+ * computed every iteration but never rendered into the prompt, so the model
+ * has zero signal. This renders a cheap name+one-line index of currently
+ * hidden tools directly in the dynamic tail instead — no FC schema tax, just
+ * plain text, only present when something is actually hidden.
+ *
+ * Default OFF pending an ablation-warden cross-tier measurement — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md.
+ * `RA_TOOL_INDEX=1` to enable for probing.
+ */
+export function toolIndexEnabled(): boolean {
+  return readFlag("RA_TOOL_INDEX") === "1";
+}
+
+/**
  * The verbose ReAct RULES block in the system prompt.
  *
  * Default OFF. Historically it rode the INVERSE of `RA_LAZY_TOOLS` (`=== "0"`),
