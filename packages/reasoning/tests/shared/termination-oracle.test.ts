@@ -14,6 +14,20 @@ import {
   type TerminationSignalEvaluator,
 } from "../../src/kernel/capabilities/decide/arbitrator.js";
 
+// Step 3c (09 §6.5): coveredTools is now ledger-backed — an ATTEMPTED tool no
+// longer counts as covered, only a SUCCESSFUL observation does. Tests that
+// want a required tool to be genuinely covered must supply a successful
+// observation step for it, not just `toolsUsed`.
+function successfulObservationStep(toolName: string) {
+  return {
+    type: "observation" as const,
+    content: `${toolName} result`,
+    metadata: {
+      observationResult: { toolName, success: true, content: `${toolName} result` },
+    },
+  };
+}
+
 // Helper to build minimal context with overrides
 function makeCtx(overrides: Partial<TerminationContext> = {}): TerminationContext {
   return {
@@ -454,6 +468,9 @@ describe("llmEndTurnEvaluator", () => {
       iteration: 1,
       requiredTools: ["web-search"],
       toolsUsed: new Set(["web-search"]),
+      // Step 3c: coverage now requires a SUCCESSFUL observation, not merely
+      // an attempted call — this is what "all used" means for this test.
+      steps: [successfulObservationStep("web-search")],
     });
     const result = llmEndTurnEvaluator.evaluate(ctx);
     expect(result).not.toBeNull();
@@ -1034,6 +1051,8 @@ describe("llmEndTurnEvaluator — remaining-required redirect arm (B1)", () => {
       requiredTools: ["file-read"],
       toolsUsed: new Set(["file-read"]),
       redirectCount: 0,
+      // Step 3c: coverage now requires a SUCCESSFUL observation.
+      steps: [successfulObservationStep("file-read")],
     });
     const result = llmEndTurnEvaluator.evaluate(ctx);
     expect(result).not.toBeNull();
