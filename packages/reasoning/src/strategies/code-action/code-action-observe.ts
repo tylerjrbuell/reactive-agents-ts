@@ -8,6 +8,7 @@ export interface ToolCallRecord {
   name: string;
   args: unknown;
   result: unknown;
+  durationMs?: number;
 }
 
 /**

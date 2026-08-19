@@ -6,6 +6,7 @@ export interface ToolCallRecord {
   name: string;
   args: unknown;
   result: unknown;
+  durationMs?: number;
 }
 
 export interface SandboxResult {
@@ -107,8 +108,14 @@ export function runInSandbox(
           return;
         }
         try {
+          const startedAt = Date.now();
           const result = await handler(msg.args);
-          toolCalls.push({ name: msg.name, args: msg.args, result });
+          toolCalls.push({
+            name: msg.name,
+            args: msg.args,
+            result,
+            durationMs: Date.now() - startedAt,
+          });
           safePostMessage({ type: "tool-result", id: msg.id, result });
         } catch (err) {
           safePostMessage({
