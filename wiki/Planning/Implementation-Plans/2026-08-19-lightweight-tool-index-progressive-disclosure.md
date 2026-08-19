@@ -1,9 +1,9 @@
 ---
 aliases: [Lightweight Tool Index — Progressive Disclosure for Tools]
 tags: [plan, architecture, kernel, tools, progressive-disclosure]
-status: proposed
+status: falsified — measured 2026-08-19, both candidate modes (index/hybrid) REWORK per §6d; mechanism stays default-off
 created: 2026-08-19
-program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal)
+program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal, not ratified)
 ---
 
 # Lightweight Tool Index — a proven-pattern alternative to deleting `discover-tools`
@@ -350,18 +350,119 @@ enough to trust a real measurement's numbers** — which single-rep smoke runs a
 (model-response variance alone makes n=1 uninterpretable; ~13pp SE at n=5 per this
 project's own Bernoulli-variance convention).
 
-## 6d. Cross-tier ablation — dispatched, not yet returned
+## 6d. Cross-tier ablation — RESULTS (ablation-warden, 2026-08-19)
 
-Given how many live model calls a proper cross-tier, multi-catalog-size, multi-rep
-measurement requires, this was handed to an `ablation-warden` agent (background) rather
-than run inline — see the session record for the dispatch brief. It covers: modes
-`full` / `discover` (baseline) / `index` / `hybrid`, catalog sizes matching §4's medium
-case and a large (60+ tool) case for the hybrid arm specifically, ≥2 tiers (a
-cloud/frontier-adjacent model given Anthropic's own key had no credit this session, and
-a local Ollama tool-caller), ≥5 reps/cell per this project's Bernoulli-variance
-convention (5 tasks × n≤5 has ~13pp SE — single-run smoke tests in §6a are NOT this
-measurement, only proof the probe itself works). Verdict to be appended here once it
-returns, per-tier, against the lift rule (§2: ≥3pp accuracy AND ≤15% token overhead).
+**Verdict: REWORK for both `index` and `hybrid`.** Neither clears 09 §2's lift rule
+(≥3pp accuracy lift AND ≤15% token overhead, cross-tier). `index` actively regresses
+accuracy; `hybrid` shows no lift anywhere and a regression on the small catalog.
+
+### Tiers measured
+
+Only one tier produced clean, trustworthy data: **gpt-4o-mini (frontier/openai)**,
+`REPS=5`, all 7 cells. Raw output: `wiki/Research/Ablations/2026-08-19-tool-index-openai-raw.txt`.
+
+**A second tier (local, `qwen3:14b`) could not be measured** — a real defect in the
+probe's own `MODELS` env parsing (`scripts/probes/tool-index-progressive-disclosure-probe.ts:57-64`,
+**fixed same day, commit follows this one**) was found live: `s.split(":")` destructured
+to only `[model, provider]` (first two tokens), which silently corrupted any Ollama tag
+containing a colon — true of every model in this project's Ollama instance, and of the
+script's own documented default (`qwen3:14b:ollama`). No exception was raised; cells
+silently degraded (`actionCount:0` throughout, confirmed via a raw n=1 diagnostic run
+showing the corrupted key `14b/qwen3/...`). **This defect also affected every `scripts/probes/step3-*.ts`
+probe run earlier in this session** that used the same `[model, provider] = s.split(":")`
+pattern against a colon-bearing Ollama tag — those runs were functionally coherent
+(real qwen3-shaped latencies and tool-call behavior were observed), so the underlying
+runtime evidently resolved the malformed `provider="14b"` to something that still worked,
+but the provider label in those results was wrong. Those Step 3 findings (F9 path-authority
+remap, requirement-evidence attempted-vs-completed) were independently corroborated by
+deterministic unit tests in the same session, so they stand regardless — but the live
+cross-model corroboration for them should be treated as one confirmed tier (openai) plus
+one mislabeled tier, not two clean tiers, if revisited.
+
+A bonus run using bare `qwen3` (dodges the parse bug by having no tag, but resolves to
+`qwen3:latest`, an **8.2B model — NOT the requested 14.8B `qwen3:14b`**) is saved at
+`wiki/Research/Ablations/2026-08-19-tool-index-ollama-qwen3-latest-raw.txt` but is
+excluded from the verdict below: it shows a floor effect (the model attempts zero tool
+calls in every mode except `full` — `actionCount:0` across discover/index/hybrid, both
+catalog sizes), which is a model-capability ceiling, not mechanism signal.
+
+**Why one clean tier is still dispositive:** the lift rule requires clearing on
+*every* tier tested. The frontier tier already fails decisively for both candidates —
+no additional passing tier could produce an overall PASS or OPT-IN; a second tier would
+only have mattered if this one had cleared. **A real 09 PASS verdict is not available
+from this pass regardless — this measurement establishes REWORK, not "insufficient
+data."**
+
+### Results table (gpt-4o-mini, n=5/cell — verified against raw data by the parent session)
+
+| Catalog | Mode | solvedRate | avgTokens | Δ accuracy vs `discover` | Δ tokens vs `discover` |
+|---|---|---|---|---|---|
+| small | `full` | 100% | 1,561 | +40pp | −28% |
+| small | `discover` (baseline) | 60% | 2,167 | — | — |
+| small | `index` | **0%** | 1,024 | **−60pp** | −53% |
+| small | `hybrid` | 40% | 2,132 | −20pp | −2% |
+| large | `discover` (baseline) | 100% | 5,359 | — | — |
+| large | `index` | **0%** | 2,384 | **−100pp** | −55% |
+| large | `hybrid` | 100% | 5,530 | 0pp | +3.2% |
+
+`index` mode's collapse is not narrow-miss noise: 0/5 solved at both catalog sizes (10/10
+total), against a 60-100% baseline — well outside the ~13pp SE this project's own
+Bernoulli-variance convention would predict at n=5. Raw transcripts show the model
+consistently calling an unrelated visible tool (`joke-tell`) instead of the hidden,
+named target, despite `buildToolIndexText` being confirmed correctly wired into the
+prompt's dynamic tail (`think.ts:805-816`) and its cap flag confirmed to resolve
+"uncapped" correctly for non-hybrid modes (`harness-flags.ts:95-100`). `hybrid`'s small-
+catalog result (`discover-tools` called, then the model gives up without following
+through) matches the exact failure mode this plan's own §6a smoke test predicted — a
+competing-affordance problem, not this run's own artifact. A live prompt-dump diagnostic
+to 100% rule out a threading bug was attempted but blocked by the ablation-warden's
+read-only authority; the pattern (reproducible across catalog sizes, consistent with the
+prior independent smoke test) reads as genuine model behavior, not instrument noise, but
+this residual gap is worth closing before spending further ablation budget on either mode.
+
+`full` mode is not itself a default-on candidate under this ablation (09 §5.2 already
+treats small, unpruned catalogs as fine) — its result is included as context: on a
+17-tool catalog, skipping pruning entirely beats `discover` on both legs simultaneously
+(+40pp accuracy, −28% tokens), suggesting `PRUNE_MIN_TOOLS=15` may be too aggressive a
+threshold even for a capable frontier model, independent of this mechanism.
+
+### Per-mode cross-tier verdict
+
+- **`index`: REWORK.** Catastrophic accuracy regression (0% vs 60-100% baseline) at
+  the only tier measured. Kill or fundamentally redesign — do not retest the
+  discover-tools-free disclosure design as currently specified without first resolving
+  why the model ignores the always-visible index text in favor of a random visible tool.
+- **`hybrid`: REWORK.** No lift on either cell measured (0pp large-catalog tie, −20pp
+  small-catalog regression). Does not qualify for OPT-IN either (OPT-IN requires lift
+  on ≥1 tier; this shows none).
+- **`full`: out of scope for this verdict** (not the candidate under test) but its
+  small-catalog result is a genuine finding worth a separate look at `PRUNE_MIN_TOOLS`.
+
+### Recommendation for the owner (not a unilateral ship decision)
+
+Do not set `toolDisclosureMode` to `"index"` or `"hybrid"` as a default on any
+`CONTEXT_PROFILES` tier — the data argues against both as currently implemented.
+Before any further measurement: (1) the `MODELS` parsing defect is now fixed
+(commit follows) — re-run the local tier on the actual `qwen3:14b`, not a substitute,
+before drawing any local-tier conclusion; (2) if `index`/`hybrid` are revisited, first
+understand why the model ignores the rendered index text in favor of an unrelated tool
+before spending more ablation budget — this looks like a genuine salience/format problem
+with the mechanism, not noise. Separately: `discover` (today's shipped default) beats
+both candidates here, which does NOT vindicate 09 §5.2's original "discover-tools is
+pure cost, REMOVE" ruling either — this plan's §1 diagnosis (invisible, not unneeded)
+may still be right even though neither of its proposed fixes clears the bar. That
+question is open, not resolved by this measurement.
+
+### What happens to the mechanism now
+
+Per 09 §2 ("falsified levers stay dead") and §8 ("no promoting a mechanism because it's
+elegant — eight lift attempts, zero passes"): `RA_TOOL_INDEX` stays default OFF (already
+true — no shipped behavior changes), `toolDisclosureMode`/`toolIndexMaxEntries` stay
+unset on every `CONTEXT_PROFILES` tier (already true), and this plan is **not
+promoted to an implementation task**. The knob, the probe, and this write-up remain as
+the record of a measured, falsified hypothesis — should the salience question in the
+recommendation above get resolved later, the instrument is ready to re-run without
+rebuilding it.
 
 ## 6. Open question for the owner
 

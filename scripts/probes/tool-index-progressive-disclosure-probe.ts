@@ -59,7 +59,16 @@ const CELLS = (process.env.MODELS ?? "gpt-4o-mini:openai,qwen3:14b:ollama")
   .map((s) => s.trim())
   .filter(Boolean)
   .map((s) => {
-    const [model, provider] = s.split(":");
+    // Fix (2026-08-19, found by ablation-warden): split on the LAST colon,
+    // not the first two tokens. Ollama tags routinely contain a colon
+    // (qwen3:14b), so `s.split(":")` on "qwen3:14b:ollama" used to
+    // destructure to model="qwen3", provider="14b" — silently wrong, no
+    // exception, cells just degraded (actionCount:0). Affected every probe
+    // in this session that used the same `[model, provider] = s.split(":")`
+    // pattern with a colon-bearing Ollama tag.
+    const lastColon = s.lastIndexOf(":");
+    const model = lastColon === -1 ? s : s.slice(0, lastColon);
+    const provider = lastColon === -1 ? undefined : s.slice(lastColon + 1);
     return { model, provider: (provider ?? "openai") as "openai" | "ollama" | "anthropic" | "gemini" };
   });
 
