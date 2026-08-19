@@ -147,6 +147,62 @@ export { computePromptSchemas } from "./tool-surface.js";
  * schema tax `discover-tools` pays on every call. Empty when nothing is
  * hidden (an unpruned surface renders nothing).
  */
+/**
+ * Shared by `buildToolIndexText` and `buildToolIndexCallableSchemas` — the
+ * hidden set an index render operates over, capped identically for both so
+ * the prose and the promoted FC schemas never describe a different set of
+ * tools than they make callable.
+ */
+function cappedHiddenTools(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+  maxEntries?: number,
+): { readonly capped: readonly ToolSchema[]; readonly overflow: number } {
+  const visibleNames = new Set(visible.map((ts) => ts.name));
+  const hidden = universe.filter((ts) => !visibleNames.has(ts.name));
+  const capped = maxEntries && maxEntries > 0 && hidden.length > maxEntries
+    ? hidden.slice(0, maxEntries)
+    : hidden;
+  return { capped, overflow: hidden.length - capped.length };
+}
+
+/**
+ * The other half of the index mechanism's fix (2026-08-19, root-caused via a
+ * live wire-level trace — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+ * §6e). `buildToolIndexText` only renders PROSE describing hidden tools; on a
+ * native-fc dialect the provider API can only invoke a function present in
+ * the request's declared `tools:` array, which is built from
+ * `toolSurface.callable`/`.visible` — NEVER from `.universe`, where the index
+ * text's hidden set lives. A tool named only in prose was therefore
+ * structurally uncallable, confirmed live: a model reading the index,
+ * wanting the tool, and being unable to invoke it improvised a fake
+ * workaround via an unrelated tool instead (0% solved across a 5-rep,
+ * 2-catalog-size ablation).
+ *
+ * This promotes the SAME capped hidden set into real (but compact —
+ * first-sentence-only description, matching the index text's own economy)
+ * ToolSchema entries so they can be unioned into the wire schema array
+ * (`llmTools`, below) and actually invoked. Text-parse/sentinel dialects
+ * don't need this (their `tools:` param isn't sent to the provider at all —
+ * see the `context.toolCallingDriver.mode !== "text-parse"` gate below — and
+ * per the same investigation, the healing pipeline already resolves a
+ * model-named call against `toolSurface.universe` regardless of the FC
+ * array on those dialects, so prose-only disclosure may already work there;
+ * untested, flagged as the next measurement in the plan doc).
+ */
+export function buildToolIndexCallableSchemas(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+  maxEntries?: number,
+): readonly ToolSchema[] {
+  const { capped } = cappedHiddenTools(universe, visible, maxEntries);
+  return capped.map((ts) => {
+    const firstSentence = ts.description.split(/(?<=[.!?])\s/)[0] ?? ts.description;
+    return { ...ts, description: firstSentence };
+  });
+}
+
 export function buildToolIndexText(
   universe: readonly ToolSchema[],
   visible: readonly ToolSchema[],
@@ -158,14 +214,8 @@ export function buildToolIndexText(
    */
   maxEntries?: number,
 ): string {
-  const visibleNames = new Set(visible.map((ts) => ts.name));
-  const hidden = universe.filter((ts) => !visibleNames.has(ts.name));
-  if (hidden.length === 0) return "";
-
-  const capped = maxEntries && maxEntries > 0 && hidden.length > maxEntries
-    ? hidden.slice(0, maxEntries)
-    : hidden;
-  const overflow = hidden.length - capped.length;
+  const { capped, overflow } = cappedHiddenTools(universe, visible, maxEntries);
+  if (capped.length === 0 && overflow === 0) return "";
 
   const lines = capped.map((ts) => {
     const params = ts.parameters
@@ -853,11 +903,32 @@ export function handleThinking(
     // when set, else `META_TOOLS` (single source). Domain tools always stay, so
     // an in-progress task never loses a real affordance.
     const isNativeFC = context.toolCallingDriver.mode === "native-fc";
-    const wireToolSchemas = isNativeFC
+    const baseWireToolSchemas = isNativeFC
       ? gatedToolSchemas.filter(
           (ts) => ts.scope === "domain" || (ts.scope !== "harness" && !META_TOOL_SET.has(ts.name)),
         )
       : gatedToolSchemas;
+    // The other half of the index fix (2026-08-19, see buildToolIndexCallableSchemas'
+    // JSDoc) — only matters on native-fc (text-parse doesn't send a `tools:`
+    // param at all, see the mode check below, so promoted schemas here are
+    // harmless no-ops for it). Dedup against gatedToolSchemas defensively —
+    // should never overlap by construction (promoted = hidden = not visible
+    // = not in gatedToolSchemas) but a name collision must not double-list.
+    const indexPromotedSchemas = toolIndexEnabled()
+      ? buildToolIndexCallableSchemas(
+          toolSurface.universe,
+          toolSurface.visible,
+          profile.toolIndexMaxEntries ?? toolIndexMaxEntriesFlag(),
+        )
+      : [];
+    const wireToolSchemas = indexPromotedSchemas.length === 0
+      ? baseWireToolSchemas
+      : [
+          ...baseWireToolSchemas,
+          ...indexPromotedSchemas.filter(
+            (ts) => !baseWireToolSchemas.some((existing) => existing.name === ts.name),
+          ),
+        ];
     const llmTools = wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       description: ts.description,

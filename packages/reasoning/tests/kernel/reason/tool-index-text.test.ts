@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildToolIndexText } from "../../../src/kernel/capabilities/reason/think.js";
+import { buildToolIndexText, buildToolIndexCallableSchemas } from "../../../src/kernel/capabilities/reason/think.js";
 import type { ToolSchema } from "../../../src/kernel/capabilities/attend/tool-formatting.js";
 
 function tool(name: string, description: string): ToolSchema {
@@ -45,5 +45,39 @@ describe("buildToolIndexText", () => {
     const universe = [tool("a", "Does A."), tool("b", "Does B.")];
     const text = buildToolIndexText(universe, [], 5);
     expect(text).not.toContain("more. Call discover-tools");
+  });
+});
+
+// 2026-08-19 root-cause fix: buildToolIndexText only renders PROSE — it never
+// made a hidden tool actually callable. The wire-level FC `tools:` array is
+// built from a completely separate path (toolSurface.callable), so an
+// index-listed tool was structurally uninvokable on native-fc dialects
+// (confirmed live: 0% solved across a 5-rep, 2-catalog ablation). This is
+// the other half of the fix — promoting the SAME capped hidden set into real
+// callable schemas.
+describe("buildToolIndexCallableSchemas", () => {
+  it("returns nothing when nothing is hidden", () => {
+    const universe = [tool("a", "Does A.")];
+    expect(buildToolIndexCallableSchemas(universe, universe)).toEqual([]);
+  });
+
+  it("promotes every hidden tool with a trimmed (first-sentence-only) description", () => {
+    const universe = [
+      tool("a", "Does A."),
+      tool("b", "Does B. Also does more B things in detail."),
+    ];
+    const promoted = buildToolIndexCallableSchemas(universe, [universe[0]!]);
+    expect(promoted).toHaveLength(1);
+    expect(promoted[0]!.name).toBe("b");
+    expect(promoted[0]!.description).toBe("Does B.");
+    // Params must survive verbatim — this is what makes the tool actually
+    // invocable, not just visible.
+    expect(promoted[0]!.parameters).toEqual(universe[1]!.parameters);
+  });
+
+  it("respects the same cap as buildToolIndexText — prose and callability never diverge", () => {
+    const universe = [tool("a", "A."), tool("b", "B."), tool("c", "C."), tool("d", "D.")];
+    const promoted = buildToolIndexCallableSchemas(universe, [], 2);
+    expect(promoted.map((ts) => ts.name)).toEqual(["a", "b"]);
   });
 });
