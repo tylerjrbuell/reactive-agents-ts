@@ -1,6 +1,15 @@
 # Reactive Agents — Design North Star v5.0
 
-**Status:** AUTHORITATIVE for ARCHITECTURE + ROADMAP. This document is the single consolidated source of truth for all forward-looking work. It supersedes v3.0, `07-ROADMAP-v1.0.md`, and `Phase 1.5 Improvement Roadmap.md`.
+> ⚠️ **SUPERSEDED (2026-08-18).** This doc's own "AUTHORITATIVE" line below is stale —
+> it dates from 2026-05-07 (v0.10.6-era) and predates the July meta-loop overhaul. Current
+> architecture authority, in order: `09-UNIFIED-PROGRAM.md` (canonical sequencing) →
+> `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) →
+> `Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified kernel
+> architecture). Several live files (`NAVIGATION.md`, `architecture-reference`/`architecture-audit`/
+> `update-docs` skills) still pointed here as of 2026-08-18 and were corrected in the same pass.
+> Kept for historical traceability only — do not cite as current.
+
+**Status (historical, as originally written):** AUTHORITATIVE for ARCHITECTURE + ROADMAP. This document is the single consolidated source of truth for all forward-looking work. It supersedes v3.0, `07-ROADMAP-v1.0.md`, and `Phase 1.5 Improvement Roadmap.md`.
 
 **Date:** 2026-04-26 (architecture); 2026-04-27 (methodology layer); 2026-05-07 (v4.0 — consolidated forward plan, empirical state updated to v0.10.6, all roadmap phases absorbed)
 **Author:** Tyler Buell + Claude

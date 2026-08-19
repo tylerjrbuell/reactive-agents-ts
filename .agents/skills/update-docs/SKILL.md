@@ -153,40 +153,44 @@ Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` 
 
 ## Step 6: Sync Canonical Documents (Critical)
 
-**After ANY code change, verify these 6 canonical documents stay synchronized:**
+**After ANY code change, verify the canonical documents stay synchronized.**
+
+> **2026-08-18 correction:** this section previously pointed at `docs/spec/docs/` (eliminated
+> in the May 2026 wiki consolidation — see `AGENTS.md` hard rule "NO new files in `docs/`")
+> and at `04-PROJECT-STATE.md`/`05-DESIGN-NORTH-STAR.md`/`06-AUDIT-v0.10.0.md`/
+> `07-ROADMAP-v1.0.md`, all deprecated. Corrected below against the current authority chain —
+> see `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
 
 ### Canonical Document Sync Rules
 
-All documents live in `docs/spec/docs/` with uniform naming `NN-NAME.md`:
+Numbered specs live in `wiki/Architecture/Specs/` (`NN-NAME.md`); current authority is `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md`. See `AGENTS.md` §Documentation Workflow for the fuller trigger table (also covers README/Starlight/CHANGELOG).
 
 | Change Type | Update These Documents | How to Verify |
 |---|---|---|
-| New package shipped | `07-ROADMAP-v1.0.md` (architecture section) + `04-PROJECT-STATE.md` (package count) | `ls packages/ \| wc -l` matches both docs |
-| New mechanism validated | `06-AUDIT-v0.10.0.md` §10.2 (if v0.10.0) OR `07-ROADMAP-v1.0.md` (if v1.0+) | Verdict + rationale present in correct doc |
-| Test count changed | `04-PROJECT-STATE.md` (test count) + `07-ROADMAP-v1.0.md` (if impacts phase gate) | `bun test 2>&1 \| tail -3` matches docs |
-| Phase gate passed | `07-ROADMAP-v1.0.md` (amendment log, next phase unlocked) | Date + gate results documented |
-| New FM discovered | `02-FAILURE-MODES.md` (add FM entry) + relevant roadmap phase | FM-* code + references present |
-| Architecture refined | `05-DESIGN-NORTH-STAR.md` + `07-ROADMAP-v1.0.md` (Phase 2+ implications) | Both docs updated consistently |
-| Release shipped | `ROADMAP.md` (move to "Released") + `CHANGELOG.md` + `04-PROJECT-STATE.md` | Version present in all 3 |
+| New package shipped | `AGENTS.md` (package map), `README.md` (packages table), `apps/docs/src/data/metrics-cache.json` | `ls packages \| wc -l` matches AGENTS.md count |
+| Mechanism/experiment validated | `wiki/Experiments/` (M-series note with verdict) | Verdict + rationale present in the note |
+| Test count changed | `apps/docs/src/data/metrics-cache.json`, then `bun run --cwd apps/docs metrics:sync-readme` | `bun test 2>&1 \| tail -3` matches the synced count |
+| New FM discovered | `wiki/Failure-Modes/` (add `FM-<X>-<name>.md`) + `02-FAILURE-MODES.md` catalog entry | FM-* code + references present |
+| Architecture refined | Amend `09-UNIFIED-PROGRAM.md` in place — do not write a new north-star doc | Change logged as a ratification event, not silent drift |
+| Debt found/fixed | `wiki/Architecture/DEBT-REGISTER.md` (the only debt list) | Row present with verdict + evidence file:line |
+| Release shipped | `ROADMAP.md` (move to "Released") + `CHANGELOG.md` + `wiki/Hot.md` | Version present in all 3 |
 
 ### Authority Enforcement
 
-- **DO NOT** create one-off phase/spike plans for permanent planning (e.g., `2026-MM-DD-phase-N-*.md`)
-- **Archive** all tactical phase plans to `docs/superpowers/plans/archive/` after completion
-- **If docs conflict:** Amend lower-authority doc per AGENTS.md hierarchy; never silent drift
-- **Naming:** All canonical docs use `NN-NAME.md`; no date prefixes or irregular suffixes
+- **DO NOT** create one-off phase/spike plans for permanent planning — use `wiki/Planning/Implementation-Plans/YYYY-MM-DD-<feature>.md`
+- **If docs conflict:** Amend lower-authority doc per the `09` > `08` > ratified design-specs > active plans > evidence hierarchy; never silent drift
+- **Naming:** Numbered canonical docs use `NN-NAME.md`, `10+` for new ones — `05`/`06`/`07` are double-booked with deprecated docs, don't reuse them
 
 ### Quick Sync Checklist
 
 After completing ANY feature, bug fix, or validation:
 
-- [ ] `04-PROJECT-STATE.md` test count matches `bun test` output
-- [ ] `07-ROADMAP-v1.0.md` amendment log updated (if phase gate passed)
-- [ ] `06-AUDIT-v0.10.0.md` mechanism verdicts updated (if v0.10.0 work)
-- [ ] `02-FAILURE-MODES.md` updated (if new FM discovered)
-- [ ] `.agents/MEMORY.md` updated (new findings documented)
-- [ ] No orphan one-off docs left in `docs/superpowers/plans/` (archive if not current)
-- [ ] No broken cross-references in AGENTS.md or DOCUMENT_INDEX.md
+- [ ] Test count synced (`apps/docs/src/data/metrics-cache.json` + `metrics:sync-readme`) if it changed
+- [ ] `wiki/Architecture/DEBT-REGISTER.md` updated if debt was found or closed
+- [ ] `wiki/Failure-Modes/` updated if a new FM was discovered
+- [ ] `.agents/MEMORY.md` and Claude auto-memory updated (new findings documented)
+- [ ] No orphan one-off docs left outside `wiki/` (see `AGENTS.md` §Plans, Specs & Knowledge Storage)
+- [ ] No broken cross-references in `AGENTS.md` or `DOCUMENT_INDEX.md`
 
 ---
 

@@ -21,7 +21,9 @@
 | 7 | `03-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
 | 8 | `00-VISION.md` | What we're building toward. Stable anchor. |
 
-**Historical (do not treat as current):** `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated banner added 07-12), `07-ROADMAP-v1.0.md` + `06-AUDIT-v0.10.0.md` (v0.10-era; superseded by root `ROADMAP.md` + 08/09), `START_HERE_AI_AGENTS.md` (points at deprecated 04 — prefer `wiki/Hot.md`).
+**Historical (do not treat as current):** `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated banner added 07-12), `07-ROADMAP-v1.0.md` + `06-AUDIT-v0.10.0.md` (v0.10-era; superseded by root `ROADMAP.md` + 08/09). `START_HERE_AI_AGENTS.md` was deleted 2026-08-18 (dead-end pointer to deprecated 04) — use `wiki/Hot.md` instead.
+
+**Undocumented until 2026-08-18 (not previously listed here — gap found and closed):** `06-MISSION-STATEMENTS.md` (2026-05-23, status "draft") and `07-OPTIMAL-EXECUTION-ALGORITHM.md` (2026-05-23) both exist on disk with **numbers that collide with `06-AUDIT-v0.10.0.md` and `07-ROADMAP-v1.0.md`** — an artifact of two unrelated numbering passes, not a naming convention to repeat. Both are superseded by 08/09 like everything else pre-July; treat as historical. `05-DESIGN-NORTH-STAR.md` got a same-day deprecation banner (2026-08-18) — several live files (`NAVIGATION.md`, 3 `.agents/skills/`) were still citing its self-claimed "AUTHORITATIVE" line as current and were corrected in the same pass. **Do not reuse 05/06/07 for a new doc** — pick 10+.
 
 **Authority Hierarchy (2026-07-12):**
 

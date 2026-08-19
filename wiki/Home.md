@@ -5,116 +5,42 @@ tags: [MOC, root]
 
 # Reactive Agents Project Brain
 
-> [!warning] Stale as of 2026-07-31 — not the current entry point
-> This page and the `MOCs/` layer beneath it haven't been touched since the May 2026 vault
-> scaffold. Most links below are broken (they point at a `Concepts/` directory that was never
-> created, at decision names that predate the current `YYYY-MM-DD-<slug>` filename convention,
-> and at package/app stub pages for 18 of the 22 documented packages). Treat everything on this
-> page as unreliable navigation, not as current state.
->
-> **Use these instead, in order:**
-> 1. [[Hot|Hot.md]] — recent session context cache
-> 2. [[Architecture/DEBT-REGISTER|Architecture/DEBT-REGISTER.md]] — the canonical debt ledger
-> 3. [[Architecture/Specs/09-UNIFIED-PROGRAM|Architecture/Specs/09-UNIFIED-PROGRAM.md]] — canonical sequencing/direction
->
-> Full regeneration of this MOC layer was scoped out of the 2026-07-31 cleanup pass (too much
-> surface, high hallucination risk to rebuild without the session context that produced it) —
-> it is marked legacy here rather than deleted.
+> [!note] This page is a stub, not an index
+> The `MOCs/` layer this page used to route through hasn't been maintained since the May 2026
+> vault scaffold — 18 of the current packages predate its stub pages, `Concepts/` was never
+> created, and its decision links predate the current `YYYY-MM-DD-<slug>` filename convention.
+> Regenerating it was scoped out of the 2026-07-31 cleanup pass (high hallucination risk to
+> rebuild without the session context that produced it). Don't route through `MOCs/` — use
+> `claude-obsidian:wiki-query` against the directories below instead, or the pointers here.
 
-**Purpose:** Comprehensive knowledge management system for the reactive-agents-ts framework. Maps architecture, tracks research, documents decisions, and enables rapid understanding for agentic coding and research.
+**Purpose:** knowledge vault for the reactive-agents-ts framework — architecture, research,
+decisions, and planning history, agent-agnostic (Claude/Cursor/Codex/etc. all write here).
 
-**Current Phase:** Phase 1 complete (mechanism validation sweep). Preparing for Phase 2.
+## Start here
 
----
+1. [[Hot|Hot.md]] — recent session context cache, read this first every session
+2. `claude-obsidian:wiki-query` — for anything specific; beats grepping 550+ files by hand
+3. [[Architecture/DEBT-REGISTER|Architecture/DEBT-REGISTER.md]] — canonical technical-debt ledger
+4. [[Architecture/Specs/09-UNIFIED-PROGRAM|Architecture/Specs/09-UNIFIED-PROGRAM.md]] — canonical sequencing/direction
 
-## Quick Navigation
+## Directory map
 
-### 🗺️ Core Maps
-- [[Hot.md|Hot (Recent Context)]] — Last 5 session updates, current focus
-- [[MOCs/Architecture MOC|Architecture]] — System design, 12-phase kernel, package layers, port system
-- [[MOCs/Research MOC|Research & Validation]] — Spike research (M1-M13), failure modes (FM-A–H), improvement loop
-- [[MOCs/Concepts MOC|Concepts & Patterns]] — Cognitive architecture, tool integration, safety, memory
-- [[MOCs/Decisions MOC|Decisions & Trade-offs]] — Phase gates, north star alignment, strategic choices
-- [[MOCs/Packages MOC|Packages & Dependencies]] — 26 packages + 5 apps, layer organization, ownership
+| Content type | Location |
+|---|---|
+| Implementation plans | `Planning/Implementation-Plans/YYYY-MM-DD-<feature>.md` |
+| Canonical numbered specs | `Architecture/Specs/NN-NAME.md` — see `DOCUMENT_INDEX.md` for authority order |
+| Architecture design specs | `Architecture/Design-Specs/YYYY-MM-DD-<spec>.md` |
+| Decisions / RFCs | `Decisions/YYYY-MM-DD-<decision>.md` |
+| Post-feature debriefs | `Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md` |
+| Audit reports | `Research/Audit-Reports-YYYY-MM-DD/` |
+| Failure modes | `Failure-Modes/` — `FM-<X>-<name>.md`, catalog at `Failure-Modes/00 FM Catalog.md` |
+| Harness probe reports | `Research/Harness-Reports/` (large — most content is raw trace data, not prose) |
+| Running issues | `Issues/Running Issues Log.md` |
 
-### 📋 Plans, Specs & Decisions (Agent-Agnostic Storage)
+## Keeping it fresh
 
-**All plans and specs from any AI agent (Claude/Cursor/Codex/etc.) live here:**
+- Update [[Hot|Hot.md]] at session end with key changes and next steps
+- New durable artifact → `claude-obsidian:save` / `wiki-ingest`, not a raw `Write`
+- Periodic health check → `claude-obsidian:wiki-lint` (orphans, dead links, stale frontmatter)
 
-- [[Planning/Planning-Index|Planning Index]] — All implementation plans (active, completed, archived)
-- [[Planning/Implementation-Plans|Implementation Plans]] — `YYYY-MM-DD-<feature>.md` format
-- [[Architecture/Specs|Canonical Specs]] — Numbered project specs (00-VISION through 07-ROADMAP-v1.0)
-- [[Architecture/Design-Specs|Design Specs]] — Feature-level architecture documents
-- [[Decisions/Decision Index|Decision Index]] — Searchable decision log
-- [[Research/Debriefs|Engineering Debriefs]] — Post-feature notes from completed work
-
-### 🏗️ By Category
-- **[[MOCs/Architecture MOC|System Architecture]]** — 12-phase kernel, 26 packages + 5 apps, port system, phase details
-- **[[Packages/00 Package Index|Package Index]]** — Quick reference for all packages with purposes, dependencies, ownership
-- **[[MOCs/Concepts MOC|Core Concepts]]** — Effect-TS, reactive intelligence, tool healing, memory systems, verification
-- **[[Failure-Modes/00 FM Catalog|Failure Modes]]** — FM-A through FM-H, empirical evidence, mitigations, integration tests
-- **[[MOCs/Decisions MOC|Decisions]]** — Architecture decisions, trade-offs, phase gates, north star alignment
-- **[[Decisions/Decision Index|Decision Index]]** — Searchable catalog of all strategic decisions by phase and impact
-- **[[Issues/Running Issues Log|Running Issues Log]]** — Critical blockers, known issues, resolutions, historical closure
-- **[[MOCs/Research MOC|Research & Validation]]** — All 13 mechanisms (M1-M13), failure mode taxonomy, improvement pipeline
-
-### 🔍 For Different Needs
-- **New agent starting work?** → Start with [[Hot.md|Hot]] → [[MOCs/Architecture MOC|Architecture MOC]] → [[Packages/00 Package Index|Package Index]]
-- **Understand the kernel?** → [[MOCs/Architecture MOC|Architecture MOC]] (12 phases) → [[MOCs/Concepts MOC|Concepts MOC]] (patterns)
-- **Find past decisions?** → [[Decisions/Decision Index|Decision Index]] (searchable by phase & impact) or [[MOCs/Decisions MOC|Decisions MOC]]
-- **Validate a mechanism?** → [[MOCs/Research MOC|Research MOC]] → individual M1-M13 notes → [[Failure-Modes/00 FM Catalog|FM Catalog]]
-- **Understand failure modes?** → [[Failure-Modes/00 FM Catalog|FM Catalog]] (taxonomy) → [[Failure-Modes/FM-A Tool Engagement|detailed FM notes]]
-- **Debug an issue?** → [[Issues/Running Issues Log|Running Issues Log]] (blockers) or [[Failure-Modes/00 FM Catalog|Failure Modes]] (patterns)
-- **Learn a design pattern?** → [[MOCs/Concepts MOC|Concepts MOC]] (cognitive, tools, safety, memory, orchestration)
-- **Find a package?** → [[Packages/00 Package Index|Package Index]] (all 26 packages + 5 apps) or [[MOCs/Packages MOC|Packages MOC]] (by layer)
-
----
-
-## Vault Statistics
-
-- **Total Notes:** [auto-calculated by dataview]
-- **Architecture Notes:** Packages, concepts, kernel phases, design patterns
-- **Research Notes:** 13 mechanism spikes (M1-M13), failure modes (FM-A through FM-H)
-- **Decision Notes:** Phase gates, trade-offs, North Star alignment
-- **Last Updated:** [auto-calculated]
-
----
-
-## How to Use This Brain
-
-### Query Examples (for agentic querying)
-- "Find all notes tagged #phase-1 that mention 'healing pipeline'"
-- "What decisions led to the current kernel architecture?"
-- "Which spike research validates the memory system?"
-- "Show me all open issues blocking Phase 2"
-- "What failure modes does context curation address?"
-
-### Adding to the Brain
-1. **New spike research?** → Use [[_Templates/Experiment Template|Experiment Template]] in `Experiments/` folder, tag with mechanism number
-2. **Decision made?** → Use [[_Templates/Decision Template|Decision Template]] in `Decisions/` folder with date, context, trade-offs
-3. **Discovered a concept?** → Use [[_Templates/Concept Template|Concept Template]] in `Concepts/` folder, link to related mechanisms
-4. **New failure mode?** → Add to [[Failure-Modes]] with FM-ID, category, empirical evidence, reproduction steps
-5. **Running issue?** → Add to [[Issues/Running Issues Log|Running Issues Log]] with priority, owner, resolution status
-
-### Keeping it Fresh
-- Update [[Hot.md|Hot]] at session end with key changes and next steps
-- Review [[Issues/Running Issues Log|Running Issues Log]] at phase gates to update status
-- Sync [[MOCs]] pages when mechanisms ship or phase gates advance
-- Link new notes to existing MOCs (Architecture, Research, Concepts, Decisions, Packages)
-
----
-
-## Phase Milestones
-
-- ✅ **Phase 0:** Frozen judge validation
-- ✅ **Phase 1:** Mechanism validation sweep (13 mechanisms, 8 KEEP / 5 IMPROVE verdicts)
-- 🔄 **Phase 1.5:** Improvement iterations (retry tuning, skill persistence, calibration activation)
-- 📅 **Phase 2:** Orchestration decomposition (builder/engine/gateway refactor)
-- 📅 **Phase 3:** Code-as-action strategy (local model SLM support)
-- 📅 **Phase 4-7:** Local model engineering, benchmarking, polish, v1.0 release
-
-See [[Decisions/Phase Gate Log|Phase Gate Log]] for validation criteria.
-
----
-
-**Last Synced:** 2026-05-04 | **Branch:** refactor/overhaul | **v0.10.0 release-ready**
+**Last reviewed:** 2026-08-18 (this rewrite, cut from a MOC-routing page to a stub index)

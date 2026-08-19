@@ -106,7 +106,7 @@ See the `effect-ts-patterns` skill in `.claude/skills/` for the full coding conv
 
 ## Adding a Feature
 
-1. Check `ROADMAP.md` and `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` — your change should map to a milestone
+1. Check `ROADMAP.md` and `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` — your change should map to a milestone
 2. Write a failing test first (TDD is the house style)
 3. Implement following existing Effect-TS patterns
 4. Run `bun test && bun run build` — both must pass clean
