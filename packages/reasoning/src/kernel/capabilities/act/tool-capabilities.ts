@@ -93,6 +93,18 @@ export const resolveExecutableToolCapabilities = (input: {
     if (toolServiceOpt._tag === "Some") {
       const toolService = toolServiceOpt.value;
 
+      // Reset discovered-set at the start of each run (idempotent across
+      // re-resolutions; the kernel calls resolveExecutableToolCapabilities
+      // once per run). Fixed 2026-08-19: this used to live inside the
+      // `toolDiscoveryEnabled()` branch below, so a run with
+      // RA_TOOL_DISCOVERY=0 never reset it — a PRIOR run's discovered set
+      // (in the same process) leaked forward and widened tool-surface.ts's
+      // visibility floor for every later discovery-off run. `discovered` is
+      // consumed unconditionally by tool-surface.ts regardless of whether
+      // discover-tools itself is registered (it also backs the lightweight
+      // tool-index, RA_TOOL_INDEX), so the reset must be unconditional too.
+      yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
+
       if (input.metaTools?.recall) {
         yield* toolService
           .register(recallTool, makeRecallHandler(scratchpadStoreRef))
@@ -138,11 +150,6 @@ export const resolveExecutableToolCapabilities = (input: {
       // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
       // adapt.
       if (toolDiscoveryEnabled()) {
-        // Reset discovered-set at the start of each run (idempotent across
-        // re-resolutions). The kernel calls resolveExecutableToolCapabilities
-        // once per run, so this fires on initial wiring.
-        yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
-
         const catalog = input.allToolSchemas ?? [];
         yield* toolService
           .register(
