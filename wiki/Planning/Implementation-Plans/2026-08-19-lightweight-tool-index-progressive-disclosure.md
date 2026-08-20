@@ -1,7 +1,7 @@
 ---
 aliases: [Lightweight Tool Index — Progressive Disclosure for Tools]
 tags: [plan, architecture, kernel, tools, progressive-disclosure]
-status: PROMISING, still default-off (§7) — 3 real bugs found+fixed (FC-callability, discover-tools truncation+fabrication, prose/schema double-payment); index mode clears the lift rule on 3 of 4 measured cells (both catalog sizes on cloud, small catalog on local); 4th cell (qwen3:14b large catalog) re-verified at n=15, holds at 60% solved — a real, distinguished engagement ceiling, not noise; ready for a formal ablation-warden cross-tier verdict scoped to catalogs below that ceiling, or with a cap fix (§7b, still unresolved) if the large-local-tier cell must be covered too
+status: OPT-IN (ablation-warden formal verdict, 2026-08-19) — RA_TOOL_INDEX stays default-off. 5 real bugs found+fixed this investigation; index mode clears the lift rule cleanly on the frontier tier (both catalog sizes), fails cross-tier due to qwen3:14b's confirmed large-catalog engagement ceiling (60% solved, real not noise, n=15) plus a since-discovered invalid discover-mode baseline on that tier (0% solved, 0% discover-tools ever called, both catalog sizes — not a functioning comparison point). If scoped later: frontier-tier CONTEXT_PROFILES entry only, never a raw tool-count threshold. hybrid/index_capped modes remain REWORK (relevance-blind cap ordering, unresolved).
 created: 2026-08-19
 program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal, not ratified)
 ---
@@ -860,6 +860,46 @@ scanning 60 real FC schemas on a 14B local model, not a framework bug and not a
 measurement artifact. **The cell is closed as a real, distinguished gap** — `index` mode
 does not clear the lift rule on this one cell, and no further re-verification is planned
 for it in this pass.
+
+### ablation-warden formal cross-tier verdict (2026-08-19)
+
+Dispatched for a formal verdict per 09 §2. Full report:
+`wiki/Research/Ablations/2026-08-19-tool-index-warden-verdict.md`. Independently
+re-reproduced gpt-4o-mini/small (100%/1271 tokens, exact match) and qwen3:14b/large
+(40% this draw vs. my 60% at n=15 — different draw, same failure signature, both inside
+noise of each other, ceiling confirmed real either way).
+
+**Verdict: OPT-IN, not default-on** (full or scoped). Frontier tier clears cleanly; local
+tier fails cross-tier on two grounds: the confirmed large-catalog ceiling, AND — the
+warden's own finding — **the only `discover`-mode baseline on record for qwen3:14b
+(§6g's 0%/40% swing) predates the truncation/paraphrase fixes and is itself degenerate,
+making it an invalid denominator for a token-overhead percentage.** Recommended scoping
+if a default is ever wired: `ContextProfileSchema.toolDisclosureMode="index"` on the
+`"frontier"` `CONTEXT_PROFILES` entry specifically — not a raw tool-count threshold,
+since the local-tier gap is comprehension-based, not size-based; a bare threshold would
+wrongly extend the mode to a tier proven not to handle it.
+
+### Clean qwen3:14b `discover` baseline, post-`ffbab632` (2026-08-19)
+
+Per the warden's flag, re-measured `discover` mode on qwen3:14b at n=15 (both catalog
+sizes) to replace the noisy §6g reading:
+
+| Catalog | solvedRate | avgTokens | discoverRate |
+|---|---|---|---|
+| small (16 tools) | **0%** (0/15) | 867 | **0%** — never called |
+| large (60 tools) | **0%** (0/15) | 862 | **0%** — never called |
+
+Both catalog sizes: 0/15 solved, and the model **never once invoked `discover-tools`
+itself** across 30 total reps. This is not noise settling toward a low number — it's
+total non-engagement, confirming the warden's suspicion outright. `discover` mode is
+fully broken on this tier, independent of catalog size, and was never a valid comparison
+baseline for a token-overhead calculation (near-zero cost paired with near-zero effort,
+not near-zero cost paired with a working mechanism). `index` mode's 100%/60% solved
+rates on this tier are not "better than a working alternative" — they're the only
+working mechanism measured on this tier at all. This doesn't change the warden's
+OPT-IN verdict (a tier `index` doesn't itself clear cleanly still isn't a cross-tier
+PASS), but it does mean the local-tier comparison going forward should stop citing
+`discover` as a functioning baseline for qwen3:14b — it isn't one.
 
 ### Most efficient and robust design, given everything measured
 

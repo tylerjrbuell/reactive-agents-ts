@@ -1,0 +1,977 @@
+
+[ollama/qwen3:14b][large/discover][rep 1/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+ℹ️ Reactive Intelligence — Anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false }) (https://docs.reactiveagents.dev/telemetry)
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.1s
+  📊 [metric:entropy] 0.6295912063953488 composite
+✓ [phase:reactive:kernel] 3.2s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 872 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.2s with 872 tokens
+
+═══ Logs (9) ═══
+  02:36:18.456 INFO  Execution started {"taskId":"01M0EGDHMH40H40X3QBRDY5714","agentId":"agent-1787193378402"}
+  02:36:18.463 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 13ms
+  02:36:18.469 INFO  ◉ [strategy]   reactive
+  02:36:18.469 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:18.512 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:21.633 INFO  ◉ [think]      1 steps | 872 tok | 0.0s
+  02:36:21.637 INFO  Execution completed {"taskId":"01M0EGDHMH40H40X3QBRDY5714","success":true,"tokensUsed":872,"cost":0,"duration":3186}
+  02:36:21.637 INFO  ◉ [complete]   ✓ 01M0EGDHMH40H40X3QBRDY5714 | 872 tok | $0.0000 | 3.2s
+  02:36:21.637 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (647 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3201.0ms) [eaa4637d…]
+    ✓ execution.phase.bootstrap (3.9ms) [eaa4637d…]
+      ✓ phase.bootstrap.metrics (0.1ms) [eaa4637d…]
+    ✓ execution.phase.strategy-select (3.2ms) [eaa4637d…]
+      ✓ phase.strategy-select.metrics (0.0ms) [eaa4637d…]
+    ✓ execution.phase.think (3158.4ms) [eaa4637d…]
+      ✓ phase.think.metrics (0.0ms) [eaa4637d…]
+    ✓ execution.phase.complete (1.6ms) [eaa4637d…]
+      ✓ phase.complete.metrics (0.0ms) [eaa4637d…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.2s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 872  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            3ms
+├─ ✅  [strategy-select]      2ms
+├─ ✅  [think]               3.2s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.630   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.630 →
+└─  iter  1 █████████████░░░░░░░ 0.630 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":872,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 2/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+  📊 [metric:entropy] 0.6481250000000001 composite
+✓ [phase:reactive:kernel] 2.8s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 854 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.8s with 854 tokens
+
+═══ Logs (9) ═══
+  02:36:21.672 INFO  Execution started {"taskId":"01M0EGDMS80M7GNRFZ79RMDYVZ","agentId":"agent-1787193381663"}
+  02:36:21.675 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:21.678 INFO  ◉ [strategy]   reactive
+  02:36:21.678 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:21.683 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:24.497 INFO  ◉ [think]      1 steps | 854 tok | 0.0s
+  02:36:24.499 INFO  Execution completed {"taskId":"01M0EGDMS80M7GNRFZ79RMDYVZ","success":true,"tokensUsed":854,"cost":0,"duration":2826}
+  02:36:24.499 INFO  ◉ [complete]   ✓ 01M0EGDMS80M7GNRFZ79RMDYVZ | 854 tok | $0.0000 | 2.8s
+  02:36:24.499 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (648 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2837.4ms) [97d1e27f…]
+    ✓ execution.phase.bootstrap (1.9ms) [97d1e27f…]
+      ✓ phase.bootstrap.metrics (0.0ms) [97d1e27f…]
+    ✓ execution.phase.strategy-select (2.1ms) [97d1e27f…]
+      ✓ phase.strategy-select.metrics (0.0ms) [97d1e27f…]
+    ✓ execution.phase.think (2819.0ms) [97d1e27f…]
+      ✓ phase.think.metrics (0.0ms) [97d1e27f…]
+    ✓ execution.phase.complete (1.2ms) [97d1e27f…]
+      ✓ phase.complete.metrics (0.0ms) [97d1e27f…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.8s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 854  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.8s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":854,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 3/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.0s
+  📊 [metric:entropy] 0.6482327586206897 composite
+✓ [phase:reactive:kernel] 3.0s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 863 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.0s with 863 tokens
+
+═══ Logs (9) ═══
+  02:36:24.523 INFO  Execution started {"taskId":"01M0EGDQJBYR2B5Q3T3HGB5P2A","agentId":"agent-1787193384514"}
+  02:36:24.525 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 2ms
+  02:36:24.526 INFO  ◉ [strategy]   reactive
+  02:36:24.526 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:24.530 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:27.507 INFO  ◉ [think]      1 steps | 863 tok | 0.0s
+  02:36:27.509 INFO  Execution completed {"taskId":"01M0EGDQJBYR2B5Q3T3HGB5P2A","success":true,"tokensUsed":863,"cost":0,"duration":2985}
+  02:36:27.509 INFO  ◉ [complete]   ✓ 01M0EGDQJBYR2B5Q3T3HGB5P2A | 863 tok | $0.0000 | 3.0s
+  02:36:27.509 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (649 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3001.0ms) [92eca872…]
+    ✓ execution.phase.bootstrap (1.1ms) [92eca872…]
+      ✓ phase.bootstrap.metrics (0.0ms) [92eca872…]
+    ✓ execution.phase.strategy-select (1.1ms) [92eca872…]
+      ✓ phase.strategy-select.metrics (0.0ms) [92eca872…]
+    ✓ execution.phase.think (2980.1ms) [92eca872…]
+      ✓ phase.think.metrics (0.0ms) [92eca872…]
+    ✓ execution.phase.complete (1.1ms) [92eca872…]
+      ✓ phase.complete.metrics (0.0ms) [92eca872…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.0s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 863  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.0s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":863,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 4/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.3s
+  📊 [metric:entropy] 0.6320265151515152 composite
+✓ [phase:reactive:kernel] 3.3s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 879 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.3s with 879 tokens
+
+═══ Logs (9) ═══
+  02:36:27.542 INFO  Execution started {"taskId":"01M0EGDTGNBZ40V78N1XSWP9F5","agentId":"agent-1787193387529"}
+  02:36:27.545 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 4ms
+  02:36:27.546 INFO  ◉ [strategy]   reactive
+  02:36:27.547 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:27.552 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:30.831 INFO  ◉ [think]      1 steps | 879 tok | 0.0s
+  02:36:30.833 INFO  Execution completed {"taskId":"01M0EGDTGNBZ40V78N1XSWP9F5","success":true,"tokensUsed":879,"cost":0,"duration":3292}
+  02:36:30.833 INFO  ◉ [complete]   ✓ 01M0EGDTGNBZ40V78N1XSWP9F5 | 879 tok | $0.0000 | 3.3s
+  02:36:30.833 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (650 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3303.5ms) [46304079…]
+    ✓ execution.phase.bootstrap (2.2ms) [46304079…]
+      ✓ phase.bootstrap.metrics (0.0ms) [46304079…]
+    ✓ execution.phase.strategy-select (1.1ms) [46304079…]
+      ✓ phase.strategy-select.metrics (0.0ms) [46304079…]
+    ✓ execution.phase.think (3284.3ms) [46304079…]
+      ✓ phase.think.metrics (0.0ms) [46304079…]
+    ✓ execution.phase.complete (1.1ms) [46304079…]
+      ✓ phase.complete.metrics (0.0ms) [46304079…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.3s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 879  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            2ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.3s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.632   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.632 →
+└─  iter  1 █████████████░░░░░░░ 0.632 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":879,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 5/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+  📊 [metric:entropy] 0.6421354166666666 composite
+✓ [phase:reactive:kernel] 2.8s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 851 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.8s with 851 tokens
+
+═══ Logs (9) ═══
+  02:36:30.859 INFO  Execution started {"taskId":"01M0EGDXRANRKP5E4VS518XQ9N","agentId":"agent-1787193390851"}
+  02:36:30.861 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:30.862 INFO  ◉ [strategy]   reactive
+  02:36:30.862 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:30.866 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:33.660 INFO  ◉ [think]      1 steps | 851 tok | 0.0s
+  02:36:33.662 INFO  Execution completed {"taskId":"01M0EGDXRANRKP5E4VS518XQ9N","success":true,"tokensUsed":851,"cost":0,"duration":2803}
+  02:36:33.662 INFO  ◉ [complete]   ✓ 01M0EGDXRANRKP5E4VS518XQ9N | 851 tok | $0.0000 | 2.8s
+  02:36:33.662 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (651 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2813.2ms) [a2fc30c1…]
+    ✓ execution.phase.bootstrap (1.2ms) [a2fc30c1…]
+      ✓ phase.bootstrap.metrics (0.0ms) [a2fc30c1…]
+    ✓ execution.phase.strategy-select (1.1ms) [a2fc30c1…]
+      ✓ phase.strategy-select.metrics (0.0ms) [a2fc30c1…]
+    ✓ execution.phase.think (2797.5ms) [a2fc30c1…]
+      ✓ phase.think.metrics (0.0ms) [a2fc30c1…]
+    ✓ execution.phase.complete (1.0ms) [a2fc30c1…]
+      ✓ phase.complete.metrics (0.0ms) [a2fc30c1…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.8s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 851  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.8s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.642   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.642 →
+└─  iter  1 █████████████░░░░░░░ 0.642 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":851,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 6/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.1s
+  📊 [metric:entropy] 0.6362061403508772 composite
+✓ [phase:reactive:kernel] 3.1s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 868 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.1s with 868 tokens
+
+═══ Logs (9) ═══
+  02:36:33.684 INFO  Execution started {"taskId":"01M0EGE0GMWT1ZH9TAJZGFJ3W8","agentId":"agent-1787193393677"}
+  02:36:33.686 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 2ms
+  02:36:33.687 INFO  ◉ [strategy]   reactive
+  02:36:33.687 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:33.690 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:36.777 INFO  ◉ [think]      1 steps | 868 tok | 0.0s
+  02:36:36.779 INFO  Execution completed {"taskId":"01M0EGE0GMWT1ZH9TAJZGFJ3W8","success":true,"tokensUsed":868,"cost":0,"duration":3094}
+  02:36:36.779 INFO  ◉ [complete]   ✓ 01M0EGE0GMWT1ZH9TAJZGFJ3W8 | 868 tok | $0.0000 | 3.1s
+  02:36:36.779 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (652 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3108.9ms) [57b3a3ad…]
+    ✓ execution.phase.bootstrap (1.0ms) [57b3a3ad…]
+      ✓ phase.bootstrap.metrics (0.0ms) [57b3a3ad…]
+    ✓ execution.phase.strategy-select (1.0ms) [57b3a3ad…]
+      ✓ phase.strategy-select.metrics (0.0ms) [57b3a3ad…]
+    ✓ execution.phase.think (3089.1ms) [57b3a3ad…]
+      ✓ phase.think.metrics (0.0ms) [57b3a3ad…]
+    ✓ execution.phase.complete (1.3ms) [57b3a3ad…]
+      ✓ phase.complete.metrics (0.0ms) [57b3a3ad…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.1s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 868  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.1s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.636   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.636 →
+└─  iter  1 █████████████░░░░░░░ 0.636 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":868,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 7/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.9s
+  📊 [metric:entropy] 0.6481250000000001 composite
+✓ [phase:reactive:kernel] 3.0s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 860 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.0s with 860 tokens
+
+═══ Logs (9) ═══
+  02:36:36.813 INFO  Execution started {"taskId":"01M0EGE3JCBGW18BJWJEFFSB6K","agentId":"agent-1787193396799"}
+  02:36:36.815 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:36.817 INFO  ◉ [strategy]   reactive
+  02:36:36.817 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:36.823 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:39.775 INFO  ◉ [think]      1 steps | 860 tok | 0.0s
+  02:36:39.777 INFO  Execution completed {"taskId":"01M0EGE3JCBGW18BJWJEFFSB6K","success":true,"tokensUsed":860,"cost":0,"duration":2964}
+  02:36:39.777 INFO  ◉ [complete]   ✓ 01M0EGE3JCBGW18BJWJEFFSB6K | 860 tok | $0.0000 | 3.0s
+  02:36:39.777 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (653 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2974.7ms) [1f9d3f2a…]
+    ✓ execution.phase.bootstrap (1.4ms) [1f9d3f2a…]
+      ✓ phase.bootstrap.metrics (0.0ms) [1f9d3f2a…]
+    ✓ execution.phase.strategy-select (1.1ms) [1f9d3f2a…]
+      ✓ phase.strategy-select.metrics (0.0ms) [1f9d3f2a…]
+    ✓ execution.phase.think (2957.6ms) [1f9d3f2a…]
+      ✓ phase.think.metrics (0.0ms) [1f9d3f2a…]
+    ✓ execution.phase.complete (1.1ms) [1f9d3f2a…]
+      ✓ phase.complete.metrics (0.0ms) [1f9d3f2a…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.0s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 860  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.0s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":860,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 8/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+  📊 [metric:entropy] 0.6481250000000001 composite
+✓ [phase:reactive:kernel] 2.9s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 854 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.9s with 854 tokens
+
+═══ Logs (9) ═══
+  02:36:39.800 INFO  Execution started {"taskId":"01M0EGE6FQZFGSBP5H2WAYCYP5","agentId":"agent-1787193399792"}
+  02:36:39.802 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:39.803 INFO  ◉ [strategy]   reactive
+  02:36:39.803 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:39.807 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:42.659 INFO  ◉ [think]      1 steps | 854 tok | 0.0s
+  02:36:42.661 INFO  Execution completed {"taskId":"01M0EGE6FQZFGSBP5H2WAYCYP5","success":true,"tokensUsed":854,"cost":0,"duration":2861}
+  02:36:42.661 INFO  ◉ [complete]   ✓ 01M0EGE6FQZFGSBP5H2WAYCYP5 | 854 tok | $0.0000 | 2.9s
+  02:36:42.661 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (654 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2877.5ms) [5e11bcc7…]
+    ✓ execution.phase.bootstrap (1.1ms) [5e11bcc7…]
+      ✓ phase.bootstrap.metrics (0.0ms) [5e11bcc7…]
+    ✓ execution.phase.strategy-select (1.1ms) [5e11bcc7…]
+      ✓ phase.strategy-select.metrics (0.0ms) [5e11bcc7…]
+    ✓ execution.phase.think (2855.0ms) [5e11bcc7…]
+      ✓ phase.think.metrics (0.0ms) [5e11bcc7…]
+    ✓ execution.phase.complete (1.3ms) [5e11bcc7…]
+      ✓ phase.complete.metrics (0.0ms) [5e11bcc7…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.9s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 854  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.9s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":854,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 9/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.6s
+  📊 [metric:entropy] 0.6481250000000001 composite
+✓ [phase:reactive:kernel] 2.6s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 840 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.6s with 840 tokens
+
+═══ Logs (9) ═══
+  02:36:42.697 INFO  Execution started {"taskId":"01M0EGE9A7KXC9TZBK4TXRTE0G","agentId":"agent-1787193402683"}
+  02:36:42.699 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 4ms
+  02:36:42.701 INFO  ◉ [strategy]   reactive
+  02:36:42.701 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:42.711 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:45.325 INFO  ◉ [think]      1 steps | 840 tok | 0.0s
+  02:36:45.326 INFO  Execution completed {"taskId":"01M0EGE9A7KXC9TZBK4TXRTE0G","success":true,"tokensUsed":840,"cost":0,"duration":2631}
+  02:36:45.326 INFO  ◉ [complete]   ✓ 01M0EGE9A7KXC9TZBK4TXRTE0G | 840 tok | $0.0000 | 2.6s
+  02:36:45.326 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (655 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2641.2ms) [8cb743db…]
+    ✓ execution.phase.bootstrap (1.6ms) [8cb743db…]
+      ✓ phase.bootstrap.metrics (0.0ms) [8cb743db…]
+    ✓ execution.phase.strategy-select (1.3ms) [8cb743db…]
+      ✓ phase.strategy-select.metrics (0.0ms) [8cb743db…]
+    ✓ execution.phase.think (2622.7ms) [8cb743db…]
+      ✓ phase.think.metrics (0.0ms) [8cb743db…]
+    ✓ execution.phase.complete (1.2ms) [8cb743db…]
+      ✓ phase.complete.metrics (0.0ms) [8cb743db…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.6s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 840  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.6s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":840,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 10/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+  📊 [metric:entropy] 0.6483333333333334 composite
+✓ [phase:reactive:kernel] 2.9s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 857 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.9s with 857 tokens
+
+═══ Logs (9) ═══
+  02:36:45.352 INFO  Execution started {"taskId":"01M0EGEBX7Y44J0NR29A1B9GAS","agentId":"agent-1787193405343"}
+  02:36:45.353 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 2ms
+  02:36:45.354 INFO  ◉ [strategy]   reactive
+  02:36:45.354 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:45.358 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:48.210 INFO  ◉ [think]      1 steps | 857 tok | 0.0s
+  02:36:48.212 INFO  Execution completed {"taskId":"01M0EGEBX7Y44J0NR29A1B9GAS","success":true,"tokensUsed":857,"cost":0,"duration":2861}
+  02:36:48.212 INFO  ◉ [complete]   ✓ 01M0EGEBX7Y44J0NR29A1B9GAS | 857 tok | $0.0000 | 2.9s
+  02:36:48.212 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (656 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2869.5ms) [5dee81b6…]
+    ✓ execution.phase.bootstrap (1.0ms) [5dee81b6…]
+      ✓ phase.bootstrap.metrics (0.0ms) [5dee81b6…]
+    ✓ execution.phase.strategy-select (1.0ms) [5dee81b6…]
+      ✓ phase.strategy-select.metrics (0.0ms) [5dee81b6…]
+    ✓ execution.phase.think (2855.5ms) [5dee81b6…]
+      ✓ phase.think.metrics (0.0ms) [5dee81b6…]
+    ✓ execution.phase.complete (1.0ms) [5dee81b6…]
+      ✓ phase.complete.metrics (0.0ms) [5dee81b6…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.9s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 857  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.9s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.648   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.648 →
+└─  iter  1 █████████████░░░░░░░ 0.648 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":857,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 11/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.9s
+  📊 [metric:entropy] 0.6396774193548387 composite
+✓ [phase:reactive:kernel] 2.9s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 855 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.9s with 855 tokens
+
+═══ Logs (9) ═══
+  02:36:48.241 INFO  Execution started {"taskId":"01M0EGEEQF1ZGGX43MESFTZR41","agentId":"agent-1787193408229"}
+  02:36:48.243 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:48.244 INFO  ◉ [strategy]   reactive
+  02:36:48.245 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:48.250 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:51.169 INFO  ◉ [think]      1 steps | 855 tok | 0.0s
+  02:36:51.172 INFO  Execution completed {"taskId":"01M0EGEEQF1ZGGX43MESFTZR41","success":true,"tokensUsed":855,"cost":0,"duration":2930}
+  02:36:51.172 INFO  ◉ [complete]   ✓ 01M0EGEEQF1ZGGX43MESFTZR41 | 855 tok | $0.0000 | 2.9s
+  02:36:51.172 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (657 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2943.3ms) [b11e9b02…]
+    ✓ execution.phase.bootstrap (1.3ms) [b11e9b02…]
+      ✓ phase.bootstrap.metrics (0.0ms) [b11e9b02…]
+    ✓ execution.phase.strategy-select (1.1ms) [b11e9b02…]
+      ✓ phase.strategy-select.metrics (0.0ms) [b11e9b02…]
+    ✓ execution.phase.think (2924.2ms) [b11e9b02…]
+      ✓ phase.think.metrics (0.0ms) [b11e9b02…]
+    ✓ execution.phase.complete (1.1ms) [b11e9b02…]
+      ✓ phase.complete.metrics (0.0ms) [b11e9b02…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.9s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 855  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.9s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.640   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.640 →
+└─  iter  1 █████████████░░░░░░░ 0.640 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":855,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 12/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.1s
+  📊 [metric:entropy] 0.6351735624123422 composite
+✓ [phase:reactive:kernel] 3.1s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 870 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.2s with 870 tokens
+
+═══ Logs (9) ═══
+  02:36:51.218 INFO  Execution started {"taskId":"01M0EGEHMFRV3N79N4ZRGM4PQP","agentId":"agent-1787193411205"}
+  02:36:51.223 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 7ms
+  02:36:51.235 INFO  ◉ [strategy]   reactive
+  02:36:51.235 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:51.247 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:54.387 INFO  ◉ [think]      1 steps | 870 tok | 0.0s
+  02:36:54.389 INFO  Execution completed {"taskId":"01M0EGEHMFRV3N79N4ZRGM4PQP","success":true,"tokensUsed":870,"cost":0,"duration":3172}
+  02:36:54.389 INFO  ◉ [complete]   ✓ 01M0EGEHMFRV3N79N4ZRGM4PQP | 870 tok | $0.0000 | 3.2s
+  02:36:54.389 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (658 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3184.1ms) [a3367ee3…]
+    ✓ execution.phase.bootstrap (3.1ms) [a3367ee3…]
+      ✓ phase.bootstrap.metrics (0.0ms) [a3367ee3…]
+    ✓ execution.phase.strategy-select (9.6ms) [a3367ee3…]
+      ✓ phase.strategy-select.metrics (0.0ms) [a3367ee3…]
+    ✓ execution.phase.think (3149.6ms) [a3367ee3…]
+      ✓ phase.think.metrics (0.0ms) [a3367ee3…]
+    ✓ execution.phase.complete (1.1ms) [a3367ee3…]
+      ✓ phase.complete.metrics (0.0ms) [a3367ee3…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.2s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 870  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            2ms
+├─ ✅  [strategy-select]      4ms
+├─ ✅  [think]               3.1s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.635   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.635 →
+└─  iter  1 █████████████░░░░░░░ 0.635 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":870,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 13/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.9s
+  📊 [metric:entropy] 0.6280480480480481 composite
+✓ [phase:reactive:kernel] 2.9s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 860 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 2.9s with 860 tokens
+
+═══ Logs (9) ═══
+  02:36:54.415 INFO  Execution started {"taskId":"01M0EGEMRES8Q9D6AJAN34T5Y9","agentId":"agent-1787193414406"}
+  02:36:54.417 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:36:54.419 INFO  ◉ [strategy]   reactive
+  02:36:54.419 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:54.424 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:36:57.314 INFO  ◉ [think]      1 steps | 860 tok | 0.0s
+  02:36:57.316 INFO  Execution completed {"taskId":"01M0EGEMRES8Q9D6AJAN34T5Y9","success":true,"tokensUsed":860,"cost":0,"duration":2901}
+  02:36:57.316 INFO  ◉ [complete]   ✓ 01M0EGEMRES8Q9D6AJAN34T5Y9 | 860 tok | $0.0000 | 2.9s
+  02:36:57.316 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (659 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (2912.0ms) [748921f8…]
+    ✓ execution.phase.bootstrap (1.1ms) [748921f8…]
+      ✓ phase.bootstrap.metrics (0.0ms) [748921f8…]
+    ✓ execution.phase.strategy-select (1.1ms) [748921f8…]
+      ✓ phase.strategy-select.metrics (0.0ms) [748921f8…]
+    ✓ execution.phase.think (2894.6ms) [748921f8…]
+      ✓ phase.think.metrics (0.0ms) [748921f8…]
+    ✓ execution.phase.complete (1.1ms) [748921f8…]
+      ✓ phase.complete.metrics (0.0ms) [748921f8…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 2.9s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 860  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               2.9s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.628   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.628 →
+└─  iter  1 █████████████░░░░░░░ 0.628 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":860,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 14/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.2s
+  📊 [metric:entropy] 0.637336956521739 composite
+✓ [phase:reactive:kernel] 3.2s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 881 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.2s with 881 tokens
+
+═══ Logs (9) ═══
+  02:36:57.340 INFO  Execution started {"taskId":"01M0EGEQKWYGFFKJ6KCTS7PNV4","agentId":"agent-1787193417331"}
+  02:36:57.342 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 2ms
+  02:36:57.344 INFO  ◉ [strategy]   reactive
+  02:36:57.344 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:36:57.348 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:37:00.571 INFO  ◉ [think]      1 steps | 881 tok | 0.0s
+  02:37:00.573 INFO  Execution completed {"taskId":"01M0EGEQKWYGFFKJ6KCTS7PNV4","success":true,"tokensUsed":881,"cost":0,"duration":3232}
+  02:37:00.573 INFO  ◉ [complete]   ✓ 01M0EGEQKWYGFFKJ6KCTS7PNV4 | 881 tok | $0.0000 | 3.2s
+  02:37:00.573 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (660 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3244.1ms) [cd38c6fe…]
+    ✓ execution.phase.bootstrap (1.2ms) [cd38c6fe…]
+      ✓ phase.bootstrap.metrics (0.0ms) [cd38c6fe…]
+    ✓ execution.phase.strategy-select (1.1ms) [cd38c6fe…]
+      ✓ phase.strategy-select.metrics (0.0ms) [cd38c6fe…]
+    ✓ execution.phase.think (3226.7ms) [cd38c6fe…]
+      ✓ phase.think.metrics (0.0ms) [cd38c6fe…]
+    ✓ execution.phase.complete (1.2ms) [cd38c6fe…]
+      ✓ phase.complete.metrics (0.0ms) [cd38c6fe…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.2s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 881  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.2s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.637   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.637 →
+└─  iter  1 █████████████░░░░░░░ 0.637 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":881,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+[ollama/qwen3:14b][large/discover][rep 15/15] running... ✓ Provider: ollama | Model: qwen3:14b | API key: (set)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 3.0s
+  📊 [metric:entropy] 0.638125 composite
+✓ [phase:reactive:kernel] 3.0s
+[debug] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 868 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 3.0s with 868 tokens
+
+═══ Logs (9) ═══
+  02:37:00.601 INFO  Execution started {"taskId":"01M0EGETSRP824N60DE4ATFFGZ","agentId":"agent-1787193420590"}
+  02:37:00.603 INFO  ◉ [bootstrap]  0 semantic lines, 0 episodic | 3ms
+  02:37:00.604 INFO  ◉ [strategy]   reactive
+  02:37:00.604 INFO  ◉ [tools]      registered: web-search, crypto-price, http-get, file-read, list-directory, file-write, code-execute, git-cli, gh-cli, gws-cli, weather-lookup, recipe-search, calendar-create-event, send-sms, music-recommend, map-directions, stock-quote, news-headlines, todo-add, image-caption, translate-text, timer-set, joke-tell, flight-status, word-define, quote-inspire, podcast-search, podcast-book, gym-class-search, gym-class-book, bus-route-search, bus-route-book, library-book-search, library-book-book, parking-spot-search, parking-spot-book, coupon-search, coupon-book, restaurant-table-search, restaurant-table-book, movie-showtime-search, movie-showtime-book, gift-wrap-search, gift-wrap-book, pet-groomer-search, pet-groomer-book, dry-cleaner-search, dry-cleaner-book, car-wash-search, car-wash-book, hair-salon-search, hair-salon-book, bike-rental-search, bike-rental-book, ferry-schedule-search, ferry-schedule-book, hotel-room-search, hotel-room-book, concert-ticket-search, concert-ticket-book, art-exhibit-search, art-exhibit-book, yoga-class-search, yoga-class-book, wine-pairing-search, wine-pairing-book, zbx-rate-lk7
+  02:37:00.610 INFO  ◉ [tools]      visible: calendar-create-event, send-sms, joke-tell, recall, discover-tools
+  02:37:03.621 INFO  ◉ [think]      1 steps | 868 tok | 0.0s
+  02:37:03.623 INFO  Execution completed {"taskId":"01M0EGETSRP824N60DE4ATFFGZ","success":true,"tokensUsed":868,"cost":0,"duration":3022}
+  02:37:03.623 INFO  ◉ [complete]   ✓ 01M0EGETSRP824N60DE4ATFFGZ | 868 tok | $0.0000 | 3.0s
+  02:37:03.623 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (661 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (3032.9ms) [f12f6b29…]
+    ✓ execution.phase.bootstrap (1.3ms) [f12f6b29…]
+      ✓ phase.bootstrap.metrics (0.0ms) [f12f6b29…]
+    ✓ execution.phase.strategy-select (1.1ms) [f12f6b29…]
+      ✓ phase.strategy-select.metrics (0.0ms) [f12f6b29…]
+    ✓ execution.phase.think (3016.1ms) [f12f6b29…]
+      ✓ phase.think.metrics (0.0ms) [f12f6b29…]
+    ✓ execution.phase.complete (0.9ms) [f12f6b29…]
+      ✓ phase.complete.metrics (0.0ms) [f12f6b29…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ──────────────────────╮
+│ Status:   Success   Duration: 3.0s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 868  │
+╰───────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            1ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               3.0s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: C   Signal: flat   Mean: 0.638   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 █████████████░░░░░░░ 0.638 →
+└─  iter  1 █████████████░░░░░░░ 0.638 →
+{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":868,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}
+
+=== ollama/qwen3:14b/large/discover summary: {"reps":[{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":872,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":854,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":863,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":879,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":851,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":868,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":860,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":854,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":840,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":857,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":855,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":870,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":860,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":881,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0},{"mode":"discover","catalog":"large","success":true,"solved":false,"totalTokens":868,"targetCallIteration":-1,"discoverCalled":false,"actionCount":0}],"summary":{"n":15,"solvedRate":0,"foundRate":0,"avgIterWhenFound":null,"avgTokens":862,"discoverRate":0}} ===
+TOOL_INDEX_PROBE_RESULTS={
+  "ollama/qwen3:14b/large/discover": {
+    "reps": [
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 872,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 854,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 863,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 879,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 851,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 868,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 860,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 854,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 840,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 857,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 855,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 870,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 860,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 881,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      },
+      {
+        "mode": "discover",
+        "catalog": "large",
+        "success": true,
+        "solved": false,
+        "totalTokens": 868,
+        "targetCallIteration": -1,
+        "discoverCalled": false,
+        "actionCount": 0
+      }
+    ],
+    "summary": {
+      "n": 15,
+      "solvedRate": 0,
+      "foundRate": 0,
+      "avgIterWhenFound": null,
+      "avgTokens": 862,
+      "discoverRate": 0
+    }
+  }
+}
