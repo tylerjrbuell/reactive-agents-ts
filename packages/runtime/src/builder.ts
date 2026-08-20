@@ -497,8 +497,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
-    /** Opt-in deterministic citation-check config. Absent = off (default). */
-    private _answerPolicyConfig: import('./builder/types.js').AnswerPolicyOptions | undefined = undefined
     /** Opt-in Ed25519 receipt-signing private key (Arc 1 Task 9). Absent = unsigned receipt (default). */
     private _receiptSigningKey: JsonWebKey | undefined = undefined
     /** Fabrication-guard mode. Absent = "block" (always-on default). */
@@ -1044,28 +1042,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         // opt-in defaults and the guard's always-on default are untouched.
         if (fabricationGuard !== undefined) this._fabricationGuard = fabricationGuard
         if (stallPolicy !== undefined) this._stallPolicy = stallPolicy
-        return this
-    }
-
-    /**
-     * Opt in to a deterministic (non-LLM) citation check on the final
-     * answer. Off by default.
-     *
-     * When on, URLs cited in the final answer are checked against the run's
-     * tool-observation evidence (`validateCitations` in
-     * `@reactive-agents/reasoning`). `requireCitations: "warn"` = advisory;
-     * `requireCitations: "block"` = redirect once, mirroring
-     * `GroundingOptions.mode`.
-     *
-     * NOTE: this stores the policy on the builder config. Enforcing it at
-     * the termination/deliverable-assembly funnel is separate follow-up
-     * work — see `AnswerPolicyOptions`'s JSDoc.
-     *
-     * @param options - Answer policy configuration
-     * @returns `this` for chaining
-     */
-    withAnswerPolicy(options: import('./builder/types.js').AnswerPolicyOptions): this {
-        this._answerPolicyConfig = options
         return this
     }
 
