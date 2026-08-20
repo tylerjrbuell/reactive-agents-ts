@@ -304,6 +304,10 @@ export { detectCompletionGaps } from "./skills/completion-gaps.js";
 // ─── Tool Call Resolver ───
 export * from "./tool-calling/index.js";
 
+// ─── Research Utilities ───
+export { boundedMap } from "./research/bounded-parallel.js";
+export type { BoundedMapResult } from "./research/bounded-parallel.js";
+
 // ─── Conductor's Suite Tools ───
 export {
   recallTool,
