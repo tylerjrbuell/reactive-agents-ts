@@ -1,7 +1,7 @@
 ---
 aliases: [Lightweight Tool Index — Progressive Disclosure for Tools]
 tags: [plan, architecture, kernel, tools, progressive-disclosure]
-status: REWORK (default-off) — root cause found + fixed (§6e/f/g): index mode's accuracy failure was a wiring bug (fixed, now 100% solved both tiers when engaged); remaining blockers are catalog-size token cost (cloud) and discover-tools comprehension (local), both narrower and better-understood than the original verdict
+status: PROMISING, still default-off (§7) — 3 real bugs found+fixed (FC-callability, discover-tools truncation+fabrication, prose/schema double-payment); index mode now clears the lift rule on 3 of 4 measured cells (both catalog sizes on cloud, small catalog on local); one open cell (qwen3:14b large catalog, 60% solved) before this could go to ablation-warden for a formal cross-tier verdict
 created: 2026-08-19
 program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal, not ratified)
 ---
@@ -766,9 +766,119 @@ bounded) with what's now known to fail (`discover-tools`' registration hurting
 `qwen3:14b`, its exhaustion message hurting `hybrid`'s small-catalog case). That's the
 next measurement worth running before touching any default — not yet done in this pass.
 
+## 7. Three parallel investigations (2026-08-20) — verdict: `index` mode clears the bar
+
+Three open threads from §6g were investigated together: (1) `discover-tools`' exhaustion
+message/UX, (2) the untested capped-index-without-discover-tools cell, (3) the
+`PRUNE_MIN_TOOLS` question. Raw notes:
+`wiki/Research/Ablations/2026-08-19-tool-index-final-retest-notes.txt`.
+
+### 7a. `discover-tools`' poor solve rate: TWO real compression bugs, not the message
+
+Rewording the exhaustion message (scan-first, conclude-second) did **not** fix `hybrid`'s
+poor accuracy — a live trace after the reword still showed 0/5. Tracing further found
+the actual cause was two layers below wording: (1) `compressToolResult`
+(`tool-formatting.ts`) generically truncates any tool result over budget to a handful of
+preview lines — silently defeating `discover-tools`' own "dump the complete catalog"
+design guarantee; the target tool was routinely in the truncated tail. (2) Fixing that
+uncovered LLM fact-extraction as a **second**, independent compressor that paraphrased
+the raw catalog dump into a lossy "key facts" summary — confirmed live to fabricate an
+answer (echoed the query's own transaction ID back as the "identifier"). **Both are now
+exempted for `toolName === "discover-tools"`** (commit `ffbab632`) — real, standalone
+correctness fixes (a directory listing must never be truncated or LLM-paraphrased when
+exact names matter for subsequent tool calls) independent of anything else in this plan.
+Net effect on `hybrid`'s solve rate: modest. The residual gap — a model given the
+complete, correct list still not reliably finding one entry among many — is a genuine
+scanning/attention limit, not a bug, and is superseded by §7c's finding below.
+
+### 7b. Capped index without `discover-tools`: REAL design flaw found, not measured as hoped
+
+`index_capped` (cap=8, no `discover-tools`) scored **0% at both catalog sizes** — but not
+because the idea is wrong. A debug trace showed the target tool (registered last in the
+catalog) was *always* in the "8 more" overflow, every single rep: **the cap has zero
+relevance-aware ordering — it's a raw `.slice(0, maxEntries)` on registration order.**
+`hybrid` survives this same flaw only because `discover-tools` provides a (bug-prone,
+per §7a) fallback path to the overflow; `index_capped` has no fallback at all, so an
+overflow tool is *permanently* unreachable. This is a real, unresolved gap in the cap
+mechanism itself (`cappedHiddenTools`, `think.ts`) — worth fixing with a relevance-based
+truncation order (even the same free keyword scorer `discover-tools` already uses) before
+`hybrid`/capped modes are trusted at any catalog size larger than the cap. **Not fixed in
+this pass** — flagged for whoever picks up `hybrid` next; `index` mode (§7c) doesn't need
+this fix because it never caps.
+
+### 7c. The `PRUNE_MIN_TOOLS` question, AND the fix that actually matters most
+
+`full` mode (no pruning) was swept from 15 to 60 tools (diverse domain-named fillers,
+n=3/size): **100% solved at every size, tokens scaling smoothly (~1,500 → ~3,600) with no
+accuracy cliff.** (An earlier attempt at this sweep using generic `filler-N` names
+falsely showed 0% at n=15 — semantically null names give the model nothing to rule out,
+so it thrashes trying each one; corrected before drawing any conclusion — see the raw
+notes file for the full story, it's a probe-design lesson worth keeping.) This confirms
+§6d/§6g's repeated observation: on every tier and catalog size measured so far, `full`
+mode has never once lost on accuracy. `PRUNE_MIN_TOOLS=15` remains a live open question
+for a separate investigation — this plan doesn't resolve it, only sharpens the evidence
+that it's worth someone's time.
+
+**But comparing `full`'s sweep numbers against `index` mode's numbers surfaced the
+sharpest finding of this whole investigation:** at 60 tools, uncapped `index` mode
+(5,210 tokens) cost *more* than `full` mode (3,621 tokens) — despite disclosing *less*
+information per tool (a trimmed one-liner vs. the complete schema `full` already sends).
+That shouldn't be possible unless something was being paid for twice. It was:
+`buildToolIndexText` rendered a prose description for every tool `buildToolIndexCallableSchemas`
+*also* promoted into the real FC schema — the model got each promoted tool's
+name/params/description sent twice, once as inert text, once as the structured tool it
+already sees. **Fixed** (commit `bffe8a48`): a promoted tool needs no prose call-out at
+all; the schema itself is the complete disclosure. Only genuinely unreachable overflow
+tools (§7b's unresolved cap-ordering gap) still get a one-line count-only mention.
+
+### The verdict, finally
+
+Live-reverified post-fix, `index` mode, both tiers, `REPS=5`:
+
+| Tier | Catalog | solvedRate | avgTokens | vs. `discover` baseline |
+|---|---|---|---|---|
+| gpt-4o-mini | small | **100%** | 1,271 (was 1,770) | **−41% tokens, +40pp accuracy** |
+| gpt-4o-mini | large | **100%** | 3,351 (was 5,210) | **−37% tokens, tied accuracy (already 100%)** |
+| qwen3:14b | small | **100%** (was 40%) | 2,903 | strictly better on both legs |
+| qwen3:14b | large | 60% (unchanged) | 5,204 | mixed — accuracy leg still open |
+
+**`index` mode is the first candidate in this entire investigation to clear 09 §2's lift
+rule cleanly on more than one cell** — both catalog sizes on the frontier tier, and the
+small-catalog case on the local tier. The large-catalog local-tier case (60% solved) is
+the one cell where it's not yet a clean pass — engagement is imperfect when scanning 60
+real (not redundant-prose) schemas on a smaller model, a plausible ceiling effect rather
+than a fixable bug, though not conclusively distinguished from one yet.
+
+### Most efficient and robust design, given everything measured
+
+1. **`index` mode (uncapped, no `discover-tools`, no cap) is the strongest general-purpose
+   answer found in this investigation** — best or tied-best accuracy on every cell
+   measured, and the cheapest mechanism-with-rescue option at both catalog sizes on the
+   tier where cost was ever a concern. It is not yet a cross-tier PASS by 09's strict
+   rule (the qwen3:14b large-catalog cell is open), but it is close, well-understood, and
+   nothing else tested comes near it.
+2. **`full` mode remains categorically correct for small catalogs** (below roughly the
+   size where the FC schema tax itself becomes the binding cost, not yet pinned down
+   precisely — the `PRUNE_MIN_TOOLS` question) — simpler, zero mechanism risk, never
+   measured to lose.
+3. **`hybrid`/capped modes are not recommended as built** — real, specific, still-open
+   defects (relevance-blind cap ordering, §7b) beyond what `discover-tools`' own fixed
+   bugs (§7a) already cost it. Not worth pursuing further unless `index`'s large-catalog
+   local-tier gap turns out to need a cap after all.
+4. **The concrete next step, if this is promoted toward a default:** re-verify the
+   qwen3:14b large-catalog cell with a larger rep count (n=5 is genuinely on the edge of
+   this project's own noise floor at 60%) before either calling it a real gap or a
+   measurement artifact — and only then take this to `ablation-warden` for a formal
+   cross-tier verdict. **Still not shipped as any default in this pass** — `RA_TOOL_INDEX`
+   stays OFF, no `CONTEXT_PROFILES` tier is touched — but the case for `index` mode is now
+   substantially stronger than "REWORK," and this doc's own status line reflects that.
+
 ## 6. Open question for the owner
 
 If the probe passes the lift rule, does the index render for **all** hidden tools
 unconditionally, or only above some hidden-count threshold (to avoid the index itself
-becoming a wall of text on a very large catalog)? Not resolved here — worth deciding once
-real hidden-tool-count distributions are visible from the probe's own runs.
+becoming a wall of text on a very large catalog)? **Partially answered by §7c**: the index
+text itself no longer scales with hidden-tool count at all once a tool is promoted (only
+the overflow count line does) — so the remaining version of this question is really about
+`buildToolIndexCallableSchemas`' own promoted-set size (unbounded in `index` mode), which
+is a wire-cost question, not a prompt-readability one anymore.
