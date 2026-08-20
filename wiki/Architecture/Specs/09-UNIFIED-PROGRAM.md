@@ -58,6 +58,16 @@ K makes agents capable. P makes them governable. T keeps both honest.
   Exactly one definition of "improvement" in this codebase.
 - **C5 — Teams wait for perception.** Arc 3 requires RunAssessment + contract. A parent
   cannot supervise progress that isn't measured. (A2A last-mile wiring is independent.)
+  *Forward input, not scope (added 2026-08-19, external research pass): today's `compose`
+  package is killswitches only (`budget-limit`, `timeout-after`, `max-iterations`,
+  `watchdog`, `require-approval-for`) — no topology/orchestration surface exists yet, so
+  there is nothing to "expand" pre-C5. 2026 harness-engineering literature converges on
+  patterns worth evaluating once Arc 3 opens: task-adaptive topology selection
+  (parallel/sequential/hierarchical/hybrid per task shape, not one fixed pattern),
+  subagent isolation with a rebuilt permission context per spawn (not inherited wholesale),
+  and a "puppeteer" orchestrator role split (planner/executor/validator) over the A2A
+  protocol for inter-agent discovery. None of this is authorized before RunAssessment
+  ships — §8's WIP=1 rule still applies.
 - **C6 — The flywheel is the policy compiler grown up.** Arc 4 + Wave G + Phase 7 are one movement.
 - **C7 — One terminal truth.** **NEW 2026-08-12.** `run()`, `runStream()`, durable rows,
   trace completion and UI state are projections of one supervisor-owned outcome. No path
@@ -233,6 +243,18 @@ is only honest after Steps 1–3 give it one place to apply.
 **Step 5 — context and cost economy.** One allocator; stable prefix vs dynamic tail;
 surface/prompt hashes so every cache hit is explainable; compaction before the window is
 consumed; inject recall or don't compute it (6.7).
+
+*Alternate hypothesis, not yet tested (added 2026-08-19, external research pass).* This
+step assumes the lever is **pruning** — hide surface, shrink the tail. MIT's RLM
+(recursive language models, Aug 2026) is the opposite bet: don't hide context, let the
+model **recurse over it programmatically** — decompose long input, spawn sub-calls over
+slices, recombine — reporting inputs handled "two orders of magnitude beyond context
+window" and +28.3% avg over a vanilla baseline on long-context tasks (RLM-Qwen3-8B).
+These are not mutually exclusive — recursion is expressible as a strategy variant
+(`src/strategies/`) that trades tokens for coverage on tasks where pruning would hide the
+answer — but Step 5's allocator design should not assume pruning is the only lever before
+this is measured. Do not build it speculatively; log it as an open alternate hypothesis for
+whoever designs the allocator, gated by the same §2 lift rule as any other mechanism.
 
 **Step 6 — config and memory convergence.** One spec compiled once; one consolidator (6.8);
 retire builder-state mirrors (6.10). **Last, deliberately** — 83 withers is real debt with
