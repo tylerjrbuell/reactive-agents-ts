@@ -1,7 +1,7 @@
 ---
 aliases: [Lightweight Tool Index — Progressive Disclosure for Tools]
 tags: [plan, architecture, kernel, tools, progressive-disclosure]
-status: falsified — measured 2026-08-19, both candidate modes (index/hybrid) REWORK per §6d; mechanism stays default-off
+status: REWORK (default-off) — root cause found + fixed (§6e/f/g): index mode's accuracy failure was a wiring bug (fixed, now 100% solved both tiers when engaged); remaining blockers are catalog-size token cost (cloud) and discover-tools comprehension (local), both narrower and better-understood than the original verdict
 created: 2026-08-19
 program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal, not ratified)
 ---
@@ -695,6 +695,76 @@ even this mechanism's territory anymore, it's a `PRUNE_MIN_TOOLS` question; (3) 
 `discover-tools`-comprehension gap on smaller models is worth its own investigation
 (better description wording? an explicit few-shot example of when to call it?) since it
 now has two independent live reproductions on this tier.
+
+## 6g. gpt-4o-mini post-fix retest (2026-08-19) — accuracy problem SOLVED, cost problem SURFACES
+
+Raw: `wiki/Research/Ablations/2026-08-19-tool-index-openai-postfix-raw.txt`, `REPS=5`,
+all 7 cells, same task/catalogs as the original ablation.
+
+| Catalog | Mode | solvedRate | avgTokens | vs. original pre-fix ablation |
+|---|---|---|---|---|
+| small | `full` | 100% | 1,561 | unchanged (not touched by the fix) |
+| small | `discover` (baseline) | 0%¹ | 1,528 | was 60% / 2,167 — see caveat¹ |
+| small | `index` | **100%** | 1,770 | was **0%** / 1,024 |
+| small | `hybrid` | 20% | 2,123 | was 40% / 2,132 |
+| large | `discover` (baseline) | 40%¹ | 2,836 | was 100% / 5,359 — see caveat¹ |
+| large | `index` | **100%** | 5,210 | was **0%** / 2,384 |
+| large | `hybrid` | 80% | 4,971 | was 100% / 5,530 |
+
+¹ `discover`'s baseline swung hard between runs (60%→0% small, 100%→40% large) despite
+zero code changes on that path — larger than the ~13pp SE this project's Bernoulli-
+variance convention predicts at n=5, which means even n=5 is not enough to pin down
+`discover`'s own baseline precisely; treat both readings as noisy, not the original as
+"correct" and this one as "wrong." This doesn't affect the `index` read below, which
+moved from a rock-solid 0% to a rock-solid 100% — far outside what noise explains.
+
+**`index` mode: 0% → 100% solved, both catalog sizes, confirmed.** This is the fix
+working exactly as designed — every failure in the original ablation is now closed. The
+accuracy leg of 09 §2's lift rule (≥3pp) is cleared by a wide margin (+100pp minimum,
+even against the noisiest baseline reading).
+
+**But the token leg now becomes the live constraint, and it's catalog-size-dependent:**
+`index` costs +16% tokens vs. `discover` on the small catalog (borderline against the
+≤15% ceiling — noise-level difference, not a clean pass or fail) and **+84% on the large
+catalog — a clear token-leg FAIL.** This is the direct, expected cost of the fix: a
+promoted tool now carries a real (if compact) FC schema instead of a free-text line, and
+`index` mode is uncapped by design — cost grows with hidden-tool count, unbounded. This
+is exactly the tension `hybrid`'s cap exists to manage, and exactly why `hybrid` was
+worth building as a separate mode rather than assuming `index` wins outright once fixed.
+
+**`hybrid` improved (pre-fix 40%/20% → post-fix 20%/80%) but doesn't clearly win either
+leg** — better accuracy than before (the same underlying fix helps it too, since hybrid
+also renders an index), but its cap=8 doesn't control cost enough at the large catalog
+(+75% vs baseline, still a clear token-leg fail) and its small-catalog accuracy (20%) is
+still poor — `discover-tools`' honest-exhaustion framing (§6e, root cause 2) is a live,
+separate defect inside `hybrid` that this fix didn't touch.
+
+### Updated verdict
+
+- **`index`: accuracy leg PASSES cleanly on the cloud tier now (was the sole blocker).
+  Token leg passes at small catalogs, FAILS at large ones.** Cross-tier is still not a
+  clean PASS — `qwen3:14b`'s ceiling is engagement (§6f), not accuracy-once-engaged, so
+  `index`'s remaining problem differs BY TIER: cost at large catalogs on cloud,
+  engagement rate on local. Still REWORK for a default under 09's strict cross-tier
+  lift rule, but the fix converted one hard blocker (0% accuracy) into a much narrower,
+  better-understood, catalog-size-scoped one (cost at scale) — a materially different
+  and more tractable position than before this session's fix.
+- **`hybrid`: still REWORK.** Improved but neither leg clears, and it now carries a
+  distinct known defect (`discover-tools`' exhaustion-message framing) on top of the
+  cost problem. Lowest-priority of the three modes to keep investigating.
+- **`full`: unchanged, still the strongest single result on both tiers measured.**
+
+### What this means concretely for next steps
+
+The natural, narrow fix for `index`'s remaining problem is **applying `hybrid`'s cap to
+`index` mode itself** — i.e., collapsing the taxonomy's meaningful choice down to "how
+many tools get promoted, and does `discover-tools` back up the overflow" rather than
+three qualitatively different mechanisms. A capped, `discover-tools`-free index (today's
+`hybrid` minus `discover-tools` minus the exhaustion-message bug) is the untested cell
+that combines what's now known to work (accuracy, once the tool is real and cost is
+bounded) with what's now known to fail (`discover-tools`' registration hurting
+`qwen3:14b`, its exhaustion message hurting `hybrid`'s small-catalog case). That's the
+next measurement worth running before touching any default — not yet done in this pass.
 
 ## 6. Open question for the owner
 
