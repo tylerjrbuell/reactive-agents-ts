@@ -1,5 +1,12 @@
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import type { DefinedTool } from "./define-tool.js";
+import { ToolExecutionError, ToolOutputValidationError } from "./errors.js";
+
+/**
+ * Unique symbol used to mark attempt carriers, preventing accidental
+ * duck-typing of user tool results that happen to have `value` and `attempt` fields.
+ */
+const ATTEMPT_CARRIER = Symbol("attemptCarrier");
 
 export interface ToolObservabilityMeta {
   readonly toolName: string;
@@ -14,6 +21,7 @@ export interface ObservedToolResult<T = unknown> {
 }
 
 interface AttemptCarrier {
+  readonly [ATTEMPT_CARRIER]: true;
   readonly value: unknown;
   readonly attempt: number;
 }
@@ -51,9 +59,8 @@ function isAttemptCarrier(value: unknown): value is AttemptCarrier {
   return (
     typeof value === "object" &&
     value !== null &&
-    "value" in value &&
-    "attempt" in value &&
-    typeof (value as { attempt: unknown }).attempt === "number"
+    ATTEMPT_CARRIER in value &&
+    (value as { [ATTEMPT_CARRIER]: unknown })[ATTEMPT_CARRIER] === true
   );
 }
 
@@ -70,15 +77,19 @@ export function withToolRetry(tool: DefinedTool, options: { maxAttempts: number 
     definition: tool.definition,
     handler: (rawArgs: Record<string, unknown>) =>
       Effect.gen(function* () {
-        let lastError: unknown;
+        let lastError: Cause.Cause<ToolExecutionError | ToolOutputValidationError> | undefined;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           const exit = yield* Effect.exit(tool.handler(rawArgs));
           if (exit._tag === "Success") {
-            return { value: exit.value, attempt } satisfies AttemptCarrier;
+            return {
+              [ATTEMPT_CARRIER]: true,
+              value: exit.value,
+              attempt,
+            } satisfies AttemptCarrier;
           }
           lastError = exit.cause;
         }
-        return yield* Effect.failCause(lastError as Parameters<typeof Effect.failCause>[0]);
+        return yield* Effect.failCause(lastError!);
       }),
   };
 }
