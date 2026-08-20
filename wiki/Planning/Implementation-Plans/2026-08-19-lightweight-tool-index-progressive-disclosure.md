@@ -1,7 +1,7 @@
 ---
 aliases: [Lightweight Tool Index — Progressive Disclosure for Tools]
 tags: [plan, architecture, kernel, tools, progressive-disclosure]
-status: PROMISING, still default-off (§7) — 3 real bugs found+fixed (FC-callability, discover-tools truncation+fabrication, prose/schema double-payment); index mode now clears the lift rule on 3 of 4 measured cells (both catalog sizes on cloud, small catalog on local); one open cell (qwen3:14b large catalog, 60% solved) before this could go to ablation-warden for a formal cross-tier verdict
+status: PROMISING, still default-off (§7) — 3 real bugs found+fixed (FC-callability, discover-tools truncation+fabrication, prose/schema double-payment); index mode clears the lift rule on 3 of 4 measured cells (both catalog sizes on cloud, small catalog on local); 4th cell (qwen3:14b large catalog) re-verified at n=15, holds at 60% solved — a real, distinguished engagement ceiling, not noise; ready for a formal ablation-warden cross-tier verdict scoped to catalogs below that ceiling, or with a cap fix (§7b, still unresolved) if the large-local-tier cell must be covered too
 created: 2026-08-19
 program: 09-UNIFIED-PROGRAM §5.2 (counter-proposal, not ratified)
 ---
@@ -849,6 +849,18 @@ the one cell where it's not yet a clean pass — engagement is imperfect when sc
 real (not redundant-prose) schemas on a smaller model, a plausible ceiling effect rather
 than a fixable bug, though not conclusively distinguished from one yet.
 
+### qwen3:14b large-catalog cell re-verified at n=15 (2026-08-19)
+
+Re-ran `MODES_FILTER=index CATALOG_FILTER=large REPS=15` (added `CATALOG_FILTER` to the
+probe for this). Result: **9/15 solved (60%), identical to the n=5 rate.** The rate held
+exactly stable across a 3x rep increase — not noise wobble settling toward a different
+number. All 6 failures show `actionCount: 0` — the model never attempted the tool call at
+all, not a wrong-tool miscall or a healing failure. This is a genuine engagement ceiling
+scanning 60 real FC schemas on a 14B local model, not a framework bug and not a
+measurement artifact. **The cell is closed as a real, distinguished gap** — `index` mode
+does not clear the lift rule on this one cell, and no further re-verification is planned
+for it in this pass.
+
 ### Most efficient and robust design, given everything measured
 
 1. **`index` mode (uncapped, no `discover-tools`, no cap) is the strongest general-purpose
@@ -865,13 +877,17 @@ than a fixable bug, though not conclusively distinguished from one yet.
    defects (relevance-blind cap ordering, §7b) beyond what `discover-tools`' own fixed
    bugs (§7a) already cost it. Not worth pursuing further unless `index`'s large-catalog
    local-tier gap turns out to need a cap after all.
-4. **The concrete next step, if this is promoted toward a default:** re-verify the
-   qwen3:14b large-catalog cell with a larger rep count (n=5 is genuinely on the edge of
-   this project's own noise floor at 60%) before either calling it a real gap or a
-   measurement artifact — and only then take this to `ablation-warden` for a formal
-   cross-tier verdict. **Still not shipped as any default in this pass** — `RA_TOOL_INDEX`
-   stays OFF, no `CONTEXT_PROFILES` tier is touched — but the case for `index` mode is now
-   substantially stronger than "REWORK," and this doc's own status line reflects that.
+4. **The concrete next step, if this is promoted toward a default:** the qwen3:14b
+   large-catalog cell has now been re-verified at n=15 (60% solved, unchanged from n=5,
+   all failures `actionCount: 0`) — it is a real ceiling, not a measurement artifact, so
+   no further re-verification is warranted. The remaining choice is scope: either (a) take
+   `index` mode to `ablation-warden` for a formal cross-tier verdict scoped to catalogs
+   below the ~60-tool local-tier ceiling (the 3 cells that already pass cleanly), or (b)
+   fix the cap-ordering gap (§7b, still unresolved) first so a relevance-aware capped
+   index can cover the large-catalog local-tier case too. **Still not shipped as any
+   default in this pass** — `RA_TOOL_INDEX` stays OFF, no `CONTEXT_PROFILES` tier is
+   touched — but the case for `index` mode is now substantially stronger than "REWORK,"
+   and every cell has a distinguished, understood verdict rather than an open question.
 
 ## 6. Open question for the owner
 

@@ -309,15 +309,19 @@ function summarize(reps: readonly CellResult[]) {
   };
 }
 
-// Optional filter for targeted re-runs, e.g. MODES_FILTER=index_capped to
-// re-test one new cell without re-running the whole matrix.
+// Optional filters for targeted re-runs, e.g. MODES_FILTER=index_capped to
+// re-test one new cell without re-running the whole matrix. CATALOG_FILTER
+// narrows to one catalog size (2026-08-19: added for the qwen3:14b/large/index
+// noise-floor re-verification — no need to re-pay small-catalog reps).
 const modesFilter = process.env.MODES_FILTER
   ? new Set(process.env.MODES_FILTER.split(",").map((s) => s.trim()))
   : null;
+const catalogFilter = process.env.CATALOG_FILTER ?? null;
 
 const results: Record<string, unknown> = {};
 for (const { model, provider } of CELLS) {
   for (const { catalog, modes } of CELL_PLAN) {
+    if (catalogFilter && catalog !== catalogFilter) continue;
     for (const mode of modesFilter ? modes.filter((m) => modesFilter.has(m)) : modes) {
       const reps: CellResult[] = [];
       for (let i = 0; i < REPS; i++) {
