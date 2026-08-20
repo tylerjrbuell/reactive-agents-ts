@@ -213,6 +213,10 @@ export type {
   ToolHandler,
 } from "./define-tool.js";
 
+// ─── Tool Observability Envelope ───
+export { withToolObservability, withToolRetry } from "./observability.js";
+export type { ObservedToolResult, ToolObservabilityMeta } from "./observability.js";
+
 // ─── Standard Schema (Zod / Valibot / ArkType interop) ───
 export { isStandardSchema } from "./standard-schema.js";
 export type { StandardSchemaV1 } from "./standard-schema.js";
