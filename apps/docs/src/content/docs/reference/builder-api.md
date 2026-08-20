@@ -68,6 +68,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withAdaptiveHarness` | `adaptiveHarness` | config | Adaptive harness / policy compiler. |
 | `withAgentId` | `agentId` | config | Stable agent identifier. |
 | `withAgentTool` | _overlay — code-only sub-agent registry_ | overlay | Register a sub-agent as a tool. |
+| `withAnswerPolicy` | _overlay — code-only_ | overlay | Configure answer policy. |
 | `withApprovalPolicy` | _overlay — carries an approval predicate (HITL durability rail)_ | overlay | Human-in-the-loop tool approval gate. |
 | `withAudit` | `features.audit` | config | Per-tool-call rationale auditing. |
 | `withBehavioralContracts` | _overlay — behavioral-contract overlay (folds into withContract)_ | overlay | Behavioral contracts. |

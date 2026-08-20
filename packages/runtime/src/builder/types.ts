@@ -434,6 +434,31 @@ export interface GroundingOptions {
 }
 
 /**
+ * Options for `.withAnswerPolicy()` — opt-in deterministic citation check.
+ *
+ * When enabled, URLs cited in the final answer are checked against the
+ * run's tool-observation evidence (via `validateCitations` in
+ * `@reactive-agents/reasoning`). Absent = today's behavior (no framework
+ * check).
+ *
+ * @example
+ * ```typescript
+ * agent.withAnswerPolicy({ requireCitations: "warn" })   // advisory
+ * agent.withAnswerPolicy({ requireCitations: "block" })  // redirect once
+ * ```
+ */
+export interface AnswerPolicyOptions {
+    /**
+     * When set, every cited URL in the final answer must appear in this
+     * run's tool-observation evidence (checked via `citation-policy.ts`'s
+     * `validateCitations`). "warn" logs a mismatch; "block" redirects once,
+     * mirroring `GroundingOptions.mode`. Unset = today's behavior
+     * (citation-persona-dependent, no framework check).
+     */
+    readonly requireCitations?: "warn" | "block";
+}
+
+/**
  * Options for `.withReceiptSigning()` — opt-in Ed25519 provenance signature
  * on the trust receipt (Arc 1 Task 9). Absent by default (unsigned receipt,
  * zero overhead).
