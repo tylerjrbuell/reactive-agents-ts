@@ -216,6 +216,10 @@ export type {
   ToolHandler,
 } from "./define-tool.js";
 
+// ─── Toolset (shared defaults factory) ───
+export { defineToolset } from "./toolset.js";
+export type { Toolset, ToolsetDefaults } from "./toolset.js";
+
 // ─── Tool Observability Envelope ───
 export { withToolObservability, withToolRetry } from "./observability.js";
 export type { ObservedToolResult, ToolObservabilityMeta } from "./observability.js";
