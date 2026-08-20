@@ -191,6 +191,9 @@ export {
 } from "./adapters/agent-tool-adapter.js";
 export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
+export { fetchJsonTool, HttpToolError } from "./adapters/http-tool-adapter.js";
+export type { HttpToolOptions } from "./adapters/http-tool-adapter.js";
+
 // ─── Tool Calling Drivers ───
 export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
