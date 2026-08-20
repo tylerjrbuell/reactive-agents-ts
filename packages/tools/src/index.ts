@@ -220,6 +220,10 @@ export type {
 export { defineToolset } from "./toolset.js";
 export type { Toolset, ToolsetDefaults } from "./toolset.js";
 
+// ─── Testing Helpers ───
+export { testTool, mockFetchOnce } from "./testing.js";
+export type { TestToolResult } from "./testing.js";
+
 // ─── Tool Observability Envelope ───
 export { withToolObservability, withToolRetry } from "./observability.js";
 export type { ObservedToolResult, ToolObservabilityMeta } from "./observability.js";
