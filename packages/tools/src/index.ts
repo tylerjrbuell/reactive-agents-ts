@@ -29,6 +29,7 @@ export {
   ToolExecutionError,
   ToolDefinitionError,
   ToolTimeoutError,
+  ToolOutputValidationError,
   ToolValidationError,
   MCPConnectionError,
   ToolAuthorizationError,
