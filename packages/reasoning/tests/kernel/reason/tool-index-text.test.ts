@@ -10,22 +10,29 @@ function tool(name: string, description: string): ToolSchema {
   };
 }
 
+// 2026-08-19 (second fix, same day): buildToolIndexText USED to render a
+// prose line for every capped/promoted tool — but buildToolIndexCallableSchemas
+// promotes that SAME set into a real FC schema, so the name/params/
+// description were being sent to the model TWICE (once as text, once as the
+// structured tool it already sees). Found live: uncapped "index" mode cost
+// MORE tokens per tool than "full" mode despite disclosing LESS information
+// per tool. Fixed — a promoted tool needs no prose call-out at all (the
+// schema IS the disclosure); only the truly-unreachable overflow (capped out,
+// no schema, only reachable via discover-tools) still needs a mention, and
+// only as a count.
 describe("buildToolIndexText", () => {
   it("returns empty string when nothing is hidden", () => {
     const universe = [tool("a", "Does A.")];
     expect(buildToolIndexText(universe, universe)).toBe("");
   });
 
-  it("lists every hidden tool with no cap", () => {
+  it("no cap ⇒ everything hidden gets promoted ⇒ no prose needed at all", () => {
     const universe = [tool("a", "Does A."), tool("b", "Does B."), tool("c", "Does C.")];
     const visible = [universe[0]!];
-    const text = buildToolIndexText(universe, visible);
-    expect(text).toContain("- b(query: string) — Does B.");
-    expect(text).toContain("- c(query: string) — Does C.");
-    expect(text).not.toContain("more. Call discover-tools");
+    expect(buildToolIndexText(universe, visible)).toBe("");
   });
 
-  it("hybrid mode: truncates at maxEntries and names the overflow count", () => {
+  it("hybrid mode: capped tools get no prose (promoted); overflow gets a count-only note", () => {
     const universe = [
       tool("a", "Does A."),
       tool("b", "Does B."),
@@ -34,17 +41,17 @@ describe("buildToolIndexText", () => {
     ];
     const visible: ToolSchema[] = [];
     const text = buildToolIndexText(universe, visible, 2);
-    expect(text).toContain("- a(query: string) — Does A.");
-    expect(text).toContain("- b(query: string) — Does B.");
-    expect(text).not.toContain("- c(");
-    expect(text).not.toContain("- d(");
-    expect(text).toContain("…and 2 more. Call discover-tools with a query to search them.");
+    expect(text).not.toContain("Does A.");
+    expect(text).not.toContain("Does B.");
+    expect(text).not.toContain("- a(");
+    expect(text).toContain("2 additional tool(s)");
+    expect(text).toContain("discover-tools");
   });
 
-  it("maxEntries at or above the hidden count is a no-op (no overflow line)", () => {
+  it("maxEntries at or above the hidden count is a no-op (no overflow note)", () => {
     const universe = [tool("a", "Does A."), tool("b", "Does B.")];
     const text = buildToolIndexText(universe, [], 5);
-    expect(text).not.toContain("more. Call discover-tools");
+    expect(text).toBe("");
   });
 });
 

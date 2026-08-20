@@ -203,6 +203,10 @@ export function buildToolIndexCallableSchemas(
   });
 }
 
+/**
+ * The overflow-only note for tools past the cap — see the "double-payment"
+ * fix below for why this is ALL this function renders now.
+ */
 export function buildToolIndexText(
   universe: readonly ToolSchema[],
   visible: readonly ToolSchema[],
@@ -214,25 +218,22 @@ export function buildToolIndexText(
    */
   maxEntries?: number,
 ): string {
-  const { capped, overflow } = cappedHiddenTools(universe, visible, maxEntries);
-  if (capped.length === 0 && overflow === 0) return "";
-
-  const lines = capped.map((ts) => {
-    const params = ts.parameters
-      .map((p) => `${p.name}: ${p.type}${p.required ? "" : "?"}`)
-      .join(", ");
-    const firstSentence = ts.description.split(/(?<=[.!?])\s/)[0] ?? ts.description;
-    const trimmed = firstSentence.length > 140 ? `${firstSentence.slice(0, 137)}…` : firstSentence;
-    return `- ${ts.name}(${params}) — ${trimmed}`;
-  });
-
-  return [
-    "## Additional tools available (not shown above — call by name to use)",
-    ...lines,
-    ...(overflow > 0
-      ? [`- …and ${overflow} more. Call discover-tools with a query to search them.`]
-      : []),
-  ].join("\n");
+  // Fix (2026-08-19, found live investigating why `index` mode cost MORE
+  // per tool than `full` mode despite carrying LESS information per tool):
+  // every capped/promoted tool used to get a prose line here AND a real FC
+  // schema via buildToolIndexCallableSchemas (name/params/description sent
+  // TWICE — once as text, once as the structured tool the provider already
+  // shows the model). A tool present in the `tools:` array needs no prose
+  // call-out; the schema itself is the disclosure. Only tools that did NOT
+  // get promoted (the overflow, capped-out portion — unreachable except via
+  // discover-tools' query search) still need a mention, and only as a count,
+  // not a per-tool description nobody asked to see rendered twice.
+  const { overflow } = cappedHiddenTools(universe, visible, maxEntries);
+  if (overflow === 0) return "";
+  return (
+    `${overflow} additional tool(s) exist beyond what's shown above — ` +
+    `call discover-tools with a query to search them.`
+  );
 }
 
 export function looksLikeFinalAnswer(content: string): boolean {

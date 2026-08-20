@@ -175,7 +175,7 @@ function taskWasActuallySolved(answer: string | undefined): boolean {
   return typeof answer === "string" && answer.includes(REFERENCE_CODE);
 }
 
-type Mode = "full" | "discover" | "index" | "hybrid";
+type Mode = "full" | "discover" | "index" | "hybrid" | "index_capped";
 type CatalogSize = "small" | "large";
 
 const MODE_ENV: Record<Mode, Record<string, string>> = {
@@ -183,14 +183,21 @@ const MODE_ENV: Record<Mode, Record<string, string>> = {
   discover: { RA_LAZY_TOOLS: "1", RA_TOOL_DISCOVERY: "1", RA_TOOL_INDEX: "0" },
   index: { RA_LAZY_TOOLS: "1", RA_TOOL_DISCOVERY: "0", RA_TOOL_INDEX: "1" },
   hybrid: { RA_LAZY_TOOLS: "1", RA_TOOL_DISCOVERY: "1", RA_TOOL_INDEX: "1", RA_TOOL_INDEX_MAX_ENTRIES: "8" },
+  // 2026-08-19 — the untested cell §6g flagged: caps index mode's uncapped
+  // token growth WITHOUT registering discover-tools (which §6f found
+  // actively depresses engagement on qwen3:14b, independent of any bug).
+  // Combines what's proven to work (schema-promoted, correct-when-engaged)
+  // with what's proven to fail (discover-tools' registration hurting a
+  // model tier that doesn't understand its purpose).
+  index_capped: { RA_LAZY_TOOLS: "1", RA_TOOL_DISCOVERY: "0", RA_TOOL_INDEX: "1", RA_TOOL_INDEX_MAX_ENTRIES: "8" },
 };
 
 // SMALL runs all 4 modes; LARGE skips `full` (guaranteed worse at 60 tools,
 // not a live question) and focuses on whether `index` grows unacceptably
-// vs `hybrid`'s cap.
+// vs `hybrid`'s cap, plus index_capped (the untested combination).
 const CELL_PLAN: ReadonlyArray<{ catalog: CatalogSize; modes: readonly Mode[] }> = [
-  { catalog: "small", modes: ["full", "discover", "index", "hybrid"] },
-  { catalog: "large", modes: ["discover", "index", "hybrid"] },
+  { catalog: "small", modes: ["full", "discover", "index", "hybrid", "index_capped"] },
+  { catalog: "large", modes: ["discover", "index", "hybrid", "index_capped"] },
 ];
 
 const REPS = Number(process.env.REPS ?? "5");
@@ -207,7 +214,7 @@ async function runCell(model: string, provider: string, mode: Mode, catalog: Cat
   await Effect.runPromise(Ref.set(discoveredToolsStoreRef, new Set<string>()));
   const prevEnv: Record<string, string | undefined> = {};
   const envToSet = { ...MODE_ENV[mode] };
-  if (mode !== "hybrid") envToSet.RA_TOOL_INDEX_MAX_ENTRIES = "0"; // explicit uncap for non-hybrid modes
+  if (mode !== "hybrid" && mode !== "index_capped") envToSet.RA_TOOL_INDEX_MAX_ENTRIES = "0"; // explicit uncap for other modes
   for (const [k, v] of Object.entries(envToSet)) {
     prevEnv[k] = process.env[k];
     process.env[k] = v;
@@ -302,10 +309,16 @@ function summarize(reps: readonly CellResult[]) {
   };
 }
 
+// Optional filter for targeted re-runs, e.g. MODES_FILTER=index_capped to
+// re-test one new cell without re-running the whole matrix.
+const modesFilter = process.env.MODES_FILTER
+  ? new Set(process.env.MODES_FILTER.split(",").map((s) => s.trim()))
+  : null;
+
 const results: Record<string, unknown> = {};
 for (const { model, provider } of CELLS) {
   for (const { catalog, modes } of CELL_PLAN) {
-    for (const mode of modes) {
+    for (const mode of modesFilter ? modes.filter((m) => modesFilter.has(m)) : modes) {
       const reps: CellResult[] = [];
       for (let i = 0; i < REPS; i++) {
         process.stderr.write(`\n[${provider}/${model}][${catalog}/${mode}][rep ${i + 1}/${REPS}] running... `);
