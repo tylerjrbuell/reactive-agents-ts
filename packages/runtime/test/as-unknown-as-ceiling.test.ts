@@ -179,7 +179,11 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //     • execution-engine.ts's `makeStatusRenderer(logger, stdout, eb)` call
 //       needs no cast.
 //   Design it out beats bumping it up (same conclusion as 2026-07-09).
-const CEILING = 75;
+// - 2026-08-20: +1 for packages/tools/src/testing.ts's mockFetchOnce test
+//   helper — bun-types' `typeof fetch` carries a static `.preconnect`
+//   member a plain stub function cannot structurally satisfy without a
+//   cast; no existing helper fits this shape. See master plan §5.5.
+const CEILING = 76;
 
 interface Hit {
   file: string;

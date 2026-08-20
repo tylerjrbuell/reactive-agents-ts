@@ -34,6 +34,9 @@ export async function testTool<T = unknown>(
 export function mockFetchOnce(response: { status?: number; body?: unknown }): () => void {
   const original = global.fetch;
   const { status = 200, body } = response;
+  // Narrow test-mock boundary: bun-types' `typeof fetch` carries a static
+  // `.preconnect` member a plain stub function structurally cannot satisfy
+  // without a cast (see master plan §5.5 follow-up list).
   global.fetch = (async () =>
     new Response(body === undefined ? null : JSON.stringify(body), { status })) as unknown as typeof fetch;
   return () => {
