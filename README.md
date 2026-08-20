@@ -295,6 +295,8 @@ await session.chat("Summarize yesterday's logs")
 await session.chat('Which errors were most frequent?')
 ```
 
+See [`apps/examples/src/demos/canonical-chat-session.ts`](apps/examples/src/demos/canonical-chat-session.ts) for a full runnable session example (Bun), or [`apps/examples/src/demos/canonical-chat-session-node.ts`](apps/examples/src/demos/canonical-chat-session-node.ts) for the Node-portable version using `node:readline/promises`.
+
 ### Agent Config (Agent as Data)
 
 Define agents as JSON-serializable config objects. Save, share, and reconstruct agents without code:

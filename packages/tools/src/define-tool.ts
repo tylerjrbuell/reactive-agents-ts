@@ -1,6 +1,6 @@
 import { Effect, Schema, ParseResult, SchemaAST as AST } from "effect";
 import type { ToolDefinition, ToolParameter } from "./types.js";
-import { ToolExecutionError, ToolDefinitionError } from "./errors.js";
+import { ToolExecutionError, ToolDefinitionError, ToolOutputValidationError } from "./errors.js";
 import { type StandardSchemaV1, isStandardSchema } from "./standard-schema.js";
 
 // ─── Types ───
@@ -39,8 +39,9 @@ export type ToolHandler<A> = (
  * Options for defineTool — combines ToolDefinition metadata with a typed handler.
  *
  * @typeParam A - The decoded type of the input schema (inferred automatically).
+ * @typeParam O - The decoded type of the output schema (inferred automatically, defaults to unknown).
  */
-export interface DefineToolOptions<A> {
+export interface DefineToolOptions<A, O = unknown> {
   /** Tool name — unique identifier used to invoke it. */
   name: string;
   /** Human-readable description shown to the LLM. */
@@ -86,6 +87,15 @@ export interface DefineToolOptions<A> {
   isCacheable?: boolean;
   /** Custom cache TTL in ms. */
   cacheTtlMs?: number;
+  /**
+   * Optional output schema. When present, the handler's resolved return
+   * value is decoded against it before the tool call is considered
+   * successful — a handler that silently returns the wrong shape fails
+   * loudly (`ToolOutputValidationError`) instead of the bad shape reaching
+   * the model. Accepts the same dual Effect-Schema / Standard-Schema forms
+   * as `input`.
+   */
+  output?: ToolSchema<O>;
 }
 
 /**
@@ -98,11 +108,11 @@ export interface DefinedTool {
   readonly definition: ToolDefinition;
   /**
    * Wrapped handler that validates raw args at runtime, then calls the typed
-   * handler. Errors are mapped to ToolExecutionError.
+   * handler. Errors are mapped to ToolExecutionError or ToolOutputValidationError.
    */
   readonly handler: (
     args: Record<string, unknown>,
-  ) => Effect.Effect<unknown, ToolExecutionError>;
+  ) => Effect.Effect<unknown, ToolExecutionError | ToolOutputValidationError>;
 }
 
 // ─── AST Walking (Effect Schema) ───
@@ -419,6 +429,52 @@ function decodeArgs(
   );
 }
 
+function decodeOutput(
+  output: ToolSchema<unknown>,
+  rawValue: unknown,
+  toolName: string,
+): Effect.Effect<unknown, ToolOutputValidationError> {
+  if (isStandardSchema(output)) {
+    const std = output["~standard"];
+    return Effect.tryPromise({
+      try: () => Promise.resolve(std.validate(rawValue)),
+      catch: (e) =>
+        new ToolOutputValidationError({
+          message: `Output validation threw for "${toolName}": ${e instanceof Error ? e.message : String(e)}`,
+          toolName,
+          rawOutput: rawValue,
+        }),
+    }).pipe(
+      Effect.flatMap((result) =>
+        result.issues === undefined
+          ? Effect.succeed(result.value)
+          : Effect.fail(
+              new ToolOutputValidationError({
+                message: `Invalid output for "${toolName}": ${formatStandardIssues(result.issues)}`,
+                toolName,
+                rawOutput: rawValue,
+              }),
+            ),
+      ),
+    );
+  }
+
+  const decode = Schema.decodeUnknown(output as Schema.Schema<unknown>);
+  return decode(rawValue).pipe(
+    Effect.mapError(
+      (err) =>
+        new ToolOutputValidationError({
+          message:
+            err instanceof ParseResult.ParseError
+              ? ParseResult.TreeFormatter.formatErrorSync(err)
+              : String(err),
+          toolName,
+          rawOutput: rawValue,
+        }),
+    ),
+  );
+}
+
 // ─── Handler normalisation ───
 
 function runHandler(
@@ -552,7 +608,7 @@ function assertValidOptions(options: unknown): void {
  * });
  * ```
  */
-export function defineTool<A>(options: DefineToolOptions<A>): DefinedTool {
+export function defineTool<A, O = unknown>(options: DefineToolOptions<A, O>): DefinedTool {
   assertValidOptions(options);
 
   const {
@@ -589,12 +645,18 @@ export function defineTool<A>(options: DefineToolOptions<A>): DefinedTool {
 
   const typedHandler = handler as ToolHandler<unknown>;
   const typedInput = input as ToolSchema<unknown>;
+  const typedOutput = options.output as ToolSchema<unknown> | undefined;
 
   const wrappedHandler = (
     rawArgs: Record<string, unknown>,
-  ): Effect.Effect<unknown, ToolExecutionError> =>
+  ): Effect.Effect<unknown, ToolExecutionError | ToolOutputValidationError> =>
     decodeArgs(typedInput, rawArgs, name).pipe(
       Effect.flatMap((decoded) => runHandler(typedHandler, decoded, name, rawArgs)),
+      Effect.flatMap((rawValue) =>
+        typedOutput === undefined
+          ? Effect.succeed(rawValue)
+          : decodeOutput(typedOutput, rawValue, name),
+      ),
     );
 
   return { definition, handler: wrappedHandler };

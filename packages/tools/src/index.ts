@@ -29,6 +29,7 @@ export {
   ToolExecutionError,
   ToolDefinitionError,
   ToolTimeoutError,
+  ToolOutputValidationError,
   ToolValidationError,
   MCPConnectionError,
   ToolAuthorizationError,
@@ -190,6 +191,9 @@ export {
 } from "./adapters/agent-tool-adapter.js";
 export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
+export { fetchJsonTool, HttpToolError } from "./adapters/http-tool-adapter.js";
+export type { HttpToolOptions } from "./adapters/http-tool-adapter.js";
+
 // ─── Tool Calling Drivers ───
 export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
@@ -211,6 +215,18 @@ export type {
   ToolSchema,
   ToolHandler,
 } from "./define-tool.js";
+
+// ─── Toolset (shared defaults factory) ───
+export { defineToolset } from "./toolset.js";
+export type { Toolset, ToolsetDefaults } from "./toolset.js";
+
+// ─── Testing Helpers ───
+export { testTool, mockFetchOnce } from "./testing.js";
+export type { TestToolResult } from "./testing.js";
+
+// ─── Tool Observability Envelope ───
+export { withToolObservability, withToolRetry } from "./observability.js";
+export type { ObservedToolResult, ToolObservabilityMeta } from "./observability.js";
 
 // ─── Standard Schema (Zod / Valibot / ArkType interop) ───
 export { isStandardSchema } from "./standard-schema.js";
@@ -287,6 +303,14 @@ export { detectCompletionGaps } from "./skills/completion-gaps.js";
 
 // ─── Tool Call Resolver ───
 export * from "./tool-calling/index.js";
+
+// ─── Research Utilities ───
+export { boundedMap } from "./research/bounded-parallel.js";
+export type { BoundedMapResult } from "./research/bounded-parallel.js";
+export { searchThenFetch } from "./research/search-then-fetch.js";
+export type { SearchThenFetchOptions, SearchThenFetchResult } from "./research/search-then-fetch.js";
+export { resolveThenRetrieve } from "./research/resolve-then-retrieve.js";
+export type { ResolveThenRetrieveOptions } from "./research/resolve-then-retrieve.js";
 
 // ─── Conductor's Suite Tools ───
 export {
