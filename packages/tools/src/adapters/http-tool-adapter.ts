@@ -7,6 +7,18 @@ export class HttpToolError extends Data.TaggedError("HttpToolError")<{
 }> {}
 
 export interface HttpToolOptions {
+  /**
+   * Builds the request URL from decoded (potentially LLM-generated) tool
+   * args. This adapter does NOT encode the URL for you — callers MUST
+   * `encodeURIComponent()` any arg value they interpolate into the URL, or
+   * a malicious/malformed arg (e.g. containing `/`, `?`, `&`, or `..`) can
+   * change which resource or host the request actually hits.
+   *
+   * @example
+   * ```typescript
+   * buildUrl: (a) => `https://example.test/${encodeURIComponent(a.id as string)}`
+   * ```
+   */
   readonly buildUrl: (args: Record<string, unknown>) => string;
   readonly maxRetries?: number;
   readonly retryOn?: readonly number[];
@@ -23,6 +35,13 @@ const DEFAULT_RETRY_ON = [429, 502, 503, 504];
  * if not provided), and raises `HttpToolError` with the status code on any
  * other non-2xx response instead of leaving handlers to invent their own
  * status handling per tool.
+ *
+ * When `headers` is supplied, redirects are NOT followed automatically
+ * (`redirect: "manual"`) — this prevents an `Authorization`/API-key header
+ * from being silently forwarded to a different host via a 3xx response. A
+ * blocked redirect surfaces as an `HttpToolError` (status 0) rather than
+ * being followed. When `headers` is omitted, `fetch`'s default
+ * redirect-following behavior is unchanged.
  */
 export function fetchJsonTool(
   options: HttpToolOptions,
@@ -34,8 +53,19 @@ export function fetchJsonTool(
     let lastStatus: number | undefined;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url, headers ? { headers } : undefined);
+      const response = await fetch(
+        url,
+        headers ? { headers, redirect: "manual" } : undefined,
+      );
       lastStatus = response.status;
+
+      if (response.type === "opaqueredirect") {
+        throw new HttpToolError({
+          message: `Request to ${url} was redirected but redirects are blocked because 'headers' was supplied (to avoid leaking credentials to another host).`,
+          status: 0,
+          url,
+        });
+      }
 
       if (response.status === 204 || response.status === 205) {
         if (emptyResultValue !== undefined) return emptyResultValue;
@@ -48,7 +78,15 @@ export function fetchJsonTool(
           if (emptyResultValue !== undefined) return emptyResultValue;
           throw new HttpToolError({ message: "Empty body on 2xx response with no emptyResultValue configured", status: response.status, url });
         }
-        return JSON.parse(text);
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new HttpToolError({
+            message: `Request to ${url} returned non-JSON response on a ${response.status} status: ${text.slice(0, 200)}`,
+            status: response.status,
+            url,
+          });
+        }
       }
 
       if (retryOn.includes(response.status) && attempt < maxRetries) {
