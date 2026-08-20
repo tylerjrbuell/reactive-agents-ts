@@ -307,6 +307,10 @@ export * from "./tool-calling/index.js";
 // ─── Research Utilities ───
 export { boundedMap } from "./research/bounded-parallel.js";
 export type { BoundedMapResult } from "./research/bounded-parallel.js";
+export { searchThenFetch } from "./research/search-then-fetch.js";
+export type { SearchThenFetchOptions, SearchThenFetchResult } from "./research/search-then-fetch.js";
+export { resolveThenRetrieve } from "./research/resolve-then-retrieve.js";
+export type { ResolveThenRetrieveOptions } from "./research/resolve-then-retrieve.js";
 
 // ─── Conductor's Suite Tools ───
 export {
