@@ -550,7 +550,20 @@ export function executeToolAndObserve(
     }
 
     // ── 7. LLM fact extraction (kernel shouldExtract path) ───────────────────
-    if (exec.success && config.extractFactsLLM) {
+    // discover-tools exemption (2026-08-19, same root cause as
+    // compressToolResult's exemption in tool-formatting.ts — see
+    // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+    // §6e root cause 2). Fixing the length-based preview compressor
+    // uncovered a SECOND, independent compression path: with the raw dump
+    // now reaching here, LLM fact-extraction paraphrased discover-tools'
+    // exact name→description directory listing into a lossy "key facts"
+    // summary — confirmed live to fabricate an answer (echoed the query's
+    // own transaction ID back as if it were the looked-up value; the real
+    // target tool's exact name never survived the paraphrase). A directory
+    // listing where exact names matter for subsequent tool-calling must
+    // never go through an LLM summarization pass — there is nothing to
+    // "extract," every line is already the payload.
+    if (exec.success && config.extractFactsLLM && toolName !== "discover-tools") {
       const extracted = yield* extractObservationFacts(
         toolName,
         exec.content,

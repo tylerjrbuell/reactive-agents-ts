@@ -245,6 +245,23 @@ export function compressToolResult(
   budget: number,
   previewItems: number,
 ): CompressResult {
+  // discover-tools exemption (2026-08-19 — root-caused via a live trace, see
+  // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+  // §6e root cause 2). discover-tools' "honest exhaustion" branch
+  // (discover-tools.ts) deliberately dumps the COMPLETE tool catalog so the
+  // model has ground truth instead of assuming a hidden tool exists — that
+  // is the entire point of the design, stated in its own 2026-08-06 fix
+  // comment. The generic preview-compressor below truncated that dump right
+  // back down to `previewItems` lines (frontier tier: 3) + a "...N more
+  // lines" marker, silently defeating the guarantee: confirmed live, a model
+  // whose target tool was in the truncated tail never saw it, never called
+  // recall() to retrieve the rest, and answered "I don't have access" with
+  // the correct tool sitting uncompressed two lines further down in
+  // storage. discover-tools' own output is already terse (one line per
+  // tool, formatToolLine) — it is the wrong shape for a "preview + recall"
+  // treatment designed for noisy CLI/JSON payloads, not a curated listing
+  // meant to be read whole.
+  if (toolName === "discover-tools") return { content: result };
   if (result.length <= budget) return { content: result };
 
   const key = nextToolResultKey();
