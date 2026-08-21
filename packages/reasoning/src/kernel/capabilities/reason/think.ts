@@ -236,21 +236,35 @@ export function buildToolIndexText(
   );
 }
 
+// Strong negative signals — these are planning patterns, not answers. Use
+// word-boundary matches so the heuristic doesn't fire on substring mentions
+// like "I should explain..." in a real answer.
+const PLANNING_PATTERNS = [
+  /\b(?:i (?:should|need to|will|am going to|'ll|'m going to) (?:call|use|invoke|fetch|search|look up|check)\b)/i,
+  /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
+  /\bnext (?:step|i'll|i will|i should)\b/i,
+  /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
+  /^(?:thinking|reasoning|planning|analysis)\b/i,
+];
+
+/**
+ * Weaker completeness check than {@link looksLikeFinalAnswer}: substantial,
+ * coherent prose that doesn't read like the model is still planning its next
+ * move. No structural-signal requirement (no header/list/"in summary" etc.) —
+ * appropriate ONLY when no tool was ever required or used this run, where a
+ * plain conversational reply IS the answer and shouldn't need research-answer
+ * formatting to be trusted as complete.
+ */
+export function looksLikeCompleteProse(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.length < 100) return false;
+  return !PLANNING_PATTERNS.some((re) => re.test(trimmed));
+}
+
 export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
   if (trimmed.length < 100) return false;
-
-  // Strong negative signals — these are planning patterns, not answers.
-  // Use word-boundary matches so the heuristic doesn't fire on substring
-  // mentions like "I should explain..." in a real answer.
-  const planningPatterns = [
-    /\b(?:i (?:should|need to|will|am going to|'ll|'m going to) (?:call|use|invoke|fetch|search|look up|check)\b)/i,
-    /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
-    /\bnext (?:step|i'll|i will|i should)\b/i,
-    /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
-    /^(?:thinking|reasoning|planning|analysis)\b/i,
-  ];
-  if (planningPatterns.some((re) => re.test(trimmed))) return false;
+  if (PLANNING_PATTERNS.some((re) => re.test(trimmed))) return false;
 
   // Positive signals — structural indicators that this IS the answer.
   const positiveSignals = [
@@ -1681,11 +1695,43 @@ export function handleThinking(
         const hasRealToolWork = [...state.toolsUsed].some(
           (t) => !META_TOOL_SET.has(t),
         );
+        // Banter/no-tool turns never set hasRealToolWork (no tool is ever
+        // offered), so they'd otherwise never hit this short-circuit and
+        // would loop until the oracle/loop-detector forces an exit instead.
+        const noToolsOffered = (input.availableToolSchemas ?? []).every(
+          (ts) => META_TOOL_SET.has(ts.name),
+        );
+        // `noToolsOffered` only covers agents with ZERO tools registered —
+        // it silently misses the far more common case of an agent that has
+        // tools registered but this particular turn doesn't need one (e.g.
+        // a chat turn routed into the tool-capable path where the model
+        // reasonably declines every offered tool). `reqTools.length === 0`
+        // (no tool is MANDATORY for this task) is the correct proxy for
+        // "tool use isn't required to trust this thought as the answer" —
+        // conflating "tools exist" with "a tool was required" left every
+        // such turn with no fast-accept path, forcing repeated re-prompts
+        // (flat entropy) until the loop-detector intervened.
+        const noToolRequired = reqTools.length === 0;
+        // A no-tool-required turn that also never used a tool is exactly the
+        // conversational case looksLikeFinalAnswer's structural-signal check
+        // was never meant for (it's tuned for research-style answers with
+        // headers/lists/"in summary" — a casual banter reply has none of
+        // that, even though the LLM itself reports stopReason:"end_turn").
+        // Confirmed live via rax-diagnose: 6 iterations regenerating a
+        // complete, valid, DIFFERENTLY-WORDED banter answer each time before
+        // the loop-detector gave up — looksLikeFinalAnswer rejected every one.
+        // Trust the weaker prose check here instead; the stricter structural
+        // check stays in force for anything that used or required a tool,
+        // where the persona's citation/grounding requirements still apply.
+        const noToolNeeded = noToolRequired && !hasRealToolWork;
+        const qualifiesAsFinalAnswer = noToolNeeded
+          ? looksLikeCompleteProse(thinkingContent)
+          : looksLikeFinalAnswer(thinkingContent);
         if (
-          hasRealToolWork &&
+          (hasRealToolWork || noToolsOffered || noToolNeeded) &&
           missingReq.length === 0 &&
           state.iteration > 0 &&
-          looksLikeFinalAnswer(thinkingContent)
+          qualifiesAsFinalAnswer
         ) {
           const stateWithThought = transitionState(state, {
             steps: [...newSteps, makeStep("thought", thinkingContent)],
