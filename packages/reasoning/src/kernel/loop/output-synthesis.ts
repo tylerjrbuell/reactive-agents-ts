@@ -265,6 +265,32 @@ export function buildSynthesisPrompt(
   return lines.join("\n");
 }
 
+// ── De-scaffolding Fallback ──────────────────────────────────────────────────
+
+/** Matches a leading `✓ toolName: ` / `✗ toolName: ` tool-observation scaffolding
+ *  marker at the start of a line (tool-execution.ts's success/failure prefix). */
+const SCAFFOLD_PREFIX_RE = /^[✓✗]\s*[\w-]+\s*:\s*/;
+
+/**
+ * Strip tool-call scaffolding markers (`✓ web-search: `, `✗ code-execute: `)
+ * from a raw harness-assembled deliverable join.
+ *
+ * Last-resort fallback for when output-gate LLM synthesis is attempted but
+ * returns empty content (weak local models, e.g. gemma4:e4b — real trace,
+ * 2026-08-15, scratch.ts research-task triage #3): without this, the raw
+ * `harness_synthesis` concatenation ships to the user byte-for-byte, internal
+ * formatting markers and all, with zero readable synthesis. This does not
+ * replace synthesis — it is a deterministic floor under it, so a failed LLM
+ * call degrades to "gathered notes" rather than a visibly internal dump.
+ */
+export function deScaffoldRawDeliverable(raw: string): string {
+  return raw
+    .split(/\n\n+/)
+    .map((block) => block.replace(SCAFFOLD_PREFIX_RE, "").trim())
+    .filter((block) => block.length > 0)
+    .join("\n\n");
+}
+
 // ── Finalization Pipeline ────────────────────────────────────────────────────
 
 /**

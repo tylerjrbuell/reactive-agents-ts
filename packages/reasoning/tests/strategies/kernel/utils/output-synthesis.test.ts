@@ -5,6 +5,7 @@ import {
   validateOutputFormat,
   buildFinalAnswerCandidate,
   finalizeOutput,
+  deScaffoldRawDeliverable,
   type FinalAnswerCandidate,
 } from "../../../../src/kernel/loop/output-synthesis.js";
 import type { TaskIntent } from "../../../../src/kernel/capabilities/comprehend/task-intent.js";
@@ -250,5 +251,38 @@ describe("finalizeOutput", () => {
     );
     expect(result.formatValidated).toBe(true);
     expect(result.source).toBe("model");
+  });
+});
+
+// ── deScaffoldRawDeliverable ─────────────────────────────────────────────────
+// Fallback used when output-gate LLM synthesis returns empty content — the raw
+// harness_synthesis join (tool-observation bodies, ✓/✗-prefixed) must not ship
+// to the user byte-for-byte with its internal scaffolding intact.
+
+describe("deScaffoldRawDeliverable", () => {
+  it("strips leading ✓/✗ tool-name scaffolding prefixes from each joined block", () => {
+    const raw =
+      "✓ web-search: I Shouldn't Be Alive is a survival documentary series.\n\n" +
+      "✓ web-search: The show has aired multiple seasons on Discovery Channel.";
+    const cleaned = deScaffoldRawDeliverable(raw);
+    expect(cleaned).not.toMatch(/^✓ web-search:/);
+    expect(cleaned).toContain("I Shouldn't Be Alive is a survival documentary series.");
+    expect(cleaned).toContain("The show has aired multiple seasons on Discovery Channel.");
+  });
+
+  it("strips a ✗-prefixed failure marker the same way", () => {
+    const cleaned = deScaffoldRawDeliverable("✗ code-execute: exit code 1");
+    expect(cleaned).not.toMatch(/^✗ code-execute:/);
+    expect(cleaned).toContain("exit code 1");
+  });
+
+  it("leaves text with no scaffolding markers unchanged", () => {
+    expect(deScaffoldRawDeliverable("Plain prose, no markers here.")).toBe(
+      "Plain prose, no markers here.",
+    );
+  });
+
+  it("passes empty input through as empty", () => {
+    expect(deScaffoldRawDeliverable("")).toBe("");
   });
 });

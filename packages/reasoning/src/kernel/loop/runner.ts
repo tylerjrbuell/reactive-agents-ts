@@ -60,6 +60,7 @@ import {
   buildFinalAnswerCandidate,
   finalizeOutput,
   buildSynthesisPrompt,
+  deScaffoldRawDeliverable,
   type FinalizedOutput,
 } from "./output-synthesis.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -1594,6 +1595,20 @@ export function runKernel(
               });
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             }
+          } else if (terminationSource === "harness" || terminationSource === "oracle") {
+            // LLM synthesis was attempted but returned empty content (weak
+            // local models fail this call in practice — see
+            // deScaffoldRawDeliverable's docstring). Shipping the raw
+            // harness_synthesis join verbatim means the user sees internal
+            // `✓ toolName: ` scaffolding as if it were the answer. Strip that
+            // scaffolding as a deterministic floor under the failed LLM call
+            // — honestly still unsynthesized (outputSynthesized stays false),
+            // but no longer visibly an internal artifact dump.
+            state = commitDeliverable(
+              state,
+              harnessSynthesisDeliverable([], undefined, deScaffoldRawDeliverable(state.output ?? "")),
+              { outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+            );
           } else {
             state = transitionState(state, {
               meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
