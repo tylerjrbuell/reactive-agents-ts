@@ -244,6 +244,29 @@ is only honest after Steps 1–3 give it one place to apply.
 surface/prompt hashes so every cache hit is explainable; compaction before the window is
 consumed; inject recall or don't compute it (6.7).
 
+**6.7 recall half: MEASURED, DON'T COMPUTE IT. NEW 2026-08-20.** Issue #129 Phase 1
+(`RecallService` seam) shipped 2026-05-23, Phase 2 (writers) never dispatched. Spike this
+date: retrieval itself works (rung-1 zero-token differential probe, 4 task shapes, 62.5%
+divergence rate — bootstrap-only query genuinely misses facts a per-iter query would find).
+But **injecting that content never changed model output**, tested 3 ways, n=5 replicates ×
+2 local tiers (gemma4:12b, granite4:latest), real kernel wire (not simulated): raw fact
+dump, bare fact as a user turn, filesystem-pointer + imperative instruction. **0.0pp lift,
+all three, both tiers.** The filesystem-pointer variant was worse — models never called
+`file-read` on the referenced note despite the explicit instruction. Same disposition class
+as §5.2 (`discover-tools`): clean measurement, negative, → **park `RecallService` Phase 2,
+do not build the writers.** Leave the Phase 1 seam as dead scaffold (same acceptance as the
+unwired `loadProfile` method already gets). Untested: frontier-tier models (haiku/sonnet+)
+on the same harness — if a future need justifies it, that is the one gap left, not more
+local-tier phrasing attempts.
+
+**The actual filesystem-memory answer is the boundary that already works.**
+`MemoryService.bootstrap()`/`flush()` + `MemoryFileSystem` already do Manus-style
+compression (full detail off to `memory.md`, short reference loaded once) at the **run**
+boundary, not per-iteration — this is proven-live plumbing, just default-off since v0.12.
+The open question worth measuring is whether defaulting it on clears the lift rule — a
+separate, untested question from per-iter recall, and the more promising one given per-iter
+injection's flat result.
+
 *Alternate hypothesis, not yet tested (added 2026-08-19, external research pass).* This
 step assumes the lever is **pruning** — hide surface, shrink the tail. MIT's RLM
 (recursive language models, Aug 2026) is the opposite bet: don't hide context, let the
