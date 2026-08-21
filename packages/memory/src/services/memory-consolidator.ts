@@ -37,6 +37,26 @@ export class MemoryConsolidatorService extends Context.Tag(
     ) => Effect.Effect<ConsolidationResult, DatabaseError>;
 
     /**
+     * Decay importance of entries that haven't been accessed in the last 7
+     * days by `factor`. Lighter-weight than a full `consolidate()` cycle —
+     * used for per-flush hygiene (absorbed from the retired standalone
+     * extraction/memory-consolidator.ts, 2026-08-21 dedupe). Returns the
+     * number of entries affected.
+     */
+    readonly decayUnused: (
+      agentId: string,
+      factor: number,
+    ) => Effect.Effect<number, DatabaseError>;
+
+    /**
+     * Boost importance of entries with high access counts. Returns the
+     * number of entries affected.
+     */
+    readonly promoteActive: (
+      agentId: string,
+    ) => Effect.Effect<number, DatabaseError>;
+
+    /**
      * Notify that a new episodic entry was created.
      * Returns true if the pending count has reached the threshold.
      */
@@ -148,6 +168,31 @@ export const MemoryConsolidatorServiceLive = (
           );
         });
 
+      // ─── decayUnused / promoteActive (absorbed from the retired standalone
+      //     extraction/memory-consolidator.ts, 2026-08-21 dedupe) ────────────
+      const decayUnused = (agentId: string, factor: number) =>
+        Effect.gen(function* () {
+          const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString();
+          return yield* db.exec(
+            `UPDATE semantic_memory
+             SET importance = MAX(0, importance - ?)
+             WHERE agent_id = ?
+               AND last_accessed_at < ?
+               AND importance > 0.1`,
+            [factor, agentId, cutoff],
+          );
+        });
+
+      const promoteActive = (agentId: string) =>
+        db.exec(
+          `UPDATE semantic_memory
+           SET importance = MIN(1, importance + 0.05)
+           WHERE agent_id = ?
+             AND access_count >= 5
+             AND importance < 0.95`,
+          [agentId],
+        );
+
       return {
         consolidate: (agentId) =>
           Effect.gen(function* () {
@@ -162,6 +207,9 @@ export const MemoryConsolidatorServiceLive = (
 
             return { replayed, connected, compressed, pruned };
           }),
+
+        decayUnused,
+        promoteActive,
 
         notifyEntry: () =>
           Ref.updateAndGet(pending, (n) => n + 1).pipe(

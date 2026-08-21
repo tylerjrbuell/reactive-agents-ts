@@ -3,8 +3,9 @@
  * and auto-extract semantic memories from the conversation. Transitions
  * agentState to `flushing`.
  *
- * Optional services (`MemoryService`, `MemoryConsolidator`, `MemoryExtractor`)
- * are acquired lazily; when none are wired the phase is a fast no-op.
+ * Optional services (`MemoryService`, `MemoryConsolidatorService`,
+ * `MemoryExtractor`) are acquired lazily; when none are wired the phase is a
+ * fast no-op.
  *
  * Skip conditions handled by the phase body:
  * - No memory services wired: returns `agentState: "flushing"` unchanged
@@ -26,9 +27,6 @@ type MemoryServiceLike = {
   flush?: (agentId: string) => Effect.Effect<void>;
   storeSemantic?: (entry: unknown) => Effect.Effect<unknown>;
 };
-type MemoryConsolidatorLike = {
-  decayUnused: (agentId: string, decayFactor: number) => Effect.Effect<number>;
-};
 /**
  * `.withMemoryConsolidation()` service (memory pkg
  * `services/memory-consolidator.ts`) — REPLAY→CONNECT→COMPRESS cycles.
@@ -40,8 +38,7 @@ type MemoryConsolidatorLike = {
 type MemoryConsolidatorServiceLike = {
   // Narrow service-interface shim (Category-A, errors/index.ts doc-block):
   // the real `consolidate` returns `Effect<ConsolidationResult, DatabaseError>`,
-  // but this file dodges cross-package error coupling — same convention as the
-  // sibling `MemoryConsolidatorLike.decayUnused` above (never-typed error,
+  // but this file dodges cross-package error coupling (never-typed error,
   // runtime `Effect.catchAll` is the actual safety net). Success channel is
   // `unknown` (not the error channel), so this is NOT a silent-swallow site.
   consolidate: (agentId: string) => Effect.Effect<unknown>;
@@ -55,7 +52,6 @@ type MemoryExtractorLike = {
 };
 
 const MemoryServiceTag = Context.GenericTag<MemoryServiceLike>("MemoryService");
-const MemoryConsolidatorTag = Context.GenericTag<MemoryConsolidatorLike>("MemoryConsolidator");
 const MemoryConsolidatorServiceTag =
   Context.GenericTag<MemoryConsolidatorServiceLike>("MemoryConsolidatorService");
 const MemoryExtractorTag = Context.GenericTag<MemoryExtractorLike>("MemoryExtractor");
@@ -66,7 +62,6 @@ export const memoryFlush: Phase = {
   run: (ctx, deps) =>
     Effect.gen(function* () {
       const memoryServiceOpt = yield* Effect.serviceOption(MemoryServiceTag);
-      const memoryConsolidatorOpt = yield* Effect.serviceOption(MemoryConsolidatorTag);
       const consolidatorServiceOpt = yield* Effect.serviceOption(
         MemoryConsolidatorServiceTag,
       );
@@ -75,7 +70,6 @@ export const memoryFlush: Phase = {
       // Skip when no memory services are configured
       if (
         memoryServiceOpt._tag === "None" &&
-        memoryConsolidatorOpt._tag === "None" &&
         consolidatorServiceOpt._tag === "None" &&
         memoryExtractorOpt._tag === "None"
       ) {
@@ -143,16 +137,6 @@ export const memoryFlush: Phase = {
             tag: errorTag(err),
           }),
         ),
-      );
-
-      // Lightweight consolidation: decay unused memory entries
-      yield* Effect.succeed(memoryConsolidatorOpt).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.decayUnused(ctx.agentId, 0.05).pipe(Effect.catchAll(() => Effect.succeed(0)))
-            : Effect.succeed(0),
-        ),
-        Effect.catchAll(() => Effect.succeed(0)),
       );
 
       // Auto-extract semantic memories — only when there's meaningful content.

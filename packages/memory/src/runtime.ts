@@ -10,7 +10,6 @@ import { PlanStoreServiceLive } from "./services/plan-store.js";
 import { MemoryServiceLive } from "./services/memory-service.js";
 import { AgentMemoryFromMemoryService } from "./services/agent-memory-adapter.js";
 import { MemoryDatabaseLive } from "./database.js";
-import { MemoryConsolidatorLive } from "./extraction/memory-consolidator.js";
 import { MemoryExtractorLive, MemoryExtractorTier2Live } from "./extraction/memory-extractor.js";
 import { CompactionServiceLive } from "./compaction/compaction-service.js";
 import type { MemoryConfig, MemoryLLM } from "./types.js";
@@ -60,11 +59,6 @@ export const createMemoryLayer = (
   // File system layer (no deps)
   const fsLayer = MemoryFileSystemLive;
 
-  // Consolidator layer (depends on DB)
-  const consolidatorLayer = MemoryConsolidatorLive(config).pipe(
-    Layer.provide(dbLayer),
-  );
-
   // Compaction layer (depends on DB)
   const compactionLayer = CompactionServiceLive.pipe(Layer.provide(dbLayer));
 
@@ -94,7 +88,6 @@ export const createMemoryLayer = (
     fsLayer,
     memoryServiceLayer,
     agentMemoryAdapter,
-    consolidatorLayer,
     compactionLayer,
     extractorLayer,
   );

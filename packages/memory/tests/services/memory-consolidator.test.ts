@@ -19,6 +19,7 @@ const makeSemanticEntry = (
   id: string,
   content: string,
   importance: number = 0.5,
+  opts: { accessCount?: number; lastAccessedAt?: Date } = {},
 ): SemanticEntry => ({
   id: id as MemoryId,
   agentId: "agent-test",
@@ -29,8 +30,8 @@ const makeSemanticEntry = (
   tags: ["test"],
   createdAt: new Date(),
   updatedAt: new Date(),
-  accessCount: 0,
-  lastAccessedAt: new Date(),
+  accessCount: opts.accessCount ?? 0,
+  lastAccessedAt: opts.lastAccessedAt ?? new Date(),
 });
 
 const config = { ...defaultMemoryConfig("agent-test"), dbPath: TEST_DB };
@@ -141,6 +142,64 @@ describe("MemoryConsolidatorService", () => {
         expect(highEntry).toBeDefined();
       }),
       { decayFactor, pruneThreshold },
+    );
+  });
+
+  // ─── decayUnused / promoteActive (absorbed from the retired standalone
+  //     extraction/memory-consolidator.ts service, 2026-08-21 dedupe) ─────────
+
+  it("decayUnused reduces importance of entries not accessed recently", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+        const staleDate = new Date(Date.now() - 10 * 86_400_000);
+
+        yield* semantic.store(
+          makeSemanticEntry("stale", "old fact", 0.5, { lastAccessedAt: staleDate }),
+        );
+        yield* svc.decayUnused("agent-test", 0.1);
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "stale");
+        expect(entry!.importance).toBeCloseTo(0.4, 5);
+      }),
+    );
+  });
+
+  it("decayUnused does not affect recently accessed entries", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+
+        yield* semantic.store(
+          makeSemanticEntry("fresh", "recent fact", 0.5, { lastAccessedAt: new Date() }),
+        );
+        yield* svc.decayUnused("agent-test", 0.1);
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "fresh");
+        expect(entry!.importance).toBeCloseTo(0.5, 5);
+      }),
+    );
+  });
+
+  it("promoteActive boosts importance of frequently accessed entries", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+
+        yield* semantic.store(
+          makeSemanticEntry("popular", "frequently used fact", 0.5, { accessCount: 10 }),
+        );
+        yield* svc.promoteActive("agent-test");
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "popular");
+        expect(entry!.importance).toBeCloseTo(0.55, 5);
+      }),
     );
   });
 
