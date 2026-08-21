@@ -36,6 +36,7 @@ import {
   validateNumericGrounding,
   detectFabricatedMeasurement,
   detectContradictedTestClaim,
+  detectFabricatedListedEntities,
   resolveFabricationGuardMode,
   type FabricationGuardMode,
 } from "./evidence-grounding.js";
@@ -629,6 +630,19 @@ export const defaultVerifier: Verifier = {
           passed: testClaim.ok,
           severity: testClaim.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
           reason: testClaim.ok ? undefined : testClaim.violations.join("; "),
+        });
+
+        // Check 4e: fabricated-listed-entity guard. Same family, but polices
+        // wholesale-invented NAMED ITEMS (table rows / bold list titles
+        // presented as researched facts) rather than numbers or booleans —
+        // see detectFabricatedListedEntities's docstring for the real-model
+        // "invented 9 episode titles" trace that surfaced this gap.
+        const listedEntities = detectFabricatedListedEntities(ctx.content, corpus);
+        checks.push({
+          name: "output-not-fabricated-listed-entities",
+          passed: listedEntities.ok,
+          severity: listedEntities.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
+          reason: listedEntities.ok ? undefined : listedEntities.violations.join("; "),
         });
       }
 

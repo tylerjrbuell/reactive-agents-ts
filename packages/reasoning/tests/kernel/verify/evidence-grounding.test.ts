@@ -4,6 +4,7 @@ import {
   buildEvidenceCorpusFromSteps,
   detectFabricatedMeasurement,
   detectContradictedTestClaim,
+  detectFabricatedListedEntities,
   resolveFabricationGuardMode,
 } from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
@@ -124,6 +125,69 @@ describe("detectContradictedTestClaim (2026-08-15 rw-7 real-model finding)", () 
   it("passes when there is no exit-code signal in evidence at all", () => {
     const out = "All tests have passed successfully.";
     expect(detectContradictedTestClaim(out, "no test runner was invoked").ok).toBe(true);
+  });
+});
+
+describe("detectFabricatedListedEntities (2026-08-15 scratch.ts research-task finding)", () => {
+  it("flags a markdown table of titles wholly absent from thin evidence (real trace repro)", () => {
+    const out = `| Episode | Description |
+|---|---|
+| Mike and the Forgotten Path | A hiker survives a fall in the Rockies. |
+| The River's Embrace | A rafting trip goes wrong on a remote river. |
+| Silent Ridge | A climber is stranded overnight in a storm. |`;
+    const evidence =
+      "web-search: I Shouldn't Be Alive is a documentary series about survival stories. " +
+      "web-search: the show has aired multiple seasons on Discovery Channel.";
+    const r = detectFabricatedListedEntities(out, evidence);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.violations.some((v) => v.includes("Mike and the Forgotten Path"))).toBe(true);
+  });
+
+  it("passes when every listed title appears in the evidence corpus (real sourced content)", () => {
+    const out = `| Episode | Description |
+|---|---|
+| Trapped in the Andes | A climber survives an avalanche. |
+| Lost at Sea | Sailors adrift for weeks. |
+| Desert Crossing | Hikers stranded without water. |`;
+    const evidence =
+      "episode 1 'Trapped in the Andes' covers a climber; episode 2 'Lost at Sea' covers sailors; " +
+      "episode 3 'Desert Crossing' covers hikers stranded without water.";
+    expect(detectFabricatedListedEntities(out, evidence).ok).toBe(true);
+  });
+
+  it("does NOT fire when only SOME titles are ungrounded (precision over recall — avoids paraphrase false-positives)", () => {
+    const out = `| Episode | Description |
+|---|---|
+| Trapped in the Andes | A climber survives an avalanche. |
+| A Totally Invented Title | Nothing about this is real. |
+| Desert Crossing | Hikers stranded without water. |`;
+    const evidence = "'Trapped in the Andes' and 'Desert Crossing' are real episodes of the show.";
+    expect(detectFabricatedListedEntities(out, evidence).ok).toBe(true);
+  });
+
+  it("does NOT fire on plain prose with no structured list", () => {
+    const out = "The show I Shouldn't Be Alive covers survival stories from around the world.";
+    expect(detectFabricatedListedEntities(out, "").ok).toBe(true);
+  });
+
+  it("does NOT fire on a single listed item (needs >=2 candidates for confidence)", () => {
+    const out = `| Episode | Description |
+|---|---|
+| Mike and the Forgotten Path | A hiker survives a fall. |`;
+    expect(detectFabricatedListedEntities(out, "no matching evidence at all").ok).toBe(true);
+  });
+
+  it("flags a bulleted list of bold titles wholly absent from evidence", () => {
+    const out =
+      "- **Mike and the Forgotten Path** — a hiker survives a fall.\n" +
+      "- **The River's Embrace** — a rafting trip goes wrong.\n" +
+      "- **Silent Ridge** — a climber is stranded overnight.";
+    const r = detectFabricatedListedEntities(out, "generic search snippets about the show, no episode list");
+    expect(r.ok).toBe(false);
+  });
+
+  it("passes when evidence corpus is empty and there is no structured list to check", () => {
+    expect(detectFabricatedListedEntities("I don't have enough information to answer.", "").ok).toBe(true);
   });
 });
 

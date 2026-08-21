@@ -334,3 +334,90 @@ export function validateNumericGrounding(
   if (violations.length === 0) return { ok: true };
   return { ok: false, violations };
 }
+
+/** Matches a markdown table separator row (`|---|---|`, `|:--|--:|`, etc). */
+const TABLE_SEPARATOR_RE = /^\s*\|?[\s:|-]+\|?\s*$/;
+
+/** Extract the first cell of each markdown table DATA row (skips the header
+ *  row and the `|---|---|` separator). */
+function extractTableRowTitles(text: string): string[] {
+  const lines = text.split("\n");
+  const titles: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.includes("|")) continue;
+    if (!TABLE_SEPARATOR_RE.test(line)) continue;
+    // `line` is a separator row — the row above it is the header (skip), the
+    // rows below it (until a non-table line) are data rows.
+    for (let j = i + 1; j < lines.length; j++) {
+      const row = lines[j];
+      if (!row.includes("|") || TABLE_SEPARATOR_RE.test(row)) break;
+      const firstCell = row.split("|").map((c) => c.trim()).find((c) => c.length > 0);
+      if (firstCell) titles.push(firstCell.replace(/\*\*/g, ""));
+    }
+  }
+  return titles;
+}
+
+/** Extract bold titles from bullet/numbered list items (`- **Title** — ...`). */
+const BOLD_LIST_ITEM_RE = /^\s*(?:[-*]|\d+[.)])\s+\*\*([^*]+)\*\*/gm;
+function extractBoldListTitles(text: string): string[] {
+  return [...text.matchAll(BOLD_LIST_ITEM_RE)].map((m) => m[1].trim());
+}
+
+/**
+ * Fabricated NARRATIVE/factual-entity guard (always-on, part of the fabrication-
+ * guard family alongside {@link detectFabricatedMeasurement} and
+ * {@link detectContradictedTestClaim}). Those two police ungrounded NUMBERS and
+ * CONTRADICTED booleans; this one polices wholesale-invented NAMED ITEMS —
+ * markdown table rows or bolded list entries presented as researched facts
+ * (episode titles, product names, article headlines) that appear nowhere in
+ * the tool-observation corpus.
+ *
+ * Found via a real-model trace (gemma4:e4b, `plan-execute-reflect`,
+ * 2026-08-15): asked to research and table episode names/descriptions for a
+ * TV season, the model got back 5 vague web-search snippets with no episode
+ * breakdown, then its synthesis step INVENTED 9 complete episode titles +
+ * descriptions wholesale ("Mike and the Forgotten Path", "The River's
+ * Embrace" — none of these exist, none grounded in any observation). The
+ * self-verify + final verifier both rubber-stamped it because nothing checked
+ * narrative claims — only numbers.
+ *
+ * High-precision by construction, same discipline as the numeric guard:
+ * - Only extracts candidates from STRUCTURED list positions (markdown table
+ *   first-cell, or bolded bullet/numbered-list titles) — free-form prose
+ *   claims are not policed here (that would need real NER, an LLM call, which
+ *   this file deliberately avoids).
+ * - Requires >=2 candidates before firing at all — a single listed item is
+ *   too little signal (could be a legitimate one-row summary).
+ * - Fires only when ALL candidates are ungrounded (zero overlap with the
+ *   corpus), not just some — a mix of grounded/ungrounded rows is far more
+ *   likely to be paraphrasing or formatting drift than fabrication, and this
+ *   guard is tuned to catch wholesale invention (the trace's failure mode),
+ *   not flag every imperfect table. Precision over recall, same tradeoff the
+ *   numeric guard documents for Big-O/counts/dollar-figures.
+ */
+export function detectFabricatedListedEntities(
+  output: string,
+  evidence: string,
+): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[] } {
+  const candidates = [...extractTableRowTitles(output), ...extractBoldListTitles(output)].filter(
+    (t) => t.length >= 4 && /[a-zA-Z]{3,}/.test(t),
+  );
+  if (candidates.length < 2) return { ok: true };
+
+  const corpusLower = evidence.toLowerCase().replace(/\s+/g, " ");
+  const ungrounded = candidates.filter(
+    (title) => !corpusLower.includes(title.toLowerCase().replace(/\s+/g, " ")),
+  );
+  if (ungrounded.length < candidates.length) return { ok: true };
+
+  return {
+    ok: false,
+    violations: [
+      `${candidates.length} listed items (e.g. "${candidates[0]}"${
+        candidates[1] ? `, "${candidates[1]}"` : ""
+      }) appear nowhere in the tool evidence — likely invented, not researched`,
+    ],
+  };
+}
