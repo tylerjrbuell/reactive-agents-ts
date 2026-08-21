@@ -331,6 +331,13 @@ export interface ExecutionContextMetadata {
   }[];
   /** Total number of reasoning steps taken */
   stepsCount?: number;
+  /**
+   * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+   * Forwarded alongside `reasoningSteps` so evidence checks (e.g. `validateCitations`
+   * from `@reactive-agents/reasoning`) read the same corpus the kernel's own grounding
+   * checks use instead of the lossy compressed step-content preview.
+   */
+  scratchpad?: Readonly<Record<string, string>>;
 
   // ── Direct-LLM path ─────────────────────────────────────────────────────
   /** Final text response from the direct-LLM path */

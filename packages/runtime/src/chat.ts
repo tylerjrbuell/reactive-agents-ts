@@ -40,6 +40,27 @@ export interface ChatReply {
   steps?: number;
   /** Estimated cost in USD (when available) */
   cost?: number;
+  /**
+   * Full reasoning-step evidence (tool-capable path only). Structurally
+   * typed to mirror `@reactive-agents/reasoning`'s `ReasoningStep` without a
+   * cross-package import (same pattern as `TaskResult.metadata.reasoningSteps`
+   * in runtime/src/types.ts). Pass this to `validateCitations(message, steps)`
+   * (from `@reactive-agents/reasoning`) to deterministically check that every
+   * URL the reply cites appears in the run's actual tool-observation evidence.
+   */
+  reasoningSteps?: readonly {
+    id?: string;
+    type: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+  }[];
+  /**
+   * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+   * Pass this to `validateCitations(message, steps, new Map(Object.entries(scratchpad)))`
+   * so it reads the same evidence corpus the kernel's own grounding checks use, not the
+   * lossy compressed preview in `reasoningSteps[].content`.
+   */
+  scratchpad?: Readonly<Record<string, string>>;
 }
 
 /**

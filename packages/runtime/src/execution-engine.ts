@@ -1483,6 +1483,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // Forward reasoning steps so chat() can access tool results and analysis.
                     // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
                     ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
+                    // Forward the uncompressed tool-result store alongside reasoningSteps
+                    // so external evidence checks (validateCitations) aren't limited to
+                    // the lossy compressed step-content preview.
+                    ...(ctx.metadata.scratchpad ? { scratchpad: ctx.metadata.scratchpad } as Record<string, unknown> : {}),
                     // Trust receipt (Arc 1 Task 8): forward `{name, ok}` tool-call
                     // outcomes collected from ToolCallCompleted events. This is the
                     // ONLY grounding source on the minimal/inline loop (which

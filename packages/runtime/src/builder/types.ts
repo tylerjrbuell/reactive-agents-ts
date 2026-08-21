@@ -931,6 +931,13 @@ export interface AgentResultMetadata {
         readonly metadata?: Record<string, unknown>
     }>
     /**
+     * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+     * Forwarded alongside `reasoningSteps` so evidence checks (e.g. `validateCitations`
+     * from `@reactive-agents/reasoning`) read the same corpus the kernel's own grounding
+     * checks use instead of the lossy compressed step-content preview.
+     */
+    readonly scratchpad?: Readonly<Record<string, string>>
+    /**
      * Derived array of tool calls extracted from `reasoningSteps`. One entry
      * per `type === "action"` step. Convenient for tests / evals that just
      * want "which tools did the agent use" without filtering steps.

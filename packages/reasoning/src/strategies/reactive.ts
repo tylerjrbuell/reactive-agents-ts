@@ -363,6 +363,13 @@ export const executeReactive = (
         ...(state.meta.lastDialectObserved !== undefined
           ? { lastDialectObserved: state.meta.lastDialectObserved }
           : {}),
+        // Forward the full (uncompressed) tool-result store so external
+        // evidence checks (e.g. `validateCitations`) read the same corpus
+        // the kernel's own grounding checks use, not the lossy compressed
+        // step-content preview. See `buildEvidenceCorpusFromSteps`.
+        ...(state.scratchpad.size > 0
+          ? { scratchpad: Object.fromEntries(state.scratchpad) }
+          : {}),
       },
     });
   });

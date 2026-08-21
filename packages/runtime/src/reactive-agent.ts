@@ -2394,6 +2394,8 @@ export class ReactiveAgent<TOut = unknown> {
             tokens: result.metadata.tokensUsed,
             steps: result.metadata.stepsCount,
             cost: result.metadata.cost,
+            reasoningSteps: result.metadata.reasoningSteps,
+            scratchpad: result.metadata.scratchpad,
         }
     }
 

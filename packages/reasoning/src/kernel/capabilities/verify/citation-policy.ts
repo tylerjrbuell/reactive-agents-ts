@@ -44,13 +44,14 @@ export function extractUrls(text: string): readonly string[] {
 export function validateCitations(
   output: string,
   steps: readonly ReasoningStep[],
+  scratchpad?: ReadonlyMap<string, string>,
 ): CitationValidationResult {
   const citedUrls = extractUrls(output);
   if (citedUrls.length === 0) {
     return { ok: true, uncitedUrls: [], citedUrlCount: 0 };
   }
 
-  const corpus = buildEvidenceCorpusFromSteps(steps);
+  const corpus = buildEvidenceCorpusFromSteps(steps, scratchpad);
   const uncitedUrls = citedUrls.filter((url) => !corpus.includes(url));
 
   return {

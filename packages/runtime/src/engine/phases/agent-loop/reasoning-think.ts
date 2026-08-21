@@ -419,6 +419,11 @@ export const runReasoningThink = (
         reasoningResult: result,
         stepsCount: result.metadata.stepsCount,
         reasoningSteps: result.steps ?? [],
+        // Forwards the strategy's full (uncompressed) tool-result store —
+        // see reactive.ts's extraMetadata.scratchpad and buildEvidenceCorpusFromSteps.
+        ...(result.metadata.scratchpad !== undefined
+          ? { scratchpad: result.metadata.scratchpad }
+          : {}),
         // Wave C.2 — this is the run's PRIMARY pass, so its ledger seeds the
         // run-scoped one that the auxiliary passes then merge into. Without a
         // run-scoped home each later pass would overwrite `reasoningResult` and

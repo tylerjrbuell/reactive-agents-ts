@@ -327,6 +327,14 @@ export type ExecutionReasoningResult = {
      * (`ledger/run-scope.ts`) needs the true entry union to be type-safe.
      */
     runLedger?: import("@reactive-agents/reasoning").RunLedger;
+    /**
+     * Full (uncompressed) tool-result store, forwarded by the reactive strategy
+     * via `extraMetadata.scratchpad` (packages/reasoning/src/strategies/reactive.ts).
+     * Same failure mode this file documents repeatedly above (runLedger,
+     * verdict, abstention, harnessAuthoredOutput): the whitelist rebuild below
+     * silently drops any field not explicitly listed here.
+     */
+    scratchpad?: Readonly<Record<string, string>>;
   };
 };
 
@@ -433,6 +441,12 @@ export function normalizeReasoningResult(
       runLedger: Array.isArray(md.runLedger)
         ? (md.runLedger as ExecutionReasoningResult["metadata"]["runLedger"])
         : undefined,
+      // See the field comment on ExecutionReasoningResult.metadata.scratchpad —
+      // same whitelist-drop failure mode as runLedger/verdict/abstention above.
+      scratchpad:
+        typeof md.scratchpad === "object" && md.scratchpad !== null
+          ? (md.scratchpad as Readonly<Record<string, string>>)
+          : undefined,
     },
   };
 }
