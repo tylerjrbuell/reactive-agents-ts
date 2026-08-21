@@ -63,9 +63,16 @@ describe("normalizeCortexAgentConfig", () => {
 
   test("normalizeCortexAgentConfig parses skills", () => {
     const out = normalizeCortexAgentConfig({
+      skills: { paths: ["./x"], activate: ["my-skill"] },
+    });
+    expect(out.skills).toEqual({ paths: ["./x"], activate: ["my-skill"] });
+  });
+
+  test("normalizeCortexAgentConfig never forwards a removed 'evolution' skills key (withSkills throws on it, v0.14 P0-10)", () => {
+    const out = normalizeCortexAgentConfig({
       skills: { paths: ["./x"], evolution: { mode: "auto" } },
     });
-    expect(out.skills).toEqual({ paths: ["./x"], evolution: { mode: "auto" } });
+    expect(out.skills).toEqual({ paths: ["./x"] });
   });
 
   test("normalizes agentTools and dynamicSubAgents", () => {
@@ -111,14 +118,17 @@ describe("parseCortexSkillsConfig", () => {
     expect(parseCortexSkillsConfig({ paths: [" ./a ", "b"] })?.paths).toEqual(["./a", "b"]);
   });
 
-  test("includes evolution when present", () => {
+  test("includes activate when present", () => {
+    const sk = parseCortexSkillsConfig({ paths: ["./s"], activate: ["a", "b"] });
+    expect(sk?.activate).toEqual(["a", "b"]);
+  });
+
+  test("drops a removed 'evolution' key rather than forwarding it (withSkills throws on it, v0.14 P0-10)", () => {
     const sk = parseCortexSkillsConfig({
       paths: ["./s"],
       evolution: { mode: "suggest", refinementThreshold: 5, rollbackOnRegression: true },
     });
-    expect(sk?.evolution?.mode).toBe("suggest");
-    expect(sk?.evolution?.refinementThreshold).toBe(5);
-    expect(sk?.evolution?.rollbackOnRegression).toBe(true);
+    expect(sk).toEqual({ paths: ["./s"] });
   });
 });
 

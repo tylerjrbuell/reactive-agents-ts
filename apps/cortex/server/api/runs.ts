@@ -54,13 +54,7 @@ export const RunConfigBody = t.Object({
   skills: t.Optional(
     t.Object({
       paths: t.Array(t.String()),
-      evolution: t.Optional(
-        t.Object({
-          mode: t.Optional(t.String()),
-          refinementThreshold: t.Optional(t.Number()),
-          rollbackOnRegression: t.Optional(t.Boolean()),
-        }),
-      ),
+      activate: t.Optional(t.Array(t.String())),
     }),
   ),
   variables: t.Optional(t.Array(t.Unknown())),
@@ -70,6 +64,7 @@ export const RunConfigBody = t.Object({
   outputSchemaOnParseFail: t.Optional(t.Union([t.Literal("degrade"), t.Literal("throw")])),
   budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
   grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
+  fabricationGuard: t.Optional(t.Union([t.Literal("off"), t.Literal("warn"), t.Literal("block")])),
   modelRouting: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -160,6 +155,7 @@ export const runsRouter = (
             ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
             ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
+            ...(b.fabricationGuard ? { fabricationGuard: b.fabricationGuard } : {}),
             ...(b.modelRouting?.enabled ? { modelRouting: b.modelRouting } : {}),
             ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),

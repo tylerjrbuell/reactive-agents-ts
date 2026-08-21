@@ -68,7 +68,7 @@ export function cortexRunsPostBody(
       ? {
           skills: {
             paths: cfg.skills.paths,
-            ...(cfg.skills.evolution ? { evolution: { ...cfg.skills.evolution } } : {}),
+            ...(cfg.skills.activate?.length ? { activate: cfg.skills.activate } : {}),
           },
         }
       : {}),
@@ -90,6 +90,10 @@ export function cortexRunsPostBody(
       : {}),
     // Numeric grounding — send when enabled.
     ...(cfg.grounding && cfg.grounding.mode !== "off" ? { grounding: { mode: cfg.grounding.mode } } : {}),
+    // Fabrication guard — send an override only when the user picked one; "default" keeps the framework's always-on "block".
+    ...(cfg.fabricationGuard && cfg.fabricationGuard.mode !== "default"
+      ? { fabricationGuard: cfg.fabricationGuard.mode }
+      : {}),
     // Cost-aware model routing — send when enabled.
     ...(cfg.modelRouting?.enabled
       ? {

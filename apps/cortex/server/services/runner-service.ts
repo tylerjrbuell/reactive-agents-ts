@@ -92,6 +92,8 @@ export interface LaunchParams {
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
   readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
+  /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" by default; pass to override. */
+  readonly fabricationGuard?: "off" | "warn" | "block";
   /** Cost-aware model routing (`.withModelRouting()`). enabled=false → not applied. */
   readonly modelRouting?: {
     readonly enabled?: boolean;
@@ -296,6 +298,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.budget ? { budget: params.budget } : {}),
                 ...(params.grounding ? { grounding: params.grounding } : {}),
+                ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),

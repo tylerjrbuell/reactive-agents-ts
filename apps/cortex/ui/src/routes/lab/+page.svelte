@@ -489,8 +489,8 @@
       healthCheck: sourceConfig.healthCheck ?? defaults.healthCheck,
       skills: {
         paths: [...(sourceConfig.skills?.paths ?? defaults.skills.paths)],
-        ...(sourceConfig.skills?.evolution
-          ? { evolution: { ...sourceConfig.skills.evolution } }
+        ...(sourceConfig.skills?.activate?.length
+          ? { activate: [...sourceConfig.skills.activate] }
           : {}),
       },
     };

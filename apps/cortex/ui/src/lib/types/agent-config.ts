@@ -145,15 +145,27 @@ export interface AgentConfig {
   budget: { tokenLimit: number; costLimit: number };
   /** Numeric evidence-grounding (v0.12). "off" = disabled. `.withGrounding()`. */
   grounding: { mode: "off" | "warn" | "block" };
+  /**
+   * Fabrication guard override. The framework runs this ALWAYS ON at "block"
+   * even if never configured — "default" here means "send no override, keep
+   * that framework default"; "off"/"warn"/"block" send an explicit override.
+   * `.withFabricationGuard()`.
+   */
+  fabricationGuard: { mode: "default" | "off" | "warn" | "block" };
   /** Cost-aware model routing (v0.13). enabled=false → not applied. `.withModelRouting()`. */
   modelRouting: { enabled: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Record<string, string> };
   /** Generic framework-config overrides from the type-introspected renderer — a
    * nested partial AgentConfig keyed by manifest configField paths. Empty by default. */
   rawConfig: Record<string, unknown>;
-  /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
+  /**
+   * Living skills: SKILL.md directories + optional forced-activation names
+   * (framework `withSkills`). NOTE: there is no `evolution` field — the
+   * framework's `withSkills()` THROWS if an `evolution` key is present
+   * (removed v0.14, DEBT-REGISTER P0-10). Never reintroduce it here.
+   */
   skills: {
     paths: string[];
-    evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
+    activate?: string[];
   };
   /**
    * Lifecycle webhooks — server fires a POST to each URL on run start/completion/failure.
@@ -184,6 +196,7 @@ export function defaultConfig(): AgentConfig {
     outputSchema: "",
     budget: { tokenLimit: 0, costLimit: 0 },
     grounding: { mode: "off" },
+    fabricationGuard: { mode: "default" },
     modelRouting: { enabled: false },
     rawConfig: {},
     verificationStep: "none",

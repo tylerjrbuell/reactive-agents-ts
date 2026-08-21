@@ -36,6 +36,14 @@
     AgentPaused:               "text-tertiary",
     AgentStopped:              "text-error/60",
     ContextPressure:           "text-tertiary",
+    SkillActivated:            "text-secondary",
+    SkillRefined:              "text-secondary/80",
+    SkillRefinementSuggested:  "text-secondary/60",
+    SkillRolledBack:           "text-error/60",
+    SkillConflictDetected:     "text-error",
+    SkillPromoted:             "text-secondary",
+    SkillSkippedContextFull:   "text-tertiary",
+    SkillEvicted:              "text-outline/60",
   };
 
   function typeColor(type: string): string {

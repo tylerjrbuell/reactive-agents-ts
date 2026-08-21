@@ -30,7 +30,7 @@
     mcpServerIds: string[];
     agentTools: CortexAgentToolConfig[];
     dynamicSubAgents: { enabled: boolean; maxIterations: number };
-    skills: { paths: string[]; evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean } };
+    skills: { paths: string[]; activate?: string[] };
   };
 
   interface Props {
@@ -106,7 +106,7 @@
         keywords: "web search file read write code mcp registry spawn dynamic sub agent construction shell terminal host execute risk allowlist",
       },
       subagents: { label: "Sub-agents", keywords: "local remote a2a url hub delegation researcher" },
-      skills: { label: "Skills", keywords: "living skill.md evolution path directory agentskills auto awesome" },
+      skills: { label: "Skills", keywords: "living skill.md activate force path directory agentskills auto awesome" },
       memory: { label: "Memory", keywords: "working episodic semantic context synthesis ics account tree" },
       guardrails: { label: "Guardrails", keywords: "injection pii toxicity security threshold" },
       execution: { label: "Execution", keywords: "timeout retry cache checkpoint progress ttl timer" },
@@ -211,6 +211,22 @@
     const paths = parseSkillPathsLines(skillsPathsDraft);
     lastSkillsPathsSig = JSON.stringify(paths);
     config = { ...config, skills: { ...config.skills, paths } };
+  }
+
+  let skillsActivateDraft = $state("");
+  let lastSkillsActivateSig = $state("");
+  $effect(() => {
+    const sig = JSON.stringify(config.skills?.activate ?? []);
+    if (sig !== lastSkillsActivateSig) {
+      lastSkillsActivateSig = sig;
+      skillsActivateDraft = formatSkillPathsLines(config.skills?.activate ?? []);
+    }
+  });
+
+  function commitSkillsActivateDraft() {
+    const activate = parseSkillPathsLines(skillsActivateDraft);
+    lastSkillsActivateSig = JSON.stringify(activate);
+    config = { ...config, skills: { ...config.skills, activate: activate.length > 0 ? activate : undefined } };
   }
 
   /** Model dropdown: `/api/models/framework/:provider` + live Ollama tags when applicable. */
@@ -965,6 +981,16 @@
           <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[8px]">.withGrounding</code>); never hard-fails.</p>
         </div>
         <div>
+          <label for="fabrication-guard-mode" class="config-label">Fabrication guard</label>
+          <select id="fabrication-guard-mode" bind:value={config.fabricationGuard.mode} class="config-input">
+            <option value="default">Default — always on, block</option>
+            <option value="off">Off</option>
+            <option value="warn">Warn — flag invented entities/measurements</option>
+            <option value="block">Block — one corrective retry, then degrade</option>
+          </select>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code class="text-[8px]">.withFabricationGuard</code>).</p>
+        </div>
+        <div>
           <label class="config-label flex items-center gap-2">
             <input type="checkbox" bind:checked={config.modelRouting.enabled} />
             Cost-aware model routing
@@ -1407,56 +1433,16 @@
             rows="3"
             class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label for="skills-evolution-mode" class="config-label">Evolution mode</label>
-            <select id="skills-evolution-mode" class="config-input"
-              value={config.skills.evolution?.mode ?? ""}
-              onchange={(e) => {
-                const mode = (e.target as HTMLSelectElement).value;
-                const ev = { ...config.skills.evolution };
-                if (mode) ev.mode = mode;
-                else delete ev.mode;
-                config = {
-                  ...config,
-                  skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
-                };
-              }}>
-              <option value="">Default</option>
-              <option value="suggest">Suggest</option>
-              <option value="auto">Auto</option>
-            </select>
-          </div>
-          <div>
-            <label for="skills-refinement-threshold" class="config-label">Refinement threshold <span class="text-outline/30 normal-case font-normal">(0 = omit)</span></label>
-            <input id="skills-refinement-threshold" type="number" min="0" class="config-input"
-              value={config.skills.evolution?.refinementThreshold ?? 0}
-              onchange={(e) => {
-                const n = parseInt((e.target as HTMLInputElement).value || "0", 10);
-                const ev = { ...config.skills.evolution };
-                if (Number.isFinite(n) && n > 0) ev.refinementThreshold = n;
-                else delete ev.refinementThreshold;
-                config = {
-                  ...config,
-                  skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
-                };
-              }} />
-          </div>
+        <div>
+          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-outline/30 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
+          <textarea id="skills-activate-lines"
+            bind:value={skillsActivateDraft}
+            onblur={commitSkillsActivateDraft}
+            placeholder={"my-skill-name"}
+            rows="2"
+            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Task-relevant skills still auto-activate; this is a deterministic override (<code class="text-[8px]">withSkills({'{'} activate {'}'}</code>).</p>
         </div>
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" class="accent-primary w-3.5 h-3.5"
-            checked={config.skills.evolution?.rollbackOnRegression === true}
-            onchange={() => {
-              const ev = { ...config.skills.evolution };
-              if (ev.rollbackOnRegression) delete ev.rollbackOnRegression;
-              else ev.rollbackOnRegression = true;
-              config = {
-                ...config,
-                skills: { ...config.skills, evolution: Object.keys(ev).length > 0 ? ev : undefined },
-              };
-            }} />
-          <span class="font-mono text-[10px] text-on-surface/80">Rollback on regression</span>
-        </label>
       </div>
     {/if}
   </div>
