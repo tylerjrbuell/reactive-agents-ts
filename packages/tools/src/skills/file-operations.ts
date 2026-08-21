@@ -26,6 +26,71 @@ export function getFileRoot(): string {
   return fileRootStore.getStore() ?? process.cwd();
 }
 
+// ─── Corrective traversal guard ─────────────────────────────────────────────
+// Small local tool-callers routinely invent ABSOLUTE paths ("/home/user/
+// logs.txt", "/app/logs.txt") for a file that exists right under the working
+// root as "./logs.txt" (issue #201: granite4 burned 2-4 rejected calls per
+// run this way, one rep needing 8 iterations to recover). The guard's job is
+// unchanged — the call is still refused — but a bare rejection makes the
+// model guess again from nothing. The error is corrective instead: it names
+// the root, states the relative-path rule, and when a suffix of the rejected
+// path actually exists under the root, names that path outright, so the next
+// call can be the right one.
+
+/** Longest suffix of `rejected`'s components that exists under `base`, as a
+ * "./"-prefixed relative path — or undefined. Probes at most `maxProbes`
+ * suffixes (deepest first, so "./data/logs.txt" beats "./logs.txt" when both
+ * exist). */
+async function existingSuffixUnder(
+  base: string,
+  rejected: string,
+  maxProbes = 4,
+): Promise<string | undefined> {
+  const parts = rejected.split(/[\\/]+/).filter((p) => p.length > 0 && p !== "." && p !== "..");
+  const deepest = Math.min(parts.length, maxProbes);
+  for (let take = deepest; take >= 1; take--) {
+    const candidate = parts.slice(parts.length - take).join("/");
+    const probe = path.resolve(base, candidate);
+    // The probe itself must stay confined — a candidate that escapes is no fix.
+    if (!path.normalize(probe).startsWith(path.normalize(base))) continue;
+    try {
+      await fs.access(probe);
+      return `./${candidate}`;
+    } catch {
+      // keep shrinking the suffix
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve `filePath` against the active file root and confine it there.
+ * Returns the resolved absolute path, or throws a CORRECTIVE traversal error:
+ * the rejection names the working root, restates the relative-path rule, and
+ * points at the existing in-root path when one matches a suffix of the
+ * rejected path. Exported for the corrective-guard tests.
+ */
+export async function confinePath(filePath: string): Promise<string> {
+  const allowedBase = getFileRoot();
+  const resolved = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(allowedBase, filePath);
+  if (path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
+    return resolved;
+  }
+  const suggestion = await existingSuffixUnder(allowedBase, filePath);
+  const basename = path.basename(filePath) || "output.txt";
+  const correction =
+    suggestion !== undefined
+      ? `"${suggestion}" exists under the root — retry with that exact path.`
+      : `Use a relative path instead, e.g. "./${basename}".`;
+  throw new Error(
+    `Path traversal detected: ${filePath} resolves to ${resolved}, outside the ` +
+      `working root ${allowedBase}. Paths are relative to the working root, ` +
+      `never the filesystem root. ${correction}`,
+  );
+}
+
 export const fileReadTool: ToolDefinition = {
   name: "file-read",
   description:
@@ -38,9 +103,10 @@ export const fileReadTool: ToolDefinition = {
       name: "path",
       type: "string",
       description:
-        "Relative or absolute path to the file to read. " +
+        "Path to the file to read, RELATIVE to the working root. " +
         "Examples: './output.txt', './data/report.md', './results/data.json'. " +
-        "Must be within the current working directory.",
+        "Never invent absolute paths like '/home/user/file.txt' or '/app/file.txt' — " +
+        "they resolve outside the working root and the call is refused.",
       required: true,
     },
     {
@@ -79,19 +145,8 @@ export const fileReadHandler = (
 
       // Security: resolve RELATIVE paths against the active file root (default
       // process.cwd(); the bench/sandbox sets a temp dir via withFileRoot) and
-      // confine the result to it.
-      const allowedBase = getFileRoot();
-      const resolved = path.isAbsolute(filePath)
-        ? path.resolve(filePath)
-        : path.resolve(allowedBase, filePath);
-      const normalizedBase = path.normalize(allowedBase);
-      const normalizedResolved = path.normalize(resolved);
-
-      if (!normalizedResolved.startsWith(normalizedBase)) {
-        throw new Error(
-          `Path traversal detected: ${filePath} resolves to ${resolved} outside of ${allowedBase}`,
-        );
-      }
+      // confine the result to it. The rejection is corrective — see confinePath.
+      const resolved = await confinePath(filePath);
 
       // A missing file is not a transient fault. Retrying ENOENT only burned
       // 300ms of backoff before returning the same answer; retry the faults
@@ -164,14 +219,8 @@ export const listDirectoryHandler = (
       const requested = typeof args.path === "string" && args.path.length > 0 ? args.path : ".";
 
       const allowedBase = getFileRoot();
-      const resolved = path.isAbsolute(requested)
-        ? path.resolve(requested)
-        : path.resolve(allowedBase, requested);
-      if (!path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
-        throw new Error(
-          `Path traversal detected: ${requested} resolves outside of ${allowedBase}`,
-        );
-      }
+      // Corrective rejection — see confinePath.
+      const resolved = await confinePath(requested);
 
       const dirents = await fs.readdir(resolved, { withFileTypes: true });
       const entries = await Promise.all(
@@ -206,11 +255,12 @@ export const fileWriteTool: ToolDefinition = {
       name: "path",
       type: "string",
       description:
-        "REQUIRED. Relative or absolute path where the file will be written. " +
+        "REQUIRED. Path where the file will be written, RELATIVE to the working root. " +
         "Use 'path', NOT 'file' or 'filename'. " +
         "Examples: './output.txt', './results/report.md', './data.json'. " +
         "If no path is specified in the task, use a sensible default like './output.txt'. " +
-        "Must be within the current working directory.",
+        "Never invent absolute paths like '/home/user/output.txt' — they resolve " +
+        "outside the working root and the call is refused.",
       required: true,
     },
     {
@@ -371,13 +421,8 @@ export const fileWriteHandler = (
       // Resolve RELATIVE paths against the active file root (default cwd; the
       // bench/sandbox sets a temp dir via withFileRoot) and confine writes to
       // it — so a model-invented "report.md" lands in the sandbox, not the cwd.
-      const allowedBase = getFileRoot();
-      const resolved = path.isAbsolute(filePath)
-        ? path.resolve(filePath)
-        : path.resolve(allowedBase, filePath);
-      if (!path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
-        throw new Error(`Path traversal detected: ${filePath}`);
-      }
+      // The rejection is corrective — see confinePath.
+      const resolved = await confinePath(filePath);
 
       const parent = path.dirname(resolved);
       await fs.mkdir(parent, { recursive: true });
