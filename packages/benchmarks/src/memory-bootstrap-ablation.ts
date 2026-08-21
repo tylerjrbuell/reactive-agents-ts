@@ -87,7 +87,7 @@ function noteFactTool(): { definition: ToolDefinition; handler: (args: Record<st
       timeoutMs: 5_000,
       requiresApproval: false,
       source: "function",
-    } as unknown as ToolDefinition,
+    },
     handler: (args: Record<string, unknown>) =>
       Effect.succeed(`recorded: ${String(args.fact)}`),
   };
@@ -177,15 +177,13 @@ async function runSession(
  *  persisted anything — any accuracy/token delta downstream is not trustworthy. */
 function checkPersisted(dbPath: string, agentId: string): { semantic: number; snapshots: number; episodes: number } {
   if (!existsSync(dbPath)) return { semantic: 0, snapshots: 0, episodes: 0 };
-  const db = new (Database as unknown as new (path: string) => {
-    query: (sql: string) => { all: (...args: unknown[]) => { count: number }[] };
-    close: () => void;
-  })(dbPath);
+  const db = new Database(dbPath);
   try {
     const q = (table: string) => {
       try {
         const rows = db.query(`SELECT COUNT(*) as count FROM ${table} WHERE agent_id = '${agentId.replace(/'/g, "''")}'`).all();
-        return Number(rows[0]?.count ?? 0);
+        const first = rows[0] as { count?: number } | undefined;
+        return Number(first?.count ?? 0);
       } catch {
         return -1; // table doesn't exist / query failed
       }
