@@ -1,10 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { buildKernelHooks } from "../../../src/kernel/state/kernel-hooks.js";
 import {
   initialKernelState,
   transitionState,
-  type MaybeService,
   type EventBusInstance,
   type KernelState,
 } from "../../../src/kernel/state/kernel-state.js";
@@ -12,17 +11,14 @@ import type { StepId } from "../../../src/types/step.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeMockEventBus(): { events: unknown[]; eb: MaybeService<EventBusInstance> } {
+function makeMockEventBus(): { events: unknown[]; eb: Option.Option<EventBusInstance> } {
   const events: unknown[] = [];
-  const eb: MaybeService<EventBusInstance> = {
-    _tag: "Some",
-    value: {
-      publish: (event: unknown) => {
-        events.push(event);
-        return Effect.void;
-      },
+  const eb: Option.Option<EventBusInstance> = Option.some({
+    publish: (event: unknown) => {
+      events.push(event);
+      return Effect.void;
     },
-  };
+  });
   return { events, eb };
 }
 
@@ -41,7 +37,7 @@ describe("buildKernelHooks", () => {
   // ── EventBus None ────────────────────────────────────────────────────────
 
   describe("with EventBus None", () => {
-    const noneEB: MaybeService<EventBusInstance> = { _tag: "None" };
+    const noneEB: Option.Option<EventBusInstance> = Option.none();
     const hooks = buildKernelHooks(noneEB);
 
     it("onThought returns without error", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { LLMService, TestLLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel } from "../../../src/kernel/loop/runner.js";
 import {
@@ -8,24 +8,20 @@ import {
   type KernelState,
   type KernelContext,
   type ThoughtKernel,
-  type MaybeService,
   type EventBusInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeMockEventBus(): { events: unknown[]; eb: MaybeService<EventBusInstance> } {
+function makeMockEventBus(): { events: unknown[]; eb: Option.Option<EventBusInstance> } {
   const events: unknown[] = [];
-  const eb: MaybeService<EventBusInstance> = {
-    _tag: "Some",
-    value: {
-      publish: (event: unknown) => {
-        events.push(event);
-        return Effect.void;
-      },
+  const eb: Option.Option<EventBusInstance> = Option.some({
+    publish: (event: unknown) => {
+      events.push(event);
+      return Effect.void;
     },
-  };
+  });
   return { events, eb };
 }
 

@@ -18,7 +18,7 @@
 // Co-located inside packages/reasoning/src/kernel/** (kernel-warden authority).
 
 import { describe, it, expect, afterEach } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver } from "@reactive-agents/tools";
@@ -73,10 +73,10 @@ const makeContext = (input: KernelInput): KernelContext => ({
   input,
   profile: CONTEXT_PROFILES.local,
   compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-  toolService: { _tag: "None" },
+  toolService: Option.none(),
   hooks: noopHooks,
   toolCallingDriver: new NativeFCDriver(),
-  memoryService: { _tag: "None" },
+  memoryService: Option.none(),
 });
 
 // Capture the assembled system prompt that the think phase hands to onThought.

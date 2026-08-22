@@ -9,7 +9,7 @@
  * normal unknown-tool path instead of pausing).
  */
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { handleActing } from "../../../src/kernel/capabilities/act/act.js";
 import { TextParseDriver, REQUEST_USER_INPUT_TOOL_NAME } from "@reactive-agents/tools";
@@ -18,21 +18,17 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-  type MaybeService,
   type ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import type { StepId } from "../../../src/types/step.js";
 
-function successToolService(): MaybeService<ToolServiceInstance> {
-  return {
-    _tag: "Some",
-    value: {
+function successToolService(): Option.Option<ToolServiceInstance> {
+  return Option.some({
       execute: (req) => Effect.succeed({ success: true, result: { ok: req.toolName } }),
       getTool: () => Effect.fail(new Error("no schema")),
       listTools: () => Effect.succeed([]),
-    },
-  };
+    });
 }
 
 function baseState(

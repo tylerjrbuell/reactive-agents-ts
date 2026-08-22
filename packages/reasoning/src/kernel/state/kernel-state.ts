@@ -6,7 +6,7 @@
  * function. The state is immutable — each iteration produces a new state via
  * `transitionState()`. Serialization helpers support persistence and debugging.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
@@ -974,8 +974,6 @@ export interface KernelInput {
 
 // ── Narrow service types ─────────────────────────────────────────────────────
 
-export type MaybeService<T> = { _tag: "Some"; value: T } | { _tag: "None" };
-
 /** Minimal ToolService surface used by kernel calls (execute + getTool) */
 export type ToolServiceInstance = {
   readonly execute: (input: {
@@ -1081,13 +1079,13 @@ export interface KernelContext {
   readonly input: KernelInput;
   readonly profile: ContextProfile;
   readonly compression: ResultCompressionConfig;
-  readonly toolService: MaybeService<ToolServiceInstance>;
+  readonly toolService: Option.Option<ToolServiceInstance>;
   readonly hooks: KernelHooks;
   /** Driver selected from calibration toolCallDialect ("native-fc" → NativeFCDriver, else TextParseDriver). */
   readonly toolCallingDriver: ToolCallingDriver;
   /** Memory service for semantic storage of successful tool results. None when
    *  the memory layer is not registered. Store calls are forked (non-blocking). */
-  readonly memoryService: MaybeService<MemoryServiceInstance>;
+  readonly memoryService: Option.Option<MemoryServiceInstance>;
 }
 
 // ── ThoughtKernel — The core computation type ────────────────────────────────

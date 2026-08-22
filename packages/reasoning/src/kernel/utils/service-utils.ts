@@ -5,7 +5,7 @@
  * top of every strategy file, and the copy-pasted `compilePromptOrFallback`
  * and EventBus publish boilerplate.
  */
-import { Context, Effect } from "effect";
+import { Context, Effect, Option } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { EventBus, EntropySensorService, AgentMemory } from "@reactive-agents/core";
@@ -14,7 +14,6 @@ import { ObservableLogger, type LogEvent } from "@reactive-agents/observability"
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
 import type {
-  MaybeService,
   ToolServiceInstance,
   EventBusInstance,
   MemoryServiceInstance,
@@ -136,21 +135,21 @@ export type StrategyServices = {
   /** LLM service instance (always present — required dependency) */
   llm: LLMService["Type"];
   /** Tool service — None when no tools are registered */
-  toolService: MaybeService<ToolServiceInstance>;
+  toolService: Option.Option<ToolServiceInstance>;
   /** Prompt template service — None when prompts layer is absent */
-  promptService: MaybeService<PromptServiceInstance>;
+  promptService: Option.Option<PromptServiceInstance>;
   /** EventBus — None when observability layer is absent */
-  eventBus: MaybeService<EventBusInstance>;
+  eventBus: Option.Option<EventBusInstance>;
   /** Entropy sensor — None when reactive intelligence layer is absent */
-  entropySensor: MaybeService<EntropySensorInstance>;
+  entropySensor: Option.Option<EntropySensorInstance>;
   /** Reactive controller — None when reactive intelligence controller is absent */
-  reactiveController: MaybeService<ReactiveControllerInstance>;
+  reactiveController: Option.Option<ReactiveControllerInstance>;
   /** Intervention dispatcher — None when reactive intelligence controller is absent */
-  dispatcher: MaybeService<DispatcherInstance>;
+  dispatcher: Option.Option<DispatcherInstance>;
   /** Memory service — None when memory layer is absent. Used by tool-execution
    *  to populate semantic memory from successful tool results (fire-and-forget
    *  via Effect.forkDaemon — does not block the kernel hot path). */
-  memoryService: MaybeService<MemoryServiceInstance>;
+  memoryService: Option.Option<MemoryServiceInstance>;
 };
 
 /**
@@ -159,11 +158,11 @@ export type StrategyServices = {
  * Replaces the identical service acquisition block that appears in every strategy:
  * ```typescript
  * const llm = yield* LLMService;
- * const promptServiceOptRaw = yield* Effect.serviceOption(PromptService).pipe(
- *   Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+ * const promptService = yield* Effect.serviceOption(PromptService).pipe(
+ *   Effect.catchAll(() => Effect.succeed(Option.none())),
  * );
- * const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
- *   Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+ * const eventBus = yield* Effect.serviceOption(EventBus).pipe(
+ *   Effect.catchAll(() => Effect.succeed(Option.none())),
  * );
  * ```
  */
@@ -174,43 +173,45 @@ export const resolveStrategyServices: Effect.Effect<
 > = Effect.gen(function* () {
   const llm = yield* LLMService;
 
-  const toolServiceOptRaw = yield* Effect.serviceOption(ToolService);
-  const toolService = toolServiceOptRaw as MaybeService<ToolServiceInstance>;
+  // Narrowed to the kernel's structural ToolServiceInstance (readonly-param
+  // vs the real ToolService's richer shape) — same narrowing this file always
+  // applied before resolving via Effect.serviceOption.
+  const toolService = (yield* Effect.serviceOption(ToolService)) as unknown as Option.Option<ToolServiceInstance>;
 
-  const promptServiceOptRaw = yield* Effect.serviceOption(PromptServiceTag).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  const promptService = yield* Effect.serviceOption(PromptServiceTag).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none<PromptServiceInstance>())),
   );
-  const promptService = promptServiceOptRaw as MaybeService<PromptServiceInstance>;
 
-  const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-  );
-  const eventBus = ebOptRaw as MaybeService<EventBusInstance>;
+  // Narrowed to the kernel's structural EventBusInstance (its `publish` takes
+  // `unknown`, not the real EventBus's `AgentEvent`).
+  const eventBus = (yield* Effect.serviceOption(EventBus).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none())),
+  )) as unknown as Option.Option<EventBusInstance>;
 
-  const entropySensorOptRaw = yield* Effect.serviceOption(EntropySensorService).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  const entropySensor = yield* Effect.serviceOption(EntropySensorService).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none<EntropySensorInstance>())),
   );
-  const entropySensor = entropySensorOptRaw as MaybeService<EntropySensorInstance>;
 
-  const reactiveControllerOptRaw = yield* Effect.serviceOption(ReactiveControllerTag).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  const reactiveController = yield* Effect.serviceOption(ReactiveControllerTag).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none<ReactiveControllerInstance>())),
   );
-  const reactiveController = reactiveControllerOptRaw as MaybeService<ReactiveControllerInstance>;
 
-  const dispatcherOptRaw = yield* Effect.serviceOption(InterventionDispatcherTag).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+  const dispatcher = yield* Effect.serviceOption(InterventionDispatcherTag).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none<DispatcherInstance>())),
   );
-  const dispatcher = dispatcherOptRaw as MaybeService<DispatcherInstance>;
 
   // FIX-34 / W11 — resolve via the narrow AgentMemory port in core, not
   // the heavy MemoryService Tag in @reactive-agents/memory. Adapter Layers
   // (e.g. AgentMemoryFromMemoryService in the memory package) bridge the
   // two; user code that wants a custom AgentMemory provider can supply
-  // it directly without dragging in the memory package.
-  const memoryServiceOptRaw = yield* Effect.serviceOption(AgentMemory).pipe(
-    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-  );
-  const memoryService = memoryServiceOptRaw as MaybeService<MemoryServiceInstance>;
+  // it directly without dragging in the memory package. Narrowed to the
+  // kernel's structural MemoryServiceInstance the same way toolService/
+  // eventBus are above — AgentMemory's storeSemantic returns a bare
+  // `string`, the kernel's MemoryServiceInstance expects a branded
+  // `MemoryId`; this cast is the same pre-existing narrowing, not new.
+  const memoryService = (yield* Effect.serviceOption(AgentMemory).pipe(
+    Effect.catchAll(() => Effect.succeed(Option.none())),
+  )) as unknown as Option.Option<MemoryServiceInstance>;
 
   return {
     llm,
@@ -232,21 +233,22 @@ export const resolveStrategyServices: Effect.Effect<
  * `"frontier"`), matching the context-engineering sprint's prompt variant system.
  */
 export function compilePromptOrFallback(
-  promptService: MaybeService<PromptServiceInstance>,
+  promptService: Option.Option<PromptServiceInstance>,
   templateId: string,
   variables: Record<string, unknown>,
   fallback: string,
   tier?: string,
 ): Effect.Effect<string, never> {
-  if (promptService._tag === "None") {
-    return Effect.succeed(fallback);
-  }
-  return promptService.value
-    .compile(templateId, variables, tier ? { tier } : undefined)
-    .pipe(
-      Effect.map((compiled) => compiled.content),
-      Effect.catchAll(() => Effect.succeed(fallback)),
-    );
+  return Option.match(promptService, {
+    onNone: () => Effect.succeed(fallback),
+    onSome: (service) =>
+      service
+        .compile(templateId, variables, tier ? { tier } : undefined)
+        .pipe(
+          Effect.map((compiled) => compiled.content),
+          Effect.catchAll(() => Effect.succeed(fallback)),
+        ),
+  });
 }
 
 /**
@@ -261,11 +263,14 @@ export function compilePromptOrFallback(
  * This boilerplate appears 20+ times across the 5 strategy files.
  */
 export function publishReasoningStep(
-  eventBus: MaybeService<EventBusInstance>,
+  eventBus: Option.Option<EventBusInstance>,
   payload: unknown,
 ): Effect.Effect<void, never> {
-  if (eventBus._tag === "None") return Effect.void;
-  return eventBus.value.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/service-utils.ts:216", tag: errorTag(err) })));
+  return Option.match(eventBus, {
+    onNone: () => Effect.void,
+    onSome: (bus) =>
+      bus.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/service-utils.ts:216", tag: errorTag(err) }))),
+  });
 }
 
 /**

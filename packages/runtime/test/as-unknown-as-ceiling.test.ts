@@ -183,7 +183,20 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   helper — bun-types' `typeof fetch` carries a static `.preconnect`
 //   member a plain stub function cannot structurally satisfy without a
 //   cast; no existing helper fits this shape. See master plan §5.5.
-const CEILING = 76;
+// - 2026-08-22: +1 for reasoning/src/kernel/utils/service-utils.ts's
+//   memoryService resolution. Debt-sweep replaced the hand-rolled
+//   MaybeService<T> with Effect's Option<T> throughout the kernel
+//   (design-out, net negative on this ceiling elsewhere in the same
+//   change). This ONE site regressed: MaybeService was a plain structural
+//   interface, so `as MaybeService<MemoryServiceInstance>` needed no
+//   `unknown` hop; Option<T> is nominally branded, and AgentMemory's real
+//   storeSemantic returns a bare `string` where the kernel's
+//   MemoryServiceInstance expects a branded MemoryId — the same
+//   structural gap toolService/eventBus already cast across in this file.
+//   Design-out would mean widening AgentMemory's public port type in
+//   @reactive-agents/core to match, a cross-package type change outside
+//   this fix's scope. Bumping per this file's own precedent (2026-08-20).
+const CEILING = 77;
 
 interface Hit {
   file: string;

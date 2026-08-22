@@ -10,7 +10,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { EventBus } from "@reactive-agents/core";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import type { EventBusInstance, KernelMessage, MaybeService } from "../kernel/state/kernel-state.js";
+import type { EventBusInstance, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -133,13 +133,12 @@ export const executeCodeAction = (
     const llm = yield* LLMService;
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     // Wave C.2 slice 3b-ii — the bus the run ledger announces its growth on.
-    // Same narrowing `resolveStrategyServices` applies (service-utils.ts:184):
-    // Effect's `Option` and the kernel's `MaybeService` are the same two-case
-    // shape, and the kernel types against its own.
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as MaybeService<EventBusInstance>;
+    // Narrowed to the kernel's structural EventBusInstance (its `publish` takes
+    // `unknown`, not `AgentEvent`) — same narrowing `resolveStrategyServices`
+    // applies (service-utils.ts).
+    const ebOpt = (yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed(Option.none())),
+    )) as unknown as Option.Option<EventBusInstance>;
 
     const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
     const verifier = input.verifier ?? noopVerifier;

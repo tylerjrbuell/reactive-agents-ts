@@ -23,7 +23,7 @@
 // Keyless / deterministic (provider "test") — CI has no keys/Ollama/Docker.
 
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import type { KernelStateLike } from "@reactive-agents/core";
 import type { TaskContract } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -34,7 +34,7 @@ import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import { buildRunEnvelope, provideTestEnvelope } from "../kernel/envelope/run-envelope.js";
 import { executeToolAndObserve, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { compileRunContract, forbiddenTools } from "../kernel/contract/run-contract.js";
-import type { MaybeService, ToolServiceInstance } from "../kernel/state/kernel-state.js";
+import type { ToolServiceInstance } from "../kernel/state/kernel-state.js";
 
 const GATHER_SCHEMA = {
   name: "gather",
@@ -176,17 +176,15 @@ describe("Task 7 — executeToolAndObserve derives tool-policy from the envelope
     success: { type: "regex", pattern: ".*" },
   });
 
-  const makeToolService = (executed: string[]): MaybeService<ToolServiceInstance> => ({
-    _tag: "Some",
-    value: {
+  const makeToolService = (executed: string[]): Option.Option<ToolServiceInstance> =>
+    Option.some({
       execute: (input) => {
         executed.push(input.toolName);
         return Effect.succeed({ success: true, result: { ok: true } });
       },
       getTool: () => Effect.succeed({ parameters: [] }),
       listTools: () => Effect.succeed([]),
-    },
-  });
+    });
 
   const dispatch = (
     executed: string[],

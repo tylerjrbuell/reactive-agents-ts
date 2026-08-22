@@ -46,7 +46,6 @@ import {
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type {
-  MaybeService,
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 
@@ -286,7 +285,7 @@ export interface ToolObserveBatchResult extends ToolObserveResult {
  * `state.steps` still includes every member's obsStep as normal.
  */
 export function executeToolAndObserveBatch(
-  toolService: MaybeService<ToolServiceInstance>,
+  toolService: Option.Option<ToolServiceInstance>,
   calls: readonly ToolObserveBatchCall[],
   ctx: Omit<ToolObserveContext, "callId" | "healed" | "schemas"> & {
     readonly schemas?: readonly ToolSchemaLite[];
@@ -316,7 +315,7 @@ export function executeToolAndObserveBatch(
 }
 
 export function executeToolAndObserve(
-  toolService: MaybeService<ToolServiceInstance>,
+  toolService: Option.Option<ToolServiceInstance>,
   call: {
     readonly toolName: string;
     readonly args: Record<string, unknown>;
@@ -461,7 +460,7 @@ export function executeToolAndObserve(
     }
 
     // ── 2. ToolService unavailable → failed observation (parity with act.ts) ─
-    if (toolService._tag === "None") {
+    if (Option.isNone(toolService)) {
       const content = `[Tool "${toolName}" requested but ToolService is not available]`;
       const obsStep = makeStep("observation", content, {
         toolCallId: ctx.callId,

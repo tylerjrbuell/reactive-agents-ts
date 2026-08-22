@@ -17,7 +17,7 @@
  *   - normalizeObservation(toolName, result) — tool-specific output normalization
  *   - resolveToolArgs(toolService, toolRequest) — resolve raw ACTION args
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -36,7 +36,7 @@ import type { RunLedger } from "../../ledger/run-ledger.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
-import type { MaybeService, ToolServiceInstance } from "../../../kernel/state/kernel-state.js";
+import type { ToolServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 
@@ -522,7 +522,7 @@ function resolveToolArgs(
  * - Error enrichment with expected parameter schema
  */
 export function executeToolCall(
-  toolServiceOpt: MaybeService<ToolServiceInstance>,
+  toolServiceOpt: Option.Option<ToolServiceInstance>,
   toolRequest: { tool: string; input: string; transform?: string },
   config: ToolExecutionConfig,
 ): Effect.Effect<ToolExecutionResult, never> {
@@ -534,7 +534,7 @@ export function executeToolCall(
     sessionId,
   } = config;
 
-  if (toolServiceOpt._tag === "None") {
+  if (Option.isNone(toolServiceOpt)) {
     const content = `[Tool "${toolRequest.tool}" requested but ToolService is not available — add .withTools() to agent builder]`;
     return Effect.succeed({
       content,

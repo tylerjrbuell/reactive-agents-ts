@@ -24,7 +24,7 @@
 //      fails test (2).
 
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import fc from "fast-check";
 import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver } from "@reactive-agents/tools";
@@ -225,10 +225,10 @@ const captureFCTools = async (state: KernelState, input: KernelInput): Promise<s
     input,
     profile: CONTEXT_PROFILES.local,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-    toolService: { _tag: "None" },
+    toolService: Option.none(),
     hooks: noopHooks,
     toolCallingDriver: new NativeFCDriver(),
-    memoryService: { _tag: "None" },
+    memoryService: Option.none(),
   };
   await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));
   return capturedFCToolNames;

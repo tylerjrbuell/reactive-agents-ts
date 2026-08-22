@@ -36,7 +36,7 @@ interface Published {
     readonly callId?: string;
 }
 
-/** Minimal EventBus double (a `MaybeService`) recording what the hooks publish. */
+/** Minimal EventBus double (an `Option`-shaped duck-type) recording what the hooks publish. */
 function makeRecordingBus(sink: Published[]) {
     return {
         _tag: "Some" as const,

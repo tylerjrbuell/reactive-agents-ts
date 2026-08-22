@@ -36,11 +36,11 @@
  * this directory too. Outside it, this function is the only way to grow a run
  * ledger — one owner module + one grep-able script, per 09 §6.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import type { LedgerEntryAppendedEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
-import type { EventBusInstance, MaybeService } from "../state/kernel-state.js";
+import type { EventBusInstance } from "../state/kernel-state.js";
 import {
   appendEntries,
   ledgerEntriesForEvent,
@@ -119,18 +119,20 @@ export function growRunLedger(
  * simply unobserved (unit tests, `createLightRuntime`).
  */
 export function ledgerSinkTarget(
-  eventBus: MaybeService<EventBusInstance>,
+  eventBus: Option.Option<EventBusInstance>,
   taskId: string,
   agentId: string | undefined,
   site: string,
 ): LedgerSinkTarget {
-  if (eventBus._tag === "None") return { taskId, ...(agentId ? { agentId } : {}) };
-  return {
-    taskId,
-    ...(agentId ? { agentId } : {}),
-    publish: (event) =>
-      eventBus.value
-        .publish(event)
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site, tag: errorTag(err) }))),
-  };
+  return Option.match(eventBus, {
+    onNone: () => ({ taskId, ...(agentId ? { agentId } : {}) }),
+    onSome: (bus) => ({
+      taskId,
+      ...(agentId ? { agentId } : {}),
+      publish: (event: LedgerEntryAppendedEvent) =>
+        bus
+          .publish(event)
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site, tag: errorTag(err) }))),
+    }),
+  });
 }
