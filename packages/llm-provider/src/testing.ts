@@ -6,6 +6,7 @@ import type {
   LLMMessage,
   LlmCallPurpose,
   TokenLogprob,
+  StructuredCompletionRequest,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
 import { DEFAULT_CAPABILITIES } from "./capabilities.js";
@@ -445,7 +446,7 @@ export const TestLLMService = (
       );
     },
 
-    completeStructured: (request) =>
+    completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
       Effect.gen(function* () {
         const searchText = extractSearchText(request.messages, request);
         // Schema-constrained by definition, so always the harness channel: it
@@ -463,8 +464,11 @@ export const TestLLMService = (
         }
 
         if ("json" in turn) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test provider bypasses schema; json is unknown, return type is generic A
-          return turn.json as any;
+          // Test provider bypasses schema validation by design — `turn.json`
+          // is `unknown` (the scenario author's raw fixture) and `A` is the
+          // caller's generic output type with no runtime witness here, so
+          // there's no guard cheaper than this narrowing assertion.
+          return turn.json as A;
         }
 
         // text turn — try JSON.parse then decode against schema. A tool turn's

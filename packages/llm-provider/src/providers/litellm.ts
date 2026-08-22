@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema, Duration } from "effect";
+import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -17,7 +17,7 @@ import type {
   ToolCall,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { resolveCapability } from "../capability-resolver.js";
@@ -302,20 +302,18 @@ export const LiteLLMProviderLive = Layer.effect(
             model,
             config.pricingRegistry,
           );
-        }).pipe(
-          Effect.retry(retryPolicy),
+        }).pipe((effect) =>
           // G2 default is 120s (thinking/reasoning models exceed 30s); F4
           // makes it request/config-resolvable — see resolveCloudTimeoutMs.
-          Effect.timeout(Duration.millis(timeoutMs)),
-          Effect.catchTag("TimeoutException", () =>
-            Effect.fail(
+          withRetryAndTimeout(effect, {
+            timeoutMs,
+            onTimeout: () =>
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "litellm",
                 timeoutMs,
               }),
-            ),
-          ),
+          }),
         );
       },
 

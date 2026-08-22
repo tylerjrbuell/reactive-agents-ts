@@ -1,5 +1,5 @@
-import { Effect, Schedule, Stream } from "effect";
-import type { LLMErrors } from "./errors.js";
+import { Duration, Effect, Schedule, Stream } from "effect";
+import type { LLMErrors, LLMTimeoutError } from "./errors.js";
 import type { StreamEvent } from "./types.js";
 
 /**
@@ -55,6 +55,35 @@ export function retryStreamBeforeFirstEmission<E extends LLMErrors, R>(
   return stream.pipe(
     Stream.tap(() => Effect.sync(() => { emittedAny = true; })),
     Stream.retry(guardedPolicy),
+  );
+}
+
+/**
+ * `retryPolicy` + `Effect.timeout` + `TimeoutException`→`LLMTimeoutError`
+ * combinator for the non-streaming `complete()` path. This exact shape was
+ * duplicated verbatim across all 5 provider adapters' `complete()` — only
+ * the constructed `LLMTimeoutError`'s fields (provider name, message text,
+ * and provider-specific extras like `model`/`elapsedMs` on the local/ollama
+ * adapter) varied between them. `onTimeout` is a factory rather than a
+ * fixed error so each call site can still close over its own request-scoped
+ * bindings (e.g. `model`, `startedAt`) when building the error.
+ *
+ * F4: callers resolve `timeoutMs` ONCE and pass the same binding here and
+ * into `onTimeout`'s closure, so `Effect.timeout` and the error's restated
+ * `timeoutMs` can never drift.
+ */
+export function withRetryAndTimeout<A, E extends LLMErrors, R>(
+  effect: Effect.Effect<A, E, R>,
+  options: {
+    readonly timeoutMs: number;
+    readonly onTimeout: () => LLMTimeoutError;
+    readonly policy?: typeof retryPolicy;
+  },
+): Effect.Effect<A, E | LLMTimeoutError, R> {
+  return effect.pipe(
+    Effect.retry(options.policy ?? retryPolicy),
+    Effect.timeout(Duration.millis(options.timeoutMs)),
+    Effect.catchTag("TimeoutException", () => Effect.fail(options.onTimeout())),
   );
 }
 

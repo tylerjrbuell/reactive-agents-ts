@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema, Duration } from 'effect'
+import { Effect, Layer, Stream, Schema } from 'effect'
 import { LLMService } from '../llm-service.js'
 import { LLMConfig } from '../llm-config.js'
 import type { ProviderCapabilities } from '../capabilities.js'
@@ -14,7 +14,7 @@ import type {
     TokenLogprob,
 } from '../types.js'
 import { estimateTokenCount } from '../token-counter.js'
-import { retryPolicy, retryStreamBeforeFirstEmission } from '../retry.js'
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from '../retry.js'
 import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
@@ -614,13 +614,12 @@ export const LocalProviderLive = Layer.effect(
                             ? { resolvedParams: { contextWindow: numCtx } }
                             : {}),
                     } satisfies CompletionResponse
-                }).pipe(
-                    Effect.retry(retryPolicy),
-                    Effect.timeout(Duration.millis(timeoutMs)),
-                    Effect.catchTag('TimeoutException', () => {
-                        const elapsedMs = Date.now() - startedAt
-                        return Effect.fail(
-                            new LLMTimeoutError({
+                }).pipe((effect) =>
+                    withRetryAndTimeout(effect, {
+                        timeoutMs,
+                        onTimeout: () => {
+                            const elapsedMs = Date.now() - startedAt
+                            return new LLMTimeoutError({
                                 message:
                                     `Local LLM request for model "${model}" timed out after ` +
                                     `${elapsedMs}ms (limit ${timeoutMs}ms). The model may be ` +
@@ -632,8 +631,8 @@ export const LocalProviderLive = Layer.effect(
                                 model,
                                 elapsedMs,
                             })
-                        )
-                    })
+                        },
+                    }),
                 )
                 }),
 

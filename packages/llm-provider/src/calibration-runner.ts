@@ -9,6 +9,7 @@
 import type { ModelCalibration } from "./calibration.js";
 import { isMain } from "@reactive-agents/runtime-shim";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+import type { Tool as OllamaTool } from "ollama";
 
 // Shared resolution (OLLAMA_ENDPOINT → OLLAMA_HOST → OLLAMA_BASE → localhost)
 // so calibrating a model and running it can never disagree about the endpoint.
@@ -61,13 +62,13 @@ async function getOllamaClient() {
 async function ollamaChat(
   modelId: string,
   messages: { role: "system" | "user" | "assistant" | "tool"; content: string }[],
-  tools?: readonly unknown[],
+  tools?: readonly OllamaTool[],
 ) {
   const client = await getOllamaClient();
   return client.chat({
     model: modelId,
     messages,
-    ...(tools ? { tools: tools as any } : {}),
+    ...(tools ? { tools: [...tools] } : {}),
     options: { temperature: 0 },
     stream: false,
   });

@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema, Duration } from "effect";
+import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -16,7 +16,7 @@ import type {
   ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
@@ -420,22 +420,20 @@ export const GeminiProviderLive = Layer.effect(
           }
 
           return mapGeminiResponse(response, model, config.pricingRegistry);
-        }).pipe(
-          Effect.retry(retryPolicy),
+        }).pipe((effect) =>
           // G2 default is 120s: 30s was too tight for thinking-mode models —
           // a single reasoning-heavy complete() (e.g. tree-of-thought
           // expansion on gemini-2.5-pro) routinely needs >30s. F4 makes the
           // ceiling request/config-resolvable — see resolveCloudTimeoutMs.
-          Effect.timeout(Duration.millis(timeoutMs)),
-          Effect.catchTag("TimeoutException", () =>
-            Effect.fail(
+          withRetryAndTimeout(effect, {
+            timeoutMs,
+            onTimeout: () =>
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "gemini",
                 timeoutMs,
               }),
-            ),
-          ),
+          }),
         );
       },
 
