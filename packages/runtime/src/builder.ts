@@ -63,7 +63,7 @@ import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
 } from './builder/build-effect/runtime-construction.js'
-import type { TestTurn } from '@reactive-agents/llm-provider'
+import type { TestTurn, LLMService } from '@reactive-agents/llm-provider'
 import type { TaskContract } from '@reactive-agents/core'
 import type {
     LifecycleHook,
@@ -376,8 +376,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enablePrompts: boolean = false
     private _promptsOptions?: PromptsOptions
     private _testScenario?: TestTurn[]
-    private _extraLayers?: Layer.Layer<any, any, any>
-    private _llmOverrideLayer?: Layer.Layer<any, any, any>
+    // ROut is contravariant on `Layer` (`in ROut`), so `never` — not `unknown`
+    // — is the maximally-permissive success-channel type here: it accepts a
+    // layer providing ANY service. `unknown` would reject every concrete
+    // layer (see withLayers() below for why `any` was replaced with this
+    // rather than `unknown`).
+    private _extraLayers?: Layer.Layer<never, unknown, unknown>
+    // Exact target type: this is force-cast to `Layer.Layer<LLMService>` at
+    // the sole consumption site (runtime-construction.ts, RuntimeOptions
+    // .llmOverrideLayer). Typing it precisely here removes that cast.
+    private _llmOverrideLayer?: Layer.Layer<LLMService>
     // Tracing is on by default (Sprint 3.6) so `rax diagnose <runId>` always
     // has data to inspect — a productized DX win. Disable explicitly with
     // .withObservability({ tracing: false }) or REACTIVE_AGENTS_TRACE=off.
@@ -2220,7 +2228,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param layers - Effect-TS Layer(s) to add
      * @returns `this` for chaining
      */
-    withLayers(layers: Layer.Layer<any, any>): this {
+    withLayers(layers: Layer.Layer<never, unknown, unknown>): this {
         this._extraLayers = layers
         return this
     }
@@ -2235,9 +2243,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * LLM layer to run the entire harness against recorded model responses with
      * no live provider.
      *
-     * @param layer - an Effect Layer providing LLMService
+     * @param layer - an Effect Layer providing LLMService, with no unresolved
+     * requirements or errors — it must be able to run standalone as the
+     * whole-runtime replacement for the base `LLMService` layer.
      */
-    withReplayLLM(layer: Layer.Layer<any, any>): this {
+    withReplayLLM(layer: Layer.Layer<LLMService>): this {
         this._llmOverrideLayer = layer
         return this
     }
@@ -2710,4 +2720,109 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             })
         }) as Effect.Effect<ReactiveAgent<TOut>, Error>
     }
+
+    /**
+     * Compile-time drift guard for {@link BuilderRuntimeStateView}
+     * (packages/runtime/src/builder/build-effect/runtime-construction.ts),
+     * which `build()` reaches via `self as unknown as BuilderRuntimeStateView`
+     * above. That cast is a genuine structural (not nominal) relationship —
+     * TypeScript's class-privacy branding otherwise blocks a class from ever
+     * being assignable to a plain interface, and `keyof`/`Pick` over a class
+     * type always exclude its private members, so neither can express this
+     * check. Naming each field explicitly, from *inside* the class body
+     * (where private access is legal), is the only mechanism that actually
+     * reaches them: if a field referenced by `BuilderRuntimeStateView` is
+     * renamed or removed here, the corresponding `self._field` access below
+     * fails to compile (TS2339); if its type narrows incompatibly, the
+     * object-literal-to-`BuilderRuntimeStateView` assignment fails (TS2322/
+     * TS2741). Never constructed at runtime — type-checked only.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    private static readonly _assertRuntimeStateViewShape = (
+        self: ReactiveAgentBuilder<any>
+    ): BuilderRuntimeStateView => ({
+        _a2aOptions: self._a2aOptions,
+        _adaptiveHarness: self._adaptiveHarness,
+        _approvalPolicy: self._approvalPolicy,
+        _behavioralContract: self._behavioralContract,
+        _budgetLimits: self._budgetLimits,
+        _calibration: self._calibration,
+        _circuitBreakerConfig: self._circuitBreakerConfig,
+        _consolidationConfig: self._consolidationConfig,
+        _contextProfile: self._contextProfile,
+        _cortexUrl: self._cortexUrl,
+        _costTrackingOptions: self._costTrackingOptions,
+        _customTermination: self._customTermination,
+        _documents: self._documents,
+        _durableRuns: self._durableRuns,
+        _enableAudit: self._enableAudit,
+        _enableBehavioralContracts: self._enableBehavioralContracts,
+        _enableCostTracking: self._enableCostTracking,
+        _enableExperienceLearning: self._enableExperienceLearning,
+        _enableGuardrails: self._enableGuardrails,
+        _enableHealthCheck: self._enableHealthCheck,
+        _enableKillSwitch: self._enableKillSwitch,
+        _enableMemory: self._enableMemory,
+        _enableMemoryConsolidation: self._enableMemoryConsolidation,
+        _enableObservability: self._enableObservability,
+        _enablePrompts: self._enablePrompts,
+        _enableReactiveIntelligence: self._enableReactiveIntelligence,
+        _enableReasoning: self._enableReasoning,
+        _enableSelfImprovement: self._enableSelfImprovement,
+        _enableTools: self._enableTools,
+        _enableVerification: self._enableVerification,
+        _environmentContext: self._environmentContext,
+        _executionTimeoutMs: self._executionTimeoutMs,
+        _extraLayers: self._extraLayers,
+        _fabricationGuard: self._fabricationGuard,
+        _fallbackConfig: self._fallbackConfig,
+        _gatewayOptions: self._gatewayOptions,
+        _groundingConfig: self._groundingConfig,
+        _guardrailsOptions: self._guardrailsOptions,
+        _harnessRegistrations: self._harnessRegistrations,
+        _leanHarness: self._leanHarness,
+        _llmOverrideLayer: self._llmOverrideLayer,
+        _loggingConfig: self._loggingConfig,
+        _longHorizon: self._longHorizon,
+        _maxIterations: self._maxIterations,
+        _maxTokens: self._maxTokens,
+        _mcpServers: self._mcpServers,
+        _memoryOptions: self._memoryOptions,
+        _memoryTier: self._memoryTier,
+        _metaTools: self._metaTools,
+        _minIterations: self._minIterations,
+        _model: self._model,
+        _modelRouting: self._modelRouting,
+        _numCtx: self._numCtx,
+        _observabilityOptions: self._observabilityOptions,
+        _ollamaTimeoutMs: self._ollamaTimeoutMs,
+        _outputValidator: self._outputValidator,
+        _outputValidatorOptions: self._outputValidatorOptions,
+        _pricingRegistry: self._pricingRegistry,
+        _provider: self._provider,
+        _providerConfig: self._providerConfig,
+        _rateLimiterConfig: self._rateLimiterConfig,
+        _reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
+        _reasoningOptions: self._reasoningOptions,
+        _receiptSigningKey: self._receiptSigningKey,
+        _requiredToolsConfig: self._requiredToolsConfig,
+        _resultCompression: self._resultCompression,
+        _retryPolicy: self._retryPolicy,
+        _sessionMaxAgeDays: self._sessionMaxAgeDays,
+        _sessionPersist: self._sessionPersist,
+        _skillPersistence: self._skillPersistence,
+        _skillsConfig: self._skillsConfig,
+        _stallPolicy: self._stallPolicy,
+        _taskContext: self._taskContext,
+        _taskContract: self._taskContract,
+        _telemetryConfig: self._telemetryConfig,
+        _temperature: self._temperature,
+        _testScenario: self._testScenario,
+        _thinking: self._thinking,
+        _thinkingOptions: self._thinkingOptions,
+        _toolsOptions: self._toolsOptions,
+        _userInteraction: self._userInteraction,
+        _verificationOptions: self._verificationOptions,
+        _verificationStep: self._verificationStep,
+    })
 }

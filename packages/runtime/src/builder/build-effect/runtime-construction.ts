@@ -115,8 +115,8 @@ export interface BuilderRuntimeStateView {
   readonly _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
   readonly _enableSelfImprovement: boolean;
   readonly _testScenario?: TestTurn[];
-  readonly _extraLayers?: Layer.Layer<any, any, any>;
-  readonly _llmOverrideLayer?: Layer.Layer<any, any, any>;
+  readonly _extraLayers?: Layer.Layer<never, unknown, unknown>;
+  readonly _llmOverrideLayer?: Layer.Layer<LLMService>;
   readonly _environmentContext?: Record<string, string>;
   readonly _mcpServers: MCPServerConfig[];
   readonly _reasoningOptions?: ReasoningOptions;
@@ -362,7 +362,20 @@ export const buildBaseRuntimeAndEngine = (
       kernelMetaTools = { userInteraction: true };
     }
 
-    const composedExtraLayers = state._extraLayers;
+    // Widening boundary: `_extraLayers` is `Layer.Layer<never, unknown, unknown>`
+    // on the public builder seam (builder.ts `withLayers()`) — `never` is the
+    // maximally-permissive success-channel type given `Layer`'s `in ROut`
+    // (contravariant) variance, deliberately chosen over `any`/`unknown` so
+    // the public signature still requires a real `Layer`. `RuntimeOptions
+    // .extraLayers` (runtime-types.ts) is `Layer.Layer<any, any, any>` —
+    // pre-existing debt in `createRuntime`'s own option surface, out of scope
+    // here — and TypeScript's variance-annotated generic comparison does not
+    // let `any` silently absorb a `never` ROut at that position, so one
+    // explicit widening is required to bridge the two. This is the ONE place
+    // that widening happens for `_extraLayers`.
+    const composedExtraLayers = state._extraLayers as
+      | Layer.Layer<any, any, any>
+      | undefined;
     const llmOverrideLayer = state._llmOverrideLayer;
     /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
     let cortexReporterLayer: Layer.Layer<unknown> | null = null;
@@ -415,9 +428,10 @@ export const buildBaseRuntimeAndEngine = (
       enableSelfImprovement: state._enableSelfImprovement,
       testScenario: state._testScenario,
       extraLayers: composedExtraLayers,
-      // Erasure cast: the builder field is Layer<any,any,any> (public seam);
-      // the option contract is a fully-resolved LLMService layer.
-      llmOverrideLayer: llmOverrideLayer as Layer.Layer<LLMService> | undefined,
+      // No cast needed: `_llmOverrideLayer` is typed `Layer.Layer<LLMService>`
+      // on the public builder seam (builder.ts `withReplayLLM`), matching
+      // `RuntimeOptions.llmOverrideLayer` exactly.
+      llmOverrideLayer,
       systemPrompt: composedSystemPrompt,
       environmentContext: state._environmentContext,
       mcpServers:
