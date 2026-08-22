@@ -637,11 +637,22 @@ export const defaultVerifier: Verifier = {
         // presented as researched facts) rather than numbers or booleans —
         // see detectFabricatedListedEntities's docstring for the real-model
         // "invented 9 episode titles" trace that surfaced this gap.
+        //
+        // Severity is ALWAYS "warn", never "reject" — unlike 4c/4d (near-
+        // zero false-positive by construction: strict numeric/exit-code
+        // matching), this heuristic's exact-substring grounding check
+        // false-positives on legitimate abstractive synthesis (a model's own
+        // category headers, a summary table's date/aggregate columns) that
+        // naturally shares no vocabulary with terse raw tool evidence. Live
+        // incident, 2026-08-21 (cortex run 01M0KB5MTA4NJP907V93RHKFGK): a
+        // genuinely successful commit-summary report was hard-failed by this
+        // check in block mode. Detection stays visible as an advisory
+        // warning; it must never be able to reject a terminal answer.
         const listedEntities = detectFabricatedListedEntities(ctx.content, corpus);
         checks.push({
           name: "output-not-fabricated-listed-entities",
           passed: listedEntities.ok,
-          severity: listedEntities.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
+          severity: listedEntities.ok ? "pass" : "warn",
           reason: listedEntities.ok ? undefined : listedEntities.violations.join("; "),
         });
       }

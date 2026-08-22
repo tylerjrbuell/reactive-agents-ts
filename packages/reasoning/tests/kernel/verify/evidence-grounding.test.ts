@@ -189,6 +189,30 @@ describe("detectFabricatedListedEntities (2026-08-15 scratch.ts research-task fi
   it("passes when evidence corpus is empty and there is no structured list to check", () => {
     expect(detectFabricatedListedEntities("I don't have enough information to answer.", "").ok).toBe(true);
   });
+
+  // ── 2026-08-21 live false-positive (cortex run 01M0KB5MTA4NJP907V93RHKFGK) ──
+  // A legitimate commit-summary report was flagged as "invented" and the run
+  // hard-failed. One root cause: numbered bold-list titles that are the
+  // model's OWN synthesized category headers ("**Improved Onboarding &
+  // Clarity:**") are not researched named-entity claims scraped from
+  // evidence -- they're the model's legitimate synthesis of already-consumed
+  // tool output, and naturally share no vocabulary with terse raw commit-log
+  // text. A title ending in ":" structurally reads as "label: elaboration"
+  // (a category/section header), not a standalone entity claim, so it's
+  // excluded from extraction. (The OTHER root cause -- a summary table with
+  // Date/Action columns also getting flagged -- is fixed at the verifier
+  // severity level, not here; see verifier.test.ts. This function's job is
+  // extraction/grounding, not deciding how harshly a violation is punished.)
+  it("does NOT flag numbered bold category headers ending in ':' (synthesis, not entity claims)", () => {
+    const out =
+      "1.  **Improved Onboarding & Clarity:** Significant overhauls to the README.\n" +
+      "2.  **Stability & Reliability:** Critical bug fixes around LLM providers.\n" +
+      "3.  **Maintainability:** Architectural changes to tool registration.";
+    const evidence = "docs: update README site structure\nfix: groq deprecation handling\nrefactor: tool registration opt-in";
+    expect(detectFabricatedListedEntities(out, evidence).ok).toBe(true);
+  });
+  // Original colon-free detection (scratch.ts titles have no trailing ":")
+  // preserved by "flags a bulleted list of bold titles..." above.
 });
 
 describe("validateNumericGrounding (tolerant value-match)", () => {

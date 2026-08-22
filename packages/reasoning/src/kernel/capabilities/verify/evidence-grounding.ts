@@ -362,7 +362,14 @@ function extractTableRowTitles(text: string): string[] {
 /** Extract bold titles from bullet/numbered list items (`- **Title** — ...`). */
 const BOLD_LIST_ITEM_RE = /^\s*(?:[-*]|\d+[.)])\s+\*\*([^*]+)\*\*/gm;
 function extractBoldListTitles(text: string): string[] {
-  return [...text.matchAll(BOLD_LIST_ITEM_RE)].map((m) => m[1].trim());
+  return [...text.matchAll(BOLD_LIST_ITEM_RE)]
+    .map((m) => m[1].trim())
+    // A title ending in ":" reads as "label: elaboration" — a category or
+    // section header the model synthesized to organize its OWN answer, not
+    // a standalone named-entity claim scraped from evidence (live false
+    // positive, 2026-08-21: "**Improved Onboarding & Clarity:**" in a
+    // legitimate commit-summary report, flagged as an invented entity).
+    .filter((title) => !title.endsWith(":"));
 }
 
 /**

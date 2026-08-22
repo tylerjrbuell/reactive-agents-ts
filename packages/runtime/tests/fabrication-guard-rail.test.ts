@@ -36,3 +36,33 @@ describe("fabrication-guard builder rail (deterministic test provider)", () => {
     expect(r.success).toBe(false);
   });
 });
+
+// End-to-end reproduction of the 2026-08-21 cortex live false-positive (run
+// 01M0KB5MTA4NJP907V93RHKFGK): a legitimate summary report — numbered bold
+// category headers the model synthesized itself, plus a Date/Action summary
+// table — was hard-failed by the (then newly-added) fabricated-listed-
+// entities check in the DEFAULT block mode. Exercises the exact same builder
+// → verifier rail as the suite above, proving the fix holds through the full
+// stack, not just the verifier unit.
+const LEGITIMATE_SUMMARY_REPORT =
+  "FINAL ANSWER: # Activity Summary\n\n" +
+  "1.  **Improved Onboarding & Clarity:** Overhauled the README.\n" +
+  "2.  **Stability & Reliability:** Fixed provider deprecation bugs.\n\n" +
+  "| Date | Key Action | Impact |\n| :--- | :--- | :--- |\n" +
+  "| **Aug 17** | Memory Tier Docs Update | Improved documentation clarity. |\n" +
+  "| **Aug 16** | README/Site Overhaul | Massive DX boost. |";
+
+describe("fabricated-listed-entities never hard-fails a legitimate synthesis report (2026-08-21 cortex incident)", () => {
+  it("default (block) mode → legitimate summary report still ships successfully", async () => {
+    const a = await ReactiveAgents.create()
+      .withName("fab-listed-entities-rail")
+      .withModel("test-model")
+      .withReasoning()
+      .withVerification()
+      .withTestScenario([{ text: LEGITIMATE_SUMMARY_REPORT }])
+      .build();
+    const r = await a.run("summarize the last 10 commits in a markdown report");
+    expect(r.success).toBe(true);
+    expect(r.output).toContain("Improved Onboarding");
+  });
+});
