@@ -562,6 +562,22 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
 
 **Verdict:** PROVEN (unit) — 4 red-on-cut tests in `requirement-state.test.ts`, mutating the ledger read reddens 2. **Residual (honest):** no end-to-end kernel-delegation cell — blocked by test-provider scripting limits (the OB-3 "sub-agent merge on the kernel parent path untested" area); a false-negative *rate* drop is owner-gated live-arm work, not claimed.
 
+### D-2026-08-21-N — fabrication-guard "block degrades to warn" doesn't actually restore success — live false-fail on cortex
+
+**Class:** correctness bug (guard enforcement leaves the run mis-terminated after the documented degrade).
+
+Caught via cortex's own run history (`apps/cortex/.cortex/cortex.db`, run `01M0KB5MTA4NJP907V93RHKFGK`, 2026-08-21, `ollama`/`gemma4:e4b`, `reactive` strategy). The run is a genuine success being reported as a failure end-to-end: `terminationReason: "end_turn"` (clean stop), debrief `outcome: "success"` / `confidence: "high"`, `gh-cli` called twice with 100% tool success, and a complete, well-formed markdown report as the answer — yet `cortex_runs.status = "failed"` and `error_message` contains that SAME full report text verbatim (not an error).
+
+Root cause traced through the kernel:
+1. Task ("fetch the last 10 commits... summarize... in a nice markdown report") has a small local model synthesize `gh-cli`'s raw output into categorized prose + a markdown table.
+2. `verifier.ts` check 4e (`detectFabricatedListedEntities`, `packages/reasoning/src/kernel/capabilities/verify/verifier.ts:640-646`) — part of the always-on fabrication-guard family broadened by the same-day commit `2f8432fa` — flags the bold list items / table rows as unverifiable "invented named entities" against the tool-evidence corpus. A model's reasonable paraphrase/categorization of real tool output is exactly the shape this heuristic risks false-positiving on.
+3. In `block` mode this is documented as "suppress + retry, degrades to warn" (`verifier.ts:651` comment) — i.e. after one retry the answer should still ship, just flagged, not fail the run.
+4. It doesn't degrade cleanly: `execution-engine.ts:1226` (`rr.status === "failed" ? executionSucceeded = false`) still reads the pre-degrade failed status, and `run-finalize.ts:74` (`!executionSucceeded && result.error ? { error: result.error }`) then ships the full answer text as `error` — so the "degrade" the comment promises isn't actually clearing status/error by the time the result reaches `TaskResult`/`AgentCompleted`.
+
+Only 1 sample so far (cortex's DB had 4 total runs, 1 failed) — not yet cross-tier confirmed, but the mechanism is traced to specific lines, not inferred from the symptom alone. Prime suspects for who else hits this: any local/weaker model doing prose synthesis (summaries, reports, categorized write-ups) from tool output, since check 4e's heuristic is aimed at exactly that shape.
+
+**Discharge:** find the actual "degrades to warn" implementation site referenced by `verifier.ts:651`'s "see runner" and confirm whether it (a) never runs for the 4c/4d/4e fabrication-guard family (only for the opt-in numeric-grounding check 5), or (b) runs but doesn't propagate the restored status back through `execution-engine.ts`'s `rr.status`/`ctx.metadata.lastResponse` read path. Needs a red-on-cut regression test pinning "block mode + fabrication flag + retry + still-flagged → ships as `status: completed` with a warn-level verdict, not `status: failed` with the answer as the error." Owner-gated — kernel retry/degrade state machine, not a one-line fix.
+
 ---
 
 ## 6. The gates that keep it fixed (no fix is done without one)
