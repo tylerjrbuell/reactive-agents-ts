@@ -61,18 +61,48 @@ interface ActiveConnection {
 
 // ─── Module-level State ───────────────────────────────────────────────────────
 
-const activeConnections = new Map<string, ActiveConnection>();
-
-const notificationCallbacks = new Map<
-  string,
-  (method: string, params: Record<string, unknown>) => void
->();
+/**
+ * Registry of every live `makeMCPClient` instance's own connection table.
+ *
+ * Each instance created by `makeMCPClient` owns a private `activeConnections`
+ * Map (see below) so that two Layer instances in the same process — e.g. two
+ * concurrent agents, or parallel test suites — never clobber each other's
+ * connections. This registry exists only so two process-wide concerns can
+ * still reach every instance despite that isolation:
+ *   1. `cleanupMcpTransport(serverName)` — an exported bare function called
+ *      by external consumers (e.g. apps/cortex) that hold no reference to
+ *      which instance owns a given server name.
+ *   2. `ensureExitHandler()` — process signal handlers can only be
+ *      registered once per process, but must still clean up every
+ *      instance's connections on shutdown.
+ * The registry holds no connection data itself; it is only a lookup path
+ * for these two cases. Each instance still reads/writes its own Map.
+ */
+const connectionRegistry = new Set<Map<string, ActiveConnection>>();
 
 // ─── Exit Cleanup ─────────────────────────────────────────────────────────────
 
+/** Clean up a single named entry within one instance's connection table. */
+function cleanupConnectionEntry(connections: Map<string, ActiveConnection>, serverName: string): void {
+  const conn = connections.get(serverName);
+  if (!conn) return;
+
+  if (conn.dockerContainerName) {
+    // Must use `docker rm -f` — killing the docker run process is not enough
+    // because the Docker daemon keeps the container alive independently.
+    mcpDebug(`[MCP cleanup] stopping container "${conn.dockerContainerName}"`);
+    dockerRmForce(conn.dockerContainerName);
+  }
+  try { void conn.transport.close(); } catch { /* already gone */ }
+  connections.delete(serverName);
+  mcpDebug(`[MCP cleanup] "${serverName}" transport closed`);
+}
+
 function cleanupAll(): void {
-  for (const [name] of activeConnections) {
-    cleanupMcpTransport(name);
+  for (const connections of connectionRegistry) {
+    for (const [name] of connections) {
+      cleanupConnectionEntry(connections, name);
+    }
   }
 }
 
@@ -158,20 +188,17 @@ function getFreeHostPort(): Promise<number> {
 /**
  * Forcibly close a named MCP transport and stop any managed docker container.
  * Called on DELETE, agent dispose, and refresh-tools timeout.
+ *
+ * This is a bare top-level function with no instance handle, so it searches
+ * every live `makeMCPClient` instance's connection table (via
+ * `connectionRegistry`) and cleans up the entry wherever it is found. A
+ * server name may legitimately exist in more than one instance now that each
+ * instance's connections are isolated.
  */
 export function cleanupMcpTransport(serverName: string): void {
-  const conn = activeConnections.get(serverName);
-  if (!conn) return;
-
-  if (conn.dockerContainerName) {
-    // Must use `docker rm -f` — killing the docker run process is not enough
-    // because the Docker daemon keeps the container alive independently.
-    mcpDebug(`[MCP cleanup] stopping container "${conn.dockerContainerName}"`);
-    dockerRmForce(conn.dockerContainerName);
+  for (const connections of connectionRegistry) {
+    cleanupConnectionEntry(connections, serverName);
   }
-  try { void conn.transport.close(); } catch { /* already gone */ }
-  activeConnections.delete(serverName);
-  mcpDebug(`[MCP cleanup] "${serverName}" transport closed`);
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -670,6 +697,18 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
 
 export const makeMCPClient = Effect.gen(function* () {
   const serversRef = yield* Ref.make<Map<string, MCPServer>>(new Map());
+
+  // Per-instance connection state (WS-mcp-isolation): each `makeMCPClient`
+  // build gets its own private tables so two Layer instances in the same
+  // process never share or clobber each other's MCP connections.
+  const activeConnections = new Map<string, ActiveConnection>();
+  const notificationCallbacks = new Map<
+    string,
+    (method: string, params: Record<string, unknown>) => void
+  >();
+  // Registered so `cleanupMcpTransport()` (bare export, no instance handle)
+  // and the process exit handler can still reach this instance's table.
+  connectionRegistry.add(activeConnections);
 
   const connect = (config: ConnectConfig): Effect.Effect<MCPServer, MCPConnectionError> =>
     Effect.tryPromise({
