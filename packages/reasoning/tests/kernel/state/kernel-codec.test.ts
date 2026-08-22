@@ -21,6 +21,7 @@ import {
   deserializeKernelState,
   KERNEL_CODEC_VERSION,
 } from "../../../src/kernel/state/kernel-codec.js";
+import { KernelCodecError } from "../../../src/errors/errors.js";
 import type { KernelState } from "../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
 
@@ -202,5 +203,24 @@ describe("kernel-codec — envelope versioning and corrupt input", () => {
 
   it("throws descriptively on corrupt JSON", () => {
     expect(() => deserializeKernelState("{not json")).toThrow();
+  });
+
+  it("throws a typed KernelCodecError (instanceof + discriminable .reason), not a plain Error", () => {
+    try {
+      deserializeKernelState("{not json");
+      throw new Error("expected deserializeKernelState to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(KernelCodecError);
+      expect((err as KernelCodecError)._tag).toBe("KernelCodecError");
+      expect((err as KernelCodecError).reason).toBe("invalid-json");
+    }
+
+    try {
+      deserializeKernelState(JSON.stringify({ codecVersion: KERNEL_CODEC_VERSION + 1, state: {} }));
+      throw new Error("expected deserializeKernelState to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(KernelCodecError);
+      expect((err as KernelCodecError).reason).toBe("version-mismatch");
+    }
   });
 });

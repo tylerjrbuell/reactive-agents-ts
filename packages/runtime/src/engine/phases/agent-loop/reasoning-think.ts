@@ -12,7 +12,7 @@
  * actual module path for telemetry accuracy.
  */
 import { Effect, FiberRef } from "effect";
-import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
@@ -236,8 +236,34 @@ export const runReasoningThink = (
     // ResumeStateRef to a serialized checkpoint, deserialize it here and forward
     // it as `resumeState` so the kernel continues from the restored state instead
     // of a fresh seed. Null on every normal run (zero cost).
+    //
+    // deserializeKernelState throws a typed KernelCodecError (not Effect.fail —
+    // it's a pure sync codec called from many non-Effect contexts, see
+    // kernel-codec.ts) on a corrupt/foreign checkpoint payload. Wrapped in
+    // Effect.try + catchAll so a bad row in the durable-run store degrades to a
+    // fresh run instead of crashing this Effect.gen as an unrecoverable defect —
+    // the resume request silently not being honored is itself a load-bearing
+    // failure (the user asked to continue a specific run), so it's surfaced via
+    // emitLoadBearingFailure rather than the quieter emitErrorSwallowed.
     const resumeJson = yield* FiberRef.get(ResumeStateRef);
-    const resumeState = resumeJson ? deserializeKernelState(resumeJson) : undefined;
+    const resumeState = resumeJson
+      ? yield* Effect.try({
+          try: () => deserializeKernelState(resumeJson),
+          // Preserve the underlying KernelCodecError (rather than Effect's
+          // generic UnknownException wrapper) so errorTag() below reports
+          // the real tag/message for triage.
+          catch: (err) => err,
+        }).pipe(
+          Effect.catchAll((err) =>
+            emitLoadBearingFailure({
+              capability: "durable-resume",
+              site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:resume-deserialize",
+              tag: errorTag(err),
+              message: err instanceof Error ? err.message : String(err),
+            }).pipe(Effect.as(undefined)),
+          ),
+        )
+      : undefined;
 
     // Durable HITL (Phase D): a human's approval decision threaded in on a resumed
     // run (via ApprovalDecisionRef, seeded by approveRun/denyRun). Forwarded to the

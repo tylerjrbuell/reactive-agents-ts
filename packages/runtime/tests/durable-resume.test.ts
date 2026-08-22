@@ -23,6 +23,7 @@ import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Database } from "@reactive-agents/runtime-shim";
 import { ReactiveAgents } from "../src/builder.js";
 
 function makeToolDef(name: string) {
@@ -147,6 +148,54 @@ describe("durable runs — resume", () => {
         expect(String(err)).toContain("DurableConfigMismatch");
       } finally {
         await drifted.dispose();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 45000);
+
+  it("degrades to a fresh run instead of crashing when the persisted checkpoint is corrupt", async () => {
+    // Guards the reasoning-think.ts durable-resume seam: deserializeKernelState
+    // now throws a typed KernelCodecError on a malformed envelope, wrapped in
+    // Effect.try + catchAll (emitLoadBearingFailure) instead of surfacing as an
+    // unrecoverable Effect defect. A corrupt `state_json` row (bit-rot, foreign
+    // write, truncated disk) must not crash the resuming run — it should fall
+    // back to a fresh start on the same task.
+    const dir = mkdtempSync(join(tmpdir(), "ra-resume-corrupt-"));
+    try {
+      const original = await makeAgent({
+        dir,
+        systemPrompt: "You are a precise calculator.",
+        scenario: [
+          { toolCall: { name: "echo-tool", args: { input: "hi" } } },
+          { text: "FINAL ANSWER: forty-two" },
+        ],
+      });
+      const runId = await captureRun(original);
+      await original.dispose();
+
+      // Corrupt the persisted checkpoint envelope directly — not valid JSON.
+      const db = new Database(join(dir, "runs.db"));
+      db.prepare(
+        `UPDATE run_checkpoints SET state_json = ? WHERE run_id = ?`,
+      ).run("{not-valid-json-at-all", runId);
+      db.close();
+
+      const resumeAgent = await makeAgent({
+        dir,
+        systemPrompt: "You are a precise calculator.",
+        scenario: [{ text: "FINAL ANSWER: forty-two" }],
+      });
+      try {
+        // Must not throw — corrupt checkpoint degrades to a fresh run rather
+        // than propagating a defect / crashing the process.
+        const result = await resumeAgent.resumeRun(runId);
+        expect(result.output).toContain("forty-two");
+
+        const completed = await resumeAgent.listRuns({ status: "completed" });
+        expect(completed.some((r) => r.runId === runId)).toBe(true);
+      } finally {
+        await resumeAgent.dispose();
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
