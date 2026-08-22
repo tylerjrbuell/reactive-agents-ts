@@ -1838,7 +1838,7 @@ export class ReactiveAgent<TOut = unknown> {
                                         return Effect.fail(new StructuredOutputError({
                                             rawText: agentResult.output,
                                             issues: [g.objectError],
-                                        }) as unknown as Error)
+                                        }))
                                     }
                                     const result: AgentResult = {
                                         ...agentResult,
@@ -1868,7 +1868,7 @@ export class ReactiveAgent<TOut = unknown> {
                             // If "degrade" extractObjectFromAnswer already catches and returns
                             // { objectError } in the success channel — nothing extra needed.
                             Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
-                                Effect.fail(e as unknown as Error)
+                                Effect.fail(e)
                             ),
                         )
                     }),

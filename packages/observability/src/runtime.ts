@@ -2,7 +2,7 @@ import { Layer } from "effect";
 import { EventBusLive } from "@reactive-agents/core";
 import { ObservabilityServiceLive } from "./observability-service.js";
 import type { ExporterConfig } from "./observability-service.js";
-import { MetricsCollectorLive } from "./metrics/metrics-collector.js";
+import { MetricsCollectorLive, MetricsCollectorTag } from "./metrics/metrics-collector.js";
 
 /**
  * Create observability layer with optional pre-created metrics collector.
@@ -14,7 +14,7 @@ import { MetricsCollectorLive } from "./metrics/metrics-collector.js";
  */
 export const createObservabilityLayer = (
   exporterConfig: ExporterConfig = {},
-  metricsCollectorLayer: Layer.Layer<any, any> = MetricsCollectorLive,
+  metricsCollectorLayer: Layer.Layer<MetricsCollectorTag, never> = MetricsCollectorLive,
 ) =>
   ObservabilityServiceLive(exporterConfig).pipe(
     // Note: metricsCollectorLayer should already have EventBusLive provided by the caller (runtime.ts)

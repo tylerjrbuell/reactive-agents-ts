@@ -49,7 +49,8 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Phase pipeline (W23 decomposition) ───
 import { runGuardedPhase, runObservablePhase } from "./engine/pipeline.js";
-import type { PhaseDeps } from "./engine/runtime-context.js";
+import type { PhaseDeps, ObsLike } from "./engine/runtime-context.js";
+import { asObsLike } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
 import { bootstrap } from "./engine/phases/bootstrap.js";
 import { complete } from "./engine/phases/complete.js";
@@ -88,24 +89,8 @@ import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
 
 // ─── Narrow service types for optional deps ───
-
-type ObsLike = {
-  withSpan: <A, E>(name: string, effect: Effect.Effect<A, E>, attrs?: Record<string, unknown>) => Effect.Effect<A, E>;
-  incrementCounter: (name: string, value?: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  recordHistogram: (name: string, value: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  setGauge: (name: string, value: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  captureSnapshot: (agentId: string, state: Record<string, unknown>) => Effect.Effect<unknown, never>;
-  debug: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  info: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  warn: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
-  flush: () => Effect.Effect<void, never>;
-  verbosity: () => string;
-  attachChildren: (
-    children: readonly { readonly name: string; readonly data: unknown }[],
-  ) => Effect.Effect<void, never>;
-};
+// ObsLike + asObsLike are canonical at engine/runtime-context.ts — reused here
+// rather than re-derived, per WS-5b (cast-site ceiling counts sites, not occurrences).
 
 type EbLike = {
   publish: (event: AgentEvent) => Effect.Effect<void, never>;
@@ -197,7 +182,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             ).pipe(
               Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
             );
-            const obs: ObsLike | null = obsOpt._tag === "Some" ? (obsOpt.value as unknown as ObsLike) : null;
+            const obs: ObsLike | null = obsOpt._tag === "Some" ? asObsLike(obsOpt.value) : null;
 
             // Verbosity helpers — read once per execution
             // ObsLike.verbosity() is typed `() => string` (a deliberately narrow/
