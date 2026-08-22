@@ -1,7 +1,7 @@
 ---
 title: Codebase debt + Effect-abstraction cleanup sweep
 date: 2026-08-21
-status: in-progress
+status: batch-1-and-2-done; item-9 needs a decision; items-16-17 escalated
 ---
 
 # Codebase debt + Effect-abstraction cleanup sweep
@@ -17,30 +17,36 @@ document is the synthesis + execution plan.
 
 ## Findings, triaged
 
-### Batch 1 — Fix immediately (mechanical, low risk, independent files)
+### Batch 1 — Fix immediately (mechanical, low risk, independent files) — ALL DONE
 
-| # | Finding | File:line | Effort |
-|---|---|---|---|
-| 1 | Ceiling-test 2-over-budget: bad `ToolDefinition` literal cast + reinvented `Database` constructor cast | `packages/benchmarks/src/memory-bootstrap-ablation.ts:90,180` | Low |
-| 2 | Dead duplicate `serializeKernelState`/`deserializeKernelState` — name-collides with the real codec in `kernel-codec.ts`, zero production callers, a landmine waiting to happen | `packages/reasoning/src/kernel/state/kernel-state.ts:1292-1361` | Low |
-| 3 | Retry/timeout/catchTag pattern duplicated verbatim across 5 LLM provider adapters, self-documented via repeated "F4" comments, never factored out | `anthropic.ts:307`, `openai.ts:380`, `gemini.ts:424`, `litellm.ts:306`, `local.ts:616` | Medium |
-| 4 | `mcp-client.ts` module-level global connection state — two `ToolService` Layer instances in one process silently clobber each other's MCP connections | `packages/tools/src/mcp/mcp-client.ts:64-98` | Medium |
-| 5 | `observability/runtime.ts` erases type on default layer param needlessly | `packages/observability/src/runtime.ts:17` | Low |
-| 6 | Two undocumented `as unknown as` casts, no rationale comment (contrast with the documented sibling pattern) | `packages/runtime/src/reactive-agent.ts:1841`, `packages/runtime/src/execution-engine.ts:200` | Low |
-| 7 | Raw `Error` throws instead of typed domain errors (rest of package is clean on this) | `packages/memory/src/services/skill-portability.ts:117,124` | Low |
-| 8 | Stray avoidable `as any` casts | `packages/llm-provider/src/calibration-runner.ts:70`, `testing.ts:467` | Low |
-
-### Batch 2 — Flag for planning (real, scoped, but bigger blast radius — own dedicated pass)
-
-| # | Finding | File:line | Effort | Risk |
+| # | Finding | File:line | Effort | Status |
 |---|---|---|---|---|
-| 9 | Dead inline agent-loop arm — Move 1 (2026-08-13) made the kernel arm the sole path; the `else if (!cacheHit)` branch + 4 `inline-*.ts` files (~1,450 LOC total) are unreachable in production | `packages/runtime/src/execution-engine.ts:861-1102`, `packages/runtime/src/engine/phases/agent-loop/inline-{think,act,observe,harness-hooks}.ts` | Medium | Medium (verify no test layer stack omits `ReasoningService` first) |
-| 10 | `withLayers()`/`withReplayLLM()` erase both channels via `Layer<any,any>` on public builder API; unchecked cast at consumption site | `packages/runtime/src/builder.ts:2223,2240`, `runtime-construction.ts:420` | Medium | Low, but semver-relevant public type signature |
-| 11 | `BuilderRuntimeStateView` blind structural cast, no compile-time guard against a renamed/removed private field | `packages/runtime/src/builder/build-effect/runtime-construction.ts:84-91` | Medium | Low |
-| 12 | `MaybeService<T>` reinvents `Option<T>`, which the package already imports elsewhere | `packages/reasoning/src/kernel/state/kernel-state.ts:977` + ~7 consumer files | Medium | Low |
-| 13 | No `Data.TaggedError`/`Effect.fail` anywhere in the kernel — domain errors are plain `throw`, surfacing as unrecoverable defects inside `Effect.gen` | `kernel/state/kernel-codec.ts:200-227`, `kernel/utils/tool-parsing.ts` (8 sites) | Medium | Medium (touches the runtime resume call-site) |
-| 14 | `toStrictToolSchema` typed `(schema: any): any`, self-acknowledged debt | `packages/llm-provider/src/providers/openai.ts:160-206` | Medium | Low |
-| 15 | `applyPatches` exported+tested, zero callers — dispatcher applies patches inline instead; duplicate-or-dead, needs a check-first read | `packages/reactive-intelligence/src/controller/patch-applier.ts:14` vs `dispatcher.ts:252,261` | Low | Low |
+| 1 | Ceiling-test 2-over-budget: bad `ToolDefinition` literal cast + reinvented `Database` constructor cast | `packages/benchmarks/src/memory-bootstrap-ablation.ts:90,180` | Low | ✅ `86b61457` |
+| 2 | Dead duplicate `serializeKernelState`/`deserializeKernelState` — name-collides with the real codec in `kernel-codec.ts`, zero production callers, a landmine waiting to happen | `packages/reasoning/src/kernel/state/kernel-state.ts:1292-1361` | Low | ✅ `cce26232` |
+| 3 | Retry/timeout/catchTag pattern duplicated verbatim across 5 LLM provider adapters, self-documented via repeated "F4" comments, never factored out | `anthropic.ts:307`, `openai.ts:380`, `gemini.ts:424`, `litellm.ts:306`, `local.ts:616` | Medium | ✅ `18649cff` |
+| 4 | `mcp-client.ts` module-level global connection state — two `ToolService` Layer instances in one process silently clobber each other's MCP connections | `packages/tools/src/mcp/mcp-client.ts:64-98` | Medium | ✅ `97454a51` |
+| 5 | `observability/runtime.ts` erases type on default layer param needlessly | `packages/observability/src/runtime.ts:17` | Low | ✅ `bbbb1d9f` |
+| 6 | Two undocumented `as unknown as` casts, no rationale comment (contrast with the documented sibling pattern) | `packages/runtime/src/reactive-agent.ts:1841`, `packages/runtime/src/execution-engine.ts:200` | Low | ✅ `bbbb1d9f` |
+| 7 | Raw `Error` throws instead of typed domain errors (rest of package is clean on this) | `packages/memory/src/services/skill-portability.ts:117,124` | Low | ✅ `bbbb1d9f` |
+| 8 | Stray avoidable `as any` casts | `packages/llm-provider/src/calibration-runner.ts:70`, `testing.ts:467` | Low | ✅ `18649cff` |
+
+**Unplanned but fixed along the way:** check 4e's fabrication guard (shipped hours earlier the same day) had a live false-positive hard-failing legitimate synthesis reports — found via cortex's own run history while sweeping. Root-caused, fixed, verified end-to-end against the real production trace shape. `bbc8e16d`.
+
+### Batch 2 — Flag for planning (real, scoped, but bigger blast radius — own dedicated pass) — 6/7 DONE
+
+| # | Finding | File:line | Effort | Risk | Status |
+|---|---|---|---|---|---|
+| 9 | Dead inline agent-loop arm | `packages/runtime/src/execution-engine.ts:861-1102`, `inline-{think,act,observe,harness-hooks}.ts` | Medium | Medium | ⚠️ **NOT dead — see below, needs a decision** |
+| 10 | `withLayers()`/`withReplayLLM()` erase both channels via `Layer<any,any>` on public builder API; unchecked cast at consumption site | `packages/runtime/src/builder.ts:2223,2240`, `runtime-construction.ts:420` | Medium | Low | ✅ `08121a5e` |
+| 11 | `BuilderRuntimeStateView` blind structural cast, no compile-time guard against a renamed/removed private field | `packages/runtime/src/builder/build-effect/runtime-construction.ts:84-91` | Medium | Low | ✅ `08121a5e` (guard proven to catch drift, see commit) |
+| 12 | `MaybeService<T>` reinvents `Option<T>`, which the package already imports elsewhere | `packages/reasoning/src/kernel/state/kernel-state.ts:977` + ~7 consumer files | Medium | Low | ✅ `b6ee0b85` |
+| 13 | No `Data.TaggedError`/`Effect.fail` anywhere in the kernel — domain errors are plain `throw`, surfacing as unrecoverable defects inside `Effect.gen` | `kernel/state/kernel-codec.ts:200-227`, `kernel/utils/tool-parsing.ts` (8 sites) | Medium | Medium | ✅ `48c22d01` |
+| 14 | `toStrictToolSchema` typed `(schema: any): any`, self-acknowledged debt | `packages/llm-provider/src/providers/openai.ts:160-206` | Medium | Low | ✅ `8c68c040` |
+| 15 | `applyPatches` exported+tested, zero callers — dispatcher applies patches inline instead; duplicate-or-dead, needs a check-first read | `packages/reactive-intelligence/src/controller/patch-applier.ts:14` vs `dispatcher.ts:252,261` | Low | Low | ✅ `8c68c040` (deleted — reactive-observer.ts's logic diverged, dispatcher was never the real consumer) |
+
+**#9 finding correction (2026-08-22):** the dispatched agent correctly refused to delete. `createRuntime()`'s "reasoningOpt always Some" guarantee (Move 1, 2026-08-13) is scoped to that specific composition, NOT to `ExecutionEngineLive` as a general Layer. ~10 files in `packages/runtime/tests/` construct `ExecutionEngineLive` directly without providing `ReasoningService` (`execution-engine.test.ts`, `kill-switch-enforcement.test.ts`, `budget-enforcement.test.ts`, `foundation-integration.test.ts`, `max-iterations-enforcement.test.ts`, `behavioral-contract-enforcement.test.ts`, `semantic-extraction.test.ts`, `verification-quality-gate.test.ts`, `memory-consolidation-wiring.test.ts`, `builder-contracts.test.ts`) — those tests legitimately hit the inline branch today, confirmed passing (baseline: 1511/0). Deleting as originally scoped would runtime-crash them, not just fail typecheck. Needs a decision: (a) update those ~10 tests to always provide `ReasoningService`, making the branch genuinely dead, then delete it — or (b) keep the inline path as a documented "minimal engine mode" and fix `runtime.ts`'s misleading "always Some" doc-comment to scope it to `createRuntime()` specifically. Not executed either way yet.
+
+**Cross-batch note:** the `MaybeService→Option` migration (#12) traded a net -1 on the `as unknown as` cast ceiling for one unavoidable +1 (`service-utils.ts`'s `memoryService` resolution — Option's nominal typing needs `unknown` where the old structural `MaybeService` didn't). Ceiling bumped 76→77 with rationale in `as-unknown-as-ceiling.test.ts`, matching that file's own documented bump precedent. True design-out would mean widening `AgentMemory`'s public port type in `@reactive-agents/core` — out of scope for this sweep.
 
 ### Escalate — needs explicit decision, changes runtime behavior
 
