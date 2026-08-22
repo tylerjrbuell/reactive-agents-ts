@@ -70,7 +70,6 @@ export type {
   KernelStatePatch,
 } from "./controller/intervention.js";
 export { defaultInterventionConfig } from "./controller/intervention.js";
-export { applyPatches } from "./controller/patch-applier.js";
 export { defaultInterventionRegistry } from "./controller/handlers/index.js";
 export { earlyStopHandler } from "./controller/handlers/early-stop.js";
 

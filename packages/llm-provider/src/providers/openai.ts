@@ -151,16 +151,37 @@ export const isStrictToolCallingSupported = (model: string): boolean => {
 };
 
 /**
+ * Minimal recursive JSON-Schema shape covering exactly what `toStrictToolSchema`
+ * branches on below: object schemas (properties/required/additionalProperties),
+ * array schemas (items), anyOf unions, and scalar leaf schemas (type/enum/default).
+ * Arbitrary extra JSON-Schema keywords (description, title, format, ...) are
+ * preserved via the `unknown`-typed index signature rather than widening to `any`.
+ */
+export interface JSONSchema {
+  type?: string;
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  additionalProperties?: boolean | JSONSchema;
+  items?: JSONSchema;
+  anyOf?: JSONSchema[];
+  enum?: unknown[];
+  default?: unknown;
+  [key: string]: unknown;
+}
+
+const isJSONSchemaObject = (value: unknown): value is JSONSchema =>
+  typeof value === "object" && value !== null;
+
+/**
  * Transform a JSON Schema into an OpenAI-compatible "Strict" schema.
  * 1. Sets additionalProperties: false
  * 2. Moves all properties into the required array
  * 3. Removes 'default' values (not supported in strict mode)
  */
 /** @internal Exported for testing only */
-export const toStrictToolSchema = (schema: any): any => {
-  if (!schema || typeof schema !== "object") return schema;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- toStrictToolSchema is a pre-existing `(schema: any): any` mutator; the clone keeps that local shape.
-  const newSchema = deepClone<any>(schema);
+export const toStrictToolSchema = (schema: unknown): unknown => {
+  if (!isJSONSchemaObject(schema)) return schema;
+  const newSchema = deepClone<JSONSchema>(schema);
 
   if (newSchema.type === "object" && newSchema.properties) {
     const originalRequired = new Set<string>(newSchema.required ?? []);
@@ -172,13 +193,13 @@ export const toStrictToolSchema = (schema: any): any => {
       const prop = newSchema.properties[key];
 
       // Remove 'default' as it's not supported in OpenAI Strict Mode
-      if (typeof prop === "object" && prop !== null) {
+      if (isJSONSchemaObject(prop)) {
         delete prop.default;
       }
 
       // Properties that were NOT originally required become nullable so the
       // model can pass null instead of omitting them (strict mode forbids omission)
-      if (!originalRequired.has(key) && prop && typeof prop === "object") {
+      if (!originalRequired.has(key) && isJSONSchemaObject(prop)) {
         if (prop.type && prop.type !== "null" && !prop.anyOf) {
           prop.anyOf = [{ type: prop.type }, { type: "null" }];
           delete prop.type;
@@ -187,16 +208,16 @@ export const toStrictToolSchema = (schema: any): any => {
 
       // Recursively apply to nested objects and anyOf branches
       if (prop.type === "object" && prop.properties) {
-        newSchema.properties[key] = toStrictToolSchema(prop);
+        newSchema.properties[key] = toStrictToolSchema(prop) as JSONSchema;
       } else if (prop.anyOf) {
-        prop.anyOf = prop.anyOf.map((variant: any) =>
-          variant && variant.type === "object"
+        prop.anyOf = prop.anyOf.map((variant) =>
+          isJSONSchemaObject(variant) && variant.type === "object"
             ? { ...variant, additionalProperties: false }
             : variant,
         );
       }
       if (prop.type === "array" && prop.items && prop.items.type === "object") {
-        newSchema.properties[key].items = toStrictToolSchema(prop.items);
+        newSchema.properties[key].items = toStrictToolSchema(prop.items) as JSONSchema;
       }
     }
   }
