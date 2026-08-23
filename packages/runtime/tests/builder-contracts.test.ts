@@ -17,44 +17,49 @@ import { ReactiveAgents } from "../src/builder.js";
 
 // ─── Mock Helpers ─────────────────────────────────────────────────────────────
 
-type LLMServiceShape = {
-  complete: (req: unknown) => Effect.Effect<{
-    content: string;
-    stopReason: string;
-    toolCalls?: unknown[];
-    usage: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
-    model: string;
-  }>;
+// ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───────────
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mocks below used to
+// drive the (now-deleted) inline arm directly. `executionTimeoutMs`
+// (`execution-engine.ts` ~line 1877) wraps the WHOLE `execute()` effect —
+// both arms — with `Effect.timeoutFail`, so a `ReasoningService` stub that
+// sleeps before resolving exercises the identical real timeout wiring.
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
 };
 
-const LLMServiceTag = Context.GenericTag<LLMServiceShape>("LLMService");
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
 
-function makeFastLLM(): Layer.Layer<LLMServiceShape> {
-  return Layer.succeed(LLMServiceTag, {
-    complete: (_req: unknown) =>
+function makeFastLLM(): Layer.Layer<{ execute: unknown }> {
+  return Layer.succeed(ReasoningServiceTag, {
+    execute: (_params: { [k: string]: unknown }) =>
       Effect.succeed({
-        content: "FINAL ANSWER: done",
-        stopReason: "end_turn",
-        toolCalls: [],
-        usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-        model: "test",
+        output: "FINAL ANSWER: done",
+        status: "completed" as const,
+        steps: [{ id: "step-1", type: "thought", content: "FINAL ANSWER: done" }],
+        metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
       }),
-  });
+  }) as unknown as Layer.Layer<{ execute: unknown }>;
 }
 
-function makeSlowLLM(delayMs: number): Layer.Layer<LLMServiceShape> {
-  return Layer.succeed(LLMServiceTag, {
-    complete: (_req: unknown) =>
+function makeSlowLLM(delayMs: number): Layer.Layer<{ execute: unknown }> {
+  return Layer.succeed(ReasoningServiceTag, {
+    execute: (_params: { [k: string]: unknown }) =>
       Effect.sleep(Duration.millis(delayMs)).pipe(
         Effect.map(() => ({
-          content: "FINAL ANSWER: done",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-          model: "test",
+          output: "FINAL ANSWER: done",
+          status: "completed" as const,
+          steps: [{ id: "step-1", type: "thought", content: "FINAL ANSWER: done" }],
+          metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
         })),
       ),
-  });
+  }) as unknown as Layer.Layer<{ execute: unknown }>;
 }
 
 function makeEngine(config?: Partial<import("../src/types.js").ReactiveAgentsConfig>) {

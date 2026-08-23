@@ -16,41 +16,77 @@ import {
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
-// ─── Mock Primitives ───────────────────────────────────────────────────────
-
-function makeMockLLM(opts: {
+// ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───────────
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mock this file used
+// to drive the (now-deleted) inline arm directly is no longer on the
+// execution path. The memory-flush extraction gate under test
+// (`packages/runtime/src/engine/phases/memory-flush.ts`, "Lever 7") reads
+// `ctx.toolResults.length` and `ctx.metadata.lastResponse.length` — both
+// derived from `ReasoningResult.steps`/`.output` on EITHER arm
+// (`reasoning-think.ts` sets `lastResponse = String(result.output)`;
+// `reasoning-post-think.ts` derives synthetic `toolResults` from
+// action/observation step PAIRS in `result.steps`). This stub builds that
+// exact step shape from the same `{content, toolCalls}` opts the old LLM
+// mock took, so every extraction-gate assertion below is unchanged.
+function makeMockReasoning(opts: {
   content?: string;
-  toolCalls?: unknown[];
+  toolCalls?: readonly { id: string; name: string; input: unknown }[];
   tokens?: number;
+  /**
+   * Extra preliminary "thought" steps before the final answer. Needed for
+   * no-tool-call scenarios so `ctx.iteration` (== `stepsCount`,
+   * `reasoning-post-think.ts:214`) lands above 3 — otherwise
+   * `classifyComplexity` (`engine/util.ts`) grades the run "moderate" and
+   * `memory-flush-dispatch.ts` FORKS the flush fire-and-forget, racing this
+   * test's synchronous assertions. "complex" (iteration > 3) runs it
+   * blocking. Multi-tool-call scenarios naturally clear this via their own
+   * action/observation step pairs and don't need it.
+   */
+  extraThoughtSteps?: number;
 }) {
-  let callCount = 0;
+  const steps: { id: string; type: string; content: string; metadata?: Record<string, unknown> }[] = [];
+  for (let i = 0; i < (opts.extraThoughtSteps ?? 0); i++) {
+    steps.push({ id: `pre-thought-${i}`, type: "thought", content: `Considering the answer (${i})...` });
+  }
+  for (const tc of opts.toolCalls ?? []) {
+    steps.push({
+      id: `${tc.id}-action`,
+      type: "action",
+      content: `${tc.name}(${JSON.stringify(tc.input)})`,
+      metadata: { toolUsed: tc.name },
+    });
+    steps.push({
+      id: `${tc.id}-observation`,
+      type: "observation",
+      content: `Mock result from ${tc.name}`,
+      metadata: { observationResult: { success: true } },
+    });
+  }
+  steps.push({
+    id: "final-thought",
+    type: "thought",
+    content: opts.content ?? "FINAL ANSWER: Task completed.",
+  });
+
   return Layer.succeed(
     Context.GenericTag<{
-      complete: (req: unknown) => Effect.Effect<{
-        content: string;
-        stopReason: string;
-        toolCalls?: unknown[];
-        usage: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
-        model: string;
+      execute: (params: { [k: string]: unknown }) => Effect.Effect<{
+        output: unknown;
+        status: "completed" | "failed" | "partial";
+        steps?: readonly { id: string; type: string; content: string; metadata?: Record<string, unknown> }[];
+        metadata: { cost: number; tokensUsed: number; stepsCount: number };
       }>;
-    }>("LLMService"),
+    }>("ReasoningService"),
     {
-      complete: (_req: unknown) => {
-        callCount++;
-        const isFirstCall = callCount === 1;
-        return Effect.succeed({
-          content: opts.content ?? "FINAL ANSWER: Task completed.",
-          stopReason: "end_turn",
-          toolCalls: isFirstCall ? (opts.toolCalls ?? []) : [],
-          usage: {
-            inputTokens: 100,
-            outputTokens: opts.tokens ?? 50,
-            totalTokens: (opts.tokens ?? 50) + 100,
-            estimatedCost: 0.001,
-          },
-          model: "test-model",
-        });
-      },
+      execute: (_params: { [k: string]: unknown }) =>
+        Effect.succeed({
+          output: opts.content ?? "FINAL ANSWER: Task completed.",
+          status: "completed" as const,
+          steps,
+          metadata: { cost: 0.001, tokensUsed: (opts.tokens ?? 50) + 100, stepsCount: steps.length },
+        }),
     },
   );
 }
@@ -169,7 +205,7 @@ describe("Semantic memory extraction during memory-flush", () => {
 
     // LLM makes TWO tool calls on first request, then returns final answer.
     // Multi-tool use triggers the extraction path under Lever 7.
-    const llmLayer = makeMockLLM({
+    const llmLayer = makeMockReasoning({
       content: "FINAL ANSWER: The answer is 4.",
       toolCalls: [
         { id: "tc-1", name: "web_search", input: { query: "2+2" } },
@@ -220,7 +256,7 @@ describe("Semantic memory extraction during memory-flush", () => {
     const { engineLayer } = makeEngine();
 
     // No tool calls, but substantial response
-    const llmLayer = makeMockLLM({ content: longResponse });
+    const llmLayer = makeMockReasoning({ content: longResponse, extraThoughtSteps: 3 });
 
     const testLayer = Layer.mergeAll(
       engineLayer,
@@ -247,7 +283,7 @@ describe("Semantic memory extraction during memory-flush", () => {
     const { engineLayer } = makeEngine();
 
     // Short response, no tool calls
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: 4" });
+    const llmLayer = makeMockReasoning({ content: "FINAL ANSWER: 4" });
 
     const testLayer = Layer.mergeAll(
       engineLayer,
@@ -273,7 +309,7 @@ describe("Semantic memory extraction during memory-flush", () => {
     const { engineLayer } = makeEngine();
 
     // Tool calls present but no MemoryExtractor layer
-    const llmLayer = makeMockLLM({
+    const llmLayer = makeMockReasoning({
       content: "FINAL ANSWER: The answer is 4.",
       toolCalls: [{ id: "tc-1", name: "web_search", input: { query: "2+2" } }],
     });
@@ -315,7 +351,7 @@ describe("Semantic memory extraction during memory-flush", () => {
     const memService = makeMockMemoryService();
     const { engineLayer } = makeEngine();
 
-    const llmLayer = makeMockLLM({
+    const llmLayer = makeMockReasoning({
       content: "FINAL ANSWER: The answer is 4.",
       toolCalls: [{ id: "tc-1", name: "web_search", input: { query: "2+2" } }],
     });
@@ -350,7 +386,7 @@ describe("Semantic memory extraction during memory-flush", () => {
 
     // Multi-tool use triggers the extraction path under Lever 7 (single tool
     // + short answer would skip the LLM call entirely).
-    const llmLayer = makeMockLLM({
+    const llmLayer = makeMockReasoning({
       content: "FINAL ANSWER: The answer is 4.",
       toolCalls: [
         { id: "tc-1", name: "web_search", input: { query: "2+2" } },

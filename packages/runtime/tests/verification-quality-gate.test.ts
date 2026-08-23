@@ -8,22 +8,29 @@ import {
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import { VerificationService } from "@reactive-agents/verification";
 
-// ── Helpers ──
+// ── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ────────────
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mocks this file used
+// to drive the (now-deleted) inline arm directly are no longer on the
+// execution path. Crucially, the verification-retry mechanism itself
+// (`verification-think-retry.ts`) ALSO routes through `ReasoningService`
+// when available — "Kernel-routed retry": it calls
+// `reasoningOpt.value.execute({..., availableTools: [], contextProfile:
+// { maxIterations: 1 }})` with the verifier feedback already folded into
+// `c.messages`, which flows in via `params.initialMessages`. So a single
+// `ReasoningService` stub, called once for the initial think and again for
+// each retry, is the correct real boundary — not a special-cased mock.
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
+};
 
-const LLMServiceTag = Context.GenericTag<{
-  complete: (req: unknown) => Effect.Effect<{
-    content: string;
-    stopReason: string;
-    toolCalls?: unknown[];
-    usage: {
-      inputTokens: number;
-      outputTokens: number;
-      totalTokens: number;
-      estimatedCost: number;
-    };
-    model: string;
-  }>;
-}>("LLMService");
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
 
 const mockTask = {
   id: "task-vg-001" as any,
@@ -36,27 +43,34 @@ const mockTask = {
   createdAt: new Date(),
 };
 
-const makeUsage = () => ({
-  inputTokens: 10,
-  outputTokens: 20,
-  totalTokens: 30,
-  estimatedCost: 0,
-});
+/** A stub whose per-call output is driven by `contentByCall` (1-indexed by
+ * call count; the last entry repeats for any further calls). Mirrors the old
+ * `makeMockLLM`'s callCount-driven content selection, at the
+ * `ReasoningService.execute()` boundary instead of `LLMService.complete()`. */
+function makeMockReasoning(contentByCall: readonly string[]) {
+  let callCount = 0;
+  const calls: { [k: string]: unknown }[] = [];
+  const layer = Layer.succeed(ReasoningServiceTag, {
+    execute: (params: { [k: string]: unknown }) => {
+      callCount++;
+      calls.push(params);
+      const content = contentByCall[Math.min(callCount, contentByCall.length) - 1]!;
+      return Effect.succeed({
+        output: content,
+        status: "completed" as const,
+        steps: [{ id: `step-${callCount}`, type: "thought", content }],
+        metadata: { cost: 0, tokensUsed: 30, stepsCount: 1 },
+      });
+    },
+  });
+  return { layer, calls, callCount: () => callCount };
+}
 
 // ── Tests ──
 
 describe("Verification Quality Gate", () => {
   it("should proceed normally when verification passes", async () => {
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: () =>
-        Effect.succeed({
-          content: "Paris is the capital of France.",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        }),
-    });
+    const reasoning = makeMockReasoning(["Paris is the capital of France."]);
 
     const MockVerification = Layer.succeed(VerificationService as any, {
       verify: (_response: string, _input: string) =>
@@ -80,7 +94,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      MockLLM,
+      reasoning.layer,
       MockVerification,
     );
 
@@ -96,25 +110,10 @@ describe("Verification Quality Gate", () => {
   });
 
   it("should retry think phase when verification rejects the response", async () => {
-    let llmCallCount = 0;
-
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: () => {
-        llmCallCount++;
-        // First call gives bad answer, second call gives good answer
-        const content =
-          llmCallCount === 1
-            ? "I don't know the answer."
-            : "Paris is the capital of France.";
-        return Effect.succeed({
-          content,
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        });
-      },
-    });
+    const reasoning = makeMockReasoning([
+      "I don't know the answer.",
+      "Paris is the capital of France.",
+    ]);
 
     let verifyCallCount = 0;
 
@@ -161,7 +160,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      MockLLM,
+      reasoning.layer,
       MockVerification,
     );
 
@@ -173,8 +172,8 @@ describe("Verification Quality Gate", () => {
     );
 
     expect(result.success).toBe(true);
-    // LLM should be called at least twice (initial + retry)
-    expect(llmCallCount).toBeGreaterThanOrEqual(2);
+    // ReasoningService should be called at least twice (initial + retry)
+    expect(reasoning.callCount()).toBeGreaterThanOrEqual(2);
     // Verification should be called twice (initial + re-verify after retry)
     expect(verifyCallCount).toBe(2);
     // Final answer should be the improved one
@@ -182,20 +181,7 @@ describe("Verification Quality Gate", () => {
   });
 
   it("should respect maxVerificationRetries and not loop forever", async () => {
-    let llmCallCount = 0;
-
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: () => {
-        llmCallCount++;
-        return Effect.succeed({
-          content: "I still don't know.",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        });
-      },
-    });
+    const reasoning = makeMockReasoning(["I still don't know."]);
 
     let verifyCallCount = 0;
 
@@ -232,7 +218,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      MockLLM,
+      reasoning.layer,
       MockVerification,
     );
 
@@ -247,25 +233,12 @@ describe("Verification Quality Gate", () => {
     expect(result.success).toBe(true);
     // Verify was called exactly 2 times: initial + after 1 retry
     expect(verifyCallCount).toBe(2);
-    // LLM called: 1 initial + 1 retry = 2
-    expect(llmCallCount).toBe(2);
+    // ReasoningService called: 1 initial + 1 retry = 2
+    expect(reasoning.callCount()).toBe(2);
   });
 
   it("should not trigger retry when recommendation is 'review' (not 'reject')", async () => {
-    let llmCallCount = 0;
-
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: () => {
-        llmCallCount++;
-        return Effect.succeed({
-          content: "Maybe Paris?",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        });
-      },
-    });
+    const reasoning = makeMockReasoning(["Maybe Paris?"]);
 
     let verifyCallCount = 0;
 
@@ -294,7 +267,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      MockLLM,
+      reasoning.layer,
       MockVerification,
     );
 
@@ -306,22 +279,13 @@ describe("Verification Quality Gate", () => {
     );
 
     expect(result.success).toBe(true);
-    // No retry — only 1 LLM call and 1 verify call
-    expect(llmCallCount).toBe(1);
+    // No retry — only 1 ReasoningService call and 1 verify call
+    expect(reasoning.callCount()).toBe(1);
     expect(verifyCallCount).toBe(1);
   });
 
   it("should work normally when verification is disabled (backward compat)", async () => {
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: () =>
-        Effect.succeed({
-          content: "Paris is the capital.",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        }),
-    });
+    const reasoning = makeMockReasoning(["Paris is the capital."]);
 
     // No verification service provided, verification disabled in config
     const config = defaultReactiveAgentsConfig("agent-001", {
@@ -331,7 +295,7 @@ describe("Verification Quality Gate", () => {
     const engineLayer = ExecutionEngineLive(config).pipe(
       Layer.provide(hookLayer),
     );
-    const testLayer = Layer.mergeAll(hookLayer, engineLayer, MockLLM);
+    const testLayer = Layer.mergeAll(hookLayer, engineLayer, reasoning.layer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -345,24 +309,10 @@ describe("Verification Quality Gate", () => {
   });
 
   it("should pass verification feedback to the retry think phase", async () => {
-    const messagesReceived: unknown[][] = [];
-
-    const MockLLM = Layer.succeed(LLMServiceTag, {
-      complete: (req: unknown) => {
-        const messages = (req as any).messages ?? [];
-        messagesReceived.push(messages);
-        return Effect.succeed({
-          content:
-            messagesReceived.length === 1
-              ? "Bad answer"
-              : "Paris is the capital of France.",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        });
-      },
-    });
+    const reasoning = makeMockReasoning([
+      "Bad answer",
+      "Paris is the capital of France.",
+    ]);
 
     let verifyCallCount = 0;
     const MockVerification = Layer.succeed(VerificationService as any, {
@@ -407,7 +357,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      MockLLM,
+      reasoning.layer,
       MockVerification,
     );
 
@@ -418,33 +368,30 @@ describe("Verification Quality Gate", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // The retry LLM call should include verification feedback in messages
-    expect(messagesReceived.length).toBeGreaterThanOrEqual(2);
-    const retryMessages = messagesReceived[messagesReceived.length - 1];
+    // The retry ReasoningService call should include verification feedback
+    // in its seeded initialMessages (the kernel-routed retry's carrier for
+    // verifier feedback — see verification-think-retry.ts).
+    expect(reasoning.calls.length).toBeGreaterThanOrEqual(2);
+    const retryParams = reasoning.calls[reasoning.calls.length - 1]!;
+    const retryMessages = (retryParams.initialMessages ?? []) as readonly {
+      role: string;
+      content: string;
+    }[];
     const feedbackMsg = retryMessages.find(
-      (m: any) =>
+      (m) =>
         m.role === "user" &&
         typeof m.content === "string" &&
         m.content.includes("Verification Feedback"),
     );
     expect(feedbackMsg).toBeDefined();
     // Should include the layer details
-    expect((feedbackMsg as any).content).toContain("factuality");
-    expect((feedbackMsg as any).content).toContain("factually incorrect");
+    expect(feedbackMsg?.content).toContain("factuality");
+    expect(feedbackMsg?.content).toContain("factually incorrect");
   });
 
   // ── F10: onReject enforcement (end-to-end through the engine) ──────────
-  const alwaysBadLLM = () =>
-    Layer.succeed(LLMServiceTag, {
-      complete: () =>
-        Effect.succeed({
-          content: "This answer is wrong and unverifiable.",
-          stopReason: "end_turn",
-          toolCalls: [],
-          usage: makeUsage(),
-          model: "test-model",
-        }),
-    });
+  const alwaysBadReasoning = () =>
+    makeMockReasoning(["This answer is wrong and unverifiable."]);
 
   const alwaysRejectVerification = () =>
     Layer.succeed(VerificationService as any, {
@@ -472,7 +419,7 @@ describe("Verification Quality Gate", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      alwaysBadLLM(),
+      alwaysBadReasoning().layer,
       alwaysRejectVerification(),
     );
     return Effect.runPromise(

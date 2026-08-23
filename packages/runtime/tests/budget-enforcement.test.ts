@@ -9,36 +9,32 @@ import {
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import { CostService } from "@reactive-agents/cost";
 
-// ─── Mock LLM that returns a simple answer ───
-
+// ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mock this file used
+// to drive the (now-deleted) inline arm directly is no longer on the
+// execution path. The budget checks under test (pre-flight, in
+// `cost-route.ts`) all fire BEFORE the reasoningOpt branch split, so a
+// minimal `ReasoningService` stub (matching the pattern in
+// `chat-history-seeds-kernel.test.ts`) preserves every assertion's meaning
+// for the pre-flight cases; only tests that reach "think" actually invoke it.
 const MockLLMServiceLive = Layer.succeed(
   Context.GenericTag<{
-    complete: (req: unknown) => Effect.Effect<{
-      content: string;
-      stopReason: string;
-      toolCalls?: unknown[];
-      usage: {
-        inputTokens: number;
-        outputTokens: number;
-        totalTokens: number;
-        estimatedCost: number;
-      };
-      model: string;
+    execute: (params: { [k: string]: unknown }) => Effect.Effect<{
+      output: unknown;
+      status: "completed" | "failed" | "partial";
+      steps?: readonly { id: string; type: string; content: string }[];
+      metadata: { cost: number; tokensUsed: number; stepsCount: number };
     }>;
-  }>("LLMService"),
+  }>("ReasoningService"),
   {
-    complete: (_req: unknown) =>
+    execute: (_params: { [k: string]: unknown }) =>
       Effect.succeed({
-        content: "Task completed: Here is the answer.",
-        stopReason: "end_turn",
-        toolCalls: [],
-        usage: {
-          inputTokens: 10,
-          outputTokens: 20,
-          totalTokens: 30,
-          estimatedCost: 0.001,
-        },
-        model: "test-model",
+        output: "Task completed: Here is the answer.",
+        status: "completed" as const,
+        steps: [{ id: "step-1", type: "thought", content: "Task completed: Here is the answer." }],
+        metadata: { cost: 0, tokensUsed: 30, stepsCount: 1 },
       }),
   },
 );
@@ -275,79 +271,75 @@ describe("Budget Enforcement", () => {
   });
 
   it("should gracefully stop mid-loop when budget is exceeded per-iteration", async () => {
-    // Reset call counter
+    // REDESIGN NOTE (Move 1 dead-arm removal, 2026-08-21): this test used to
+    // drive the inline arm's while-loop with a raw `LLMService` mock that
+    // returned a tool call on iteration 1 (forcing a second loop pass), with
+    // `CostService.checkBudget` failing starting on the second check — the
+    // inline arm's per-iteration budget guard then swallowed the failure and
+    // returned a graceful `success:true` completion.
+    //
+    // The kernel arm's equivalent mechanism is the Arbitrator's budget
+    // pre-intent guard (`packages/reasoning/src/kernel/capabilities/decide/
+    // arbitrator.ts` — "the BudgetSignal reports `exceeded` ⇒ terminate
+    // immediately as exit-failure, regardless of intent.kind, dominating
+    // every other termination signal"), which is a graceful
+    // `status:"failed"` result (a real "task did not complete because the
+    // budget ran out" outcome), not a crash and not a silent success. This
+    // stub simulates a reasoning pass that itself calls the REAL
+    // `CostService.checkBudget()` mid-execution (mirroring where the
+    // kernel's own budget signal is sourced) and, on rejection, returns that
+    // same graceful failed shape — proving the engine assembles a coherent
+    // `TaskResult` (the Effect resolves, it does not throw or hang) rather
+    // than crashing when budget-exceeded surfaces mid-loop.
     checkBudgetCallCount = 0;
 
     const config = defaultReactiveAgentsConfig("agent-budget", {
       enableCostTracking: true,
     });
 
-    // LLM that returns tool calls on first request, forcing a second iteration
-    let llmCallCount = 0;
-    const LoopingLLM = Layer.succeed(
+    const midLoopBudgetReasoningLayer = Layer.effect(
       Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: unknown[];
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
+        execute: (params: { [k: string]: unknown }) => Effect.Effect<{
+          output: unknown;
+          status: "completed" | "failed" | "partial";
+          steps?: readonly { id: string; type: string; content: string }[];
+          metadata: { cost: number; tokensUsed: number; stepsCount: number };
+          error?: string;
         }>;
-      }>("LLMService"),
-      {
-        complete: (_req: unknown) => {
-          llmCallCount++;
-          if (llmCallCount === 1) {
-            // First call: return tool call to force loop continuation
-            return Effect.succeed({
-              content: "Let me search for that.",
-              stopReason: "tool_use",
-              toolCalls: [{ id: "call-1", name: "search", input: { query: "test" } }],
-              usage: {
-                inputTokens: 50,
-                outputTokens: 50,
-                totalTokens: 100,
-                estimatedCost: 0.005,
-              },
-              model: "test-model",
-            });
-          }
-          // Subsequent calls: complete
-          return Effect.succeed({
-            content: "Here is the answer: 4.",
-            stopReason: "end_turn",
-            toolCalls: [],
-            usage: {
-              inputTokens: 50,
-              outputTokens: 50,
-              totalTokens: 100,
-              estimatedCost: 0.005,
-            },
-            model: "test-model",
-          });
-        },
-      },
-    );
-
-    // Mock ToolService for handling tool calls
-    const MockToolService = Layer.succeed(
-      Context.GenericTag<{
-        executeTool: (name: string, args: Record<string, unknown>) => Effect.Effect<unknown>;
-        listTools: () => Effect.Effect<readonly any[]>;
-        toFunctionCallingFormat: () => Effect.Effect<readonly any[]>;
-        getTool: (name: string) => Effect.Effect<any>;
-      }>("ToolService"),
-      {
-        executeTool: () => Effect.succeed({ result: "search result" }),
-        listTools: () => Effect.succeed([]),
-        toFunctionCallingFormat: () => Effect.succeed([]),
-        getTool: () => Effect.succeed(null),
-      },
+      }>("ReasoningService"),
+      Effect.gen(function* () {
+        const cost = yield* CostService;
+        return {
+          execute: (_params: { [k: string]: unknown }) =>
+            Effect.gen(function* () {
+              // First iteration: budget check passes (pre-flight semantics).
+              yield* cost.checkBudget(0.005, "agent-budget", "session").pipe(
+                Effect.catchAll(() => Effect.void),
+              );
+              // Second iteration (the loop continuing after a tool call):
+              // budget check fails — mirrors the Arbitrator's mid-run budget
+              // signal dominating every other termination path.
+              const secondCheck = yield* cost
+                .checkBudget(0.005, "agent-budget", "session")
+                .pipe(Effect.either);
+              if (secondCheck._tag === "Left") {
+                return {
+                  output: null,
+                  status: "failed" as const,
+                  steps: [{ id: "step-1", type: "thought", content: "Let me search for that." }],
+                  metadata: { cost: 5.5, tokensUsed: 100, stepsCount: 1 },
+                  error: "budget_exceeded: Session spend $5.50 exceeds limit $5.00",
+                };
+              }
+              return {
+                output: "Here is the answer: 4.",
+                status: "completed" as const,
+                steps: [{ id: "step-1", type: "thought", content: "Here is the answer: 4." }],
+                metadata: { cost: 5.5, tokensUsed: 200, stepsCount: 2 },
+              };
+            }),
+        };
+      }),
     );
 
     const hookLayer = LifecycleHookRegistryLive;
@@ -358,8 +350,7 @@ describe("Budget Enforcement", () => {
     const testLayer = Layer.mergeAll(
       hookLayer,
       engineLayer,
-      LoopingLLM,
-      MockToolService,
+      midLoopBudgetReasoningLayer.pipe(Layer.provide(ExceedsAfterFirstCostService)),
       ExceedsAfterFirstCostService,
     );
 
@@ -370,7 +361,12 @@ describe("Budget Enforcement", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Should complete gracefully (not crash) when budget exceeded mid-loop
-    expect(result.success).toBe(true);
+    // The engine resolved to a coherent TaskResult — it did not crash or
+    // hang when the budget signal fired mid-loop. Under the kernel arm's
+    // real contract this is a graceful failure (see note above), not a
+    // silent success.
+    expect(result).toBeDefined();
+    expect(String(result.taskId)).toBe("task-budget-001");
+    expect(result.success).toBe(false);
   });
 });
