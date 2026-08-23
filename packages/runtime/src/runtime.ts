@@ -650,7 +650,14 @@ export const createRuntime = (options: RuntimeOptions) => {
   // ── KillSwitch ──
   // Provide eventBusLayer so KillSwitchService captures the same EventBus instance
   // during its layer build (for AgentPaused/AgentResumed event emission).
-  const killSwitchOptLayer = options.enableKillSwitch
+  // Also auto-provided when a behavioral contract declares `maxToolCalls` —
+  // that dimension has no kernel-native equivalent and is enforced by
+  // triggering the kill switch from an EventBus subscriber (see
+  // engine/phases/agent-loop/behavioral-contract-bridge.ts). Without this,
+  // `.withBehavioralContracts({ maxToolCalls })` alone (no `.withKillSwitch()`)
+  // would silently never enforce the cap — the service simply wouldn't exist
+  // in the DI graph for execution-engine.ts to acquire.
+  const killSwitchOptLayer = options.enableKillSwitch || (options.enableBehavioralContracts && options.behavioralContract?.maxToolCalls != null)
     ? (() => {
         const { KillSwitchServiceLive } =
           require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");

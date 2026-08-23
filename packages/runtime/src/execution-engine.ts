@@ -78,6 +78,10 @@ import { runVerificationQualityGate } from "./engine/phases/agent-loop/verificat
 import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
+import {
+  mergeBehavioralContractIntoConfig,
+  startMaxToolCallsGuard,
+} from "./engine/phases/agent-loop/behavioral-contract-bridge.js";
 import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { verifyResultBoundary } from "./engine/finalize/result-verification.js";
@@ -451,13 +455,47 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               }
             }
 
+            // ── Behavioral contract: resolve once, up front ──
+            // (Runtime fix, 2026-08-23 — see behavioral-contract-bridge.ts doc
+            // block for the full root-cause + mechanism writeup.) Resolved here,
+            // BEFORE the KillSwitchService acquisition below, because a declared
+            // `maxToolCalls` cap needs the kill switch even when the caller never
+            // called `.withKillSwitch()` explicitly — runtime.ts's
+            // `killSwitchOptLayer` auto-provides the service in that case (see
+            // its own comment), and this is the corresponding consumer-side
+            // widen so the service is actually ACQUIRED, not just provided.
+            let activeBehavioralContract: import("@reactive-agents/guardrails").BehavioralContract | undefined;
+            if (config.enableBehavioralContracts) {
+              const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
+                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+              );
+              if (bcOpt._tag === "Some") {
+                activeBehavioralContract = yield* bcOpt.value.getContract();
+              }
+            }
+            const configForBehavioralContract = activeBehavioralContract
+              ? mergeBehavioralContractIntoConfig(config, activeBehavioralContract)
+              : config;
+
             // ── Acquire KillSwitchService optionally ──
-            const ksOpt = config.enableKillSwitch
+            const ksOpt = config.enableKillSwitch || activeBehavioralContract?.maxToolCalls != null
               ? yield* Effect.serviceOption(KillSwitchService).pipe(
                   Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
                 )
               : { _tag: "None" as const };
             const ks = ksOpt._tag === "Some" ? ksOpt.value : null;
+
+            // ── maxToolCalls → kill-switch bridge ──
+            // Started unconditionally here (before bootstrap) so it observes
+            // every tool call for the FULL run, not just the reasoning-arm
+            // portion. No-ops when the contract declares no maxToolCalls cap.
+            yield* startMaxToolCallsGuard({
+              eb,
+              ks,
+              taskId: task.id,
+              agentId: config.agentId,
+              maxToolCalls: activeBehavioralContract?.maxToolCalls,
+            });
 
             // ── PhaseDeps bundle (W23 decomposition) ──
             // Long-lived dependency bundle threaded through every extracted phase.
@@ -695,7 +733,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const preLoop = yield* runPreLoopDispatch({
                   ctx,
                   task,
-                  config,
+                  // Behavioral-contract-merged config (identical to `config`
+                  // when no contract is active) — carries the reasoning arm's
+                  // tightened allowedTools/forbiddenTools/maxIterations. See
+                  // behavioral-contract-bridge.ts.
+                  config: configForBehavioralContract,
                   deps,
                   resolvedCalibration,
                   obs,
@@ -744,7 +786,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // + allowedTools prompt filter + adaptive filter ──
                   // Body extracted to engine/phases/agent-loop/setup/tool-schemas.ts (W23 step 6a-6).
                   const prepared = yield* prepareReasoningToolSchemas({
-                    config,
+                    config: configForBehavioralContract,
                     task,
                     availableToolSchemas: initialToolSchemas,
                     availableToolNames: initialToolNames,
@@ -789,7 +831,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
                     runReasoningThink(c, {
-                      config,
+                      config: configForBehavioralContract,
                       task,
                       reasoningService: reasoningOpt.value,
                       availableToolNames,
@@ -1179,6 +1221,51 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ? String(sanitizedOutput).trim()
                       : "";
                 const hasSubstantiveOutput = outputForSuccess.length > 0;
+
+                // ── Behavioral contract: checkOutput (maxOutputLength / deniedTopics /
+                // requireDisclosure) ──
+                // The one dimension with no kernel-native equivalent AND no prior
+                // caller anywhere in the monorepo (a pre-existing gap, not a Move-1
+                // regression — see behavioral-contract-bridge.ts doc block). Runs
+                // ONCE here, in the shared post-arm code that sees the final output
+                // regardless of which arm produced it. A "block" severity violation
+                // fails the run the same way the old inline-arm tool/iteration
+                // violations did, for a uniform failure mode across all 3 contract
+                // dimensions. A "warning" surfaces via `obs` without failing.
+                if (config.enableBehavioralContracts) {
+                  const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (bcOpt._tag === "Some") {
+                    const violation = yield* bcOpt.value.checkOutput(outputForSuccess).pipe(
+                      Effect.catchAll(() => Effect.succeed(null)),
+                    );
+                    if (violation) {
+                      if (violation.severity === "block") {
+                        return yield* Effect.fail(
+                          new BehavioralContractViolationError({
+                            message: violation.message,
+                            taskId: ctx.taskId,
+                            rule: violation.rule,
+                            violation: violation.message,
+                          }),
+                        );
+                      }
+                      if (obs) {
+                        yield* obs
+                          .info(`⚠ [behavioral-contract] ${violation.message}`)
+                          .pipe(
+                            Effect.catchAll((err) =>
+                              emitErrorSwallowed({
+                                site: "runtime/src/execution-engine.ts:behavioral-contract-output-warning",
+                                tag: errorTag(err),
+                              }),
+                            ),
+                          );
+                      }
+                    }
+                  }
+                }
 
                 // Extract terminatedBy from reasoning metadata, with fallback inference.
                 //
