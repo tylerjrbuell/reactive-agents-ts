@@ -204,7 +204,10 @@ describe("Living Intelligence System integration", () => {
 
       // Verify new defaults
       expect(defaultReactiveIntelligenceConfig.learning.skillSynthesis).toBe(true);
-      expect(defaultReactiveIntelligenceConfig.learning.banditSelection).toBe(true);
+      // Bandit-driven strategy selection is opt-in (must clear an
+      // ablation-warden pass before ever defaulting on) — see
+      // ReactiveIntelligenceConfig.learning.banditStrategySelection.
+      expect(defaultReactiveIntelligenceConfig.learning.banditStrategySelection).toBeUndefined();
     });
   });
 

@@ -39,6 +39,12 @@ export const strategySelect: Phase = {
                   taskType: deps.task.type,
                   complexity: 0.5,
                   urgency: 0.5,
+                  // Threaded so StrategySelectorLive (reactive-intelligence)
+                  // can derive the SAME `${modelId}:${taskCategory}` context
+                  // bucket the bandit's write side (learning-engine.ts) uses.
+                  // Matches the modelId resolution pattern used elsewhere in
+                  // execution-engine.ts (e.g. line ~1625).
+                  modelId: String(ctx.selectedModel ?? deps.config.defaultModel ?? "unknown"),
                 },
                 ctx.memoryContext,
               )

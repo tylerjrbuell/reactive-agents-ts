@@ -87,6 +87,13 @@ export { selectArm, updateArm } from "./learning/bandit.js";
 export { shouldSynthesizeSkill, extractSkillFragment, skillFragmentToProceduralEntry, skillFragmentToSkillRecord } from "./learning/skill-synthesis.js";
 export { LearningEngineService, LearningEngineServiceLive } from "./learning/learning-engine.js";
 export type { RunCompletedData, LearningResult } from "./learning/learning-engine.js";
+export {
+  StrategySelectorService,
+  StrategySelectorServiceLive,
+  deriveContextBucket,
+  DEFAULT_BANDIT_ARM_IDS,
+} from "./learning/strategy-selector.js";
+export type { StrategySelectionContext } from "./learning/strategy-selector.js";
 
 // ── Event Subscriber ──
 export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";

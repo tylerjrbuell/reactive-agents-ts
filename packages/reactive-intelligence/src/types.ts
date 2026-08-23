@@ -151,9 +151,29 @@ export type ReactiveIntelligenceConfig = {
     readonly causalAttribution?: boolean;
   };
   readonly learning: {
-    readonly banditSelection?: boolean;
     readonly skillSynthesis?: boolean;
     readonly skillDir?: string;
+    /**
+     * OPT-IN (default OFF/absent) — wires a real `StrategySelector`
+     * implementation (`StrategySelectorServiceLive`, `./learning/strategy-selector.ts`)
+     * into the composed RI layer so `packages/runtime`'s `strategy-select.ts`
+     * Phase actually consults bandit-learned reward stats (written by
+     * `updateArm` in `learning-engine.ts`) instead of always falling back to
+     * `config.defaultStrategy`. Before this flag existed, `selectArm` was
+     * dead code — the bandit recorded outcomes for a decision it never made.
+     *
+     * DO NOT flip `enabled` to default `true` without a cross-tier
+     * ablation-warden pass first — this changes actual runtime strategy
+     * selection and must clear the project's lift rule (≥3pp lift AND
+     * ≤15% token overhead across ≥2 model tiers) before ever defaulting on.
+     */
+    readonly banditStrategySelection?: {
+      readonly enabled: boolean;
+      /** Candidate strategy names to select between. Defaults to the
+       *  framework's core registered strategies when omitted — see
+       *  `DEFAULT_BANDIT_ARM_IDS` in `./learning/strategy-selector.ts`. */
+      readonly armIds?: readonly string[];
+    };
   };
   readonly telemetry?: boolean | {
     readonly enabled: boolean;
@@ -349,7 +369,6 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     causalAttribution: false,
   },
   learning: {
-    banditSelection: true,
     skillSynthesis: true,
   },
   telemetry: false,
