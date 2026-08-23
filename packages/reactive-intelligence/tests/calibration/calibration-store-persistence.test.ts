@@ -1,7 +1,7 @@
 // Run: bun test packages/reactive-intelligence/tests/calibration/calibration-store-persistence.test.ts --timeout 15000
 import { describe, it, expect, afterAll } from "bun:test";
-import { Effect } from "effect";
-import { EntropySensorService } from "@reactive-agents/core";
+import { Effect, Layer } from "effect";
+import { EntropySensorService, EventBusLive } from "@reactive-agents/core";
 import { CalibrationStore } from "../../src/calibration/calibration-store.js";
 import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 import * as fs from "fs";
@@ -48,9 +48,10 @@ describe("CalibrationStore persistent dbPath", () => {
     const dbPath = path.join(os.tmpdir(), `cal-config-test-${Date.now()}.sqlite`);
     tmpFiles.push(dbPath);
 
+    // RI layer's calibration-update subscriber requires EventBus.
     const layer = createReactiveIntelligenceLayer({
       calibrationDbPath: dbPath,
-    });
+    }).pipe(Layer.provide(EventBusLive));
 
     // Use the layer to update calibration, then verify it was persisted to the file
     const program = Effect.gen(function* () {

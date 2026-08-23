@@ -7,8 +7,8 @@
  * healthy reasoning, stalled loops, and degraded behavior.
  */
 import { describe, test, expect } from "bun:test";
-import { Effect } from "effect";
-import { EntropySensorService } from "@reactive-agents/core";
+import { Effect, Layer } from "effect";
+import { EntropySensorService, EventBusLive } from "@reactive-agents/core";
 import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 import { computeTokenEntropy } from "../../src/sensor/token-entropy.js";
 import { computeStructuralEntropy } from "../../src/sensor/structural-entropy.js";
@@ -63,7 +63,8 @@ function scoreViaService(
     steps?: StepLike[];
   },
 ) {
-  const layer = createReactiveIntelligenceLayer();
+  // RI layer's calibration-update subscriber requires EventBus.
+  const layer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
   return Effect.runPromise(
     Effect.gen(function* () {
       const sensor = yield* EntropySensorService;

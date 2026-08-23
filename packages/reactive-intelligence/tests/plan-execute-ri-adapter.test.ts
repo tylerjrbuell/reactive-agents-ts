@@ -22,14 +22,16 @@
 // its consumers.
 
 import { describe, test, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import {
   EntropySensorService,
+  EventBusLive,
   type KernelStateLike,
 } from "@reactive-agents/core";
 import { createReactiveIntelligenceLayer } from "../src/runtime.js";
 
-const testLayer = createReactiveIntelligenceLayer();
+// RI layer's calibration-update subscriber requires EventBus.
+const testLayer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
 
 /**
  * EXACT mirror of `plan-execute.ts:737-756` synthetic state construction.

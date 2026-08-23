@@ -971,11 +971,18 @@ export const createRuntime = (options: RuntimeOptions) => {
       : undefined;
 
   const reactiveIntelOptLayer = options.enableReactiveIntelligence
-    ? createReactiveIntelligenceLayer(
+    ? // The RI layer's calibration-update subscriber (wired in
+      // `createReactiveIntelligenceLayer`) requires `EventBus`. Per the
+      // `Layer.mergeAll` caveat documented below (gateway/extra layers hit
+      // the same thing), sibling layers in a single `mergeAll` do NOT
+      // auto-wire each other's requirements — provide the runtime's shared
+      // `eventBusLayer` explicitly so the subscriber joins the SAME bus
+      // instance `reactive-observer.ts` publishes `EntropyScored` to.
+      createReactiveIntelligenceLayer(
         options.reactiveIntelligenceOptions,
         undefined,
         skillLayerForRi,
-      )
+      ).pipe(Layer.provide(eventBusLayer))
     : skillLayerForRi?.resolver
       ? makeSkillResolverService(skillLayerForRi.resolver)
       : Layer.empty;

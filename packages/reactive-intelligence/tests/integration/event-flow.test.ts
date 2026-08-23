@@ -1,11 +1,12 @@
 import { describe, test, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { EntropySensorService } from "@reactive-agents/core";
+import { EntropySensorService, EventBusLive } from "@reactive-agents/core";
 import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 
 describe("entropy service integration", () => {
   test("EntropySensorService composes with other layers", async () => {
-    const layer = createReactiveIntelligenceLayer();
+    // RI layer's calibration-update subscriber requires EventBus.
+    const layer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
 
     const program = Effect.gen(function* () {
       const sensor = yield* EntropySensorService;
