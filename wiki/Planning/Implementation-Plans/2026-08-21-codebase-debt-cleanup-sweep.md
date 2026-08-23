@@ -1,7 +1,7 @@
 ---
 title: Codebase debt + Effect-abstraction cleanup sweep
 date: 2026-08-21
-status: batch-1-and-2-done; item-9 needs a decision; items-16-17 escalated
+status: batch-1-and-2-done; items-16-17-done; item-9 blocked on new scope (DEBT-REGISTER D-2026-08-23-A)
 ---
 
 # Codebase debt + Effect-abstraction cleanup sweep
@@ -44,16 +44,17 @@ document is the synthesis + execution plan.
 | 14 | `toStrictToolSchema` typed `(schema: any): any`, self-acknowledged debt | `packages/llm-provider/src/providers/openai.ts:160-206` | Medium | Low | ✅ `8c68c040` |
 | 15 | `applyPatches` exported+tested, zero callers — dispatcher applies patches inline instead; duplicate-or-dead, needs a check-first read | `packages/reactive-intelligence/src/controller/patch-applier.ts:14` vs `dispatcher.ts:252,261` | Low | Low | ✅ `8c68c040` (deleted — reactive-observer.ts's logic diverged, dispatcher was never the real consumer) |
 
-**#9 finding correction (2026-08-22):** the dispatched agent correctly refused to delete. `createRuntime()`'s "reasoningOpt always Some" guarantee (Move 1, 2026-08-13) is scoped to that specific composition, NOT to `ExecutionEngineLive` as a general Layer. ~10 files in `packages/runtime/tests/` construct `ExecutionEngineLive` directly without providing `ReasoningService` (`execution-engine.test.ts`, `kill-switch-enforcement.test.ts`, `budget-enforcement.test.ts`, `foundation-integration.test.ts`, `max-iterations-enforcement.test.ts`, `behavioral-contract-enforcement.test.ts`, `semantic-extraction.test.ts`, `verification-quality-gate.test.ts`, `memory-consolidation-wiring.test.ts`, `builder-contracts.test.ts`) — those tests legitimately hit the inline branch today, confirmed passing (baseline: 1511/0). Deleting as originally scoped would runtime-crash them, not just fail typecheck. Needs a decision: (a) update those ~10 tests to always provide `ReasoningService`, making the branch genuinely dead, then delete it — or (b) keep the inline path as a documented "minimal engine mode" and fix `runtime.ts`'s misleading "always Some" doc-comment to scope it to `createRuntime()` specifically. Not executed either way yet.
+**#9 status (2026-08-22 → 2026-08-23): 9/10 test migrations done (`603a55f6`), deletion itself BLOCKED on new scope.** `createRuntime()`'s "reasoningOpt always Some" guarantee (Move 1, 2026-08-13) is scoped to that specific composition, NOT to `ExecutionEngineLive` as a general Layer — ~10 test files constructed it directly without `ReasoningService`, legitimately exercising the inline branch. 9 of 10 migrated cleanly onto the kernel arm, zero behavior loss, baseline `1511→1518` pass. The 10th (`behavioral-contract-enforcement.test.ts`) exposed a real silently-dead safety feature — see #17b below, now fixed. After that fix, attempting the actual branch/file deletion surfaced **5 MORE builder features with zero kernel-arm equivalent** (`withMinIterations`/`withCustomTermination`/`withVerificationStep`/`withOutputValidator`/`withTaskContext` direct-LLM injection) — 17 new test failures across 3 previously-unidentified files. Deletion reverted, not shipped with the regression. Full detail + discharge plan: `wiki/Architecture/DEBT-REGISTER.md` **D-2026-08-23-A**. This is now separately-scoped follow-up work, not a same-sweep item.
 
 **Cross-batch note:** the `MaybeService→Option` migration (#12) traded a net -1 on the `as unknown as` cast ceiling for one unavoidable +1 (`service-utils.ts`'s `memoryService` resolution — Option's nominal typing needs `unknown` where the old structural `MaybeService` didn't). Ceiling bumped 76→77 with rationale in `as-unknown-as-ceiling.test.ts`, matching that file's own documented bump precedent. True design-out would mean widening `AgentMemory`'s public port type in `@reactive-agents/core` — out of scope for this sweep.
 
-### Escalate — needs explicit decision, changes runtime behavior
+### Escalate — needs explicit decision, changes runtime behavior — BOTH DONE
 
-| # | Finding | Why it's not a mechanical fix |
+| # | Finding | Resolution |
 |---|---|---|
-| 16 | `selectArm` (Thompson-sampling bandit) fully wired on the write side (`updateArm` records rewards every run) but **never called** on the read side — nothing selects an arm via it | Wiring it changes what strategy/arm gets picked at decision time. Per project convention this needs an `ablation-warden`-style cross-tier verification before going default-on, not a blind wire-up in a cleanup sweep. |
-| 17 | `subscribeEntropyScoring`/`subscribeCalibrationUpdates` — exported, tested, zero callers; likely meant to be started once at agent-boot | Same shape as #16 — silently-inert signal pipeline. Wiring it could change entropy/calibration-driven behavior in live runs. Needs a `runtime-warden` confirm of the intended call site before wiring. |
+| 16 | `selectArm` (Thompson-sampling bandit) fully wired on the write side but never called on the read side | ✅ `02bada4c` — wired into the already-designed-but-unimplemented `StrategySelector` seam, strictly opt-in (`learning.banditStrategySelection.enabled`, default off), explicit ablation-warden-pass-required comment before ever defaulting on. Also caught and deleted a real landmine: a misleadingly-named, unrelated dead `banditSelection: true` config field sitting next to the new flag. |
+| 17 | `subscribeEntropyScoring`/`subscribeCalibrationUpdates` — exported, tested, zero callers | ✅ `96a587dd` — investigation found deeper than the audit: kernel-based strategies already publish `EntropyScored` via inline scoring, but NOTHING ever subscribed to close the calibration-drift feedback loop. Wired `subscribeCalibrationUpdates` (real gap, gated by the existing `enableReactiveIntelligence` flag, not a new opt-in). Deliberately did NOT wire `subscribeEntropyScoring` — found it would double-score every step for kernel-based strategies (dedup set has no visibility into the kernel's own inline publishes); documented as a follow-up needing the dedup logic fixed first. Also found and documented (not fixed, out of scope): even wired, the subscriber doesn't yet call `updateCalibration`/publish `CalibrationDrift` — real recalibration needs an event-schema change (`modelId` threading) that's a separate piece of work. |
+| 17b | (new, found while fixing #17) `BehavioralContractService` enforcement silently dead — `deniedTools`/`allowedTools`/`maxToolCalls`/`maxIterations` unenforced since Move 1 (~9 days), `checkOutput` never enforced, ever | ✅ `481965a8` — full writeup in DEBT-REGISTER **D-2026-08-23-B**. Bridged onto the kernel's native tool-policy/iteration-cap primitives + a new EventBus→kill-switch bridge for `maxToolCalls` + a shared post-arm `checkOutput` call. 9-test rewrite proves all 4 dimensions through the real kernel arm, positive and negative cases. |
 
 ### Registered but explicitly NOT this sweep (large, already-tracked, or non-actionable now)
 
@@ -63,9 +64,16 @@ document is the synthesis + execution plan.
 
 ## Execution order
 
-1. Batch 1, items 1-8 — dispatched as parallel subagents, each scoped to independent files/packages, TDD/safe-refactor discipline, full regression + typecheck before commit.
-2. Batch 2 — one item at a time in a later pass, each gets its own commit and regression sweep (not bundled — different files/packages, different risk profiles).
-3. Escalate items — reported to user, not executed without an explicit go-ahead + (for #16/#17) an ablation verification pass.
+1. Batch 1, items 1-8 — ✅ done, dispatched as parallel subagents, each scoped to independent files/packages, TDD/safe-refactor discipline, full regression + typecheck before commit.
+2. Batch 2 — ✅ done (item 9's test migrations done, deletion blocked — see #9 status above), one item at a time, each its own commit and regression sweep.
+3. Escalate items (16/17) — ✅ done, user explicitly authorized "fix correctly and thoroughly"; both wired opt-in/gated per their individual risk profile, not blind default-on.
+
+## Follow-up work (out of this sweep, tracked in DEBT-REGISTER)
+
+- **D-2026-08-23-A**: 5 builder features need kernel-arm parity before the inline-arm deletion is safe.
+- **#17's `subscribeEntropyScoring`**: needs its dedup logic fixed (consult already-published `EntropyScored` events) before it can safely cover blueprint/code-action/adaptive's missing entropy coverage.
+- **#17's calibration loop**: `subscribeCalibrationUpdates` is wired but still doesn't call `updateCalibration`/publish `CalibrationDrift` — needs an event-schema change (`modelId` threading through `EntropyScored`/`TaskCompleted`).
+- **#16's bandit**: wired and opt-in; needs an `ablation-warden` cross-tier pass before any consideration of default-on.
 
 ## Audit source (not persisted elsewhere — full findings live in the 4 agent transcripts this session)
 

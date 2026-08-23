@@ -562,9 +562,13 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
 
 **Verdict:** PROVEN (unit) — 4 red-on-cut tests in `requirement-state.test.ts`, mutating the ledger read reddens 2. **Residual (honest):** no end-to-end kernel-delegation cell — blocked by test-provider scripting limits (the OB-3 "sub-agent merge on the kernel parent path untested" area); a false-negative *rate* drop is owner-gated live-arm work, not claimed.
 
-### D-2026-08-21-N — fabrication-guard "block degrades to warn" doesn't actually restore success — live false-fail on cortex
+### D-2026-08-21-N — fabrication-guard "block degrades to warn" doesn't actually restore success — live false-fail on cortex ✅ RESOLVED 2026-08-21 (`bbc8e16d`)
 
 **Class:** correctness bug (guard enforcement leaves the run mis-terminated after the documented degrade).
+
+**Resolution:** root cause was actually in check 4e's own extraction, not the degrade path — `detectFabricatedListedEntities` treated any bold-list title as a named-entity claim, including the model's own synthesized category headers ending in `:`. Excluded those from extraction; severity for this specific check changed to always `warn`, never `reject` (unlike 4c/4d, its exact-substring grounding is inherently paraphrase-sensitive and not near-zero-false-positive by construction). Verified end-to-end: reverted the fix, reproduced the exact production failure through the full builder→runtime→kernel→verifier stack via the deterministic test provider, restored the fix, confirmed success with detection still visible as a warning. See `packages/reasoning/src/kernel/capabilities/verify/evidence-grounding.ts`/`verifier.ts`, tests in the same commit.
+
+Original finding preserved below for provenance.
 
 Caught via cortex's own run history (`apps/cortex/.cortex/cortex.db`, run `01M0KB5MTA4NJP907V93RHKFGK`, 2026-08-21, `ollama`/`gemma4:e4b`, `reactive` strategy). The run is a genuine success being reported as a failure end-to-end: `terminationReason: "end_turn"` (clean stop), debrief `outcome: "success"` / `confidence: "high"`, `gh-cli` called twice with 100% tool success, and a complete, well-formed markdown report as the answer — yet `cortex_runs.status = "failed"` and `error_message` contains that SAME full report text verbatim (not an error).
 
@@ -576,7 +580,35 @@ Root cause traced through the kernel:
 
 Only 1 sample so far (cortex's DB had 4 total runs, 1 failed) — not yet cross-tier confirmed, but the mechanism is traced to specific lines, not inferred from the symptom alone. Prime suspects for who else hits this: any local/weaker model doing prose synthesis (summaries, reports, categorized write-ups) from tool output, since check 4e's heuristic is aimed at exactly that shape.
 
-**Discharge:** find the actual "degrades to warn" implementation site referenced by `verifier.ts:651`'s "see runner" and confirm whether it (a) never runs for the 4c/4d/4e fabrication-guard family (only for the opt-in numeric-grounding check 5), or (b) runs but doesn't propagate the restored status back through `execution-engine.ts`'s `rr.status`/`ctx.metadata.lastResponse` read path. Needs a red-on-cut regression test pinning "block mode + fabrication flag + retry + still-flagged → ships as `status: completed` with a warn-level verdict, not `status: failed` with the answer as the error." Owner-gated — kernel retry/degrade state machine, not a one-line fix.
+**Discharge (superseded by resolution above):** find the actual "degrades to warn" implementation site referenced by `verifier.ts:651`'s "see runner" and confirm whether it (a) never runs for the 4c/4d/4e fabrication-guard family (only for the opt-in numeric-grounding check 5), or (b) runs but doesn't propagate the restored status back through `execution-engine.ts`'s `rr.status`/`ctx.metadata.lastResponse` read path. Needs a red-on-cut regression test pinning "block mode + fabrication flag + retry + still-flagged → ships as `status: completed` with a warn-level verdict, not `status: failed` with the answer as the error." Owner-gated — kernel retry/degrade state machine, not a one-line fix.
+
+### D-2026-08-23-A — 5 builder features have zero kernel-arm equivalent; only reachable via the dead inline direct-LLM branch
+
+**Class:** dead-code-deletion blocker / silent feature gap (same shape as D-2026-08-21-M below, discovered while resolving it).
+
+`packages/runtime/src/execution-engine.ts`'s `else if (!cacheHit)` inline direct-LLM branch (~line 861-1102, backed by `engine/phases/agent-loop/inline-{think,act,observe,harness-hooks}.ts`) has been dead in ALL real production usage since Move 1 (2026-08-13) made the kernel/`ReasoningService` arm the sole path `createRuntime()` ever builds. A debt-sweep this session set out to delete it after migrating the ~10 runtime tests that were incidentally still exercising it via a minimal test-only layer stack. 9 of 10 migrated cleanly onto the kernel arm with zero behavior loss (see `wiki/Planning/Implementation-Plans/2026-08-21-codebase-debt-cleanup-sweep.md`); the 10th (`behavioral-contract-enforcement.test.ts`) exposed a real silently-dead safety feature, now fixed (D-2026-08-23-B below).
+
+After that fix, an attempted deletion of the inline branch caused **17 new test failures** across 3 files not previously identified: `feature-contract.test.ts`, `harness-improvements.test.ts`, `verification-step-wired.test.ts`. `grep` confirmed these builder features have **zero occurrences in `execution-engine.ts` outside the deleted inline block** — i.e. they work TODAY only because the "dead" branch isn't actually reachable in production (so users of these features never hit it), but ALSO isn't reachable by these tests' minimal layer stacks in the way that matters — meaning these are likely ALSO silently non-functional for any real user going through the kernel arm, same shape as the behavioral-contract finding:
+
+- `.withMinIterations()`
+- `.withCustomTermination()`
+- `.withVerificationStep()`
+- `.withOutputValidator()` (kernel-arm parity unconfirmed — verify before assuming full breakage, `verification-quality-gate.test.ts` in the same sweep DID successfully route an output-validator-shaped scenario through a kernel-arm stub, so this one may be partially covered elsewhere — recheck before scoping the fix)
+- `.withTaskContext()` direct-LLM injection path specifically (the withCustomTermination/verification tests reference task-context injection as part of what breaks)
+
+The inline-branch deletion was reverted (not committed) rather than shipped with this regression. `execution-engine.ts` and the 4 `inline-*.ts` files remain in the tree, unchanged, still dead-in-production.
+
+**Discharge:** for each of the 5 features, determine (a) does it already have a kernel-arm equivalent under a different name/mechanism that these tests simply don't exercise correctly (re-check before assuming full breakage — `withOutputValidator` especially), or (b) does it need new kernel-arm wiring analogous to the behavioral-contract-bridge.ts pattern (translate into a mechanism the kernel already natively supports where possible; new kernel-crossing plumbing only where genuinely needed, respecting the `reasoning` package's import boundary — core/llm-provider/memory/tools only). Fix each, add/redesign the corresponding test to prove kernel-arm parity (same discipline as the other 9 migrated tests), THEN the inline-arm deletion becomes safe. Not owner-gated by architecture — bounded, mechanical-once-scoped work, but real work, not a one-line fix.
+
+### D-2026-08-23-B — behavioral-contract enforcement was silently dead in production (deniedTools/allowedTools/maxToolCalls/maxIterations for ~9 days; checkOutput ever) ✅ RESOLVED 2026-08-23 (`481965a8`)
+
+**Class:** correctness bug, safety-feature silent failure (found while investigating D-2026-08-23-A).
+
+`BehavioralContractService.checkToolCall`/`checkIteration` (backing `.withBehavioralContract({deniedTools, allowedTools, maxToolCalls, maxIterations, ...})`) were called ONLY from `inline-act.ts`/`iteration-guards.ts` — both reachable only from the same dead inline branch as D-2026-08-23-A. Any user who opted into a behavioral contract got zero enforcement of those 4 fields since Move 1 (2026-08-13), silently — no error, no warning, the contract simply didn't apply. `checkOutput` (`maxOutputLength`/`deniedTopics`/`requireDisclosure`) was never called from anywhere in the monorepo, in either arm, ever — an older, deeper gap.
+
+**Resolution:** `packages/runtime/src/engine/phases/agent-loop/behavioral-contract-bridge.ts` (new) translates each contract field into a mechanism the kernel already natively enforces, since `packages/reasoning` cannot depend on `@reactive-agents/guardrails`: `deniedTools`/`allowedTools` merge into `config.forbiddenTools` + a synthesized `config.taskContract.tools` entry (feeds the kernel's real `evaluateToolPolicy` gate); `maxIterations` tightens `config.contextProfile.maxIterations` via `Math.min`; `maxToolCalls` (no kernel-native equivalent — a running count, not a per-tool-name rule) is enforced via a new EventBus subscriber counting `ToolCallCompleted` and triggering `KillSwitchService.terminate()` past the cap, reusing the abort mechanism the kernel's run-fiber already respects; `checkOutput` runs once in the shared post-arm code where the final output is visible regardless of arm. Also fixed: `.withBehavioralContracts({maxToolCalls})` alone (no `.withKillSwitch()`) previously wouldn't even have `KillSwitchService` in the DI graph — widened the auto-provision condition in `runtime.ts`.
+
+**Verdict:** PROVEN — `behavioral-contract-enforcement.test.ts` rewritten (9 tests) against the real kernel arm via `.withTestScenario()`, no stubs, covering all 4 dimensions with both positive (violation blocks/aborts) and negative (compliant run succeeds) cases. `packages/reasoning` untouched (0 boundary violation). Full runtime/guardrails/reasoning suites green.
 
 ---
 
