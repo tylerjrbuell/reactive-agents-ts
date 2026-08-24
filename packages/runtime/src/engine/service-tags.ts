@@ -12,13 +12,15 @@
 import { Context, Effect } from "effect";
 
 /**
- * MemoryService (logEpisode shape) — used by the inline-path agent loop to
- * persist per-iteration and per-LLM-call episodes to working memory.
+ * MemoryService (logEpisode shape) — persists per-step episodes to working
+ * memory.
  *
  * Consumers:
- *   - engine/phases/agent-loop/inline-think.ts
- *   - engine/phases/agent-loop/inline-observe.ts
  *   - engine/phases/agent-loop/reasoning-post-think.ts
+ *
+ * (The inline direct-LLM arm's `inline-think.ts` / `inline-observe.ts` were
+ * also consumers before their deletion, 2026-08-23 — see DEBT-REGISTER
+ * D-2026-08-23-A.)
  *
  * NOTE: Other MemoryService shapes exist (bootstrap: { bootstrap }, memory-flush:
  * { snapshot, flush?, storeSemantic? }) and are intentionally NOT hoisted here
