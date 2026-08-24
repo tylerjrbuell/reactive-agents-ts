@@ -146,6 +146,7 @@ export function runReactiveObserver(
                     confidence: richScore["confidence"],
                     modelTier: richScore["modelTier"],
                     iterationWeight: richScore["iterationWeight"],
+                    modelId: s.meta.entropy?.modelId ?? "unknown",
                   }),
                   logEntropy,
                 ], { concurrency: "unbounded" }).pipe(Effect.asVoid);

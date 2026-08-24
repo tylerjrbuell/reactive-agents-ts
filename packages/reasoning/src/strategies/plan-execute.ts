@@ -1142,6 +1142,7 @@ export const executePlanExecute = (
               confidence: richScore["confidence"],
               modelTier: richScore["modelTier"],
               iterationWeight: richScore["iterationWeight"],
+              modelId: input.modelId ?? "unknown",
             }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:659", tag: errorTag(err) })));
           }
 

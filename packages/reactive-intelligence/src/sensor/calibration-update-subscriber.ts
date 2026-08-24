@@ -39,15 +39,48 @@ export function subscribeCalibrationUpdates(): Effect.Effect<
     const unsubScored = yield* eventBus.on("EntropyScored", (event) =>
       Effect.sync(() => {
         const existing = taskScores.get(event.taskId) ?? { modelId: "unknown", scores: [] };
+        if (event.modelId) existing.modelId = event.modelId;
         existing.scores.push(event.composite);
         taskScores.set(event.taskId, existing);
       }),
     );
     yield* Effect.addFinalizer(() => Effect.sync(unsubScored));
 
-    // On task completion, clean up task state
+    // On task completion, recalibrate against the accumulated scores and
+    // publish CalibrationDrift when the sensor detects drift, then clean up.
     const unsubCompleted = yield* eventBus.on("TaskCompleted", (event) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
+        const task = taskScores.get(event.taskId);
+        const modelId = event.modelId;
+
+        if (modelId && task && task.scores.length > 0) {
+          const calibration = yield* entropySensor.updateCalibration(modelId, task.scores);
+
+          if (calibration.driftDetected) {
+            // Mirror computeCalibration()'s drift formula (conformal.ts:48-58):
+            // mean/stddev over the full score array, drift measured against
+            // the trailing min(5, max(3, n)) most recent scores.
+            const scores = task.scores;
+            const n = scores.length;
+            const mean = scores.reduce((s, v) => s + v, 0) / n;
+            const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+            const stddev = Math.sqrt(variance);
+            const recentCount = Math.min(5, Math.max(3, n));
+            const recentScores = scores.slice(-recentCount);
+            const observedMean = recentScores.reduce((s, v) => s + v, 0) / recentScores.length;
+            const deviationSigma = stddev > 0 ? (observedMean - mean) / stddev : 0;
+
+            yield* eventBus.publish({
+              _tag: "CalibrationDrift",
+              taskId: event.taskId,
+              modelId,
+              expectedMean: mean,
+              observedMean,
+              deviationSigma,
+            });
+          }
+        }
+
         taskScores.delete(event.taskId);
       }),
     );

@@ -66,6 +66,8 @@ export type AgentEvent =
       readonly taskId: string;
       /** True if execution succeeded, false if error occurred */
       readonly success: boolean;
+      /** Model identifier used for this task's execution, when known */
+      readonly modelId?: string;
     }
   | {
       /**
@@ -710,6 +712,8 @@ export type AgentEvent =
       readonly confidence: "high" | "medium" | "low";
       readonly modelTier: "frontier" | "local" | "unknown";
       readonly iterationWeight: number;
+      /** Model identifier that produced this entropy score, when known */
+      readonly modelId?: string;
     }
   | {
       readonly _tag: "ContextWindowWarning";

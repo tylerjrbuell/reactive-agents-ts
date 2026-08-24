@@ -22,6 +22,7 @@ export type EntropyScored = {
   readonly confidence: "high" | "medium" | "low";
   readonly modelTier: "frontier" | "local" | "unknown";
   readonly iterationWeight: number;
+  readonly modelId?: string;
 };
 
 export type ContextWindowWarning = {

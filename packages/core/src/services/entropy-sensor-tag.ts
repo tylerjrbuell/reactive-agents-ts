@@ -53,6 +53,7 @@ export type ModelCalibrationLike = {
   readonly sampleCount: number;
   readonly highEntropyThreshold: number;
   readonly convergenceThreshold: number;
+  readonly driftDetected: boolean;
 };
 
 export type ContextSectionLike = {

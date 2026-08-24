@@ -133,6 +133,7 @@ export function subscribeEntropyScoring(config: {
           confidence: score.confidence,
           modelTier: score.modelTier,
           iterationWeight: score.iterationWeight,
+          modelId: config.modelId ?? "unknown",
         });
       }).pipe(Effect.catchAllCause(() => Effect.void)),
     );

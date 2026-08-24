@@ -87,6 +87,7 @@ export const finalizeRun = (
         _tag: "TaskCompleted",
         taskId: task.id,
         success: executionSucceeded,
+        ...(config.defaultModel ? { modelId: String(config.defaultModel) } : {}),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:task-completed-event", tag: errorTag(err) })));
     }
 

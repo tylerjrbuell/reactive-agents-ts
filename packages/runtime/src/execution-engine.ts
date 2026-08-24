@@ -439,6 +439,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       },
                       confidence: score.confidence,
                       modelTier: score.modelTier, iterationWeight: score.iterationWeight,
+                      modelId: String(config.defaultModel ?? "unknown"),
                     });
                   }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:641", tag: errorTag(err) }))),
                 );
