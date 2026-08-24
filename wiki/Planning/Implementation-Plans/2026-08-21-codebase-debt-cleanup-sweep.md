@@ -1,7 +1,7 @@
 ---
 title: Codebase debt + Effect-abstraction cleanup sweep
 date: 2026-08-21
-status: batch-1-and-2-done; items-16-17-done; item-9 blocked on new scope (DEBT-REGISTER D-2026-08-23-A)
+status: ALL DONE — batch-1-and-2 + items-16-17 + item-9 (inline arm deleted, `e36cd897`)
 ---
 
 # Codebase debt + Effect-abstraction cleanup sweep
@@ -36,7 +36,7 @@ document is the synthesis + execution plan.
 
 | # | Finding | File:line | Effort | Risk | Status |
 |---|---|---|---|---|---|
-| 9 | Dead inline agent-loop arm | `packages/runtime/src/execution-engine.ts:861-1102`, `inline-{think,act,observe,harness-hooks}.ts` | Medium | Medium | ⚠️ **NOT dead — see below, needs a decision** |
+| 9 | Dead inline agent-loop arm | `packages/runtime/src/execution-engine.ts:861-1102`, `inline-{think,act,observe,harness-hooks}.ts` | Medium | Medium | ✅ `e36cd897` — deleted, -1,626 LOC |
 | 10 | `withLayers()`/`withReplayLLM()` erase both channels via `Layer<any,any>` on public builder API; unchecked cast at consumption site | `packages/runtime/src/builder.ts:2223,2240`, `runtime-construction.ts:420` | Medium | Low | ✅ `08121a5e` |
 | 11 | `BuilderRuntimeStateView` blind structural cast, no compile-time guard against a renamed/removed private field | `packages/runtime/src/builder/build-effect/runtime-construction.ts:84-91` | Medium | Low | ✅ `08121a5e` (guard proven to catch drift, see commit) |
 | 12 | `MaybeService<T>` reinvents `Option<T>`, which the package already imports elsewhere | `packages/reasoning/src/kernel/state/kernel-state.ts:977` + ~7 consumer files | Medium | Low | ✅ `b6ee0b85` |
