@@ -27,7 +27,7 @@ const failingSkillStore = {
   // Other SkillStore methods stubbed for shape; not used by learning-engine.
 } as any;
 
-const mockCalibrationStore = new (await import("../../src/calibration/calibration-store.js")).CalibrationStore();
+const mockCalibrationStore = new (await import("../../src/calibration/calibration-store.js")).CalibrationStore(":memory:");
 const mockBanditStore = new (await import("../../src/learning/bandit-store.js")).BanditStore();
 
 const makeData = (overrides: Partial<RunCompletedData> = {}): RunCompletedData => ({
