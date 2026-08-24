@@ -31,7 +31,11 @@ import {
 import { createReactiveIntelligenceLayer } from "../src/runtime.js";
 
 // RI layer's calibration-update subscriber requires EventBus.
-const testLayer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
+// calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL disk
+// path (~/.reactive-agents/calibration.db); tests must never touch it.
+const testLayer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+  Layer.provide(EventBusLive),
+);
 
 /**
  * EXACT mirror of `plan-execute.ts:737-756` synthetic state construction.

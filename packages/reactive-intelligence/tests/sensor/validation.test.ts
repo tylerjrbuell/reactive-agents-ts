@@ -6,7 +6,11 @@ import { VALIDATION_DATASET } from "./validation-dataset.js";
 
 describe("validation dataset accuracy", () => {
   // RI layer's calibration-update subscriber requires EventBus.
-  const layer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
+  // calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL disk
+  // path (~/.reactive-agents/calibration.db); tests must never touch it.
+  const layer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+    Layer.provide(EventBusLive),
+  );
 
   /**
    * High-signal examples: well-structured reasoning with tool progress.

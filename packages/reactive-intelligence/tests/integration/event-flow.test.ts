@@ -6,7 +6,14 @@ import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 describe("entropy service integration", () => {
   test("EntropySensorService composes with other layers", async () => {
     // RI layer's calibration-update subscriber requires EventBus.
-    const layer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
+    // calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL
+    // disk path (~/.reactive-agents/calibration.db); tests must never touch
+    // it. (This test previously assumed a fresh, uncalibrated store, which
+    // only held by accident because nothing ever wrote to the real store —
+    // see calibration-store-test-isolation.test.ts in packages/runtime.)
+    const layer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+      Layer.provide(EventBusLive),
+    );
 
     const program = Effect.gen(function* () {
       const sensor = yield* EntropySensorService;

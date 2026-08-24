@@ -11,7 +11,11 @@ describe("EntropyEventSubscriber", () => {
   // requirement (from its calibration-update subscriber) is actually
   // satisfied by the same bus instance the test observes below — plain
   // `merge` only unions outputs, it does not cross-wire sibling requirements.
-  const riLayer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
+  // calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL disk
+  // path (~/.reactive-agents/calibration.db); tests must never touch it.
+  const riLayer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+    Layer.provide(EventBusLive),
+  );
   const testLayer = Layer.merge(EventBusLive, riLayer);
 
   test("scores ReasoningStepCompleted events with thoughts", async () => {

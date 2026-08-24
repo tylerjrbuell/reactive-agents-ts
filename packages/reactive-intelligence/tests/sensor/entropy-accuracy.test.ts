@@ -64,7 +64,11 @@ function scoreViaService(
   },
 ) {
   // RI layer's calibration-update subscriber requires EventBus.
-  const layer = createReactiveIntelligenceLayer().pipe(Layer.provide(EventBusLive));
+  // calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL disk
+  // path (~/.reactive-agents/calibration.db); tests must never touch it.
+  const layer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+    Layer.provide(EventBusLive),
+  );
   return Effect.runPromise(
     Effect.gen(function* () {
       const sensor = yield* EntropySensorService;

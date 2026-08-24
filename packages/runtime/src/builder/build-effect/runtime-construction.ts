@@ -78,6 +78,40 @@ export function resolveCalibrationSetting(
 }
 
 /**
+ * Test-environment isolation for `CalibrationStore` — mirrors the
+ * `memoryOptions.dbPath` auto-resolution below in
+ * {@link buildBaseRuntimeAndEngine}. `CalibrationStore` (unlike
+ * `BanditStore`, which already defaults to `:memory:`) defaults to a REAL
+ * disk path (`~/.reactive-agents/calibration.db`). Left unguarded, any test
+ * that completes a task with entropy scoring on (the default) writes real
+ * rows into the user's live, potentially months-old calibration cache, keyed
+ * by whatever `defaultModel` string the test used — and since
+ * `EntropySensorService.updateCalibration` accumulates onto whatever scores
+ * already exist for that modelId, a test that happens to reuse a real model
+ * id can silently corrupt real historical calibration data. (Confirmed via
+ * a real incident 2026-08-24: a single `bun test` run injected rows for
+ * "test"/"test-model"/"sentinel-model"/"unknown" and appended synthetic
+ * scores onto at least one real, months-old model's row.)
+ *
+ * @param options - The value passed to `.withReactiveIntelligence()`, or `undefined` if never called.
+ * @param enableReactiveIntelligence - The resolved `_enableReactiveIntelligence` flag (default `true`).
+ * @param provider - The resolved `_provider` field.
+ * @param nodeEnv - `process.env.NODE_ENV`, injected for testability.
+ * @returns The options to forward to the runtime, with `calibrationDbPath` pinned to `:memory:` under test conditions unless the caller set one explicitly.
+ */
+export function resolveReactiveIntelligenceOptions(
+  options: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> | undefined,
+  enableReactiveIntelligence: boolean,
+  provider: ProviderName,
+  nodeEnv: string | undefined,
+): Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> | undefined {
+  if (!enableReactiveIntelligence) return options;
+  if (options?.calibrationDbPath) return options;
+  if (provider !== "test" && nodeEnv !== "test") return options;
+  return { ...(options ?? {}), calibrationDbPath: ":memory:" };
+}
+
+/**
  * Structural view over the builder state fields read by
  * {@link buildBaseRuntimeAndEngine}. The `ReactiveAgentBuilder` class
  * structurally satisfies this interface — call sites cast via
@@ -526,7 +560,12 @@ export const buildBaseRuntimeAndEngine = (
       outputValidatorOptions: state._outputValidatorOptions,
       customTermination: state._customTermination,
       enableReactiveIntelligence: state._enableReactiveIntelligence,
-      reactiveIntelligenceOptions: state._reactiveIntelligenceOptions,
+      reactiveIntelligenceOptions: resolveReactiveIntelligenceOptions(
+        state._reactiveIntelligenceOptions,
+        state._enableReactiveIntelligence,
+        state._provider,
+        process.env.NODE_ENV,
+      ),
       // `.withSkills()` guarantees non-empty paths (it throws otherwise —
       // v0.14 P0-10), so presence of the config IS the gate.
       ...(state._skillsConfig
