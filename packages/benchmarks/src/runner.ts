@@ -99,6 +99,26 @@ export const shouldUseLongHorizon = (task: {
 }): boolean => task.tags?.includes("horizon:long") ?? false;
 
 /**
+ * Billed/cache-read fields for a `TaskResult`, gated on whether the
+ * `LLMRequestCompleted` subscriber ever actually fired for this run.
+ *
+ * A subscribe race or a dropped event must not report a defined-but-wrong `0`
+ * for `billedTokens` — `aggregateRuns`'s `r.billedTokens ?? r.tokensUsed`
+ * fallback only engages on `undefined`, so a defined `0` would silently read
+ * as "genuinely billed nothing" and violate the never-default-to-0 guarantee.
+ * Omitting the fields entirely when the subscriber never fired lets that
+ * fallback correctly engage and use the run's raw `tokensUsed` instead.
+ */
+export const billedTokenFields = (
+  sawLLMRequestCompleted: boolean,
+  cumulativeBilledTokens: number,
+  cumulativeCacheReadTokens: number,
+): { billedTokens?: number; cacheReadTokens?: number } =>
+  sawLLMRequestCompleted
+    ? { billedTokens: cumulativeBilledTokens, cacheReadTokens: cumulativeCacheReadTokens }
+    : {};
+
+/**
  * Run a single benchmark task against a real LLM.
  * Returns a TaskResult with real timing, token usage, cost, and pass/fail status.
  */
@@ -158,6 +178,14 @@ const runTask = async (
     let cumulativeCost = 0;
     let cumulativeBilledTokens = 0;
     let cumulativeCacheReadTokens = 0;
+    // Set true the first time LLMRequestCompleted actually fires. A subscribe
+    // race or a dropped event must not leave cumulativeBilledTokens sitting at
+    // its 0 initializer and reported as a genuine "0 billed tokens" — that
+    // would silently violate the never-default-to-0 guarantee downstream
+    // (aggregateRuns's `??` fallback only engages on undefined, not on a
+    // defined-but-wrong 0). Both return sites below omit the fields entirely
+    // when this stays false, so the raw-tokensUsed fallback correctly engages.
+    let sawLLMRequestCompleted = false;
     let iterations = 0;
 
     // Listen for progress to capture tokens/cost even on timeout
@@ -170,6 +198,7 @@ const runTask = async (
         // agentResult.metadata.tokensUsed. They are live now.
         cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed;
         cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0;
+        sawLLMRequestCompleted = true;
       }
       if (event._tag === "ReasoningStepCompleted") {
         iterations++;
@@ -223,8 +252,7 @@ const runTask = async (
         status: "fail",
         durationMs,
         tokensUsed: cumulativeTokens,
-        billedTokens: cumulativeBilledTokens,
-        cacheReadTokens: cumulativeCacheReadTokens,
+        ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
         estimatedCost: cumulativeCost,
         iterations,
         output: error instanceof Error ? `Error: ${error.message}` : String(error),
@@ -246,9 +274,9 @@ const runTask = async (
       tokensUsed: agentResult.metadata.tokensUsed || cumulativeTokens,
       // AgentResultMetadata does not (yet) carry a billed/cache-read split, so
       // these fall back to the event-stream accumulator directly rather than
-      // ORing against a nonexistent metadata field.
-      billedTokens: cumulativeBilledTokens,
-      cacheReadTokens: cumulativeCacheReadTokens,
+      // ORing against a nonexistent metadata field. Omit entirely (not 0) when
+      // the subscriber never fired, so aggregateRuns falls back to raw tokensUsed.
+      ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
       estimatedCost: agentResult.metadata.cost || cumulativeCost,
       iterations: agentResult.metadata.stepsCount || iterations,
       output: agentResult.output.slice(0, 1000),
