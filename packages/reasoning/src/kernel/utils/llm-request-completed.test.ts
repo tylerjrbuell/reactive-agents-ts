@@ -1,18 +1,24 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, type AgentEvent } from "@reactive-agents/core";
 import { emitLLMExchange } from "./diagnostics.js";
 
-type Captured = { readonly _tag: string } & Record<string, unknown>;
-
-/** Recording EventBus stub — collects every published event for assertions. */
-const recordingBus = (sink: Ref.Ref<readonly Captured[]>) =>
+/**
+ * Recording EventBus stub — collects every published event for assertions.
+ *
+ * Implemented against the real `EventBus.Service` shape rather than cast into
+ * it: `publish` takes an `AgentEvent`, and the two subscription methods return
+ * a no-op unsubscribe, which is structurally what the tag declares. Keeping
+ * the sink typed as `AgentEvent[]` also means `find(e => e._tag === "…")`
+ * narrows to the real event variant, so the assertions below check the actual
+ * published field types instead of a `Record<string, unknown>` bag.
+ */
+const recordingBus = (sink: Ref.Ref<readonly AgentEvent[]>) =>
   Layer.succeed(EventBus, {
-    publish: (event: unknown) =>
-      Ref.update(sink, (prev) => [...prev, event as Captured]),
+    publish: (event: AgentEvent) => Ref.update(sink, (prev) => [...prev, event]),
     on: () => Effect.succeed(() => {}),
     subscribe: () => Effect.succeed(() => {}),
-  } as unknown as typeof EventBus.Service);
+  });
 
 const baseArgs = {
   taskId: "task-1",
@@ -29,7 +35,7 @@ describe("emitLLMExchange -> LLMRequestCompleted", () => {
   it("publishes LLMRequestCompleted alongside LLMExchangeEmitted", async () => {
     const events = await Effect.runPromise(
       Effect.gen(function* () {
-        const sink = yield* Ref.make<readonly Captured[]>([]);
+        const sink = yield* Ref.make<readonly AgentEvent[]>([]);
         yield* emitLLMExchange({
           ...baseArgs,
           response: {
@@ -53,7 +59,7 @@ describe("emitLLMExchange -> LLMRequestCompleted", () => {
   it("carries billed tokens, cache reads and the raw total", async () => {
     const completed = await Effect.runPromise(
       Effect.gen(function* () {
-        const sink = yield* Ref.make<readonly Captured[]>([]);
+        const sink = yield* Ref.make<readonly AgentEvent[]>([]);
         yield* emitLLMExchange({
           ...baseArgs,
           promptPrefixHash: "aaaaaaaaaaaaaaaa",
@@ -88,7 +94,7 @@ describe("emitLLMExchange -> LLMRequestCompleted", () => {
   it("omits cache fields and reports cached=false when the provider reports none", async () => {
     const completed = await Effect.runPromise(
       Effect.gen(function* () {
-        const sink = yield* Ref.make<readonly Captured[]>([]);
+        const sink = yield* Ref.make<readonly AgentEvent[]>([]);
         yield* emitLLMExchange({
           ...baseArgs,
           response: { content: "ok", tokensIn: 800, tokensOut: 200, durationMs: 90 },
