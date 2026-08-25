@@ -8,9 +8,14 @@
   LLM-exchange emission site.
 
 ### Added
-- Prompt-cache accounting reaches the run result and the benchmark gate:
-  `billedTokens` and `cacheReadTokens` on run metadata, `meanBilledTokens` and
-  `meanCacheReadTokens` on benchmark reports.
+- Prompt-cache accounting reaches the benchmark gate. Both benchmark
+  measurement paths — the bench runner (`runTask`) and the gate/ablation
+  session path (`runInternal`) — now subscribe to `LLMRequestCompleted` and
+  accumulate `billedTokens` / `cacheReadTokens` per call, which roll up to
+  `meanBilledTokens` / `meanCacheReadTokens` on benchmark reports. The event
+  stream is the source; `AgentResult.metadata` does NOT yet carry these fields
+  (that wiring, in `packages/runtime/src/execution-engine.ts`, is a deferred
+  fast-follow) and is read only as a fallback for when no event fired.
 - `promptPrefixHash` and `toolSurfaceHash` on every LLM exchange, so a
   prompt-cache miss is attributable to a named prefix segment.
 

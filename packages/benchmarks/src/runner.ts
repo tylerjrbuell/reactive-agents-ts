@@ -829,6 +829,25 @@ async function runInternal(
     const agent = await builder.build()
     console.log = _log
 
+    // Billed-token instrument (2026-08-24 amendment §4). This is the SAME
+    // mechanism `runTask` uses (see the subscription there): the per-call
+    // `LLMRequestCompleted` event is the only live source of the cache split.
+    // Without this subscription the gate/ablation path — which flows through
+    // runInternal, NOT runTask — reported meanBilledTokens === meanTokens and
+    // cacheHitRate === 0 on every real measurement, leaving the ratified
+    // billed-token rule inert on the exact path it was ratified for.
+    let cumulativeBilledTokens = 0
+    let cumulativeCacheReadTokens = 0
+    // Never report a defined-but-wrong 0: see `billedTokenFields`.
+    let sawLLMRequestCompleted = false
+    const unsubBilled = await agent.subscribe((event) => {
+      if (event._tag === "LLMRequestCompleted") {
+        cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed
+        cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0
+        sawLLMRequestCompleted = true
+      }
+    })
+
     // M3 ablation: when the variant config requests the noop verifier, set the
     // env-var signal consumed by strategies/reactive.ts. The strategy swaps
     // `defaultVerifier` for `noopVerifier` only when no explicit verifier was
@@ -891,6 +910,17 @@ async function runInternal(
           cacheReadTokens?: number
         }
         const terminatedBy = completed.abstention ? "abstained" : meta.terminatedBy
+        // PRIMARY: the live LLMRequestCompleted subscription above.
+        // SECONDARY: AgentResult.metadata, which does not carry these fields
+        // yet (that wiring lives in packages/runtime/src/execution-engine.ts
+        // and is a deferred fast-follow) — it reads through for free the
+        // moment it does, and is only consulted when the event never fired.
+        const billed = sawLLMRequestCompleted
+          ? billedTokenFields(true, cumulativeBilledTokens, cumulativeCacheReadTokens)
+          : {
+              ...(meta.billedTokens != null ? { billedTokens: meta.billedTokens } : {}),
+              ...(meta.cacheReadTokens != null ? { cacheReadTokens: meta.cacheReadTokens } : {}),
+            }
         return {
           output: completed.output,
           tokensUsed: meta.tokensUsed ?? 0,
@@ -899,11 +929,7 @@ async function runInternal(
           status: "pass",
           ...(traceDir && completed.taskId ? { traceId: completed.taskId } : {}),
           ...(terminatedBy != null ? { terminatedBy } : {}),
-          // AgentResultMetadata does not yet surface a billed/cache-read split
-          // (that wiring lives in packages/runtime/src/execution-engine.ts,
-          // outside this package); these read through the moment it does.
-          ...(meta.billedTokens != null ? { billedTokens: meta.billedTokens } : {}),
-          ...(meta.cacheReadTokens != null ? { cacheReadTokens: meta.cacheReadTokens } : {}),
+          ...billed,
         }
       } finally {
         clearTimeout(killTimer)
@@ -919,6 +945,7 @@ async function runInternal(
         }
       }
     } finally {
+      unsubBilled()
       await agent.dispose()
       if (config.verifier === "noop") {
         if (prevVerifierEnv === undefined) delete process.env[VERIFIER_ENV];
