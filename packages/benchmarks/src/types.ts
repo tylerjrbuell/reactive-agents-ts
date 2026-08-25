@@ -148,6 +148,10 @@ export interface TaskResult {
   readonly status: "pass" | "fail" | "error";
   readonly durationMs: number;
   readonly tokensUsed: number;
+  /** Provider-billed tokens, mirroring {@link RunScore.billedTokens}. */
+  readonly billedTokens?: number;
+  /** Cache-read input tokens, mirroring {@link RunScore.cacheReadTokens}. */
+  readonly cacheReadTokens?: number;
   readonly estimatedCost: number;
   readonly iterations: number;
   readonly output: string;
@@ -223,6 +227,15 @@ export interface RunScore {
    */
   readonly dimensions: ReadonlyArray<BenchDimensionScore>;
   readonly tokensUsed: number;
+  /**
+   * Provider-billed tokens for this run: `(inputTokens - cacheRead) + output`.
+   * Optional because replayed/deterministic runs and providers without cache
+   * reporting do not produce one; consumers fall back to `tokensUsed`, NEVER
+   * to 0 — a 0 default would make every such arm trivially pass the cost leg.
+   */
+  readonly billedTokens?: number;
+  /** Input tokens served from a prompt-cache hit. Absent means "not reported". */
+  readonly cacheReadTokens?: number;
   readonly durationMs: number;
   readonly status: "pass" | "fail" | "error";
   readonly output: string;
@@ -240,6 +253,14 @@ export interface TaskVariantReport {
   readonly meanScores: ReadonlyArray<DimensionScore>;
   readonly variance: number;
   readonly meanTokens: number;
+  /**
+   * Mean billed tokens across runs — the figure the lift gate's token leg
+   * scores as of the 2026-08-24 amendment. `meanTokens` above stays RAW and is
+   * retained on every receipt so historical reports stay readable.
+   */
+  readonly meanBilledTokens: number;
+  /** Mean cache-read input tokens across runs. 0 when unreported. */
+  readonly meanCacheReadTokens: number;
   readonly meanDurationMs: number;
   /**
    * Fraction of runs that COMPLETED (no crash, no timeout). This is a liveness
@@ -586,6 +607,10 @@ export type SuccessCriteria =
 export interface TaskRunResult {
   readonly output: string;
   readonly tokensUsed: number;
+  /** Provider-billed tokens, mirroring {@link RunScore.billedTokens}. */
+  readonly billedTokens?: number;
+  /** Cache-read input tokens, mirroring {@link RunScore.cacheReadTokens}. */
+  readonly cacheReadTokens?: number;
   readonly durationMs: number;
   readonly iterations: number;
   readonly status: "pass" | "fail" | "error";

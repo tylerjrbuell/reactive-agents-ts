@@ -156,6 +156,8 @@ const runTask = async (
     let agentResult: Awaited<ReturnType<typeof agent.run>>;
     let cumulativeTokens = 0;
     let cumulativeCost = 0;
+    let cumulativeBilledTokens = 0;
+    let cumulativeCacheReadTokens = 0;
     let iterations = 0;
 
     // Listen for progress to capture tokens/cost even on timeout
@@ -163,6 +165,11 @@ const runTask = async (
       if (event._tag === "LLMRequestCompleted") {
         cumulativeTokens += event.tokensUsed;
         cumulativeCost += event.estimatedCost;
+        // Before the F-1 fix nothing published this event, so these
+        // accumulators sat at 0 and the bench silently fell through to
+        // agentResult.metadata.tokensUsed. They are live now.
+        cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed;
+        cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0;
       }
       if (event._tag === "ReasoningStepCompleted") {
         iterations++;
@@ -216,6 +223,8 @@ const runTask = async (
         status: "fail",
         durationMs,
         tokensUsed: cumulativeTokens,
+        billedTokens: cumulativeBilledTokens,
+        cacheReadTokens: cumulativeCacheReadTokens,
         estimatedCost: cumulativeCost,
         iterations,
         output: error instanceof Error ? `Error: ${error.message}` : String(error),
@@ -235,6 +244,11 @@ const runTask = async (
       status: passed ? "pass" : "fail",
       durationMs,
       tokensUsed: agentResult.metadata.tokensUsed || cumulativeTokens,
+      // AgentResultMetadata does not (yet) carry a billed/cache-read split, so
+      // these fall back to the event-stream accumulator directly rather than
+      // ORing against a nonexistent metadata field.
+      billedTokens: cumulativeBilledTokens,
+      cacheReadTokens: cumulativeCacheReadTokens,
       estimatedCost: agentResult.metadata.cost || cumulativeCost,
       iterations: agentResult.metadata.stepsCount || iterations,
       output: agentResult.output.slice(0, 1000),
@@ -841,7 +855,13 @@ async function runInternal(
           else if (ev._tag === "StreamError") streamError = ev.cause
         }
         if (!completed) throw new Error(streamError ?? "timeout")
-        const meta = completed.metadata as { tokensUsed?: number; stepsCount?: number; terminatedBy?: string }
+        const meta = completed.metadata as {
+          tokensUsed?: number
+          stepsCount?: number
+          terminatedBy?: string
+          billedTokens?: number
+          cacheReadTokens?: number
+        }
         const terminatedBy = completed.abstention ? "abstained" : meta.terminatedBy
         return {
           output: completed.output,
@@ -851,6 +871,11 @@ async function runInternal(
           status: "pass",
           ...(traceDir && completed.taskId ? { traceId: completed.taskId } : {}),
           ...(terminatedBy != null ? { terminatedBy } : {}),
+          // AgentResultMetadata does not yet surface a billed/cache-read split
+          // (that wiring lives in packages/runtime/src/execution-engine.ts,
+          // outside this package); these read through the moment it does.
+          ...(meta.billedTokens != null ? { billedTokens: meta.billedTokens } : {}),
+          ...(meta.cacheReadTokens != null ? { cacheReadTokens: meta.cacheReadTokens } : {}),
         }
       } finally {
         clearTimeout(killTimer)
@@ -955,7 +980,8 @@ export function aggregateRuns(
 ): TaskVariantReport {
   if (runs.length === 0) {
     return { taskId, modelVariantId, variantId: variant.id, variantLabel: variant.label,
-      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanDurationMs: 0, passRate: 0, solveRate: 0 }
+      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanBilledTokens: 0, meanCacheReadTokens: 0,
+      meanDurationMs: 0, passRate: 0, solveRate: 0 }
   }
 
   const dims = [...new Set(runs.flatMap(r => r.dimensions.map(d => d.dimension)))] as QualityDimension[]
@@ -1008,6 +1034,14 @@ export function aggregateRuns(
     meanScores,
     variance: Math.sqrt(variance),
     meanTokens: Math.round(runs.reduce((a, r) => a + r.tokensUsed, 0) / runs.length),
+    // Fall back to the RAW figure per run, not to 0 — a provider with no cache
+    // reporting must score as "billed everything", which is the truth.
+    meanBilledTokens: Math.round(
+      runs.reduce((a, r) => a + (r.billedTokens ?? r.tokensUsed), 0) / runs.length,
+    ),
+    meanCacheReadTokens: Math.round(
+      runs.reduce((a, r) => a + (r.cacheReadTokens ?? 0), 0) / runs.length,
+    ),
     meanDurationMs: Math.round(runs.reduce((a, r) => a + r.durationMs, 0) / runs.length),
     passRate: completionRateOf(runs),
     solveRate: solveRateOf(runs),
@@ -1348,6 +1382,8 @@ export async function runSession(
             meanScores: [],
             variance: 0,
             meanTokens: 0,
+            meanBilledTokens: 0,
+            meanCacheReadTokens: 0,
             meanDurationMs: 0,
             passRate: 0,
             solveRate: 0,
@@ -1427,6 +1463,8 @@ export async function runSession(
               ...(result.traceId ? { traceId: result.traceId } : {}),
               ...(diagnosis ? { diagnosis } : {}),
               ...(trust ? { trust } : {}),
+              ...(result.billedTokens != null ? { billedTokens: result.billedTokens } : {}),
+              ...(result.cacheReadTokens != null ? { cacheReadTokens: result.cacheReadTokens } : {}),
             })
             if (diagnosis) {
               const diagLine = formatDiagnosisLine(diagnosis);

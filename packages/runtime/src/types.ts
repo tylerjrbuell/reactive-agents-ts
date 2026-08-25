@@ -173,6 +173,10 @@ export const ExecutionContextSchema = Schema.Struct({
   cost: Schema.Number,
   /** Cumulative tokens consumed */
   tokensUsed: Schema.Number,
+  /** Provider-billed tokens: `(input - cacheRead) + output`. Absent when unreported. */
+  billedTokens: Schema.optional(Schema.Number),
+  /** Input tokens served from a prompt-cache hit. Absent when unreported. */
+  cacheReadTokens: Schema.optional(Schema.Number),
   /** Timestamp when execution started */
   startedAt: Schema.DateFromSelf,
   /** Arbitrary metadata (tags, custom data, state) */

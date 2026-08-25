@@ -927,6 +927,12 @@ export const createRuntime = (options: RuntimeOptions) => {
                   taskId: event.taskId,
                   model: event.model,
                   tokensUsed: event.tokensUsed,
+                  // Live as of Task 3 (LLMRequestCompleted now has a real
+                  // producer). Fall back to the raw figure, never to 0 — a
+                  // provider without cache reporting must log as "billed
+                  // everything", not as free.
+                  billedTokens: event.billedTokens ?? event.tokensUsed,
+                  cacheReadTokensIn: event.cacheReadTokensIn ?? 0,
                   durationMs: event.durationMs,
                 }),
               ),
