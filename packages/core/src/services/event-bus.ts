@@ -200,6 +200,32 @@ export type AgentEvent =
       readonly tokensOut?: number;
       /** True when the response was served from prompt cache (Anthropic ephemeral cache, OpenAI cached input, etc.). */
       readonly cached?: boolean;
+      /**
+       * Input tokens served from a prompt-cache hit, when the provider reports
+       * them (Anthropic `cache_read_input_tokens`, OpenAI cached input).
+       * Absent means "provider did not report", NOT "zero" — a consumer that
+       * needs a number treats absent as 0 via `billedInputTokens`.
+       */
+      readonly cacheReadTokensIn?: number;
+      /**
+       * `(inputTokens - cacheReadTokensIn) + outputTokens`, clamped at zero on
+       * the input half. The figure the lift gate's token leg scores
+       * (2026-08-24 amendment §4). `tokensUsed` above stays RAW and is retained
+       * on every receipt so historical reports stay readable.
+       */
+      readonly billedTokens?: number;
+      /**
+       * Stable hash of the cacheable prompt prefix (system block). When two
+       * consecutive calls in one run disagree on this, the cache could not have
+       * hit and the system block is the reason.
+       */
+      readonly promptPrefixHash?: string;
+      /**
+       * Stable hash of the ordered tool-schema surface sent on the wire. Tools
+       * occupy position zero of the Anthropic cache prefix, so a change here
+       * invalidates every downstream breakpoint (failure mode F10).
+       */
+      readonly toolSurfaceHash?: string;
       /** Estimated cost in USD */
       readonly estimatedCost: number;
     }
