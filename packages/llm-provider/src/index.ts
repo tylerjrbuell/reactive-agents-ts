@@ -171,6 +171,9 @@ export { retryPolicy } from "./retry.js";
 export type { PricingProvider, ModelPricing } from "./pricing.js";
 export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 
+// ─── Cost Instrumentation ───
+export { billedInputTokens, type BilledTokens, type UsageLike } from "./billed-tokens.js";
+
 // ─── Structured Output Schemas ───
 export {
   ReActActionSchema,
