@@ -22,9 +22,13 @@ describe("billedInputTokens", () => {
   });
 
   it("clamps at zero when a provider reports cacheRead >= input", () => {
-    // Anthropic reports input_tokens as the UNCACHED remainder, so a provider
-    // that also reports the cached figure separately can make the naive
-    // subtraction negative. Billed tokens are never negative.
+    // NOT reachable via this repo's Anthropic path: `totalInputTokens()`
+    // (providers/anthropic.ts) reports input_tokens INCLUSIVE of the cache
+    // pools since `2f97ca1e`, so `inputTokens - cacheRead` cannot go negative
+    // there. This pins the general defense: a hypothetical provider reporting
+    // inputTokens EXCLUSIVE of cache, while still reporting cacheRead
+    // separately, would make the naive subtraction negative. Billed tokens are
+    // never negative.
     const r = billedInputTokens({
       inputTokens: 200,
       outputTokens: 50,

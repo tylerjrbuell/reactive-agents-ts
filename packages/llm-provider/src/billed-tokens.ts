@@ -37,9 +37,24 @@ const nonNegative = (n: number | undefined): number =>
 /**
  * Split a usage report into billed and cached halves.
  *
- * Providers disagree about whether `inputTokens` already excludes cache reads.
- * Anthropic reports the UNCACHED remainder, so `inputTokens - cacheRead` can go
- * negative; that is clamped to 0 rather than allowed to poison an aggregate.
+ * CONTRACT: `usage.inputTokens` is the TRUE prompt size, cache pools INCLUDED.
+ * The subtraction below is therefore correct as written — do NOT "fix" it as a
+ * double subtraction.
+ *
+ * This repo's Anthropic adapter guarantees that invariant: `totalInputTokens()`
+ * (providers/anthropic.ts) deliberately computes
+ * `input_tokens + cache_read + cache_creation` on every complete() and stream()
+ * path. It used to pass the Anthropic wire value straight through — which IS
+ * the uncached remainder — and that made a caching run look ~600x cheaper per
+ * call than it was, confounding every token ablation (fixed in `2f97ca1e`).
+ *
+ * The zero clamp is NOT defending against Anthropic, then: it is unreachable on
+ * that path today. It defends against a HYPOTHETICAL future provider that
+ * reports `inputTokens` EXCLUSIVE of its cache pools while still reporting the
+ * cache figure separately — for which `inputTokens - cacheRead` would go
+ * negative. Clamping keeps such a provider from poisoning an aggregate instead
+ * of silently subtracting twice. Keep the clamp; it is cheap and general.
+ *
  * A provider reporting no cache figures degrades to `billedInput === inputTokens`,
  * which is exactly today's behavior.
  */
