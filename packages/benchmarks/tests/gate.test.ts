@@ -43,6 +43,10 @@ function tvr(p: {
   variantId: string;
   accuracy?: number;
   meanTokens?: number;
+  /** Defaults to `meanTokens` — the no-caching case (raw === billed). */
+  meanBilledTokens?: number;
+  /** Defaults to 0 — the no-caching case. */
+  meanCacheReadTokens?: number;
   variance?: number;
   /** Runs per cell. Drives the standard-error bar and the underpowered guard. */
   n?: number;
@@ -50,6 +54,7 @@ function tvr(p: {
   noMetric?: boolean;
 }): TaskVariantReport {
   const accuracy = p.accuracy ?? 0.5;
+  const meanTokens = p.meanTokens ?? 1000;
   return {
     taskId: p.taskId ?? "t1",
     modelVariantId: p.modelVariantId,
@@ -58,7 +63,9 @@ function tvr(p: {
     runs: runsOf(accuracy, p.n ?? 1000) as TaskVariantReport["runs"],
     meanScores: p.noMetric ? [] : scores(accuracy),
     variance: p.variance ?? 0,
-    meanTokens: p.meanTokens ?? 1000,
+    meanTokens,
+    meanBilledTokens: p.meanBilledTokens ?? meanTokens,
+    meanCacheReadTokens: p.meanCacheReadTokens ?? 0,
     meanDurationMs: 100,
     passRate: 1,
     inconclusive: p.inconclusive

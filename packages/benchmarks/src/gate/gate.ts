@@ -208,6 +208,16 @@ function computeEvidence(
   const tokenOverheadPct =
     baseTokens === 0 ? 0 : ((candTokens - baseTokens) / baseTokens) * 100;
 
+  // Billed leg (2026-08-24 amendment §4). Both figures are computed and both
+  // are reported; `policy.tokenLeg` decides which one the AND is evaluated on.
+  // Raw is NEVER dropped — archived reports and prior verdicts stay auditable.
+  const baseBilled = mean(pairedBase.map((r) => r.meanBilledTokens));
+  const candBilled = mean(pairedCand.map((r) => r.meanBilledTokens));
+  const billedTokenOverheadPct =
+    baseBilled === 0 ? 0 : ((candBilled - baseBilled) / baseBilled) * 100;
+  const candCacheRead = mean(pairedCand.map((r) => r.meanCacheReadTokens));
+  const cacheHitRate = candTokens === 0 ? 0 : candCacheRead / candTokens;
+
   const variance = maxOf(pairedCells.map((r) => r.variance));
 
   // ── SE(D̄): the larger of two noise sources ────────────────────────────────
@@ -272,6 +282,9 @@ function computeEvidence(
   let costOk: boolean;
   let longHorizonFields: Pick<TierEvidence, "taskClass" | "costPerDeliverable"> = {};
   if (taskClass === "long-horizon") {
+    // Long-horizon CPD keeps the RAW numerator for now. Switching it is a
+    // separate ruling the 2026-08-24 amendment deliberately did not make.
+    //
     // Deliverable-check pass-rate = the partial-credit metric score (0..1),
     // already computed in the result rows. CPD = tokens ÷ pass-rate.
     const candCPD =
@@ -283,7 +296,9 @@ function computeEvidence(
       !zeroDelivery && (candCPD <= baseCPD || candidateMetric >= baselineMetric);
     longHorizonFields = { taskClass: "long-horizon", costPerDeliverable: candCPD };
   } else {
-    costOk = tokenOverheadPct <= policy.maxTokenOverheadPct;
+    const scoredOverheadPct =
+      policy.tokenLeg === "raw" ? tokenOverheadPct : billedTokenOverheadPct;
+    costOk = scoredOverheadPct <= policy.maxTokenOverheadPct;
   }
 
   // Promotion demands the 95% band (`promotable`) AND pass^8 non-regression
@@ -305,6 +320,8 @@ function computeEvidence(
     candidateMetric,
     liftPp,
     tokenOverheadPct,
+    billedTokenOverheadPct,
+    cacheHitRate,
     variance,
     noisePp,
     promotionNoisePp,

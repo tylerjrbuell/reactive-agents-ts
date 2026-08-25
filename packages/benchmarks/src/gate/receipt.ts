@@ -1,7 +1,12 @@
 // File: src/gate/receipt.ts
-import type { GateVerdict, TierEvidence } from "./types.js";
+import type { GateVerdict, LiftPolicy, TierEvidence } from "./types.js";
+import { DEFAULT_LIFT_POLICY } from "./types.js";
 
-function tierRow(t: TierEvidence): string {
+function fmtPct(n: number): string {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
+
+function tierRow(t: TierEvidence, policy: LiftPolicy): string {
   const verdict = t.inconclusive
     ? "INCONCLUSIVE"
     : t.regresses
@@ -13,7 +18,13 @@ function tierRow(t: TierEvidence): string {
   const cand = (t.candidateMetric * 100).toFixed(1);
   const lift = `${t.liftPp >= 0 ? "+" : ""}${t.liftPp.toFixed(1)}pp`;
   const tok = `${t.tokenOverheadPct >= 0 ? "+" : ""}${t.tokenOverheadPct.toFixed(1)}%`;
-  return `  ${t.tier.padEnd(18)} ${base.padStart(6)}  ${cand.padStart(6)}  ${lift.padStart(8)}  ${tok.padStart(8)}  ${verdict}`;
+  const row = `  ${t.tier.padEnd(18)} ${base.padStart(6)}  ${cand.padStart(6)}  ${lift.padStart(8)}  ${tok.padStart(8)}  ${verdict}`;
+  // Both legs on every receipt. A reader must be able to see WHY a verdict
+  // differs from a pre-amendment one without re-running anything.
+  const tokLine =
+    `    · tokens raw ${fmtPct(t.tokenOverheadPct)} | billed ${fmtPct(t.billedTokenOverheadPct)}` +
+    ` (scored: ${policy.tokenLeg}) | cacheHit ${(t.cacheHitRate * 100).toFixed(1)}%`;
+  return `${row}\n${tokLine}`;
 }
 
 /**
@@ -48,11 +59,14 @@ function tierDetailLines(t: TierEvidence): string[] {
   return lines;
 }
 
-export function formatGateReceipt(verdict: GateVerdict): string {
+export function formatGateReceipt(
+  verdict: GateVerdict,
+  policy: LiftPolicy = DEFAULT_LIFT_POLICY,
+): string {
   const header = `LIFT GATE · ${verdict.candidateVariantId} vs ${verdict.baselineVariantId}`;
   const cols = `  ${"tier".padEnd(18)} ${"base".padStart(6)}  ${"cand".padStart(6)}  ${"lift".padStart(8)}  ${"tok".padStart(8)}  verdict`;
   const rows = verdict.perTier
-    .flatMap((t) => [tierRow(t), ...tierDetailLines(t)])
+    .flatMap((t) => [tierRow(t, policy), ...tierDetailLines(t)])
     .join("\n");
   const agg =
     `  AGGREGATE  ${verdict.aggregate.liftPp.toFixed(1)}pp · ` +
