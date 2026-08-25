@@ -28,6 +28,58 @@
 
 Entries in this section are dated evidence and historical context. They are not current status unless the entry is explicitly marked as verified above or corroborated by source/tests and the canonical wiki debt register.
 
+**2026-08-24: External-research convergence pass — 09 amendment PROPOSED, W1+W2 plan READY.**
+Validated an external "State of AI Agents 2026" research doc against primary sources, then checked
+Reactive Agents against it. Docs produced:
+`wiki/Decisions/2026-08-24-external-research-convergence-amendment.md` (ratification event amending
+09 §2/§5.3/§6/§7) and `wiki/Planning/Implementation-Plans/2026-08-24-cost-instrument-truth.md`.
+
+Decisive codebase findings, all verified 2026-08-24:
+- **`LLMRequestCompleted` has NINE consumers and ZERO producers.** Declared
+  `packages/core/src/services/event-bus.ts:184-205`; consumed by the benchmark runner
+  (`runner.ts:163-165`), both observability collectors, `observe/src/tracer.ts:122`,
+  `runtime/src/runtime.ts:924`, cortex server ingest, and three cortex UI stores. Nothing publishes
+  it. The per-call LLM token/cost stream has been dead. Single correct producer site =
+  `emitLLMExchange` (`packages/reasoning/src/kernel/utils/diagnostics.ts:528`).
+- **Cache accounting dies at the trace.** `cacheReadInputTokens` is produced by
+  `llm-provider/src/providers/anthropic.ts:497,820` and reaches the exchange at
+  `reasoning/src/kernel/observable-llm.ts:172-173`, but the only downstream reader in the repo is the
+  standalone `benchmarks/src/disclosure-ablation.ts:196`. It never reaches result metadata, the
+  receipt, `packages/cost`, or the lift gate.
+- **The lift gate's token leg is cache-blind** (`benchmarks/src/gate/gate.ts:206-208` sums raw
+  `meanTokens`). This is the real reason 09 §5.3 reads as it does: the stable-surface verdict was
+  correct under the rule as written, but the rule's raw-token proxy stopped tracking cost when prompt
+  caching shipped. Amendment = keep the leg in TOKENS, count `inputTokens − cacheReadInputTokens`.
+  USD was reconsidered and re-rejected (imports vendor pricing into a cross-provider gate).
+- **`toolDisclosureMode` is a dead field** (`reasoning/src/context/context-profile.ts:93`): declared
+  with 25 lines of JSDoc, no `CONTEXT_PROFILES` entry sets it, no consumer reads it. Only its sibling
+  `toolIndexMaxEntries` is read (`think.ts:874,936`). 09 Step 4 "profiles" is ~70% built, not
+  greenfield — reprices that step down substantially.
+- **Two 09 §6 debt items are STALE (ratchet may go down):** §6.11 API-key prefix leak is FIXED
+  (`runtime/src/build-validation.ts:353-363` emits `(set)`/`(missing)`); §6.8 two memory
+  consolidators is FIXED (`memory/src/services/memory-consolidator.ts` is the only one). §6.9 stays
+  OPEN — `trace/src/replay.ts` validates `kind`/`runId` only, per its own JSDoc.
+- **Memory writes bypass guardrails entirely** — zero `guardrail` hits under `packages/memory/src`,
+  while `guardrails/src/detectors/` ships injection/pii/toxicity. `_enableMemory` default false
+  (`runtime/src/builder.ts:345`).
+- **τ-bench is built and has never been run** — `benchmarks/src/tau-bench/` has adapter/loader/pass-k
+  plus vendored airline+retail data; zero reports in `wiki/Research/Harness-Reports/`.
+- Zero `prefixHash|surfaceHash|promptHash` anywhere; `tools/src/mcp/` is client-only while
+  `packages/a2a/` ships both client and server.
+
+Research-doc claims that must NOT be cited: "+25pp classification-head fine-tuning on tiny models"
+(the actual paper, arXiv 2607.03801, reports +2–3pp); "4.5M executions / 56.6% success" and "30pp
+harness variance" (both unsourced); its benchmark table (understates frontier agents and omits the
+2026-04-12 UC Berkeley RDI result that all eight major agent benchmarks were broken by reward
+hacking). Sound and usable: arXiv 2605.13850 (7×6 cognitive-function × execution-topology taxonomy),
+2602.14690 (harness-engineering study of 70 systems), 2606.22528 (governance decay under compaction).
+
+Workstream order set by the amendment: W1 cost-instrument truth → W2 cache explainability (same
+slice, WIP=1) → W3 profile completion → W4 harness-quality metrics in `packages/eval` → W5 τ-bench
+score → W6 memory hygiene → W7 residue. Explicitly NOT authorized: a topology/orchestration surface
+(09 C5 gates it behind RunAssessment), any RL/distillation pipeline, the 28-pattern catalog, or
+another north-star document.
+
 **2026-08-16: Health sweep (pre-release) — HS-224..228 fixed, HS-229..232 filed, 1 false P0.**
 User-requested DX/cleanliness pass before v0.15.0. 4 parallel scan agents. **Real correctness bug in
 this session's own earlier work:** HS-224 — scratchpad-spill's `resolveScratchpadValue` was wired into
