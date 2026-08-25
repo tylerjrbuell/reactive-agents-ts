@@ -10,7 +10,7 @@ import { fail, info } from "../ui.js";
 
 const GATE_USAGE =
   "Usage: rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> " +
-  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] " +
+  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] [--token-leg <raw|billed>] " +
   "[--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id>]";
 
 /**
@@ -82,17 +82,32 @@ export async function runEvalGate(args: string[]): Promise<void> {
   const minLift = num("--min-lift");
   const maxTok = num("--max-tok");
   const minTiers = num("--min-tiers");
+  // `--token-leg raw` re-scores an archived report under the pre-2026-08-24
+  // rule that was in force when it was produced (LiftPolicy.tokenLeg). Without
+  // a way to select the leg the "raw" option existed only in the type.
+  const tokenLegRaw = get("--token-leg");
+  let tokenLeg: LiftPolicy["tokenLeg"] | undefined;
+  if (tokenLegRaw === "raw" || tokenLegRaw === "billed") {
+    tokenLeg = tokenLegRaw;
+  } else if (tokenLegRaw !== undefined) {
+    console.error(fail(`--token-leg must be "raw" or "billed", got "${tokenLegRaw}"`));
+    process.exit(1);
+  }
   const policy: LiftPolicy = {
     ...DEFAULT_LIFT_POLICY,
     ...(get("--metric") ? { metric: get("--metric") as LiftPolicy["metric"] } : {}),
     ...(minLift !== undefined ? { minLiftPp: minLift } : {}),
     ...(maxTok !== undefined ? { maxTokenOverheadPct: maxTok } : {}),
     ...(minTiers !== undefined ? { minTiers } : {}),
+    ...(tokenLeg !== undefined ? { tokenLeg } : {}),
   };
 
   // evaluateLiftGate is pure; report shape is the SessionReport written by `rax bench --output`.
   const verdict = evaluateLiftGate(report as Parameters<typeof evaluateLiftGate>[0], baseline, candidate, policy);
-  console.log(formatGateReceipt(verdict));
+  // Pass the policy the verdict was ACTUALLY evaluated under — formatGateReceipt
+  // otherwise falls back to DEFAULT_LIFT_POLICY for its display text and would
+  // print "(scored: billed)" on a receipt scored under `--token-leg raw`.
+  console.log(formatGateReceipt(verdict, policy));
   if (verdict.aggregate.tiersCovered === 0) {
     console.error(
       info(`No comparable tiers for "${baseline}" vs "${candidate}" — check the variant ids exist in the report.`),
