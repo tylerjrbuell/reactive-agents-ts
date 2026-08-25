@@ -1,3 +1,25 @@
+## [Unreleased]
+
+### Fixed
+- `LLMRequestCompleted` was declared and consumed in nine places but published
+  by nothing, leaving the per-call LLM token/cost stream dead across the
+  benchmark runner, both observability collectors, the trace tracer and the
+  Cortex live readouts. It is now published from the kernel's single
+  LLM-exchange emission site.
+
+### Added
+- Prompt-cache accounting reaches the run result and the benchmark gate:
+  `billedTokens` and `cacheReadTokens` on run metadata, `meanBilledTokens` and
+  `meanCacheReadTokens` on benchmark reports.
+- `promptPrefixHash` and `toolSurfaceHash` on every LLM exchange, so a
+  prompt-cache miss is attributable to a named prefix segment.
+
+### Changed
+- The lift gate's cost leg now scores **billed** input tokens
+  (`input − cacheRead`) rather than raw tokens, configurable via
+  `LiftPolicy.tokenLeg`. Raw overhead is still computed and printed on every
+  receipt. The leg remains denominated in tokens, not USD.
+
 ## [0.15.0] — 2026-08-16
 
 Behavior change — the path-healing pipeline no longer silently rescues an out-of-root absolute path (F9)

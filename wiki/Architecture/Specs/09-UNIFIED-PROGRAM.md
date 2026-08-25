@@ -35,10 +35,15 @@ K makes agents capable. P makes them governable. T keeps both honest.
 ## 2. Program invariants (law — unchanged)
 
 - **One owner module + one grep-able enforcement script per subsystem. No script → not done.**
-- **The lift rule.** Default-on requires **≥3pp accuracy lift AND ≤15% token overhead**,
-  cross-tier, per task class. Otherwise opt-in, or removed. `ablation-warden` holds veto.
-  The rule is an AND, and the token leg is measured in **tokens**, not USD
-  (`gate/types.ts:101`, `gate.ts:286` — the gate has no USD field at all).
+- **The lift rule.** Default-on requires **≥3pp accuracy lift AND ≤15% billed-token
+  overhead**, cross-tier, per task class, where billed input tokens =
+  `inputTokens − cacheReadInputTokens` (falling back to `inputTokens` when a provider
+  reports no cache figures; output tokens billed in full). Otherwise opt-in, or removed.
+  `ablation-warden` holds veto. The rule is an AND, and the token leg is measured in
+  **tokens**, not USD (`gate/types.ts` `LiftPolicy.tokenLeg`, `gate.ts` — the gate has no
+  USD field at all). Amended 2026-08-24 from a raw-token leg — see
+  [[../../Decisions/2026-08-24-external-research-convergence-amendment]] §4 (F-3: raw
+  tokens stopped being a sound cost proxy once prompt caching shipped).
 - **Honest-claims law** (08 §binding) applies to receipts, forks, replay, and our own headlines.
 - The meta-loop DAG is one-directional; control re-enters as ledger entries only.
 - Falsified levers stay dead. Non-goals in 08 §9 carried.
@@ -85,6 +90,7 @@ K makes agents capable. P makes them governable. T keeps both honest.
 | `_enableReasoning` default | `false` (`builder.ts:360`) — **default users take the inline arm** | verified 2026-08-12 |
 | Public builder withers | **83** | verified 2026-08-12 |
 | Strategy implementations | 8 files, **7,628 LOC** | verified 2026-08-12 |
+| `LLMRequestCompleted` producers | 1 (was 0) | `scripts/check-cost-accounting.sh` |
 
 The +141% figure replaces an earlier 555–640%, which was computed with a broken
 instrument (Anthropic `usage.input_tokens` counts only the uncached remainder; fixed
@@ -140,6 +146,10 @@ construction, and it still fails, because the rule says tokens. A proposed amend
 filed ([[../../Decisions/2026-07-29-lift-rule-cost-vs-tokens-amendment]]); **it is not in
 force, and ratifying it would promote nothing.**
 
+**Superseded in part 2026-08-24.** The verdict was correct under the rule as written; the
+rule's token leg was cache-blind. Re-measure under the billed leg before citing this
+section's numbers as a disposition.
+
 ### 5.4 The measurement ladder (ratified 2026-07-28)
 
 **Rung 1** deterministic replay over the golden corpus — does the machinery fire, at zero
@@ -193,12 +203,17 @@ narrower than the "canonical argument identity everywhere" the 08-10 proposals a
 skills, then `void`s both — the comment admits it. `volatile-tail.ts` reads a `goal_state`
 that has no live producer.
 
-**6.8 Two memory consolidators.** `memory/src/extraction/memory-consolidator.ts` and
-`memory/src/services/memory-consolidator.ts` are independent implementations, both wired,
-both live (`memory-flush.ts:29-71` acquires both).
+**6.8 Two memory consolidators. RESOLVED (verified 2026-08-24).**
+`packages/memory/src/extraction/` contains only `memory-extractor.ts`;
+`packages/memory/src/services/memory-consolidator.ts` is the sole consolidator
+implementation. See
+[[../../Decisions/2026-08-24-external-research-convergence-amendment]] §2 F-5.
 
 **6.9 The measurement substrate is unvalidated.** `trace/src/replay.ts:15-28` casts
 arbitrary parsed JSONL to `TraceEvent` with no schema check. This is the instrument.
+**Still open (checked 2026-08-24).** `replay.ts` now rejects malformed lines via
+`isTraceEvent`, but per its own JSDoc this "only checks that `kind`/`runId` are present —
+it is not a full per-kind schema check." The instrument still admits any payload shape.
 
 **6.10 Configuration has seven representations.** Builder private fields → `BuilderState`
 → `BuilderRuntimeStateView` → `RuntimeOptions` → `ReactiveAgentsConfig` → `AgentConfig`
@@ -209,6 +224,11 @@ use separate layer graphs. *Real debt, but DX debt — see §7's ordering.*
 API key to console on every build. `cost-track.ts:20-48` hardcodes `tier:"sonnet"` and
 `inputTokens: 0` (scoped: only runs under `.withCostTracking()`, default off).
 `calibration.ts:161-184` returns a deliberately empty adapter.
+**API-key-prefix leak: RESOLVED (verified 2026-08-24).**
+`packages/runtime/src/build-validation.ts:353-363` now emits `(set)` / `(missing)` /
+`(not required)` / `(set via .withProvider config)` — no key material reaches the log. See
+[[../../Decisions/2026-08-24-external-research-convergence-amendment]] §2 F-5. The
+`cost-track.ts` and `calibration.ts` stubs are unaffected by this closure and remain open.
 
 ## 7. The ordered path
 
@@ -217,6 +237,17 @@ model.** That is what must become explicit, measurable and per-tier — a fronti
 prefix caching and a 4GB local tool-caller want opposite settings, and today both get one
 hidden default. Profiles are that axis made explicit; ownership convergence is what makes
 profiles enforceable. Order follows cheapness and measurability, not architectural elegance.
+
+**W1/W2 — cost instrument truth + cache explainability (2026-08-24 amendment).** Inserted
+ahead of Step 0 residue: every remaining step is scored by this instrument, and 09 §2's own
+doctrine ("a surprising measurement indicts the instrument first") applies to §2 itself.
+W1 fixes F-1 (produce `LLMRequestCompleted`), F-2 (thread cache fields to metadata and
+receipt), F-3 (billed-token lift-gate leg), and re-runs the disclosure ablation under the
+corrected leg. W2 adds a stable-prefix hash + tool-surface hash to every exchange and
+receipt so a `cacheRead=0` is attributable to a named segment — ships in the same slice as
+W1. Full workstream table (W1–W7):
+[[../../Decisions/2026-08-24-external-research-convergence-amendment]] §4. Landed:
+`scripts/check-cost-accounting.sh`; §4 verified-state row above.
 
 **Step 0 — forced fixes.** No lift gate needed; each is deterministic or a pure removal.
 Remove the API-key prefix (6.11). Validate trace JSON at load (6.9). Delete `discover-tools`
