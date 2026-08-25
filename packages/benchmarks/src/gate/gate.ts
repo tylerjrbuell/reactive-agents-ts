@@ -19,6 +19,7 @@ import {
   type LiftPolicy,
   type TaskClass,
   type TierEvidence,
+  scoredTokenOverheadPct,
 } from "./types.js";
 
 /**
@@ -211,11 +212,17 @@ function computeEvidence(
   // Billed leg (2026-08-24 amendment §4). Both figures are computed and both
   // are reported; `policy.tokenLeg` decides which one the AND is evaluated on.
   // Raw is NEVER dropped — archived reports and prior verdicts stay auditable.
-  const baseBilled = mean(pairedBase.map((r) => r.meanBilledTokens));
-  const candBilled = mean(pairedCand.map((r) => r.meanBilledTokens));
+  //
+  // The `??` fallbacks are load-bearing, not defensive noise: a SessionReport
+  // archived before this amendment carries neither field, and `mean(undefined)`
+  // is NaN — which fails `<= maxTokenOverheadPct` and would silently flip every
+  // archived report's cost verdict to false. Falling back to the raw figure
+  // makes an un-instrumented report score exactly as it did pre-amendment.
+  const baseBilled = mean(pairedBase.map((r) => r.meanBilledTokens ?? r.meanTokens));
+  const candBilled = mean(pairedCand.map((r) => r.meanBilledTokens ?? r.meanTokens));
   const billedTokenOverheadPct =
     baseBilled === 0 ? 0 : ((candBilled - baseBilled) / baseBilled) * 100;
-  const candCacheRead = mean(pairedCand.map((r) => r.meanCacheReadTokens));
+  const candCacheRead = mean(pairedCand.map((r) => r.meanCacheReadTokens ?? 0));
   const cacheHitRate = candTokens === 0 ? 0 : candCacheRead / candTokens;
 
   const variance = maxOf(pairedCells.map((r) => r.variance));
@@ -403,6 +410,7 @@ function decide(
   const aggregate = {
     liftPp: mean(conclusive.map((t) => t.liftPp)),
     tokenOverheadPct: mean(conclusive.map((t) => t.tokenOverheadPct)),
+    billedTokenOverheadPct: mean(conclusive.map((t) => t.billedTokenOverheadPct)),
     tiersCovered,
   };
 
@@ -437,8 +445,13 @@ function buildRationale(
   anySignificant = true,
 ): string {
   const lift = aggregate.liftPp.toFixed(1);
-  const tok = aggregate.tokenOverheadPct.toFixed(1);
-  const base = `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ${tok}% tok`;
+  // Print the leg the verdict was actually SCORED on, labeled. Printing the
+  // raw figure while deciding on the billed one made the headline number and
+  // the decision disagree with no way for a reader to tell.
+  const tok = scoredTokenOverheadPct(aggregate, policy).toFixed(1);
+  const base =
+    `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ` +
+    `${tok}% ${policy.tokenLeg} tok`;
   if (decision === "underpowered")
     return `${base} — too few runs to resolve ≥${policy.minLiftPp}pp; this is NOT evidence of no effect`;
   if (decision === "reject") return `${base} — a tier significantly regresses`;

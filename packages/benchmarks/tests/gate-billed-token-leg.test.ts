@@ -20,7 +20,7 @@ import type {
   SessionReport,
   TaskVariantReport,
 } from "../src/types.js";
-import { projectTierEvidence } from "../src/gate/gate.js";
+import { evaluateLiftGate, projectTierEvidence } from "../src/gate/gate.js";
 import { DEFAULT_LIFT_POLICY } from "../src/gate/types.js";
 
 // ── fixture builders (copied verbatim from gate.test.ts, not exported there) ─
@@ -193,5 +193,108 @@ describe("billed token leg", () => {
     );
 
     expect(evidence!.cacheHitRate).toBeCloseTo(0.3, 2); // 12000 / 40000
+  });
+});
+
+// ── C1: archived reports (no billed fields at all) ──────────────────────────
+//
+// `meanBilledTokens` / `meanCacheReadTokens` did not exist before this
+// amendment. Any SessionReport archived earlier — and the branch's own stated
+// promise is that those stay re-auditable — simply has no such keys. When the
+// gate read them unguarded, `mean(undefined)` produced NaN, `NaN <=
+// maxTokenOverheadPct` is false, and the cost leg silently failed EVERY tier
+// on EVERY archived report. These fixtures OMIT the fields rather than setting
+// them, which is the only shape that reproduces that bug.
+
+/** `tvr` with the two billed fields genuinely absent from the object. */
+function archivedTvr(p: Parameters<typeof tvr>[0]): TaskVariantReport {
+  const { meanBilledTokens: _b, meanCacheReadTokens: _c, ...rest } = tvr(p);
+  return rest;
+}
+
+describe("archived reports without billed fields", () => {
+  const archivedArm = () =>
+    makeReport([
+      archivedTvr({
+        modelVariantId: "haiku",
+        variantId: "base",
+        accuracy: 0.6,
+        meanTokens: 30_000,
+      }),
+      archivedTvr({
+        modelVariantId: "haiku",
+        variantId: "cand",
+        accuracy: 0.7,
+        meanTokens: 33_000,
+      }),
+      archivedTvr({
+        modelVariantId: "sonnet",
+        variantId: "base",
+        accuracy: 0.6,
+        meanTokens: 30_000,
+      }),
+      archivedTvr({
+        modelVariantId: "sonnet",
+        variantId: "cand",
+        accuracy: 0.7,
+        meanTokens: 33_000,
+      }),
+    ]);
+
+  it("falls back to raw, so both legs agree and neither is NaN", () => {
+    const [evidence] = projectTierEvidence(
+      archivedArm(),
+      "base",
+      "cand",
+      DEFAULT_LIFT_POLICY,
+    );
+
+    expect(Number.isNaN(evidence!.billedTokenOverheadPct)).toBe(false);
+    expect(evidence!.billedTokenOverheadPct).toBeCloseTo(
+      evidence!.tokenOverheadPct,
+      10,
+    );
+    expect(Number.isFinite(evidence!.cacheHitRate)).toBe(true);
+    expect(evidence!.cacheHitRate).toBe(0);
+  });
+
+  it("still produces a real verdict instead of a silent always-false cost leg", () => {
+    const verdict = evaluateLiftGate(
+      archivedArm(),
+      "base",
+      "cand",
+      DEFAULT_LIFT_POLICY,
+    );
+
+    // +10pp lift at +10% raw overhead across two tiers clears the rule. Under
+    // the NaN bug this scored `opt-in` no matter what the numbers said.
+    expect(verdict.decision).toBe("default-on");
+    expect(Number.isNaN(verdict.aggregate.billedTokenOverheadPct)).toBe(false);
+  });
+
+  it("fails an archived arm that is genuinely too expensive", () => {
+    const verdict = evaluateLiftGate(
+      makeReport([
+        archivedTvr({
+          modelVariantId: "haiku",
+          variantId: "base",
+          accuracy: 0.6,
+          meanTokens: 30_000,
+        }),
+        archivedTvr({
+          modelVariantId: "haiku",
+          variantId: "cand",
+          accuracy: 0.7,
+          meanTokens: 60_000,
+        }),
+      ]),
+      "base",
+      "cand",
+      DEFAULT_LIFT_POLICY,
+    );
+
+    // The leg must still BITE — the fallback restores pre-amendment scoring,
+    // it does not disable the cost check.
+    expect(verdict.decision).not.toBe("default-on");
   });
 });

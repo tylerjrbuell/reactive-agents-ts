@@ -257,10 +257,22 @@ export interface TaskVariantReport {
    * Mean billed tokens across runs — the figure the lift gate's token leg
    * scores as of the 2026-08-24 amendment. `meanTokens` above stays RAW and is
    * retained on every receipt so historical reports stay readable.
+   *
+   * OPTIONAL by construction: this type is read back from SessionReport JSON
+   * archived before the amendment landed, where the field simply does not
+   * exist. Declaring it required made every such report deserialize into
+   * `undefined` behind a `number` annotation, and the gate's `mean()` then
+   * produced `NaN` — which compares false against every threshold and silently
+   * flipped every cost verdict. Consumers MUST read it as
+   * `meanBilledTokens ?? meanTokens`.
    */
-  readonly meanBilledTokens: number;
-  /** Mean cache-read input tokens across runs. 0 when unreported. */
-  readonly meanCacheReadTokens: number;
+  readonly meanBilledTokens?: number;
+  /**
+   * Mean cache-read input tokens across runs. 0 when unreported, ABSENT on
+   * reports archived before the 2026-08-24 amendment — read as
+   * `meanCacheReadTokens ?? 0`.
+   */
+  readonly meanCacheReadTokens?: number;
   readonly meanDurationMs: number;
   /**
    * Fraction of runs that COMPLETED (no crash, no timeout). This is a liveness

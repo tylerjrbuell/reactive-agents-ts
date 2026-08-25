@@ -51,7 +51,14 @@ export interface ClassVerdict {
   readonly perTier: readonly TierEvidence[];
   readonly aggregate: {
     readonly liftPp: number;
+    /** Mean RAW token overhead across conclusive tiers. Always reported. */
     readonly tokenOverheadPct: number;
+    /**
+     * Mean BILLED token overhead across conclusive tiers. Always reported.
+     * `policy.tokenLeg` decides which of the two the verdict was scored on;
+     * receipts and the rationale print the SCORED one, labeled.
+     */
+    readonly billedTokenOverheadPct: number;
     readonly tiersCovered: number;
   };
   readonly partial: boolean;
@@ -227,7 +234,14 @@ export interface GateVerdict {
   readonly perTier: readonly TierEvidence[];
   readonly aggregate: {
     readonly liftPp: number;
+    /** Mean RAW token overhead across conclusive tiers. Always reported. */
     readonly tokenOverheadPct: number;
+    /**
+     * Mean BILLED token overhead across conclusive tiers. Always reported.
+     * `policy.tokenLeg` decides which of the two the verdict was scored on;
+     * receipts and the rationale print the SCORED one, labeled.
+     */
+    readonly billedTokenOverheadPct: number;
     readonly tiersCovered: number;
   };
   /** True if any covered tier is inconclusive — blocks `default-on`. */
@@ -244,4 +258,19 @@ export interface GateVerdict {
    * deliverable; short on the historical token-overhead rule).
    */
   readonly byClass?: readonly ClassVerdict[];
+}
+
+/**
+ * The token-overhead figure a verdict was actually SCORED on — raw or billed
+ * per `policy.tokenLeg`. Receipts and rationales must surface THIS number:
+ * printing the raw leg while deciding on the billed one makes the headline
+ * disagree with the decision, with nothing on the page to say so.
+ */
+export function scoredTokenOverheadPct(
+  aggregate: GateVerdict["aggregate"],
+  policy: LiftPolicy,
+): number {
+  return policy.tokenLeg === "raw"
+    ? aggregate.tokenOverheadPct
+    : aggregate.billedTokenOverheadPct;
 }

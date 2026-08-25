@@ -1,6 +1,7 @@
 // File: src/gate/receipt.ts
 import type { GateVerdict, LiftPolicy, TierEvidence } from "./types.js";
 import { DEFAULT_LIFT_POLICY } from "./types.js";
+import { scoredTokenOverheadPct } from "./types.js";
 
 function fmtPct(n: number): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
@@ -68,9 +69,12 @@ export function formatGateReceipt(
   const rows = verdict.perTier
     .flatMap((t) => [tierRow(t, policy), ...tierDetailLines(t)])
     .join("\n");
+  // The aggregate headline prints the leg the verdict was SCORED on, labeled,
+  // consistent with the per-tier sub-line. The other leg is one line up on
+  // every tier row, so nothing is hidden.
   const agg =
     `  AGGREGATE  ${verdict.aggregate.liftPp.toFixed(1)}pp · ` +
-    `${verdict.aggregate.tokenOverheadPct.toFixed(1)}% tok · ` +
+    `${scoredTokenOverheadPct(verdict.aggregate, policy).toFixed(1)}% ${policy.tokenLeg} tok · ` +
     `tiers=${verdict.aggregate.tiersCovered}` +
     (verdict.partial ? " · PARTIAL" : "");
   const decision = `  DECISION: ${verdict.decision.toUpperCase()} — ${verdict.rationale}`;
