@@ -38,6 +38,7 @@ import {
   type StopReason,
 } from "@reactive-agents/llm-provider";
 import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
+import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
 import { FiberRef } from "effect";
 import { CurrentRunContext } from "@reactive-agents/core";
 
@@ -139,6 +140,12 @@ function emitForRequestWith(
       ? emitContextPressure({ taskId, tokensUsed, contextWindow })
       : Effect.void;
 
+  // Untruncated on purpose — see promptPrefixHash below. `request.systemPrompt`
+  // is the exact value passed to `emitLLMExchange` as `systemPrompt:` (see
+  // below); emitLLMExchange truncates its OWN copy at SYSTEM_PROMPT_MAX for
+  // the trace payload, so this reference is the pre-truncation string.
+  const systemPromptForHash = request.systemPrompt;
+
   return emitLLMExchange({
     taskId: request.traceContext?.taskId ?? ambientTaskId ?? PLACEHOLDER_TASK_ID,
     iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
@@ -148,6 +155,12 @@ function emitForRequestWith(
     systemPrompt: request.systemPrompt,
     messages: toExchangeMessages(request.messages),
     toolSchemaNames: request.tools?.map((t) => t.name),
+    // W2 — hash the two cacheable prefix segments so a cacheRead=0 names its
+    // own cause. The system prompt is hashed AS SENT (post-assembly), which is
+    // the whole point: if the volatile tail leaked back into the cached block,
+    // this hash churns and the receipt shows it.
+    promptPrefixHash: hashPromptPrefix(systemPromptForHash),
+    toolSurfaceHash: hashToolSurface(request.tools?.map((t) => t.name)),
     // The gateway stamps `purpose` on every mediated request; carry it onto the
     // trace so spend is attributable per SUBSYSTEM, not just per run. Before
     // this, every `llm-exchange` in a real trace read UNSTAMPED and the harness

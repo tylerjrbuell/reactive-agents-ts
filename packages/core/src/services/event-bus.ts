@@ -1299,6 +1299,14 @@ export type AgentEvent =
       readonly purpose?: LlmCallPurpose;
       readonly temperature?: number;
       readonly maxTokens?: number;
+      /**
+       * Stable hash of the cacheable system-prompt prefix (W2, pre-truncation).
+       * Optional so call sites that do not compute it (tests, un-mediated
+       * calls) stay valid.
+       */
+      readonly promptPrefixHash?: string;
+      /** Stable hash of the ordered wire tool surface (W2). */
+      readonly toolSurfaceHash?: string;
       readonly response: {
         readonly content: string;
         readonly truncated?: boolean;

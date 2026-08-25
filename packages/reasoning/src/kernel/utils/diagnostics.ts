@@ -588,6 +588,8 @@ export function emitLLMExchange(args: {
         ...(args.purpose ? { purpose: args.purpose } : {}),
         temperature: args.temperature,
         maxTokens: args.maxTokens,
+        ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
+        ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
         response: {
           content: respTrunc.text ?? "",
           ...(respTrunc.truncated ? { truncated: true } : {}),
