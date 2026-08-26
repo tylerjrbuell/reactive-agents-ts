@@ -622,6 +622,9 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                       cacheUsage,
                       config.pricingRegistry,
                     ),
+                    ...(typeof cacheUsage.cached_tokens === "number"
+                      ? { cacheReadInputTokens: cacheUsage.cached_tokens }
+                      : {}),
                   },
                 });
                 emit.end();
@@ -971,6 +974,9 @@ const mapOpenAIResponse = (
         },
         registry,
       ),
+      ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
+        ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
     },
     model: response.model ?? model,
     toolCalls,
