@@ -110,3 +110,14 @@ on-brand proof, and rescue the FeatureCarousel.
 Build re-verified green; `dist/index.html` shows the receipt (tool-grounded,
 gemma4:e4b, ledger, raw JSON) and the corrected carousel numbers, with every
 stale figure gone.
+
+### Generator wiring (evidence receipt stays current)
+
+`apps/docs/scripts/generate-evidence-receipt.ts` transforms the newest committed
+QA-probe report (`wiki/Research/Harness-Reports/real-world-probes-<date>/<probe>.json`)
+into `src/data/evidence-receipt.json` — verbatim values, absolute local paths
+sanitized, `--probe`/`--model` overridable (model is the one asserted field; the
+probe JSON doesn't record it). Deterministic and model-free (reads committed
+JSON), so it's wired into docs `predev`/`prebuild` beside generate-metrics, plus
+a `bun run receipt` alias. Re-running the probe fleet + a build refreshes the
+landing receipt with no hand-editing.

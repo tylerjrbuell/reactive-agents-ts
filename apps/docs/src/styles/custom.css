@@ -2656,7 +2656,7 @@ starlight-toc a[data-ra-changed]::before {
 }
 .ra-receipt-checks li {
     display: grid;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr);
     align-items: baseline;
     gap: 0.5rem;
     font-size: 0.74rem;
@@ -2665,6 +2665,9 @@ starlight-toc a[data-ra-changed]::before {
     font-family: 'Geist Mono', ui-monospace, monospace;
     color: var(--sl-color-gray-1);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 .ra-check-detail {
     color: var(--sl-color-gray-3);
