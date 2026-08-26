@@ -108,6 +108,9 @@ type LiteLLMRawResponse = {
     // Some LiteLLM proxies include cost directly
     input_cost?: number;
     output_cost?: number;
+    // LiteLLM normalizes prompt-caching token counts to this OpenAI-shaped
+    // field for providers that support it (LiteLLM docs).
+    prompt_tokens_details?: { cached_tokens?: number };
   };
   model: string;
 };
@@ -183,6 +186,9 @@ const mapLiteLLMResponse = (
             }
           : undefined,
       ),
+      ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
+        ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
     },
     model: response.model ?? model,
     toolCalls,
@@ -404,7 +410,11 @@ export const LiteLLMProviderLive = Layer.effect(
                   { id: string; name: string; arguments: string }
                 > = new Map();
                 let finalUsage:
-                  | { prompt_tokens: number; completion_tokens: number }
+                  | {
+                      prompt_tokens: number;
+                      completion_tokens: number;
+                      prompt_tokens_details?: { cached_tokens?: number };
+                    }
                   | undefined;
                 // Synthesis is single-shot: finish_reason fires first, then
                 // [DONE] arrives. Without the guard both paths would emit
@@ -503,6 +513,9 @@ export const LiteLLMProviderLive = Layer.effect(
                             undefined,
                             config.pricingRegistry,
                           ),
+                          ...(typeof finalUsage?.prompt_tokens_details?.cached_tokens === "number"
+                            ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
+                            : {}),
                         },
                       });
                       emit.end();
@@ -528,6 +541,7 @@ export const LiteLLMProviderLive = Layer.effect(
                         usage?: {
                           prompt_tokens: number;
                           completion_tokens: number;
+                          prompt_tokens_details?: { cached_tokens?: number };
                         };
                       };
 
