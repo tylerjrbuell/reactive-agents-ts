@@ -96,7 +96,7 @@ const toAnthropicMessages = (
   // uses 3 of Anthropic's 4 cache-breakpoint budget per request.
   //
   // The cache_control marker is a no-op on cold caches and when the cached
-  // prefix is below the per-model minimum (Sonnet: 1024 tok; Haiku: 2048 tok),
+  // prefix is below the per-model minimum (Sonnet: 1024 tok; Haiku: 4096 tok),
   // so adding it unconditionally is safe.
   let lastToolResultIdx = -1;
   for (let i = filtered.length - 1; i >= 0; i--) {
@@ -159,7 +159,7 @@ const toEffectError = (
 // (and including) this block can be cached for 5 minutes". Subsequent calls
 // with the same prefix get a 90% input-token discount on the cached portion.
 //
-// Per-model minimum cacheable block: Sonnet 1024 tok, Haiku 2048 tok. Marking
+// Per-model minimum cacheable block: Sonnet 1024 tok, Haiku 4096 tok. Marking
 // a block below the threshold is a no-op (provider ignores the marker). So
 // marking unconditionally is safe — the provider self-gates.
 //
@@ -176,7 +176,7 @@ type SystemParam =
 /**
  * Build the Anthropic `system` parameter. Wraps in a cache-able content block
  * unconditionally — the provider auto-skips cache_control on blocks below the
- * per-model minimum cacheable size (Sonnet: 1024 tok, Haiku: 2048 tok), so
+ * per-model minimum cacheable size (Sonnet: 1024 tok, Haiku: 4096 tok), so
  * always marking is safe and lets longer scaffolds (real-world RA agents with
  * multiple built-in tools + full ContextManager output) get cache benefit on
  * iteration 1+ without any per-call decision logic.

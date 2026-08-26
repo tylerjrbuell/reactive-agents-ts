@@ -266,7 +266,7 @@ if (import.meta.main) {
       console.error(
         `MANIPULATION CHECK FAILED: stable-surface reported cacheRead=0. ` +
         `Either the prefix is still churning or the prompt is below the ` +
-        `per-model cache minimum (Sonnet 1024 tok, Haiku 2048 tok). ` +
+        `per-model cache minimum (Sonnet 1024 tok, Haiku 4096 tok). ` +
         `Do NOT read a cost conclusion off this run.`,
       );
     }
