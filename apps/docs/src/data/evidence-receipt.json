@@ -1,0 +1,45 @@
+{
+  "_source": "Real captured run from the framework's QA probe fleet. Verbatim values from wiki/Research/Harness-Reports/real-world-probes-2026-07-11/p2-multi-file.json (model: gemma4:e4b via Ollama, per wiki/Research/Debriefs/2026-07-11-probe-fleet-qa-debrief.md). Do not hand-edit numbers — regenerate from a probe run.",
+  "task": {
+    "id": "p2-multi-file",
+    "label": "Multi-file generation — write a markdown report and a JSON data file, then declare both as deliverables",
+    "prompt": "Compare the moon counts of Jupiter, Saturn, and Mars. Write ./qa-out/p2-report.md and ./qa-out/p2-data.json."
+  },
+  "model": {
+    "id": "gemma4:e4b",
+    "provider": "ollama",
+    "tier": "local",
+    "note": "~4B-class local model, no API key"
+  },
+  "receipt": {
+    "verdict": "tool-grounded",
+    "method": "heuristic",
+    "confidence": 0.8,
+    "strategy": "reactive",
+    "terminatedBy": "end_turn",
+    "goalAchieved": true,
+    "success": true,
+    "toolCallStats": { "failed": 0 },
+    "llmCalls": 3,
+    "tokensUsed": 8685,
+    "durationMs": 7499,
+    "deliverables": [
+      { "spec": "produce the file ./qa-out/p2-report.md", "produced": true },
+      { "spec": "produce the file ./qa-out/p2-data.json", "produced": true }
+    ],
+    "interventions": []
+  },
+  "checks": [
+    { "name": "report-on-disk", "pass": true, "detail": "./qa-out/p2-report.md" },
+    { "name": "data-on-disk", "pass": true, "detail": "./qa-out/p2-data.json" },
+    { "name": "data-json-valid", "pass": true, "detail": "array=true len=3" },
+    { "name": "both-deliverables-declared", "pass": true, "detail": "2 deliverables, both produced:true" },
+    { "name": "deliverable-claim-matches-disk [p2-report.md]", "pass": true, "detail": "receipt.produced=true diskExists=true" },
+    { "name": "deliverable-claim-matches-disk [p2-data.json]", "pass": true, "detail": "receipt.produced=true diskExists=true" },
+    { "name": "coherence:success-implies-output", "pass": true, "detail": "success=true outputLen=228" },
+    { "name": "coherence:tokens-reported", "pass": true, "detail": "tokensUsed=8685" },
+    { "name": "hygiene:no-unhandled-fiber-defect", "pass": true, "detail": "clean" },
+    { "name": "hygiene:no-dropped-tool-on-action-step", "pass": true, "detail": "clean" }
+  ],
+  "capturedAt": "2026-07-11"
+}

@@ -74,3 +74,39 @@ Rendered `dist/index.html` confirms: `softwareVersion:"0.15.0"`,
 - A real, inspectable evidence-receipt artifact on the page (most on-brand proof).
 - A live benchmarks table with reproducible numbers.
 - `npx`/StackBlitz one-click "run it in 60s" surfaced above the fold.
+
+---
+
+## Increment 2 — evidence receipt showcase + carousel salvage (same day)
+
+Follow-up on the debrief's "not done" list: surface the evidence receipt as the
+on-brand proof, and rescue the FeatureCarousel.
+
+- **EvidenceReceipt component** (`src/components/EvidenceReceipt.astro` +
+  `src/data/evidence-receipt.json`). Renders a **real, unedited** `TrustReceipt`
+  captured from the QA probe fleet — p2-multi-file, run on `gemma4:e4b` (a
+  ~4B-class local Ollama model), verdict `tool-grounded`, 2 declared
+  deliverables both checked against disk, 10 deterministic ledger checks
+  passing. Values are verbatim from
+  `wiki/Research/Harness-Reports/real-world-probes-2026-07-11/p2-multi-file.json`
+  (model attribution per `2026-07-11-probe-fleet-qa-debrief.md`); schema is
+  `packages/core/src/types/receipt.ts`. Card shows the verdict badge, run
+  identity, a metric grid, deliverables, the verification ledger, an
+  honest-scope footnote (verdict grades the evidence trail, not truth; Ed25519
+  signing via `.withReceiptSigning()`), and an expandable raw-JSON view. New
+  "The proof: every run returns a receipt" section on `index.mdx`, placed right
+  after the "See it run" demo so the flow is watch-it-run → inspect-the-receipt.
+  This is the most on-brand proof on the page: a real receipt from a 4B model,
+  not an assertion.
+- **FeatureCarousel salvage** — it was rendering **stale hardcoded numbers**
+  that contradicted the stats panel (3,472 tests / 409 files / 25 packages / 5
+  strategies vs. the real 8,920 / 1,158 / 34 / 8) — a credibility leak on a
+  "verified" brand. Wired the numbers to `metrics.json` (providers, strategies,
+  tests, testFiles, packagesTotal) so they never drift again. Enhancements:
+  ARIA roving-tabindex arrow-key navigation on the tablist, and
+  `prefers-reduced-motion` now leaves it manual (no auto-advance / progress
+  animation).
+
+Build re-verified green; `dist/index.html` shows the receipt (tool-grounded,
+gemma4:e4b, ledger, raw JSON) and the corrected carousel numbers, with every
+stale figure gone.

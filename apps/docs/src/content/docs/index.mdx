@@ -30,6 +30,7 @@ import {
 import HeroInteraction from '../../components/HeroInteraction.astro'
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
 import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
+import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
 import TerminalReplay from '../../components/TerminalReplay.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
@@ -107,6 +108,18 @@ Watch the **same** agent investigate an incident — call two tools, correlate t
 <p class="ra-demo-cta">
   Don't take the recording's word for it — <a href="/guides/local-models/">run the same code on your own machine</a> with a pulled 4B model, no API key.
 </p>
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner" style="text-align:center">
+
+## The proof: every run returns a receipt
+
+Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`** — an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. Below is a **real, unedited receipt** from a run on `gemma4:e4b`, a ~4B-class local model: it declared two deliverables, wrote both, and the harness checked each against disk before grading the run `tool-grounded`.
+
+<EvidenceReceipt />
 
   </div>
 </div>
