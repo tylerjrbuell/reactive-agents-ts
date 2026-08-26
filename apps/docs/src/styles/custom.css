@@ -2317,3 +2317,151 @@ starlight-toc a[data-ra-changed]::before {
     padding: 0.1em 0.45em;
     font-family: var(--sl-font-mono, monospace);
 }
+
+/* ================================================================
+   Marketing hero add-ons — trust bar, demo CTAs, honest-replay
+   label, and the Google "Preferred Sources" badge.
+   ================================================================ */
+
+/* ── Trust bar: compact credibility strip under the hero ─────── */
+.ra-trustbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem 1.35rem;
+    max-width: 980px;
+    margin: 0.25rem auto -1rem;
+    padding: 0 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--sl-color-gray-2);
+}
+.ra-trustbar span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    opacity: 0.9;
+}
+/* Bullet separators between items (not before the first) */
+.ra-trustbar span + span::before {
+    content: '';
+    position: absolute;
+    left: -0.7rem;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--ra-violet);
+    opacity: 0.6;
+}
+.ra-trustbar code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.82em;
+    color: var(--ra-cyan);
+}
+
+/* ── Demo call-to-action lines (run-it-yourself) ─────────────── */
+.ra-demo-cta {
+    margin: 1.1rem auto 0;
+    max-width: 60ch;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-2);
+    text-align: center;
+}
+.ra-demo-cta code {
+    font-size: 0.85em;
+    background: color-mix(in srgb, var(--ra-violet) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ra-violet) 30%, transparent);
+    border-radius: 5px;
+    padding: 0.12em 0.4em;
+    white-space: nowrap;
+}
+
+/* ── Honest-replay label above the interactive terminal ──────── */
+.ra-replay-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 1.5rem auto 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+}
+.ra-replay-label code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--ra-cyan);
+    font-size: 0.9em;
+}
+.ra-replay-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+    animation: ra-replay-pulse 2s ease-out infinite;
+    flex: 0 0 auto;
+}
+@keyframes ra-replay-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ra-replay-dot {
+        animation: none;
+    }
+}
+
+/* ── Google "Preferred Sources" badge ────────────────────────── */
+.ra-prefsrc {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--ra-violet) 32%, transparent);
+    background: color-mix(in srgb, var(--ra-violet) 8%, var(--sl-color-black));
+    color: var(--sl-color-white);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    transition: border-color 0.18s ease, transform 0.18s ease,
+        box-shadow 0.18s ease;
+}
+.ra-prefsrc:hover {
+    border-color: color-mix(in srgb, var(--ra-cyan) 55%, transparent);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+}
+.ra-prefsrc-g {
+    flex: 0 0 auto;
+}
+.ra-prefsrc-star {
+    flex: 0 0 auto;
+    color: var(--ra-violet);
+}
+.ra-prefsrc:hover .ra-prefsrc-star {
+    color: var(--ra-cyan);
+}
+.ra-prefsrc--compact {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    gap: 0.4rem;
+}

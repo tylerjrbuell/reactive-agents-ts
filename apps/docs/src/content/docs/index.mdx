@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: A TypeScript framework for building LLM agents on Effect-TS — typed, observable, and composable, with the same code running on local and frontier models.
+description: The transparent, composable TypeScript framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API — on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
 template: splash
 hero:
-    tagline: 'A harness you fully control for agent loops that actually finish, on any model, with proof. Transparent (every step is a typed event you can inspect and steer), reliable across model tiers (the same code runs on a local 4B model or a frontier API), composable (opt in one layer at a time), and accountable (every run returns a signed evidence receipt, not just prose).'
+    tagline: 'The transparent, composable harness for TypeScript agents. The same code finishes the loop on a local 4B model or a frontier API — then returns a signed receipt proving what it did. Typed, observable, and yours to steer.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -11,6 +11,9 @@ hero:
           link: guides/quickstart/
           icon: right-arrow
           variant: primary
+        - text: See it run ↓
+          link: '#see-it-run'
+          variant: minimal
         - text: "⭐ Star on GitHub"
           link: https://github.com/tylerjrbuell/reactive-agents-ts
           icon: external
@@ -26,6 +29,7 @@ import {
 } from '@astrojs/starlight/components'
 import HeroInteraction from '../../components/HeroInteraction.astro'
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
+import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
 import TerminalReplay from '../../components/TerminalReplay.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
@@ -53,6 +57,14 @@ import demoGif from '../../assets/local-vs-frontier.gif'
   refreshed by CI). Never hardcode a literal here — edit the script.
 */}
 
+<div class="ra-trustbar" role="list" aria-label="At a glance">
+    <span role="listitem">TypeScript-native · zero <code>any</code></span>
+    <span role="listitem">Runs local 4B → frontier</span>
+    <span role="listitem">MCP-native</span>
+    <span role="listitem">Built on Effect-TS</span>
+    <span role="listitem">MIT licensed</span>
+</div>
+
 <div class="ra-panel ra-stats-panel">
     <div class="ra-panel-inner ra-stats">
         <div class="ra-stat">
@@ -78,10 +90,10 @@ import demoGif from '../../assets/local-vs-frontier.gif'
     </div>
 </div>
 
-<div class="ra-section-card ra-panel">
+<div id="see-it-run" class="ra-section-card ra-panel" style="scroll-margin-top:1.5rem">
   <div class="ra-panel-inner" style="text-align:center">
 
-## Reliable on every model tier
+## See it run — reliable on every model tier
 
 Watch the **same** agent investigate an incident — call two tools, correlate the data, recommend a fix — and **finish the job on a 4B local model just like on Claude**. One builder; the only line that changes is the model. That cross-tier reliability is the harness doing its job: tool-call healing, verification, and a single-owner termination oracle.
 
@@ -91,6 +103,10 @@ Watch the **same** agent investigate an incident — call two tools, correlate t
   loading="lazy"
   style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
 />
+
+<p class="ra-demo-cta">
+  Don't take the recording's word for it — <a href="/guides/local-models/">run the same code on your own machine</a> with a pulled 4B model, no API key.
+</p>
 
   </div>
 </div>
@@ -124,12 +140,25 @@ One declarative config object — the front door you already know from the Verce
 
 No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`) and skip the `.env` line entirely — see [Local Models](/guides/local-models/).
 
+<p class="ra-replay-label">
+  <span class="ra-replay-dot" aria-hidden="true"></span>
+  Recorded replay of the real <code>rax demo</code> — same output you get locally, not a mockup.
+</p>
+
 <TerminalReplay />
+
+<p class="ra-demo-cta">
+  Run this exact demo yourself: <code>bunx @reactive-agents/cli demo</code> · or try the <a href="/guides/playground/">in-browser playground</a> — no install.
+</p>
 
   </div>
 </div>
 
 <EmailSubscribe />
+
+<div class="ra-prefsrc-wrap" style="text-align:center;margin:1.25rem auto 0">
+    <PreferredSourceBadge />
+</div>
 
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
