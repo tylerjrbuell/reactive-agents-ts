@@ -879,10 +879,29 @@ export function handleThinking(
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
     if (toolIndexText) parts.push(toolIndexText);
-    // Hotfix 0.5-1 (2026-07-07): render harness guidance into the dynamic
-    // tail. GuidanceContext was previously assembled (and pendingGuidance
-    // cleared) but never passed to assembly — every guidance-channel signal
-    // was a silent no-op. Tail placement keeps the stable prefix intact.
+    // Hotfix 0.5-1 (2026-07-07): GuidanceContext was previously assembled
+    // (and pendingGuidance cleared) but never passed to assembly — every
+    // guidance-channel signal was a silent no-op.
+    //
+    // Automatic-caching fix (2026-08-24): guidance used to be rendered into
+    // the SYSTEM PROMPT's dynamic tail, on the claim that "tail placement
+    // keeps the stable prefix intact." That claim was wrong — appending
+    // anywhere inside the system STRING still changes the whole string's
+    // content and hash, and Anthropic's prompt cache hierarchy puts system
+    // before messages, so any system-content change invalidates the cache
+    // for that call and everything downstream. Live traces confirmed this:
+    // system-prompt length churned 444 -> 649 -> 444 -> 444 chars across
+    // iterations, tracking exactly when guidance fired. Guidance now lands
+    // as a trailing message-thread entry instead (see guidanceText's use
+    // building `messagesForRequest` below) — the system prompt stays
+    // byte-identical across iterations whenever nothing structural changed,
+    // maximizing automatic-caching reuse, while the message thread's
+    // EXPECTED per-iteration growth absorbs the volatile content, exactly
+    // matching how the automatic-caching breakpoint is designed to move
+    // forward. The guidance message is request-only — it is built from
+    // `conversationMessages` (a fresh per-iteration projection, not the
+    // kernel's canonical `state.messages`) and never written back to state,
+    // so it stays as ephemeral as the old system-prompt-tail approach was.
     //
     // `prompt.guidance` compose hook (2026-08-16): of the 9 guidance channels
     // (required-tools reminders, oracle/ICS nudges, error-recovery, the
@@ -905,8 +924,14 @@ export function handleThinking(
           })
         )
       : defaultGuidanceText;
-    if (guidanceText) parts.push(guidanceText);
     const systemPromptWithDriver = parts.join("\n\n");
+    // guidanceText rides as a trailing user-role message on the OUTGOING
+    // request only — conversationMessages (and therefore state.messages)
+    // stays untouched, so guidance never becomes part of persisted
+    // conversation history that gets replayed/compacted/traced.
+    const messagesForRequest: LLMMessage[] = guidanceText
+      ? [...conversationMessages, { role: "user" as const, content: guidanceText }]
+      : conversationMessages;
 
     // ── Control-plane invariant: the FC array is DOMAIN-ONLY on native-FC ────
     // (2026-08-08-control-plane-vs-meta-tools). A harness-scope tool
@@ -992,7 +1017,7 @@ export function handleThinking(
         ? { budgetTokens: state.maxOutputTokensOverride }
         : {}),
     }, {
-      messages: conversationMessages,
+      messages: messagesForRequest,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
       temperature: temp,
