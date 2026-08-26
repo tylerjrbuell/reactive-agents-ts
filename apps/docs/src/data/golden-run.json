@@ -104,6 +104,113 @@
       "loop": false
     }
   ],
+  "timeline": [
+    {
+      "atMs": 0,
+      "kind": "phase",
+      "phase": "bootstrap",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 7,
+      "kind": "phase",
+      "phase": "strategy-select",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 13,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 24,
+      "kind": "phase",
+      "phase": "bootstrap",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 30,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 1907,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 2995,
+      "kind": "tool",
+      "phase": "act",
+      "tool": "web-search",
+      "argsPreview": "\"number of moons for Jupiter, Saturn, and Mars\""
+    },
+    {
+      "atMs": 2999,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 11445,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 11453,
+      "kind": "tool",
+      "phase": "act",
+      "tool": "file-write",
+      "argsPreview": "./data.json"
+    },
+    {
+      "atMs": 11455,
+      "kind": "phase",
+      "phase": "think",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 12365,
+      "kind": "tool",
+      "phase": "act",
+      "tool": "file-write",
+      "argsPreview": "./report.md"
+    },
+    {
+      "atMs": 12367,
+      "kind": "phase",
+      "phase": "observe",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 12371,
+      "kind": "phase",
+      "phase": "memory-flush",
+      "tool": null,
+      "argsPreview": null
+    },
+    {
+      "atMs": 17744,
+      "kind": "phase",
+      "phase": "complete",
+      "tool": null,
+      "argsPreview": null
+    }
+  ],
   "output": "The moon counts for Jupiter, Saturn, and Mars have been compared, and the results have been written to `./report.md` and raw data has been saved as a JSON array in `./data.json`.",
   "receipt": {
     "verdict": "tool-grounded",

@@ -2391,52 +2391,6 @@ starlight-toc a[data-ra-changed]::before {
     white-space: nowrap;
 }
 
-/* ── Honest-replay label above the interactive terminal ──────── */
-.ra-replay-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin: 1.5rem auto 0.75rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--sl-color-gray-3);
-    text-align: center;
-}
-.ra-replay-label code {
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--ra-cyan);
-    font-size: 0.9em;
-}
-.ra-replay-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
-    animation: ra-replay-pulse 2s ease-out infinite;
-    flex: 0 0 auto;
-}
-@keyframes ra-replay-pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
-    }
-    70% {
-        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    .ra-replay-dot {
-        animation: none;
-    }
-}
-
 /* ── Google "Preferred Sources" badge ────────────────────────── */
 .ra-prefsrc {
     display: inline-flex;
@@ -2964,6 +2918,14 @@ starlight-toc a[data-ra-changed]::before {
     /* Never inherit the hero's mobile text-align:center — code must stay
        left-aligned or the monospace indentation staggers per line. */
     text-align: left;
+    min-height: 8.5em;
+    transition: opacity 0.26s ease;
+}
+.ra-hero-code.is-fading {
+    opacity: 0;
+}
+.ra-hero-winttl {
+    transition: opacity 0.26s ease;
 }
 .ra-hero-verdict,
 .ra-hero-winbar {
@@ -3083,7 +3045,7 @@ starlight-toc a[data-ra-changed]::before {
 }
 
 /* ================================================================
-   RunTrace — real tool-call trace, reusing the .ra-hero-win chrome.
+   RunReplay — real tool-call trace body, reusing the .ra-hero-win chrome.
    ================================================================ */
 .ra-trace-win {
     max-width: 760px;
@@ -3146,4 +3108,122 @@ starlight-toc a[data-ra-changed]::before {
     padding-top: 0.5rem;
     border-top: 1px solid rgba(139, 92, 246, 0.12);
     margin-top: 0.15rem;
+}
+
+/* ================================================================
+   RunReplay — animated playback of the same real run's timeline,
+   synced feed + phase rail. Paced from real relative gaps (see
+   generate-golden-run.ts `timeline`), clamped for readability.
+   ================================================================ */
+.ra-replay-win {
+    max-width: 860px;
+    margin: 0 auto;
+    position: relative;
+}
+.ra-replay-btn {
+    margin-left: auto;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: var(--sl-color-gray-2);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ra-replay-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+    color: var(--sl-color-white);
+}
+.ra-replay-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: stretch;
+}
+.ra-replay-feed {
+    min-height: 15rem;
+}
+.ra-replay-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.ra-replay-line,
+.ra-replay-tick {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.ra-replay-line.is-in,
+.ra-replay-tick.is-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+.ra-replay-tick {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.66rem;
+    color: var(--sl-color-gray-4);
+    letter-spacing: 0.03em;
+}
+.ra-replay-tick-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--ra-cyan);
+    flex: 0 0 auto;
+}
+.ra-replay-verdict-row {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.ra-replay-verdict-row.is-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+.ra-replay-rail {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 0.3rem;
+    padding: 1rem 0.9rem;
+    border-left: 1px solid rgba(139, 92, 246, 0.12);
+}
+.ra-replay-dot {
+    width: 10px;
+    height: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ra-replay-dot-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sl-color-gray-5);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.ra-replay-dot--off .ra-replay-dot-core {
+    opacity: 0.35;
+}
+.ra-replay-dot.is-active .ra-replay-dot-core {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.75);
+    transform: scale(1.35);
+}
+@media (max-width: 40rem) {
+    .ra-replay-grid {
+        grid-template-columns: 1fr;
+    }
+    .ra-replay-rail {
+        flex-direction: row;
+        border-left: none;
+        border-top: 1px solid rgba(139, 92, 246, 0.12);
+        justify-content: center;
+        flex-wrap: wrap;
+    }
 }

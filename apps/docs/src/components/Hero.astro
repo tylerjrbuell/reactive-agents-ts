@@ -24,17 +24,59 @@ const produced = r.deliverables.filter((d) => d.produced).length
 const total = r.deliverables.length
 const model = evidence.model.id
 
-// Code content as an HTML string (rendered via set:html) so Astro's JSX
-// parser doesn't treat the literal `{ builtins: true }` braces as expressions.
-const codeHtml = [
-    `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
-    `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// or "anthropic"</span>`,
-    `  .<span class="rm">withReasoning</span>()          <span class="rc">// ReAct</span>`,
-    `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
-    `  .<span class="rm">build</span>()`,
-    ``,
-    `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
-].join('\n')
+// Rotating builder snippets — real API surface, different agent shapes, to
+// make "composable, tailor to any task" concrete instead of asserted. Each is
+// an HTML string (rendered via set:html) so Astro's JSX parser doesn't treat
+// literal `{ ... }` braces in the code as expressions. The verdict footer
+// below stays tied to the one real captured run regardless of which snippet
+// is showing — it isn't claiming these variants were the one that ran.
+const SNIPPETS: { file: string; lines: string[] }[] = [
+    {
+        file: 'agent.ts',
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// or "anthropic"</span>`,
+            `  .<span class="rm">withReasoning</span>()          <span class="rc">// ReAct</span>`,
+            `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+            ``,
+            `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
+        ],
+    },
+    {
+        file: 'support-bot.ts',
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withGuardrails</span>({ blockPII: <span class="rk">true</span> })`,
+            `  .<span class="rm">withApprovalPolicy</span>(<span class="rs">"require-human"</span>)`,
+            `  .<span class="rm">withMemory</span>()             <span class="rc">// per-customer context</span>`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'research-agent.ts',
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withMCP</span>([<span class="rs">"filesystem"</span>, <span class="rs">"web-search"</span>])`,
+            `  .<span class="rm">withObservability</span>()      <span class="rc">// full trace, every hop</span>`,
+            `  .<span class="rm">withVerification</span>()       <span class="rc">// entropy + NLI check</span>`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'extractor.ts',
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// 4B model, no API key</span>`,
+            `  .<span class="rm">withOutputSchema</span>(InvoiceSchema)`,
+            `  .<span class="rm">withModelRouting</span>({ costAware: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+]
+const codeHtmls = SNIPPETS.map((s) => s.lines.join('\n'))
+const codeFiles = SNIPPETS.map((s) => s.file)
 ---
 
 {
@@ -90,14 +132,19 @@ const codeHtml = [
             </div>
 
             <div class="ra-hero-visual">
-                <div class="ra-hero-win">
+                <div
+                    class="ra-hero-win ra-hero-cycle"
+                    data-hero-cycle
+                    data-files={JSON.stringify(codeFiles)}
+                    data-snippets={JSON.stringify(codeHtmls)}
+                >
                     <div class="ra-hero-winbar">
                         <span class="ra-hero-tl-dot ra-hero-tl-r" />
                         <span class="ra-hero-tl-dot ra-hero-tl-y" />
                         <span class="ra-hero-tl-dot ra-hero-tl-g" />
-                        <span class="ra-hero-winttl">agent.ts</span>
+                        <span class="ra-hero-winttl" data-hero-file>{codeFiles[0]}</span>
                     </div>
-                    <pre class="ra-hero-code"><code set:html={codeHtml} /></pre>
+                    <pre class="ra-hero-code"><code data-hero-code set:html={codeHtmls[0]} /></pre>
                     <div class="ra-hero-verdict">
                         <span class="ra-hero-vbadge">● {r.verdict}</span>
                         <span class="ra-hero-vmeta">
@@ -107,7 +154,8 @@ const codeHtml = [
                     </div>
                 </div>
                 <p class="ra-hero-vcap">
-                    Not a mockup — a <a href="#see-it-run">real receipt</a> from a ~4B local model.
+                    One SDK, any agent shape — same real receipt underneath, from a ~4B local model.
+                    <a href="#see-it-run">See the full run →</a>
                 </p>
             </div>
         </div>
@@ -115,3 +163,34 @@ const codeHtml = [
         <Default />
     )
 }
+
+<script>
+    function initHeroCycle(root: HTMLElement) {
+        const files: string[] = JSON.parse(root.dataset.files ?? '[]')
+        const snippets: string[] = JSON.parse(root.dataset.snippets ?? '[]')
+        const codeEl = root.querySelector<HTMLElement>('[data-hero-code]')
+        const fileEl = root.querySelector<HTMLElement>('[data-hero-file]')
+        if (!codeEl || !fileEl || snippets.length < 2) return
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        if (reduceMotion) return
+
+        let i = 0
+        let paused = false
+        const swap = () => {
+            if (paused) return
+            i = (i + 1) % snippets.length
+            const pre = codeEl.closest('pre')
+            pre?.classList.add('is-fading')
+            window.setTimeout(() => {
+                codeEl.innerHTML = snippets[i]
+                fileEl.textContent = files[i]
+                pre?.classList.remove('is-fading')
+            }, 260)
+        }
+        root.addEventListener('mouseenter', () => { paused = true })
+        root.addEventListener('mouseleave', () => { paused = false })
+        window.setInterval(swap, 4200)
+    }
+    document.querySelectorAll<HTMLElement>('[data-hero-cycle]').forEach(initHeroCycle)
+</script>

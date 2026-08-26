@@ -1,0 +1,153 @@
+---
+/**
+ * RunReplay — the flagship "watch it work" evidence, animated. Plays back the
+ * SAME golden run's real event timeline (packages/runtime hook timestamps,
+ * see apps/docs/scripts/generate-golden-run.ts) as a terminal feed synced to
+ * a 12-phase rail, ending with the real verdict.
+ *
+ * Honesty contract: event ORDER and RELATIVE proportion are real (derived
+ * from real hook timestamps). Playback speed is compressed/clamped for
+ * readability — a 17.7s run doesn't play at 17.7s — stated in the caption.
+ * No invented events, no invented copy; every line is real data from
+ * golden-run.json's timeline/toolCalls/receipt.
+ */
+import data from '../data/golden-run.json'
+
+const { model, task, run, receipt, capturedAt, timeline, phases } = data
+const r = receipt!
+const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced).length
+const total = r.deliverables.length
+
+const PHASE_LABEL: Record<string, string> = {
+    bootstrap: 'bootstrap',
+    guardrail: 'guardrail',
+    'cost-route': 'cost-route',
+    'strategy-select': 'strategy-select',
+    think: 'think',
+    act: 'act',
+    observe: 'observe',
+    verify: 'verify',
+    'memory-flush': 'memory-flush',
+    'cost-track': 'cost-track',
+    audit: 'audit',
+    complete: 'complete',
+}
+---
+
+<div class="ra-replay" data-timeline={JSON.stringify(timeline)} data-total-ms={run.wallMs}>
+    <div class="ra-hero-win ra-replay-win">
+        <div class="ra-hero-winbar">
+            <span class="ra-hero-tl-dot ra-hero-tl-r" />
+            <span class="ra-hero-tl-dot ra-hero-tl-y" />
+            <span class="ra-hero-tl-dot ra-hero-tl-g" />
+            <span class="ra-hero-winttl">{model.id} · live run · {capturedAt}</span>
+            <button type="button" class="ra-replay-btn" data-replay-btn>↻ Replay</button>
+        </div>
+
+        <div class="ra-replay-grid">
+            <div class="ra-trace-body ra-replay-feed" data-replay-feed>
+                <p class="ra-trace-row ra-trace-task">
+                    <span class="ra-trace-label">task</span>
+                    <span class="ra-trace-val">{task.prompt}</span>
+                </p>
+                <div class="ra-replay-lines" data-replay-lines>
+                    {timeline.map((e, i) => (
+                        e.kind === 'tool' ? (
+                            <p class="ra-trace-row ra-trace-call ra-replay-line" data-line={i}>
+                                <span class="ra-trace-idx">{'>'}</span>
+                                <span class="ra-trace-tool">{e.tool}</span>
+                                <span class="ra-trace-args">{e.argsPreview}</span>
+                            </p>
+                        ) : (
+                            <p class="ra-replay-tick" data-line={i}>
+                                <span class="ra-replay-tick-dot" /> {PHASE_LABEL[e.phase ?? ''] ?? e.phase}
+                            </p>
+                        )
+                    ))}
+                </div>
+                <p class="ra-trace-row ra-trace-out ra-replay-verdict-row" data-replay-final>
+                    <span class="ra-trace-label">verdict</span>
+                    <span class="ra-trace-val">{r.verdict} · {produced}/{total} deliverables produced · {r.toolCallStats.failed} tool failures</span>
+                </p>
+            </div>
+
+            <div class="ra-replay-rail" data-replay-rail>
+                {phases.map((p) => (
+                    <div class:list={['ra-replay-dot', p.fired ? 'ra-replay-dot--live' : 'ra-replay-dot--off']} data-phase={p.name} title={p.name}>
+                        <span class="ra-replay-dot-core" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+
+    <p class="ra-hero-vcap">
+        Paced from the run's real relative timing (order and proportion are real; a 17.7s run is compressed for readability) —
+        not a mockup, a <a href="#the-proof">real receipt</a> from a ~4B local model.
+    </p>
+</div>
+
+<script>
+    function initReplay(root: HTMLElement) {
+        const timeline: { atMs: number; kind: 'phase' | 'tool'; phase: string }[] = JSON.parse(root.dataset.timeline ?? '[]')
+        const totalRealMs = Number(root.dataset.totalMs ?? 1)
+        const lines = Array.from(root.querySelectorAll<HTMLElement>('[data-replay-lines] [data-line]'))
+        const rail = root.querySelector<HTMLElement>('[data-replay-rail]')
+        const finalRow = root.querySelector<HTMLElement>('[data-replay-final]')
+        const replayBtn = root.querySelector<HTMLButtonElement>('[data-replay-btn]')
+        const dots = rail ? Array.from(rail.querySelectorAll<HTMLElement>('[data-phase]')) : []
+
+        // Compress real relative gaps into a readable playback: proportional,
+        // clamped so a 9s think-step doesn't stall playback nor a 4ms hop
+        // disappear. Order and relative "who's slower" always survive.
+        const TARGET_TOTAL = 5200
+        const MIN_STEP = 90
+        const MAX_STEP = 620
+        const scale = TARGET_TOTAL / totalRealMs
+        let cursor = 0
+        const delays = timeline.map((e, i) => {
+            const prev = i === 0 ? 0 : timeline[i - 1].atMs
+            const raw = (e.atMs - prev) * scale
+            const step = Math.min(MAX_STEP, Math.max(MIN_STEP, raw))
+            cursor += step
+            return cursor
+        })
+
+        let timers: number[] = []
+        const reset = () => {
+            timers.forEach(clearTimeout)
+            timers = []
+            lines.forEach((el) => el.classList.remove('is-in'))
+            dots.forEach((el) => el.classList.remove('is-active'))
+            finalRow?.classList.remove('is-in')
+        }
+
+        const play = () => {
+            reset()
+            lines.forEach((el, i) => {
+                timers.push(window.setTimeout(() => el.classList.add('is-in'), delays[i]))
+            })
+            timeline.forEach((e, i) => {
+                timers.push(window.setTimeout(() => {
+                    const phaseName = e.kind === 'tool' ? 'act' : e.phase
+                    dots.find((d) => d.dataset.phase === phaseName)?.classList.add('is-active')
+                }, delays[i]))
+            })
+            timers.push(window.setTimeout(() => finalRow?.classList.add('is-in'), cursor + 260))
+        }
+
+        replayBtn?.addEventListener('click', play)
+
+        const io = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    play()
+                    io.disconnect()
+                }
+            }
+        }, { threshold: 0.4 })
+        io.observe(root)
+    }
+
+    document.querySelectorAll<HTMLElement>('.ra-replay').forEach(initReplay)
+</script>

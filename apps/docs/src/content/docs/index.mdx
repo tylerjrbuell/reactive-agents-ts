@@ -30,7 +30,7 @@ import {
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
 import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
 import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
-import RunTrace from '../../components/RunTrace.astro'
+import RunReplay from '../../components/RunReplay.astro'
 import RunPhases from '../../components/RunPhases.astro'
 import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
@@ -89,9 +89,9 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 
 ## One real run, start to finish
 
-No animation, no script. This is what one real live run on `gemma4:e4b` — a ~4B-class local model, no API key — actually did: the task it got, every tool call it made, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
+No script, no actor. This plays back one real live run on `gemma4:e4b` — a ~4B-class local model, no API key — paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
 
-<RunTrace />
+<RunReplay />
 
 <p class="ra-demo-cta">
   Same task, your machine: <a href="/guides/local-models/">pull a local model and run it yourself</a>.
@@ -112,7 +112,7 @@ The engine has 12 phases. Most agent frameworks hide this entirely. Here's exact
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
+<div id="the-proof" class="ra-section-card ra-panel" style="scroll-margin-top:1.5rem">
   <div class="ra-panel-inner" style="text-align:center">
 
 ## The proof: every run returns a receipt

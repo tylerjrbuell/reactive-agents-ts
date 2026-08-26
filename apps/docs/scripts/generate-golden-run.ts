@@ -137,6 +137,22 @@ const main = (): void => {
     argsPreview: argsPreview(tc.name, tc.arguments),
   }));
 
+  // Real playback timeline: every "before" hook event, offset from the run's
+  // first event, in ms — the actual relative pacing of what happened when.
+  // `act` events are zipped to their tool call in firing order (same count).
+  const beforeEvents = run.hookLog.filter((e) => e.timing === "before");
+  const t0 = beforeEvents[0]?.t ?? 0;
+  let actCursor = 0;
+  const timeline = beforeEvents.map((e) => {
+    const atMs = e.t - t0;
+    if (e.phase === "act") {
+      const tc = toolCalls[actCursor];
+      actCursor += 1;
+      return { atMs, kind: "tool" as const, phase: e.phase, tool: tc?.name ?? null, argsPreview: tc?.argsPreview ?? null };
+    }
+    return { atMs, kind: "phase" as const, phase: e.phase, tool: null, argsPreview: null };
+  });
+
   // Prefer the rich LLM-synthesized debrief; fall back to the deterministic
   // one (both are real — debriefRich is just the slower, richer synthesis of
   // the same run, per the docs' debrief.rich contract).
@@ -156,6 +172,7 @@ const main = (): void => {
     },
     toolCalls,
     phases,
+    timeline,
     output: run.result.output,
     receipt: run.result.receipt ?? null,
     debrief,
