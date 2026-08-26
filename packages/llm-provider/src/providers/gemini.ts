@@ -230,6 +230,9 @@ const mapGeminiResponse = (
         },
         registry,
       ),
+      ...(typeof response.usageMetadata?.cachedContentTokenCount === "number"
+        ? { cacheReadInputTokens: response.usageMetadata.cachedContentTokenCount }
+        : {}),
     },
     model,
     toolCalls: toolCalls?.length ? toolCalls : undefined,
@@ -643,6 +646,9 @@ export const GeminiProviderLive = Layer.effect(
                       },
                       config.pricingRegistry,
                     ),
+                    ...(cachedContentTokens
+                      ? { cacheReadInputTokens: cachedContentTokens }
+                      : {}),
                   },
                 });
                 emit.end();
