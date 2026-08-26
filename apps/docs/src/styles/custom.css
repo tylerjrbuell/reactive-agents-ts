@@ -3024,6 +3024,26 @@ starlight-toc a[data-ra-changed]::before {
     color: var(--sl-color-gray-1);
     font-weight: 700;
 }
+.ra-hero-vfeatures {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    transition: opacity 0.18s ease;
+}
+.ra-hero-vfeatures.is-fading {
+    opacity: 0;
+}
+.ra-hero-vtag {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.66rem;
+    color: var(--ra-cyan);
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 999px;
+    padding: 0.16rem 0.55rem;
+    white-space: nowrap;
+}
 .ra-hero-vcap {
     margin: 0.85rem 0 0;
     text-align: center;

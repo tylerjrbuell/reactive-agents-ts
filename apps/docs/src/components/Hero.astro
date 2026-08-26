@@ -30,9 +30,10 @@ const model = evidence.model.id
 // literal `{ ... }` braces in the code as expressions. The verdict footer
 // below stays tied to the one real captured run regardless of which snippet
 // is showing — it isn't claiming these variants were the one that ran.
-const SNIPPETS: { file: string; lines: string[] }[] = [
+const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
     {
         file: 'agent.ts',
+        features: ['ReAct reasoning', 'built-in tools', 'runs on a local 4B model'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
             `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// or "anthropic"</span>`,
@@ -45,6 +46,7 @@ const SNIPPETS: { file: string; lines: string[] }[] = [
     },
     {
         file: 'support-bot.ts',
+        features: ['PII-blocking guardrails', 'human-approval gate', 'per-customer memory'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
             `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
@@ -56,6 +58,7 @@ const SNIPPETS: { file: string; lines: string[] }[] = [
     },
     {
         file: 'research-agent.ts',
+        features: ['MCP tool servers', 'full trace observability', 'entropy + NLI verification'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
             `  .<span class="rm">withMCP</span>([<span class="rs">"filesystem"</span>, <span class="rs">"web-search"</span>])`,
@@ -66,6 +69,7 @@ const SNIPPETS: { file: string; lines: string[] }[] = [
     },
     {
         file: 'extractor.ts',
+        features: ['schema-locked output', 'cost-aware model routing', 'runs on a local 4B model'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
             `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// 4B model, no API key</span>`,
@@ -80,6 +84,7 @@ const SNIPPETS: { file: string; lines: string[] }[] = [
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, '')
 const snippetsData = SNIPPETS.map((s) => ({
     file: s.file,
+    features: s.features,
     lines: s.lines.map((html) => ({ html, plain: stripTags(html) })),
 }))
 const firstLines = snippetsData[0].lines
@@ -158,6 +163,11 @@ const firstLines = snippetsData[0].lines
                             {produced}/{total} deliverables <b>✓ produced</b> ·{' '}
                             {r.toolCallStats.failed} tool failures · <b>{model}</b>
                         </span>
+                        <div class="ra-hero-vfeatures" data-hero-features>
+                            {snippetsData[0].features.map((f) => (
+                                <span class="ra-hero-vtag">{f}</span>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <p class="ra-hero-vcap">
@@ -173,7 +183,7 @@ const firstLines = snippetsData[0].lines
 
 <script>
     type Line = { html: string; plain: string }
-    type Snippet = { file: string; lines: Line[] }
+    type Snippet = { file: string; features: string[]; lines: Line[] }
 
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
 
@@ -232,10 +242,24 @@ const firstLines = snippetsData[0].lines
         }
     }
 
+    async function swapFeatures(el: HTMLElement, features: string[]) {
+        el.classList.add('is-fading')
+        await wait(180)
+        el.innerHTML = ''
+        for (const f of features) {
+            const tag = document.createElement('span')
+            tag.className = 'ra-hero-vtag'
+            tag.textContent = f
+            el.appendChild(tag)
+        }
+        el.classList.remove('is-fading')
+    }
+
     function initHeroCycle(root: HTMLElement) {
         const snippets: Snippet[] = JSON.parse(root.dataset.snippets ?? '[]')
         const codeEl = root.querySelector<HTMLElement>('[data-hero-code]')
         const fileEl = root.querySelector<HTMLElement>('[data-hero-file]')
+        const featuresEl = root.querySelector<HTMLElement>('[data-hero-features]')
         if (!codeEl || !fileEl || snippets.length < 2) return
 
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -254,6 +278,7 @@ const firstLines = snippetsData[0].lines
                 if (cancelled) return
                 i = (i + 1) % snippets.length
                 fileEl.textContent = snippets[i].file
+                if (featuresEl) void swapFeatures(featuresEl, snippets[i].features)
                 await transition(codeEl, current, snippets[i])
                 current = snippets[i].lines
             }
