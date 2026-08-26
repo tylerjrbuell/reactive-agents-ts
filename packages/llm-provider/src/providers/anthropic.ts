@@ -73,7 +73,7 @@ export function totalInputTokens(usage: {
 type AnthropicRole = "user" | "assistant";
 
 type AnthropicContentBlock =
-  | { type: "text"; text: string; cache_control?: { type: "ephemeral" } }
+  | { type: "text"; text: string }
   | { type: "image"; source: { type: string; media_type: string; data: string } }
   | { type: "tool_use"; id: string; name: string; input: unknown }
   | { type: "tool_result"; tool_use_id: string; content: string };
@@ -88,34 +88,13 @@ const toAnthropicMessages = (
 ): AnthropicMessage[] => {
   const filtered = messages.filter((m) => m.role !== "system");
 
-  // Lever 1 prompt-caching — locate the last tool_result message and mark its
-  // tool_result block with cache_control. On multi-iteration runs the provider
-  // hits the cache on every message up to and including this breakpoint, so
-  // subsequent iterations re-process only the NEW tail (new assistant turn +
-  // user continuation). Combined with the system + tools breakpoints this
-  // uses 3 of Anthropic's 4 cache-breakpoint budget per request.
-  //
-  // The cache_control marker is a no-op on cold caches and when the cached
-  // prefix is below the per-model minimum (Sonnet: 1024 tok; Haiku: 4096 tok),
-  // so adding it unconditionally is safe.
-  let lastToolResultIdx = -1;
-  for (let i = filtered.length - 1; i >= 0; i--) {
-    if (filtered[i]?.role === "tool") {
-      lastToolResultIdx = i;
-      break;
-    }
-  }
-
-  return filtered.map((m, idx) => {
+  return filtered.map((m) => {
     if (m.role === "tool") {
       const block: Record<string, unknown> = {
         type: "tool_result" as const,
         tool_use_id: m.toolCallId,
         content: m.content,
       };
-      if (idx === lastToolResultIdx) {
-        block.cache_control = { type: "ephemeral" as const };
-      }
       return {
         role: "user" as AnthropicRole,
         content: [block] as unknown as AnthropicContentBlock[],
@@ -137,14 +116,13 @@ const toAnthropicTool = (tool: {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-}, cached: boolean = false) => ({
+}) => ({
   name: tool.name,
   description: tool.description,
   input_schema: {
     type: "object" as const,
     ...tool.inputSchema,
   },
-  ...(cached ? { cache_control: { type: "ephemeral" as const } } : {}),
 });
 
 const toEffectError = (
@@ -153,42 +131,32 @@ const toEffectError = (
   model?: string,
 ): LLMErrors => mapProviderError(error, provider, model);
 
-// ── System prompt caching ────────────────────────────────────────────────────
-// Anthropic prompt caching: marking content with cache_control: { type:
-// "ephemeral" } tells the provider "everything from the request start up to
-// (and including) this block can be cached for 5 minutes". Subsequent calls
-// with the same prefix get a 90% input-token discount on the cached portion.
+// ── Prompt caching (automatic) ───────────────────────────────────────────────
+// Anthropic's automatic caching mode: a single top-level `cache_control: {
+// type: "ephemeral" }` field on the request (a sibling of `model`/`system`/
+// `messages`/`tools`, not nested inside any of them). The provider applies
+// the cache breakpoint to the last cacheable block by itself, and moves it
+// forward as the conversation grows — exactly the shape of RA's agentic
+// loop, where `messages` grows by one assistant turn + tool results each
+// kernel iteration.
 //
-// Per-model minimum cacheable block: Sonnet 1024 tok, Haiku 4096 tok. Marking
-// a block below the threshold is a no-op (provider ignores the marker). So
-// marking unconditionally is safe — the provider self-gates.
+// This replaces the three hand-placed breakpoints this file used to carry
+// (last tool, system text block, last tool_result message). Per Anthropic's
+// own docs the cache is hierarchical — tools, then system, then messages —
+// and a change at any level invalidates that level and everything after it,
+// regardless of which caching mode is used. The manual scheme only ever
+// bought fine-grained *placement* control over where within that hierarchy
+// the breakpoints sat; it never bought independent invalidation control
+// between tools/system/messages, since the hierarchy invalidates downstream
+// levels either way. RA never used the placement control for anything — the
+// three breakpoints were always "cache as much of the prefix as possible" —
+// so automatic caching gets the same effective caching with none of the
+// index-tracking.
 //
-// Lever 1 spike (this PR): wrap the system parameter as a content block with
-// cache_control on every call. Pairs with tool-list cache_control (already
-// present, on last tool entry) and message-thread cache_control (added in
-// `toAnthropicMessages` above, on last tool_result). Three breakpoints total,
-// well under Anthropic's 4-breakpoint per-request limit.
-
-type SystemParam =
-  | string
-  | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
-
-/**
- * Build the Anthropic `system` parameter. Wraps in a cache-able content block
- * unconditionally — the provider auto-skips cache_control on blocks below the
- * per-model minimum cacheable size (Sonnet: 1024 tok, Haiku: 4096 tok), so
- * always marking is safe and lets longer scaffolds (real-world RA agents with
- * multiple built-in tools + full ContextManager output) get cache benefit on
- * iteration 1+ without any per-call decision logic.
- */
-const buildSystemParam = (systemPrompt: string | undefined): SystemParam | undefined => {
-  if (!systemPrompt) return undefined;
-  return [{
-    type: "text",
-    text: systemPrompt,
-    cache_control: { type: "ephemeral" },
-  }];
-};
+// Per-model minimum cacheable block still applies identically under
+// automatic caching: Sonnet 1024 tok, Haiku 4096 tok. A request whose
+// cacheable prefix is below the threshold simply doesn't cache — no error,
+// no marker to condition on.
 
 // ─── Anthropic Provider Layer ───
 
@@ -259,14 +227,15 @@ export const AnthropicProviderLive = Layer.effect(
                   reserve !== undefined ? answerBudget + reserve : answerBudget,
                   cap,
                 ),
-                system: buildSystemParam(request.systemPrompt),
+                // Automatic prompt caching — see the "Prompt caching
+                // (automatic)" note above `toAnthropicMessages`.
+                cache_control: { type: "ephemeral" },
+                system: request.systemPrompt,
                 messages: toAnthropicMessages(request.messages),
                 stop_sequences: request.stopSequences
                   ? [...request.stopSequences]
                   : undefined,
-                tools: request.tools?.map((t, i) =>
-                  toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
-                ),
+                tools: request.tools?.map((t) => toAnthropicTool(t)),
                 // Thinking-form + temperature: adaptive/enabled shape when
                 // thinking is on (temperature omitted — API rejects ≠1);
                 // plain temperature when off. See buildAnthropicThinkingBody.
@@ -367,11 +336,12 @@ export const AnthropicProviderLive = Layer.effect(
                   : streamAnswerBudget,
                 streamCap,
               ),
-              system: buildSystemParam(request.systemPrompt),
+              // Automatic prompt caching — see the "Prompt caching
+              // (automatic)" note above `toAnthropicMessages`.
+              cache_control: { type: "ephemeral" },
+              system: request.systemPrompt,
               messages: toAnthropicMessages(request.messages),
-              tools: request.tools?.map((t, i) =>
-                toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
-              ),
+              tools: request.tools?.map((t) => toAnthropicTool(t)),
               ...buildAnthropicThinkingBody(
                 model,
                 streamReserve,
@@ -581,7 +551,10 @@ export const AnthropicProviderLive = Layer.effect(
                       : structuredAnswerBudget,
                     structuredCap,
                   ),
-                  system: buildSystemParam(request.systemPrompt),
+                  // Automatic prompt caching — see the "Prompt caching
+                  // (automatic)" note above `toAnthropicMessages`.
+                  cache_control: { type: "ephemeral" },
+                  system: request.systemPrompt,
                   messages: anthropicMsgs,
                   ...buildAnthropicThinkingBody(
                     structuredModel,

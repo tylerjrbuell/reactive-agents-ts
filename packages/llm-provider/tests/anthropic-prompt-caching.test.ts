@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 
 // Bun module mocks are process-global and leak across test FILES. Capture the
 // real module and re-install it in afterAll so later files (e.g. runtime
@@ -10,35 +10,50 @@ afterAll(() => {
 });
 
 // ─── Mock @anthropic-ai/sdk BEFORE the provider module is imported ───
-// Pattern mirrors gemini-provider.test.ts. Lever 1 prompt-caching spike —
-// validates cache_control markers fire on system + last tool + last
-// tool_result so multi-iter Anthropic calls hit the 5-min ephemeral cache.
+// Pattern mirrors gemini-provider.test.ts. Validates automatic prompt
+// caching: a single top-level `cache_control: { type: "ephemeral" }` field
+// on the request, replacing the old three hand-placed breakpoints (last
+// tool, system text block, last tool_result).
 
 let capturedCreateOpts: Record<string, unknown> | null = null;
+let capturedStreamOpts: Record<string, unknown> | null = null;
+
+const mockResponse = {
+  id: "msg_test",
+  type: "message",
+  role: "assistant",
+  content: [{ type: "text", text: "ok" }],
+  model: "claude-sonnet-4-6",
+  stop_reason: "end_turn",
+  usage: {
+    input_tokens: 10,
+    output_tokens: 5,
+    cache_creation_input_tokens: 100,
+    cache_read_input_tokens: 500,
+  },
+};
 
 const mockCreate = mock(async (opts: unknown) => {
   capturedCreateOpts = opts as Record<string, unknown>;
-  return {
-    id: "msg_test",
-    type: "message",
-    role: "assistant",
-    content: [{ type: "text", text: "ok" }],
-    model: "claude-sonnet-4-6",
-    stop_reason: "end_turn",
-    usage: {
-      input_tokens: 10,
-      output_tokens: 5,
-      cache_creation_input_tokens: 100,
-      cache_read_input_tokens: 500,
+  return mockResponse;
+});
+
+const mockStream = mock((opts: unknown) => {
+  capturedStreamOpts = opts as Record<string, unknown>;
+  const obj: { on: (event: string, cb: (m: unknown) => void) => unknown } = {
+    on(event, cb) {
+      if (event === "finalMessage") setTimeout(() => cb(mockResponse), 0);
+      return obj;
     },
   };
+  return obj;
 });
 
 mock.module("@anthropic-ai/sdk", () => ({
   default: class MockAnthropic {
     messages = {
       create: mockCreate,
-      stream: () => ({ on: () => {} }),
+      stream: mockStream,
     };
   },
 }));
@@ -69,8 +84,8 @@ function makeLayer() {
   return Layer.provide(AnthropicProviderLive, configLayer);
 }
 
-describe("Anthropic prompt caching (Lever 1)", () => {
-  it("marks system prompt with cache_control on every call", async () => {
+describe("Anthropic prompt caching (automatic)", () => {
+  it("carries a top-level cache_control: { type: 'ephemeral' } field on complete()", async () => {
     capturedCreateOpts = null;
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -83,14 +98,31 @@ describe("Anthropic prompt caching (Lever 1)", () => {
     );
 
     expect(capturedCreateOpts).not.toBeNull();
-    const system = capturedCreateOpts!.system;
-    expect(Array.isArray(system)).toBe(true);
-    const arr = system as Array<{ type: string; cache_control?: { type: string } }>;
-    expect(arr).toHaveLength(1);
-    expect(arr[0]!.cache_control).toEqual({ type: "ephemeral" });
+    expect(capturedCreateOpts!.cache_control).toEqual({ type: "ephemeral" });
+    // system goes back to a plain string — the array-of-blocks shape was
+    // only needed to carry the old per-block cache_control marker.
+    expect(capturedCreateOpts!.system).toBe("You are an agent.");
   });
 
-  it("marks the LAST tool with cache_control (existing behavior preserved)", async () => {
+  it("carries a top-level cache_control: { type: 'ephemeral' } field on stream()", async () => {
+    capturedStreamOpts = null;
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "hi" }],
+          systemPrompt: "You are an agent.",
+        });
+        return yield* Stream.runDrain(stream);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    expect(capturedStreamOpts).not.toBeNull();
+    expect(capturedStreamOpts!.cache_control).toEqual({ type: "ephemeral" });
+    expect(capturedStreamOpts!.system).toBe("You are an agent.");
+  });
+
+  it("no longer marks individual tools with cache_control (automatic caching supersedes it)", async () => {
     capturedCreateOpts = null;
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -107,14 +139,14 @@ describe("Anthropic prompt caching (Lever 1)", () => {
       }).pipe(Effect.provide(makeLayer())),
     );
 
-    const tools = capturedCreateOpts!.tools as Array<{ name: string; cache_control?: { type: string } }>;
+    const tools = capturedCreateOpts!.tools as Array<{ name: string; cache_control?: unknown }>;
     expect(tools).toHaveLength(3);
-    expect(tools[0]!.cache_control).toBeUndefined();
-    expect(tools[1]!.cache_control).toBeUndefined();
-    expect(tools[2]!.cache_control).toEqual({ type: "ephemeral" });
+    for (const t of tools) {
+      expect(t.cache_control).toBeUndefined();
+    }
   });
 
-  it("marks the LAST tool_result message with cache_control on multi-turn input", async () => {
+  it("no longer marks tool_result blocks with cache_control (automatic caching supersedes it)", async () => {
     capturedCreateOpts = null;
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -134,10 +166,9 @@ describe("Anthropic prompt caching (Lever 1)", () => {
 
     const messages = capturedCreateOpts!.messages as Array<{
       role: string;
-      content: string | Array<{ type: string; cache_control?: { type: string } }>;
+      content: string | Array<{ type: string; cache_control?: unknown }>;
     }>;
 
-    // Find the two tool_result messages — only the LAST one should carry cache_control.
     const toolResultMessages = messages.filter(
       (m) =>
         Array.isArray(m.content) &&
@@ -145,17 +176,11 @@ describe("Anthropic prompt caching (Lever 1)", () => {
     );
     expect(toolResultMessages).toHaveLength(2);
 
-    const firstToolResultBlock = (toolResultMessages[0]!.content as Array<{
-      type: string;
-      cache_control?: { type: string };
-    }>)[0]!;
-    expect(firstToolResultBlock.cache_control).toBeUndefined();
-
-    const lastToolResultBlock = (toolResultMessages[1]!.content as Array<{
-      type: string;
-      cache_control?: { type: string };
-    }>)[0]!;
-    expect(lastToolResultBlock.cache_control).toEqual({ type: "ephemeral" });
+    for (const m of toolResultMessages) {
+      for (const b of m.content as Array<{ type: string; cache_control?: unknown }>) {
+        expect(b.cache_control).toBeUndefined();
+      }
+    }
   });
 
   it("surfaces cacheCreationInputTokens + cacheReadInputTokens in usage", async () => {
@@ -174,7 +199,7 @@ describe("Anthropic prompt caching (Lever 1)", () => {
     expect(result.usage.cacheReadInputTokens).toBe(500);
   });
 
-  it("omits cache_control on tool_result when no tool_result in messages", async () => {
+  it("carries cache_control even when there is no system prompt or tools", async () => {
     capturedCreateOpts = null;
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -189,11 +214,11 @@ describe("Anthropic prompt caching (Lever 1)", () => {
       }).pipe(Effect.provide(makeLayer())),
     );
 
+    expect(capturedCreateOpts!.cache_control).toEqual({ type: "ephemeral" });
     const messages = capturedCreateOpts!.messages as Array<{
       role: string;
-      content: string | Array<{ type: string; cache_control?: { type: string } }>;
+      content: string | Array<{ type: string; cache_control?: unknown }>;
     }>;
-    // None of the messages are tool_result — none should have cache_control on content blocks.
     for (const m of messages) {
       if (Array.isArray(m.content)) {
         for (const b of m.content) {
