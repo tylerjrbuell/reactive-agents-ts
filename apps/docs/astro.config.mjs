@@ -140,6 +140,11 @@ export default defineConfig({
                 // Adds per-page og:image/twitter:image + Schema.org JSON-LD on top of
                 // Starlight's default head (SEO rich snippets + AEO answer-engine grounding).
                 Head: './src/components/Head.astro',
+                // Custom splash hero on the home page: a "code → proof" visual
+                // (builder snippet resolving into a real verdict) with the brand
+                // glyph kept as a small accent. Falls back to Starlight's default
+                // Hero on any other splash page.
+                Hero: './src/components/Hero.astro',
                 PageTitle: './src/components/PageTitle.astro',
                 Footer: './src/components/Footer.astro',
                 // Append the release-subscribe form under the right-hand TOC on every page.

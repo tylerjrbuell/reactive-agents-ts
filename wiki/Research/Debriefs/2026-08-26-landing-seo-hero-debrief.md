@@ -121,3 +121,27 @@ probe JSON doesn't record it). Deterministic and model-free (reads committed
 JSON), so it's wired into docs `predev`/`prebuild` beside generate-metrics, plus
 a `bun run receipt` alias. Re-running the probe fleet + a build refreshes the
 landing receipt with no hand-editing.
+
+## Increment 3 — hero visual redesign ("code → proof")
+
+The abstract network-mark graphic (the brand glyph blown up to fill half the
+splash) read as a generic "AI blob" that didn't say what the product does.
+Prototyped three directions, user picked **B + mark accent**.
+
+- **`src/components/Hero.astro`** — a Starlight `Hero` override (registered in
+  astro.config `components.Hero`). Home page only; falls back to Starlight's
+  default Hero on any other splash page. Left column: the brand glyph as a small
+  accent + eyebrow, the gradient H1, tagline, CTAs, and a single props strip.
+  Right column: a "code → proof" window — the builder snippet resolving into a
+  live `tool-grounded` verdict whose values (`2/2 deliverables ✓ produced · 0
+  tool failures · gemma4:e4b`) are pulled from the SAME `evidence-receipt.json`
+  the receipt section renders, so the hero can't drift from the real receipt.
+- Removed the now-duplicate `.ra-trustbar` from `index.mdx` (the hero carries
+  the props strip) and the dead `<HeroInteraction />` (it animated the old big
+  `.hero img`, which no longer exists).
+- Fixes found via rendered screenshots: the code block's literal `{ }` braces
+  broke Astro's JSX parser → moved code to a `set:html` string; on mobile the
+  hero's `text-align:center` cascaded into the `<pre>` and staggered the
+  monospace indentation → forced the code left-aligned.
+
+Verified green in dark, light, and mobile via real Chromium renders.

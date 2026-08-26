@@ -27,7 +27,6 @@ import {
     Tabs,
     TabItem,
 } from '@astrojs/starlight/components'
-import HeroInteraction from '../../components/HeroInteraction.astro'
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
 import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
 import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
@@ -57,14 +56,6 @@ import demoGif from '../../assets/local-vs-frontier.gif'
   (LifecyclePhase enum), or read from metrics-cache.json (test count
   refreshed by CI). Never hardcode a literal here — edit the script.
 */}
-
-<div class="ra-trustbar" role="list" aria-label="At a glance">
-    <span role="listitem">TypeScript-native · zero <code>any</code></span>
-    <span role="listitem">Runs local 4B → frontier</span>
-    <span role="listitem">MCP-native</span>
-    <span role="listitem">Built on Effect-TS</span>
-    <span role="listitem">MIT licensed</span>
-</div>
 
 <div class="ra-panel ra-stats-panel">
     <div class="ra-panel-inner ra-stats">
@@ -616,5 +607,3 @@ Interactive prompts guide you through template (`minimal`, `with-tools`, `stream
 
   </div>
 </div>
-
-<HeroInteraction />

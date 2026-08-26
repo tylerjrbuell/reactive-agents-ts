@@ -2767,3 +2767,269 @@ starlight-toc a[data-ra-changed]::before {
         display: none;
     }
 }
+
+/* ================================================================
+   Custom splash hero — "code → proof" (src/components/Hero.astro)
+   Two-column: copy + a builder window resolving into a real verdict.
+   Brand glyph kept as a small accent. Theme-aware.
+   ================================================================ */
+.ra-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 2.75rem;
+    padding: 1rem 0 1.5rem;
+}
+@media (max-width: 50rem) {
+    .ra-hero {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        text-align: center;
+    }
+}
+
+/* Brand accent row */
+.ra-hero-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+}
+@media (max-width: 50rem) {
+    .ra-hero-brand {
+        justify-content: center;
+    }
+}
+.ra-hero-mark {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 3px 14px rgba(124, 58, 237, 0.45));
+}
+.ra-hero-eyebrow {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3);
+}
+
+/* Headline — mirror the site's animated gradient title */
+.ra-hero h1 {
+    font-size: clamp(2.1rem, 4.4vw, 3.4rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+    margin: 0;
+    background: linear-gradient(
+        165deg,
+        #c4b5fd 0%,
+        #a78bfa 16%,
+        #8b5cf6 32%,
+        #06b6d4 48%,
+        #a78bfa 62%,
+        #8b5cf6 76%,
+        #7c3aed 90%,
+        #6d28d9 100%
+    );
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: ra-title-flow 8s ease-in-out infinite;
+}
+.ra-hero-tagline {
+    font-size: 1.12rem;
+    line-height: 1.65;
+    color: var(--sl-color-gray-2);
+    max-width: 46ch;
+    margin: 1.1rem 0 0;
+}
+@media (max-width: 50rem) {
+    .ra-hero-tagline {
+        margin-inline: auto;
+    }
+}
+.ra-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-items: center;
+    margin-top: 1.6rem;
+}
+@media (max-width: 50rem) {
+    .ra-hero-actions {
+        justify-content: center;
+    }
+}
+.ra-hero-props {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 1.2rem;
+    margin-top: 1.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-3);
+}
+@media (max-width: 50rem) {
+    .ra-hero-props {
+        justify-content: center;
+    }
+}
+.ra-hero-props span {
+    position: relative;
+}
+.ra-hero-props span + span::before {
+    content: '';
+    position: absolute;
+    left: -0.62rem;
+    top: 50%;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--ra-violet);
+    opacity: 0.55;
+    transform: translateY(-50%);
+}
+
+/* ── The code → proof window ─────────────────────────────────── */
+.ra-hero-win {
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(
+        135deg,
+        rgba(139, 92, 246, 0.55),
+        rgba(6, 182, 212, 0.28),
+        rgba(139, 92, 246, 0.55)
+    );
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5), 0 0 70px rgba(139, 92, 246, 0.1);
+    overflow: hidden;
+}
+.ra-hero-win > .ra-hero-winbar,
+.ra-hero-win > .ra-hero-code,
+.ra-hero-win > .ra-hero-verdict {
+    background: #101119;
+}
+[data-theme='light'] .ra-hero-win > .ra-hero-winbar,
+[data-theme='light'] .ra-hero-win > .ra-hero-code,
+[data-theme='light'] .ra-hero-win > .ra-hero-verdict {
+    background: #fbfbfe;
+}
+.ra-hero-winbar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 15px;
+    border-radius: 15px 15px 0 0;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+.ra-hero-tl-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.ra-hero-tl-r {
+    background: #ef4444;
+}
+.ra-hero-tl-y {
+    background: #eab308;
+}
+.ra-hero-tl-g {
+    background: #22c55e;
+}
+.ra-hero-winttl {
+    margin-left: 8px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--sl-color-gray-3);
+}
+.ra-hero-code {
+    margin: 0;
+    padding: 15px 18px;
+    overflow-x: auto;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.82rem;
+    line-height: 1.75;
+    color: #c8d1e4;
+    /* Never inherit the hero's mobile text-align:center — code must stay
+       left-aligned or the monospace indentation staggers per line. */
+    text-align: left;
+}
+.ra-hero-verdict,
+.ra-hero-winbar {
+    text-align: left;
+}
+[data-theme='light'] .ra-hero-code {
+    color: #334155;
+}
+.ra-hero-code code {
+    font-family: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    white-space: pre;
+}
+.ra-hero-code .rk {
+    color: #c4b5fd;
+}
+.ra-hero-code .rm {
+    color: #67e8f9;
+}
+.ra-hero-code .rs {
+    color: #86efac;
+}
+.ra-hero-code .rc {
+    color: #5b6472;
+    font-style: italic;
+}
+[data-theme='light'] .ra-hero-code .rk {
+    color: #7c3aed;
+}
+[data-theme='light'] .ra-hero-code .rm {
+    color: #0369a1;
+}
+[data-theme='light'] .ra-hero-code .rs {
+    color: #15803d;
+}
+[data-theme='light'] .ra-hero-code .rc {
+    color: #94a3b8;
+}
+.ra-hero-verdict {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+    border-radius: 0 0 15px 15px;
+    border-top: 1px solid rgba(139, 92, 246, 0.15);
+    background: rgba(34, 197, 94, 0.06) !important;
+}
+.ra-hero-vbadge {
+    flex: 0 0 auto;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    border-radius: 999px;
+    padding: 0.28rem 0.65rem;
+    white-space: nowrap;
+}
+.ra-hero-vmeta {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--sl-color-gray-3);
+    min-width: 0;
+}
+.ra-hero-vmeta b {
+    color: var(--sl-color-gray-1);
+    font-weight: 700;
+}
+.ra-hero-vcap {
+    margin: 0.85rem 0 0;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--sl-color-gray-3);
+}

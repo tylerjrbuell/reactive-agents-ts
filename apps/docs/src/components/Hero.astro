@@ -1,0 +1,117 @@
+---
+/**
+ * Custom splash Hero (home page only). Replaces the oversized brand-mark
+ * graphic with a "code → proof" visual: the builder snippet that resolves into
+ * a REAL tool-grounded verdict (values pulled from the same evidence-receipt
+ * data the receipt section renders). The brand glyph is kept as a small, calm
+ * accent beside the headline. Any non-home page that uses the splash template
+ * falls back to Starlight's default Hero.
+ */
+import Default from '@astrojs/starlight/components/Hero.astro'
+import { LinkButton } from '@astrojs/starlight/components'
+import evidence from '../data/evidence-receipt.json'
+
+const route = Astro.locals.starlightRoute
+const { entry } = route
+const isHome = (entry.id || 'index') === 'index'
+const data = entry.data
+const hero = data.hero
+const { title = data.title, tagline, actions = [] } = hero ?? {}
+
+// Real, honest values for the verdict footer — same source as the receipt.
+const r = evidence.receipt
+const produced = r.deliverables.filter((d) => d.produced).length
+const total = r.deliverables.length
+const model = evidence.model.id
+
+// Code content as an HTML string (rendered via set:html) so Astro's JSX
+// parser doesn't treat the literal `{ builtins: true }` braces as expressions.
+const codeHtml = [
+    `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+    `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// or "anthropic"</span>`,
+    `  .<span class="rm">withReasoning</span>()          <span class="rc">// ReAct</span>`,
+    `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+    `  .<span class="rm">build</span>()`,
+    ``,
+    `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
+].join('\n')
+---
+
+{
+    isHome ? (
+        <div class="ra-hero">
+            <div class="ra-hero-copy">
+                <div class="ra-hero-brand">
+                    <svg class="ra-hero-mark" viewBox="0 0 48 48" aria-hidden="true">
+                        <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.08" />
+                        <g stroke="#7c3aed" stroke-width="1.1" opacity="0.5">
+                            <line x1="14" y1="6" x2="34" y2="6" />
+                            <line x1="14" y1="6" x2="6" y2="20" />
+                            <line x1="34" y1="6" x2="42" y2="20" />
+                            <line x1="6" y1="20" x2="6" y2="34" />
+                            <line x1="42" y1="20" x2="42" y2="34" />
+                            <line x1="24" y1="24" x2="24" y2="6" />
+                            <line x1="24" y1="24" x2="6" y2="20" />
+                            <line x1="24" y1="24" x2="42" y2="20" />
+                            <line x1="24" y1="24" x2="6" y2="34" />
+                            <line x1="24" y1="24" x2="42" y2="34" />
+                        </g>
+                        <circle cx="24" cy="24" r="5.5" fill="#8b5cf6" />
+                        <circle cx="14" cy="6" r="2.6" fill="#a78bfa" />
+                        <circle cx="34" cy="6" r="2.6" fill="#06b6d4" />
+                        <circle cx="6" cy="20" r="2.6" fill="#a78bfa" />
+                        <circle cx="42" cy="20" r="2.6" fill="#a78bfa" />
+                        <circle cx="6" cy="34" r="2.6" fill="#06b6d4" />
+                        <circle cx="42" cy="34" r="2.6" fill="#a78bfa" />
+                    </svg>
+                    <span class="ra-hero-eyebrow">Reactive Agents</span>
+                </div>
+
+                <h1 id="_top" data-page-title set:html={title} />
+                {tagline && <div class="ra-hero-tagline" set:html={tagline} />}
+
+                {actions.length > 0 && (
+                    <div class="ra-hero-actions">
+                        {actions.map((a) => (
+                            <LinkButton href={a.link} variant={a.variant} icon={a.icon}>
+                                {a.text}
+                            </LinkButton>
+                        ))}
+                    </div>
+                )}
+
+                <div class="ra-hero-props" role="list" aria-label="At a glance">
+                    <span role="listitem">TypeScript-native</span>
+                    <span role="listitem">Local 4B → frontier</span>
+                    <span role="listitem">MCP-native</span>
+                    <span role="listitem">Effect-TS</span>
+                    <span role="listitem">MIT licensed</span>
+                </div>
+            </div>
+
+            <div class="ra-hero-visual">
+                <div class="ra-hero-win">
+                    <div class="ra-hero-winbar">
+                        <span class="ra-hero-tl-dot ra-hero-tl-r" />
+                        <span class="ra-hero-tl-dot ra-hero-tl-y" />
+                        <span class="ra-hero-tl-dot ra-hero-tl-g" />
+                        <span class="ra-hero-winttl">agent.ts</span>
+                    </div>
+                    <pre class="ra-hero-code"><code set:html={codeHtml} /></pre>
+                    <div class="ra-hero-verdict">
+                        <span class="ra-hero-vbadge">● {r.verdict}</span>
+                        <span class="ra-hero-vmeta">
+                            {produced}/{total} deliverables <b>✓ produced</b> ·{' '}
+                            {r.toolCallStats.failed} tool failures · <b>{model}</b>
+                        </span>
+                    </div>
+                </div>
+                <p class="ra-hero-vcap">
+                    Not a mockup — a <a href="#see-it-run">real receipt</a> from a ~4B local model.
+                </p>
+            </div>
+        </div>
+    ) : (
+        <Default />
+    )
+}
