@@ -13,6 +13,16 @@ import data from '../data/evidence-receipt.json'
 
 const { task, model, receipt, checks } = data
 const okChecks = checks.filter((c) => c.pass).length
+const producedCount = receipt.deliverables.filter((d) => d.produced).length
+
+// The `*deliverables-declared` check's raw detail is the receipt's own
+// deliverables array re-serialized as JSON — noisy and redundant with the
+// Deliverables list above. Render a clean, derived summary instead (still
+// honest: computed from the same real data).
+const checkDetail = (c: { detail: string }): string =>
+    c.detail.startsWith('deliverables=')
+        ? `${receipt.deliverables.length} declared · ${producedCount} produced`
+        : c.detail
 const rawJson = JSON.stringify(
     {
         verdict: receipt.verdict,
@@ -94,7 +104,7 @@ const rawJson = JSON.stringify(
                                 {c.pass ? '✓' : '✗'}
                             </span>
                             <span class="ra-check-name">{c.name}</span>
-                            <span class="ra-check-detail">{c.detail}</span>
+                            <span class="ra-check-detail">{checkDetail(c)}</span>
                         </li>
                     ))}
                 </ul>
