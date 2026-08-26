@@ -30,7 +30,9 @@ import {
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
 import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
 import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
-import TerminalReplay from '../../components/TerminalReplay.astro'
+import RunTrace from '../../components/RunTrace.astro'
+import RunPhases from '../../components/RunPhases.astro'
+import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
 import metrics from '../../data/metrics.json'
@@ -85,20 +87,27 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 <div id="see-it-run" class="ra-section-card ra-panel" style="scroll-margin-top:1.5rem">
   <div class="ra-panel-inner" style="text-align:center">
 
-## See it run — reliable on every model tier
+## One real run, start to finish
 
-Watch the **same** agent investigate an incident — call two tools, correlate the data, recommend a fix — and **finish the job on a 4B local model just like on Claude**. One builder; the only line that changes is the model. That cross-tier reliability is the harness doing its job: tool-call healing, verification, and a single-owner termination oracle.
+No animation, no script. This is what one real live run on `gemma4:e4b` — a ~4B-class local model, no API key — actually did: the task it got, every tool call it made, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
 
-<img
-  src={demoGif.src}
-  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes"
-  loading="lazy"
-  style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
-/>
+<RunTrace />
 
 <p class="ra-demo-cta">
-  Don't take the recording's word for it — <a href="/guides/local-models/">run the same code on your own machine</a> with a pulled 4B model, no API key.
+  Same task, your machine: <a href="/guides/local-models/">pull a local model and run it yourself</a>.
 </p>
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner" style="text-align:center">
+
+## Every phase, visible
+
+The engine has 12 phases. Most agent frameworks hide this entirely. Here's exactly which ones fired **for the run above** — and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
+
+<RunPhases />
 
   </div>
 </div>
@@ -108,9 +117,38 @@ Watch the **same** agent investigate an incident — call two tools, correlate t
 
 ## The proof: every run returns a receipt
 
-Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`** — an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. Below is a **real, unedited receipt** from a run on `gemma4:e4b`, a ~4B-class local model: it declared two deliverables, wrote both, and the harness checked each against disk before grading the run `tool-grounded`.
+Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`** — an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
 
 <EvidenceReceipt />
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner" style="text-align:center">
+
+## The debrief
+
+The receipt grades the evidence trail. The debrief explains the reasoning — including the context curator's real, per-iteration decisions about what to keep, compress, or drop. Same run, one layer deeper.
+
+<RunDebrief />
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner" style="text-align:center">
+
+## Reliable across every model tier
+
+That run above was local. Swap one line and the identical code finishes the same class of task on a frontier model — **tool-call healing, verification, and a single-owner termination oracle** make the harness the reliable part, not the model.
+
+<img
+  src={demoGif.src}
+  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes"
+  loading="lazy"
+  style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
+/>
 
   </div>
 </div>
@@ -144,15 +182,8 @@ One declarative config object — the front door you already know from the Verce
 
 No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`) and skip the `.env` line entirely — see [Local Models](/guides/local-models/).
 
-<p class="ra-replay-label">
-  <span class="ra-replay-dot" aria-hidden="true"></span>
-  Recorded replay of the real <code>rax demo</code> — same output you get locally, not a mockup.
-</p>
-
-<TerminalReplay />
-
 <p class="ra-demo-cta">
-  Run this exact demo yourself: <code>bunx @reactive-agents/cli demo</code> · or try the <a href="/guides/playground/">in-browser playground</a> — no install.
+  Prefer to see it before you install: <code>bunx @reactive-agents/cli demo</code> · or try the <a href="/guides/playground/">in-browser playground</a> — no install.
 </p>
 
   </div>

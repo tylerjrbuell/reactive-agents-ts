@@ -2,14 +2,14 @@
 /**
  * Custom splash Hero (home page only). Replaces the oversized brand-mark
  * graphic with a "code → proof" visual: the builder snippet that resolves into
- * a REAL tool-grounded verdict (values pulled from the same evidence-receipt
- * data the receipt section renders). The brand glyph is kept as a small, calm
- * accent beside the headline. Any non-home page that uses the splash template
- * falls back to Starlight's default Hero.
+ * a REAL tool-grounded verdict (values pulled from the same golden-run.json
+ * every evidence section on the page reads from). The brand glyph is kept as
+ * a small, calm accent beside the headline. Any non-home page that uses the
+ * splash template falls back to Starlight's default Hero.
  */
 import Default from '@astrojs/starlight/components/Hero.astro'
 import { LinkButton } from '@astrojs/starlight/components'
-import evidence from '../data/evidence-receipt.json'
+import evidence from '../data/golden-run.json'
 
 const route = Astro.locals.starlightRoute
 const { entry } = route
@@ -73,7 +73,7 @@ const codeHtml = [
                 {actions.length > 0 && (
                     <div class="ra-hero-actions">
                         {actions.map((a) => (
-                            <LinkButton href={a.link} variant={a.variant} icon={a.icon}>
+                            <LinkButton href={a.link} variant={a.variant} icon={a.icon?.name}>
                                 {a.text}
                             </LinkButton>
                         ))}

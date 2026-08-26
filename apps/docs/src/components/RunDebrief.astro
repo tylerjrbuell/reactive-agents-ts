@@ -1,0 +1,78 @@
+---
+/**
+ * RunDebrief — the SAME golden run's structured debrief: summary, key
+ * findings, lessons learned, caveats, and the context-curator's decision
+ * rationale (why context was kept/compressed each iteration). This is the
+ * "why," not just the "what" — the composability/observability story made
+ * concrete from one real run instead of asserted in prose.
+ */
+import data from '../data/golden-run.json'
+
+const { debrief, model, capturedAt } = data
+const d = debrief!
+---
+
+<figure class="ra-receipt-fig">
+    <div class="ra-receipt-panel">
+        <div class="ra-receipt">
+            <div class="ra-receipt-head">
+                <div class="ra-receipt-title">
+                    <span class="ra-receipt-kicker">Agent Debrief</span>
+                    <span class="ra-receipt-sub">why the agent did what it did, synthesized after the run</span>
+                </div>
+                <span class="ra-verdict ra-verdict--tool-grounded">
+                    ● {d.outcome} · {d.confidence}
+                </span>
+            </div>
+
+            <p class="ra-receipt-task">{d.summary}</p>
+
+            {d.keyFindings.length > 0 && (
+                <div class="ra-receipt-section">
+                    <p class="ra-receipt-legend">Key findings</p>
+                    <ul class="ra-receipt-list">
+                        {d.keyFindings.map((f: string) => (
+                            <li><span class="ra-tick ra-tick--ok">•</span><span>{f}</span></li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {d.lessonsLearned.length > 0 && (
+                <div class="ra-receipt-section">
+                    <p class="ra-receipt-legend">Lessons learned</p>
+                    <ul class="ra-receipt-list">
+                        {d.lessonsLearned.map((f: string) => (
+                            <li><span class="ra-tick ra-tick--ok">•</span><span>{f}</span></li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            <div class="ra-receipt-section">
+                <p class="ra-receipt-legend">
+                    Context-curator decisions — real reasons for each iteration
+                </p>
+                <ul class="ra-receipt-checks">
+                    {d.rationale.map((r: { iteration: number; decision: string; rationale: { why: string } }) => (
+                        <li>
+                            <span class="ra-tick ra-tick--ok">→</span>
+                            <span class="ra-check-name">iter {r.iteration} · {r.decision}</span>
+                            <span class="ra-check-detail">{r.rationale.why}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            {d.caveats && (
+                <p class="ra-receipt-foot">
+                    <strong>Caveat, stated by the agent itself:</strong> {d.caveats}
+                </p>
+            )}
+        </div>
+    </div>
+    <figcaption class="ra-receipt-cap">
+        Synthesized from the same run captured {capturedAt} on <code>{model.id}</code>.
+        <a href="/features/debrief-chat/">How debriefs work →</a>
+    </figcaption>
+</figure>

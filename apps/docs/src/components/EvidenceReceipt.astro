@@ -5,39 +5,17 @@
  * "verified, not vibes", so the landing shows an actual receipt from a real
  * run (gemma4:e4b, local, ~4B-class) rather than asserting the capability.
  *
- * Data is verbatim from a QA-probe run — see src/data/evidence-receipt.json,
- * which cites the source trace. The TrustReceipt schema is
- * packages/core/src/types/receipt.ts.
+ * Data is the SAME golden run that powers the hero, the trace section, and
+ * the phases section (src/data/golden-run.json) — one real run, one story.
+ * The TrustReceipt schema is packages/core/src/types/receipt.ts.
  */
-import data from '../data/evidence-receipt.json'
+import data from '../data/golden-run.json'
 
-const { task, model, receipt, checks } = data
-const okChecks = checks.filter((c) => c.pass).length
+const { task, model, run, toolCalls, receipt, capturedAt } = data
 const producedCount = receipt.deliverables.filter((d) => d.produced).length
 
-// The `*deliverables-declared` check's raw detail is the receipt's own
-// deliverables array re-serialized as JSON — noisy and redundant with the
-// Deliverables list above. Render a clean, derived summary instead (still
-// honest: computed from the same real data).
-const checkDetail = (c: { detail: string }): string =>
-    c.detail.startsWith('deliverables=')
-        ? `${receipt.deliverables.length} declared · ${producedCount} produced`
-        : c.detail
 const rawJson = JSON.stringify(
-    {
-        verdict: receipt.verdict,
-        method: receipt.method,
-        confidence: receipt.confidence,
-        toolCallStats: receipt.toolCallStats,
-        deliverables: receipt.deliverables,
-        interventions: receipt.interventions,
-        terminatedBy: receipt.terminatedBy,
-        modelId: model.id,
-        strategy: receipt.strategy,
-        tokensUsed: receipt.tokensUsed,
-        llmCalls: receipt.llmCalls,
-        durationMs: receipt.durationMs,
-    },
+    { receipt, run, toolCalls },
     null,
     2,
 )
@@ -61,25 +39,27 @@ const rawJson = JSON.stringify(
             <div class="ra-receipt-idrow">
                 <span class="ra-chip ra-chip--model">{model.id}</span>
                 <span class="ra-chip">{model.provider} · {model.tier}</span>
-                <span class="ra-chip ra-chip--muted">{model.note}</span>
+                <span class="ra-chip ra-chip--muted">{run.strategy}</span>
             </div>
-            <p class="ra-receipt-task">{task.label}</p>
+            <p class="ra-receipt-task">{task.prompt}</p>
 
             <!-- Metric grid -->
             <div class="ra-receipt-metrics">
                 <div><span class="rm-k">confidence</span><span class="rm-v">{receipt.confidence}</span></div>
+                <div><span class="rm-k">tool calls ok</span><span class="rm-v rm-good">{receipt.toolCallStats.ok}</span></div>
                 <div><span class="rm-k">tool calls failed</span><span class="rm-v rm-good">{receipt.toolCallStats.failed}</span></div>
-                <div><span class="rm-k">llm calls</span><span class="rm-v">{receipt.llmCalls}</span></div>
-                <div><span class="rm-k">tokens</span><span class="rm-v">{receipt.tokensUsed.toLocaleString()}</span></div>
-                <div><span class="rm-k">duration</span><span class="rm-v">{(receipt.durationMs / 1000).toFixed(1)}s</span></div>
-                <div><span class="rm-k">strategy</span><span class="rm-v">{receipt.strategy}</span></div>
+                <div><span class="rm-k">tokens</span><span class="rm-v">{run.tokensUsed.toLocaleString()}</span></div>
+                <div><span class="rm-k">duration</span><span class="rm-v">{(run.wallMs / 1000).toFixed(1)}s</span></div>
+                <div><span class="rm-k">iterations</span><span class="rm-v">{run.iterations}</span></div>
                 <div><span class="rm-k">terminated by</span><span class="rm-v">{receipt.terminatedBy}</span></div>
-                <div><span class="rm-k">interventions</span><span class="rm-v">{receipt.interventions.length}</span></div>
+                <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? '—'}</span></div>
             </div>
 
             <!-- Deliverables -->
             <div class="ra-receipt-section">
-                <p class="ra-receipt-legend">Declared deliverables — checked against disk, not claimed</p>
+                <p class="ra-receipt-legend">
+                    Declared deliverables — {producedCount}/{receipt.deliverables.length} checked against disk, not claimed
+                </p>
                 <ul class="ra-receipt-list">
                     {receipt.deliverables.map((d) => (
                         <li>
@@ -92,19 +72,17 @@ const rawJson = JSON.stringify(
                 </ul>
             </div>
 
-            <!-- Verification ledger -->
+            <!-- Raw tool-call evidence trail -->
             <div class="ra-receipt-section">
                 <p class="ra-receipt-legend">
-                    Deterministic verification ledger — {okChecks}/{checks.length} passed
+                    Evidence trail — every tool call this run made, in order
                 </p>
                 <ul class="ra-receipt-checks">
-                    {checks.map((c) => (
+                    {toolCalls.map((tc) => (
                         <li>
-                            <span class:list={['ra-tick', c.pass ? 'ra-tick--ok' : 'ra-tick--miss']}>
-                                {c.pass ? '✓' : '✗'}
-                            </span>
-                            <span class="ra-check-name">{c.name}</span>
-                            <span class="ra-check-detail">{checkDetail(c)}</span>
+                            <span class="ra-tick ra-tick--ok">✓</span>
+                            <span class="ra-check-name">{tc.name}</span>
+                            <span class="ra-check-detail">{tc.argsPreview}</span>
                         </li>
                     ))}
                 </ul>
@@ -124,8 +102,8 @@ const rawJson = JSON.stringify(
         </div>
     </div>
     <figcaption class="ra-receipt-cap">
-        A <strong>real</strong> run captured 2026-07-11 on <code>{model.id}</code> — a
-        ~4B-class local model. Every run returns one of these.
+        The <strong>same real run</strong> captured {capturedAt} on <code>{model.id}</code> —
+        a ~4B-class local model — that powers every evidence section on this page.
         <a href="/features/verification/">How verification works →</a>
     </figcaption>
 </figure>

@@ -145,3 +145,76 @@ Prototyped three directions, user picked **B + mark accent**.
   monospace indentation → forced the code left-aligned.
 
 Verified green in dark, light, and mobile via real Chromium renders.
+
+## Increment 4 — bug fixes + "one real run" narrative spine
+
+User feedback: Get Started's arrow icon was missing, "See it run" was
+squished/borderless (Starlight's `.minimal` variant ships `padding-inline: 0`
+by design; the site's global `.secondary,.minimal { border-color }` override
+added a visible border but no matching padding). Separately: the hero still
+read as too many words / not enough raw evidence, and the TerminalReplay demo
+felt scripted and cheap. Ask: thread ONE real run through the whole page —
+live run → observability/hooks → composability → trust receipt → debrief —
+unfolding the framework as the reader scrolls, inspired by Composio/Vercel/
+Mastra-style "show, don't assert" landing pages.
+
+### Bug fixes
+- `Hero.astro`: `icon={a.icon}` passed the whole `{name, html}` object to
+  `LinkButton`, which expects a bare icon-name string → the arrow silently
+  didn't render. Fixed to `icon={a.icon?.name}`.
+- `custom.css`: added `padding-inline` back to `.sl-link-button.minimal` to
+  match `.secondary`, since the site renders it with a visible border.
+
+### One real run, captured live
+- `scripts/capture-golden-run.ts` (repo root, ops script, not part of the
+  build) — builds a real agent via the SDK (not the CLI) on `gemma4:e4b` /
+  Ollama with hooks registered on all 12 phases (before/after), memory
+  enabled (debrief synthesis is memory-gated), tools + observability on. Runs
+  the SAME multi-file task family already used site-wide (compare moon counts
+  of Jupiter/Saturn/Mars, write `./report.md` + `./data.json`) and dumps
+  `result.receipt`, `result.debrief`/`debriefRich`, `result.metadata`
+  (reasoning steps, tool calls, ledger), and the full hook-firing log.
+- Ran it live: 3 real tool calls (`web-search`, `file-write` ×2), 9
+  iterations, 9,610 tokens, $0 cost, verdict `tool-grounded`,
+  `verifierVerdict: pass`, and — new finding — only **7 of 12 phases fired**
+  (no guardrails/cost-tracking/audit configured). Turned that into a feature:
+  the composability proof is that phases run only when config asks for them.
+- Sanitized (`/tmp` + home paths → relative) and committed as source of truth:
+  `wiki/Research/Harness-Reports/golden-run-2026-08-26/run.json`.
+- `apps/docs/scripts/generate-golden-run.ts` — deterministic transform of the
+  committed run into `src/data/golden-run.json` (phase-fire counts derived
+  from the real hook log against the canonical `LifecyclePhase` list parsed
+  from `packages/runtime/src/types.ts`, same technique as
+  `generate-metrics.ts`). Wired into `predev`/`prebuild`, `bun run golden-run`
+  alias. Retired `generate-evidence-receipt.ts` + `evidence-receipt.json` —
+  this run supersedes the older QA-probe-sourced receipt.
+
+### New page spine — one run, unfolding
+`index.mdx` restructured: Trust receipt is no longer a standalone section —
+it's now one stop in a single narrative, all reading `golden-run.json`:
+1. **"One real run, start to finish"** (`#see-it-run`) — `RunTrace.astro`:
+   static (no typewriter animation) render of the task, every tool call in
+   call order with real args, and the real output. Replaces the old
+   `TerminalReplay` HN demo as the flagship "watch it work" evidence — user
+   explicitly disliked it as scripted/cheap; it's now a secondary
+   `bunx @reactive-agents/cli demo` CTA line only, animation deleted.
+2. **"Every phase, visible"** — `RunPhases.astro`: reuses the existing
+   `.ra-flow-grid`/`.ra-phase` Architecture-at-a-Glance markup, now annotated
+   per-phase with fired/opt-in from the real hook log.
+3. **"The proof: every run returns a receipt"** — `EvidenceReceipt.astro`,
+   repointed at `golden-run.json`; dropped the QA-probe-specific "checks"
+   ledger (not a general framework concept) in favor of the real tool-call
+   evidence trail.
+4. **"The debrief"** (new) — `RunDebrief.astro`: summary, key findings,
+   lessons learned, and the context-curator's real per-iteration
+   keep/compress rationale — the "why," differentiated from the receipt's
+   "what."
+5. **"Reliable across every model tier"** — the pre-existing local-vs-frontier
+   GIF, kept and retitled (it proves portability, which the single local run
+   above can't demonstrate alone).
+Then Start-in-60-Seconds, unchanged.
+
+Verified: `bun run build` green, links valid; grepped `dist/index.html` for
+the real per-phase fired counts (7 fired / 5 opt-in matches the captured
+data exactly); Chrome-headless full-page screenshot confirms the button
+fixes and the full run-narrative rendering with real data end to end.
