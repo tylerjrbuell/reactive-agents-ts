@@ -2919,13 +2919,39 @@ starlight-toc a[data-ra-changed]::before {
        left-aligned or the monospace indentation staggers per line. */
     text-align: left;
     min-height: 8.5em;
-    transition: opacity 0.26s ease;
 }
-.ra-hero-code.is-fading {
-    opacity: 0;
+.ra-hero-code code {
+    display: block;
 }
-.ra-hero-winttl {
-    transition: opacity 0.26s ease;
+.ra-hero-code .rl {
+    white-space: pre;
+    min-height: 1.75em;
+}
+.ra-hero-code .rl.is-editing {
+    position: relative;
+}
+.ra-hero-code .rl.is-editing::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: -0.15em;
+    background: var(--ra-cyan);
+    animation: ra-hero-caret 0.85s steps(1) infinite;
+}
+@keyframes ra-hero-caret {
+    0%, 49% {
+        opacity: 1;
+    }
+    50%, 100% {
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ra-hero-code .rl.is-editing::after {
+        animation: none;
+    }
 }
 .ra-hero-verdict,
 .ra-hero-winbar {

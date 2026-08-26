@@ -5,15 +5,16 @@
  * see apps/docs/scripts/generate-golden-run.ts) as a terminal feed synced to
  * a 12-phase rail, ending with the real verdict.
  *
- * Honesty contract: event ORDER and RELATIVE proportion are real (derived
- * from real hook timestamps). Playback speed is compressed/clamped for
- * readability — a 17.7s run doesn't play at 17.7s — stated in the caption.
- * No invented events, no invented copy; every line is real data from
- * golden-run.json's timeline/toolCalls/receipt.
+ * Honesty contract: plays back at REAL wall-clock speed — the gap between
+ * two events on screen is the actual gap the run took (floored at 60ms so
+ * sub-tick bursts stay visible). This run took ~17.8s; the replay takes the
+ * same ~17.8s, so watching it feels like watching the actual run, not a
+ * sped-up trailer. No invented events, no invented copy; every line is real
+ * data from golden-run.json's timeline/toolCalls/receipt.
  */
 import data from '../data/golden-run.json'
 
-const { model, task, run, receipt, capturedAt, timeline, phases } = data
+const { model, task, receipt, capturedAt, timeline, phases } = data
 const r = receipt!
 const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced).length
 const total = r.deliverables.length
@@ -34,7 +35,7 @@ const PHASE_LABEL: Record<string, string> = {
 }
 ---
 
-<div class="ra-replay" data-timeline={JSON.stringify(timeline)} data-total-ms={run.wallMs}>
+<div class="ra-replay" data-timeline={JSON.stringify(timeline)}>
     <div class="ra-hero-win ra-replay-win">
         <div class="ra-hero-winbar">
             <span class="ra-hero-tl-dot ra-hero-tl-r" />
@@ -82,34 +83,27 @@ const PHASE_LABEL: Record<string, string> = {
     </div>
 
     <p class="ra-hero-vcap">
-        Paced from the run's real relative timing (order and proportion are real; a 17.7s run is compressed for readability) —
-        not a mockup, a <a href="#the-proof">real receipt</a> from a ~4B local model.
+        Real-time playback — this took the model ~17.8s, so the replay takes ~17.8s too. Not sped up, not a mockup —
+        a <a href="#the-proof">real receipt</a> from a ~4B local model.
     </p>
 </div>
 
 <script>
     function initReplay(root: HTMLElement) {
         const timeline: { atMs: number; kind: 'phase' | 'tool'; phase: string }[] = JSON.parse(root.dataset.timeline ?? '[]')
-        const totalRealMs = Number(root.dataset.totalMs ?? 1)
         const lines = Array.from(root.querySelectorAll<HTMLElement>('[data-replay-lines] [data-line]'))
         const rail = root.querySelector<HTMLElement>('[data-replay-rail]')
         const finalRow = root.querySelector<HTMLElement>('[data-replay-final]')
         const replayBtn = root.querySelector<HTMLButtonElement>('[data-replay-btn]')
         const dots = rail ? Array.from(rail.querySelectorAll<HTMLElement>('[data-phase]')) : []
 
-        // Compress real relative gaps into a readable playback: proportional,
-        // clamped so a 9s think-step doesn't stall playback nor a 4ms hop
-        // disappear. Order and relative "who's slower" always survive.
-        const TARGET_TOTAL = 5200
-        const MIN_STEP = 90
-        const MAX_STEP = 620
-        const scale = TARGET_TOTAL / totalRealMs
+        // Real wall-clock delays — the run's actual atMs offsets, floored so a
+        // near-simultaneous pair of events (a few ms apart) doesn't flash
+        // invisibly. No compression, no cap: a slow think-step stays slow.
+        const MIN_STEP = 60
         let cursor = 0
-        const delays = timeline.map((e, i) => {
-            const prev = i === 0 ? 0 : timeline[i - 1].atMs
-            const raw = (e.atMs - prev) * scale
-            const step = Math.min(MAX_STEP, Math.max(MIN_STEP, raw))
-            cursor += step
+        const delays = timeline.map((e) => {
+            cursor = Math.max(cursor + MIN_STEP, e.atMs)
             return cursor
         })
 
