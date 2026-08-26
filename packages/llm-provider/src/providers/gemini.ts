@@ -489,7 +489,7 @@ export const GeminiProviderLive = Layer.effect(
                 let fullContent = "";
                 let inputTokens = 0;
                 let outputTokens = 0;
-                let cachedContentTokens = 0;
+                let cachedContentTokens: number | undefined;
                 let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
                 // Raw functionCalls captured for adapter normalization at
@@ -562,7 +562,16 @@ export const GeminiProviderLive = Layer.effect(
                     inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
                     outputTokens =
                       chunk.usageMetadata.candidatesTokenCount ?? 0;
-                    cachedContentTokens = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0;
+                    // Only overwrite when the chunk genuinely reports the
+                    // field — collapsing "never reported" and "reported 0"
+                    // into the same sentinel corrupts both the surfaced
+                    // usage.cacheReadInputTokens field AND the cost calc
+                    // below (a real 0 must stay distinguishable from
+                    // absent, same rule mapGeminiResponse already applies).
+                    const chunkCached = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount;
+                    if (typeof chunkCached === "number") {
+                      cachedContentTokens = chunkCached;
+                    }
                   }
                 }
 
@@ -642,11 +651,11 @@ export const GeminiProviderLive = Layer.effect(
                       outputTokens,
                       model,
                       {
-                        cached_content_token_count: cachedContentTokens || undefined,
+                        cached_content_token_count: cachedContentTokens,
                       },
                       config.pricingRegistry,
                     ),
-                    ...(cachedContentTokens
+                    ...(typeof cachedContentTokens === "number"
                       ? { cacheReadInputTokens: cachedContentTokens }
                       : {}),
                   },

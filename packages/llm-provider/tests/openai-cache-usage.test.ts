@@ -10,7 +10,7 @@
 // Run: bun test packages/llm-provider/tests/openai-cache-usage.test.ts --timeout 15000
 
 import { describe, it, expect, mock, beforeAll } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 
 let capturedCreateOpts: Record<string, unknown> | null = null;
 let mockUsage: Record<string, unknown> = {
@@ -18,9 +18,30 @@ let mockUsage: Record<string, unknown> = {
   completion_tokens: 5,
   total_tokens: 15,
 };
+// Streaming path: openai.ts assigns `finalUsage = chunk.usage` wholesale
+// (no 0-vs-absent accumulator like Gemini's), so this can stay undefined
+// to simulate "final chunk never carried a usage field".
+let mockStreamUsage: Record<string, unknown> | undefined = {
+  prompt_tokens: 10,
+  completion_tokens: 5,
+};
+
+async function* mockStreamChunks() {
+  yield {
+    choices: [{ delta: { content: "ok" }, finish_reason: undefined }],
+  };
+  yield {
+    choices: [{ delta: {}, finish_reason: "stop" }],
+    usage: mockStreamUsage,
+  };
+}
 
 const mockCreate = mock(async (opts: unknown) => {
   capturedCreateOpts = opts as Record<string, unknown>;
+  const streamRequested = (opts as { stream?: boolean }).stream === true;
+  if (streamRequested) {
+    return mockStreamChunks();
+  }
   return {
     choices: [
       {
@@ -86,7 +107,7 @@ function makeLayer() {
   );
 }
 
-describe("OpenAI cache-read usage surfacing", () => {
+describe("OpenAI cache-read usage surfacing (complete())", () => {
   it("surfaces cacheReadInputTokens in usage when reported", async () => {
     capturedCreateOpts = null;
     mockUsage = {
@@ -125,5 +146,57 @@ describe("OpenAI cache-read usage surfacing", () => {
 
     expect(result.usage.cacheReadInputTokens).toBeUndefined();
     expect("cacheReadInputTokens" in result.usage).toBe(false);
+  });
+});
+
+describe("OpenAI cache-read usage surfacing (stream())", () => {
+  it("surfaces cacheReadInputTokens on the streamed usage event when reported", async () => {
+    capturedCreateOpts = null;
+    mockStreamUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 5,
+      prompt_tokens_details: { cached_tokens: 4 },
+    };
+
+    const events = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    const usage = Array.from(events).find((e) => e.type === "usage") as
+      | { type: "usage"; usage: Record<string, unknown> }
+      | undefined;
+    expect(usage).toBeDefined();
+    expect(usage!.usage.cacheReadInputTokens).toBe(4);
+  });
+
+  it("omits cacheReadInputTokens on the streamed usage event when no cache field is reported", async () => {
+    capturedCreateOpts = null;
+    mockStreamUsage = {
+      prompt_tokens: 10,
+      completion_tokens: 5,
+    };
+
+    const events = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return yield* Stream.runCollect(stream);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+    const usage = Array.from(events).find((e) => e.type === "usage") as
+      | { type: "usage"; usage: Record<string, unknown> }
+      | undefined;
+    expect(usage).toBeDefined();
+    expect(usage!.usage.cacheReadInputTokens).toBeUndefined();
+    expect("cacheReadInputTokens" in usage!.usage).toBe(false);
   });
 });
