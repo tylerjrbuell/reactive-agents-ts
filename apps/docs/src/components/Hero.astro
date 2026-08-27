@@ -157,7 +157,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                         <span class="ra-hero-tl-dot ra-hero-tl-g" />
                         <span class="ra-hero-winttl" data-hero-file>{snippetsData[0].file}</span>
                     </div>
-                    <pre class="ra-hero-code" style={`height:calc(${maxLines} * 1.75em)`}><code data-hero-code>{firstLines.map((l) => (
+                    <pre class="ra-hero-code" style={`height:calc(${maxLines} * 1.75em + 30px)`}><code data-hero-code>{firstLines.map((l) => (
                         <div class="rl" set:html={l.html || '​'} />
                     ))}</code></pre>
                     <div class="ra-hero-verdict">
