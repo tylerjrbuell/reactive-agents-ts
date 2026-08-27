@@ -1,15 +1,18 @@
 ---
 /**
  * Custom splash Hero (home page only). Replaces the oversized brand-mark
- * graphic with a "code → proof" visual: the builder snippet that resolves into
- * a REAL tool-grounded verdict (values pulled from the same golden-run.json
- * every evidence section on the page reads from). The brand glyph is kept as
- * a small, calm accent beside the headline. Any non-home page that uses the
+ * graphic with a "code → proof" visual: a rotating set of REAL builder
+ * chains, each a genuine snippet from the docs/README, cycling through the
+ * shapes the SDK actually supports (ReAct, guardrailed, MCP, structured
+ * output, chat, gateway, declarative config, multi-agent compose). Each
+ * badge names that snippet's headline capability — it is not a run verdict;
+ * the one real captured run's receipt lives further down the page
+ * (RunReplay / EvidenceReceipt), not here. The brand glyph is kept as a
+ * small, calm accent beside the headline. Any non-home page that uses the
  * splash template falls back to Starlight's default Hero.
  */
 import Default from '@astrojs/starlight/components/Hero.astro'
 import { LinkButton } from '@astrojs/starlight/components'
-import evidence from '../data/golden-run.json'
 
 const route = Astro.locals.starlightRoute
 const { entry } = route
@@ -18,21 +21,15 @@ const data = entry.data
 const hero = data.hero
 const { title = data.title, tagline, actions = [] } = hero ?? {}
 
-// Real, honest values for the verdict footer — same source as the receipt.
-const r = evidence.receipt
-const produced = r.deliverables.filter((d) => d.produced).length
-const total = r.deliverables.length
-const model = evidence.model.id
-
-// Rotating builder snippets — real API surface, different agent shapes, to
-// make "composable, tailor to any task" concrete instead of asserted. Each is
-// an HTML string (rendered via set:html) so Astro's JSX parser doesn't treat
-// literal `{ ... }` braces in the code as expressions. The verdict footer
-// below stays tied to the one real captured run regardless of which snippet
-// is showing — it isn't claiming these variants were the one that ran.
-const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
+// Rotating builder snippets — real API surface, real doc/README examples,
+// spanning the different shapes the SDK supports. Each `badge` names that
+// snippet's headline capability (not a pass/fail verdict — the real receipt
+// lives in the RunReplay/EvidenceReceipt sections below, sourced from the
+// one real captured run).
+const SNIPPETS: { file: string; badge: string; features: string[]; lines: string[] }[] = [
     {
         file: 'agent.ts',
+        badge: 'ReAct + tools',
         features: ['ReAct reasoning', 'built-in tools', 'runs on a local 4B model'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
@@ -46,6 +43,7 @@ const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
     },
     {
         file: 'support-bot.ts',
+        badge: 'guardrails + HITL',
         features: ['PII-blocking guardrails', 'human-approval gate', 'per-customer memory'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
@@ -58,6 +56,7 @@ const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
     },
     {
         file: 'research-agent.ts',
+        badge: 'MCP + observability',
         features: ['MCP tool servers', 'full trace observability', 'entropy + NLI verification'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
@@ -69,6 +68,7 @@ const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
     },
     {
         file: 'extractor.ts',
+        badge: 'typed structured output',
         features: ['schema-locked output', 'cost-aware model routing', 'runs on a local 4B model'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
@@ -78,12 +78,89 @@ const SNIPPETS: { file: string; features: string[]; lines: string[] }[] = [
             `  .<span class="rm">build</span>()`,
         ],
     },
+    {
+        file: 'chat.ts',
+        badge: 'single-shot chat',
+        features: ['no tool loop', 'smallest surface area', 'direct-LLM latency'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">build</span>()          <span class="rc">// no .withReasoning(), direct LLM</span>`,
+            ``,
+            `<span class="rk">const</span> reply = <span class="rk">await</span> agent.<span class="rm">run</span>(<span class="rs">"Explain functors in one paragraph."</span>)`,
+        ],
+    },
+    {
+        file: 'chat-session.ts',
+        badge: 'multi-turn chat session',
+        features: ['conversation history', 'persistent memory', 'stateful across calls'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withMemory</span>()            <span class="rc">// persists across turns</span>`,
+            `  .<span class="rm">build</span>()`,
+            ``,
+            `<span class="rk">const</span> reply = <span class="rk">await</span> agent.<span class="rm">run</span>(nextMessage, { history })`,
+        ],
+    },
+    {
+        file: 'strategy.ts',
+        badge: 'tree-of-thought reasoning',
+        features: ['multi-branch exploration', '8 pluggable strategies', 'swap with one config key'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withReasoning</span>({ defaultStrategy: <span class="rs">"tree-of-thought"</span> })`,
+            `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'gateway.ts',
+        badge: 'autonomous gateway',
+        features: ['scheduled cron triggers', 'heartbeat wake cycle', 'daily token budget'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withGateway</span>({`,
+            `    heartbeat: { intervalMs: 1_800_000 },`,
+            `    crons: [{ schedule: <span class="rs">"0 9 * * MON"</span>, instruction: <span class="rs">"Weekly review"</span> }],`,
+            `  })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'declarative.ts',
+        badge: 'declarative config',
+        features: ['one config object', 'same engine, no chain', 'Vercel-AI-SDK-shaped'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> <span class="rm">createAgent</span>({`,
+            `  name: <span class="rs">"researcher"</span>,`,
+            `  provider: <span class="rs">"anthropic"</span>,`,
+            `  reasoning: {},`,
+            `  tools: { builtins: <span class="rk">true</span> },`,
+            `})`,
+        ],
+    },
+    {
+        file: 'multi-agent.ts',
+        badge: 'multi-agent pipeline',
+        features: ['compose() primitives', 'pipe · parallel · race', "one agent's output feeds the next"],
+        lines: [
+            `<span class="rk">const</span> draft = <span class="rm">agentFn</span>({ name: <span class="rs">"writer"</span> }, (b) => b.<span class="rm">withReasoning</span>())`,
+            `<span class="rk">const</span> critic = <span class="rm">agentFn</span>({ name: <span class="rs">"editor"</span> }, (b) => b.<span class="rm">withReasoning</span>())`,
+            ``,
+            `<span class="rk">const</span> pipeline = <span class="rm">pipe</span>(draft, critic)`,
+            `<span class="rk">const</span> result = <span class="rk">await</span> pipeline(<span class="rs">"Draft a release note"</span>)`,
+        ],
+    },
 ]
 // Plain-text per line (tags stripped) drives the typing/backspace animation;
 // the HTML version snaps in as syntax highlighting once a line finishes typing.
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, '')
 const snippetsData = SNIPPETS.map((s) => ({
     file: s.file,
+    badge: s.badge,
     features: s.features,
     lines: s.lines.map((html) => ({ html, plain: stripTags(html) })),
 }))
@@ -161,11 +238,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                         <div class="rl" set:html={l.html || '​'} />
                     ))}</code></pre>
                     <div class="ra-hero-verdict">
-                        <span class="ra-hero-vbadge">● {r.verdict}</span>
-                        <span class="ra-hero-vmeta">
-                            {produced}/{total} deliverables <b>✓ produced</b> ·{' '}
-                            {r.toolCallStats.failed} tool failures · <b>{model}</b>
-                        </span>
+                        <span class="ra-hero-vbadge" data-hero-badge>◆ {snippetsData[0].badge}</span>
                         <div class="ra-hero-vfeatures" data-hero-features>
                             {snippetsData[0].features.map((f) => (
                                 <span class="ra-hero-vtag">{f}</span>
@@ -173,6 +246,10 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                         </div>
                     </div>
                 </div>
+                <p class="ra-hero-vcap">
+                    One SDK, {snippetsData.length} agent shapes shown here. Every real receipt lives in the
+                    <a href="#see-it-run">run below ↓</a>.
+                </p>
             </div>
         </div>
     ) : (
@@ -182,7 +259,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
 
 <script>
     type Line = { html: string; plain: string }
-    type Snippet = { file: string; features: string[]; lines: Line[] }
+    type Snippet = { file: string; badge: string; features: string[]; lines: Line[] }
 
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
 
@@ -259,11 +336,19 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         el.classList.remove('is-fading')
     }
 
+    async function swapBadge(el: HTMLElement, badge: string) {
+        el.classList.add('is-fading')
+        await wait(180)
+        el.textContent = `◆ ${badge}`
+        el.classList.remove('is-fading')
+    }
+
     function initHeroCycle(root: HTMLElement) {
         const snippets: Snippet[] = JSON.parse(root.dataset.snippets ?? '[]')
         const codeEl = root.querySelector<HTMLElement>('[data-hero-code]')
         const fileEl = root.querySelector<HTMLElement>('[data-hero-file]')
         const featuresEl = root.querySelector<HTMLElement>('[data-hero-features]')
+        const badgeEl = root.querySelector<HTMLElement>('[data-hero-badge]')
         if (!codeEl || !fileEl || snippets.length < 2) return
 
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -284,6 +369,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                 if (cancelled) return
                 i = (i + 1) % snippets.length
                 fileEl.textContent = snippets[i].file
+                if (badgeEl) void swapBadge(badgeEl, snippets[i].badge)
                 if (featuresEl) void swapFeatures(featuresEl, snippets[i].features)
                 await transition(codeEl, current, snippets[i])
                 current = snippets[i].lines

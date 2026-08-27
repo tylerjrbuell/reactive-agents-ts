@@ -73,6 +73,14 @@ interface HookEntry {
   readonly timing: "before" | "after";
   readonly t: number;
 }
+interface ReasoningStep {
+  readonly type: "thought" | "action" | "observation";
+  readonly content?: string;
+  readonly metadata?: {
+    readonly toolCall?: { readonly id?: string };
+    readonly toolCallId?: string;
+  };
+}
 interface RunJson {
   readonly task: string;
   readonly model: { readonly id: string; readonly provider: string; readonly tier: string };
@@ -85,7 +93,9 @@ interface RunJson {
       readonly iterations?: number;
       readonly tokensUsed?: number;
       readonly cost?: number;
+      readonly reasoningSteps?: readonly ReasoningStep[];
       readonly toolCalls?: readonly {
+        readonly id?: string;
         readonly name: string;
         readonly arguments?: Record<string, unknown>;
       }[];
@@ -132,26 +142,96 @@ const main = (): void => {
     loop: LOOP_PHASES.has(name),
   }));
 
+  // Real per-call detail for the expandable trace rows: the thought that
+  // preceded this action, and the observation/result it produced. For a
+  // file-write, "result" is the actual file content that got written (the
+  // truest evidence of what happened) rather than the success observation.
+  const steps = run.result.metadata.reasoningSteps ?? [];
+  const truncate = (s: string, n: number): string => (s.length > n ? s.slice(0, n) + "…" : s);
+  const detailFor = (
+    tc: { id?: string; name: string; arguments?: Record<string, unknown> },
+  ): { thought: string | null; result: string | null } => {
+    const actionIdx = steps.findIndex((s) => s.type === "action" && s.metadata?.toolCall?.id === tc.id);
+    const thoughtStep = actionIdx > 0 ? steps[actionIdx - 1] : undefined;
+    const thought =
+      thoughtStep?.type === "thought" && thoughtStep.content?.trim() ? truncate(thoughtStep.content.trim(), 500) : null;
+    if (tc.name === "file-write" && typeof tc.arguments?.content === "string") {
+      return { thought, result: truncate(tc.arguments.content, 1200) };
+    }
+    const obs = steps.find((s) => s.type === "observation" && s.metadata?.toolCallId === tc.id);
+    return { thought, result: obs?.content ? truncate(obs.content, 1200) : null };
+  };
+
   const toolCalls = (run.result.metadata.toolCalls ?? []).map((tc) => ({
     name: tc.name,
     argsPreview: argsPreview(tc.name, tc.arguments),
+    detail: detailFor(tc),
   }));
 
   // Real playback timeline: every "before" hook event, offset from the run's
   // first event, in ms — the actual relative pacing of what happened when.
   // `act` events are zipped to their tool call in firing order (same count).
+  // The outer engine also fires one synthetic bookkeeping `act` hook (paired
+  // with its synthetic `observe` hook, see reasoning-post-think.ts) that has
+  // no matching real tool call — when the act-hook count outruns the real
+  // toolCalls array, that's it: fall through to a plain phase tick rather
+  // than render an empty tool row.
   const beforeEvents = run.hookLog.filter((e) => e.timing === "before");
   const t0 = beforeEvents[0]?.t ?? 0;
   let actCursor = 0;
   const timeline = beforeEvents.map((e) => {
     const atMs = e.t - t0;
-    if (e.phase === "act") {
+    if (e.phase === "act" && actCursor < toolCalls.length) {
       const tc = toolCalls[actCursor];
       actCursor += 1;
-      return { atMs, kind: "tool" as const, phase: e.phase, tool: tc?.name ?? null, argsPreview: tc?.argsPreview ?? null };
+      return {
+        atMs,
+        kind: "tool" as const,
+        phase: e.phase,
+        tool: tc.name,
+        argsPreview: tc.argsPreview,
+        detail: tc.detail,
+      };
     }
-    return { atMs, kind: "phase" as const, phase: e.phase, tool: null, argsPreview: null };
+    return {
+      atMs,
+      kind: "phase" as const,
+      phase: e.phase,
+      tool: null,
+      argsPreview: null,
+      detail: null as
+        | { thought: string | null; leadsToTool: string | null }
+        | { observations: { tool: string; argsPreview: string; result: string | null }[] }
+        | null,
+    };
   });
+
+  // Honest, order-derived detail for non-tool ticks — never fabricated,
+  // never fuzzily attributed. A `think` tick immediately followed by the
+  // `tool` tick it led to inherits that tool's real preceding thought (same
+  // content already computed above, just surfaced here too). A tick with no
+  // reliable 1:1 correlation stays undecorated rather than guessing.
+  for (let i = 0; i < timeline.length; i++) {
+    const entry = timeline[i];
+    if (entry.kind !== "phase") continue;
+    if (entry.phase === "think") {
+      const next = timeline[i + 1];
+      if (next?.kind === "tool") {
+        entry.detail = { thought: next.detail?.thought ?? null, leadsToTool: next.tool ?? null };
+      }
+    }
+    if (entry.phase === "observe") {
+      const toolsBefore = timeline.slice(0, i).filter((t) => t.kind === "tool").length;
+      const seen = toolCalls.slice(0, toolsBefore);
+      if (seen.length > 0) {
+        // The real observation content per tool result curated into context
+        // by this tick — not a summary label, the actual text.
+        entry.detail = {
+          observations: seen.map((t) => ({ tool: t.name, argsPreview: t.argsPreview, result: t.detail.result })),
+        };
+      }
+    }
+  }
 
   // Prefer the rich LLM-synthesized debrief; fall back to the deterministic
   // one (both are real — debriefRich is just the slower, richer synthesis of

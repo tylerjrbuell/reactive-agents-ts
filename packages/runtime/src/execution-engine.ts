@@ -852,6 +852,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     task,
                     obs,
                     isNormal,
+                    // This fires ONE coarse act+observe pair per reasoning()
+                    // call, batching every tool the reasoning service used —
+                    // the only act/observe signal for a custom or mocked
+                    // ReasoningService that doesn't route through the kernel
+                    // (see feature-contract.test.ts "act hook fires after
+                    // reasoning when tools were used", which mocks the
+                    // service and depends on exactly this). For the real
+                    // kernel, act.ts ALSO fires its own act+observe pair per
+                    // individual tool round (finer-grained, per-call). Both
+                    // are real and intentional at different granularity —
+                    // not a duplicate to remove.
                     fireActObserveHooks: (c) =>
                       Effect.gen(function* () {
                         let cc = yield* guardedPhase(c, "act", (cx) => Effect.succeed(cx));

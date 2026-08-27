@@ -3002,29 +3002,26 @@ starlight-toc a[data-ra-changed]::before {
     padding: 12px 18px;
     border-radius: 0 0 15px 15px;
     border-top: 1px solid rgba(139, 92, 246, 0.15);
-    background: rgba(34, 197, 94, 0.06) !important;
+    background: rgba(139, 92, 246, 0.06) !important;
 }
 .ra-hero-vbadge {
     flex: 0 0 auto;
     font-family: 'Geist Mono', ui-monospace, monospace;
     font-size: 0.78rem;
     font-weight: 700;
-    color: #4ade80;
-    background: rgba(34, 197, 94, 0.12);
-    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(139, 92, 246, 0.4);
     border-radius: 999px;
     padding: 0.28rem 0.65rem;
     white-space: nowrap;
+    transition: opacity 0.18s ease;
 }
-.ra-hero-vmeta {
-    font-family: 'Geist Mono', ui-monospace, monospace;
-    font-size: 0.74rem;
-    color: var(--sl-color-gray-3);
-    min-width: 0;
+.ra-hero-vbadge.is-fading {
+    opacity: 0;
 }
-.ra-hero-vmeta b {
-    color: var(--sl-color-gray-1);
-    font-weight: 700;
+[data-theme='light'] .ra-hero-vbadge {
+    color: #6d28d9;
 }
 .ra-hero-vfeatures {
     flex: 1 1 100%;
@@ -3112,6 +3109,9 @@ starlight-toc a[data-ra-changed]::before {
     font-family: 'Geist Mono', ui-monospace, monospace;
     font-size: 0.82rem;
     line-height: 1.6;
+    /* The section wrapper sets text-align:center for its prose; the trace
+       is code/log content and must stay left-aligned regardless. */
+    text-align: left;
 }
 [data-theme='light'] .ra-trace-body {
     background: #fbfbfe;
@@ -3141,6 +3141,10 @@ starlight-toc a[data-ra-changed]::before {
 }
 .ra-trace-call {
     padding-left: 0.1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
 }
 .ra-trace-idx {
     flex: 0 0 auto;
@@ -3220,6 +3224,87 @@ starlight-toc a[data-ra-changed]::before {
     font-size: 0.66rem;
     color: var(--sl-color-gray-4);
     letter-spacing: 0.03em;
+}
+.ra-replay-tick.ra-replay-has-detail {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-toggle {
+    align-items: center;
+    gap: 0.4rem;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-detail {
+    margin-left: 0.85rem;
+    font-size: 0.66rem;
+}
+.ra-replay-toggle {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    width: 100%;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+}
+.ra-replay-has-detail:not(.is-in) .ra-replay-toggle {
+    pointer-events: none;
+}
+.ra-replay-toggle:hover .ra-trace-tool {
+    text-decoration: underline;
+}
+.ra-replay-chevron {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--sl-color-gray-4);
+    font-size: 0.68rem;
+    transition: transform 0.15s ease;
+}
+.ra-replay-toggle[aria-expanded='true'] .ra-replay-chevron {
+    transform: rotate(-180deg);
+}
+.ra-replay-detail {
+    margin: 0.35rem 0 0.15rem 1.4rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(6, 182, 212, 0.05);
+    border: 1px solid rgba(6, 182, 212, 0.18);
+    border-radius: 8px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: var(--sl-color-gray-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 12rem;
+    overflow-y: auto;
+}
+.ra-replay-detail-list {
+    max-height: none;
+    overflow-y: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.ra-replay-obs + .ra-replay-obs {
+    padding-top: 0.5rem;
+    border-top: 1px dashed rgba(6, 182, 212, 0.2);
+}
+.ra-replay-obs-head {
+    margin: 0 0 0.25rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ra-cyan);
+    opacity: 0.85;
+}
+.ra-replay-obs-body {
+    margin: 0;
+    max-height: 8rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 .ra-replay-tick-dot {
     width: 4px;

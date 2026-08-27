@@ -7,17 +7,19 @@
  *
  * Honesty contract: plays back at REAL wall-clock speed — the gap between
  * two events on screen is the actual gap the run took (floored at 60ms so
- * sub-tick bursts stay visible). This run took ~17.8s; the replay takes the
- * same ~17.8s, so watching it feels like watching the actual run, not a
- * sped-up trailer. No invented events, no invented copy; every line is real
- * data from golden-run.json's timeline/toolCalls/receipt.
+ * sub-tick bursts stay visible), so watching it feels like watching the
+ * actual run, not a sped-up trailer. Duration is read from the data, never
+ * hardcoded, so it can't drift when the golden run is recaptured. No
+ * invented events, no invented copy; every line is real data from
+ * golden-run.json's timeline/toolCalls/receipt.
  */
 import data from '../data/golden-run.json'
 
-const { model, task, receipt, capturedAt, timeline, phases } = data
+const { model, task, run, receipt, capturedAt, timeline, phases } = data
 const r = receipt!
 const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced).length
 const total = r.deliverables.length
+const durationS = (run.wallMs / 1000).toFixed(1)
 
 const PHASE_LABEL: Record<string, string> = {
     bootstrap: 'bootstrap',
@@ -54,11 +56,41 @@ const PHASE_LABEL: Record<string, string> = {
                 <div class="ra-replay-lines" data-replay-lines>
                     {timeline.map((e, i) => (
                         e.kind === 'tool' ? (
-                            <p class="ra-trace-row ra-trace-call ra-replay-line" data-line={i}>
-                                <span class="ra-trace-idx">{'>'}</span>
-                                <span class="ra-trace-tool">{e.tool}</span>
-                                <span class="ra-trace-args">{e.argsPreview}</span>
-                            </p>
+                            <div class="ra-trace-row ra-trace-call ra-replay-line ra-replay-has-detail" data-line={i}>
+                                <button type="button" class="ra-replay-toggle" data-replay-toggle aria-expanded="false">
+                                    <span class="ra-trace-idx">{'>'}</span>
+                                    <span class="ra-trace-tool">{e.tool}</span>
+                                    <span class="ra-trace-args">{e.argsPreview}</span>
+                                    <span class="ra-replay-chevron" aria-hidden="true">▾</span>
+                                </button>
+                                {(e.detail?.thought || e.detail?.result) && (
+                                    <pre class="ra-replay-detail" data-replay-detail hidden>{e.detail.thought && `reasoning: ${e.detail.thought}\n\n`}result:
+{e.detail.result ?? '(no result captured)'}</pre>
+                                )}
+                            </div>
+                        ) : e.detail ? (
+                            <div class="ra-replay-tick ra-replay-has-detail" data-line={i}>
+                                <button type="button" class="ra-replay-toggle" data-replay-toggle aria-expanded="false">
+                                    <span class="ra-replay-tick-dot" /> {PHASE_LABEL[e.phase ?? ''] ?? e.phase}
+                                    <span class="ra-replay-chevron" aria-hidden="true">▾</span>
+                                </button>
+                                {'observations' in e.detail ? (
+                                    <div class="ra-replay-detail ra-replay-detail-list" data-replay-detail hidden>
+                                        {e.detail.observations.map((o, oi) => (
+                                            <div class="ra-replay-obs">
+                                                <p class="ra-replay-obs-head">{oi + 1}/{e.detail.observations.length} · <b>{o.tool}</b> {o.argsPreview}</p>
+                                                <pre class="ra-replay-obs-body">{o.result ?? '(no result captured)'}</pre>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <pre class="ra-replay-detail" data-replay-detail hidden>{
+                                        e.detail.thought
+                                            ? `reasoning: ${e.detail.thought}`
+                                            : `no separate reasoning text on this run: this pass led directly to a ${e.detail.leadsToTool} call`
+                                    }</pre>
+                                )}
+                            </div>
                         ) : (
                             <p class="ra-replay-tick" data-line={i}>
                                 <span class="ra-replay-tick-dot" /> {PHASE_LABEL[e.phase ?? ''] ?? e.phase}
@@ -83,8 +115,9 @@ const PHASE_LABEL: Record<string, string> = {
     </div>
 
     <p class="ra-hero-vcap">
-        Real-time playback: this took the model ~17.8s, so the replay takes ~17.8s too. Not sped up, not a mockup,
-        a <a href="#the-proof">real receipt</a> from a ~4B local model.
+        Real-time playback: this took the model ~{durationS}s, so the replay takes ~{durationS}s too. Not sped up, not a mockup,
+        a <a href="#the-proof">real receipt</a> from a ~4B local model. Click any tool call to expand its real result,
+        including the file contents it actually wrote.
     </p>
 </div>
 
@@ -114,6 +147,11 @@ const PHASE_LABEL: Record<string, string> = {
             lines.forEach((el) => el.classList.remove('is-in'))
             dots.forEach((el) => el.classList.remove('is-active'))
             finalRow?.classList.remove('is-in')
+            root.querySelectorAll<HTMLButtonElement>('[data-replay-toggle]').forEach((btn) => {
+                btn.setAttribute('aria-expanded', 'false')
+                const detail = btn.nextElementSibling as HTMLElement | null
+                if (detail) detail.hidden = true
+            })
         }
 
         const play = () => {
@@ -131,6 +169,16 @@ const PHASE_LABEL: Record<string, string> = {
         }
 
         replayBtn?.addEventListener('click', play)
+
+        root.querySelectorAll<HTMLButtonElement>('[data-replay-toggle]').forEach((btn) => {
+            const detail = btn.nextElementSibling as HTMLElement | null
+            if (!detail) return
+            btn.addEventListener('click', () => {
+                const open = btn.getAttribute('aria-expanded') === 'true'
+                btn.setAttribute('aria-expanded', String(!open))
+                detail.hidden = open
+            })
+        })
 
         const io = new IntersectionObserver((entries) => {
             for (const entry of entries) {
