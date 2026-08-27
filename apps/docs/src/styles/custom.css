@@ -3233,6 +3233,16 @@ starlight-toc a[data-ra-changed]::before {
 .ra-replay-tick.ra-replay-has-detail .ra-replay-toggle {
     align-items: center;
     gap: 0.4rem;
+    color: var(--ra-cyan);
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-toggle:hover {
+    text-decoration-style: solid;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-chevron {
+    color: var(--ra-cyan);
+    opacity: 0.75;
 }
 .ra-replay-tick.ra-replay-has-detail .ra-replay-detail {
     margin-left: 0.85rem;
@@ -3286,6 +3296,11 @@ starlight-toc a[data-ra-changed]::before {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+}
+.ra-replay-detail-list[hidden] {
+    /* An author display:flex rule beats the UA [hidden]{display:none} rule
+       on specificity ties — restore the collapse explicitly. */
+    display: none;
 }
 .ra-replay-obs + .ra-replay-obs {
     padding-top: 0.5rem;

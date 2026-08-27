@@ -48,6 +48,12 @@ async function main() {
     .withReasoning()
     .withTools({ builtins: true })
     .withObservability()
+    // gemma4:e4b advertises a `thinking` capability. Without this the model
+    // returns tool calls with no visible reasoning, so every captured thought
+    // step has empty content and the run's reasoning is invisible. With it,
+    // the Ollama adapter's thinking trace lands on step.metadata.thinking
+    // (see think.ts thoughtMeta) — real model reasoning, capturable.
+    .withThinking(true)
     // Debrief synthesis is memory-gated (see debrief.ts) — needed to capture
     // a real result.debrief alongside the receipt from the same run.
     .withMemory();

@@ -83,11 +83,15 @@ const PHASE_LABEL: Record<string, string> = {
                                             </div>
                                         ))}
                                     </div>
+                                ) : 'engineWrapper' in e.detail ? (
+                                    <pre class="ra-replay-detail" data-replay-detail hidden>outer engine wrapper: the execution engine brackets the whole kernel loop in one coarse think phase, so this tick opens before the kernel bootstraps and closes after it completes. Every reasoning pass below runs inside it.</pre>
+                                ) : 'outerBatch' in e.detail ? (
+                                    <pre class="ra-replay-detail" data-replay-detail hidden>outer engine bookkeeping: fires once per reasoning() call, batching every tool that call used, separate from the per-round act/observe pair the kernel already fired above for each tool. Not a repeat tool call.</pre>
                                 ) : (
                                     <pre class="ra-replay-detail" data-replay-detail hidden>{
                                         e.detail.thought
-                                            ? `reasoning: ${e.detail.thought}`
-                                            : `no separate reasoning text on this run: this pass led directly to a ${e.detail.leadsToTool} call`
+                                            ? e.detail.thought
+                                            : `the model emitted no thought text on this pass; it went straight to a ${e.detail.leadsToTool} call`
                                     }</pre>
                                 )}
                             </div>

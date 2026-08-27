@@ -202,35 +202,76 @@ const main = (): void => {
       detail: null as
         | { thought: string | null; leadsToTool: string | null }
         | { observations: { tool: string; argsPreview: string; result: string | null }[] }
+        | { engineWrapper: true }
+        | { outerBatch: true }
         | null,
     };
   });
 
-  // Honest, order-derived detail for non-tool ticks — never fabricated,
-  // never fuzzily attributed. A `think` tick immediately followed by the
-  // `tool` tick it led to inherits that tool's real preceding thought (same
-  // content already computed above, just surfaced here too). A tick with no
-  // reliable 1:1 correlation stays undecorated rather than guessing.
+  // Zip the kernel's `think` ticks to the run's real thought steps in order.
+  // Since the duplicate-think fix (iterate-pass.ts now fires `think` hooks
+  // only when it actually dispatches a thinking step), each kernel think tick
+  // corresponds 1:1 to one reasoning pass, so positional zipping is exact
+  // rather than a guess. Index 0 is the outer engine's coarse wrapper (see
+  // below) and is skipped here.
+  const thoughtSteps = steps.filter((s) => s.type === "thought");
+  const kernelThinkIdxs = timeline
+    .map((e, i) => (e.phase === "think" ? i : -1))
+    .filter((i) => i !== -1)
+    .slice(1);
+  kernelThinkIdxs.forEach((tlIdx, n) => {
+    const raw = thoughtSteps[n]?.content?.trim();
+    const next = timeline[tlIdx + 1];
+    timeline[tlIdx].detail = {
+      thought: raw ? truncate(raw, 800) : null,
+      leadsToTool: next?.kind === "tool" ? next.tool : null,
+    };
+  });
+
+  // Each `observe` tick shows only the tool result(s) since the PREVIOUS
+  // observe tick — the kernel now fires observe once per real tool round
+  // (act.ts fix, 2026-08-27), so this is normally exactly the one call that
+  // round just made, not an accumulating summary of everything so far.
+  let toolsConsumedByObserve = 0;
   for (let i = 0; i < timeline.length; i++) {
     const entry = timeline[i];
     if (entry.kind !== "phase") continue;
-    if (entry.phase === "think") {
-      const next = timeline[i + 1];
-      if (next?.kind === "tool") {
-        entry.detail = { thought: next.detail?.thought ?? null, leadsToTool: next.tool ?? null };
-      }
-    }
     if (entry.phase === "observe") {
       const toolsBefore = timeline.slice(0, i).filter((t) => t.kind === "tool").length;
-      const seen = toolCalls.slice(0, toolsBefore);
+      const seen = toolCalls.slice(toolsConsumedByObserve, toolsBefore);
+      toolsConsumedByObserve = toolsBefore;
       if (seen.length > 0) {
         // The real observation content per tool result curated into context
         // by this tick — not a summary label, the actual text.
         entry.detail = {
           observations: seen.map((t) => ({ tool: t.name, argsPreview: t.argsPreview, result: t.detail.result })),
         };
+      } else {
+        // No new tool since the last observe tick: this is the outer
+        // engine's batched pair firing after everything is already
+        // consumed by the kernel's per-round observes (see the `act` case
+        // below for the paired explanation).
+        entry.detail = { outerBatch: true };
       }
     }
+    if (entry.phase === "act" && !entry.detail) {
+      // A plain (non-`tool`-kind) `act` phase tick is the outer engine's
+      // batched act+observe pair — see execution-engine.ts's
+      // fireActObserveHooks — genuinely fired once per reasoning() call,
+      // covering every tool that call used, separate from the kernel's own
+      // per-round act+observe pairs above. Not a leftover, not a duplicate.
+      entry.detail = { outerBatch: true };
+    }
+  }
+
+  // The outer execution engine wraps the ENTIRE kernel loop in one coarse
+  // `think` phase hook (execution-engine.ts: guardedPhase(ctx, "think", …)),
+  // so the first think tick is that wrapper, not a reasoning pass — it opens
+  // before the kernel's own bootstrap and closes after the kernel completes.
+  // Label it for what it is instead of leaving it looking like a silent step.
+  const firstThinkIdx = timeline.findIndex((e) => e.phase === "think");
+  if (firstThinkIdx !== -1 && !timeline[firstThinkIdx].detail) {
+    timeline[firstThinkIdx].detail = { engineWrapper: true };
   }
 
   // Prefer the rich LLM-synthesized debrief; fall back to the deterministic
