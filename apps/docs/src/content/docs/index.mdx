@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: The transparent, composable TypeScript framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API — on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
+description: The transparent, composable TypeScript framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API, on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
 template: splash
 hero:
-    tagline: 'The transparent, composable harness for TypeScript agents. The same code finishes the loop on a local 4B model or a frontier API — then returns a signed receipt proving what it did. Typed, observable, and yours to steer.'
+    tagline: 'The transparent, composable harness for TypeScript agents. The same code finishes the loop on a local 4B model or a frontier API, then returns a signed receipt proving what it did. Typed, observable, and yours to steer.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -89,7 +89,7 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 
 ## One real run, start to finish
 
-No script, no actor. This plays back one real live run on `gemma4:e4b` — a ~4B-class local model, no API key — paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
+No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-class local model with no API key, paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
 
 <RunReplay />
 
@@ -105,7 +105,7 @@ No script, no actor. This plays back one real live run on `gemma4:e4b` — a ~4B
 
 ## Every phase, visible
 
-The engine has 12 phases. Most agent frameworks hide this entirely. Here's exactly which ones fired **for the run above** — and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
+The engine has 12 phases. Most agent frameworks hide this entirely. Here's exactly which ones fired **for the run above**, and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
 
 <RunPhases />
 
@@ -117,7 +117,7 @@ The engine has 12 phases. Most agent frameworks hide this entirely. Here's exact
 
 ## The proof: every run returns a receipt
 
-Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`** — an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
+Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`**: an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
 
 <EvidenceReceipt />
 
@@ -129,7 +129,7 @@ Most frameworks give you prose and ask you to trust it. Reactive Agents returns 
 
 ## The debrief
 
-The receipt grades the evidence trail. The debrief explains the reasoning — including the context curator's real, per-iteration decisions about what to keep, compress, or drop. Same run, one layer deeper.
+The receipt grades the evidence trail. The debrief explains the reasoning, including the context curator's real, per-iteration decisions about what to keep, compress, or drop. Same run, one layer deeper.
 
 <RunDebrief />
 
@@ -141,11 +141,11 @@ The receipt grades the evidence trail. The debrief explains the reasoning — in
 
 ## Reliable across every model tier
 
-That run above was local. Swap one line and the identical code finishes the same class of task on a frontier model — **tool-call healing, verification, and a single-owner termination oracle** make the harness the reliable part, not the model.
+That run above was local. Swap one line and the identical code finishes the same class of task on a frontier model: **tool-call healing, verification, and a single-owner termination oracle** make the harness the reliable part, not the model.
 
 <img
   src={demoGif.src}
-  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes"
+  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude, only the provider/model line changes"
   loading="lazy"
   style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
 />

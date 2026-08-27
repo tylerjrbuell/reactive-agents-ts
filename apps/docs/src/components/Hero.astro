@@ -173,10 +173,6 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                         </div>
                     </div>
                 </div>
-                <p class="ra-hero-vcap">
-                    One SDK, any agent shape — same real receipt underneath, from a ~4B local model.
-                    <a href="#see-it-run">See the full run →</a>
-                </p>
             </div>
         </div>
     ) : (
@@ -210,7 +206,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         el.textContent = plain
         for (let n = plain.length; n >= 0; n--) {
             el.textContent = plain.slice(0, n) || '​'
-            await wait(14)
+            await wait(20)
         }
     }
 
@@ -218,9 +214,14 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         el.classList.add('is-editing')
         for (let n = 1; n <= plain.length; n++) {
             el.textContent = plain.slice(0, n)
-            await wait(20)
+            await wait(28)
         }
-        await wait(80)
+        await wait(120)
+    }
+
+    function setIdleCaret(codeEl: HTMLElement, on: boolean) {
+        const last = codeEl.lastElementChild as HTMLElement | null
+        last?.classList.toggle('is-editing', on)
     }
 
     async function transition(codeEl: HTMLElement, current: Line[], target: Snippet) {
@@ -276,8 +277,10 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
 
         const loop = async () => {
             while (!cancelled) {
-                await wait(2600)
+                setIdleCaret(codeEl, true)
+                await wait(3200)
                 while (paused && !cancelled) await wait(200)
+                setIdleCaret(codeEl, false)
                 if (cancelled) return
                 i = (i + 1) % snippets.length
                 fileEl.textContent = snippets[i].file

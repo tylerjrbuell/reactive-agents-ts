@@ -52,13 +52,13 @@ const rawJson = JSON.stringify(
                 <div><span class="rm-k">duration</span><span class="rm-v">{(run.wallMs / 1000).toFixed(1)}s</span></div>
                 <div><span class="rm-k">iterations</span><span class="rm-v">{run.iterations}</span></div>
                 <div><span class="rm-k">terminated by</span><span class="rm-v">{receipt.terminatedBy}</span></div>
-                <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? '—'}</span></div>
+                <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? 'n/a'}</span></div>
             </div>
 
             <!-- Deliverables -->
             <div class="ra-receipt-section">
                 <p class="ra-receipt-legend">
-                    Declared deliverables — {producedCount}/{receipt.deliverables.length} checked against disk, not claimed
+                    Declared deliverables: {producedCount}/{receipt.deliverables.length} checked against disk, not claimed
                 </p>
                 <ul class="ra-receipt-list">
                     {receipt.deliverables.map((d) => (
@@ -75,7 +75,7 @@ const rawJson = JSON.stringify(
             <!-- Raw tool-call evidence trail -->
             <div class="ra-receipt-section">
                 <p class="ra-receipt-legend">
-                    Evidence trail — every tool call this run made, in order
+                    Evidence trail: every tool call this run made, in order
                 </p>
                 <ul class="ra-receipt-checks">
                     {toolCalls.map((tc) => (
@@ -91,7 +91,7 @@ const rawJson = JSON.stringify(
             <!-- Provenance footnote -->
             <p class="ra-receipt-foot">
                 <code>verdict</code> grades the evidence trail, not the answer's truth. Add
-                tamper-proof provenance with <code>.withReceiptSigning()</code> — an Ed25519
+                tamper-proof provenance with <code>.withReceiptSigning()</code>, an Ed25519
                 signature over the receipt bytes, self-contained public key embedded.
             </p>
 
@@ -102,8 +102,8 @@ const rawJson = JSON.stringify(
         </div>
     </div>
     <figcaption class="ra-receipt-cap">
-        The <strong>same real run</strong> captured {capturedAt} on <code>{model.id}</code> —
-        a ~4B-class local model — that powers every evidence section on this page.
+        The <strong>same real run</strong> captured {capturedAt} on <code>{model.id}</code>,
+        a ~4B-class local model, that powers every evidence section on this page.
         <a href="/features/verification/">How verification works →</a>
     </figcaption>
 </figure>
