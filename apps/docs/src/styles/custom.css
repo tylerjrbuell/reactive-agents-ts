@@ -2918,7 +2918,9 @@ starlight-toc a[data-ra-changed]::before {
     /* Never inherit the hero's mobile text-align:center — code must stay
        left-aligned or the monospace indentation staggers per line. */
     text-align: left;
-    min-height: 8.5em;
+    /* height is pinned inline (Hero.astro) to the tallest snippet's line
+       count, so backspace/type transitions never resize the window. */
+    overflow-y: hidden;
 }
 .ra-hero-code code {
     display: block;
