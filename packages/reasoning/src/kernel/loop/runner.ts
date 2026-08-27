@@ -610,6 +610,9 @@ export function runKernel(
           state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
         }
       }
+      // Matching 'after' hook — the 'before' fire above had none, leaving
+      // every bootstrap pairing in a trace permanently orphaned.
+      yield* Effect.promise(() => runPhaseHooks(harnessPipeline, 'after', 'bootstrap', 0, state));
     }
 
     // ── Durable HITL resume re-entry (Phase D) ───────────────────────────────
