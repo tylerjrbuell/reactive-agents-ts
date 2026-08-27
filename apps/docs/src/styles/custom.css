@@ -3030,7 +3030,11 @@ starlight-toc a[data-ra-changed]::before {
     flex: 1 1 100%;
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: 0.35rem;
+    /* Reserve room for 2 wrapped rows of tags (the longest snippet's set at
+       narrow widths) so switching snippets never resizes the verdict panel. */
+    min-height: calc(2 * 1.5rem + 0.35rem);
     transition: opacity 0.18s ease;
 }
 .ra-hero-vfeatures.is-fading {
