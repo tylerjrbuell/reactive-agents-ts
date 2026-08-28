@@ -15,7 +15,12 @@
 import type { HarnessPipeline, Phase } from "@reactive-agents/core";
 import { type KernelState, asKernelStateLike } from "../state/kernel-state.js";
 
-export type HookAbort = { abort: 'stop' | 'terminate'; reason?: string };
+export type HookAbort = {
+  abort: 'stop' | 'terminate';
+  reason?: string;
+  /** Structured budget figures, when the aborting killswitch set them (D-1 amendment). */
+  meta?: { budgetType: string; limit: number; used: number };
+};
 
 export async function runPhaseHooks(
   pipeline: HarnessPipeline | undefined,

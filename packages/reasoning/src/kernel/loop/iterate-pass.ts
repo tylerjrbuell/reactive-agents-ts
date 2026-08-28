@@ -84,6 +84,7 @@ import {
 import { enumerationIncompleteProposal, inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../utils/observation-helpers.js";
@@ -708,6 +709,25 @@ export function runIterationPass(
           )
         : undefined;
       if (beforeThinkAbort) {
+        // D-1 amendment (2026-08-27 dead-signal-wiring plan, Task 3
+        // narrowed): `before('think')` is the ONE runtime site that consumes
+        // a killswitch abort carrying budget `meta` (currently only
+        // `budgetLimit()`, packages/compose/src/killswitches/budget-limit.ts)
+        // — `act.ts`'s before/after('act')/('observe') aborts never see this
+        // killswitch. Publish before the state transition below so the event
+        // fires even on the abort path; real figures only (never fabricated),
+        // straight from the killswitch's own computation.
+        if (beforeThinkAbort.meta) {
+          const meta = beforeThinkAbort.meta;
+          yield* publishReasoningStep(eventBus, {
+            _tag: "BudgetExhausted",
+            agentId: effectiveInput.agentId ?? "reasoning-agent",
+            budgetType: meta.budgetType,
+            limit: meta.limit,
+            used: meta.used,
+            timestamp: Date.now(),
+          });
+        }
         // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
         // TerminateReason), so it can't route through terminate(). Set
         // status + terminatedBy via transitionState (NO output key), then —
