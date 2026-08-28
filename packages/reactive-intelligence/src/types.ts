@@ -179,6 +179,9 @@ export type ReactiveIntelligenceConfig = {
     readonly enabled: boolean;
     readonly endpoint?: string;
   };
+  /** Show the one-time "Reactive Intelligence" telemetry banner. Defaults to
+   *  `true`; set `false` to silence it without disabling telemetry itself. */
+  readonly notice?: boolean;
   readonly models?: Record<string, ModelRegistryEntry>;
   /** Path to a persistent SQLite file for calibration data. Defaults to `:memory:`. */
   readonly calibrationDbPath?: string;

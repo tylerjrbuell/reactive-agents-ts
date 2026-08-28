@@ -30,7 +30,7 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, ChildDashboardRegistry, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer, makeNoticesManager, NOTICE_IDS } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -123,8 +123,11 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
-// Deduplicates RI telemetry notice across runs within the same process
-let _riTelemetryNoticeEmitted = false;
+// Deduplicates notices (RI telemetry banner, etc.) across runs within the
+// same process. Also honors REACTIVE_AGENTS_SUPPRESS_NOTICES (env) and
+// `.withReactiveIntelligence({ notice: false })` (config) — see the
+// TELEMETRY_ENABLED gate below.
+const _noticesManager = makeNoticesManager();
 
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
 // Re-exported here for backward compatibility with external importers.
@@ -559,8 +562,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:697", tag: errorTag(err) })),
                 );
 
-                // Emit RI telemetry notice once per process via structured log
-                if (config.enableReactiveIntelligence && !_riTelemetryNoticeEmitted) {
+                // Emit RI telemetry notice once per process via structured log.
+                // `_noticesManager.shouldShow` is also the single choke point for
+                // silencing it: `.withReactiveIntelligence({ notice: false })`,
+                // REACTIVE_AGENTS_SUPPRESS_NOTICES=1 (env), or a prior dismiss()
+                // all resolve here — no separate boolean to keep in sync.
+                if (
+                  config.enableReactiveIntelligence &&
+                  _noticesManager.shouldShow(NOTICE_IDS.TELEMETRY_ENABLED)
+                ) {
                   const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
                   const telemetryCfg = riOpts?.telemetry;
                   // The notice must never claim telemetry the environment has
@@ -569,8 +579,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     (telemetryCfg === undefined || telemetryCfg === true ||
                     (typeof telemetryCfg === "object" && telemetryCfg !== null &&
                       (telemetryCfg as Record<string, unknown>)["enabled"] !== false));
-                  if (telemetryEnabled) {
-                    _riTelemetryNoticeEmitted = true;
+                  const noticeEnabled = riOpts?.notice !== false;
+                  if (noticeEnabled && telemetryEnabled) {
                     yield* Effect.serviceOption(ObservableLogger).pipe(
                       Effect.tap((loggerOpt) => {
                         if (loggerOpt._tag === "Some") {

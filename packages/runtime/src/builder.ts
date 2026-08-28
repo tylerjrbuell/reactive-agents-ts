@@ -2102,6 +2102,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * @example .withReactiveIntelligence(false) // disable RI
      * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
+     * @example .withReactiveIntelligence({ notice: false }) // silence the one-time telemetry banner (telemetry itself still runs)
      * @see {@link HarnessProfile.balanced} (RI default-on) /
      *   {@link HarnessProfile.lean} (RI off) — composable presets. Config
      *   overrides also flow through `.compose(...)` or the
