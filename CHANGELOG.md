@@ -6,8 +6,22 @@
   benchmark runner, both observability collectors, the trace tracer and the
   Cortex live readouts. It is now published from the kernel's single
   LLM-exchange emission site.
+- `LLMRequestStarted` had zero producers anywhere in the codebase, and
+  `packages/observe/src/tracer.ts` only populates its span map on that
+  event's handler arm — so every LLM call's OTel span tree was silently
+  empty (RA emitted tool spans but never LLM spans, the primary reason to
+  trace an agent at all). It is now emitted at the three LLM pre-call sites
+  in `packages/reasoning/src/kernel/observable-llm.ts`. This is the other
+  half of spec finding F-1 (2026-08-24), whose `LLMRequestCompleted` half is
+  the entry above.
 
 ### Added
+- `BudgetExhausted` now has a producer — a token or cost budget killswitch
+  abort publishes it (`packages/compose/src/killswitches/budget-limit.ts`,
+  `packages/reasoning/src/kernel/loop/iterate-pass.ts`). `PhaseHookFn`'s
+  abort return type (`packages/core/src/services/harness-types.ts`) gained
+  an additive, optional `meta?: { budgetType, limit, used }` field to carry
+  the structured budget figures through.
 - Prompt-cache accounting reaches the benchmark gate. Both benchmark
   measurement paths — the bench runner (`runTask`) and the gate/ablation
   session path (`runInternal`) — now subscribe to `LLMRequestCompleted` and
@@ -24,6 +38,16 @@
   (`input − cacheRead`) rather than raw tokens, configurable via
   `LiftPolicy.tokenLeg`. Raw overhead is still computed and printed on every
   receipt. The leg remains denominated in tokens, not USD.
+- **Breaking type change:** `LLMRequestStarted`'s `contextSize` field
+  narrowed from a required `number` to an optional `number`
+  (`packages/core/src/services/event-bus.ts`), because no honest
+  measurement exists at every call site — no call site fabricates a
+  char/4 estimate just to satisfy the field. Any consumer that read
+  `event.contextSize` as a guaranteed `number` (e.g. calling `.toFixed()`
+  on it, or passing it to a `number` parameter without a null check) will
+  now fail to typecheck, or see `undefined` at runtime, until it adds a
+  null check. This is a bigger public-API break than the tag deletions
+  below.
 
 ### Removed
 - Nine never-emitted `AgentEvent` tags: `EventsMerged`, `GatewayStopped`,

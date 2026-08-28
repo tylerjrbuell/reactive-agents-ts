@@ -59,7 +59,7 @@ export interface RunState {
   /** Populated from `DebriefCompleted` — shape matches framework `DebriefPayload`. */
   readonly debrief: unknown | null;
   readonly isChat: boolean;
-  /** Accumulated streaming text from TextDeltaReceived events (live only, not persisted).
+  /** Accumulated streaming text from TextDelta events (live only, not persisted).
    *  Resets at each ReasoningIterationProgress boundary. */
   readonly streamText: string;
   /** Error message from AgentCompleted or TaskFailed when run failed. */

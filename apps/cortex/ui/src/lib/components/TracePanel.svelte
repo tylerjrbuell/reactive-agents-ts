@@ -13,7 +13,7 @@
     frame: CortexTraceFrame | null;
     frames?: CortexTraceFrame[];
     status?: string;
-    /** Live streaming text from TextDeltaReceived events — shown above trace when live */
+    /** Live streaming text from TextDelta events — shown above trace when live */
     streamText?: string;
     /** Rich event-timeline groups (one per kernel iteration). Default body; frames behind toggle. */
     timeline?: TimelineGroup[];

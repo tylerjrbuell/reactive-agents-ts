@@ -12,15 +12,17 @@
  * abort-only, matching the prior runner.ts implementation. Defining skip
  * semantics is tracked as separate follow-up.
  */
-import type { HarnessPipeline, Phase } from "@reactive-agents/core";
+import type { HarnessPipeline, Phase, PhaseHookFn } from "@reactive-agents/core";
 import { type KernelState, asKernelStateLike } from "../state/kernel-state.js";
 
-export type HookAbort = {
-  abort: 'stop' | 'terminate';
-  reason?: string;
-  /** Structured budget figures, when the aborting killswitch set them (D-1 amendment). */
-  meta?: { budgetType: string; limit: number; used: number };
-};
+/**
+ * The abort variant of `PhaseHookFn`'s return union, derived from the single
+ * source of truth in `harness-types.ts` rather than hand-mirrored here. A
+ * field added to `PhaseHookFn`'s abort shape (e.g. `meta`) now flows through
+ * automatically instead of requiring a second manual edit that a compiler
+ * can't verify stayed in sync.
+ */
+export type HookAbort = Extract<ReturnType<PhaseHookFn<Phase>>, { readonly abort: unknown }>;
 
 export async function runPhaseHooks(
   pipeline: HarnessPipeline | undefined,
@@ -34,7 +36,7 @@ export async function runPhaseHooks(
   for (const hook of hooks) {
     const result = await hook({ phase, iteration, state: asKernelStateLike(state) });
     if (result && typeof result === 'object' && 'abort' in result) {
-      return result as HookAbort;
+      return result;
     }
   }
   return undefined;
