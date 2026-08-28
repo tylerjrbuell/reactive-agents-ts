@@ -211,45 +211,87 @@ function emitForRequestWith(
  * SAME `deriveRequestId` id and correlate — even for calls outside the kernel
  * loop (reflexion / ToT / plan-execute sub-calls) that never thread
  * `traceContext`.
+ *
+ * Split into a `With` variant (explicit `ambientTaskId`, no FiberRef read) and
+ * this FiberRef-reading wrapper for the SAME reason `emitForRequest` is split
+ * from `emitForRequestWith`: the `stream` call site opens its span on the
+ * calling fiber but closes it inside `Stream.ensuring`, which can run on a
+ * DIFFERENT fiber after a hop — re-reading the FiberRef there can silently
+ * return `null` even though the open-side read saw a real ambient taskId,
+ * producing two different derived ids for the same call and leaving the LLM
+ * span open forever (only closed attribute-less by the layer's leak-finalizer).
+ * `makeObservableLLM`'s `stream` handler reads the FiberRef exactly ONCE at
+ * open time and threads that captured value through to both the start emit
+ * (via `emitLLMRequestStartedWith`) and the completion emit (via
+ * `emitForRequestWith`), so both halves of a stream call always agree.
  */
-const emitLLMRequestStarted = (
+function emitLLMRequestStartedWith(
   request: CompletionRequest,
   requestKind: "complete" | "stream" | "completeStructured",
-): Effect.Effect<void, never> =>
-  FiberRef.get(CurrentRunContext).pipe(
-    Effect.flatMap((ambient) =>
-      Effect.gen(function* () {
-        const ebOpt = yield* Effect.serviceOption(EventBus);
-        if (ebOpt._tag === "None") return;
-        const taskId =
-          request.traceContext?.taskId ?? ambient?.taskId ?? PLACEHOLDER_TASK_ID;
-        const iteration =
-          request.traceContext?.iteration ?? PLACEHOLDER_ITERATION;
-        yield* ebOpt.value.publish({
-          _tag: "LLMRequestStarted",
-          taskId,
-          requestId: deriveRequestId({ taskId, iteration, requestKind }),
-          model:
-            typeof request.model === "string"
-              ? request.model
-              : (request.model?.model ?? "unknown"),
-          provider:
-            typeof request.model === "string"
-              ? "unknown"
-              : (request.model?.provider ?? "unknown"),
-          // contextSize is intentionally omitted here — there is no honest
-          // way to measure it before the provider call runs (no char/4
-          // heuristic; that would be a fabricated estimate presented as a
-          // measurement). The field is optional on the event for exactly
-          // this reason; the COMPLETED half carries real token counts.
-        });
-      }),
-    ),
+  ambientTaskId: string | undefined,
+): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const ebOpt = yield* Effect.serviceOption(EventBus);
+    if (ebOpt._tag === "None") return;
+    const taskId =
+      request.traceContext?.taskId ?? ambientTaskId ?? PLACEHOLDER_TASK_ID;
+    // Untraced calls (classifier, reflexion/ToT/plan-execute sub-calls with no
+    // ambient run context either) all collapse onto the SAME placeholder
+    // taskId/requestId. Opening a real OTel span keyed by that shared id would
+    // let each subsequent untraced call's START silently clobber the previous
+    // one's still-open span in the tracer's `llmCalls` map (orphaned, leaked,
+    // never closed by its own COMPLETED) — and the span could never usefully
+    // attach to a workflow anyway, since `spans.workflows.get(taskId)` also
+    // always misses for the placeholder. Skipping the START publish entirely
+    // for the placeholder case costs nothing (no span was ever going to be
+    // useful) and removes the leak. The COMPLETED emitter (`emitForRequestWith`)
+    // does NOT need the same guard: it does not hold an open resource — the
+    // tracer's LLMRequestCompleted handler is a no-op lookup-miss when no
+    // matching open span exists, which is exactly what happens for these
+    // untraced calls today (and is pinned by the "completed-only" test case).
+    if (taskId === PLACEHOLDER_TASK_ID) return;
+    const iteration =
+      request.traceContext?.iteration ?? PLACEHOLDER_ITERATION;
+    yield* ebOpt.value.publish({
+      _tag: "LLMRequestStarted",
+      taskId,
+      requestId: deriveRequestId({ taskId, iteration, requestKind }),
+      model:
+        typeof request.model === "string"
+          ? request.model
+          : (request.model?.model ?? "unknown"),
+      provider:
+        typeof request.model === "string"
+          ? "unknown"
+          : (request.model?.provider ?? "unknown"),
+      // contextSize is intentionally omitted here — there is no FREE way to
+      // measure it before the provider call runs (a token count exists but
+      // costs its own round-trip; a char/4 heuristic would be a fabricated
+      // estimate presented as a measurement). The field is optional on the
+      // event for exactly this reason; the COMPLETED half carries real token
+      // counts.
+    });
+  }).pipe(
     Effect.catchAll((err) =>
       emitErrorSwallowed({
         site: "reasoning/src/kernel/observable-llm.ts:emitLLMRequestStarted",
         tag: errorTag(err),
       }),
+    ),
+  );
+}
+
+const emitLLMRequestStarted = (
+  request: CompletionRequest,
+  requestKind: "complete" | "stream" | "completeStructured",
+): Effect.Effect<void, never> =>
+  // Adaptive-harness wave 1 pattern (same as `emitForRequest`): read the
+  // ambient FiberRef fresh here. Safe for `complete`/`completeStructured`
+  // because both start and finish on the SAME fiber (no hop) — only `stream`
+  // needs the capture-once-at-open pattern (see `makeObservableLLM`).
+  FiberRef.get(CurrentRunContext).pipe(
+    Effect.flatMap((ambient) =>
+      emitLLMRequestStartedWith(request, requestKind, ambient?.taskId),
     ),
   );
 
@@ -289,7 +331,17 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         stream: (request) =>
           Effect.gen(function* () {
             const start = Date.now();
-            yield* emitLLMRequestStarted(request, "stream");
+            // Capture the ambient taskId ONCE here, on the calling fiber,
+            // before `inner.stream` returns a Stream whose `Stream.ensuring`
+            // finalizer may run on a different fiber. Threading this single
+            // captured value into BOTH the start emit (below) and the
+            // completion emit (in Stream.ensuring, via emitForRequestWith
+            // instead of emitForRequest) guarantees the two bookend halves
+            // derive the identical `deriveRequestId` id even when the
+            // FiberRef would read `null` post-hop. See the comment on
+            // `emitLLMRequestStartedWith` for the failure mode this avoids.
+            const ambientTaskId = (yield* FiberRef.get(CurrentRunContext))?.taskId;
+            yield* emitLLMRequestStartedWith(request, "stream", ambientTaskId);
             const accum = yield* Ref.make<{
               content: string;
               toolCalls: { name: string; id: string; argsJson: string }[];
@@ -388,7 +440,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                           return { name: tc.name, ...(args !== undefined ? { arguments: args } : {}) };
                         })
                       : undefined;
-                  yield* emitForRequest(
+                  // emitForRequestWith directly (not emitForRequest) with the
+                  // SAME `ambientTaskId` captured at stream-open time above —
+                  // this finalizer can run on a different fiber than the one
+                  // that opened the START span, so re-reading the FiberRef
+                  // here could silently disagree with what START used.
+                  yield* emitForRequestWith(
                     request,
                     s.content,
                     Date.now() - start,
@@ -399,6 +456,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                       usage: s.usage,
                       ...(s.resolvedParams ? { resolvedParams: s.resolvedParams } : {}),
                     },
+                    ambientTaskId,
                   );
                 }),
               ),

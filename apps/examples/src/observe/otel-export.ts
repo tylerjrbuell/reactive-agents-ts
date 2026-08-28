@@ -132,9 +132,14 @@ export async function run(opts?: {
   await witnessProvider.shutdown();
   otelApi.trace.disable();
 
-  // Witness passes if (a) the agent succeeded and (b) at least one workflow
-  // span was produced by the OpenInferenceTracerLayer.
-  const passed = result.success && agentSpans.length >= 1;
+  // Witness passes if (a) the agent succeeded, (b) at least one workflow span
+  // was produced by the OpenInferenceTracerLayer, and (c) at least one LLM
+  // span was produced — the LLM leg is the regression guard for D-1
+  // (LLMRequestStarted had zero producers; the tracer's LLM-span-open arm was
+  // reachable code with nothing ever driving it). Without this assertion,
+  // deleting the observable-llm.ts producer would leave this example green.
+  const passed =
+    result.success && agentSpans.length >= 1 && llmSpans.length >= 1;
   const output = `otel-spans=${spans.length} (agent=${agentSpans.length}, llm=${llmSpans.length}, tool=${toolSpans.length}) | ${result.output.slice(0, 60)}`;
 
   return {
