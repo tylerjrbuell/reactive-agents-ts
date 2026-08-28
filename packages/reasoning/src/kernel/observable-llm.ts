@@ -37,10 +37,19 @@ import {
   type StreamEvent,
   type StopReason,
 } from "@reactive-agents/llm-provider";
-import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
+import {
+  emitLLMExchange,
+  emitContextPressure,
+  deriveRequestId,
+} from "./utils/diagnostics.js";
 import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
 import { FiberRef } from "effect";
-import { CurrentRunContext } from "@reactive-agents/core";
+import {
+  CurrentRunContext,
+  EventBus,
+  emitErrorSwallowed,
+  errorTag,
+} from "@reactive-agents/core";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -192,6 +201,59 @@ function emitForRequestWith(
 }
 
 /**
+ * The START half of the LLM bookend (D-1). Publishes best-effort: a failure
+ * to emit telemetry must never fail the model call, so this catches into the
+ * existing swallow channel exactly as `emitForRequest` does.
+ *
+ * Mirrors `emitForRequestWith`'s taskId/iteration derivation exactly (same
+ * `request.traceContext` primary + `CurrentRunContext` FiberRef fallback, same
+ * placeholders) so the START and COMPLETED halves of a call always derive the
+ * SAME `deriveRequestId` id and correlate — even for calls outside the kernel
+ * loop (reflexion / ToT / plan-execute sub-calls) that never thread
+ * `traceContext`.
+ */
+const emitLLMRequestStarted = (
+  request: CompletionRequest,
+  requestKind: "complete" | "stream" | "completeStructured",
+): Effect.Effect<void, never> =>
+  FiberRef.get(CurrentRunContext).pipe(
+    Effect.flatMap((ambient) =>
+      Effect.gen(function* () {
+        const ebOpt = yield* Effect.serviceOption(EventBus);
+        if (ebOpt._tag === "None") return;
+        const taskId =
+          request.traceContext?.taskId ?? ambient?.taskId ?? PLACEHOLDER_TASK_ID;
+        const iteration =
+          request.traceContext?.iteration ?? PLACEHOLDER_ITERATION;
+        yield* ebOpt.value.publish({
+          _tag: "LLMRequestStarted",
+          taskId,
+          requestId: deriveRequestId({ taskId, iteration, requestKind }),
+          model:
+            typeof request.model === "string"
+              ? request.model
+              : (request.model?.model ?? "unknown"),
+          provider:
+            typeof request.model === "string"
+              ? "unknown"
+              : (request.model?.provider ?? "unknown"),
+          // contextSize is intentionally omitted here — there is no honest
+          // way to measure it before the provider call runs (no char/4
+          // heuristic; that would be a fabricated estimate presented as a
+          // measurement). The field is optional on the event for exactly
+          // this reason; the COMPLETED half carries real token counts.
+        });
+      }),
+    ),
+    Effect.catchAll((err) =>
+      emitErrorSwallowed({
+        site: "reasoning/src/kernel/observable-llm.ts:emitLLMRequestStarted",
+        tag: errorTag(err),
+      }),
+    ),
+  );
+
+/**
  * Layer that wraps an upstream LLMService to emit `LLMExchangeEmitted` on
  * every complete/completeStructured call. Apply after rate limiting; the
  * order is: provider → rate-limited → observable.
@@ -205,6 +267,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         complete: (request) =>
           Effect.gen(function* () {
             const start = Date.now();
+            yield* emitLLMRequestStarted(request, "complete");
             const response = yield* inner.complete(request);
             yield* emitForRequest(request, response.content, Date.now() - start, "complete", response);
             return response;
@@ -212,6 +275,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
           Effect.gen(function* () {
             const start = Date.now();
+            yield* emitLLMRequestStarted(request, "completeStructured");
             const result = yield* inner.completeStructured(request);
             // Structured result is the parsed value, not a CompletionResponse —
             // stringify for observability. The trace + diagnose layers will
@@ -225,6 +289,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         stream: (request) =>
           Effect.gen(function* () {
             const start = Date.now();
+            yield* emitLLMRequestStarted(request, "stream");
             const accum = yield* Ref.make<{
               content: string;
               toolCalls: { name: string; id: string; argsJson: string }[];

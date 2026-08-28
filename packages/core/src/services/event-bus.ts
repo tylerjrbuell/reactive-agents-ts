@@ -498,8 +498,15 @@ export type AgentEvent =
       readonly model: string;
       /** LLM provider */
       readonly provider: string;
-      /** Context window size (tokens) being sent to the LLM */
-      readonly contextSize: number;
+      /**
+       * Context window size (tokens) being sent to the LLM. Optional: the
+       * pre-call chokepoint (observable-llm.ts) has no honest way to measure
+       * this before the provider call runs (no char/4 heuristic — that would
+       * be a fabricated estimate presented as a measurement), so it omits the
+       * field rather than invent one. Consumers (the OTel tracer) must guard
+       * for absence.
+       */
+      readonly contextSize?: number;
     }
   // ─── Final answer milestone ───
   | {
