@@ -53,6 +53,9 @@ export default defineConfig({
                 starlightLinksValidator({
                     errorOnRelativeLinks: false, // Starlight uses many relative paths; only block hard breaks
                     errorOnInvalidHashes: false, // anchors get added/renamed often; warn but don't block
+                    // /playground/ is a plain Astro page (src/pages/), not a
+                    // content/docs entry, so the validator can't resolve it.
+                    exclude: ['/playground/'],
                 }),
                 // Click-to-zoom on every image. Cortex screenshots are large and
                 // unreadable inline; zoom modal makes the actual UI visible.
@@ -266,7 +269,7 @@ export default defineConfig({
                         {
                             label: 'Durable Human-in-the-Loop',
                             link: 'guides/durable-hitl/',
-                            badge: { text: 'New ', variant: 'success' },
+                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Cost Optimization',
