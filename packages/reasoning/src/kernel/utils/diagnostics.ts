@@ -524,6 +524,25 @@ export function emitGuardFired(args: {
   });
 }
 
+// ── RequestId ────────────────────────────────────────────────────────────────
+
+/**
+ * The id that correlates `LLMRequestStarted` with `LLMRequestCompleted`.
+ *
+ * Derived, not minted: both bookends can compute it independently from
+ * `request.traceContext`, so no id has to be threaded through the LLM service
+ * boundary. Two calls of the SAME kind in the SAME iteration would collide —
+ * accepted, because the kernel makes at most one call per (iteration, kind),
+ * and a collision degrades to a reused span rather than a wrong one.
+ */
+export function deriveRequestId(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly requestKind: string;
+}): string {
+  return `${args.taskId}:${args.iteration}:${args.requestKind}`;
+}
+
 // ── LLMExchange ──────────────────────────────────────────────────────────────
 
 export function emitLLMExchange(args: {
@@ -636,10 +655,7 @@ export function emitLLMExchange(args: {
       .publish({
         _tag: "LLMRequestCompleted",
         taskId: args.taskId,
-        // No requestId is threaded into this function today. The
-        // taskId:iteration:kind triple is unique per call within a run and is
-        // what the trace already correlates on.
-        requestId: `${args.taskId}:${args.iteration}:${args.requestKind}`,
+        requestId: deriveRequestId(args),
         model: args.model,
         provider: args.provider,
         durationMs: args.response.durationMs ?? 0,
