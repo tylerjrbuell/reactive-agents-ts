@@ -685,12 +685,28 @@ export function runIterationPass(
       // could bump it (so the F1 redirect emits exactly one trace event).
       const stepsAtPassStart = state.steps.length;
       const groundingRedirectsAtPassStart = state.meta.groundingRedirectCount ?? 0;
-      yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
+
+      // `kernel` is a STATUS-DISPATCHED transition (react-kernel.ts): it runs
+      // the think capability on status "thinking" and the ACT capability on
+      // status "acting". This pass therefore only owns the `think` phase when
+      // it is about to dispatch a thinking step. Firing `think` hooks around
+      // an acting dispatch reported every tool execution as a reasoning step:
+      // user `think` hooks ran on tool calls, and a think-scoped killswitch
+      // counted them, roughly doubling the observed think count. The act
+      // dispatch fires its own `before`/`after` `act` hooks (with the same
+      // abort semantics) inside act.ts, so it needs no wrapper here.
+      const dispatchesThink = state.status === "thinking";
+
+      if (dispatchesThink) {
+        yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
+      }
 
       // 'before think' hooks — may abort iteration
-      const beforeThinkAbort = yield* Effect.promise(() =>
-        runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
-      );
+      const beforeThinkAbort = dispatchesThink
+        ? yield* Effect.promise(() =>
+            runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
+          )
+        : undefined;
       if (beforeThinkAbort) {
         // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
         // TerminateReason), so it can't route through terminate(). Set
@@ -774,17 +790,20 @@ export function runIterationPass(
         }
       }
 
-      // 'after think' hooks
-      yield* Effect.promise(() =>
-        runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
-      );
+      // 'after think' hooks — paired with the 'before' fire above, so they
+      // only run when this pass actually dispatched a thinking step.
+      if (dispatchesThink) {
+        yield* Effect.promise(() =>
+          runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
+        );
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "think",
-        duration: Date.now() - kernelPhaseStart,
-        status: state.status === "failed" ? "error" : "success",
-      });
+        yield* emitLog({
+          _tag: "phase_complete",
+          phase: "think",
+          duration: Date.now() - kernelPhaseStart,
+          status: state.status === "failed" ? "error" : "success",
+        });
+      }
 
       // ── F1 — grounded-terminal redirect trace (2026-07-02) ───────────────
       // The Arbitrator's grounded-terminal gate is pure (it appends the

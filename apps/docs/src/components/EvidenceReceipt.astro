@@ -1,0 +1,109 @@
+---
+/**
+ * EvidenceReceipt — renders a REAL captured TrustReceipt as an inspectable
+ * card. This is the on-brand proof surface: the framework's differentiator is
+ * "verified, not vibes", so the landing shows an actual receipt from a real
+ * run (gemma4:e4b, local, ~4B-class) rather than asserting the capability.
+ *
+ * Data is the SAME golden run that powers the hero, the trace section, and
+ * the phases section (src/data/golden-run.json) — one real run, one story.
+ * The TrustReceipt schema is packages/core/src/types/receipt.ts.
+ */
+import data from '../data/golden-run.json'
+
+const { task, model, run, toolCalls, receipt, capturedAt } = data
+const producedCount = receipt.deliverables.filter((d) => d.produced).length
+
+const rawJson = JSON.stringify(
+    { receipt, run, toolCalls },
+    null,
+    2,
+)
+---
+
+<figure class="ra-receipt-fig">
+    <div class="ra-receipt-panel">
+        <div class="ra-receipt">
+            <!-- Header -->
+            <div class="ra-receipt-head">
+                <div class="ra-receipt-title">
+                    <span class="ra-receipt-kicker">TrustReceipt</span>
+                    <span class="ra-receipt-sub">evidence about <em>how</em> the answer was produced</span>
+                </div>
+                <span class:list={['ra-verdict', `ra-verdict--${receipt.verdict}`]}>
+                    ● {receipt.verdict}
+                </span>
+            </div>
+
+            <!-- Run identity -->
+            <div class="ra-receipt-idrow">
+                <span class="ra-chip ra-chip--model">{model.id}</span>
+                <span class="ra-chip">{model.provider} · {model.tier}</span>
+                <span class="ra-chip ra-chip--muted">{run.strategy}</span>
+            </div>
+            <p class="ra-receipt-task">{task.prompt}</p>
+
+            <!-- Metric grid -->
+            <div class="ra-receipt-metrics">
+                <div><span class="rm-k">confidence</span><span class="rm-v">{receipt.confidence}</span></div>
+                <div><span class="rm-k">tool calls ok</span><span class="rm-v rm-good">{receipt.toolCallStats.ok}</span></div>
+                <div><span class="rm-k">tool calls failed</span><span class="rm-v rm-good">{receipt.toolCallStats.failed}</span></div>
+                <div><span class="rm-k">tokens</span><span class="rm-v">{run.tokensUsed.toLocaleString()}</span></div>
+                <div><span class="rm-k">duration</span><span class="rm-v">{(run.wallMs / 1000).toFixed(1)}s</span></div>
+                <div><span class="rm-k">iterations</span><span class="rm-v">{run.iterations}</span></div>
+                <div><span class="rm-k">terminated by</span><span class="rm-v">{receipt.terminatedBy}</span></div>
+                <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? 'n/a'}</span></div>
+            </div>
+
+            <!-- Deliverables -->
+            <div class="ra-receipt-section">
+                <p class="ra-receipt-legend">
+                    Declared deliverables: {producedCount}/{receipt.deliverables.length} checked against disk, not claimed
+                </p>
+                <ul class="ra-receipt-list">
+                    {receipt.deliverables.map((d) => (
+                        <li>
+                            <span class:list={['ra-tick', d.produced ? 'ra-tick--ok' : 'ra-tick--miss']}>
+                                {d.produced ? '✓' : '✗'}
+                            </span>
+                            <code>{d.spec}</code>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <!-- Raw tool-call evidence trail -->
+            <div class="ra-receipt-section">
+                <p class="ra-receipt-legend">
+                    Evidence trail: every tool call this run made, in order
+                </p>
+                <ul class="ra-receipt-checks">
+                    {toolCalls.map((tc) => (
+                        <li>
+                            <span class="ra-tick ra-tick--ok">✓</span>
+                            <span class="ra-check-name">{tc.name}</span>
+                            <span class="ra-check-detail">{tc.argsPreview}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <!-- Provenance footnote -->
+            <p class="ra-receipt-foot">
+                <code>verdict</code> grades the evidence trail, not the answer's truth. Add
+                tamper-proof provenance with <code>.withReceiptSigning()</code>, an Ed25519
+                signature over the receipt bytes, self-contained public key embedded.
+            </p>
+
+            <details class="ra-receipt-raw">
+                <summary>View raw receipt JSON</summary>
+                <pre><code>{rawJson}</code></pre>
+            </details>
+        </div>
+    </div>
+    <figcaption class="ra-receipt-cap">
+        The <strong>same real run</strong> captured {capturedAt} on <code>{model.id}</code>,
+        a ~4B-class local model, that powers every evidence section on this page.
+        <a href="/features/verification/">How verification works →</a>
+    </figcaption>
+</figure>

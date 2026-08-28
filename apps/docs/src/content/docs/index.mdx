@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: A TypeScript framework for building LLM agents on Effect-TS — typed, observable, and composable, with the same code running on local and frontier models.
+description: The transparent, composable TypeScript framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API, on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
 template: splash
 hero:
-    tagline: 'A harness you fully control for agent loops that actually finish, on any model, with proof. Transparent (every step is a typed event you can inspect and steer), reliable across model tiers (the same code runs on a local 4B model or a frontier API), composable (opt in one layer at a time), and accountable (every run returns a signed evidence receipt, not just prose).'
+    tagline: 'The transparent, composable harness for TypeScript agents. Every run returns a signed receipt proving what it did — typed, observable, yours to steer.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -11,6 +11,9 @@ hero:
           link: guides/quickstart/
           icon: right-arrow
           variant: primary
+        - text: See it run ↓
+          link: '#see-it-run'
+          variant: minimal
         - text: "⭐ Star on GitHub"
           link: https://github.com/tylerjrbuell/reactive-agents-ts
           icon: external
@@ -24,9 +27,12 @@ import {
     Tabs,
     TabItem,
 } from '@astrojs/starlight/components'
-import HeroInteraction from '../../components/HeroInteraction.astro'
 import EmailSubscribe from '../../components/EmailSubscribe.astro'
-import TerminalReplay from '../../components/TerminalReplay.astro'
+import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
+import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
+import RunReplay from '../../components/RunReplay.astro'
+import RunPhases from '../../components/RunPhases.astro'
+import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
 import metrics from '../../data/metrics.json'
@@ -54,51 +60,122 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 */}
 
 <div class="ra-panel ra-stats-panel">
-    <div class="ra-panel-inner ra-stats">
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.grandTotal}</span>
-            <span class="ra-stat-label">Packages & Apps</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.tests.toLocaleString()}</span>
-            <span class="ra-stat-label">Tests</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.providers}</span>
-            <span class="ra-stat-label">LLM Providers</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.strategies}</span>
-            <span class="ra-stat-label">Reasoning Strategies</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.phases}</span>
-            <span class="ra-stat-label">Execution Phases</span>
+    <div class="ra-panel-inner ra-stats-inner">
+        <div class="ra-stats">
+            <div class="ra-stat">
+                <span class="ra-stat-icon">📦</span>
+                <span class="ra-stat-value">{metrics.grandTotal}</span>
+                <span class="ra-stat-label">Packages & Apps</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">✅</span>
+                <span class="ra-stat-value">{metrics.tests.toLocaleString()}</span>
+                <span class="ra-stat-label">Tests</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🔌</span>
+                <span class="ra-stat-value">{metrics.providers}</span>
+                <span class="ra-stat-label">LLM Providers</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🧠</span>
+                <span class="ra-stat-value">{metrics.strategies}</span>
+                <span class="ra-stat-label">Reasoning Strategies</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🔁</span>
+                <span class="ra-stat-value">{metrics.phases}</span>
+                <span class="ra-stat-label">Execution Phases</span>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner" style="text-align:center">
+<div id="see-it-run" class="ra-section-card ra-panel ra-story" data-stack="1" style="scroll-margin-top:1.5rem">
+  <div class="ra-panel-inner">
 
-## Reliable on every model tier
+<p class="ra-story-eyebrow">01 · the run</p>
 
-Watch the **same** agent investigate an incident — call two tools, correlate the data, recommend a fix — and **finish the job on a 4B local model just like on Claude**. One builder; the only line that changes is the model. That cross-tier reliability is the harness doing its job: tool-call healing, verification, and a single-owner termination oracle.
+## One real run, start to finish
+
+No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-class local model with no API key, paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
+
+<RunReplay />
+
+<p class="ra-demo-cta">
+  Same task, your machine: <a href="/guides/local-models/">pull a local model and run it yourself</a>.
+</p>
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel ra-story" data-stack="2">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">02 · the phases</p>
+
+## Every phase, visible
+
+The engine has 12 phases. Most agent frameworks hide this entirely. Here's exactly which ones fired **for the run above**, and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
+
+<RunPhases />
+
+  </div>
+</div>
+
+<div id="the-proof" class="ra-section-card ra-panel ra-story" data-stack="3" style="scroll-margin-top:1.5rem">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">03 · the proof</p>
+
+## Every run returns a receipt
+
+Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`**: an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
+
+<EvidenceReceipt />
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel ra-story" data-stack="4">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">04 · the reasoning</p>
+
+## The debrief
+
+The receipt grades the evidence trail. The debrief explains the reasoning, including the context curator's real, per-iteration decisions about what to keep, compress, or drop. Same run, one layer deeper.
+
+<RunDebrief />
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel ra-story" data-stack="5">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">05 · across models</p>
+
+## Reliable across every model tier
+
+That run above was local. Swap one line and the identical code finishes the same class of task on a frontier model: **tool-call healing, verification, and a single-owner termination oracle** make the harness the reliable part, not the model.
 
 <img
   src={demoGif.src}
-  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes"
+  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude, only the provider/model line changes"
   loading="lazy"
-  style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
+  style="display:block;margin:0;border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
 />
 
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
+<div class="ra-section-card ra-panel ra-story" data-stack="6">
   <div class="ra-panel-inner">
 
-## Start in 60 Seconds
+<p class="ra-story-eyebrow">06 · your turn</p>
+
+## Start in 60 seconds
 
 ```bash
 bun add reactive-agents
@@ -124,12 +201,20 @@ One declarative config object — the front door you already know from the Verce
 
 No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`) and skip the `.env` line entirely — see [Local Models](/guides/local-models/).
 
-<TerminalReplay />
+<p class="ra-demo-cta">
+  Prefer to see it before you install: <code>bunx @reactive-agents/cli demo</code> · or try the <a href="/guides/playground/">in-browser playground</a> — no install.
+</p>
 
   </div>
 </div>
 
+<FeatureCarousel />
+
 <EmailSubscribe />
+
+<div class="ra-prefsrc-wrap" style="text-align:center;margin:1.25rem auto 0">
+    <PreferredSourceBadge />
+</div>
 
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
@@ -421,8 +506,6 @@ agent.start(); // Runs forever, Ctrl+C to stop
   </div>
 </div>
 
-<FeatureCarousel />
-
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
@@ -574,5 +657,3 @@ Interactive prompts guide you through template (`minimal`, `with-tools`, `stream
 
   </div>
 </div>
-
-<HeroInteraction />
