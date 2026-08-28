@@ -140,6 +140,9 @@ export default defineConfig({
                 // Adds per-page og:image/twitter:image + Schema.org JSON-LD on top of
                 // Starlight's default head (SEO rich snippets + AEO answer-engine grounding).
                 Head: './src/components/Head.astro',
+                // Adds a "Playground" button to the header's right-hand group,
+                // linking straight to the full-page StackBlitz editor.
+                Header: './src/components/Header.astro',
                 // Custom splash hero on the home page: a "code → proof" visual
                 // (builder snippet resolving into a real verdict) with the brand
                 // glyph kept as a small accent. Falls back to Starlight's default

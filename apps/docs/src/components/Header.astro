@@ -1,0 +1,122 @@
+---
+// Custom Header — Starlight's default header plus a "Playground" button on
+// the right, linking straight to the full-page StackBlitz editor (not the
+// docs' embedded /guides/playground/ page) so visitors can jump into a real
+// running agent in one click from anywhere on the site.
+import config from 'virtual:starlight/user-config'
+
+import LanguageSelect from 'virtual:starlight/components/LanguageSelect'
+import Search from 'virtual:starlight/components/Search'
+import SiteTitle from 'virtual:starlight/components/SiteTitle'
+import SocialIcons from 'virtual:starlight/components/SocialIcons'
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect'
+
+const shouldRenderSearch =
+	config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro'
+
+// In-house full-page playground (src/pages/playground.astro) — a real
+// full-viewport StackBlitz editor with our own chrome, not a link out to
+// stackblitz.com and not the embedded article at /guides/playground/.
+const PLAYGROUND_URL = '/playground/'
+---
+
+<div class="header">
+	<div class="title-wrapper sl-flex">
+		<SiteTitle />
+	</div>
+	<div class="sl-flex print:hidden">
+		{shouldRenderSearch && <Search />}
+	</div>
+	<div class="sl-hidden md:sl-flex print:hidden right-group">
+		<a class="ra-playground-btn" href={PLAYGROUND_URL}>
+			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+			Playground
+		</a>
+		<div class="sl-flex social-icons">
+			<SocialIcons />
+		</div>
+		<ThemeSelect />
+		<LanguageSelect />
+	</div>
+</div>
+
+<style>
+	@layer starlight.core {
+		.header {
+			display: flex;
+			gap: var(--sl-nav-gap);
+			justify-content: space-between;
+			align-items: center;
+			height: 100%;
+		}
+
+		.title-wrapper {
+			overflow: clip;
+			padding: 0.25rem;
+			margin: -0.25rem;
+			min-width: 0;
+		}
+
+		.right-group,
+		.social-icons {
+			gap: 1rem;
+			align-items: center;
+		}
+		.social-icons::after {
+			content: '';
+			height: 2rem;
+			border-inline-end: 1px solid var(--sl-color-gray-5);
+		}
+
+		@media (min-width: 50rem) {
+			:global(:root[data-has-sidebar]) {
+				--__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+			}
+			:global(:root:not([data-has-toc])) {
+				--__toc-width: 0rem;
+			}
+			.header {
+				--__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+				--__main-column-fr: calc(
+					(
+							100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) -
+								(2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) -
+								var(--sl-content-width)
+						) / 2
+				);
+				display: grid;
+				grid-template-columns:
+					minmax(
+						calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))),
+						auto
+					)
+					1fr
+					auto;
+				align-content: center;
+			}
+		}
+	}
+
+	.ra-playground-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-shrink: 0;
+		padding: 0.4rem 0.8rem;
+		border-radius: 999px;
+		background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 600;
+		white-space: nowrap;
+		text-decoration: none;
+		transition: filter 0.15s ease, transform 0.15s ease;
+	}
+	.ra-playground-btn:hover {
+		filter: brightness(1.1);
+		transform: translateY(-1px);
+	}
+	.ra-playground-btn svg {
+		flex-shrink: 0;
+	}
+</style>

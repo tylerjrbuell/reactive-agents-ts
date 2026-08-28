@@ -131,6 +131,16 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Guard against transient horizontal scroll on mobile — pre-`.is-visible`
+   scroll-reveal transforms (.ra-story's translateX entrance, etc.) shift
+   elements past the viewport edge before they animate in; without this
+   that briefly widens the page's scrollable area on narrow viewports.
+   Any element that genuinely needs its own horizontal scroll (code blocks)
+   already scopes overflow-x:auto on itself, so this is safe site-wide. */
+body {
+    overflow-x: hidden;
+}
+
 /* ── Animations ─────────────────────────────────────────────── */
 @keyframes ra-title-flow {
     0% {
@@ -250,7 +260,9 @@ html {
 /* ── Gradient-border panel — exact carousel treatment ───────── */
 .ra-panel {
     position: relative;
-    max-width: 980px;
+    /* No max-width of its own — fills the same Starlight content column
+       (--sl-content-width) the hero above it uses, so edges line up instead
+       of the panel looking narrower than the hero. */
     margin-left: auto;
     margin-right: auto;
     padding: 1px;
@@ -267,21 +279,54 @@ html {
 }
 
 .ra-panel-inner {
-    background: #12131a;
+    /* Translucent + frosted, not opaque — lets the fixed ambient glyph
+       (.ra-hero-glyph-bg) read through every card as the page scrolls,
+       instead of stopping dead at the hero. Blur keeps text legible over it. */
+    background: rgba(18, 19, 26, 0.82);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
     border-radius: 19px;
     padding: 2.5rem 2.8rem;
+    /* Clip any flush-edge child (a table, a scroll container, an image) to
+       the panel's own rounded corners instead of letting square content
+       corners poke past the curve. */
+    overflow: hidden;
+}
+@media (max-width: 640px) {
+    .ra-panel-inner {
+        /* Desktop's 2.8rem side padding ate ~90px of a 390px screen —
+           nearly a quarter of the viewport gone before content even starts. */
+        padding: 1.75rem 1.25rem;
+    }
 }
 
 /* ── Stats bar ──────────────────────────────────────────────── */
 .ra-stats-panel {
-    margin: 2.5rem auto 3.5rem;
+    margin: 1.75rem auto 1.75rem;
+}
+
+.ra-stats-inner {
+    padding-top: 1.5rem;
+    padding-bottom: 1.75rem;
+}
+
+.ra-stats-head {
+    text-align: center;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ra-cyan);
+    opacity: 0.65;
+    margin: 0 0 1.15rem !important;
 }
 
 .ra-stats {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     align-items: center;
-    padding: 2rem 0.5rem;
+    padding: 0 0.5rem;
 }
 
 /* Reset any Starlight markdown-content margins on stat children */
@@ -294,9 +339,21 @@ html {
     text-align: center;
     padding: 0 0.25rem;
     border-left: 1px solid rgba(139, 92, 246, 0.18);
+    transition: transform 0.2s ease;
 }
 .ra-stat:first-child {
     border-left: none;
+}
+.ra-stat:hover {
+    transform: translateY(-2px);
+}
+
+.ra-stat-icon {
+    display: block;
+    font-size: 1.05rem;
+    line-height: 1;
+    margin-bottom: 0.5rem !important;
+    opacity: 0.85;
 }
 
 .ra-stat-value {
@@ -324,11 +381,41 @@ html {
 
 /* ── Section cards ───────────────────────────────────────────── */
 .ra-section-card {
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.75rem;
 }
 
 .ra-section-card .ra-panel-inner h2 {
     margin-top: 0 !important;
+    font-size: clamp(1.5rem, 2.6vw, 2.05rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.22;
+}
+
+/* ── The run narrative (see-it-run → start-in-60s) — a real sequence, so
+   a step marker earns its keep here (unlike the feature-grid sections
+   below, which aren't ordered and don't get one). Left-aligned prose reads
+   as documentation/evidence rather than centered marketing copy. ────── */
+.ra-story .ra-panel-inner {
+    text-align: left;
+}
+.ra-story-eyebrow {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ra-cyan);
+    margin: 0 0 0.65rem !important;
+}
+.ra-story .ra-panel-inner > p {
+    max-width: 62ch;
+}
+/* The intro paragraph (2nd <p>: 1st is the eyebrow) needs real breathing
+   room before the evidence panel/image that follows it — it was sitting
+   almost flush against the box below. */
+.ra-story .ra-panel-inner > p:nth-of-type(2) {
+    margin-bottom: 1.75rem;
 }
 
 /* ── Scroll-driven reveals ────────────────────────────────────────
@@ -586,6 +673,26 @@ html {
     html.js-reveal .ra-stats-panel.is-visible .ra-stat-value {
         text-shadow: 0 0 18px rgba(139, 92, 246, 0.18);
     }
+
+    /* The 6 run-narrative panels (data-stack 1-6) get their own entrance —
+       alternating left/right instead of the generic panels' uniform
+       translateY, since these are a real ordered sequence, not a grid. */
+    html.js-reveal .ra-story[data-stack] {
+        transform: translateY(24px);
+    }
+    html.js-reveal .ra-story[data-stack='1'],
+    html.js-reveal .ra-story[data-stack='3'],
+    html.js-reveal .ra-story[data-stack='5'] {
+        transform: translateX(-44px) translateY(18px) rotate(-0.6deg);
+    }
+    html.js-reveal .ra-story[data-stack='2'],
+    html.js-reveal .ra-story[data-stack='4'],
+    html.js-reveal .ra-story[data-stack='6'] {
+        transform: translateX(44px) translateY(18px) rotate(0.6deg);
+    }
+    html.js-reveal .ra-story[data-stack].is-visible {
+        transform: translateY(0) translateX(0) rotate(0deg);
+    }
 }
 
 /* Reduced-motion users get content immediately, no animation choreography. */
@@ -648,7 +755,7 @@ html {
 }
 
 [data-theme='light'] .ra-panel-inner {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.82);
 }
 
 [data-theme='light'] .ra-stat {
@@ -1374,6 +1481,11 @@ html {
     text-align: right;
     margin-bottom: 1.25rem !important;
     font-feature-settings: 'tnum' 1;
+    /* This is a data readout, not prose — the .ra-story intro-paragraph
+       62ch reading-width cap doesn't apply and was wrapping it early.
+       !important: that rule's selector (.ra-story .ra-panel-inner > p)
+       outranks a single class here. */
+    max-width: none !important;
 }
 .ra-flow-legend span {
     color: var(--ra-cyan);
@@ -2375,12 +2487,12 @@ starlight-toc a[data-ra-changed]::before {
 
 /* ── Demo call-to-action lines (run-it-yourself) ─────────────── */
 .ra-demo-cta {
-    margin: 1.1rem auto 0;
+    margin: 1.1rem 0 0;
     max-width: 60ch;
     font-size: 0.92rem;
     line-height: 1.6;
     color: var(--sl-color-gray-2);
-    text-align: center;
+    text-align: left;
 }
 .ra-demo-cta code {
     font-size: 0.85em;
@@ -2434,8 +2546,11 @@ starlight-toc a[data-ra-changed]::before {
    proof surface. Renders a REAL captured TrustReceipt.
    ================================================================ */
 .ra-receipt-fig {
-    margin: 0 auto;
-    max-width: 720px;
+    /* Fills the story panel's width and starts flush at its left edge —
+       matching the left-aligned heading/intro above it instead of sitting
+       centered and narrower, which read as misaligned against them. */
+    margin: 0;
+    max-width: 100%;
 }
 .ra-receipt-panel {
     padding: 1px;
@@ -2455,6 +2570,7 @@ starlight-toc a[data-ra-changed]::before {
     padding: 1.4rem 1.5rem 1.25rem;
     font-size: 0.9rem;
     text-align: left;
+    overflow: hidden;
 }
 [data-theme='light'] .ra-receipt {
     background: #fbfbfe;
@@ -2463,9 +2579,10 @@ starlight-toc a[data-ra-changed]::before {
 /* Header */
 .ra-receipt-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.6rem 1rem;
     padding-bottom: 0.9rem;
     border-bottom: 1px solid rgba(139, 92, 246, 0.15);
 }
@@ -2704,12 +2821,15 @@ starlight-toc a[data-ra-changed]::before {
     white-space: pre;
 }
 .ra-receipt-cap {
-    margin: 0.9rem auto 0;
-    max-width: 60ch;
+    margin: 0.9rem 0 0;
+    /* No 60ch cap — that was sized for the old centered 720px box. The
+       figure now fills the full panel width, so a short one-sentence
+       caption capped at 60ch wrapped early for no reason. */
+    max-width: 100%;
+    text-align: left;
     font-size: 0.8rem;
     line-height: 1.6;
     color: var(--sl-color-gray-3);
-    text-align: center;
 }
 .ra-receipt-cap code {
     font-size: 0.9em;
@@ -2734,47 +2854,77 @@ starlight-toc a[data-ra-changed]::before {
 /* ================================================================
    Custom splash hero — "code → proof" (src/components/Hero.astro)
    Two-column: copy + a builder window resolving into a real verdict.
-   Brand glyph kept as a small accent. Theme-aware.
+   The brand glyph lives as a large ambient animated banner behind both
+   columns (.ra-hero-glyph-bg) instead of a small icon duplicating the
+   H1 text next to it. Theme-aware.
    ================================================================ */
 .ra-hero {
+    position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* Code pane gets more room than the copy pane so longer snippets (the
+       multi-agent/gateway examples) don't feel cramped against a 50/50 split.
+       Not pushed further than 0.85fr — the CTA row needs enough width to
+       stay on one line (see .ra-hero-actions below). */
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     align-items: center;
     gap: 2.75rem;
     padding: 1rem 0 1.5rem;
 }
-@media (max-width: 50rem) {
-    .ra-hero {
-        grid-template-columns: 1fr;
-        gap: 2rem;
-        text-align: center;
+
+/* Ambient banner — the real brand mark (gradient strokes + glow filters +
+   its own built-in SMIL pulse, same file as the header logo), blown up,
+   faded, and pinned to the viewport (not the hero) so it stays visible as
+   the page scrolls past it instead of disappearing with the hero section.
+   A slow CSS drift is layered on top of the file's own internal animation
+   for extra life (composio.dev-style ambient background). */
+.ra-hero-glyph-bg {
+    position: fixed;
+    /* True vertical center, sized against viewport height too (not just
+       width) — at top:42% + a width-only cap, the glyph's top edge ran
+       past y:0 on shorter viewports and got clipped by the header bar. */
+    top: 50%;
+    left: 50%;
+    width: min(52rem, 130vw, 82vh);
+    height: auto;
+    transform: translate(-50%, -50%);
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+}
+[data-theme='light'] .ra-hero-glyph-bg {
+    opacity: 0.11;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .ra-hero-glyph-bg {
+        animation: ra-glyph-drift 24s ease-in-out infinite;
+        transform-origin: center;
+    }
+}
+@keyframes ra-glyph-drift {
+    0%, 100% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) rotate(3deg) scale(1.04);
     }
 }
 
-/* Brand accent row */
-.ra-hero-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.9rem;
+.ra-hero-copy,
+.ra-hero-visual {
+    position: relative;
+    z-index: 1;
 }
+
 @media (max-width: 50rem) {
-    .ra-hero-brand {
-        justify-content: center;
+    .ra-hero {
+        /* minmax(0, 1fr), not bare 1fr — a plain 1fr track's minimum width
+           is its content's min-content size, and the code panel's long
+           unbroken lines (.ra-hero-code) blew that out past the viewport,
+           pushing the whole page into horizontal scroll on mobile. */
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2rem;
+        text-align: center;
     }
-}
-.ra-hero-mark {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 auto;
-    filter: drop-shadow(0 3px 14px rgba(124, 58, 237, 0.45));
-}
-.ra-hero-eyebrow {
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--sl-color-gray-3);
 }
 
 /* Headline — mirror the site's animated gradient title */
@@ -2816,23 +2966,31 @@ starlight-toc a[data-ra-changed]::before {
 .ra-hero-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.8rem;
+    gap: 0.6rem;
     align-items: center;
     margin-top: 1.6rem;
+}
+/* Slightly tighter than Starlight's default button size so Get Started +
+   See it run + Star on GitHub fit on one line in the narrower copy column
+   (the code panel took the extra width — see .ra-hero grid-template-columns). */
+.ra-hero-actions .sl-link-button {
+    padding-inline: 0.9rem;
+    font-size: 0.86rem;
+    gap: 0.3rem;
 }
 @media (max-width: 50rem) {
     .ra-hero-actions {
         justify-content: center;
     }
 }
+/* Data chips, not a dot-separated text list — same mono/pill language as
+   the code window's feature tags, so this reads as spec data rather than
+   marketing copy. */
 .ra-hero-props {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.45rem 1.2rem;
+    gap: 0.5rem;
     margin-top: 1.6rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--sl-color-gray-3);
 }
 @media (max-width: 50rem) {
     .ra-hero-props {
@@ -2840,19 +2998,15 @@ starlight-toc a[data-ra-changed]::before {
     }
 }
 .ra-hero-props span {
-    position: relative;
-}
-.ra-hero-props span + span::before {
-    content: '';
-    position: absolute;
-    left: -0.62rem;
-    top: 50%;
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: var(--ra-violet);
-    opacity: 0.55;
-    transform: translateY(-50%);
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-2);
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.18);
+    border-radius: 999px;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
 }
 
 /* ── The code → proof window ─────────────────────────────────── */
@@ -2870,12 +3024,14 @@ starlight-toc a[data-ra-changed]::before {
 }
 .ra-hero-win > .ra-hero-winbar,
 .ra-hero-win > .ra-hero-code,
-.ra-hero-win > .ra-hero-verdict {
+.ra-hero-win > .ra-hero-verdict,
+.ra-hero-win > .ra-hero-receipt-strip {
     background: #101119;
 }
 [data-theme='light'] .ra-hero-win > .ra-hero-winbar,
 [data-theme='light'] .ra-hero-win > .ra-hero-code,
-[data-theme='light'] .ra-hero-win > .ra-hero-verdict {
+[data-theme='light'] .ra-hero-win > .ra-hero-verdict,
+[data-theme='light'] .ra-hero-win > .ra-hero-receipt-strip {
     background: #fbfbfe;
 }
 .ra-hero-winbar {
@@ -2886,20 +3042,57 @@ starlight-toc a[data-ra-changed]::before {
     border-radius: 15px 15px 0 0;
     border-bottom: 1px solid rgba(139, 92, 246, 0.15);
 }
-.ra-hero-tl-dot {
-    width: 11px;
-    height: 11px;
+/* Inside .sl-markdown-content (RunReplay's context, unlike Hero's), any
+   winbar child past the first silently picks up Starlight's prose
+   margin-top rhythm rule and drifts out of vertical alignment with its
+   siblings — reset margins on the whole row defensively. */
+.ra-hero-winbar > * {
+    margin: 0;
+}
+/* On narrow viewports the title + Trace/Code tabs + Replay button don't
+   fit one row — title wrapped mid-text while the buttons overflowed past
+   the panel's clipped edge. Wrap the bar and force the title onto its own
+   first row so the controls get a clean second row instead. */
+@media (max-width: 640px) {
+    .ra-hero-winbar {
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
+    .ra-hero-live-dot {
+        order: -2;
+    }
+    .ra-hero-winttl {
+        flex: 1 1 auto;
+        order: -1;
+        margin-left: 8px;
+        white-space: normal;
+    }
+}
+/* Single live-status dot — replaces the stock macOS traffic-light dots
+   (every devtool site fakes those) with something that actually signals
+   "this is live" instead of decorating the window as an OS chrome prop. */
+.ra-hero-live-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     display: inline-block;
+    background: var(--ra-cyan);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.16);
 }
-.ra-hero-tl-r {
-    background: #ef4444;
+@media (prefers-reduced-motion: no-preference) {
+    .ra-hero-live-dot {
+        animation: ra-live-pulse 2.2s ease-in-out infinite;
+    }
 }
-.ra-hero-tl-y {
-    background: #eab308;
-}
-.ra-hero-tl-g {
-    background: #22c55e;
+@keyframes ra-live-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.16);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(6, 182, 212, 0.05);
+        opacity: 0.75;
+    }
 }
 .ra-hero-winttl {
     margin-left: 8px;
@@ -3000,9 +3193,14 @@ starlight-toc a[data-ra-changed]::before {
     gap: 0.6rem;
     flex-wrap: wrap;
     padding: 12px 18px;
-    border-radius: 0 0 15px 15px;
+    /* No bottom radius of its own — the receipt strip below it is now the
+       window's true last child, so it owns the bottom corners. Rounding
+       both created a visible square notch at the seam between them. */
     border-top: 1px solid rgba(139, 92, 246, 0.15);
     background: rgba(139, 92, 246, 0.06) !important;
+}
+.ra-hero-receipt-strip {
+    border-radius: 0 0 15px 15px;
 }
 .ra-hero-vbadge {
     flex: 0 0 auto;
@@ -3029,10 +3227,12 @@ starlight-toc a[data-ra-changed]::before {
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 0.35rem;
-    /* Reserve room for 2 wrapped rows of tags (the longest snippet's set at
-       narrow widths) so switching snippets never resizes the verdict panel. */
-    min-height: calc(2 * 1.5rem + 0.35rem);
-    transition: opacity 0.18s ease;
+    overflow: hidden;
+    /* No static min-height reservation (that wasted a full row of blank
+       space for every 1-row snippet). The height is animated in JS
+       (swapFeatures in Hero.astro) between each snippet's real content
+       height, so the panel only ever takes the space it needs. */
+    transition: opacity 0.18s ease, height 0.22s ease;
 }
 .ra-hero-vfeatures.is-fading {
     opacity: 0;
@@ -3052,6 +3252,95 @@ starlight-toc a[data-ra-changed]::before {
     text-align: center;
     font-size: 0.78rem;
     color: var(--sl-color-gray-3);
+}
+/* RunReplay reuses this caption class inside the now-left-aligned story
+   sections — match that alignment instead of the hero's centered one. */
+.ra-story .ra-hero-vcap {
+    text-align: left;
+}
+
+/* Real-receipt strip — fixed footer of the code window, deliberately
+   visually distinct (neutral border, not the violet capability gradient)
+   from the cycling badge/tags above it: that's a feature preview, this is
+   the actual signed proof, pulled forward from #the-proof so the site's
+   real signature starts in the hero instead of three scrolls down. */
+.ra-hero-receipt-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 18px;
+    border-top: 1px solid rgba(139, 92, 246, 0.14);
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.ra-hero-receipt-strip:hover {
+    background: rgba(6, 182, 212, 0.05);
+    color: var(--sl-color-gray-2);
+}
+.ra-hero-receipt-strip:hover .ra-hero-receipt-link {
+    color: var(--ra-cyan);
+}
+.ra-hero-receipt-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex: 0 0 auto;
+}
+.ra-hero-receipt-strip span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ra-hero-receipt-link {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--sl-color-gray-3);
+    text-decoration: underline dotted;
+}
+
+/* Example dot rail — click to jump straight to a snippet, hover/focus shows
+   its filename. Auto-cycle keeps advancing dots when nothing is pending. */
+.ra-hero-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.9rem 0 0;
+}
+.ra-hero-dot {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    padding: 0.3rem;
+    margin: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ra-hero-dot-core {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.38);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.ra-hero-dot:hover .ra-hero-dot-core {
+    background: rgba(139, 92, 246, 0.7);
+}
+.ra-hero-dot.is-active .ra-hero-dot-core {
+    background: var(--ra-cyan);
+    box-shadow: 0 0 6px rgba(6, 182, 212, 0.65);
+}
+.ra-hero-dot:focus-visible {
+    outline: 2px solid var(--ra-cyan);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 /* ================================================================
@@ -3172,12 +3461,13 @@ starlight-toc a[data-ra-changed]::before {
    generate-golden-run.ts `timeline`), clamped for readability.
    ================================================================ */
 .ra-replay-win {
-    max-width: 860px;
-    margin: 0 auto;
+    /* Fills the story panel's width, left-aligned to match the heading/
+       intro above it instead of sitting centered and narrower. */
+    max-width: 100%;
+    margin: 0;
     position: relative;
 }
 .ra-replay-btn {
-    margin-left: auto;
     background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.3);
     color: var(--sl-color-gray-2);
@@ -3192,13 +3482,78 @@ starlight-toc a[data-ra-changed]::before {
     background: rgba(139, 92, 246, 0.22);
     color: var(--sl-color-white);
 }
+
+/* Trace / Code tabs — peek at the exact builder chain that produced this
+   run without leaving the window or breaking the replay animation running
+   underneath (it keeps ticking; only the visible panel swaps). */
+.ra-replay-tabs {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.ra-replay-tab {
+    appearance: none;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    /* Inside .sl-markdown-content, Starlight adds margin-top to any element
+       with a preceding sibling (prose rhythm) — the 2nd tab button was
+       picking that up and sitting lower than the 1st. Not prose; reset. */
+    margin: 0;
+    background: rgba(139, 92, 246, 0.07);
+    border: 1px solid rgba(139, 92, 246, 0.16);
+    color: var(--sl-color-gray-3);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ra-replay-tab:hover {
+    color: var(--sl-color-gray-1);
+}
+.ra-replay-tab.is-active {
+    background: rgba(6, 182, 212, 0.14);
+    border-color: rgba(6, 182, 212, 0.4);
+    color: var(--ra-cyan);
+}
+.ra-replay-code {
+    min-height: 15rem;
+    border-radius: 0 0 15px 15px;
+}
+.ra-replay-code[hidden] {
+    display: none;
+}
+/* Unlike Hero.astro's code panel (rendered outside the MDX body), this one
+   lives inside .sl-markdown-content, which stacks a 16px top margin onto
+   every generic block child for prose rhythm — wrong for tightly-packed
+   code lines. Reset it. */
+.ra-replay-code .rl {
+    margin: 0;
+}
 .ra-replay-grid {
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: stretch;
+    margin: 0;
+}
+/* An author `display:grid` rule beats the UA `[hidden]{display:none}` rule
+   on a specificity tie (same pattern already hit on .ra-replay-detail-list)
+   — without this, the trace grid stays visible under the code panel when
+   the Code tab is active. */
+.ra-replay-grid[hidden] {
+    display: none;
 }
 .ra-replay-feed {
     min-height: 15rem;
+    /* This is the window's true bottom-left corner. The parent's
+       overflow:hidden clip doesn't reliably round an opaque child's own
+       square corner in every browser — match it explicitly, same pattern
+       as the winbar/verdict-strip elsewhere in this window chrome. */
+    border-radius: 0 0 0 15px;
 }
 .ra-replay-lines {
     display: flex;

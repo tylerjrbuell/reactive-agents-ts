@@ -402,8 +402,9 @@ const codes: Record<string, string> = {
 <style>
 /* ── Wrapper & entrance ──────────────────────────────────────── */
 .fc-wrap {
-  margin: 0 auto 4rem;
-  max-width: 980px;
+  margin: 0 auto 1.75rem;
+  /* No max-width of its own — matches .ra-panel, filling the same content
+     column the hero uses so edges line up across the page. */
   animation: fc-fade-up 0.55s ease-out 0.2s both;
 }
 
@@ -446,7 +447,12 @@ const codes: Record<string, string> = {
 
 /* ── Window card ─────────────────────────────────────────────── */
 .fc-win {
-  background: #12131a;
+  /* Translucent + frosted, matching .ra-panel-inner — lets the fixed
+     ambient glyph read through here too instead of the carousel being
+     the one opaque block on the page. */
+  background: rgba(18, 19, 26, 0.82);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   border-radius: 19px;
   overflow: hidden;
 }
@@ -708,7 +714,7 @@ const codes: Record<string, string> = {
 
 /* ── Light mode ──────────────────────────────────────────────── */
 :global([data-theme="light"]) .fc-win {
-  background: #f9f9fd;
+  background: rgba(249, 249, 253, 0.82);
 }
 
 :global([data-theme="light"]) .fc-outer {

@@ -21,6 +21,28 @@ const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced)
 const total = r.deliverables.length
 const durationS = (run.wallMs / 1000).toFixed(1)
 
+// The exact builder chain that produced this run — copied verbatim from
+// scripts/capture-golden-run.ts (keep in sync by hand if that script
+// changes). Trimmed of the hook-registration loop, which is capture-only
+// instrumentation, not part of what a reader would actually write.
+const AGENT_CODE = [
+    `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+    `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)`,
+    `  .<span class="rm">withModel</span>(<span class="rs">"gemma4:e4b"</span>)`,
+    `  .<span class="rm">withReasoning</span>()`,
+    `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+    `  .<span class="rm">withObservability</span>()`,
+    `  .<span class="rm">withThinking</span>(<span class="rk">true</span>)     <span class="rc">// surface real model reasoning</span>`,
+    `  .<span class="rm">withMemory</span>()        <span class="rc">// debrief depends on memory being enabled</span>`,
+    `  .<span class="rm">build</span>()`,
+    ``,
+    `<span class="rk">const</span> task = <span class="rs">\`Compare the moon counts of Jupiter, Saturn, and Mars.</span>`,
+    `<span class="rs">Write a markdown report to ./report.md and the raw data</span>`,
+    `<span class="rs">as a JSON array to ./data.json.\`</span>`,
+    ``,
+    `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
+]
+
 const PHASE_LABEL: Record<string, string> = {
     bootstrap: 'bootstrap',
     guardrail: 'guardrail',
@@ -40,14 +62,20 @@ const PHASE_LABEL: Record<string, string> = {
 <div class="ra-replay" data-timeline={JSON.stringify(timeline)}>
     <div class="ra-hero-win ra-replay-win">
         <div class="ra-hero-winbar">
-            <span class="ra-hero-tl-dot ra-hero-tl-r" />
-            <span class="ra-hero-tl-dot ra-hero-tl-y" />
-            <span class="ra-hero-tl-dot ra-hero-tl-g" />
+            <span class="ra-hero-live-dot" aria-hidden="true" />
             <span class="ra-hero-winttl">{model.id} · live run · {capturedAt}</span>
+            <div class="ra-replay-tabs" role="tablist" aria-label="Trace or source">
+                <button type="button" class="ra-replay-tab is-active" data-replay-tab="trace" role="tab" aria-selected="true">Trace</button>
+                <button type="button" class="ra-replay-tab" data-replay-tab="code" role="tab" aria-selected="false">Code</button>
+            </div>
             <button type="button" class="ra-replay-btn" data-replay-btn>↻ Replay</button>
         </div>
 
-        <div class="ra-replay-grid">
+        <pre class="ra-hero-code ra-replay-code" data-replay-panel="code" hidden><code>{AGENT_CODE.map((l) => (
+            <div class="rl" set:html={l} />
+        ))}</code></pre>
+
+        <div class="ra-replay-grid" data-replay-panel="trace">
             <div class="ra-trace-body ra-replay-feed" data-replay-feed>
                 <p class="ra-trace-row ra-trace-task">
                     <span class="ra-trace-label">task</span>
@@ -133,6 +161,16 @@ const PHASE_LABEL: Record<string, string> = {
         const finalRow = root.querySelector<HTMLElement>('[data-replay-final]')
         const replayBtn = root.querySelector<HTMLButtonElement>('[data-replay-btn]')
         const dots = rail ? Array.from(rail.querySelectorAll<HTMLElement>('[data-phase]')) : []
+        const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-replay-tab]'))
+        const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-replay-panel]'))
+        tabs.forEach((tab) => tab.addEventListener('click', () => {
+            const target = tab.dataset.replayTab
+            tabs.forEach((t) => {
+                t.classList.toggle('is-active', t === tab)
+                t.setAttribute('aria-selected', String(t === tab))
+            })
+            panels.forEach((p) => { p.hidden = p.dataset.replayPanel !== target })
+        }))
 
         // Real wall-clock delays — the run's actual atMs offsets, floored so a
         // near-simultaneous pair of events (a few ms apart) doesn't flash

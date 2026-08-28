@@ -13,6 +13,8 @@
  */
 import Default from '@astrojs/starlight/components/Hero.astro'
 import { LinkButton } from '@astrojs/starlight/components'
+import logoDark from '../assets/logo-dark.svg'
+import goldenRun from '../data/golden-run.json'
 
 const route = Astro.locals.starlightRoute
 const { entry } = route
@@ -20,6 +22,14 @@ const isHome = (entry.id || 'index') === 'index'
 const data = entry.data
 const hero = data.hero
 const { title = data.title, tagline, actions = [] } = hero ?? {}
+
+// Real receipt summary from the same captured run RunReplay/EvidenceReceipt
+// use further down the page — a small, honest preview of the actual proof,
+// not another cycling capability claim. Fixed (doesn't change with the
+// snippet cycle above it).
+const receipt = goldenRun.receipt!
+const deliveredCount = receipt.deliverables.filter((d: { produced: boolean }) => d.produced).length
+const deliverableTotal = receipt.deliverables.length
 
 // Rotating builder snippets — real API surface, real doc/README examples,
 // spanning the different shapes the SDK supports. Each `badge` names that
@@ -60,7 +70,12 @@ const SNIPPETS: { file: string; badge: string; features: string[]; lines: string
         features: ['MCP tool servers', 'full trace observability', 'entropy + NLI verification'],
         lines: [
             `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
-            `  .<span class="rm">withMCP</span>([<span class="rs">"filesystem"</span>, <span class="rs">"web-search"</span>])`,
+            `  .<span class="rm">withMCP</span>({`,
+            `    name: <span class="rs">"filesystem"</span>,`,
+            `    transport: <span class="rs">"stdio"</span>,`,
+            `    command: <span class="rs">"bunx"</span>,`,
+            `    args: [<span class="rs">"-y"</span>, <span class="rs">"@modelcontextprotocol/server-filesystem"</span>, <span class="rs">"."</span>],`,
+            `  })`,
             `  .<span class="rm">withObservability</span>()      <span class="rc">// full trace, every hop</span>`,
             `  .<span class="rm">withVerification</span>()       <span class="rc">// entropy + NLI check</span>`,
             `  .<span class="rm">build</span>()`,
@@ -173,33 +188,15 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
 {
     isHome ? (
         <div class="ra-hero">
-            <div class="ra-hero-copy">
-                <div class="ra-hero-brand">
-                    <svg class="ra-hero-mark" viewBox="0 0 48 48" aria-hidden="true">
-                        <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.08" />
-                        <g stroke="#7c3aed" stroke-width="1.1" opacity="0.5">
-                            <line x1="14" y1="6" x2="34" y2="6" />
-                            <line x1="14" y1="6" x2="6" y2="20" />
-                            <line x1="34" y1="6" x2="42" y2="20" />
-                            <line x1="6" y1="20" x2="6" y2="34" />
-                            <line x1="42" y1="20" x2="42" y2="34" />
-                            <line x1="24" y1="24" x2="24" y2="6" />
-                            <line x1="24" y1="24" x2="6" y2="20" />
-                            <line x1="24" y1="24" x2="42" y2="20" />
-                            <line x1="24" y1="24" x2="6" y2="34" />
-                            <line x1="24" y1="24" x2="42" y2="34" />
-                        </g>
-                        <circle cx="24" cy="24" r="5.5" fill="#8b5cf6" />
-                        <circle cx="14" cy="6" r="2.6" fill="#a78bfa" />
-                        <circle cx="34" cy="6" r="2.6" fill="#06b6d4" />
-                        <circle cx="6" cy="20" r="2.6" fill="#a78bfa" />
-                        <circle cx="42" cy="20" r="2.6" fill="#a78bfa" />
-                        <circle cx="6" cy="34" r="2.6" fill="#06b6d4" />
-                        <circle cx="42" cy="34" r="2.6" fill="#a78bfa" />
-                    </svg>
-                    <span class="ra-hero-eyebrow">Reactive Agents</span>
-                </div>
+            {/* Ambient animated banner — the real brand mark (same file as the
+                header logo: gradient strokes + glow filters + built-in SMIL
+                pulse, not a redrawn flat copy), blown up, faded, and pinned
+                to the viewport so it stays visible while the page scrolls
+                past it rather than disappearing with the hero. Purely
+                decorative (aria-hidden), sits behind everything via z-index. */}
+            <img class="ra-hero-glyph-bg" src={logoDark.src} alt="" aria-hidden="true" />
 
+            <div class="ra-hero-copy">
                 <h1 id="_top" data-page-title set:html={title} />
                 {tagline && <div class="ra-hero-tagline" set:html={tagline} />}
 
@@ -229,9 +226,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                     data-snippets={JSON.stringify(snippetsData)}
                 >
                     <div class="ra-hero-winbar">
-                        <span class="ra-hero-tl-dot ra-hero-tl-r" />
-                        <span class="ra-hero-tl-dot ra-hero-tl-y" />
-                        <span class="ra-hero-tl-dot ra-hero-tl-g" />
+                        <span class="ra-hero-live-dot" aria-hidden="true" />
                         <span class="ra-hero-winttl" data-hero-file>{snippetsData[0].file}</span>
                     </div>
                     <pre class="ra-hero-code" style={`height:calc(${maxLines} * 1.75em + 30px)`}><code data-hero-code>{firstLines.map((l) => (
@@ -245,11 +240,30 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                             ))}
                         </div>
                     </div>
+                    {/* Fixed — the real captured run's receipt, not part of the
+                        cycle above. This is the site's actual signature: proof,
+                        not a capability claim. */}
+                    <a class="ra-hero-receipt-strip" href="#the-proof">
+                        <span class="ra-hero-receipt-dot" aria-hidden="true" />
+                        <span>verified receipt · {goldenRun.model.id} · {deliveredCount}/{deliverableTotal} deliverables · {receipt.toolCallStats.failed} tool failures</span>
+                        <span class="ra-hero-receipt-link">see it ↓</span>
+                    </a>
                 </div>
-                <p class="ra-hero-vcap">
-                    One SDK, {snippetsData.length} agent shapes shown here. Every real receipt lives in the
-                    <a href="#see-it-run">run below ↓</a>.
-                </p>
+                <div class="ra-hero-dots" role="tablist" aria-label="Code example" data-hero-dots>
+                    {snippetsData.map((s, idx) => (
+                        <button
+                            type="button"
+                            class="ra-hero-dot"
+                            data-hero-dot={idx}
+                            role="tab"
+                            aria-selected={idx === 0 ? 'true' : 'false'}
+                            aria-label={s.file}
+                            title={s.file}
+                        >
+                            <span class="ra-hero-dot-core" />
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     ) : (
@@ -278,22 +292,24 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         return { start, removed: a.slice(start, endA + 1), added: b.slice(start, endB + 1) }
     }
 
-    async function backspaceLine(el: HTMLElement, plain: string) {
+    async function backspaceLine(el: HTMLElement, plain: string, shouldAbort: () => boolean) {
         el.classList.add('is-editing')
         el.textContent = plain
         for (let n = plain.length; n >= 0; n--) {
+            if (shouldAbort()) return
             el.textContent = plain.slice(0, n) || '​'
             await wait(20)
         }
     }
 
-    async function typeLine(el: HTMLElement, plain: string) {
+    async function typeLine(el: HTMLElement, plain: string, shouldAbort: () => boolean) {
         el.classList.add('is-editing')
         for (let n = 1; n <= plain.length; n++) {
+            if (shouldAbort()) return
             el.textContent = plain.slice(0, n)
             await wait(28)
         }
-        await wait(120)
+        if (!shouldAbort()) await wait(120)
     }
 
     function setIdleCaret(codeEl: HTMLElement, on: boolean) {
@@ -301,29 +317,39 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         last?.classList.toggle('is-editing', on)
     }
 
-    async function transition(codeEl: HTMLElement, current: Line[], target: Snippet) {
+    // Checks `shouldAbort` between every typed/backspaced character so a dot
+    // click can interrupt an in-flight animation immediately instead of
+    // waiting for the current line to finish.
+    async function transition(codeEl: HTMLElement, current: Line[], target: Snippet, shouldAbort: () => boolean) {
         const { start, removed, added } = diffRange(current, target.lines)
         const lineEls = Array.from(codeEl.children) as HTMLElement[]
 
         for (let i = removed.length - 1; i >= 0; i--) {
+            if (shouldAbort()) return
             const el = lineEls[start + i]
             if (!el) continue
-            await backspaceLine(el, removed[i].plain)
+            await backspaceLine(el, removed[i].plain, shouldAbort)
             el.remove()
         }
+        if (shouldAbort()) return
 
         const anchor = lineEls[start + removed.length]?.isConnected ? lineEls[start + removed.length] : null
         for (const line of added) {
+            if (shouldAbort()) return
             const el = document.createElement('div')
             el.className = 'rl'
             codeEl.insertBefore(el, anchor)
-            await typeLine(el, line.plain)
+            await typeLine(el, line.plain, shouldAbort)
             el.innerHTML = line.html || '​'
             el.classList.remove('is-editing')
         }
     }
 
+    // Animates the tag row's height between snippets instead of reserving a
+    // fixed 2-row block for every snippet — most sets only need one row, so
+    // a static reservation wasted a full blank row underneath them.
     async function swapFeatures(el: HTMLElement, features: string[]) {
+        el.style.height = `${el.getBoundingClientRect().height}px`
         el.classList.add('is-fading')
         await wait(180)
         el.innerHTML = ''
@@ -333,7 +359,14 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
             tag.textContent = f
             el.appendChild(tag)
         }
+        const target = el.scrollHeight
+        // Force layout before reading, so the height transition below has a
+        // real starting value to animate from rather than jumping instantly.
+        void el.offsetHeight
+        el.style.height = `${target}px`
         el.classList.remove('is-fading')
+        await wait(260)
+        el.style.height = '' // release the pinned height once settled
     }
 
     async function swapBadge(el: HTMLElement, badge: string) {
@@ -349,29 +382,89 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
         const fileEl = root.querySelector<HTMLElement>('[data-hero-file]')
         const featuresEl = root.querySelector<HTMLElement>('[data-hero-features]')
         const badgeEl = root.querySelector<HTMLElement>('[data-hero-badge]')
+        // The dot rail is a sibling of `root` (root is just the code window),
+        // not a descendant — scope the lookup to the shared visual wrapper.
+        const scope = root.closest<HTMLElement>('.ra-hero-visual') ?? root.parentElement ?? root
+        const dots = Array.from(scope.querySelectorAll<HTMLButtonElement>('[data-hero-dot]'))
         if (!codeEl || !fileEl || snippets.length < 2) return
 
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        const updateDots = (idx: number) => {
+            dots.forEach((d, di) => {
+                d.classList.toggle('is-active', di === idx)
+                d.setAttribute('aria-selected', di === idx ? 'true' : 'false')
+            })
+        }
+
+        // Snaps every panel (code, file label, badge, feature tags, dots) to
+        // snippet `idx` with no animation — used for the reduced-motion path
+        // and to make a dot click land immediately instead of queuing behind
+        // the idle timer.
+        const renderInstant = (idx: number) => {
+            fileEl.textContent = snippets[idx].file
+            if (badgeEl) badgeEl.textContent = `◆ ${snippets[idx].badge}`
+            if (featuresEl) {
+                featuresEl.innerHTML = ''
+                for (const f of snippets[idx].features) {
+                    const tag = document.createElement('span')
+                    tag.className = 'ra-hero-vtag'
+                    tag.textContent = f
+                    featuresEl.appendChild(tag)
+                }
+            }
+            codeEl.innerHTML = ''
+            for (const l of snippets[idx].lines) {
+                const el = document.createElement('div')
+                el.className = 'rl'
+                el.innerHTML = l.html || '​'
+                codeEl.appendChild(el)
+            }
+            updateDots(idx)
+        }
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        if (reduceMotion) {
+            dots.forEach((d, idx) => d.addEventListener('click', () => renderInstant(idx)))
+            return
+        }
 
         let i = 0
         let current = snippets[0].lines
         let paused = false
         let cancelled = false
+        let jumpTo: number | null = null
+        updateDots(0)
         root.addEventListener('mouseenter', () => { paused = true })
         root.addEventListener('mouseleave', () => { paused = false })
+        dots.forEach((d, idx) => d.addEventListener('click', () => {
+            if (idx === i && jumpTo === null) return
+            jumpTo = idx
+        }))
 
         const loop = async () => {
             while (!cancelled) {
+                if (jumpTo !== null) {
+                    const idx = jumpTo
+                    jumpTo = null
+                    i = idx
+                    current = snippets[idx].lines
+                    renderInstant(idx)
+                    continue
+                }
                 setIdleCaret(codeEl, true)
-                await wait(3200)
-                while (paused && !cancelled) await wait(200)
+                let waited = 0
+                while (waited < 3200 && jumpTo === null && !cancelled) {
+                    if (!paused) waited += 100
+                    await wait(100)
+                }
                 setIdleCaret(codeEl, false)
                 if (cancelled) return
+                if (jumpTo !== null) continue
                 i = (i + 1) % snippets.length
+                updateDots(i)
                 fileEl.textContent = snippets[i].file
                 if (badgeEl) void swapBadge(badgeEl, snippets[i].badge)
                 if (featuresEl) void swapFeatures(featuresEl, snippets[i].features)
-                await transition(codeEl, current, snippets[i])
+                await transition(codeEl, current, snippets[i], () => jumpTo !== null)
                 current = snippets[i].lines
             }
         }

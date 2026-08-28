@@ -3,7 +3,7 @@ title: Reactive Agents
 description: The transparent, composable TypeScript framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API, on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
 template: splash
 hero:
-    tagline: 'The transparent, composable harness for TypeScript agents. The same code finishes the loop on a local 4B model or a frontier API, then returns a signed receipt proving what it did. Typed, observable, and yours to steer.'
+    tagline: 'The transparent, composable harness for TypeScript agents. Every run returns a signed receipt proving what it did — typed, observable, yours to steer.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -60,32 +60,41 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 */}
 
 <div class="ra-panel ra-stats-panel">
-    <div class="ra-panel-inner ra-stats">
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.grandTotal}</span>
-            <span class="ra-stat-label">Packages & Apps</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.tests.toLocaleString()}</span>
-            <span class="ra-stat-label">Tests</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.providers}</span>
-            <span class="ra-stat-label">LLM Providers</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.strategies}</span>
-            <span class="ra-stat-label">Reasoning Strategies</span>
-        </div>
-        <div class="ra-stat">
-            <span class="ra-stat-value">{metrics.phases}</span>
-            <span class="ra-stat-label">Execution Phases</span>
+    <div class="ra-panel-inner ra-stats-inner">
+        <div class="ra-stats">
+            <div class="ra-stat">
+                <span class="ra-stat-icon">📦</span>
+                <span class="ra-stat-value">{metrics.grandTotal}</span>
+                <span class="ra-stat-label">Packages & Apps</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">✅</span>
+                <span class="ra-stat-value">{metrics.tests.toLocaleString()}</span>
+                <span class="ra-stat-label">Tests</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🔌</span>
+                <span class="ra-stat-value">{metrics.providers}</span>
+                <span class="ra-stat-label">LLM Providers</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🧠</span>
+                <span class="ra-stat-value">{metrics.strategies}</span>
+                <span class="ra-stat-label">Reasoning Strategies</span>
+            </div>
+            <div class="ra-stat">
+                <span class="ra-stat-icon">🔁</span>
+                <span class="ra-stat-value">{metrics.phases}</span>
+                <span class="ra-stat-label">Execution Phases</span>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="see-it-run" class="ra-section-card ra-panel" style="scroll-margin-top:1.5rem">
-  <div class="ra-panel-inner" style="text-align:center">
+<div id="see-it-run" class="ra-section-card ra-panel ra-story" data-stack="1" style="scroll-margin-top:1.5rem">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">01 · the run</p>
 
 ## One real run, start to finish
 
@@ -100,8 +109,10 @@ No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-cl
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner" style="text-align:center">
+<div class="ra-section-card ra-panel ra-story" data-stack="2">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">02 · the phases</p>
 
 ## Every phase, visible
 
@@ -112,10 +123,12 @@ The engine has 12 phases. Most agent frameworks hide this entirely. Here's exact
   </div>
 </div>
 
-<div id="the-proof" class="ra-section-card ra-panel" style="scroll-margin-top:1.5rem">
-  <div class="ra-panel-inner" style="text-align:center">
+<div id="the-proof" class="ra-section-card ra-panel ra-story" data-stack="3" style="scroll-margin-top:1.5rem">
+  <div class="ra-panel-inner">
 
-## The proof: every run returns a receipt
+<p class="ra-story-eyebrow">03 · the proof</p>
+
+## Every run returns a receipt
 
 Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`**: an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
 
@@ -124,8 +137,10 @@ Most frameworks give you prose and ask you to trust it. Reactive Agents returns 
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner" style="text-align:center">
+<div class="ra-section-card ra-panel ra-story" data-stack="4">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">04 · the reasoning</p>
 
 ## The debrief
 
@@ -136,8 +151,10 @@ The receipt grades the evidence trail. The debrief explains the reasoning, inclu
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner" style="text-align:center">
+<div class="ra-section-card ra-panel ra-story" data-stack="5">
+  <div class="ra-panel-inner">
+
+<p class="ra-story-eyebrow">05 · across models</p>
 
 ## Reliable across every model tier
 
@@ -147,16 +164,18 @@ That run above was local. Swap one line and the identical code finishes the same
   src={demoGif.src}
   alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude, only the provider/model line changes"
   loading="lazy"
-  style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
+  style="display:block;margin:0;border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
 />
 
   </div>
 </div>
 
-<div class="ra-section-card ra-panel">
+<div class="ra-section-card ra-panel ra-story" data-stack="6">
   <div class="ra-panel-inner">
 
-## Start in 60 Seconds
+<p class="ra-story-eyebrow">06 · your turn</p>
+
+## Start in 60 seconds
 
 ```bash
 bun add reactive-agents
@@ -188,6 +207,8 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 
   </div>
 </div>
+
+<FeatureCarousel />
 
 <EmailSubscribe />
 
@@ -484,8 +505,6 @@ agent.start(); // Runs forever, Ctrl+C to stop
 
   </div>
 </div>
-
-<FeatureCarousel />
 
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
