@@ -247,9 +247,9 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         if (typeof msg.payload.objectError === "string") structuredError = msg.payload.objectError;
       }
 
-      // Live streaming text — accumulate TextDeltaReceived, clear on new iteration
+      // Live streaming text — accumulate TextDelta, clear on new iteration
       let streamText = s.streamText;
-      if (msg.type === "TextDeltaReceived" || msg.type === "TextDelta") {
+      if (msg.type === "TextDelta") {
         const delta = typeof msg.payload.text === "string" ? msg.payload.text
           : typeof msg.payload.delta === "string" ? msg.payload.delta : "";
         streamText = s.streamText + delta;

@@ -25,6 +25,20 @@
   `LiftPolicy.tokenLeg`. Raw overhead is still computed and printed on every
   receipt. The leg remains denominated in tokens, not USD.
 
+### Removed
+- Nine never-emitted `AgentEvent` tags: `EventsMerged`, `GatewayStopped`,
+  `MemorySnapshotSaved`, `MessageSent`, `PolicyDecisionMade`, `SessionCreated`,
+  `SessionEnded`, `TextDeltaReceived`, `CompressionApplied`. None had a
+  producer. Streaming text has always arrived on the `StreamEvent` channel as
+  `TextDelta`, which is unchanged. `CompressionApplied` was removed rather
+  than wired up because the apply-side curator that would produce it — the
+  other half of the recommendation→application compaction flow — does not
+  exist in the codebase yet; building it is a missing feature, not a wiring
+  fix. Two candidates from the original sweep, `ExecutionLoopIteration` and
+  `GatewayStarted`, were retained: each has a non-declaration hit (a test
+  file that publishes/subscribes to it as a fixture), so the safety gate
+  says leave them alone.
+
 ## [0.15.0] — 2026-08-16
 
 Behavior change — the path-healing pipeline no longer silently rescues an out-of-root absolute path (F9)

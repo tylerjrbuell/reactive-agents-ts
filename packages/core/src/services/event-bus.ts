@@ -1,5 +1,4 @@
 import { Effect, Context, Layer, Ref } from "effect";
-import type { Message } from "../types/message.js";
 import type { LlmCallPurpose } from "../types/llm-purpose.js";
 import type {
   SkillActivated,
@@ -89,15 +88,6 @@ export type AgentEvent =
       /** Agent identifier assigned during creation */
       readonly agentId: string;
     }
-  | {
-      /**
-       * A message was sent via the InteractionManager.
-       * Fired when agent.send() is called or collaboration event occurs.
-       */
-      readonly _tag: "MessageSent";
-      /** The Message object that was sent */
-      readonly message: Message;
-    }
   // ─── Execution Engine events (from @reactive-agents/runtime) ───
   | {
       /**
@@ -163,17 +153,6 @@ export type AgentEvent =
       readonly _tag: "MemoryFlushed";
       /** Agent identifier */
       readonly agentId: string;
-    }
-  | {
-      /**
-       * Memory snapshot was saved to persistent storage.
-       * Fired when MemoryService.saveSnapshot() completes.
-       */
-      readonly _tag: "MemorySnapshotSaved";
-      /** Agent identifier */
-      readonly agentId: string;
-      /** Session identifier under which snapshot was saved */
-      readonly sessionId: string;
     }
   // ─── LLM events (from @reactive-agents/llm-provider) ───
   | {
@@ -579,21 +558,6 @@ export type AgentEvent =
     }
   | {
       /**
-       * Gateway stopped and is no longer listening.
-       * Fired when GatewayService.stop() completes shutdown.
-       */
-      readonly _tag: "GatewayStopped";
-      /** Agent identifier */
-      readonly agentId: string;
-      /** Reason for stopping (e.g., "user_requested", "budget_exhausted", "error") */
-      readonly reason: string;
-      /** Total uptime in milliseconds */
-      readonly uptime: number;
-      /** Unix timestamp in milliseconds when gateway stopped */
-      readonly timestamp: number;
-    }
-  | {
-      /**
        * An external event was received by the gateway.
        * Fired when any event source delivers an event to the input router.
        */
@@ -662,23 +626,6 @@ export type AgentEvent =
     }
   | {
       /**
-       * A policy engine made a decision about an event.
-       * Fired for every policy evaluation, whether allowed or denied.
-       */
-      readonly _tag: "PolicyDecisionMade";
-      /** Agent identifier */
-      readonly agentId: string;
-      /** Policy name that made the decision */
-      readonly policy: string;
-      /** Decision outcome (e.g., "allow", "deny", "defer") */
-      readonly decision: string;
-      /** Event identifier being evaluated */
-      readonly eventId: string;
-      /** Unix timestamp in milliseconds when decision was made */
-      readonly timestamp: number;
-    }
-  | {
-      /**
        * A heartbeat tick was skipped.
        * Fired when the heartbeat scheduler decides to skip based on policy (adaptive/conservative).
        */
@@ -690,21 +637,6 @@ export type AgentEvent =
       /** Number of consecutive skips including this one */
       readonly consecutiveSkips: number;
       /** Unix timestamp in milliseconds when skip occurred */
-      readonly timestamp: number;
-    }
-  | {
-      /**
-       * Multiple events were merged into a single action.
-       * Fired when the event deduplication/merge logic combines events within the merge window.
-       */
-      readonly _tag: "EventsMerged";
-      /** Agent identifier */
-      readonly agentId: string;
-      /** Number of events that were merged */
-      readonly mergedCount: number;
-      /** Key used for merging (e.g., source + event type) */
-      readonly mergeKey: string;
-      /** Unix timestamp in milliseconds when merge occurred */
       readonly timestamp: number;
     }
   | {
@@ -774,29 +706,18 @@ export type AgentEvent =
       readonly entropyAfter?: number;
     }
   // ─── Compression coordination (GH #119 + HS-128) ───
-  // Curator-as-sole-prompt-author contract has TWO surfaces: advisors that
-  // RECOMMEND compression (dispatcher compress-messages handler, verbosity
-  // detector) and the SINGLE applier (curator). These events make the
-  // recommendation→application chain auditable end-to-end. Source
-  // discriminant lets observers distinguish dispatcher-driven vs detector-
-  // driven recommendations without colliding their thresholds.
+  // Curator-as-sole-prompt-author contract has advisors that RECOMMEND
+  // compression (dispatcher compress-messages handler, verbosity detector).
+  // The applier (curator) side of the recommendation→application chain has
+  // no producer yet — `CompressionApplied` was removed until that half is
+  // built. Source discriminant lets observers distinguish dispatcher-driven
+  // vs detector-driven recommendations without colliding their thresholds.
   | {
       readonly _tag: "CompressionRecommendation";
       readonly taskId: string;
       readonly iteration: number;
       readonly source: "dispatcher" | "verbosity-detector";
       readonly targetTokens: number;
-      readonly reason: string;
-    }
-  | {
-      readonly _tag: "CompressionApplied";
-      readonly taskId: string;
-      readonly iteration: number;
-      /** Iteration on which the consumed recommendation was emitted. */
-      readonly recommendedAtIteration: number;
-      readonly targetTokens: number;
-      /** Actual message count in the rendered Prompt after curator applied compression. */
-      readonly actualMessageCount: number;
       readonly reason: string;
     }
   // ─── Channel / messaging events ───
@@ -837,23 +758,6 @@ export type AgentEvent =
       readonly triggerName: string;
       readonly platform: string;
       readonly sessionId: string;
-      readonly timestamp: number;
-    }
-  | {
-      readonly _tag: "SessionCreated";
-      readonly taskId: string;
-      readonly sessionId: string;
-      readonly platform: string;
-      readonly externalUserId: string;
-      readonly externalChannelId: string;
-      readonly timestamp: number;
-    }
-  | {
-      readonly _tag: "SessionEnded";
-      readonly taskId: string;
-      readonly sessionId: string;
-      readonly reason: string;
-      readonly state: string;
       readonly timestamp: number;
     }
   // ─── Custom/extension events ───
@@ -976,17 +880,6 @@ export type AgentEvent =
       };
     }
   // ─── Streaming events ───
-  | {
-      /**
-       * A complete text response arrived from the LLM (end of streaming).
-       * Fired once per LLM call after content_complete — NOT per token.
-       * For per-token events, subscribe to agent.runStream() TextDelta events instead.
-       */
-      readonly _tag: "TextDeltaReceived";
-      readonly taskId: string;
-      readonly text: string;
-      readonly timestamp: number;
-    }
   | {
       /**
        * Agent stream started.

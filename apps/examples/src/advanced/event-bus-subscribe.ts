@@ -13,15 +13,14 @@
  *   2. Catch-all:    `agent.subscribe(handler)` — handler receives
  *      the full AgentEvent union; use `event._tag` to discriminate.
  *
- * The new compression-coordination event variants
- * (`CompressionRecommendation` + `CompressionApplied`, shipped
- * 2026-05-24) flow through this surface too. They're advisory:
+ * The `CompressionRecommendation` compression-coordination event
+ * (shipped 2026-05-24) flows through this surface too. It's advisory:
  *   - `dispatcher` source fires when the reactive controller
  *     recommends compression (entropy-driven).
  *   - `verbosity-detector` source fires when per-iteration token
  *     averages exceed 2× the tier-derived baseline.
  * The example documents the subscription pattern but does NOT
- * require those events to fire under the test provider (they're
+ * require the event to fire under the test provider (it's
  * triggered by entropy / verbosity signals real LLMs produce).
  *
  * Pass criterion: at least one AgentEvent received via the
@@ -83,28 +82,12 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     },
   );
 
-  // Subscription 3: separate variant in the compression chain.
-  // CompressionApplied currently emits via console.debug fallback
-  // (curator-side sync-helper refactor pending) — this subscription
-  // documents the typed surface and will receive events once the
-  // applied-side migration ships.
-  const unsubApplied = await agent.subscribe(
-    "CompressionApplied",
-    (event) => {
-      observed.push({
-        tag: event._tag,
-        iteration: event.iteration,
-      });
-    },
-  );
-
   const result = await agent.run("Demonstrate event subscription.");
   await agent.dispose();
 
   // Cleanup
   unsubAll();
   unsubCompression();
-  unsubApplied();
 
   const sawAnyEvent = observed.length >= 1;
   console.log(`  total events received: ${observed.length}`);
