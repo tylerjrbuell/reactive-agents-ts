@@ -11,7 +11,7 @@
  * PRECEDENCE IS FIXED: explicit config > environment variable > built-in
  * default. An env var never overrides a programmatic choice; it only fills a
  * hole. The env layer is `harness-flags.ts`, which remains the ONLY place in
- * `packages/reasoning` that reads `process.env.RA_*` (gate:
+ * `packages/reasoning` that reads the RA-prefixed environment variables (gate:
  * scripts/check-ablatable.sh).
  *
  * ABSENT-FIELD DISCIPLINE. Fields whose "unset" state is meaningful
