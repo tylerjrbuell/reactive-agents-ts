@@ -73,7 +73,7 @@ import type {
 } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError } from './errors.js'
-import type { ContextProfile } from '@reactive-agents/reasoning'
+import type { ContextProfile, HarnessConfig } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
 import type { ResultCompressionConfig } from '@reactive-agents/tools'
@@ -569,8 +569,44 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *   `this.withHarness(fn)`); use whichever reads more clearly at the
      *   call site.
      */
-    withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
-        this._harnessRegistrations = [...this._harnessRegistrations, fn]
+    withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this
+    /**
+     * Configure harness mechanisms directly — the switches that decide how much
+     * the harness spends per model turn and how much it hides from the model.
+     *
+     * This is the second, unrelated overload of `.withHarness()`: the pipeline-
+     * composition overload above registers a `Harness` callback, this one
+     * merges a plain data object. They are distinguished at the call site by
+     * argument shape (function vs plain config object) and never collide in
+     * practice — no `HarnessConfig` field is itself callable.
+     *
+     * Precedence: this config wins over the matching `RA_`-prefixed
+     * environment variable, which wins over the built-in default. Calls
+     * merge, so `.withHarness({a}).withHarness({b})` keeps both.
+     *
+     * @example
+     * // Keep the tool array byte-stable so the provider's prompt cache survives:
+     * .withHarness({ stableToolSurface: true })
+     * @example
+     * // Small-model profile: show everything, no discovery round trips:
+     * .withHarness({ lazyDisclosure: false, toolDiscovery: false, verboseRules: true })
+     *
+     * @see {@link HarnessProfile} — capability presets (memory/RI/verifier).
+     *   `.withHarness()` is the mechanism layer beneath them.
+     * @returns `this` for chaining
+     */
+    withHarness(config: HarnessConfig): this
+    withHarness(
+        arg: ((harness: import('@reactive-agents/core').Harness) => void) | HarnessConfig,
+    ): this {
+        if (typeof arg === 'function') {
+            this._harnessRegistrations = [...this._harnessRegistrations, arg]
+            return this
+        }
+        this._reasoningOptions = {
+            ...this._reasoningOptions,
+            harness: { ...this._reasoningOptions?.harness, ...arg },
+        }
         return this
     }
 

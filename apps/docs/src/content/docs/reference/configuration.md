@@ -158,6 +158,20 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.defaultStrategy` | `reactive` \| `plan-execute-reflect` \| `tree-of-thought` \| `reflexion` \| `adaptive` \| `direct` \| `code-action` \| `blueprint` | no |  |
 | `reasoning.enableStrategySwitching` | `boolean` | no |  |
 | `reasoning.fallbackStrategy` | `string` | no |  |
+| `reasoning.harness.assemblyDebug` | `boolean` | no |  |
+| `reasoning.harness.auditRationale` | `boolean` | no |  |
+| `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
+| `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
+| `reasoning.harness.recencyBudgetChars` | `number` | no |  |
+| `reasoning.harness.stableToolSurface` | `boolean` | no |  |
+| `reasoning.harness.thoughtContinuity` | `boolean` | no |  |
+| `reasoning.harness.toolDiscovery` | `boolean` | no |  |
+| `reasoning.harness.toolIndex` | `boolean` | no |  |
+| `reasoning.harness.toolIndexMaxEntries` | `number` | no |  |
+| `reasoning.harness.toolObserveSymmetry` | `boolean` | no |  |
+| `reasoning.harness.toolResultBudgetChars` | `number` | no |  |
+| `reasoning.harness.treeOfThoughtExploreBudgetMs` | `number` | no |  |
+| `reasoning.harness.verboseRules` | `boolean` | no |  |
 | `reasoning.maxStrategySwitches` | `number` | no |  |
 | `requiredTools.adaptive` | `boolean` | no |  |
 | `requiredTools.maxRetries` | `number` | no |  |

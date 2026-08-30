@@ -9,6 +9,7 @@ import { Schema } from "effect";
 import { ReasoningStrategy } from "@reactive-agents/core";
 import { LLMProviderType } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentBuilder } from "./builder.js";
+import { HarnessConfigSchema } from "./harness-schema.js";
 
 // ─── Provider Schema ──────────────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ export const ReasoningConfigSchema = Schema.Struct({
   fallbackStrategy: Schema.optional(Schema.String),
   /** Opt-in: emit per-tool-call decision rationale into the debrief (audit feature; speed/token tax on smaller models). */
   auditRationale: Schema.optional(Schema.Boolean),
+  /** Harness mechanism switches (W3). Set via `.withHarness({...})`; precedence config over environment variable over built-in default. */
+  harness: Schema.optional(HarnessConfigSchema),
 });
 
 export const ToolsConfigSchema = Schema.Struct({
@@ -596,6 +599,14 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(r?.auditRationale !== undefined ? { auditRationale: r.auditRationale } : {}),
     };
     builder = builder.withReasoning(Object.keys(opts).length > 0 ? opts : undefined);
+  }
+
+  // Harness mechanism switches — applied AFTER withReasoning() above, since
+  // .withHarness() merges into the existing _reasoningOptions.harness while
+  // withReasoning() replaces _reasoningOptions wholesale; reversing the order
+  // would silently drop the harness config.
+  if (config.reasoning?.harness) {
+    builder = builder.withHarness(config.reasoning.harness);
   }
 
   // Tools

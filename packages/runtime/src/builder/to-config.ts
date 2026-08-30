@@ -135,6 +135,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ro?.maxStrategySwitches !== undefined) r["maxStrategySwitches"] = ro.maxStrategySwitches;
     if (ro?.fallbackStrategy) r["fallbackStrategy"] = ro.fallbackStrategy;
     if (ro?.auditRationale !== undefined) r["auditRationale"] = ro.auditRationale;
+    if (ro?.harness !== undefined) r["harness"] = ro.harness;
     config["reasoning"] = r;
   }
 

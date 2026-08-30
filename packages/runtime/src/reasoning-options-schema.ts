@@ -10,6 +10,7 @@ import {
   ReflexionConfigSchema,
   ReasoningStrategy,
 } from "@reactive-agents/reasoning";
+import { HarnessConfigSchema } from "./harness-schema.js";
 
 const StrategyIcsOverlaySchema = Schema.Struct({
   synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
@@ -63,6 +64,14 @@ export const ReasoningOptionsJsonSchema = Schema.Struct({
    * read by the reactive think gate (env override: `RA_RATIONALE_AUDIT=1`).
    */
   auditRationale: Schema.optional(Schema.Boolean),
+  /**
+   * Harness mechanism switches (W3). Precedence: this config beats the
+   * matching `RA_`-prefixed environment variable, which beats the built-in
+   * default. Set via `.withHarness({...})`. Resolved once per run into
+   * `RunEnvelope.harness`; `auditRationale` above is the legacy single-field
+   * spelling of `harness.auditRationale` and both are honoured.
+   */
+  harness: Schema.optional(HarnessConfigSchema),
   synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
   synthesisModel: Schema.optional(Schema.String),
   synthesisProvider: Schema.optional(Schema.String),

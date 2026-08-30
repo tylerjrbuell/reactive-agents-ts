@@ -58,6 +58,7 @@ export function buildRunEnvelopeFromConfig(
     fabricationGuard: config.fabricationGuard,
     grounding: config.grounding,
     stallPolicy: config.stallPolicy,
+    harness: config.reasoningOptions?.harness,
     approvalPolicy: config.approvalPolicy
       ? {
           mode: config.approvalPolicy.mode,

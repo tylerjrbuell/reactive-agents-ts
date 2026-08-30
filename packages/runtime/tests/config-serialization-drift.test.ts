@@ -54,8 +54,12 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 // Builder methods deliberately NOT represented as data, and why. Documented so
 // "should this be config?" is a conscious, reviewed decision rather than drift:
 //   - Functions/callbacks: withHook, withErrorHandler, withOutputValidator,
-//     withVerificationStep, withCustomTermination,
-//     withHarness, withLayers, withEvents — not JSON-expressible.
+//     withVerificationStep, withCustomTermination, withLayers, withEvents —
+//     not JSON-expressible.
+//   - withHarness has TWO overloads: `(fn: Harness => void)` (pipeline
+//     composition, not JSON-expressible — the alias `compose()` is the same
+//     path) and `(config: HarnessConfig)` (plain data — merges into
+//     `reasoning.harness` and IS covered by this drift guard below).
 //   - withOutputSchema: the SCHEMA OBJECT is not JSON (options DO serialize; see
 //     NON_BUILDER_ROUNDTRIP above).
 //   - Profile switches with cross-field side effects: withLeanHarness (force-
@@ -156,6 +160,22 @@ const MAXIMAL_CONFIG: AgentConfig = {
     maxStrategySwitches: 3,
     fallbackStrategy: "reactive",
     auditRationale: true,
+    harness: {
+      lazyDisclosure: true,
+      toolDiscovery: true,
+      toolIndex: true,
+      toolIndexMaxEntries: 25,
+      verboseRules: true,
+      stableToolSurface: true,
+      recencyBudgetChars: 4096,
+      toolResultBudgetChars: 2048,
+      thoughtContinuity: true,
+      toolObserveSymmetry: true,
+      auditRationale: true,
+      treeOfThoughtExploreBudgetMs: 120_000,
+      assemblyDebug: true,
+      promptDumpPathPrefix: "/tmp/drift-guard-prompt",
+    },
   },
   tools: {
     allowedTools: ["file-read", "file-write"],
