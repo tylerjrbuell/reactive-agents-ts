@@ -97,14 +97,7 @@ import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
-import {
-  lazyDisclosureEnabled,
-  assemblyDebugEnabled,
-  promptDumpPathPrefix,
-  rationaleAuditEnabled,
-  toolIndexEnabled,
-  toolIndexMaxEntriesFlag,
-} from "../../../harness-flags.js";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -311,13 +304,15 @@ export function buildThinkProviderRequest(
    * the interface). Defaults to `"text-parse"` = render, the pre-fix behaviour.
    */
   dialect: "native-fc" | "text-parse" | "none" = "text-parse",
+  /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
+  harness?: ResolvedHarness,
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
   return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect),
+    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness),
   );
 }
 
@@ -330,6 +325,10 @@ export function handleThinking(
     const { input, profile, hooks } = context;
     const strategy = state.strategy;
     const temp = input.temperature ?? profile.temperature ?? 0.7;
+    // Carried harness config (Task 3) — the ONLY source for the mechanism
+    // switches below. Falls back to env/default resolution when this pass
+    // was constructed without an envelope (see harness-control-surface plan).
+    const h = input.harness ?? resolveHarnessConfig();
 
     const maxIter = (state.meta.maxIterations as number) ?? 10;
 
@@ -418,7 +417,7 @@ export function handleThinking(
     // re-invoke tools it's already used). Pressure-narrowing-to-final-answer-
     // only induces panic dumps on local models when fired prematurely, so the
     // resolver applies it only on the non-lazy arm.
-    const lazyMode = lazyDisclosureEnabled();
+    const lazyMode = h.lazyDisclosure;
 
     // ── Tool surface resolution (Overhaul Phase 2) ───────────────────────────
     // One resolver computes the entire per-iteration surface — classification
@@ -478,6 +477,7 @@ export function handleThinking(
       // Consumer-intent floor, carried separately from classifier relevance so
       // `hasClassification` above stays honest.
       floorTools: input.builtinFloorTools ?? [],
+      harness: h,
     });
     const promptSchemas = toolSurface.visible;
 
@@ -602,6 +602,7 @@ export function handleThinking(
       // in-prompt tool reference is skipped on native-FC (tools ride the FC
       // `tools` array); text-parse/weak-FC still get the in-prompt copy.
       context.toolCallingDriver.mode,
+      h,
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
@@ -735,13 +736,13 @@ export function handleThinking(
       }
     }
 
-    if (assemblyDebugEnabled()) {
+    if (h.assemblyDebug) {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }
 
     // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
     // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-iter{N}.json
-    const promptDumpPrefix = promptDumpPathPrefix();
+    const promptDumpPrefix = h.promptDumpPathPrefix;
     if (promptDumpPrefix) {
       const path = `${promptDumpPrefix}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
       try {
@@ -842,7 +843,7 @@ export function handleThinking(
     // When ON, this reduces to the prior `hasReachableTools ? [...] : ""`, so the
     // emitted prompt is byte-identical to the old default.
     const auditRationaleOn =
-      input.auditRationale === true || rationaleAuditEnabled();
+      input.auditRationale === true || h.auditRationale;
     const hasReachableTools = gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools && auditRationaleOn
       ? [
@@ -867,11 +868,11 @@ export function handleThinking(
     // WHY each tool is hidden, every iteration, but only for tracing. This
     // renders a cheap name+one-line index of the hidden set directly, no FC
     // schema tax. Default OFF pending an ablation-warden measurement.
-    const toolIndexText = toolIndexEnabled()
+    const toolIndexText = h.toolIndex
       ? buildToolIndexText(
           toolSurface.universe,
           toolSurface.visible,
-          profile.toolIndexMaxEntries ?? toolIndexMaxEntriesFlag(),
+          profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
         )
       : "";
 
@@ -954,11 +955,11 @@ export function handleThinking(
     // harmless no-ops for it). Dedup against gatedToolSchemas defensively —
     // should never overlap by construction (promoted = hidden = not visible
     // = not in gatedToolSchemas) but a name collision must not double-list.
-    const indexPromotedSchemas = toolIndexEnabled()
+    const indexPromotedSchemas = h.toolIndex
       ? buildToolIndexCallableSchemas(
           toolSurface.universe,
           toolSurface.visible,
-          profile.toolIndexMaxEntries ?? toolIndexMaxEntriesFlag(),
+          profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
         )
       : [];
     const wireToolSchemas = indexPromotedSchemas.length === 0

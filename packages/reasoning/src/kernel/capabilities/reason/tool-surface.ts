@@ -37,7 +37,7 @@
 
 import { filterToolsByRelevance, type ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS as META_TOOL_SET } from "../../state/kernel-constants.js";
-import { stableToolSurfaceEnabled } from "../../../harness-flags.js";
+import type { ResolvedHarness } from "../../../harness-config.js";
 
 /**
  * Pure prune-set computation for the think-phase tool disclosure.
@@ -195,6 +195,9 @@ export interface ToolSurfaceInputs {
    * See `computePromptSchemas`.
    */
   readonly floorTools?: readonly string[];
+  /** Resolved harness config for this run — the ONLY source for mechanism
+   *  switches at this site. Threaded from `KernelInput.harness` by think.ts. */
+  readonly harness: ResolvedHarness;
 }
 
 export interface ResolvedToolSurface {
@@ -282,7 +285,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   // Placed AFTER the `augmented` / `permitted` computation (which applies the
   // contract deny-list to the schema universe) and BEFORE the pressure gate and
   // Stage 2 pruning, so deny still beats everything by construction.
-  if (stableToolSurfaceEnabled()) {
+  if (inputs.harness.stableToolSurface) {
     const blocked = new Set(inputs.gateBlockedTools);
     const stableVisible = augmented.filter((ts) => !blocked.has(ts.name));
     return {

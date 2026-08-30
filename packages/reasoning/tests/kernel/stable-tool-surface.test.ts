@@ -9,6 +9,7 @@ import {
 } from "../../src/kernel/capabilities/reason/tool-surface.js";
 
 import type { ToolSchema } from "../../src/kernel/capabilities/attend/tool-formatting.js";
+import { resolveHarnessConfig } from "../../src/harness-config.js";
 
 const schema = (name: string, description: string): ToolSchema => ({
   name,
@@ -51,6 +52,11 @@ function inputs(over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs {
     gateBlockedTools: [],
     missingRequiredTools: [],
     pruneMinTools: 15,
+    // Resolved fresh per call (not hoisted) so a test's `process.env.RA_*`
+    // mutation just above is reflected — this file is specifically about
+    // that env→config resolution, unlike production call sites which thread
+    // one config resolved once at the run boundary.
+    harness: resolveHarnessConfig(),
     ...over,
   };
 }

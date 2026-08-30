@@ -12,6 +12,7 @@ import { EventLog } from "./event-log.js";
 import { ResultStore } from "./result-store.js";
 import { resolveCapability, type Tier } from "./capability.js";
 import type { AssemblyInput } from "./assembly-ctx.js";
+import type { ResolvedHarness } from "../harness-config.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
@@ -64,6 +65,15 @@ export function fromKernelState(
    * callers that don't specify.
    */
   dialect: "native-fc" | "text-parse" | "none" = "text-parse",
+  /**
+   * Resolved harness config for this pass (`KernelInput.harness`, Task 3).
+   * Threaded into `capability` and onto `AssemblyInput.harness` so the
+   * assembly-stage call sites (`systemPromptStage`, `projectResultsStage`)
+   * read the CARRIED config instead of re-resolving from the environment.
+   * Absent → those sites fall back to `resolveHarnessConfig()` (env/default),
+   * byte-identical to pre-Task-3 behavior.
+   */
+  harness?: ResolvedHarness,
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -174,6 +184,7 @@ export function fromKernelState(
     outputBudget: 2000,
     dialect,
     tier: (profile.tier as Tier) ?? "mid",
+    ...(harness ? { harness } : {}),
   });
 
   // Augment tools with the dispatcher's requiredTools + the profile's schema-detail
@@ -212,6 +223,7 @@ export function fromKernelState(
     ...(state.skillsContext ? { skillsContext: state.skillsContext } : {}),
     tools: toolsWithPolicy,
     ...(priorContext?.trim() ? { priorContext } : {}),
+    ...(harness ? { harness } : {}),
     ...dagInputs,
   };
 }

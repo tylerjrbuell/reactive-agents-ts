@@ -3,6 +3,12 @@ import fc from "fast-check";
 import { resolveToolSurface, type ToolSurfaceInputs } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
+
+// Task 3 (harness-control-surface): `ToolSurfaceInputs.harness` is now
+// mandatory. Every construction site below gets the default resolution
+// (stableToolSurface off) unless a test explicitly overrides it.
+const defaultHarness = resolveHarnessConfig();
 
 // Overhaul Phase 2 (2026-07-07). Property tests encode the resolver's
 // invariants — the exit criterion is that deleting any ONE input (e.g.
@@ -50,6 +56,7 @@ const arbInputs: fc.Arbitrary<ToolSurfaceInputs> = fc
     gateBlockedTools: r.gateBlocked,
     missingRequiredTools: r.missingRequired,
     pruneMinTools: r.pruneMinTools,
+    harness: defaultHarness,
   }));
 
 describe("resolveToolSurface — invariants (property-tested)", () => {
@@ -166,6 +173,7 @@ describe("resolveToolSurface — pinned scenarios", () => {
       gateBlockedTools: [],
       missingRequiredTools: ["file-read"],
       pruneMinTools: 15,
+      harness: defaultHarness,
     });
     const names = new Set(surface.visible.map((t) => t.name));
     expect(names.has("file-write")).toBe(true);
@@ -190,6 +198,7 @@ describe("resolveToolSurface — pinned scenarios", () => {
       gateBlockedTools: [],
       missingRequiredTools: [],
       pruneMinTools: 15,
+      harness: defaultHarness,
     });
     expect(surface.visible.map((t) => t.name)).toEqual(["final-answer"]);
     expect(surface.reasons.get("web-search")).toContain("pressure-critical");
@@ -210,6 +219,7 @@ describe("resolveToolSurface — pinned scenarios", () => {
       gateBlockedTools: ["file-read"],
       missingRequiredTools: ["web-search"],
       pruneMinTools: 15,
+      harness: defaultHarness,
     });
     expect(surface.visible.map((t) => t.name).sort()).toEqual(["file-read", "final-answer", "web-search"]);
     expect(surface.callable.map((t) => t.name).sort()).toEqual(["final-answer", "web-search"]);

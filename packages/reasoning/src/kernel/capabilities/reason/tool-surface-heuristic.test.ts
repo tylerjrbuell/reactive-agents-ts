@@ -37,6 +37,7 @@
 import { describe, it, expect } from "bun:test";
 import { resolveToolSurface } from "./tool-surface.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 
 const mk = (name: string, description: string): ToolSchema =>
   ({ name, description, parameters: [] }) as ToolSchema;
@@ -66,6 +67,7 @@ const base = {
   gateBlockedTools: [] as readonly string[],
   missingRequiredTools: [] as readonly string[],
   pruneMinTools: 15,
+  harness: resolveHarnessConfig(),
 };
 
 const visibleNames = (r: { visible: readonly ToolSchema[] }) => r.visible.map((t) => t.name);

@@ -93,7 +93,6 @@ import {
   type CompletionEnvelope,
 } from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
-import { rationaleAuditEnabled } from "../harness-flags.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -369,7 +368,7 @@ export const executePlanExecute = (
     // skip the full re-plan retry unless auditing is on. Saves a planner LLM
     // call on models that omit rationale (parallels the reactive rationale gate).
     const auditRationaleOn =
-      input.auditRationale === true || rationaleAuditEnabled();
+      input.auditRationale === true || envelope.harness.auditRationale;
 
     let missing = auditRationaleOn ? stepsMissingRationale(plan) : [];
     if (missing.length > 0) {

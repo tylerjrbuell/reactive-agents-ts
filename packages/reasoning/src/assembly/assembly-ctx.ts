@@ -8,10 +8,17 @@ import type { RunContract } from "../kernel/contract/run-contract.js";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import type { SkillsContext } from "../kernel/state/kernel-state.js";
 import type { RunAssessment } from "../kernel/assessment/assess.js";
+import type { ResolvedHarness } from "../harness-config.js";
 
 export interface AssemblyInput {
   readonly log: EventLog;
   readonly capability: ResolvedCapability;
+  /**
+   * Resolved harness config for this pass (`KernelInput.harness`, Task 3).
+   * Absent ⇒ stage call sites fall back to `resolveHarnessConfig()`
+   * (env/default resolution), byte-identical to pre-Task-3 behavior.
+   */
+  readonly harness?: ResolvedHarness;
   readonly store: ResultStore;
   readonly persona: { system: string; environmentContext?: Readonly<Record<string, string>> };
   /**

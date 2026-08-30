@@ -37,6 +37,7 @@ import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver, discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { resolveToolSurface, type ToolSurfaceInputs } from "./tool-surface.js";
 import { handleThinking } from "./think.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 import {
   initialKernelState,
   noopHooks,
@@ -71,6 +72,7 @@ const baseInputs = (over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs =>
   missingRequiredTools: [],
   pruneMinTools: 15,
   catalog: [schema("file-write"), schema("web-search"), schema("http-get")],
+  harness: resolveHarnessConfig(),
   ...over,
 });
 

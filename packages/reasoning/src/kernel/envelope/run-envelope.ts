@@ -169,10 +169,17 @@ export function mergeRunEnvelopeIntoKernelInput(
 /**
  * Test helper — the ONLY sanctioned provision site outside
  * `reasoning-service.ts` (enforced by scripts/check-cross-cutting.sh).
+ *
+ * `data` defaults to a FRESH `buildRunEnvelope()` resolved at CALL time, not
+ * to the frozen `emptyRunEnvelope` module constant (that constant is snapshot
+ * once at import time — a test's `beforeAll`/`beforeEach` mutating `RA_*` env
+ * vars runs strictly after module import, so it would silently miss a
+ * pre-resolved snapshot). Explicit `data` still wins when a caller wants the
+ * exact shared constant or a hand-built envelope.
  */
 export function provideTestEnvelope<A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  data: RunEnvelopeData = emptyRunEnvelope,
+  data?: RunEnvelopeData,
 ): Effect.Effect<A, E, Exclude<R, RunEnvelope>> {
-  return Effect.provideService(effect, RunEnvelope, data);
+  return Effect.provideService(effect, RunEnvelope, data ?? buildRunEnvelope());
 }

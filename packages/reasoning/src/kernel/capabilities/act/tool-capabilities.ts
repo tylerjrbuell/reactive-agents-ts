@@ -23,7 +23,7 @@ import {
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { toolDiscoveryEnabled } from "../../../harness-flags.js";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
 type ToolCapabilitySnapshot = {
   readonly availableToolSchemas: readonly ToolSchema[];
@@ -75,8 +75,11 @@ export const resolveExecutableToolCapabilities = (input: {
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly metaTools?: KernelMetaToolsConfig;
+  /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
+  readonly harness?: ResolvedHarness;
 }): Effect.Effect<ToolCapabilitySnapshot, never> =>
   Effect.gen(function* () {
+    const h = input.harness ?? resolveHarnessConfig();
     const available = [...(input.availableToolSchemas ?? [])];
     const all = [...(input.allToolSchemas ?? input.availableToolSchemas ?? [])];
 
@@ -96,7 +99,7 @@ export const resolveExecutableToolCapabilities = (input: {
       // Reset discovered-set at the start of each run (idempotent across
       // re-resolutions; the kernel calls resolveExecutableToolCapabilities
       // once per run). Fixed 2026-08-19: this used to live inside the
-      // `toolDiscoveryEnabled()` branch below, so a run with
+      // `h.toolDiscovery` branch below, so a run with
       // RA_TOOL_DISCOVERY=0 never reset it — a PRIOR run's discovered set
       // (in the same process) leaked forward and widened tool-surface.ts's
       // visibility floor for every later discovery-off run. `discovered` is
@@ -149,7 +152,7 @@ export const resolveExecutableToolCapabilities = (input: {
       // wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
       // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
       // adapt.
-      if (toolDiscoveryEnabled()) {
+      if (h.toolDiscovery) {
         const catalog = input.allToolSchemas ?? [];
         yield* toolService
           .register(

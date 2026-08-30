@@ -3,7 +3,7 @@ import { pushStage } from "../trace.js";
 import { buildEnvironmentContext, buildToolReference, buildRules } from "../../context/context-engine.js";
 import { buildSystemPrompt } from "../../kernel/capabilities/attend/context-utils.js";
 import type { ToolSchema, ToolParamSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
-import { verboseRulesEnabled } from "../../harness-flags.js";
+import { resolveHarnessConfig } from "../../harness-config.js";
 
 /**
  * Narrow an unknown schema list to `ToolSchema[]` without `any`. Schemas arrive
@@ -50,6 +50,7 @@ function toToolSchemas(raw: readonly unknown[]): readonly ToolSchema[] {
  *    (verbose ReAct guidance; lazy by default).
  */
 export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
+  const h = c.harness ?? resolveHarnessConfig();
   const goal = c.log.byKind("goal").at(-1)?.text ?? "";
   const parts = [buildEnvironmentContext(c.persona.environmentContext)];
   const schemas = toToolSchemas(c.tools.schemas);
@@ -94,7 +95,7 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
   // measured cacheRead 0 on the default kernel path. They now render in
   // `volatile-tail.ts`, after the last breakpoint. Do not move them back.
   // Gate: scripts/check-volatile-placement.sh
-  if (verboseRulesEnabled()) {
+  if (h.verboseRules) {
     parts.push(buildRules(schemas, c.tools.requiredTools, c.capability.tier));
   }
   const systemPrompt = parts.join("\n");

@@ -41,6 +41,7 @@ import {
 import { CONTEXT_PROFILES } from "../../../context/context-profile.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 
 const schema = (name: string): ToolSchema =>
   ({ name, description: `${name} tool`, parameters: [] }) as ToolSchema;
@@ -61,6 +62,7 @@ const baseInputs = (over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs =>
   gateBlockedTools: [],
   missingRequiredTools: [],
   pruneMinTools: 0,
+  harness: resolveHarnessConfig(),
   ...over,
 });
 
