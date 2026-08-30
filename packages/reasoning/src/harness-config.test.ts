@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "bun:test";
-import { resolveHarnessConfig } from "./harness-config.js";
+import { resolveHarnessConfig, fromDisclosureMode } from "./harness-config.js";
 
 const ENV_KEYS = [
   "RA_LAZY_TOOLS", "RA_TOOL_DISCOVERY", "RA_TOOL_INDEX", "RA_VERBOSE_RULES",
@@ -47,5 +47,37 @@ describe("resolveHarnessConfig — precedence", () => {
   it("is frozen — a run cannot mutate its own harness config", () => {
     const r = resolveHarnessConfig();
     expect(Object.isFrozen(r)).toBe(true);
+  });
+});
+
+describe("fromDisclosureMode — the profile field becomes real", () => {
+  it("full = everything visible, no discovery, no index", () => {
+    expect(fromDisclosureMode("full")).toEqual({
+      lazyDisclosure: false, toolDiscovery: false, toolIndex: false,
+    });
+  });
+
+  it("discover = prune plus the discover-tools escape hatch", () => {
+    expect(fromDisclosureMode("discover")).toEqual({
+      lazyDisclosure: true, toolDiscovery: true, toolIndex: false,
+    });
+  });
+
+  it("index = prune plus a cheap text index, no discovery round trips", () => {
+    expect(fromDisclosureMode("index")).toEqual({
+      lazyDisclosure: true, toolDiscovery: false, toolIndex: true,
+    });
+  });
+
+  it("hybrid = prune with both affordances", () => {
+    expect(fromDisclosureMode("hybrid")).toEqual({
+      lazyDisclosure: true, toolDiscovery: true, toolIndex: true,
+    });
+  });
+
+  it("a mode is still overridable field-by-field — explicit beats derived", () => {
+    const r = resolveHarnessConfig({ ...fromDisclosureMode("full"), toolIndex: true });
+    expect(r.lazyDisclosure).toBe(false);
+    expect(r.toolIndex).toBe(true);
   });
 });

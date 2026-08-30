@@ -136,3 +136,27 @@ export function resolveHarnessConfig(config: HarnessConfig = {}): ResolvedHarnes
 
 /** The no-config resolution — byte-identical to today's env-only behaviour. */
 export const defaultResolvedHarness = (): ResolvedHarness => resolveHarnessConfig();
+
+/** The four disclosure postures a `ContextProfile` can name. */
+export type ToolDisclosureMode = "full" | "discover" | "index" | "hybrid";
+
+/**
+ * Expand a profile's `toolDisclosureMode` into the three mechanism switches it
+ * actually means. This is what makes `ContextProfile.toolDisclosureMode` a real
+ * field rather than a declared-and-unread one (spec finding F-4).
+ *
+ * The result is a plain `HarnessConfig`, so a caller can spread it and then
+ * override any single field — the mode is a shorthand, never a lock.
+ */
+export function fromDisclosureMode(mode: ToolDisclosureMode): HarnessConfig {
+  switch (mode) {
+    case "full":
+      return { lazyDisclosure: false, toolDiscovery: false, toolIndex: false };
+    case "discover":
+      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: false };
+    case "index":
+      return { lazyDisclosure: true, toolDiscovery: false, toolIndex: true };
+    case "hybrid":
+      return { lazyDisclosure: true, toolDiscovery: true, toolIndex: true };
+  }
+}

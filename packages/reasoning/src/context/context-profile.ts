@@ -84,9 +84,10 @@ export const ContextProfileSchema = Schema.Struct({
    *                beyond the cap. For catalogs too large for an unbounded
    *                index to stay cheap.
    *
-   * Unset ⇒ resolves from the per-tier default in CONTEXT_PROFILES (§4 of the
-   * plan doc's design — a PROPOSED default pending ablation-warden
-   * confirmation, not yet empirically validated). Explicit
+   * Unset ⇒ resolves from the per-tier default set below in CONTEXT_PROFILES,
+   * via `fromDisclosureMode()` in harness-config.ts (spec finding F-4). Those
+   * four tier defaults are declarations of intent, not measured verdicts —
+   * see the commit that wired this field for the full ruling. Explicit
    * `.withReasoning({ contextProfile: { toolDisclosureMode } })` or a
    * `profileOverrides` entry always wins over the tier default.
    */
@@ -127,6 +128,9 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     // the conservative probe ceiling so the pressure gate doesn't trip
     // prematurely even before that wiring lands.
     maxTokens: 32_768,
+    // A large tool array is itself the failure mode for small models — pay
+    // the small recurring index-text cost, avoid discovery round trips.
+    toolDisclosureMode: "index",
   },
   mid: {
     tier: "mid",
@@ -136,6 +140,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 10,
     temperature: 0.5,
     maxTokens: 32_768,
+    toolDisclosureMode: "hybrid",
   },
   large: {
     tier: "large",
@@ -145,6 +150,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 10,
     temperature: 0.5,
     maxTokens: 32768,
+    toolDisclosureMode: "discover",
   },
   frontier: {
     tier: "frontier",
@@ -154,6 +160,8 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 12,
     temperature: 0.6,
     maxTokens: 128000,
+    // Biggest context, cheapest attention — pruning buys least here.
+    toolDisclosureMode: "discover",
   },
 };
 
