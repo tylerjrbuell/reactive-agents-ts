@@ -62,6 +62,7 @@ export type CrossCuttingInput = Pick<
   | "synthesisConfig"
   | "observationSummary"
   | "auditRationale"
+  | "harness"
   | "modelId"
   | "calibration"
   | "harnessPipeline"

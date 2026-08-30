@@ -15,6 +15,7 @@ import { Context, Effect } from "effect";
 import type { TaskContract } from "@reactive-agents/core";
 import type { KernelInput, GroundingConfig, StallPolicy } from "../state/kernel-state.js";
 import type { FabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
+import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
 export interface RunEnvelopePolicy {
   /** Declared TaskContract (.withContract) — judged contract-vs-ledger at the terminal. */
@@ -63,6 +64,13 @@ export interface RunEnvelopeRails {
 export interface RunEnvelopeData {
   readonly policy: RunEnvelopePolicy;
   readonly rails: RunEnvelopeRails;
+  /**
+   * Harness mechanism configuration, resolved once (config > env > default).
+   * A THIRD named sub-record on the SAME service — never a second service.
+   * Spec §9's ruling stands: splitting the carrier reinvents the drop at the
+   * join. `policy` is judgment, `rails` is repair, `harness` is mechanism.
+   */
+  readonly harness: ResolvedHarness;
 }
 
 export class RunEnvelope extends Context.Tag("RunEnvelope")<RunEnvelope, RunEnvelopeData>() {}
@@ -78,6 +86,8 @@ export interface BuildRunEnvelopeOptions {
   readonly approvalPolicy?: KernelInput["approvalPolicy"];
   readonly approvalDecision?: KernelInput["approvalDecision"];
   readonly interactionResponse?: KernelInput["interactionResponse"];
+  /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
+  readonly harness?: HarnessConfig;
 }
 
 export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelopeData {
@@ -96,11 +106,17 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         ? { interactionResponse: opts.interactionResponse }
         : {}),
     },
+    harness: resolveHarnessConfig(opts.harness ?? {}),
   };
 }
 
-/** The no-config envelope: every field absent. Zero behavior change by construction. */
-export const emptyRunEnvelope: RunEnvelopeData = { policy: {}, rails: {} };
+/** The no-config envelope: every policy/rails field absent, harness fully
+ *  resolved from env+defaults. Zero behavior change by construction. */
+export const emptyRunEnvelope: RunEnvelopeData = {
+  policy: {},
+  rails: {},
+  harness: resolveHarnessConfig(),
+};
 
 /**
  * Fold the run-wide envelope into a `KernelInput` — the cascade's REACH step
@@ -146,6 +162,7 @@ export function mergeRunEnvelopeIntoKernelInput(
     ...(input.interactionResponse === undefined && rails.interactionResponse !== undefined
       ? { interactionResponse: rails.interactionResponse }
       : {}),
+    ...(input.harness === undefined ? { harness: envelope.harness } : {}),
   };
 }
 

@@ -786,6 +786,12 @@ export interface KernelInput {
    * debrief gracefully lacks the why.
    */
   readonly auditRationale?: boolean;
+  /**
+   * Resolved harness mechanism config for this pass (W3). Folded in from the
+   * RunEnvelope by `runKernel`; an explicit value here wins, so a sub-kernel
+   * can be handed a narrower harness than the run's.
+   */
+  readonly harness?: import("../../harness-config.js").ResolvedHarness;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
