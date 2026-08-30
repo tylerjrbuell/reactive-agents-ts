@@ -5,14 +5,53 @@
 // agent-loop pre-W23.
 //
 // Authored 2026-05-07 (W23 step 3).
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
 import { executeDirect } from "../../src/strategies/direct.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { ToolService, createToolsLayer } from "@reactive-agents/tools";
+import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("DirectStrategy", () => {
+  afterEach(() => {
+    delete process.env.RA_TOOL_DISCOVERY;
+  });
+
+  // Finding 2 (harness-control-surface final fix wave): `executeDirect`
+  // previously built its `resolveExecutableToolCapabilities` input without
+  // `harness`, so the resolver always fell back to a fresh env re-read,
+  // silently ignoring any per-agent `.withHarness({ toolDiscovery })`.
+  it("honors the carried RunEnvelope harness config over the environment for toolDiscovery", async () => {
+    process.env.RA_TOOL_DISCOVERY = "0"; // environment says OFF
+
+    const layer = TestLLMServiceLayer([
+      { match: "What is", text: "FINAL ANSWER: Paris" },
+    ]);
+
+    const program = Effect.gen(function* () {
+      yield* executeDirect({
+        taskDescription: "What is the capital of France?",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: defaultReasoningConfig,
+      });
+      const toolService = yield* ToolService;
+      const registered = yield* toolService.listTools();
+      return registered.map((tool) => tool.name);
+    });
+
+    const names = await Effect.runPromise(
+      provideTestEnvelope(
+        program.pipe(Effect.provide(layer), Effect.provide(createToolsLayer())),
+        buildRunEnvelope({ harness: { toolDiscovery: true } }), // carried config says ON
+      ),
+    );
+
+    expect(names).toContain("discover-tools");
+  });
+
   it("returns ReasoningResult with strategy:'direct' on a single LLM call", async () => {
     const layer = TestLLMServiceLayer([
       { match: "What is", text: "FINAL ANSWER: Paris" },

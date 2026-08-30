@@ -753,7 +753,7 @@ rm -f "$EVENT_WIRING_OUT"
 
 # ── Check 12: harness mechanisms resolve through the carried config ─────────
 #
-# Task 3 (W3, 2026-08-27) migrated 9 call sites off zero-argument env
+# Task 3 (W3, 2026-08-27) migrated nineteen call sites off zero-argument env
 # resolvers so that two agents in one process can hold different harness
 # configs and a sub-agent can inherit its parent's (via the existing
 # `_reasoningOptions` passthrough — see sub-agent-harness-inheritance.test.ts;

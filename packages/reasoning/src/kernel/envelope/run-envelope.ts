@@ -111,7 +111,15 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
 }
 
 /** The no-config envelope: every policy/rails field absent, harness fully
- *  resolved from env+defaults. Zero behavior change by construction. */
+ *  resolved from env+defaults. Zero behavior change by construction.
+ *
+ *  NOT used as the production default (Finding 4, harness-control-surface
+ *  final fix wave): `harness` resolves ONCE at module-import time, so a
+ *  `RA_*` env var set after import is silently ignored by any caller that
+ *  reuses this frozen constant. `reasoning-service.ts` (the sole production
+ *  provision site) falls back to a fresh `buildRunEnvelope()` call instead.
+ *  Kept exported for tests and any other caller that genuinely wants the
+ *  shared, already-resolved constant. */
 export const emptyRunEnvelope: RunEnvelopeData = {
   policy: {},
   rails: {},

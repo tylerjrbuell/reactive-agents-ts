@@ -65,7 +65,7 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
     await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
   });
 
-  it("defaults to emptyRunEnvelope when no envelope is passed", async () => {
+  it("defaults to a fresh no-config envelope when no envelope is passed", async () => {
     const probe: StrategyFn = () =>
       Effect.gen(function* () {
         const env = yield* RunEnvelope;
@@ -99,5 +99,55 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+  });
+
+  // Finding 4 (harness-control-surface final fix wave): the no-envelope
+  // default used to be the frozen `emptyRunEnvelope` module constant, whose
+  // `harness` field is resolved ONCE at module-import time — long before this
+  // test runs. An `RA_*` env var set here (well after import) would have been
+  // silently ignored on the production path. Now the fallback is a fresh
+  // `buildRunEnvelope()` call resolved at execute() time, so the env var set
+  // just before this call is honored.
+  it("re-resolves harness from the environment fresh at execute() time, not at module load", async () => {
+    const prev = process.env.RA_STABLE_TOOL_SURFACE;
+    process.env.RA_STABLE_TOOL_SURFACE = "1";
+    try {
+      const probe: StrategyFn = () =>
+        Effect.gen(function* () {
+          const env = yield* RunEnvelope;
+          return yield* finalizeStrategyResult({
+            strategy: "reflexion",
+            steps: [],
+            output: String(env.harness.stableToolSurface),
+            status: "completed",
+            start: Date.now(),
+            totalTokens: 0,
+            totalCost: 0,
+          });
+        });
+
+      const program = Effect.gen(function* () {
+        const reasoning = yield* ReasoningService;
+
+        yield* reasoning.registerStrategy("reflexion", probe);
+
+        const result = yield* reasoning.execute({
+          taskDescription: "A task",
+          taskType: "query",
+          memoryContext: "",
+          availableTools: [],
+          strategy: "reflexion",
+          // No `envelope` passed — must fall back to a FRESH resolve, not a
+          // stale module-load-time snapshot.
+        });
+
+        expect(result.output).toBe("true");
+      });
+
+      await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+    } finally {
+      if (prev === undefined) delete process.env.RA_STABLE_TOOL_SURFACE;
+      else process.env.RA_STABLE_TOOL_SURFACE = prev;
+    }
   });
 });

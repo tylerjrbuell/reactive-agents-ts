@@ -86,6 +86,18 @@ so a fallback distinguishes "no override" from "override of zero."
 
 ## Tool disclosure: four postures
 
+:::caution[Not yet wired into resolution — pending a live consumer in a follow-up]
+`toolDisclosureMode` and `fromDisclosureMode()` exist as typed data today,
+but nothing in the resolution pipeline currently reads
+`profile.toolDisclosureMode` and threads it through `fromDisclosureMode()`
+into a resolved harness at any live call site. The table below documents
+what each mode *means* once wired — it is not yet live runtime behavior. The
+tier defaults are declarations of intent, not measured verdicts. Use
+`fromDisclosureMode()` explicitly (as in the worked example further down) if
+you want its effect today; a bare `.withContextProfile({ tier })` does not
+currently apply it for you.
+:::
+
 `toolDisclosureMode` (set on a `ContextProfile`, or expanded via
 `fromDisclosureMode()`) is shorthand for three of the mechanism switches
 above — `lazyDisclosure`, `toolDiscovery`, and `toolIndex`:
@@ -110,7 +122,9 @@ const agent = ReactiveAgents.create()
   .withHarness({ ...fromDisclosureMode("index"), verboseRules: true })
 ```
 
-`CONTEXT_PROFILES` sets one of these as the **per-tier default**:
+`CONTEXT_PROFILES` sets one of these as the **per-tier default value**
+(again: as typed data, not yet as applied runtime behavior — see the caution
+above):
 
 | Tier | Default mode |
 | --- | --- |
@@ -122,9 +136,10 @@ const agent = ReactiveAgents.create()
 **These four tier defaults are declarations of intent, not measured
 verdicts, pending future ablation-warden measurement.** No cross-tier lift
 data backs them yet — treat them as a reasonable starting posture per tier,
-not a benchmarked recommendation. An explicit `.withHarness({...})` or
-`toolDisclosureMode` on a `contextProfile` override always wins over the tier
-default.
+not a benchmarked recommendation. Once a live consumer exists, an explicit
+`.withHarness({...})` or `toolDisclosureMode` on a `contextProfile` override
+is intended to always win over the tier default; today, use
+`fromDisclosureMode()` explicitly to get any effect at all.
 
 ## Worked example: a small local model
 
@@ -139,11 +154,13 @@ const agent = ReactiveAgents.create()
   .withModel("qwen3:4b")
   .withReasoning()
   .withTools({ builtins: true })
-  .withContextProfile({ tier: "local" }) // toolDisclosureMode: "index" by default
+  .withContextProfile({ tier: "local" }) // "local" tier's default mode is "index" (data only — not yet applied automatically, see caution above)
   .withHarness({
-    // Override the tier default explicitly: show everything, skip both
-    // pruning and the index text — the model rarely needs more than a
-    // handful of tools on any given task.
+    // Explicitly override the mechanism switches themselves: show everything,
+    // skip both pruning and the index text — the model rarely needs more
+    // than a handful of tools on any given task. (Not a "tier default"
+    // override in the resolution-pipeline sense — that pipeline hook does
+    // not exist yet.)
     lazyDisclosure: false,
     toolDiscovery: false,
     toolIndex: false,

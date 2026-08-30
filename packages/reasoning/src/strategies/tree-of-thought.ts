@@ -199,6 +199,7 @@ export const executeTreeOfThought = (
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
+      harness: envelope.harness,
     });
     // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
     // branch kernel via buildKernelInput. Previously these branch kernels

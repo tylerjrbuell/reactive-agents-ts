@@ -81,3 +81,43 @@ describe("fromDisclosureMode — the profile field becomes real", () => {
     expect(r.toolIndex).toBe(true);
   });
 });
+
+// Finding 5 (harness-control-surface final fix wave): `harness-flags.ts`
+// derives `toolDiscovery`'s and `verboseRules`' env-layer defaults from
+// `RA_LAZY_TOOLS` when their own env var is unset. `resolveHarnessConfig`
+// must reproduce that coupling from the RESOLVED `lazyDisclosure` value when
+// the caller set `lazyDisclosure` via config (not just via env), or a
+// config-only `{ lazyDisclosure: false }` silently loses the coupling that
+// the equivalent `RA_LAZY_TOOLS=0` would have applied.
+describe("resolveHarnessConfig — lazyDisclosure cross-field coupling (Finding 5)", () => {
+  it("config-only lazyDisclosure:false also turns off toolDiscovery and on verboseRules", () => {
+    const r = resolveHarnessConfig({ lazyDisclosure: false });
+    expect(r.lazyDisclosure).toBe(false);
+    expect(r.toolDiscovery).toBe(false);
+    expect(r.verboseRules).toBe(true);
+  });
+
+  it("config-only lazyDisclosure:true keeps toolDiscovery on and verboseRules off", () => {
+    const r = resolveHarnessConfig({ lazyDisclosure: true });
+    expect(r.lazyDisclosure).toBe(true);
+    expect(r.toolDiscovery).toBe(true);
+    expect(r.verboseRules).toBe(false);
+  });
+
+  it("an explicit derived field always beats the coupling", () => {
+    const r = resolveHarnessConfig({ lazyDisclosure: false, toolDiscovery: true, verboseRules: false });
+    expect(r.toolDiscovery).toBe(true);
+    expect(r.verboseRules).toBe(false);
+  });
+
+  it("leaves the pure-env path (lazyDisclosure unset) byte-identical to before", () => {
+    process.env.RA_LAZY_TOOLS = "0";
+    const r = resolveHarnessConfig();
+    // Same outcome as the coupling above, but reached via the env layer's
+    // own coupling (harness-flags.ts), not the config-layer reproduction —
+    // this proves the fix does not change the no-config-set path at all.
+    expect(r.lazyDisclosure).toBe(false);
+    expect(r.toolDiscovery).toBe(false);
+    expect(r.verboseRules).toBe(true);
+  });
+});

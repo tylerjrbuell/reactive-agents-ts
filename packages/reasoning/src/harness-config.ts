@@ -115,12 +115,28 @@ export function resolveHarnessConfig(config: HarnessConfig = {}): ResolvedHarnes
   );
   const promptDump = pickOptional(config.promptDumpPathPrefix, promptDumpPathPrefix());
 
+  // Finding 5 (harness-control-surface final fix wave): `harness-flags.ts`
+  // couples `toolDiscovery`'s and `verboseRules`' env-layer DEFAULTS to
+  // `RA_LAZY_TOOLS` (see toolDiscoveryEnabled()/verboseRulesEnabled() there),
+  // but that coupling only fires when reading raw env — it does not follow a
+  // caller's `resolveHarnessConfig({ lazyDisclosure: false })`. Reproduce the
+  // coupling one level up: when the caller explicitly set `lazyDisclosure` in
+  // config (and did NOT also explicitly set the derived field), derive the
+  // derived field's fallback from the RESOLVED `lazyDisclosure` value instead
+  // of a fresh env read. When the caller left `lazyDisclosure` unset, behavior
+  // is unchanged — the env layer's own coupling already applies.
+  const resolvedLazyDisclosure = pick(config.lazyDisclosure, lazyDisclosureEnabled());
+  const toolDiscoveryFallback =
+    config.lazyDisclosure !== undefined ? resolvedLazyDisclosure : toolDiscoveryEnabled();
+  const verboseRulesFallback =
+    config.lazyDisclosure !== undefined ? !resolvedLazyDisclosure : verboseRulesEnabled();
+
   return Object.freeze({
-    lazyDisclosure: pick(config.lazyDisclosure, lazyDisclosureEnabled()),
-    toolDiscovery: pick(config.toolDiscovery, toolDiscoveryEnabled()),
+    lazyDisclosure: resolvedLazyDisclosure,
+    toolDiscovery: pick(config.toolDiscovery, toolDiscoveryFallback),
     toolIndex: pick(config.toolIndex, toolIndexEnabled()),
     ...(toolIndexMaxEntries !== undefined ? { toolIndexMaxEntries } : {}),
-    verboseRules: pick(config.verboseRules, verboseRulesEnabled()),
+    verboseRules: pick(config.verboseRules, verboseRulesFallback),
     stableToolSurface: pick(config.stableToolSurface, stableToolSurfaceEnabled()),
     ...(recencyBudgetChars !== undefined ? { recencyBudgetChars } : {}),
     ...(toolResultBudgetChars !== undefined ? { toolResultBudgetChars } : {}),

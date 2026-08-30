@@ -163,6 +163,13 @@ export const executeReflexion = (
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
+    // Finding 2 (harness-control-surface final fix wave): resolve the envelope
+    // here so its `harness` can reach `resolveExecutableToolCapabilities`
+    // below — without it, the capability resolver falls back to a fresh
+    // `resolveHarnessConfig()` re-read of the environment, silently ignoring
+    // any per-agent `.withHarness({ toolDiscovery: ... })` config.
+    const envelope = yield* RunEnvelope;
+
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reflexion.ts:emitLog");
 
     // Wave C.2 slice 3b-ii — the announced ledger seam. Before it, reflexion's
@@ -182,6 +189,7 @@ export const executeReflexion = (
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
+      harness: envelope.harness,
     });
 
     // FM-I (#195): build the run-wide cross-cutting bundle ONCE and feed it to

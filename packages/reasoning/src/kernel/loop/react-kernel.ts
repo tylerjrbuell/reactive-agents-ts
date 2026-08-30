@@ -116,6 +116,7 @@ export const executeReActKernel = (
       availableToolSchemas: input.availableToolSchemas,
       allToolSchemas: input.allToolSchemas,
       metaTools: input.metaTools,
+      harness: input.harness,
     });
 
     // Native FC detection is handled by runKernel (kernel-runner.ts) —

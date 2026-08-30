@@ -36,6 +36,26 @@ describe(".withHarness()", () => {
     expect(json.reasoning?.harness?.recencyBudgetChars).toBe(4096);
   });
 
+  it("survives a later .withReasoning() call regardless of call order", () => {
+    const cfgHarnessFirst = ReactiveAgents.create()
+      .withName("h")
+      .withProvider("anthropic")
+      .withModel("claude-haiku-4-5-20251001")
+      .withHarness({ stableToolSurface: true })
+      .withReasoning({ maxIterations: 5 })
+      .toConfig();
+    const cfgReasoningFirst = ReactiveAgents.create()
+      .withName("h")
+      .withProvider("anthropic")
+      .withModel("claude-haiku-4-5-20251001")
+      .withReasoning({ maxIterations: 5 })
+      .withHarness({ stableToolSurface: true })
+      .toConfig();
+    expect(cfgHarnessFirst.reasoning?.harness).toEqual(cfgReasoningFirst.reasoning?.harness);
+    expect(cfgHarnessFirst.reasoning?.harness?.stableToolSurface).toBe(true);
+    expect(cfgHarnessFirst.execution?.maxIterations).toBe(5);
+  });
+
   it("does not disturb the pre-existing pipeline-registration overload", () => {
     let called = false;
     const builder = ReactiveAgents.create()
