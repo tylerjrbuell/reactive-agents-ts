@@ -344,8 +344,8 @@ export type {
 } from "./kernel/envelope/run-envelope.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
 // ─── HarnessConfig — the typed per-agent harness control surface (W3) ───
-export { resolveHarnessConfig, defaultResolvedHarness } from "./harness-config.js";
-export type { HarnessConfig, ResolvedHarness } from "./harness-config.js";
+export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode } from "./harness-config.js";
+export type { HarnessConfig, ResolvedHarness, ToolDisclosureMode } from "./harness-config.js";
 // The single tool-policy gate (P0-4 / boundary B1). Exported so the ENGINE's
 // inline agent loop can delegate to the same decision the kernel act path uses,
 // instead of running an independent allow/deny implementation — or, as was the

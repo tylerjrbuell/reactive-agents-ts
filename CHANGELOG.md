@@ -16,6 +16,18 @@
   the entry above.
 
 ### Added
+- `.withHarness({...})` — typed, per-agent configuration for all 14 harness
+  mechanisms (tool disclosure, discovery, tool index, verbose rules, stable
+  tool surface, context budgets, thought continuity, observe symmetry,
+  rationale audit, ToT explore budget). Precedence: config > `RA_*` env var >
+  default. Inherited by sub-agents. Previously these were reachable only
+  through process-global environment variables, so two agents in one process
+  could not differ and no sub-agent inherited anything.
+- `ContextProfile.toolDisclosureMode` is now derivable via
+  `fromDisclosureMode()` (`"full" | "discover" | "index" | "hybrid"`), with
+  per-tier defaults set (local=index, mid=hybrid, large=discover,
+  frontier=discover) — pending a live consumer in a follow-up. Those tier
+  defaults are declarations of intent, not measured verdicts.
 - `BudgetExhausted` now has a producer — a token or cost budget killswitch
   abort publishes it (`packages/compose/src/killswitches/budget-limit.ts`,
   `packages/reasoning/src/kernel/loop/iterate-pass.ts`). `PhaseHookFn`'s
