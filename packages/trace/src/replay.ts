@@ -12,10 +12,10 @@ export interface Trace {
  * Load a JSONL trace file and parse it into a Trace object.
  * Each line must be valid JSON representing a TraceEvent.
  *
- * `isTraceEvent` only checks that `kind`/`runId` are present — it is not a
- * full per-kind schema check. This rejects malformed lines (parse failures,
- * objects missing the two fields every event carries) but does not validate
- * that a given `kind`'s payload has the right shape.
+ * `isTraceEvent` checks the base fields, that `kind` is a known trace-event
+ * kind, and that the fields that kind's payload requires are present (see
+ * `REQUIRED_FIELDS_BY_KIND` in `events.ts`) — it does not validate nested
+ * shapes or field types.
  */
 export async function loadTrace(path: string): Promise<Trace> {
   const text = await readFile(path, "utf8")

@@ -2,16 +2,29 @@
 aliases: [External Research Convergence Amendment, 09 Amendment 2026-08-24]
 tags: [decision, ratification, north-star, amendment]
 date: 2026-08-24
-status: PROPOSED
+status: RATIFIED (W1-W3 shipped 2026-09-03)
 amends: "wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md"
 ---
 
 # 2026-08-24 — External Research Convergence Amendment (amends 09 §5.3, §6, §7)
 
-**Status:** PROPOSED. This is a ratification event against
-[[../Architecture/Specs/09-UNIFIED-PROGRAM]]. Nothing below is in force until the
-owner accepts it. Per 09 §9, changing a higher document is a decision doc, not an
-edit in passing.
+**Status:** RATIFIED. All 4 items in §5 are accepted and, as of 2026-09-03, W1-W3
+are shipped:
+
+- **W1 (cost instrument truth)** — `LLMRequestCompleted` now has a producer;
+  billed-token leg (`inputTokens − cacheReadInputTokens`) lands in the lift
+  gate. `RA_STABLE_TOOL_SURFACE` was re-measured under the corrected leg by
+  the promotion band directly (n=20 pooled, Sonnet) — **REMOVE**, +66.5%
+  billed overhead vs the 15% ceiling. Flag deleted at the root
+  (`wiki/Research/Harness-Reports/2026-08-27-stable-surface-promotion.md`).
+- **W2 (cache explainability)** — folded into the dead-signal-wiring pass;
+  OTel LLM spans now populate.
+- **W3 (profile completion)** — `toolDisclosureMode` (F-4) wired via
+  `fromDisclosureMode()`; `.withHarness()` ships as the config>env>default
+  harness control surface (`wiki/Planning/Implementation-Plans/2026-08-27-harness-control-surface.md`).
+
+**Open:** W4 (harness-quality metrics), W5 (τ-bench run — F-7), W6 (memory
+guardrail wiring — F-6), W7 residue (MCP server surface, trace schema — F-8).
 
 **Trigger.** An external research pass (`state-of-ai-agents-2026.md`, reviewed
 2026-08-24) was validated against primary sources and then checked against this

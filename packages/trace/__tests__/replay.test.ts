@@ -40,3 +40,21 @@ test("rejects malformed lines instead of casting them (FF-2)", async () => {
   expect(trace.events).toHaveLength(1)
   expect(trace.events[0]!.kind).toBe("run-started")
 })
+
+test("rejects a line whose kind is unknown or whose payload lacks that kind's required fields (F-8 residue)", async () => {
+  const dir = `/tmp/trace-load-shape-${Date.now()}`
+  await mkdir(dir, { recursive: true })
+  const lines = [
+    { kind: "run-started", runId: "r", timestamp: 1, iter: -1, seq: 0, task: "t", model: "m", provider: "p", config: {} },
+    // base fields present, kind is a real trace-event kind, but the
+    // kind-specific payload is missing — this is exactly what the old
+    // "kind + runId present" check let through.
+    { kind: "run-completed", runId: "r", timestamp: 2, iter: 0, seq: 1 },
+    // base fields present, but kind is not a trace-event kind at all.
+    { kind: "not-a-real-kind", runId: "r", timestamp: 3, iter: 0, seq: 2 },
+  ]
+  await writeFile(`${dir}/r.jsonl`, lines.map((l) => JSON.stringify(l)).join("\n") + "\n")
+  const trace = await loadTrace(`${dir}/r.jsonl`)
+  expect(trace.events).toHaveLength(1)
+  expect(trace.events[0]!.kind).toBe("run-started")
+})
