@@ -374,7 +374,7 @@ describe("webSearchHandler — error cases", () => {
 describe("codeExecuteHandler — subprocess isolation", () => {
   it("should execute code in subprocess and return result", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "console.log(6 * 7)" }),
+      codeExecuteHandler()({ code: "console.log(6 * 7)" }),
     );
     const typed = result as {
       executed: boolean;
@@ -390,7 +390,7 @@ describe("codeExecuteHandler — subprocess isolation", () => {
 
   it("should capture multi-line output", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: 'console.log("hello"); console.log("world");' }),
+      codeExecuteHandler()({ code: 'console.log("hello"); console.log("world");' }),
     );
     const typed = result as { executed: boolean; output: string };
     expect(typed.executed).toBe(true);
@@ -400,7 +400,7 @@ describe("codeExecuteHandler — subprocess isolation", () => {
 
   it("should report errors for invalid code", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "throw new Error('boom')" }),
+      codeExecuteHandler()({ code: "throw new Error('boom')" }),
     );
     const typed = result as { executed: boolean; error?: string; exitCode: number };
     expect(typed.executed).toBe(false);
@@ -412,7 +412,7 @@ describe("codeExecuteHandler — subprocess isolation", () => {
 
   it("runs in isolated env with no leaked secrets", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "console.log(JSON.stringify(Object.keys(process.env)))" }),
+      codeExecuteHandler()({ code: "console.log(JSON.stringify(Object.keys(process.env)))" }),
     );
     const typed = result as { executed: boolean; output: string };
     expect(typed.executed).toBe(true);

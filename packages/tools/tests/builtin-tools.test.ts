@@ -153,7 +153,7 @@ describe("Built-in Tool Handlers", () => {
 
   it("codeExecuteHandler executes code in subprocess and returns result", async () => {
     const result = await Effect.runPromise(
-      codeExecuteHandler({ code: "console.log(2 + 2)" }),
+      codeExecuteHandler()({ code: "console.log(2 + 2)" }),
     );
 
     const typed = result as { executed: boolean; result: unknown; output: string; exitCode: number };

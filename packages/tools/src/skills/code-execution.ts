@@ -127,9 +127,28 @@ export const codeExecuteTool: ToolDefinition = {
  *   1. `eval()` does not allow `return` in ESM strict mode.
  *   2. `require` is not defined in an ESM `--eval` context.
  */
+/**
+ * Per-call override for {@link codeExecuteHandler}'s sandbox choice.
+ * Precedence: `config.sandbox` > `RA_SANDBOX` env > `"host"` default —
+ * matches `ShellExecuteConfig.sandbox` in `shell-execution.ts`, the sibling
+ * tool this factory shape was copied from to close a real inconsistency
+ * (this handler used to read `sandboxDockerEnabled()` directly with no way
+ * to override it per call, while shell-execute already accepted `config.sandbox`).
+ */
+export interface CodeExecuteConfig {
+  readonly sandbox?: "docker" | "host";
+}
+
+/**
+ * Create a code-execute handler with the given configuration.
+ *
+ * Returns a function `(args) => Effect<unknown, ToolExecutionError>`.
+ * Calling with no config preserves the historical env-only behavior exactly.
+ */
 export const codeExecuteHandler = (
-  args: Record<string, unknown>,
-): Effect.Effect<unknown, ToolExecutionError> =>
+  config?: CodeExecuteConfig,
+): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) =>
+  (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
       const rawCode = args.code as string;
@@ -151,9 +170,12 @@ export const codeExecuteHandler = (
       const wrapped = wrapCode(rawCode);
 
       // ── Opt-in Docker sandbox (F1b) ──
-      // RA_SANDBOX=docker runs the code inside a hardened throwaway container
-      // (no network, non-root, read-only rootfs) instead of a host subprocess.
-      if (sandboxDockerEnabled()) {
+      // config.sandbox > RA_SANDBOX env > "host" default. Runs the code inside
+      // a hardened throwaway container (no network, non-root, read-only
+      // rootfs) instead of a host subprocess.
+      const useDockerSandbox =
+        (config?.sandbox ?? (sandboxDockerEnabled() ? "docker" : "host")) === "docker";
+      if (useDockerSandbox) {
         const dockerResult = await Effect.runPromise(
           makeDockerSandbox({ timeoutMs }).execute(wrapped, "bun").pipe(
             Effect.catchAll((err) =>

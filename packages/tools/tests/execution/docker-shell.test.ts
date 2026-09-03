@@ -80,7 +80,7 @@ describe("F1b — code-execute RA_SANDBOX=docker opt-in", () => {
     process.env.RA_SANDBOX = "docker";
     try {
       const r = (await Effect.runPromise(
-        codeExecuteHandler({ code: "return 6 * 7;" }) as Effect.Effect<
+        codeExecuteHandler()({ code: "return 6 * 7;" }) as Effect.Effect<
           { executed: boolean; result?: unknown },
           unknown
         >,

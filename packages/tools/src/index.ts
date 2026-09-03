@@ -124,6 +124,7 @@ export {
 export {
   codeExecuteTool,
   codeExecuteHandler,
+  type CodeExecuteConfig,
 } from "./skills/code-execution.js";
 export {
   dockerExecuteTool,

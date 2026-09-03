@@ -149,7 +149,7 @@ export const builtinTools: ReadonlyArray<{
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: listDirectoryTool, handler: listDirectoryHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
-  { definition: codeExecuteTool, handler: codeExecuteHandler },
+  { definition: codeExecuteTool, handler: codeExecuteHandler() },
   { definition: gitCliTool, handler: gitCliHandler },
   { definition: ghCliTool, handler: ghCliHandler },
   { definition: gwsCliTool, handler: gwsCliHandler },
