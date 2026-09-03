@@ -14,10 +14,26 @@
 //   bun run packages/benchmarks/src/disclosure-ablation.ts <provider> <model> [runs] [outPath]
 //
 // Arms:
-//   inline          the default path — no pruning, no discovery, no kernel
+//   inline          reasoning EXTRAS off (RA_LAZY_TOOLS default: pruning + discovery ON)
 //   prune+discover  kernel default: lazy disclosure + the escape hatch
 //   prune-only      lazy disclosure with NO escape hatch (RA_TOOL_DISCOVERY=0)
 //   no-prune        every permitted tool visible every iteration
+//
+// ⚠ "inline" IS NO LONGER A SEPARATE LOOP (corrected 2026-09-03). Before Move 1
+// (`be71c87b`, 2026-08-13) `.withReasoning()` absent selected a genuinely
+// different, lighter-weight inline think/act/observe loop with no kernel
+// involvement — that was the true "bare" comparator behind the
+// +141%/+156% 2026-07-28 headline figure
+// (wiki/Research/Harness-Reports/2026-07-28-corrected-composite-rebaseline.md).
+// Since Move 1 the kernel is the SOLE agent loop for every builder; the inline
+// arm was deleted entirely (`e36cd897`, 2026-08-23). `reasoning: false` here
+// now only gates reasoning EXTRAS on the SAME kernel loop every other arm
+// runs — this arm and `prune+discover` differ by strictly less than they used
+// to. A re-run of this script today measures something categorically
+// different from what the 2026-07-28 report measured, even with an identical
+// command line. DO NOT cite a fresh "inline" number as replacing or
+// refreshing the 2026-07-28 headline without first re-reading this notice —
+// there is currently no true bare-API/no-kernel comparator in this codebase.
 //
 // F10 (`stable-surface`, stable FC tool array): measured 2026-08-27, verdict
 // REMOVE — +66.5% billed tokens vs prune+discover, 4.4x over the ceiling, and
