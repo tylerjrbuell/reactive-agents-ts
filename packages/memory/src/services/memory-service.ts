@@ -20,6 +20,16 @@ import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Service Tag ───
+//
+// `storeSemantic`/`logEpisode` are typed to admit `MemoryError` even though
+// this package's own implementation never raises one — `packages/runtime`
+// wraps the constructed layer with guardrail screening (F-6, 2026-08-24
+// external-research-convergence amendment, W6) via `withMemoryGuardrails`
+// in `packages/runtime/src/memory-guardrails.ts`, which fails with
+// `MemoryError` on a critical injection/PII match. The screening cannot
+// live in this package: `packages/guardrails` depends on
+// `packages/llm-provider`, which depends on `packages/memory` — importing
+// guardrails here would close that cycle.
 
 export class MemoryService extends Context.Tag("MemoryService")<
   MemoryService,
@@ -59,14 +69,14 @@ export class MemoryService extends Context.Tag("MemoryService")<
      */
     readonly storeSemantic: (
       entry: SemanticEntry,
-    ) => Effect.Effect<MemoryId, DatabaseError>;
+    ) => Effect.Effect<MemoryId, DatabaseError | MemoryError>;
 
     /**
      * Log an episodic event (persists to SQLite).
      */
     readonly logEpisode: (
       entry: DailyLogEntry,
-    ) => Effect.Effect<MemoryId, DatabaseError>;
+    ) => Effect.Effect<MemoryId, DatabaseError | MemoryError>;
 
     /**
      * Get current working memory contents.

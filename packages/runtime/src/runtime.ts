@@ -18,6 +18,7 @@ import {
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive, SkillStoreServiceLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
+import { withMemoryGuardrails } from "./memory-guardrails.js";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
@@ -609,10 +610,12 @@ export const createRuntime = (options: RuntimeOptions) => {
           ),
         embed: (texts, model) => llm.embed(texts, model),
       };
-      return createMemoryLayer(
-        config.memoryTier,
-        memoryOverrides as Parameters<typeof createMemoryLayer>[1],
-        bridgedLLM,
+      return withMemoryGuardrails(
+        createMemoryLayer(
+          config.memoryTier,
+          memoryOverrides as Parameters<typeof createMemoryLayer>[1],
+          bridgedLLM,
+        ),
       );
     }),
   ).pipe(Layer.provide(Layer.merge(observableLlmLayer, eventBusLayer)));
@@ -1299,10 +1302,10 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
               ),
             embed: (texts, model) => llm.embed(texts, model),
           };
-          return createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM);
+          return withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM));
         }),
       ).pipe(Layer.provide(llmLayer))
-    : createMemoryLayer("1", { agentId: options.agentId });
+    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }));
 
   // Minimal hooks layer (required by ExecutionEngine)
   const hookLayer = LifecycleHookRegistryLive;
