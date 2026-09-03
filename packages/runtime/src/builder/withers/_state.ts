@@ -148,7 +148,7 @@ export interface BuilderState {
   _enablePrompts: boolean;
   _promptsOptions?: PromptsOptions;
   _testScenario?: TestTurn[];
-  _extraLayers?: Layer.Layer<any, any, any>;
+  _extraLayers?: Layer.Layer<never, unknown, unknown>;
   _tracingConfig: { dir: string } | null;
   _mcpServers: MCPServerConfig[];
   _a2aOptions?: A2AOptions;

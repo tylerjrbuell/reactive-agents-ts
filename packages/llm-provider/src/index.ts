@@ -239,10 +239,6 @@ export { makeRateLimiter } from "./rate-limiter.js";
 export type { RateLimiterConfig, RateLimiter } from "./rate-limiter.js";
 export { makeRateLimitedProvider } from "./rate-limited-provider.js";
 
-// ─── Fallback Chain ───
-export { FallbackChain } from "./fallback-chain.js";
-export type { FallbackConfig, FallbackCallback } from "./fallback-chain.js";
-
 // ─── Validation ───
 export { validateAndRepairMessages } from "./validation.js";
 

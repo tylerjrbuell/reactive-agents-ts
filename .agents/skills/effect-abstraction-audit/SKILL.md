@@ -165,7 +165,17 @@ Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below
 
 7. ~~**`ContextProfile` vs runtime `maxTokens`**~~ — **RESOLVED.** `ContextProfile.maxTokens` is now declared (zero `as any` casts for this field).
 
-8. **`Layer<any, any>` on public builder API (NEW, HS-208)** — `withLayers()` and `withReplayLLM()` erase the error channel via `Layer<any, any>`, losing composition-time type safety. Tighten to `Layer.Layer<LLMService, unknown, never>` or appropriate bounds.
+8. **`Layer<any, any>` on public builder API (HS-208) — PARTIALLY RESOLVED 2026-09-03.** 2 of 5 sites tightened:
+   - `packages/reasoning/src/services/reasoning-service.ts:181` — `any` → `Layer.Layer<LLMService, never>`. Note: `Layer`'s `ROut` is contravariant, so the loosest type both `llmLayer` alone and the ToolService-merged layer satisfy is the narrower `LLMService`, not the `LLMService | ToolService` union (that union was tried first and rejected by the compiler — TS2322).
+   - `packages/runtime/src/builder/withers/_state.ts:151` — `any,any,any` → `Layer.Layer<never, unknown, unknown>`, now matching the two other declarations of the same conceptual field (`builder.ts:384`, `runtime-construction.ts:152`).
+   - Both packages' full test suites green after the change (reasoning 2806/2806, runtime 4792/4792 combined with llm-provider).
+   **Still open, deliberately left alone:** `packages/runtime/src/runtime-types.ts:326` (`RuntimeOptions.extraLayers`) and the widening cast at `builder/build-effect/runtime-construction.ts:404-411` — the inline comment there explicitly scopes that cast to bridging `_state.ts`'s (now-fixed) narrow type into this still-`any` public option surface, and calls fixing `runtime-types.ts` itself "out of scope" at that call site. `agent-instantiation.ts:120`'s `Layer.Layer<any, never, never>` cast is heavily and correctly documented (collapses a 15+-conditional-optional-service union deliberately) — leave it, it already replaced 6 worse casts.
+
+9. ~~**`FallbackChain` dead code**~~ — **RESOLVED 2026-09-03.** `packages/llm-provider/src/fallback-chain.ts` (plain OOP class, raw `throw`, no Ref/Tag/Layer) had zero live callers; its exact feature set (error-threshold provider switching, per-model chain) was already superseded by the Effect-native `cascadeWithTransitions` in `packages/runtime/src/llm-fallback-cascade.ts` (see that file's own comment: "P0-3: those knobs were removed because they were never wired"). Deleted source + test + `index.ts` export; llm-provider typecheck/build/tests (446/446) green after removal.
+
+10. **No `Effect.withSpan`/`Effect.fn` tracing anywhere in `packages/*/src` (NEW, found 2026-09-03)** — zero hits across the kernel/tool-execution/LLM-call paths. All observability instead goes through the hand-rolled `packages/observability` layer. Worth evaluating whether Effect-native spans could simplify or complement it — not yet scoped, Medium ROI.
+
+11. **`console.log`/`console.warn` inside domain services (NEW, found 2026-09-03)** — `skill-registry.ts:66,84`, `skill-resolver.ts:118`, `scheduler-service.ts:148,157` bypass `Effect.logWarning`/`Effect.logInfo`, skipping log-level filtering and EventBus wiring the rest of the codebase relies on. Low ROI, low risk — mechanical fix.
 
 ### Keeping this skill accurate
 

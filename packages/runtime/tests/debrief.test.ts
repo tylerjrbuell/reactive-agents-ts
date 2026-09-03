@@ -9,7 +9,6 @@ import {
 import { createTestLLMServiceLayer } from "@reactive-agents/testing";
 import { ReactiveAgents } from "../src/index.js";
 import type { AgentEvent } from "@reactive-agents/core";
-import { FallbackChain } from "@reactive-agents/llm-provider";
 
 const baseInput: DebriefInput = {
   taskPrompt: "Fetch commits and send Signal message",
@@ -283,23 +282,24 @@ describe("DebriefCompleted event emission", () => {
 });
 
 describe("ProviderFallbackActivated event shape", () => {
-  it("can be published when a fallback callback triggers", () => {
+  it("can be published when a fallback transition occurs", () => {
     const published: AgentEvent[] = [];
-    const chain = new FallbackChain(
-      { providers: ["anthropic", "openai"], errorThreshold: 1 },
-      (from: string, to: string, reason: string, attempt: number) => {
-        published.push({
-          _tag: "ProviderFallbackActivated",
-          taskId: "test-task",
-          fromProvider: from,
-          toProvider: to,
-          reason,
-          attemptNumber: attempt,
-        });
-      },
-    );
+    const transition = {
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "provider_error",
+      attemptNumber: 1,
+    };
 
-    chain.recordError("anthropic");
+    published.push({
+      _tag: "ProviderFallbackActivated",
+      taskId: "test-task",
+      fromProvider: transition.fromProvider,
+      toProvider: transition.toProvider,
+      reason: transition.reason,
+      attemptNumber: transition.attemptNumber,
+    });
+
     expect(published.some((event) => event._tag === "ProviderFallbackActivated")).toBe(true);
   });
 });

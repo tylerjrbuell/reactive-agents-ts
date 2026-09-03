@@ -1,7 +1,7 @@
 /**
  * Fallback Provider Enforcement Tests
  *
- * Verifies that the FallbackChain layer composition works correctly at the
+ * Verifies that provider-fallback layer composition works correctly at the
  * Effect layer level — mirrors what createRuntime()'s effectiveLlmLayer does.
  */
 
@@ -214,30 +214,5 @@ describe("Fallback provider layer composition", () => {
     );
 
     expect(primaryCalls()).toBe(1);
-  });
-
-  it("FallbackChain class tracks provider switching correctly", () => {
-    // Test FallbackChain independently (unit test of the stateful class)
-    const { FallbackChain } = require("@reactive-agents/llm-provider");
-    const chain = new FallbackChain({
-      providers: ["anthropic", "openai", "gemini"],
-      errorThreshold: 2,
-    });
-
-    expect(chain.currentProvider()).toBe("anthropic");
-
-    // One error — not enough to switch
-    chain.recordError("anthropic");
-    expect(chain.currentProvider()).toBe("anthropic");
-
-    // Second error — threshold met, switch to openai
-    chain.recordError("anthropic");
-    expect(chain.currentProvider()).toBe("openai");
-
-    // Success resets count
-    chain.recordSuccess("openai");
-
-    // Has more fallbacks (gemini)
-    expect(chain.hasFallback()).toBe(true);
   });
 });

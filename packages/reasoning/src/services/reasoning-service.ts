@@ -178,7 +178,10 @@ export const ReasoningServiceLive = (
       // Capture ToolService optionally — strategies like ReAct need it
       // for tool execution. When not available, strategies degrade gracefully.
       const toolServiceOpt = yield* Effect.serviceOption(ToolService);
-      let strategyLayer: Layer.Layer<any, never> = llmLayer;
+      // `Layer`'s ROut position is contravariant, so the loosest type both
+      // `llmLayer` alone and the ToolService-merged layer satisfy is the
+      // narrower `LLMService` — not the `LLMService | ToolService` union.
+      let strategyLayer: Layer.Layer<LLMService, never> = llmLayer;
       if (toolServiceOpt._tag === "Some") {
         strategyLayer = Layer.merge(
           strategyLayer,
