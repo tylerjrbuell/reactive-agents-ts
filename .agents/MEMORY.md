@@ -28,44 +28,51 @@
 
 Entries in this section are dated evidence and historical context. They are not current status unless the entry is explicitly marked as verified above or corroborated by source/tests and the canonical wiki debt register.
 
-**2026-08-24: External-research convergence pass — 09 amendment PROPOSED, W1+W2 plan READY.**
-Validated an external "State of AI Agents 2026" research doc against primary sources, then checked
-Reactive Agents against it. Docs produced:
-`wiki/Decisions/2026-08-24-external-research-convergence-amendment.md` (ratification event amending
-09 §2/§5.3/§6/§7) and `wiki/Planning/Implementation-Plans/2026-08-24-cost-instrument-truth.md`.
+**2026-08-24→09-03: External-research convergence — 09 amendment RATIFIED, W1-W3 SHIPPED.**
+`wiki/Decisions/2026-08-24-external-research-convergence-amendment.md` status is RATIFIED, W1-W3
+shipped 2026-09-03 (re-verified against code 2026-09-03). Plan
+`wiki/Planning/Implementation-Plans/2026-08-24-cost-instrument-truth.md` (W1+W2) is complete.
 
-Decisive codebase findings, all verified 2026-08-24:
-- **`LLMRequestCompleted` has NINE consumers and ZERO producers.** Declared
-  `packages/core/src/services/event-bus.ts:184-205`; consumed by the benchmark runner
-  (`runner.ts:163-165`), both observability collectors, `observe/src/tracer.ts:122`,
-  `runtime/src/runtime.ts:924`, cortex server ingest, and three cortex UI stores. Nothing publishes
-  it. The per-call LLM token/cost stream has been dead. Single correct producer site =
-  `emitLLMExchange` (`packages/reasoning/src/kernel/utils/diagnostics.ts:528`).
-- **Cache accounting dies at the trace.** `cacheReadInputTokens` is produced by
-  `llm-provider/src/providers/anthropic.ts:497,820` and reaches the exchange at
-  `reasoning/src/kernel/observable-llm.ts:172-173`, but the only downstream reader in the repo is the
-  standalone `benchmarks/src/disclosure-ablation.ts:196`. It never reaches result metadata, the
-  receipt, `packages/cost`, or the lift gate.
-- **The lift gate's token leg is cache-blind** (`benchmarks/src/gate/gate.ts:206-208` sums raw
-  `meanTokens`). This is the real reason 09 §5.3 reads as it does: the stable-surface verdict was
-  correct under the rule as written, but the rule's raw-token proxy stopped tracking cost when prompt
-  caching shipped. Amendment = keep the leg in TOKENS, count `inputTokens − cacheReadInputTokens`.
-  USD was reconsidered and re-rejected (imports vendor pricing into a cross-provider gate).
-- **`toolDisclosureMode` is a dead field** (`reasoning/src/context/context-profile.ts:93`): declared
-  with 25 lines of JSDoc, no `CONTEXT_PROFILES` entry sets it, no consumer reads it. Only its sibling
-  `toolIndexMaxEntries` is read (`think.ts:874,936`). 09 Step 4 "profiles" is ~70% built, not
-  greenfield — reprices that step down substantially.
-- **Two 09 §6 debt items are STALE (ratchet may go down):** §6.11 API-key prefix leak is FIXED
-  (`runtime/src/build-validation.ts:353-363` emits `(set)`/`(missing)`); §6.8 two memory
-  consolidators is FIXED (`memory/src/services/memory-consolidator.ts` is the only one). §6.9 stays
-  OPEN — `trace/src/replay.ts` validates `kind`/`runId` only, per its own JSDoc.
-- **Memory writes bypass guardrails entirely** — zero `guardrail` hits under `packages/memory/src`,
-  while `guardrails/src/detectors/` ships injection/pii/toxicity. `_enableMemory` default false
-  (`runtime/src/builder.ts:345`).
-- **τ-bench is built and has never been run** — `benchmarks/src/tau-bench/` has adapter/loader/pass-k
-  plus vendored airline+retail data; zero reports in `wiki/Research/Harness-Reports/`.
-- Zero `prefixHash|surfaceHash|promptHash` anywhere; `tools/src/mcp/` is client-only while
-  `packages/a2a/` ships both client and server.
+Shipped (verified 2026-09-03):
+- **W1 cost-instrument truth** — `LLMRequestCompleted` now HAS a producer
+  (`emitLLMRequestCompleted`, `reasoning/src/kernel/utils/diagnostics.ts:656`). Billed-token gate leg
+  live at `benchmarks/src/gate/gate.ts:221-222` (`meanBilledTokens ?? meanTokens`).
+  `RA_STABLE_TOOL_SURFACE` re-measured under it → **REMOVED** (+66.5% billed overhead vs 15% ceiling,
+  `a05a0e8a`/`61d90cb7`).
+- **W2 cache explainability** — folded into dead-signal-wiring pass; OTel LLM spans populate
+  (`dfef915e`, `479a2d7e`).
+- **W3 profile completion** — `toolDisclosureMode` wired via `fromDisclosureMode()`
+  (`reasoning/src/harness-config.ts:154`); `.withHarness()` ships as config>env>default surface.
+- **F-6 partial** — memory writes now screened for injection/PII before persist
+  (`memory/src/services/memory-service.ts:26-32`, `a6ff634b`). Default-on measurement NOT done —
+  `_enableMemory` still `false` (`runtime/src/builder.ts:346`, re-verified 2026-09-03).
+- **F-5 trace schema** — per-kind required-field validation shipped (`5d8c024e`).
+
+**W6 CLOSED 2026-09-03 — REWORK verdict, both flags stay opt-in.**
+`ablation-warden` ran the default-on measurement:
+`wiki/Research/Harness-Reports/2026-09-03-memory-default-on-ablation.md`.
+- `_enableMemory` (`builder.ts:346`) — REWORK: +67-100pp lift but +81%/+121% billed-token overhead
+  (30% ceiling) plus cross-tier divergence, two independent REWORK triggers (reused 2026-08-21
+  ablation, still valid — guardrail screening added since is deterministic non-LLM code).
+- `_enableMemoryConsolidation` (`builder.ts:451`) — REWORK: new ablation
+  (`packages/benchmarks/src/memory-consolidation-ablation.ts`, n=3×2 tiers, 12/12 clean cells)
+  found **0.0pp lift both tiers** (ceiling effect, both arms already at 100% recall), token overhead
+  noise-level (consolidator is pure SQL, zero `LLMService` calls). No-lift clause fails the rule
+  regardless of the near-zero cost.
+
+**OPEN — next highest-leverage, ranked:**
+- **W5 — τ-bench score (F-7).** `benchmarks/src/tau-bench/` (adapter/loader/pass-k + vendored
+  airline+retail data) never run — zero reports in `wiki/Research/Harness-Reports/` (re-verified
+  2026-09-03, still zero).
+- **W4 — harness-quality metrics in `packages/eval`.** Only 5 dimensions exist
+  (accuracy/completeness/cost-efficiency/relevance/safety); the 4 new ones (Context Efficiency Ratio,
+  Verification Cost Overhead, Trajectory Recovery Rate, Memory Hygiene Index) are NOT built.
+  RunLedger already holds the inputs — projection, not new instrumentation.
+- **W7 residue** — `tools/src/mcp/` still client-only (re-verified 2026-09-03), unlike `packages/a2a`
+  (client+server). Cheap, unblocked.
+
+Do NOT re-litigate: topology/orchestration surface (09 C5 gates it), RL/distillation pipeline, the
+28-pattern catalog, another north-star doc.
 
 Research-doc claims that must NOT be cited: "+25pp classification-head fine-tuning on tiny models"
 (the actual paper, arXiv 2607.03801, reports +2–3pp); "4.5M executions / 56.6% success" and "30pp
@@ -261,18 +268,16 @@ vs. engine's own empty-output-but-all-deliverables-verified branch (legitimately
 `engine-empty-output-invariant.test.ts`). Needs the `allProduced` deliverable-completeness signal
 threaded earlier to distinguish them — **read that test file first** before touching this rule again.
 
-**2026-08-15: scratch.ts research-task triage — 3 root causes, 1 fixed (`b13550f2`).** `rax diagnose`
-on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode names/descriptions" task)
-found: (1) **FIXED** — `evaluateToolInject` (reactive-intelligence) unconditionally suggested another
-`web-search` on knowledge-gap entropy even when the model already fetched real content (HTTP 200 from
-Wikipedia/TVGuide) compressed to the scratchpad and never called `recall()` to read it back. Fixed by
-threading `hasUnconsumedStoredEvidence` (`computeHasUnconsumedStoredEvidence` in `reactive-observer.ts`)
-so the evaluator now prefers `recall(key, full:true)` over redundant search. (2) **OPEN, high-value** —
-fabrication guards (`evidence-grounding.ts`) are NUMERIC-ONLY; plan-execute-reflect invented 9 complete
-fake episode titles from 5 vague search snippets and the verifier reported "9 checks passed" — zero
-grounding coverage for narrative/factual fabrication, likely the framework's biggest trust gap for
-research tasks. (3) **OPEN** — react's final-answer path can degenerate to a raw ✓-prefixed dump of tool
-observations with no LLM synthesis pass at all. Also noted: `http-get` on IMDb returns 202/empty body
+**2026-08-15→09-03: scratch.ts research-task triage — RESOLVED, all 3 root causes fixed.**
+`rax diagnose` on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode
+names/descriptions" task) found 3 root causes, all now fixed (re-verified 2026-09-03): (1) **FIXED
+`b13550f2`** — `evaluateToolInject` unconditionally suggested another `web-search` on knowledge-gap
+entropy even with unread real content already in the scratchpad; fixed via `hasUnconsumedStoredEvidence`
+threading. (2) **FIXED `2f8432fa`, hardened `bbc8e16d`** — fabrication guards were NUMERIC-ONLY;
+`detectFabricatedListedEntities` (`evidence-grounding.ts:407`) now catches wholesale-invented
+table rows/bolded titles with zero corpus overlap (softened to non-fatal after a live false-fail).
+(3) **FIXED `60e745da`** — react's raw ✓-prefixed tool-dump no longer ships as final answer when
+output-gate synthesis fails. Residue, not re-verified: `http-get` on IMDb returns 202/empty body
 (bot mitigation) with no signal to the model that the fetch was wasted. Full detail: Claude memory
 `project_scratch_ts_research_task_triage_2026_08_15.md`.
 

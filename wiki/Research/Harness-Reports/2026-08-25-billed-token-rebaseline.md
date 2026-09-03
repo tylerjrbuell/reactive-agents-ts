@@ -61,10 +61,13 @@ said "Sonnet 1024 tok, Haiku 2048 tok". Corrected to "Sonnet 1024 tok, Haiku 409
 verified against the current official docs and the live curl test above. Commit
 `0e1597fb`.
 
-**Still open, not fixed by this report:** the transient guidance-line injection found in
-§1's trace (a genuine, separate F10-adjacent bug — the guidance channel isn't excluded
-from the cacheable prefix on the iteration it fires). Filed as a follow-up, not blocking
-this rebaseline.
+**RESOLVED same day, `4f7c4bc0`** (re-verified 2026-09-03): the transient guidance-line
+injection found in §1's trace. Guidance now rides as a trailing user-role message on the
+outgoing request instead of being baked into the `system` string — the system prompt
+stays byte-identical across iterations whenever nothing structural changed, and Anthropic's
+automatic-caching breakpoint absorbs the message thread's expected per-iteration growth
+instead. Pinned by `guidance-prompt-injection.test.ts` (proves byte-identical system
+prompt across a guidance-bearing and guidance-free call).
 
 ## 3. The real measurement (anthropic/claude-sonnet-4-5-20250929, n=3)
 
@@ -134,8 +137,7 @@ reviewed and verified correct.
 
 ## 6. Follow-ups filed by this investigation
 
-1. **The guidance-line prefix churn** found in §1 (transient injection breaks a would-be
-   cache hit even under `RA_STABLE_TOOL_SURFACE`) — real, separate, not yet fixed.
+1. ~~**The guidance-line prefix churn** found in §1~~ — **RESOLVED `4f7c4bc0`**, see §2.
 2. **Re-run at a larger `n`** on Sonnet (and ideally Haiku, now that its real 4,096-token
    floor is known and can be deliberately cleared) before any `ablation-warden` promotion
    pass.

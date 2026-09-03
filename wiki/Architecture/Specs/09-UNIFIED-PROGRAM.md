@@ -83,11 +83,11 @@ K makes agents capable. P makes them governable. T keeps both honest.
 | Fact | Value | Source |
 |---|---|---|
 | Released | v0.14.0, 34 packages, live on npm | — |
-| Harness overhead, `full` vs `bare` | **+141% tokens / +156% cost** | [[../../Research/Harness-Reports/2026-07-28-corrected-composite-rebaseline]] rung 2, haiku, n=3, T=1 |
+| Harness overhead, `full` vs `bare` | **+141% tokens / +156% cost — STALE, see note** | [[../../Research/Harness-Reports/2026-07-28-corrected-composite-rebaseline]] rung 2, haiku, n=3, T=1 |
 | Against this document's own 15% ceiling | fails by **~9.4×** | ibid. |
 | Lift measurements attempted / passed | **8 / 0** | ibid. + §5.2 |
 | Default path meta-loop reachability | **7 event kinds**; `.withReasoning()` = 12; control plane needs `.withLongHorizon()` | `meta-loop-reachability.test.ts` |
-| `_enableReasoning` default | `false` (`builder.ts:360`) — **default users take the inline arm** | verified 2026-08-12 |
+| `_enableReasoning` default | `false` (`builder.ts:361`) — gates reasoning EXTRAS only; the kernel arm is the sole agent loop for every builder since Move 1 merged (`be71c87b`, 2026-08-13) | superseded 2026-08-13, re-verified 2026-09-03 (`runtime.ts:761-767`) |
 | Public builder withers | **83** | verified 2026-08-12 |
 | Strategy implementations | 8 files, **7,628 LOC** | verified 2026-08-12 |
 | `LLMRequestCompleted` producers | 1 (was 0) | `scripts/check-cost-accounting.sh` |
@@ -96,6 +96,20 @@ The +141% figure replaces an earlier 555–640%, which was computed with a broke
 instrument (Anthropic `usage.input_tokens` counts only the uncached remainder; fixed
 `2f97ca1e`). **Do not cite 555–640% anywhere.** Scope limits on +141%: one task, one
 model, n=3, and `bare` is RA's inline loop rather than a raw API loop — so it is a FLOOR.
+
+**⚠ STALE as of 2026-09-03 — the `bare` arm itself no longer exists, not just the
+instrument.** `+141%/+156%` was `prune+discover` vs the pre-Move-1 inline loop
+(`.withReasoning()` absent selected a genuinely separate, kernel-free think/act/observe
+implementation). Move 1 (`be71c87b`, 2026-08-13) made the kernel the sole agent loop for
+every builder, and the inline loop was deleted outright (`e36cd897`, 2026-08-23). Running
+`disclosure-ablation.ts`'s `"inline"` arm today no longer measures "kernel vs no kernel" —
+it measures "kernel with reasoning extras off vs on," a smaller and different comparison
+(see the script's own corrected header, updated 2026-09-03). **There is currently no
+bare-API/no-kernel comparator in this codebase**, so neither the 2026-07-28 number nor a
+fresh run of the same script can state the framework's true kernel overhead. A new
+baseline needs either a literal raw-`messages.create` comparator or an explicit ruling
+that "reasoning extras off" is the accepted floor going forward — owner decision, not
+resolved here. Do not cite +141%/+156% as current framework overhead without this caveat.
 
 ## 5. Measurement rulings that close open questions
 
@@ -136,6 +150,19 @@ mechanism decision in nine attempts backed by a clean measurement, and it is a r
 Scope limit: n=2 per model, one task shape, 10-builtin surface, local tier only; the
 zero-invocation record is the load-bearing fact, not the n=2 correctness delta.
 
+**Amended 2026-09-03 — REMOVE overridden, kept opt-in-by-profile instead.** This
+verdict was measured when `discover-tools` was gated purely on `RA_TOOL_DISCOVERY`/
+`RA_LAZY_TOOLS` (default ON regardless of tier), so "never fires" meant it was
+paying a cost on every tier including ones where it structurally can't help. F-4
+(disclosure-mode wiring, closed same day — see `run-envelope-config.ts`) made
+`ContextProfile.toolDisclosureMode` finally reach `tool-capabilities.ts:155`'s
+`h.toolDiscovery` gate, so registration now genuinely follows the tier's disclosure
+posture: local ("index" mode) excludes it, mid/large/frontier ("hybrid"/"discover")
+include it. Owner judgment: deleting a mechanism that only just became correctly
+scoped throws away a real capability on the strength of a measurement taken under
+the broken wiring. Re-measure the zero-invocation claim under correct gating before
+re-opening REMOVE.
+
 ### 5.3 `RA_STABLE_TOOL_SURFACE` — stays opt-in
 
 Fails the token leg on every tier (+33.3% vs default at haiku, +92.0% granite4, +221.4%
@@ -146,9 +173,11 @@ construction, and it still fails, because the rule says tokens. A proposed amend
 filed ([[../../Decisions/2026-07-29-lift-rule-cost-vs-tokens-amendment]]); **it is not in
 force, and ratifying it would promote nothing.**
 
-**Superseded in part 2026-08-24.** The verdict was correct under the rule as written; the
-rule's token leg was cache-blind. Re-measure under the billed leg before citing this
-section's numbers as a disposition.
+**Superseded 2026-08-24, re-measurement CLOSED 2026-09-03.** The verdict was correct
+under the rule as written; the rule's token leg was cache-blind. Re-measured under the
+corrected billed leg (W1, amendment §W1): **+66.5% billed overhead vs the 15% ceiling —
+REMOVE**, same disposition as the original verdict, now under the honest instrument.
+Flag deleted at the root (`a05a0e8a`/`61d90cb7`). Nothing further to re-measure here.
 
 ### 5.4 The measurement ladder (ratified 2026-07-28)
 
@@ -168,11 +197,11 @@ in more than one place, so a fix at one site silently fails at another. Every it
 was verified against source on 2026-08-11/12 (13 of 14 citations confirmed; full
 fact-check in [[../../Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals]]).
 
-**6.1 Two agent loops.** `execution-engine.ts:739-861` (kernel path) and `:862-1100`
-(inline think/act/observe). `_enableReasoning` defaults `false`, so **the default user
-gets the inline arm**, which is filesystem-blind on success and sits outside
-`check-success-authority.sh`'s fence. Every correctness fix shipped to the kernel misses
-the majority population. *Owned by Move 1.*
+**6.1 Two agent loops — RESOLVED 2026-08-13 (`be71c87b`), inline arm deleted `e36cd897`
+(2026-08-23), re-verified 2026-09-03.** The kernel arm is now the sole agent loop for
+every builder, bare or `.withReasoning()`; `_enableReasoning` only gates extras.
+`execution-engine.ts`'s old inline think/act/observe branch is gone — grep for
+`inlineLoop`/`runInlineLoop`/`minimalLoop` returns nothing. *Owned by Move 1 — closed.*
 
 **6.2 Terminal truth reconstructed, not projected.** The kernel produces terminal state;
 `reactive-agent.ts:1458-1522` then re-derives tool calls, deliverables and goal-achieved
