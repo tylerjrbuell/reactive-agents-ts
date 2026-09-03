@@ -12,6 +12,7 @@
     "apps/cortex/ui"
   ],
   "scripts": {
+    "postinstall": "bash scripts/link-skills.sh",
     "build": "turbo run build",
     "build:packages": "turbo run build --filter='./packages/*'",
     "build:apps": "turbo run build --filter='./apps/*'",
