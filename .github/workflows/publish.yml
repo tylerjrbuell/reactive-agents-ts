@@ -129,12 +129,17 @@ jobs:
       - name: Release
         run: bun scripts/release.ts ${{ steps.ver.outputs.version }}
 
-      # Tag-driven flow leaves repo package.json unbumped. Sync the release
-      # artifacts back to main: VERSION (so `cat VERSION` == npm @latest),
-      # the CHANGELOG.md section release.ts just aggregated, and the deletion
-      # of the changesets it consumed. Without the latter two, consumed
-      # changesets linger on main and re-aggregate into the NEXT release's
-      # notes (bit v0.11.2: seven v0.11.0-era notes had to be purged by hand).
+      # Sync the release artifacts back to main: VERSION (so `cat VERSION` ==
+      # npm @latest), the CHANGELOG.md section release.ts just aggregated,
+      # the deletion of the changesets it consumed, and the 34 stamped
+      # packages/*/package.json files release.ts wrote in this tag workspace.
+      # Without the changeset deletion, consumed changesets linger on main
+      # and re-aggregate into the NEXT release's notes (bit v0.11.2: seven
+      # v0.11.0-era notes had to be purged by hand). Without the package.json
+      # sync, npm ends up ahead of the repo on every single release — found
+      # 2026-09-03 as a 5-release drift across all 34 packages, caught by
+      # scripts/check-version-sync.sh, root-caused to this step never having
+      # carried package.json across the branch switch below.
       # [skip ci] prevents a docs/publish re-trigger loop.
       # Known tradeoff: if main's CHANGELOG gained edits between the tagged
       # commit and this step, the release-generated copy wins.
@@ -147,10 +152,12 @@ jobs:
           # branch switch discards them.
           cp CHANGELOG.md "$RUNNER_TEMP/CHANGELOG.release.md"
           ls .changeset/ > "$RUNNER_TEMP/changesets-remaining.txt"
+          tar -cf "$RUNNER_TEMP/package-jsons.tar" packages/*/package.json
           git fetch origin main
           git checkout -f -B main origin/main
           echo "${{ steps.ver.outputs.version }}" > VERSION
           cp "$RUNNER_TEMP/CHANGELOG.release.md" CHANGELOG.md
+          tar -xf "$RUNNER_TEMP/package-jsons.tar"
           # Remove any changeset note present on main but absent from the
           # post-release workspace (i.e. consumed by release.ts).
           for f in .changeset/*.md; do
@@ -159,7 +166,7 @@ jobs:
               git rm -q "$f"
             fi
           done
-          git add VERSION CHANGELOG.md .changeset/
+          git add VERSION CHANGELOG.md .changeset/ packages/*/package.json
           if git diff --cached --quiet; then
             echo "release artifacts already synced — nothing to commit"
             exit 0
