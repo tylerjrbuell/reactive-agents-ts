@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/trace",
-  "version": "0.10.6",
+  "version": "0.15.0",
   "description": "Structured execution trace recording and inspection for Reactive Agents",
   "keywords": [
     "ai",

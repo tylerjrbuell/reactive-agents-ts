@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/react",
-  "version": "0.10.6",
+  "version": "0.15.0",
   "description": "React hooks + components for Reactive Agents agentic UI — runs, durable interactions, inbox, dynamic render",
   "keywords": [
     "ai",

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/health",
-  "version": "0.10.6",
+  "version": "0.15.0",
   "description": "Health checks and readiness probes for Reactive Agents production deployments",
   "keywords": [
     "ai",

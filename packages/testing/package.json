@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/testing",
-  "version": "0.10.6",
+  "version": "0.15.0",
   "description": "Testing utilities for Reactive Agents — mock services, assertion helpers, and deterministic fixtures",
   "keywords": [
     "ai",

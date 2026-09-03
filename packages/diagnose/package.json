@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/diagnose",
-  "version": "0.10.6",
+  "version": "0.15.0",
   "description": "Forensic CLI for recorded Reactive Agents traces — replay, grep, diff, and debrief agent runs",
   "keywords": [
     "ai",
