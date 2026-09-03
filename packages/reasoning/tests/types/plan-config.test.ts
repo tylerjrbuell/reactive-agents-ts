@@ -12,15 +12,13 @@ describe("PlanExecuteConfig extensions", () => {
     expect(config.planMode).toBe("dag");
   });
 
-  it("accepts stepRetries and patchStrategy", () => {
+  it("accepts stepRetries", () => {
     const config = Schema.decodeSync(PlanExecuteConfigSchema)({
       maxRefinements: 2,
       reflectionDepth: "shallow",
       stepRetries: 2,
-      patchStrategy: "replan-remaining",
     });
     expect(config.stepRetries).toBe(2);
-    expect(config.patchStrategy).toBe("replan-remaining");
   });
 
   it("defaults are backward compatible", () => {

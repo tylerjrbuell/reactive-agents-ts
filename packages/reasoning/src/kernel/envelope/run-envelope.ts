@@ -88,6 +88,13 @@ export interface BuildRunEnvelopeOptions {
   readonly interactionResponse?: KernelInput["interactionResponse"];
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
+  /**
+   * Lowest-priority harness layer, beneath env — a `ContextProfile` tier's
+   * disclosure-mode shorthand (`fromDisclosureMode()`). Only fills a hole an
+   * unset env var leaves; `harness` and any explicit `RA_*` var both still
+   * win. See `resolveHarnessConfig`'s `profileDefault` parameter.
+   */
+  readonly harnessProfileDefault?: HarnessConfig;
 }
 
 export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelopeData {
@@ -106,7 +113,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         ? { interactionResponse: opts.interactionResponse }
         : {}),
     },
-    harness: resolveHarnessConfig(opts.harness ?? {}),
+    harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
 }
 

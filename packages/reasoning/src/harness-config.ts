@@ -100,8 +100,21 @@ function pickOptional<T>(configured: T | undefined, fromEnv: T | undefined): T |
  * Resolve the harness config ONCE per run. Call this at the runtime boundary,
  * never at a call site — a call site that re-resolves reintroduces the
  * process-global read this type exists to remove.
+ *
+ * `profileDefault` is a FOURTH, lowest-priority layer beneath env — a
+ * `ContextProfile` tier's `toolDisclosureMode` shorthand (via
+ * `fromDisclosureMode()`), so precedence is exactly what the module doc
+ * promises: explicit config > environment variable > tier default > hardcoded
+ * default. It only ever fills the hole an UNSET env var leaves — an explicit
+ * `RA_LAZY_TOOLS=0` (or any other explicit flag) still wins, same as before
+ * this parameter existed (F-4, re-wired 2026-09-03 after the 2026-08-24
+ * amendment's `fromDisclosureMode()` was found to have zero production
+ * callers — see run-envelope-config.ts).
  */
-export function resolveHarnessConfig(config: HarnessConfig = {}): ResolvedHarness {
+export function resolveHarnessConfig(
+  config: HarnessConfig = {},
+  profileDefault: HarnessConfig = {},
+): ResolvedHarness {
   const toolIndexMaxEntries = pickOptional(config.toolIndexMaxEntries, toolIndexMaxEntriesFlag());
   const recencyBudgetChars = pickOptional(config.recencyBudgetChars, recencyBudgetCharsOverride());
   const toolResultBudgetChars = pickOptional(
@@ -120,16 +133,21 @@ export function resolveHarnessConfig(config: HarnessConfig = {}): ResolvedHarnes
   // derived field's fallback from the RESOLVED `lazyDisclosure` value instead
   // of a fresh env read. When the caller left `lazyDisclosure` unset, behavior
   // is unchanged — the env layer's own coupling already applies.
-  const resolvedLazyDisclosure = pick(config.lazyDisclosure, lazyDisclosureEnabled());
+  const resolvedLazyDisclosure = pick(
+    config.lazyDisclosure,
+    lazyDisclosureEnabled(profileDefault.lazyDisclosure),
+  );
   const toolDiscoveryFallback =
-    config.lazyDisclosure !== undefined ? resolvedLazyDisclosure : toolDiscoveryEnabled();
+    config.lazyDisclosure !== undefined
+      ? resolvedLazyDisclosure
+      : toolDiscoveryEnabled(profileDefault.toolDiscovery);
   const verboseRulesFallback =
     config.lazyDisclosure !== undefined ? !resolvedLazyDisclosure : verboseRulesEnabled();
 
   return Object.freeze({
     lazyDisclosure: resolvedLazyDisclosure,
     toolDiscovery: pick(config.toolDiscovery, toolDiscoveryFallback),
-    toolIndex: pick(config.toolIndex, toolIndexEnabled()),
+    toolIndex: pick(config.toolIndex, toolIndexEnabled(profileDefault.toolIndex)),
     ...(toolIndexMaxEntries !== undefined ? { toolIndexMaxEntries } : {}),
     verboseRules: pick(config.verboseRules, verboseRulesFallback),
     ...(recencyBudgetChars !== undefined ? { recencyBudgetChars } : {}),

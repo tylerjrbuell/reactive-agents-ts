@@ -16,9 +16,34 @@
  * `scripts/check-cross-cutting.sh` check 4 fails CI if a reasoning execute
  * request is built without going through it.
  */
-import { buildRunEnvelope, wrapApprovalDecider } from "@reactive-agents/reasoning";
+import {
+  buildRunEnvelope,
+  wrapApprovalDecider,
+  CONTEXT_PROFILES,
+  fromDisclosureMode,
+} from "@reactive-agents/reasoning";
 import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
+
+/**
+ * Resolve the disclosure-mode floor for the harness config: the profile's
+ * explicit `toolDisclosureMode`, else the tier default (same tier heuristic
+ * `kernel/loop/runner.ts` uses — ollama with no explicit tier ⇒ "local",
+ * else "mid"), expanded to the three real mechanism switches.
+ *
+ * Closes F-4 (2026-08-24 external-research-convergence amendment, re-opened
+ * 2026-09-03 architecture audit): `fromDisclosureMode()` existed and was
+ * unit-tested but had zero production callers — every `ContextProfile`
+ * tier's `toolDisclosureMode` (all 4 tiers set one) was declared and never
+ * read. This is the floor, not the ceiling — an explicit
+ * `config.reasoningOptions.harness` field still wins (see call site below).
+ */
+function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeOptions["harness"] {
+  const tier =
+    config.contextProfile?.tier ?? (config.provider === "ollama" ? "local" : "mid");
+  const mode = config.contextProfile?.toolDisclosureMode ?? CONTEXT_PROFILES[tier].toolDisclosureMode;
+  return mode ? fromDisclosureMode(mode) : undefined;
+}
 
 /**
  * Per-pass additions the CONFIG cannot know about.
@@ -59,6 +84,10 @@ export function buildRunEnvelopeFromConfig(
     grounding: config.grounding,
     stallPolicy: config.stallPolicy,
     harness: config.reasoningOptions?.harness,
+    // Lowest-priority layer, beneath env — see `resolveHarnessConfig`'s
+    // `profileDefault` parameter. An explicit `harness` field above, or any
+    // explicit `RA_*` env var, still wins.
+    harnessProfileDefault: disclosureFloor(config),
     approvalPolicy: config.approvalPolicy
       ? {
           mode: config.approvalPolicy.mode,

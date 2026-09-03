@@ -44,8 +44,9 @@ function isOff(v: string | undefined): boolean {
  *
  * Default ON (since 2026-04-26). Off via `RA_LAZY_TOOLS=0`.
  */
-export function lazyDisclosureEnabled(): boolean {
-  return !isOff(readFlag("RA_LAZY_TOOLS"));
+export function lazyDisclosureEnabled(defaultValue = true): boolean {
+  const v = readFlag("RA_LAZY_TOOLS");
+  return v === undefined ? defaultValue : !isOff(v);
 }
 
 /**
@@ -59,10 +60,11 @@ export function lazyDisclosureEnabled(): boolean {
  * Note the dependency, which is real rather than incidental: with pruning off
  * every permitted tool is already visible, so discovery has nothing to add.
  */
-export function toolDiscoveryEnabled(): boolean {
+export function toolDiscoveryEnabled(defaultValue = true): boolean {
   const explicit = readFlag("RA_TOOL_DISCOVERY");
   if (explicit !== undefined) return !isOff(explicit);
-  return !isOff(readFlag("RA_LAZY_TOOLS"));
+  const lazy = readFlag("RA_LAZY_TOOLS");
+  return lazy === undefined ? defaultValue : !isOff(lazy);
 }
 
 /**
@@ -80,8 +82,9 @@ export function toolDiscoveryEnabled(): boolean {
  * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md.
  * `RA_TOOL_INDEX=1` to enable for probing.
  */
-export function toolIndexEnabled(): boolean {
-  return readFlag("RA_TOOL_INDEX") === "1";
+export function toolIndexEnabled(defaultValue = false): boolean {
+  const v = readFlag("RA_TOOL_INDEX");
+  return v === undefined ? defaultValue : v === "1";
 }
 
 /**
