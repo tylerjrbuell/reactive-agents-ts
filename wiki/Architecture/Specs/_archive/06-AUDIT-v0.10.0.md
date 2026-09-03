@@ -1,5 +1,9 @@
 # Overhaul Audit — 2026
 
+> ⚠️ **HISTORICAL (per `DOCUMENT_INDEX.md`, closed as of 2026-08-11).** v0.10-era audit;
+> superseded by root `ROADMAP.md` + `08-AGENTIC-OS-NORTH-STAR.md`/`09-UNIFIED-PROGRAM.md`.
+> Kept for historical traceability only — do not cite as current.
+
 > **Status:** Living document. Started 2026-04-28 on `refactor/overhaul`. Drives the v0.10.0 clean-break release.
 > **Scope:** Comprehensive feature + quality audit of every package, mechanism, doc, and memory artifact. Verdicts feed Stage 5 cleanup.
 > **Authority:** This is the only audit document. Older audits (Apr 17, Apr 18) are superseded; pull forward findings as needed.

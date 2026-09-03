@@ -8,6 +8,11 @@ purpose: positive, measurable, falsifiable statements of how the harness IS at f
 
 # Mission Statements — How the Harness Functions at Full Realization
 
+> ⚠️ **HISTORICAL (per `DOCUMENT_INDEX.md`, closed as of 2026-08-18).** Numbered `06`
+> collides with `06-AUDIT-v0.10.0.md` — an artifact of two unrelated numbering passes,
+> not a convention to repeat. Superseded by `08-AGENTIC-OS-NORTH-STAR.md`/`09-UNIFIED-PROGRAM.md`.
+> Kept for historical traceability only — do not cite as current.
+
 > **Vision** says WHY. **North Star** says WHAT. **This document says HOW the system behaves when it works** — the day-to-day signature of the harness running as designed.
 >
 > Every statement is **positive** (declares what is, not what isn't), **measurable**, and **falsifiable**. If the runtime stops matching a statement, that statement is broken.

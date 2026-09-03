@@ -15,15 +15,15 @@
 | 1 | `09-UNIFIED-PROGRAM.md` | **CANONICAL sequencing + convergence authority** (2026-07-08) — K/P/T strands, Waves A–G, release slicing |
 | 2 | `08-AGENTIC-OS-NORTH-STAR.md` | v6.0 (ratified 2026-07-05) — product-arc content, exit gates, honest-claims law, non-goals |
 | 3 | `../Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED 2026-07-11) |
-| 4 | `05-DESIGN-NORTH-STAR.md` | v5.0 architecture reference (superseded for forward sequencing by 08/09) |
+| 4 | `_archive/05-DESIGN-NORTH-STAR.md` | v5.0 architecture reference (superseded for forward sequencing by 08/09; moved to `_archive/` 2026-09-03) |
 | 5 | `01-RESEARCH-DISCIPLINE.md` | 12 rules for every harness change; methodology contract |
 | 6 | `02-FAILURE-MODES.md` | Living catalog of harness failure modes (FM-A1, FM-B2, etc.) |
 | 7 | `03-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
 | 8 | `00-VISION.md` | What we're building toward. Stable anchor. |
 
-**Historical (do not treat as current):** `04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated banner added 07-12), `07-ROADMAP-v1.0.md` + `06-AUDIT-v0.10.0.md` (v0.10-era; superseded by root `ROADMAP.md` + 08/09). `START_HERE_AI_AGENTS.md` was deleted 2026-08-18 (dead-end pointer to deprecated 04) — use `wiki/Hot.md` instead.
+**Historical (moved to `_archive/` 2026-09-03; do not treat as current):** `_archive/04-PROJECT-STATE.md` (2026-04-27 snapshot, deprecated banner added 07-12), `_archive/07-ROADMAP-v1.0.md` + `_archive/06-AUDIT-v0.10.0.md` (v0.10-era; superseded by root `ROADMAP.md` + 08/09). `START_HERE_AI_AGENTS.md` was deleted 2026-08-18 (dead-end pointer to deprecated 04) — use `wiki/Hot.md` instead.
 
-**Undocumented until 2026-08-18 (not previously listed here — gap found and closed):** `06-MISSION-STATEMENTS.md` (2026-05-23, status "draft") and `07-OPTIMAL-EXECUTION-ALGORITHM.md` (2026-05-23) both exist on disk with **numbers that collide with `06-AUDIT-v0.10.0.md` and `07-ROADMAP-v1.0.md`** — an artifact of two unrelated numbering passes, not a naming convention to repeat. Both are superseded by 08/09 like everything else pre-July; treat as historical. `05-DESIGN-NORTH-STAR.md` got a same-day deprecation banner (2026-08-18) — several live files (`NAVIGATION.md`, 3 `.agents/skills/`) were still citing its self-claimed "AUTHORITATIVE" line as current and were corrected in the same pass. **Do not reuse 05/06/07 for a new doc** — pick 10+.
+**Undocumented until 2026-08-18 (not previously listed here — gap found and closed):** `_archive/06-MISSION-STATEMENTS.md` (2026-05-23, status "draft") and `_archive/07-OPTIMAL-EXECUTION-ALGORITHM.md` (2026-05-23) both exist on disk with **numbers that collide with `06-AUDIT-v0.10.0.md` and `07-ROADMAP-v1.0.md`** — an artifact of two unrelated numbering passes, not a naming convention to repeat. Both are superseded by 08/09 like everything else pre-July; treat as historical, and both moved to `_archive/` 2026-09-03. `05-DESIGN-NORTH-STAR.md` got a same-day deprecation banner (2026-08-18) — several live files (`NAVIGATION.md`, 3 `.agents/skills/`) were still citing its self-claimed "AUTHORITATIVE" line as current and were corrected in the same pass; it too moved to `_archive/` 2026-09-03. **Do not reuse 05/06/07 for a new doc** — pick 10+.
 
 **Authority Hierarchy (2026-07-12):**
 

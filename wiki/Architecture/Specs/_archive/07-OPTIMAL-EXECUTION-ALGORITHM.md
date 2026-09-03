@@ -6,10 +6,16 @@ companion-required-reading:
   - 05-DESIGN-NORTH-STAR.md
   - 06-MISSION-STATEMENTS.md
   - wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md
-status: canonical-target
+status: historical (superseded — see banner below)
 ---
 
 # Optimal Execution Algorithm — The Canonical Harness Loop
+
+> ⚠️ **HISTORICAL (per `DOCUMENT_INDEX.md`, closed as of 2026-08-18).** Numbered `07`
+> collides with `07-ROADMAP-v1.0.md` — an artifact of two unrelated numbering passes,
+> not a convention to repeat. Frontmatter `status: canonical-target` above is stale from
+> authoring time; superseded by `08-AGENTIC-OS-NORTH-STAR.md`/`09-UNIFIED-PROGRAM.md`.
+> Kept for historical traceability only — do not cite as current.
 
 > **The harness exists to compress the gap between intent and outcome.** This document specifies the canonical per-iter algorithm the harness executes when functioning at peak signal, efficiency, and effectiveness. Every architectural decision in `2026-05-23-harness-convergence.md` is in service of reaching this algorithm structurally.
 
