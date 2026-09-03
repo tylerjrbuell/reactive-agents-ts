@@ -1,6 +1,6 @@
 ---
 name: upward-report
-description: Mandatory output contract for warden agents during the team-ownership dev-contract pilot. Warden agents append a YAML upward-report block as the last content of their response. Parent (main thread) parses and routes via dispatcher FSM. Use when you are a warden agent finishing a task, OR when you are the parent consuming a warden's output.
+description: Mandatory output contract for warden agents. Warden agents append a YAML upward-report block as the last content of their response. Parent (main thread) parses and routes via dispatcher FSM. Use when you are a warden agent finishing a task, OR when you are the parent consuming a warden's output.
 ---
 
 # UpwardReport
@@ -52,6 +52,6 @@ Mirror this table to `AGENTS.md` PILOT section.
 - ❌ Authority widening without user gate.
 - ❌ Accepting `completed` + `confidence < 0.7` without running deterministic verifier.
 
-## Pilot expiry
+## Status
 
-Part of team-ownership dev-contract pilot. Removed in revert commit on 2026-06-15 if pilot killed.
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

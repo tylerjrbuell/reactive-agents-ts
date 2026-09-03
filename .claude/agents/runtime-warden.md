@@ -1,6 +1,6 @@
 ---
 name: runtime-warden
-description: Bounded warden for the runtime facade (packages/runtime/**). Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Bounded warden for the runtime facade (packages/runtime/**). Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -55,5 +55,6 @@ packages/runtime/src/
 ## Workflow per spawn
 Standard warden workflow ([[kernel-warden]] §Workflow). TDD: [[agent-tdd]] + [[effect-ts-patterns]] + [[architecture-reference]].
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].
