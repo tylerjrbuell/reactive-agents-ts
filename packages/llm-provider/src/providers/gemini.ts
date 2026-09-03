@@ -5,9 +5,9 @@ import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import { mapProviderError } from "../provider-error.js";
 import type {
   CompletionResponse,
@@ -691,70 +691,47 @@ export const GeminiProviderLive = Layer.effect(
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
-          const maxRetries = request.maxParseRetries ?? 2;
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries: request.maxParseRetries ?? 2,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messagesWithFormat
+                    : [
+                        ...messagesWithFormat,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
+                        },
+                      ];
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messagesWithFormat
-                : [
-                    ...messagesWithFormat,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
-                    },
-                  ];
+                const response = yield* Effect.tryPromise({
+                  try: () =>
+                    client.models.generateContent({
+                      model,
+                      contents: toGeminiContents(msgs),
+                      config: buildGeminiConfig({
+                        model,
+                        maxTokens: request.maxTokens,
+                        temperature: request.temperature,
+                        systemPrompt: request.systemPrompt,
+                        responseMimeType: "application/json",
+                        responseSchema: schemaObj,
+                      }),
+                    }),
+                  catch: toEffectError,
+                });
 
-            const response = yield* Effect.tryPromise({
-              try: () =>
-                client.models.generateContent({
-                  model,
-                  contents: toGeminiContents(msgs),
-                  config: buildGeminiConfig({
-                    model,
-                    maxTokens: request.maxTokens,
-                    temperature: request.temperature,
-                    systemPrompt: request.systemPrompt,
-                    responseMimeType: "application/json",
-                    responseSchema: schemaObj,
-                  }),
-                }),
-              catch: toEffectError,
-            });
-
-            const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
-
-            try {
-              const parsed = JSON.parse(mapped.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapGeminiResponse(response, model, config.pricingRegistry).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>

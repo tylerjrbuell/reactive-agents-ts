@@ -5,10 +5,10 @@ import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
 import { mapProviderError } from "../provider-error.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -630,10 +630,6 @@ export const LiteLLMProviderLive = Layer.effect(
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
-          const maxRetries = request.maxParseRetries ?? 2;
-
           // Loop-invariant: model + F6 thinking/capability chain (mirrors
           // complete() above) resolve once, not per parse attempt.
           const model =
@@ -649,73 +645,54 @@ export const LiteLLMProviderLive = Layer.effect(
           });
           const structuredTokenField = buildTokenField(structuredCap, structuredAnswerBudget, structuredReserve, config.thinkingOptions?.effort ?? "medium");
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messagesWithFormat
-                : [
-                    ...messagesWithFormat,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
-                    },
-                  ];
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries: request.maxParseRetries ?? 2,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messagesWithFormat
+                    : [
+                        ...messagesWithFormat,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
+                        },
+                      ];
 
-            const completeResult = yield* Effect.tryPromise({
-              try: () =>
-                liteLLMFetch(
-                  baseURL,
-                  "/chat/completions",
-                  {
-                    model,
-                    ...structuredTokenField,
-                    // I1 parity: omit temperature on the reasoning path.
-                    ...(structuredReserve === undefined
-                      ? { temperature: request.temperature ?? config.defaultTemperature }
-                      : {}),
-                    messages: toLiteLLMMessages(msgs),
-                  },
-                  apiKey,
-                  extraHeaders,
-                ),
-              catch: (error) => toEffectError(error),
-            });
+                const completeResult = yield* Effect.tryPromise({
+                  try: () =>
+                    liteLLMFetch(
+                      baseURL,
+                      "/chat/completions",
+                      {
+                        model,
+                        ...structuredTokenField,
+                        // I1 parity: omit temperature on the reasoning path.
+                        ...(structuredReserve === undefined
+                          ? { temperature: request.temperature ?? config.defaultTemperature }
+                          : {}),
+                        messages: toLiteLLMMessages(msgs),
+                      },
+                      apiKey,
+                      extraHeaders,
+                    ),
+                  catch: (error) => toEffectError(error),
+                });
 
-            const response = mapLiteLLMResponse(
-              completeResult as LiteLLMRawResponse,
-              model,
-              config.pricingRegistry,
-            );
-
-            try {
-              const parsed = JSON.parse(response.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapLiteLLMResponse(
+                  completeResult as LiteLLMRawResponse,
+                  model,
+                  config.pricingRegistry,
+                ).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>

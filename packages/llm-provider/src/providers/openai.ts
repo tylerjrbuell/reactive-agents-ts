@@ -5,10 +5,10 @@ import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
 import { mapProviderError } from "../provider-error.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -684,65 +684,43 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messages
+                    : [
+                        ...messages,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
+                        },
+                      ];
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messages
-                : [
-                    ...messages,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
-                    },
-                  ];
+                const completeResult = yield* Effect.tryPromise({
+                  try: () =>
+                    client.chat.completions.create({
+                      ...requestBody,
+                      messages: toOpenAIMessages(msgs),
+                    }),
+                  catch: (error) => toEffectError(error, providerName),
+                });
 
-            const completeResult = yield* Effect.tryPromise({
-              try: () =>
-                client.chat.completions.create({
-                  ...requestBody,
-                  messages: toOpenAIMessages(msgs),
-                }),
-              catch: (error) => toEffectError(error, providerName),
-            });
-
-            const response = mapOpenAIResponse(
-              completeResult as OpenAIRawResponse,
-              model,
-              config.pricingRegistry,
-            );
-
-            try {
-              const parsed = JSON.parse(response.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapOpenAIResponse(
+                  completeResult as OpenAIRawResponse,
+                  model,
+                  config.pricingRegistry,
+                ).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>
