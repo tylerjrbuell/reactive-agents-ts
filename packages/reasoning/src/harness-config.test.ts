@@ -3,7 +3,7 @@ import { resolveHarnessConfig, fromDisclosureMode } from "./harness-config.js";
 
 const ENV_KEYS = [
   "RA_LAZY_TOOLS", "RA_TOOL_DISCOVERY", "RA_TOOL_INDEX", "RA_VERBOSE_RULES",
-  "RA_STABLE_TOOL_SURFACE", "RA_THOUGHT_CONTINUITY", "RA_RECENCY_BUDGET_CHARS",
+  "RA_THOUGHT_CONTINUITY", "RA_RECENCY_BUDGET_CHARS",
 ] as const;
 
 afterEach(() => {
@@ -14,18 +14,18 @@ describe("resolveHarnessConfig — precedence", () => {
   it("uses the built-in default when neither config nor env is set", () => {
     const r = resolveHarnessConfig();
     expect(r.lazyDisclosure).toBe(true);
-    expect(r.stableToolSurface).toBe(false);
+    expect(r.verboseRules).toBe(false);
     expect(r.toolIndex).toBe(false);
   });
 
   it("lets the environment override the built-in default", () => {
-    process.env.RA_STABLE_TOOL_SURFACE = "1";
-    expect(resolveHarnessConfig().stableToolSurface).toBe(true);
+    process.env.RA_VERBOSE_RULES = "1";
+    expect(resolveHarnessConfig().verboseRules).toBe(true);
   });
 
   it("lets explicit config beat the environment — config always wins", () => {
-    process.env.RA_STABLE_TOOL_SURFACE = "1";
-    expect(resolveHarnessConfig({ stableToolSurface: false }).stableToolSurface).toBe(false);
+    process.env.RA_VERBOSE_RULES = "1";
+    expect(resolveHarnessConfig({ verboseRules: false }).verboseRules).toBe(false);
     process.env.RA_LAZY_TOOLS = "0";
     expect(resolveHarnessConfig({ lazyDisclosure: true }).lazyDisclosure).toBe(true);
   });

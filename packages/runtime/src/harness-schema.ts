@@ -16,7 +16,6 @@ export const HarnessConfigSchema = Schema.Struct({
   toolIndex: Schema.optional(Schema.Boolean),
   toolIndexMaxEntries: Schema.optional(Schema.Number),
   verboseRules: Schema.optional(Schema.Boolean),
-  stableToolSurface: Schema.optional(Schema.Boolean),
   recencyBudgetChars: Schema.optional(Schema.Number),
   toolResultBudgetChars: Schema.optional(Schema.Number),
   thoughtContinuity: Schema.optional(Schema.Boolean),

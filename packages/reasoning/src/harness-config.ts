@@ -27,7 +27,6 @@ import {
   toolIndexEnabled,
   toolIndexMaxEntriesFlag,
   verboseRulesEnabled,
-  stableToolSurfaceEnabled,
   recencyBudgetCharsOverride,
   toolResultBudgetCharsOverride,
   thoughtContinuityEnabled,
@@ -50,9 +49,6 @@ export interface HarnessConfig {
   readonly toolIndexMaxEntries?: number;
   /** Inject the verbose ReAct RULES block. Default OFF. (`RA_VERBOSE_RULES`) */
   readonly verboseRules?: boolean;
-  /** Keep the function-calling tool array byte-stable across iterations so the
-   *  provider's prompt cache survives. Default OFF. (`RA_STABLE_TOOL_SURFACE`) */
-  readonly stableToolSurface?: boolean;
   /** Character budget for recent observations. Unset ⇒ derived from the window. (`RA_RECENCY_BUDGET_CHARS`) */
   readonly recencyBudgetChars?: number;
   /** Per-tool-result preservation cap. Unset ⇒ the tier table decides. (`RA_TOOL_RESULT_BUDGET_CHARS`) */
@@ -80,7 +76,6 @@ export interface ResolvedHarness {
   readonly toolIndex: boolean;
   readonly toolIndexMaxEntries?: number;
   readonly verboseRules: boolean;
-  readonly stableToolSurface: boolean;
   readonly recencyBudgetChars?: number;
   readonly toolResultBudgetChars?: number;
   readonly thoughtContinuity: boolean;
@@ -137,7 +132,6 @@ export function resolveHarnessConfig(config: HarnessConfig = {}): ResolvedHarnes
     toolIndex: pick(config.toolIndex, toolIndexEnabled()),
     ...(toolIndexMaxEntries !== undefined ? { toolIndexMaxEntries } : {}),
     verboseRules: pick(config.verboseRules, verboseRulesFallback),
-    stableToolSurface: pick(config.stableToolSurface, stableToolSurfaceEnabled()),
     ...(recencyBudgetChars !== undefined ? { recencyBudgetChars } : {}),
     ...(toolResultBudgetChars !== undefined ? { toolResultBudgetChars } : {}),
     thoughtContinuity: pick(config.thoughtContinuity, thoughtContinuityEnabled()),

@@ -166,7 +166,6 @@ const MAXIMAL_CONFIG: AgentConfig = {
       toolIndex: true,
       toolIndexMaxEntries: 25,
       verboseRules: true,
-      stableToolSurface: true,
       recencyBudgetChars: 4096,
       toolResultBudgetChars: 2048,
       thoughtContinuity: true,

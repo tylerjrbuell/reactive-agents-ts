@@ -7,7 +7,7 @@ import { resolveHarnessConfig } from "../../../harness-config.js";
 
 // Task 3 (harness-control-surface): `ToolSurfaceInputs.harness` is now
 // mandatory. Every construction site below gets the default resolution
-// (stableToolSurface off) unless a test explicitly overrides it.
+// unless a test explicitly overrides it.
 const defaultHarness = resolveHarnessConfig();
 
 // Overhaul Phase 2 (2026-07-07). Property tests encode the resolver's

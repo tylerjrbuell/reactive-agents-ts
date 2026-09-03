@@ -53,11 +53,11 @@ describe("sub-agents inherit the parent's harness config (behavioral)", () => {
       .withName("parent")
       .withProvider("test")
       .withModel("test-model")
-      .withHarness({ stableToolSurface: true, toolIndex: true });
+      .withHarness({ verboseRules: true, toolIndex: true });
     const parentHarness = parent.toConfig().reasoning?.harness;
 
     expect(parentHarness).toEqual({
-      stableToolSurface: true,
+      verboseRules: true,
       toolIndex: true,
     });
 
@@ -68,7 +68,7 @@ describe("sub-agents inherit the parent's harness config (behavioral)", () => {
     });
 
     expect(childConfig.reasoningOptions?.harness).toEqual({
-      stableToolSurface: true,
+      verboseRules: true,
       toolIndex: true,
     });
   });

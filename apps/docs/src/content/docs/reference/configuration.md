@@ -163,7 +163,6 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |
-| `reasoning.harness.stableToolSurface` | `boolean` | no |  |
 | `reasoning.harness.thoughtContinuity` | `boolean` | no |  |
 | `reasoning.harness.toolDiscovery` | `boolean` | no |  |
 | `reasoning.harness.toolIndex` | `boolean` | no |  |

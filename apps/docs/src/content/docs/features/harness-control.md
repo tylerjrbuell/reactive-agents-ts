@@ -49,9 +49,6 @@ existing `parentReasoningOptions` passthrough, no separate mechanism needed.
    changes.
 
 ```ts
-// Keep the tool array byte-stable so the provider's prompt cache survives:
-agent.withHarness({ stableToolSurface: true })
-
 // Small-model profile: show everything, no discovery round trips:
 agent.withHarness({
   lazyDisclosure: false,
@@ -69,7 +66,6 @@ agent.withHarness({
 | `toolIndex` | `boolean` | `false` | `RA_TOOL_INDEX` |
 | `toolIndexMaxEntries` | `number` (unset = tier decides) | unset | `RA_TOOL_INDEX_MAX_ENTRIES` |
 | `verboseRules` | `boolean` | `false` | `RA_VERBOSE_RULES` |
-| `stableToolSurface` | `boolean` | `false` | `RA_STABLE_TOOL_SURFACE` |
 | `recencyBudgetChars` | `number` (unset = derived from window) | unset | `RA_RECENCY_BUDGET_CHARS` |
 | `toolResultBudgetChars` | `number` (unset = tier table decides) | unset | `RA_TOOL_RESULT_BUDGET_CHARS` |
 | `thoughtContinuity` | `boolean` | `false` | `RA_THOUGHT_CONTINUITY` |

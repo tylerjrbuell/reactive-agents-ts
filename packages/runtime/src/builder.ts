@@ -585,9 +585,6 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * merge, so `.withHarness({a}).withHarness({b})` keeps both.
      *
      * @example
-     * // Keep the tool array byte-stable so the provider's prompt cache survives:
-     * .withHarness({ stableToolSurface: true })
-     * @example
      * // Small-model profile: show everything, no discovery round trips:
      * .withHarness({ lazyDisclosure: false, toolDiscovery: false, verboseRules: true })
      *

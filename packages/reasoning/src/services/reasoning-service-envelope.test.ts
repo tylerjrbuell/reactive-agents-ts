@@ -109,8 +109,8 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
   // `buildRunEnvelope()` call resolved at execute() time, so the env var set
   // just before this call is honored.
   it("re-resolves harness from the environment fresh at execute() time, not at module load", async () => {
-    const prev = process.env.RA_STABLE_TOOL_SURFACE;
-    process.env.RA_STABLE_TOOL_SURFACE = "1";
+    const prev = process.env.RA_VERBOSE_RULES;
+    process.env.RA_VERBOSE_RULES = "1";
     try {
       const probe: StrategyFn = () =>
         Effect.gen(function* () {
@@ -118,7 +118,7 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
           return yield* finalizeStrategyResult({
             strategy: "reflexion",
             steps: [],
-            output: String(env.harness.stableToolSurface),
+            output: String(env.harness.verboseRules),
             status: "completed",
             start: Date.now(),
             totalTokens: 0,
@@ -146,8 +146,8 @@ describe("ReasoningService provides RunEnvelope to strategy effects", () => {
 
       await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
     } finally {
-      if (prev === undefined) delete process.env.RA_STABLE_TOOL_SURFACE;
-      else process.env.RA_STABLE_TOOL_SURFACE = prev;
+      if (prev === undefined) delete process.env.RA_VERBOSE_RULES;
+      else process.env.RA_VERBOSE_RULES = prev;
     }
   });
 });

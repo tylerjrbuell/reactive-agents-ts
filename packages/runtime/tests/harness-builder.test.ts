@@ -7,9 +7,9 @@ describe(".withHarness()", () => {
       .withName("h")
       .withProvider("anthropic")
       .withModel("claude-haiku-4-5-20251001")
-      .withHarness({ stableToolSurface: true, toolIndex: true })
+      .withHarness({ verboseRules: true, toolIndex: true })
       .toConfig();
-    expect(cfg.reasoning?.harness?.stableToolSurface).toBe(true);
+    expect(cfg.reasoning?.harness?.verboseRules).toBe(true);
     expect(cfg.reasoning?.harness?.toolIndex).toBe(true);
   });
 
@@ -18,10 +18,10 @@ describe(".withHarness()", () => {
       .withName("h")
       .withProvider("anthropic")
       .withModel("claude-haiku-4-5-20251001")
-      .withHarness({ stableToolSurface: true })
+      .withHarness({ verboseRules: true })
       .withHarness({ toolIndex: true })
       .toConfig();
-    expect(cfg.reasoning?.harness?.stableToolSurface).toBe(true);
+    expect(cfg.reasoning?.harness?.verboseRules).toBe(true);
     expect(cfg.reasoning?.harness?.toolIndex).toBe(true);
   });
 
@@ -41,7 +41,7 @@ describe(".withHarness()", () => {
       .withName("h")
       .withProvider("anthropic")
       .withModel("claude-haiku-4-5-20251001")
-      .withHarness({ stableToolSurface: true })
+      .withHarness({ verboseRules: true })
       .withReasoning({ maxIterations: 5 })
       .toConfig();
     const cfgReasoningFirst = ReactiveAgents.create()
@@ -49,10 +49,10 @@ describe(".withHarness()", () => {
       .withProvider("anthropic")
       .withModel("claude-haiku-4-5-20251001")
       .withReasoning({ maxIterations: 5 })
-      .withHarness({ stableToolSurface: true })
+      .withHarness({ verboseRules: true })
       .toConfig();
     expect(cfgHarnessFirst.reasoning?.harness).toEqual(cfgReasoningFirst.reasoning?.harness);
-    expect(cfgHarnessFirst.reasoning?.harness?.stableToolSurface).toBe(true);
+    expect(cfgHarnessFirst.reasoning?.harness?.verboseRules).toBe(true);
     expect(cfgHarnessFirst.execution?.maxIterations).toBe(5);
   });
 

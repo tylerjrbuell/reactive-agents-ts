@@ -49,8 +49,8 @@ describe("RunEnvelope — harness sub-record", () => {
   });
 
   it("resolves the caller's harness config into the envelope", () => {
-    const env = buildRunEnvelope({ harness: { stableToolSurface: true } });
-    expect(env.harness.stableToolSurface).toBe(true);
+    const env = buildRunEnvelope({ harness: { verboseRules: true } });
+    expect(env.harness.verboseRules).toBe(true);
   });
 
   it("folds the harness into a KernelInput that does not already carry one", () => {

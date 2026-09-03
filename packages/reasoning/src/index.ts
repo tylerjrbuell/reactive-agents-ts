@@ -464,7 +464,6 @@ export {
 // Harness killswitch resolution — one place decides what each env flag means.
 export {
   lazyDisclosureEnabled,
-  stableToolSurfaceEnabled,
   toolDiscoveryEnabled,
   verboseRulesEnabled,
   recencyBudgetCharsOverride,
