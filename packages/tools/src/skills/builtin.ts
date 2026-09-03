@@ -145,7 +145,7 @@ export const builtinTools: ReadonlyArray<{
 }> = [
   { definition: webSearchTool, handler: webSearchHandler },
   { definition: cryptoPriceTool, handler: cryptoPriceHandler },
-  { definition: httpGetTool, handler: httpGetHandler },
+  { definition: httpGetTool, handler: httpGetHandler() },
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: listDirectoryTool, handler: listDirectoryHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },

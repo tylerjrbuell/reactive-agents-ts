@@ -81,7 +81,7 @@ afterAll(() => {
 describe("Built-in Tool Handlers", () => {
   it("httpGetHandler makes an HTTP call against the local fixture", async () => {
     const result = await Effect.runPromise(
-      httpGetHandler({ url: `${fixtureBaseUrl}/get` }),
+      httpGetHandler()({ url: `${fixtureBaseUrl}/get` }),
     );
 
     const typed = result as { status: number; body: unknown };

@@ -75,7 +75,7 @@ afterAll(() => {
 describe("httpGetHandler — error cases", () => {
   it("should fail on invalid URL", async () => {
     const result = await Effect.runPromise(
-      httpGetHandler({ url: "not-a-url" }).pipe(Effect.flip),
+      httpGetHandler()({ url: "not-a-url" }).pipe(Effect.flip),
     );
     expect(result).toBeInstanceOf(ToolExecutionError);
     expect(result.toolName).toBe("http-get");
@@ -83,7 +83,7 @@ describe("httpGetHandler — error cases", () => {
 
   it("should fail on non-existent domain", async () => {
     const result = await Effect.runPromise(
-      httpGetHandler({ url: "https://this-domain-does-not-exist-xyz123.com" }).pipe(
+      httpGetHandler()({ url: "https://this-domain-does-not-exist-xyz123.com" }).pipe(
         Effect.flip,
       ),
     );
@@ -94,7 +94,7 @@ describe("httpGetHandler — error cases", () => {
   it("should handle non-JSON response bodies as text", async () => {
     // Local Bun.serve fixture (see beforeAll) returns HTML at /html.
     const result = await Effect.runPromise(
-      httpGetHandler({ url: `${fixtureBaseUrl}/html` }),
+      httpGetHandler()({ url: `${fixtureBaseUrl}/html` }),
     );
     const typed = result as { status: number; body: unknown };
     expect(typed.status).toBe(200);
@@ -108,7 +108,7 @@ describe("httpGetHandler — error cases", () => {
     delete process.env.RA_HTTP_ALLOW_PRIVATE;
     try {
       const result = await Effect.runPromise(
-        httpGetHandler({ url: "http://169.254.169.254/latest/meta-data/" }).pipe(Effect.flip),
+        httpGetHandler()({ url: "http://169.254.169.254/latest/meta-data/" }).pipe(Effect.flip),
       );
       expect(result).toBeInstanceOf(ToolExecutionError);
       expect(result.toolName).toBe("http-get");
@@ -122,9 +122,25 @@ describe("httpGetHandler — error cases", () => {
     delete process.env.RA_HTTP_ALLOW_PRIVATE;
     try {
       const result = await Effect.runPromise(
-        httpGetHandler({ url: "http://127.0.0.1:9/" }).pipe(Effect.flip),
+        httpGetHandler()({ url: "http://127.0.0.1:9/" }).pipe(Effect.flip),
       );
       expect(result).toBeInstanceOf(ToolExecutionError);
+    } finally {
+      if (priorOptIn !== undefined) process.env.RA_HTTP_ALLOW_PRIVATE = priorOptIn;
+    }
+  });
+
+  it("config.allowPrivate wins over env — per-agent override", async () => {
+    const priorOptIn = process.env.RA_HTTP_ALLOW_PRIVATE;
+    delete process.env.RA_HTTP_ALLOW_PRIVATE;
+    try {
+      // Still fails (nothing listens on :9), but must fail as a connection
+      // error, not the SSRF-guard ToolExecutionError raised above.
+      const result = await Effect.runPromise(
+        httpGetHandler({ allowPrivate: true })({ url: "http://127.0.0.1:9/" }).pipe(Effect.flip),
+      );
+      expect(result).toBeInstanceOf(ToolExecutionError);
+      expect(String(result.message)).not.toContain("private");
     } finally {
       if (priorOptIn !== undefined) process.env.RA_HTTP_ALLOW_PRIVATE = priorOptIn;
     }

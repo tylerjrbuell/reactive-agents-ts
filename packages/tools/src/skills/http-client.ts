@@ -51,9 +51,14 @@ export const httpGetTool: ToolDefinition = {
   cardinality: "per-entity",
 };
 
+export interface HttpGetConfig {
+  readonly allowPrivate?: boolean;
+}
+
 export const httpGetHandler = (
-  args: Record<string, unknown>,
-): Effect.Effect<unknown, ToolExecutionError> =>
+  config?: HttpGetConfig,
+): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) =>
+  (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
       const url = args.url as string;
@@ -62,8 +67,9 @@ export const httpGetHandler = (
       // Egress guard (F6): the URL is model-controlled. Validate the target —
       // and every redirect hop — is public before fetching, so a prompt-injected
       // agent cannot reach cloud metadata (169.254.169.254) or internal hosts.
-      // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets.
-      const guard = { allowPrivate: httpAllowPrivateEnabled() };
+      // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets,
+      // or override per-agent via config.
+      const guard = { allowPrivate: config?.allowPrivate ?? httpAllowPrivateEnabled() };
       let current = (await assertPublicUrl(url, guard)).toString();
       let response = await fetch(current, { method: "GET", headers, redirect: "manual" });
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {

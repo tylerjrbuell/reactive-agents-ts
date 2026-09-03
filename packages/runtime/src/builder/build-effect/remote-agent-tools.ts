@@ -12,7 +12,7 @@
 
 import { Effect } from "effect";
 import { assertPublicUrl } from "@reactive-agents/runtime-shim";
-import { agentStrictEgressEnabled } from "@reactive-agents/a2a";
+import { agentEgressGuard, type AgentEgressConfig } from "@reactive-agents/a2a";
 import type {
   RemoteAgentClient,
   TaskResult,
@@ -23,16 +23,14 @@ import type {
  * Egress guard for A2A peer URLs (F15). These are operator-configured, and
  * local peers (loopback / RFC-1918) are a legitimate multi-agent pattern, so
  * private targets are allowed by default; cloud-metadata / link-local is always
- * blocked. Set RA_AGENT_STRICT_EGRESS=1 to also refuse private targets.
+ * blocked. Set RA_AGENT_STRICT_EGRESS=1, or pass `deps.egress.strictEgress`,
+ * to also refuse private targets.
  *
- * Resolver lives in `@reactive-agents/a2a` (`flags.ts`), not here — this is
- * the SAME flag `client/discovery.ts` reads, and `packages/runtime` already
- * depends on `packages/a2a`, so importing its resolver closes the two-site
- * direct-read gap (Task 15 ablatability audit) without a new package edge.
+ * Guard itself lives in `@reactive-agents/a2a` (`client/discovery.ts`) — this
+ * is the SAME flag `discoverAgent` reads, and `packages/runtime` already
+ * depends on `packages/a2a`, so sharing it closes the two-site direct-read
+ * gap (Task 15 ablatability audit) without a new package edge.
  */
-const agentEgressGuard = () => ({
-  allowPrivate: !agentStrictEgressEnabled(),
-});
 
 export interface RemoteAgentToolRegistration {
   readonly def: ToolDefinition;
@@ -53,6 +51,7 @@ export interface RemoteAgentToolDeps {
     client: RemoteAgentClient,
     agentCardUrl: string,
   ) => Promise<TaskResult>;
+  readonly egress?: AgentEgressConfig;
 }
 
 export const createRemoteAgentToolRegistration = (
@@ -60,6 +59,7 @@ export const createRemoteAgentToolRegistration = (
   deps: RemoteAgentToolDeps,
 ): RemoteAgentToolRegistration => {
   const { createRemoteAgentTool, executeRemoteAgentTool } = deps;
+  const guard = agentEgressGuard(deps.egress);
 
   // Remote A2A agent tool
   const toolDef = createRemoteAgentTool(
@@ -75,7 +75,7 @@ export const createRemoteAgentToolRegistration = (
     }) =>
       Effect.tryPromise({
         try: async () => {
-          await assertPublicUrl(remoteUrl, agentEgressGuard());
+          await assertPublicUrl(remoteUrl, guard);
           return fetch(remoteUrl, {
             method: "POST",
             headers: {
@@ -111,7 +111,7 @@ export const createRemoteAgentToolRegistration = (
     getTask: (params: { id: string }) =>
       Effect.tryPromise({
         try: async () => {
-          await assertPublicUrl(remoteUrl, agentEgressGuard());
+          await assertPublicUrl(remoteUrl, guard);
           return fetch(remoteUrl, {
             method: "POST",
             headers: {

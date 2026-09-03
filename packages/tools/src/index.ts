@@ -114,7 +114,7 @@ export {
   withFileRoot,
   getFileRoot,
 } from "./skills/file-operations.js";
-export { httpGetTool, httpGetHandler } from "./skills/http-client.js";
+export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";
 // Overhaul — pure result renderer (shared by reasoning ContextManager + write-result-to-file).
 export { renderValue, describeShape, asArray, type ResultFormat } from "./skills/render-result.js";
 export {
