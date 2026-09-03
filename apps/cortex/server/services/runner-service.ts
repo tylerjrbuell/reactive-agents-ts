@@ -407,7 +407,7 @@ export const CortexRunnerServiceLive = Layer.effect(
               // The framework's DebriefCompleted event is not yet wired in the
               // execution engine. Emit it here from AgentResult.debrief so the
               // Debrief tab shows for agents launched from Cortex.
-              const debrief = (result as any).debrief;
+              const debrief = result.debrief;
               if (debrief && typeof debrief === "object") {
                 cortexLog("info", "runner", "emitting DebriefCompleted from agent result", {
                   agentId, runId,
@@ -423,7 +423,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                         taskId: runId,
                         agentId,
                         debrief,
-                      } as any,
+                      },
                     })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:248", tag: errorTag(err) }))),
                 );

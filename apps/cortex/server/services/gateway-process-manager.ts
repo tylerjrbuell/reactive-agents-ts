@@ -377,12 +377,12 @@ export class GatewayProcessManager {
             durableApprovals.register({ agentId: agentId_, durableRunId: r.pendingApproval.runId, agent, startedAt: Date.now() });
           }
           // Emit debrief if available
-          const debrief = (result as any).debrief;
+          const debrief = result.debrief;
           if (debrief) {
             Effect.runFork(
               ingest.handleEvent(agentId_, runId, {
                 v: 1, agentId: agentId_, runId,
-                event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief } as any,
+                event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief },
               }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:316", tag: errorTag(err) }))),
             );
           }
