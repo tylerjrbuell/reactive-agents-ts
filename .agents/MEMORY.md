@@ -377,6 +377,12 @@ Reverse-chronological within the month; each links to nothing (detail lives in M
 **Build patterns:** all providers pass `tools` to both `complete()` and `stream()`; Anthropic streaming uses raw `streamEvent` (helper events fire `inputJson` before `contentBlock`); Gemini needs `msg.toolName` (not hardcoded) for `functionResponse.name` and must walk `candidates[0].content.parts[]` directly (`chunk.text` strips functionCall parts); Ollama emits `tool_calls` on `chunk.done`. Loop detection: `maxConsecutiveThoughts:3`, only ACTION steps reset the streak (`kernel/capabilities/reflect/loop-detector.ts`).
 **Known open architecture debt:** none tracked here as of 2026-08-18 — the "ToT outer loop doesn't honor `dispatcher-early-stop`" item was RESOLVED by #127 (verified live in `tree-of-thought.ts:734-775`, closed #61). Full historical debt list (mostly resolved) → MEMORY-ARCHIVE.md; current debt is DEBT-REGISTER.md, not this file.
 
+## Determinism gate gap (2026-09-03, HS-233/HS-236 in Running Issues Log)
+
+Fixed: `rw-1` bench task declared no `task.tools`/`task.fixtures`, so `runner.ts`'s builtins computation fell into the unrestricted `else` branch and `withRequiredTools(...)` was never called — 3 identical reruns produced 3 different trust outcomes (0/4/2 tool calls). Fixed by declaring `tools: [{kind:"required",name:"web-search"},{kind:"required",name:"file-write"}]`.
+
+Filed, not built: with no `.withRequiredTools()`/`TaskContract`, the framework has **no gate of any kind** on tool use — fully permissive by design (the `{adaptive:true}` LLM classifier default was correctly killed 2026-07-28 for 0pp lift; reviving it is not the fix). Any real caller with a tool-dependent task and no explicit `requiredTools` gets the same non-deterministic first-iteration branch. Proposed direction: a free static-regex heuristic over deliverable phrasing (not an LLM call) — scope (file-write only vs. also research verbs) undecided, user chose document-only for now.
+
 ## Working rules (cross-cutting, keep applying)
 
 - No Co-Authored-By trailers in commits (shows publicly on GitHub contributors page).
