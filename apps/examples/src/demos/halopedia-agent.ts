@@ -5,11 +5,6 @@ import {
     fetchJsonTool,
     resolveThenRetrieve,
 } from '@reactive-agents/tools'
-import {
-    validateCitations,
-    type ReasoningStep,
-} from '@reactive-agents/reasoning'
-import type { ChatMessage } from '@reactive-agents/runtime'
 import { Schema } from 'effect'
 import { createInterface } from 'node:readline/promises'
 
@@ -743,6 +738,23 @@ const HalopediaCompare = halopedia.tool({
     },
 })
 
+// ─── Banter vs. lore-dive tool gating ──────────────────────────────────────
+// Persona instructions above handle *tone*; this heuristic handles whether a
+// Halopedia round-trip is worth the latency at all. The framework's default
+// tool-intent heuristic (`requiresTools()`) treats "tell me about"/"explain"/
+// "describe"/"how did" as recall of a past run and routes to chat-only —
+// exactly the phrasing people use to ask for lore, which would silently kill
+// tool calls across this agent's whole domain. `.withToolIntent()` below
+// replaces the default classifier for every call on this agent instead of
+// re-deriving routing logic outside the framework.
+const BANTER_PATTERNS = [
+    /\b(what if|headcanon|hot take|unpopular opinion|imo|lol|lmao)\b/i,
+    /\b(who('d| would) win|coolest|favorite|worst|best|funny|fun)\b/i,
+]
+
+const needsHalopedia = (message: string): boolean =>
+    !BANTER_PATTERNS.some((p) => p.test(message))
+
 const agent = await ReactiveAgents.create()
     .withName('Halopedia-Agent')
     // Stable id, not the default `${name}-${Date.now()}` — .withMemory()'s
@@ -823,6 +835,7 @@ const agent = await ReactiveAgents.create()
         // standalone, with switching left at its default (enabled), to resolve
         // no-tool-needed turns in 2 iterations with no switch ever requested.
     })
+    .withToolIntent(needsHalopedia)
     // Persistent cross-session memory (SQLite, ~/.reactive-agents/<agentId>/).
     // Every substantial reply gets auto-extracted into semantic memory and
     // auto-linked by content similarity — the substrate find(scope:"memory")
@@ -858,61 +871,47 @@ const agent = await ReactiveAgents.create()
     })
     .build()
 
-// ─── Banter vs. lore-dive tool gating ──────────────────────────────────────
-// Persona instructions above handle *tone*; this heuristic handles whether a
-// Halopedia round-trip is worth the latency at all. This is a lore-wiki
-// agent, so most messages ARE genuine lore requests — default to using
-// tools and only skip them for explicit banter. The framework's generic
-// `requiresTools()` is NOT used as a fallback here: its CHAT_OVERRIDE_PATTERNS
-// treats "tell me about", "explain", "describe", "how did" as recall of a
-// past run (its intended domain) and forces useTools:false — exactly the
-// phrasing people use to ask for lore, which silently killed tool calls.
-const BANTER_PATTERNS = [
-    /\b(what if|headcanon|hot take|unpopular opinion|imo|lol|lmao)\b/i,
-    /\b(who('d| would) win|coolest|favorite|worst|best|funny|fun)\b/i,
-]
-
-const needsHalopedia = (message: string): boolean =>
-    !BANTER_PATTERNS.some((p) => p.test(message))
-
 // ─── Rolling-summary context compaction ────────────────────────────────────
-// Long sessions keep only the last RAW_TURN_WINDOW messages verbatim; older
-// turns get folded into a running `storySoFar` summary (itself re-capped)
-// instead of being dropped, so early-mentioned names/facts survive without
-// the full transcript riding along on every turn.
-const RAW_TURN_WINDOW = 12 // ~6 exchanges
+// The session below windows history at the framework's own turn/char cap and
+// would otherwise drop anything older; `onOverflow` folds those dropped turns
+// into a running summary instead of losing them. The framework owns the
+// windowing threshold and splice mechanics (`applyHistoryWindowWithOverflow`
+// in `@reactive-agents/runtime`) — this callback only owns the summarization
+// content, and a small merge cache so a long session doesn't re-summarize its
+// entire history on every turn.
 const SUMMARY_WORD_CAP = 300
-
-let history: ChatMessage[] = []
 let storySoFar = ''
+let summarizedTurns = 0
 
-const compactHistoryIfNeeded = async (): Promise<void> => {
-    if (history.length <= RAW_TURN_WINDOW) return
-    const overflowCount = history.length - RAW_TURN_WINDOW
-    const overflow = history.slice(0, overflowCount)
-    history = history.slice(overflowCount)
+const chatSession = agent.session({
+    onOverflow: async (dropped) => {
+        const newTurns = dropped.slice(summarizedTurns)
+        summarizedTurns = dropped.length
+        if (newTurns.length === 0) return storySoFar
 
-    const transcript = overflow
-        .map((m) => `${m.role === 'user' ? 'You' : 'Halopedia'}: ${m.content}`)
-        .join('\n')
-    const summaryPrompt = storySoFar
-        ? `Existing summary of an earlier Halo conversation:\n${storySoFar}\n\n` +
-          `Merge in this next chunk of conversation, keeping every distinct fact, ` +
-          `name, and decision worth remembering. Stay under ${SUMMARY_WORD_CAP} words, ` +
-          `plain prose, no citations:\n${transcript}`
-        : `Condense this Halo conversation into a compact summary of the facts, ` +
-          `names, and decisions worth remembering. Stay under ${SUMMARY_WORD_CAP} words, ` +
-          `plain prose, no citations:\n${transcript}`
+        const transcript = newTurns
+            .map((m) => `${m.role === 'user' ? 'You' : 'Halopedia'}: ${m.content}`)
+            .join('\n')
+        const summaryPrompt = storySoFar
+            ? `Existing summary of an earlier Halo conversation:\n${storySoFar}\n\n` +
+              `Merge in this next chunk of conversation, keeping every distinct fact, ` +
+              `name, and decision worth remembering. Stay under ${SUMMARY_WORD_CAP} words, ` +
+              `plain prose, no citations:\n${transcript}`
+            : `Condense this Halo conversation into a compact summary of the facts, ` +
+              `names, and decisions worth remembering. Stay under ${SUMMARY_WORD_CAP} words, ` +
+              `plain prose, no citations:\n${transcript}`
 
-    try {
-        const summary = await agent.chat(summaryPrompt, { useTools: false }, [])
-        storySoFar = summary.message.trim()
-        console.log('\n[context condensed — earlier turns folded into summary]')
-    } catch {
-        // Compaction is best-effort — if it fails, the overflow turns are
-        // simply dropped rather than blocking the conversation.
-    }
-}
+        try {
+            const summary = await agent.chat(summaryPrompt, { useTools: false })
+            storySoFar = summary.message.trim()
+        } catch {
+            // Best-effort — a failed summarization leaves storySoFar as-is;
+            // the raw turns still count as summarized so this doesn't retry
+            // the same chunk forever.
+        }
+        return storySoFar
+    },
+})
 
 const readline = createInterface({
     input: process.stdin,
@@ -934,24 +933,10 @@ try {
             break
 
         try {
-            const useTools = needsHalopedia(message)
-            const enrichedMessage = storySoFar
-                ? `[Story so far: ${storySoFar}]\n\n${message}`
-                : message
-            const reply = await agent.chat(
-                enrichedMessage,
-                { useTools, maxIterations: 12 },
-                history
-            )
-            history = [
-                ...history,
-                { role: 'user', content: message, timestamp: Date.now() },
-                {
-                    role: 'assistant',
-                    content: reply.message,
-                    timestamp: Date.now(),
-                },
-            ]
+            const reply = await chatSession.chat(message, {
+                maxIterations: 12,
+                verifyCitations: true,
+            })
 
             console.log(`\nHalopedia: ${reply.message}`)
             if (reply.toolsUsed && reply.toolsUsed.length > 0) {
@@ -959,27 +944,13 @@ try {
                     `\nSources/tools used: ${reply.toolsUsed.join(', ')}`
                 )
             }
-            // ChatReply.reasoningSteps is structurally typed (runtime doesn't
-            // import the reasoning package's branded ReasoningStep) — cast is
-            // safe, validateCitations only reads type/content/metadata. The
-            // scratchpad carries the FULL (uncompressed) tool-result store —
-            // without it, citations against evidence past the compressed
-            // step-content preview's truncation cutoff read as false positives.
-            const scratchpad = new Map(Object.entries(reply.scratchpad ?? {}))
-            const citations = validateCitations(
-                reply.message,
-                (reply.reasoningSteps ?? []) as readonly ReasoningStep[],
-                scratchpad
-            )
-            if (!citations.ok) {
+            if (reply.citationCheck && !reply.citationCheck.ok) {
                 console.warn(
-                    `\n[unverified citations] ${citations.uncitedUrls.join(
+                    `\n[unverified citations] ${reply.citationCheck.uncitedUrls.join(
                         ', '
                     )} not found in tool evidence`
                 )
             }
-
-            await compactHistoryIfNeeded()
         } catch (error) {
             console.error(
                 `\nRequest failed: ${
