@@ -192,6 +192,16 @@ describe("MemorySearchService", () => {
     expect(results.length).toBe(2);
     expect(results[0]!.id).toBe("vec-1"); // Most similar to [1,0,0]
     expect(results[1]!.id).toBe("vec-3"); // Second most similar
+
+    // Regression: the returned entry's own `.embedding` field went through a
+    // separate decode path than the cosine-similarity scoring above (which
+    // used the buffer correctly) — `new Float32Array(uint8array)` there
+    // didn't reinterpret bytes, silently returning 4x too many garbage
+    // values. Ordering alone wouldn't catch that; assert the vector itself.
+    expect(results[0]!.embedding).toHaveLength(3);
+    expect(results[0]!.embedding![0]).toBeCloseTo(0.9, 5);
+    expect(results[0]!.embedding![1]).toBeCloseTo(0.1, 5);
+    expect(results[0]!.embedding![2]).toBeCloseTo(0.0, 5);
   });
 
   it("should respect limit in vector search", async () => {

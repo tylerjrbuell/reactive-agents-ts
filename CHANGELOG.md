@@ -1,6 +1,46 @@
 ## [Unreleased]
 
 ### Fixed
+- Memory's default SQLite location no longer depends on which API enabled it
+  or which directory the process ran from. `defaultMemoryConfig()` (used by
+  `createMemoryLayer()` and the `rax skills` CLI) and `defaultUserMemoryPath()`
+  (used by the builder's auto-enabled memory) previously resolved to two
+  different paths — one cwd-relative, one `$HOME`-anchored — so a second
+  process reading the same agent's memory from a different directory would
+  silently find nothing. Both now resolve to the same
+  `~/.reactive-agents/memory/<agentId>/memory.db`. See `packages/memory/README.md#storage-location`.
+- The `memory.md` human-readable projection was written to a hardcoded
+  cwd-relative path regardless of where the actual SQLite `dbPath` lived —
+  splitting the source of truth and its projection across two unrelated
+  directories whenever auto-enabled memory (the default-on path) was in
+  play. `memory.md` now always co-locates with `memory.db`.
+- `MemoryConsolidatorService`'s `consolidation_state` table used a single
+  hardcoded row (`id='singleton'`) instead of one row per agent. Any two
+  agents sharing one `memory.db` (a supported configuration — every
+  consolidation query is agent-scoped) would stomp each other's
+  `last_run` timestamp, silently undercounting or skipping the other
+  agent's next `replay()`. Now keyed `PRIMARY KEY(agent_id)`, with an
+  in-place migration for existing databases.
+- Embeddings read back from SQLite in Tier 2 (vector) mode were silently
+  corrupted: `bun:sqlite` returns BLOB columns as `Uint8Array`, not
+  `ArrayBuffer`, and `new Float32Array(uint8array)` doesn't reinterpret the
+  bytes — it coerces each byte into its own float, producing 4x too many
+  garbage values. Affected every entry's `embedding` field returned from
+  `SemanticMemoryService` and `MemorySearchService`.
+- Episodic memory logged via the reasoning-strategy path
+  (`task-completed` / `strategy-outcome` events) recorded `content` as
+  literal `"Task: [object Object] → ..."` whenever the task input or model
+  output was a structured object rather than a string — `String(obj)`
+  instead of the existing `extractTaskText()` helper. Corrupted content
+  fed directly into the FTS5 index, so episodic recall/search returned
+  `[object Object]` noise for any structured-input or structured-output
+  run.
+- `semantic_memory`, `episodic_log`, `session_snapshots`,
+  `procedural_memory`, and `zettel_links` had no indexes beyond their
+  primary key — every `agent_id`-scoped lookup (bootstrap, flush, recall,
+  consolidation decay/prune) full-table-scanned, growing linearly with an
+  agent's history. Added 6 indexes; verified with `EXPLAIN QUERY PLAN`
+  that all affected queries now use them.
 - `LLMRequestCompleted` was declared and consumed in nine places but published
   by nothing, leaving the per-call LLM token/cost stream dead across the
   benchmark runner, both observability collectors, the trace tracer and the

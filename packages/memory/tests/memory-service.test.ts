@@ -167,13 +167,10 @@ describe("MemoryService", () => {
       }),
     );
 
-    // Check that the markdown file was created
-    const mdPath = path.join(
-      ".reactive-agents",
-      "memory",
-      "test-agent",
-      "memory.md",
-    );
+    // Check that the markdown file was created alongside the SQLite db
+    // (memory.md must co-locate with dbPath's directory, not a hardcoded
+    // cwd-relative path — see memory-service.ts basePath derivation).
+    const mdPath = path.join(TEST_DB_DIR, "test-agent", "memory.md");
     const exists = fs.existsSync(mdPath);
     expect(exists).toBe(true);
 

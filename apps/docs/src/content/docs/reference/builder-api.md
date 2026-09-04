@@ -285,7 +285,7 @@ interface ThinkingOptions {
 | Field                 | Type                              | Default / notes                                                  |
 | --------------------- | --------------------------------- | ---------------------------------------------------------------- |
 | `tier`                | `"standard" \| "enhanced"`        | `"standard"` — enhanced = 4-layer memory + embeddings            |
-| `dbPath`              | `string`                          | SQLite path (default under `.reactive-agents/memory/{agentId}/`) |
+| `dbPath`              | `string`                          | SQLite path (default `~/.reactive-agents/memory/{agentId}/memory.db`) |
 | `maxEntries`          | `number`                          | Compaction cap                                                   |
 | `capacity`            | `number`                          | Working memory slots (default `7`)                               |
 | `evictionPolicy`      | `"fifo" \| "lru" \| "importance"` | Working set eviction                                             |

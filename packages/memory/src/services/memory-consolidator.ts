@@ -83,15 +83,37 @@ export const MemoryConsolidatorServiceLive = (
       const decayFactor = config?.decayFactor ?? 0.95;
       const pruneThreshold = config?.pruneThreshold ?? 0.1;
 
-      // Ensure the consolidation state table exists
+      // Ensure the consolidation state table exists, keyed per agent_id.
+      // (Was a single global 'singleton' row — every agent sharing a
+      // memory.db stomped every other agent's last_run, silently
+      // undercounting or skipping their replay(). Migrate the legacy
+      // shape in place: it holds only a cadence counter, safe to drop.)
       yield* db.exec(
         `CREATE TABLE IF NOT EXISTS consolidation_state (
-          id        TEXT PRIMARY KEY DEFAULT 'singleton',
+          agent_id  TEXT PRIMARY KEY,
           last_run  TEXT,
           total_runs INTEGER DEFAULT 0
         )`,
         [],
       );
+      yield* Effect.gen(function* () {
+        const cols = yield* db.query<{ name: string }>(
+          `SELECT name FROM pragma_table_info('consolidation_state')`,
+          [],
+        );
+        const hasAgentId = cols.some((c) => c.name === "agent_id");
+        if (!hasAgentId) {
+          yield* db.exec(`DROP TABLE consolidation_state`, []);
+          yield* db.exec(
+            `CREATE TABLE consolidation_state (
+              agent_id  TEXT PRIMARY KEY,
+              last_run  TEXT,
+              total_runs INTEGER DEFAULT 0
+            )`,
+            [],
+          );
+        }
+      });
 
       // ─── REPLAY phase ─────────────────────────────────────────────────────
       // Count recent episodic entries since the last consolidation run.
@@ -99,8 +121,8 @@ export const MemoryConsolidatorServiceLive = (
       const replay = (agentId: string): Effect.Effect<number, DatabaseError> =>
         Effect.gen(function* () {
           const stateRows = yield* db.query<{ last_run: string | null }>(
-            `SELECT last_run FROM consolidation_state WHERE id = 'singleton'`,
-            [],
+            `SELECT last_run FROM consolidation_state WHERE agent_id = ?`,
+            [agentId],
           );
           const lastRun = stateRows[0]?.last_run ?? null;
 
@@ -155,16 +177,16 @@ export const MemoryConsolidatorServiceLive = (
         });
 
       // ─── Update consolidation state ───────────────────────────────────────
-      const recordRun = (): Effect.Effect<void, DatabaseError> =>
+      const recordRun = (agentId: string): Effect.Effect<void, DatabaseError> =>
         Effect.gen(function* () {
           const now = new Date().toISOString();
           yield* db.exec(
-            `INSERT INTO consolidation_state (id, last_run, total_runs)
-             VALUES ('singleton', ?, 1)
-             ON CONFLICT(id) DO UPDATE SET
+            `INSERT INTO consolidation_state (agent_id, last_run, total_runs)
+             VALUES (?, ?, 1)
+             ON CONFLICT(agent_id) DO UPDATE SET
                last_run   = excluded.last_run,
                total_runs = total_runs + 1`,
-            [now],
+            [agentId, now],
           );
         });
 
@@ -200,7 +222,7 @@ export const MemoryConsolidatorServiceLive = (
             const connected = yield* connect(agentId);
             const { compressed, pruned } = yield* compress(agentId);
 
-            yield* recordRun();
+            yield* recordRun(agentId);
 
             // Reset pending counter after a successful cycle
             yield* Ref.set(pending, 0);

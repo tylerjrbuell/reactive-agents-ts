@@ -6,7 +6,7 @@ import {
 } from "../../src/services/memory-consolidator.js";
 import type { ConsolidatorConfig } from "../../src/services/memory-consolidator.js";
 import { SemanticMemoryService, SemanticMemoryServiceLive } from "../../src/services/semantic-memory.js";
-import { MemoryDatabaseLive } from "../../src/database.js";
+import { MemoryDatabase, MemoryDatabaseLive } from "../../src/database.js";
 import type { SemanticEntry, MemoryId } from "../../src/types.js";
 import { defaultMemoryConfig } from "../../src/types.js";
 import * as fs from "node:fs";
@@ -296,5 +296,53 @@ describe("MemoryConsolidatorService", () => {
     );
 
     expect(count).toBe(0);
+  });
+
+  // ─── Per-agent isolation ────────────────────────────────────────────────────
+
+  it("consolidation_state does not leak last_run across agents sharing one db", async () => {
+    // Regression: consolidation_state used to be a single 'id=singleton' row.
+    // Any agent's consolidate() run stomped every other agent's last_run,
+    // so replay() would undercount (or zero out) entries for agents that
+    // didn't run last — a real risk since every consolidation query is
+    // already agent_id-scoped, implying multiple agents CAN share one db.
+    const dbLayer = MemoryDatabaseLive({ ...defaultMemoryConfig("agent-A"), dbPath: TEST_DB });
+    const consolidatorLayer = MemoryConsolidatorServiceLive().pipe(Layer.provideMerge(dbLayer));
+
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const db = yield* MemoryDatabase;
+          const cons = yield* MemoryConsolidatorService;
+          const now = new Date().toISOString();
+
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ["e1", "agent-A", "2026-09-04", "hello A", "observation", now],
+          );
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ["e2", "agent-B", "2026-09-04", "hello B", "observation", now],
+          );
+
+          const resultA = yield* cons.consolidate("agent-A");
+          const resultB = yield* cons.consolidate("agent-B");
+          const rows = yield* db.query<{ agent_id: string; total_runs: number }>(
+            `SELECT agent_id, total_runs FROM consolidation_state ORDER BY agent_id`,
+          );
+
+          return { resultA, resultB, rows };
+        }).pipe(Effect.provide(consolidatorLayer)),
+      ),
+    );
+
+    expect(result.resultA.replayed).toBe(1);
+    // agent-B's own episodic entry must still be counted even though
+    // agent-A consolidated first and set a last_run timestamp.
+    expect(result.resultB.replayed).toBe(1);
+    expect(result.rows).toEqual([
+      { agent_id: "agent-A", total_runs: 1 },
+      { agent_id: "agent-B", total_runs: 1 },
+    ]);
   });
 });

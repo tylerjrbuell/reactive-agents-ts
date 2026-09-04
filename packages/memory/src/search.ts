@@ -197,7 +197,13 @@ export const MemorySearchServiceLive = Layer.effect(
             verified: Boolean(r.verified),
             tags: safeJsonParse<string[]>(r.tags, []),
             embedding: r.embedding
-              ? Array.from(new Float32Array(r.embedding))
+              ? Array.from(
+                  new Float32Array(
+                    r.embedding instanceof ArrayBuffer
+                      ? r.embedding
+                      : ((r.embedding as unknown) as Uint8Array).buffer as ArrayBuffer,
+                  ),
+                )
               : undefined,
             createdAt: new Date(r.created_at),
             updatedAt: new Date(r.updated_at),

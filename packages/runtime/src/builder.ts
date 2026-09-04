@@ -330,14 +330,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _memoryTier: '1' | '2' = '1'
     /**
      * Memory is OFF by default (v0.12 — "Durable & Honest"). A bare
-     * `.create()....build()` is stateless: no `~/.reactive-agents/<agentId>/`
+     * `.create()....build()` is stateless: no `~/.reactive-agents/memory/<agentId>/`
      * SQLite writes, predictable in CI, no surprise cross-session state.
      * Opt in with one line — `.withMemory()` (tier-1 working memory + SQLite
      * cross-session store) — or via `HarnessProfile.balanced()` /
      * `.intelligent()`, both of which enable it explicitly. A bare
      * `.withMemory()` (no `dbPath`) resolves to a stable user-scope store at
-     * `~/.reactive-agents/<agentId>/memory.db`; pass `.withMemory({ dbPath })`
-     * to keep a project-local path. Under `test` provider / `NODE_ENV=test`
+     * `~/.reactive-agents/memory/<agentId>/memory.db`; pass `.withMemory({ dbPath })`
+     * to use a custom path. Under `test` provider / `NODE_ENV=test`
      * it resolves to SQLite `:memory:` so runs never write to disk.
      *
      * Migration from v0.11 (memory was default-on, GH #122): add `.withMemory()`
@@ -949,7 +949,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *   .withReactiveIntelligence()  // already on by default
      * ```
      *
-     * The OS-default dbPath (`~/.reactive-agents/<agentId>/memory.db`)
+     * The OS-default dbPath (`~/.reactive-agents/memory/<agentId>/memory.db`)
      * applies when no explicit `opts.dbPath` is provided. Useful as a
      * single-line opt-in to make `agent.skills()` cross-session by default
      * even when the user wants to be explicit about it.
@@ -2292,14 +2292,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Each run writes a `<runId>.jsonl` file to `dir` containing all trace events
      * (entropy scores, reactive decisions, strategy switches).
      *
-     * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
+     * @param opts.dir - Directory to write JSONL files (default: `~/.reactive-agents/traces` —
+     *   same canonical location `defaultTracingConfig()` uses when tracing is
+     *   left on its implicit default, and the one `rax diagnose` reads by
+     *   default. Previously defaulted to the cwd-relative `.reactive-agents/traces`,
+     *   which silently diverged from that location — every trace written by an
+     *   explicit `.withTracing()` call was invisible to `rax diagnose` unless
+     *   the agent happened to run from the CLI's own cwd. Fixed 2026-09-04.)
      *
      * Composable equivalent: `.withObservability({ tracing: { dir } })` or
      *   the `REACTIVE_AGENTS_TRACE` env config (process-wide) — tracing also
      *   rides the observability stack.
      */
     withTracing(opts: { dir?: string } = {}): this {
-        this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
+        this._tracingConfig = { dir: opts.dir ?? join(homedir(), '.reactive-agents', 'traces') }
         return this
     }
 

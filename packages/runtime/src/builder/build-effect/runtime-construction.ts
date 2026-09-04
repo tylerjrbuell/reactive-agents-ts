@@ -485,7 +485,7 @@ export const buildBaseRuntimeAndEngine = (
       // off in a bare builder, so this means the user opted in via
       // `.withMemory()` / `.withLearning()` / a HarnessProfile without
       // passing `{ dbPath }`) resolve a stable
-      // user-scope db path (`~/.reactive-agents/<agentId>/memory.db`).
+      // user-scope db path (`~/.reactive-agents/memory/<agentId>/memory.db`).
       // Explicit `.withMemory({ dbPath: ... })` consumers keep their
       // configured path; explicit-disable paths bypass this entirely.
       //
@@ -495,7 +495,7 @@ export const buildBaseRuntimeAndEngine = (
       // OS-scope path. Catches both the TestLLMServiceLayer convention
       // AND builder-contracts tests that use `.withProvider("anthropic")`
       // for shape-only validation without real LLM calls. Avoids
-      // accumulating `~/.reactive-agents/<agentId>/memory.db` files on
+      // accumulating `~/.reactive-agents/memory/<agentId>/memory.db` files on
       // dev machines + CI runners; tests still exercise the full memory
       // stack but discard state on process exit.
       memoryOptions:
