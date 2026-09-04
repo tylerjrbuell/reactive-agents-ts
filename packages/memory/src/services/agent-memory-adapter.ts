@@ -19,9 +19,15 @@
 // the whole point of the port.
 
 import { Effect, Layer } from "effect";
-import { AgentMemory, type AgentMemoryEntry, type AgentMemoryRelatedEntry } from "@reactive-agents/core";
+import {
+  AgentMemory,
+  type AgentMemoryEntry,
+  type AgentMemoryRelatedEntry,
+  type AgentMemorySearchResult,
+} from "@reactive-agents/core";
 import { MemoryService } from "./memory-service.js";
 import { SemanticMemoryService } from "./semantic-memory.js";
+import { MemorySearchService } from "../search.js";
 import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { MemoryId } from "../types.js";
 import type { SemanticEntry } from "../types.js";
@@ -39,17 +45,38 @@ import type { SemanticEntry } from "../types.js";
  * A neighbor that no longer resolves (evicted, or from another agent — the
  * link graph is not agent-scoped) is skipped rather than surfaced as a
  * broken entry.
+ *
+ * And `search`, backed by `MemorySearchService.searchSemantic` — the thing
+ * that gives `find(scope:"memory")` real per-entry ids to hand back to a
+ * model (previously it rendered a flat markdown dump with no identifier,
+ * so `relate(id)` was unreachable without a human hand-feeding an id).
+ *
+ * And `link`, backed by `ZettelkastenService.addLink` — lets a caller
+ * explicitly assert a relationship between two entries (any of the 6
+ * `LinkType`s: similar/sequential/causal/contradicts/supports/elaborates),
+ * distinct from the auto-similarity links `autoLinkText` creates on write.
+ *
+ * `agentId` is captured here (not threaded through the port call) because
+ * `MemorySearchService.searchSemantic` scopes rows by agent, and the
+ * kernel's tool-registration call site (`resolveExecutableToolCapabilities`)
+ * has no agentId in scope — the adapter is already built once per agent
+ * (mirrors `createMemoryLayer(tier, { agentId, ... })`), so it's the
+ * natural place to close over it.
  */
-export const AgentMemoryFromMemoryService: Layer.Layer<
+export const AgentMemoryFromMemoryService = (
+  agentId: string,
+): Layer.Layer<
   AgentMemory,
   never,
-  MemoryService | ZettelkastenService | SemanticMemoryService
-> = Layer.effect(
+  MemoryService | ZettelkastenService | SemanticMemoryService | MemorySearchService
+> =>
+  Layer.effect(
   AgentMemory,
   Effect.gen(function* () {
     const memory = yield* MemoryService;
     const zettel = yield* ZettelkastenService;
     const semantic = yield* SemanticMemoryService;
+    const search = yield* MemorySearchService;
 
     const preview = (id: string): Effect.Effect<string | undefined, never> =>
       semantic.get(MemoryId.make(id)).pipe(
@@ -105,6 +132,25 @@ export const AgentMemoryFromMemoryService: Layer.Layer<
           });
           return entries.filter((e): e is AgentMemoryRelatedEntry => e !== undefined);
         }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly AgentMemoryRelatedEntry[]))),
+
+      search: (query, limit) =>
+        search.searchSemantic({ query, agentId, limit }).pipe(
+          Effect.map((entries): readonly AgentMemorySearchResult[] =>
+            entries.map((e) => ({ id: String(e.id), preview: e.summary || e.content.slice(0, 200) })),
+          ),
+          Effect.catchAll(() => Effect.succeed([] as readonly AgentMemorySearchResult[])),
+        ),
+
+      link: (sourceId, targetId, type, strength = 1.0) =>
+        zettel
+          .addLink({
+            source: MemoryId.make(sourceId),
+            target: MemoryId.make(targetId),
+            strength,
+            type,
+            createdAt: new Date(),
+          })
+          .pipe(Effect.asVoid),
     };
   }),
-);
+  );

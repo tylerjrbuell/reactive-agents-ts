@@ -95,4 +95,51 @@ describe("relate tool registration", () => {
       { id: "entry-2", preview: "related content", strength: 0.92, type: "similar" },
     ]);
   }, 15000);
+
+  it("mode 'link' is passed through to the adapter's link method when present", async () => {
+    let captured: unknown[] | undefined;
+    const layerWithLink = Layer.mergeAll(
+      toolLayer, depsLayer, mockLLMLayer,
+      Layer.succeed(AgentMemory, {
+        storeSemantic: () => Effect.succeed("unused"),
+        getRelated: () => Effect.succeed([]),
+        link: (...args: unknown[]) => {
+          captured = args;
+          return Effect.void;
+        },
+      } as any),
+    );
+
+    const program = Effect.gen(function* () {
+      yield* resolveExecutableToolCapabilities({ availableToolSchemas: [], metaTools: { relate: true } });
+      const toolService = yield* ToolService;
+      return yield* toolService.execute({
+        toolName: "relate",
+        arguments: { id: "a", mode: "link", targetId: "b", type: "causal", strength: 0.5 },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(layerWithLink)));
+    expect(captured).toEqual(["a", "b", "causal", 0.5]);
+    expect((result.result as any).linked).toBe(true);
+  }, 15000);
+
+  it("mode 'link' fails clearly when the adapter has getRelated but not link", async () => {
+    const program = Effect.gen(function* () {
+      yield* resolveExecutableToolCapabilities({ availableToolSchemas: [], metaTools: { relate: true } });
+      const toolService = yield* ToolService;
+      return yield* toolService.execute({
+        toolName: "relate",
+        arguments: { id: "entry-1", mode: "link", targetId: "entry-2" },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+    });
+
+    await expect(
+      Effect.runPromise(program.pipe(Effect.provide(withGraphLayer))),
+    ).rejects.toThrow(/not available/);
+  }, 15000);
 });

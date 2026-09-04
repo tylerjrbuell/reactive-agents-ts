@@ -117,18 +117,27 @@ export const resolveExecutableToolCapabilities = (input: {
         append(toToolSchema(recallTool));
       }
 
+      // Resolved once, shared by `relate` (getRelated/link) and `find`
+      // (search) below — all are optional AgentMemory port methods, only
+      // present when a graph/search-capable memory adapter (e.g.
+      // `.withMemory()`'s Zettelkasten-backed one) is actually wired.
+      const agentMemoryOpt = yield* Effect.serviceOption(AgentMemory);
+
       // `relate` — only registered when BOTH the caller opted in AND a
-      // memory adapter implementing `getRelated` is actually present (e.g.
-      // `.withMemory()`'s Zettelkasten-backed adapter). Requesting it with
-      // no such adapter is silently a no-op (matches find's webFallback
-      // precedent) — not an error, since the caller may share a builder
-      // config across agents where memory is optional.
+      // memory adapter implementing `getRelated` is actually present.
+      // Requesting it with no such adapter is silently a no-op (matches
+      // find's webFallback precedent) — not an error, since the caller may
+      // share a builder config across agents where memory is optional.
+      // `link` (mode "link", writing a relationship) is independently
+      // optional — passed through when present, undefined otherwise, so
+      // `relate`'s own handler decides how to respond to a link request
+      // an adapter doesn't support.
       if (input.metaTools?.relate) {
-        const agentMemoryOpt = yield* Effect.serviceOption(AgentMemory);
         if (agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.getRelated) {
           const getRelated = agentMemoryOpt.value.getRelated;
+          const link = agentMemoryOpt.value.link;
           yield* toolService
-            .register(relateTool, makeRelateHandler({ getRelated }))
+            .register(relateTool, makeRelateHandler({ getRelated, link }))
             .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:relate", tag: errorTag(err) })));
           append(toToolSchema(relateTool));
         }
@@ -142,12 +151,17 @@ export const resolveExecutableToolCapabilities = (input: {
       }
 
       if (input.metaTools?.find) {
+        const searchMemory =
+          agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.search
+            ? agentMemoryOpt.value.search
+            : undefined;
         yield* toolService
           .register(
             findTool,
             makeFindHandler({
               ragStore: ragMemoryStore,
               webSearchHandler,
+              searchMemory,
               recallStoreRef: scratchpadStoreRef,
               config: {},
             }),

@@ -234,7 +234,12 @@ export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 // @reactive-agents/memory at runtime. Adapter Layer lives in the memory
 // package; user code is also free to ship its own AgentMemory provider.
 export { AgentMemory } from "./services/agent-memory.js";
-export type { AgentMemoryEntry, AgentMemoryRelatedEntry } from "./services/agent-memory.js";
+export type {
+  AgentMemoryEntry,
+  AgentMemoryRelatedEntry,
+  AgentMemorySearchResult,
+  AgentMemoryLinkType,
+} from "./services/agent-memory.js";
 
 // ─── Entropy Sensor Tag (for reactive-intelligence layer) ───
 export { EntropySensorService } from "./services/entropy-sensor-tag.js";

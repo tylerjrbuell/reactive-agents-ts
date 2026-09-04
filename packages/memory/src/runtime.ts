@@ -77,9 +77,10 @@ export const createMemoryLayer = (
   // that the kernel actually consumes. Provided here so any consumer of
   // `createMemoryLayer` automatically satisfies the kernel's port lookup —
   // no extra wiring required for the standard happy path. Also needs
-  // `coreServices` (ZettelkastenService + SemanticMemoryService) for the
-  // port's `getRelated` — the `relate` tool's data source.
-  const agentMemoryAdapter = AgentMemoryFromMemoryService.pipe(
+  // `coreServices` (ZettelkastenService + SemanticMemoryService +
+  // MemorySearchService) for the port's `getRelated`/`search` — the
+  // `relate` and `find(scope:"memory")` tools' data source.
+  const agentMemoryAdapter = AgentMemoryFromMemoryService(agentId).pipe(
     Layer.provide(Layer.mergeAll(memoryServiceLayer, coreServices)),
   );
 

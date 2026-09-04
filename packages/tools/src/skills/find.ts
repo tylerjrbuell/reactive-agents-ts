@@ -15,6 +15,19 @@ export interface FindState {
   ragStore: RagMemoryStore;
   webSearchHandler?: (args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>;
   bootstrapMemoryContent?: string;
+  /**
+   * Live keyword search over persistent memory (e.g. `.withMemory()`'s
+   * semantic store), sourced from `AgentMemory.search` (`@reactive-agents/core`)
+   * — see `packages/memory`'s adapter. Each hit carries a REAL entry id,
+   * which a model can pass to `relate(id)` to walk the memory graph.
+   * `bootstrapMemoryContent` (above) is a separate, older flat-text
+   * fallback kept for back-compat; when both are present results from
+   * each are merged.
+   */
+  searchMemory?: (
+    query: string,
+    limit: number,
+  ) => Effect.Effect<readonly { id: string; preview: string }[], unknown>;
   recallStoreRef: Ref.Ref<Map<string, string>>;
   config: FindConfig;
 }
@@ -27,7 +40,8 @@ export const findTool: ToolDefinition = {
     "scope 'auto' (default): tries indexed documents first, falls back to web if nothing found. " +
     "scope 'documents': search only files/documents loaded with .withDocuments(). " +
     "scope 'web': search the internet directly. " +
-    "scope 'memory': search ingested/remembered content — bootstrapped semantic memory plus anything loaded via .withDocuments() or agent.ingest(). " +
+    "scope 'memory': search remembered content from persistent memory plus anything loaded via .withDocuments() or agent.ingest(). " +
+    "Memory results carry a real entry id — pass it to relate(id) to see what else is connected. " +
     "scope 'all': search every source and merge results. " +
     "Large result sets are automatically stored in recall — check recall() to retrieve them.",
   parameters: [
@@ -112,18 +126,35 @@ export const makeFindHandler =
         }
       }
 
-      // ── Memory search (bootstrapped semantic context)
+      // ── Memory search
       const shouldSearchMemory = scope === "memory" || scope === "all";
-      if (shouldSearchMemory && state.bootstrapMemoryContent) {
+      if (shouldSearchMemory && (state.searchMemory || state.bootstrapMemoryContent)) {
         sourcesSearched.push("memory");
-        const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-        const lines = state.bootstrapMemoryContent.split("\n").filter(l => l.trim().length > 0);
-        const memMatches = lines.filter(line =>
-          terms.some(term => line.toLowerCase().includes(term))
-        ).slice(0, 5);
-        for (const line of memMatches) {
-          allResults.push({ content: line, source: "memory", identifier: "memory-bootstrap", score: 0.4 });
+
+        // Live search first — carries REAL per-entry ids (`relate(id)` needs
+        // one of these; the bootstrap-text fallback below never had one).
+        if (state.searchMemory) {
+          const hits = yield* state.searchMemory(query, 5).pipe(
+            Effect.catchAll(() => Effect.succeed([])),
+          );
+          for (const hit of hits) {
+            allResults.push({ content: hit.preview, source: "memory", identifier: hit.id, score: 0.6 });
+          }
         }
+
+        // Older flat-text fallback — kept for back-compat with any caller
+        // that still constructs FindState with only `bootstrapMemoryContent`.
+        if (state.bootstrapMemoryContent) {
+          const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+          const lines = state.bootstrapMemoryContent.split("\n").filter(l => l.trim().length > 0);
+          const memMatches = lines.filter(line =>
+            terms.some(term => line.toLowerCase().includes(term))
+          ).slice(0, 5);
+          for (const line of memMatches) {
+            allResults.push({ content: line, source: "memory", identifier: "memory-bootstrap", score: 0.4 });
+          }
+        }
+
         if (scope === "memory") {
           return yield* buildFindResponse(query, allResults, sourcesSearched, autoStoreThreshold, state.recallStoreRef);
         }

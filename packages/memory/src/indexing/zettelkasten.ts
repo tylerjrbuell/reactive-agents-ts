@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { MemoryId, ZettelLink, LinkType } from "../types.js";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { toFts5Query } from "../fts5-query.js";
 
 // ─── Service Tag ───
 
@@ -138,23 +139,14 @@ export const ZettelkastenServiceLive = Layer.effect(
           )
           .pipe(Effect.asVoid),
 
-      // Text-based auto-linking via FTS5 search (or LIKE fallback)
+      // Text-based auto-linking via FTS5 search (or LIKE fallback). Query
+      // terms go through `toFts5Query` — an unquoted term containing an
+      // FTS5-special character (e.g. "Effect-TS") previously crashed the
+      // query ("no such column: TS"), silently swallowed by the caller's
+      // catchAll, so auto-linking quietly never ran on realistic content.
       autoLinkText: (memoryId, content, agentId, threshold = 0.85) =>
         Effect.gen(function* () {
-          // Each term is quoted as an FTS5 string literal (embedded `"`
-          // doubled per FTS5 escaping rules) so it is matched as literal
-          // text, not parsed as query syntax. An unquoted term containing a
-          // hyphen, colon, or other FTS5-special character (e.g. "Effect-TS")
-          // was previously fed straight into MATCH and crashed the query
-          // ("no such column: TS") — silently swallowed by the caller's
-          // catchAll, so auto-linking quietly never ran on realistic content.
-          const searchTerms = content
-            .split(/\s+/)
-            .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
-            .filter((w) => w.length > 3)
-            .slice(0, 10)
-            .map((w) => `"${w.replace(/"/g, '""')}"`)
-            .join(" OR ");
+          const searchTerms = toFts5Query(content);
 
           if (searchTerms.length === 0) return [];
 
