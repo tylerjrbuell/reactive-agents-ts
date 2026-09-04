@@ -68,6 +68,23 @@ Override routing explicitly with `useTools`:
 const reply = await session.chat("Summarize the README", { useTools: true });
 ```
 
+### Overriding the Default Classifier
+
+The built-in routing heuristic is domain-agnostic and can misclassify phrasing that's ambiguous in general but unambiguous for a specific agent — e.g. it treats "tell me about X" as recall of a past run and routes to the direct-LLM path, which is wrong for an agent whose "X" is always a live lookup. Use `.withToolIntent()` on the builder to replace the default classifier for every call on that agent:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ builtins: true })
+  .withToolIntent((message) => !/\b(joke|opinion|what if)\b/i.test(message))
+  .build();
+
+const session = agent.session();
+await session.chat("Tell me about the Roman Empire"); // routes to tools now
+```
+
+Precedence: `chat(msg, { useTools })` (explicit, per call) > `.withToolIntent()` (agent-level) > the default `requiresTools()` heuristic.
+
 ## Persisted Sessions
 
 Sessions can be persisted to SQLite so they survive process restarts. Enable persistence when calling `agent.session()`:
@@ -89,6 +106,50 @@ await session.end();
 ```
 
 Sessions are stored in the memory database under the `chat_sessions` table. Calling `session.end()` flushes the final history to storage — the database record is kept, so the session can still be resumed later by ID.
+
+## Compacting Long History
+
+By default, history windowing (40 turns / 8,000 chars, whichever is smaller) simply drops the oldest turns once a session exceeds it — early-mentioned facts are lost. Pass `onOverflow` to `agent.session()` to fold dropped turns into a running summary instead:
+
+```typescript
+let storySoFar = "";
+let summarizedTurns = 0;
+
+const session = agent.session({
+  onOverflow: async (dropped) => {
+    const newTurns = dropped.slice(summarizedTurns);
+    summarizedTurns = dropped.length;
+    if (newTurns.length === 0) return storySoFar;
+
+    const transcript = newTurns.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const prompt = storySoFar
+      ? `Existing summary:\n${storySoFar}\n\nMerge in:\n${transcript}`
+      : `Summarize:\n${transcript}`;
+
+    const summary = await agent.chat(prompt, { useTools: false });
+    storySoFar = summary.message.trim();
+    return storySoFar;
+  },
+});
+```
+
+The framework owns the windowing threshold and splice mechanics — `dropped` is always the exact turns that fell outside the window, oldest-to-newest, and the returned string is spliced back in as a synthetic leading turn (`Summary of earlier conversation: ${summary}`) ahead of the windowed turns on every subsequent call. `onOverflow` owns the summarization content only: no prompt or LLM call is baked into the framework, so keep an incremental cache (like `summarizedTurns` above) if you don't want to re-summarize the whole dropped prefix on every call — `dropped` grows across the session, it isn't reset once summarized. Omitting `onOverflow` keeps today's drop-only behavior unchanged.
+
+## Verifying Citations
+
+For tool-grounded agents that are expected to cite sources, pass `verifyCitations: true` to check every URL in the reply against the run's tool-observation evidence:
+
+```typescript
+const reply = await session.chat("What's the latest on the Mars mission?", {
+  verifyCitations: true,
+});
+
+if (reply.citationCheck && !reply.citationCheck.ok) {
+  console.warn("Uncited/fabricated URLs:", reply.citationCheck.uncitedUrls);
+}
+```
+
+`citationCheck` is only populated on the tool-capable path — the direct-LLM path has no tool evidence to check against, so the field is omitted there rather than falsely reporting `ok: true`. Default is off (no cost unless opted in).
 
 ## Session with System Context
 
@@ -162,12 +223,17 @@ ask();
 
 ```typescript
 interface ChatReply {
-  message: string;          // the assistant's response text
-  toolsUsed?: string[];     // tools called (when tools were needed)
-  fromMemory?: boolean;     // true if response used prior run context
-  tokens?: number;          // token count for this turn (when available)
-  steps?: number;           // reasoning steps taken (tool path only)
-  cost?: number;            // estimated cost in USD (when available)
+  message: string;             // the assistant's response text
+  toolsUsed?: string[];        // tools called (when tools were needed)
+  fromMemory?: boolean;        // true if response used prior run context
+  tokens?: number;             // token count for this turn (when available)
+  steps?: number;              // reasoning steps taken (tool path only)
+  cost?: number;                // estimated cost in USD (when available)
+  citationCheck?: {             // only set when verifyCitations:true was passed
+    ok: boolean;
+    uncitedUrls: readonly string[];
+    citedUrlCount: number;
+  };
 }
 ```
 
