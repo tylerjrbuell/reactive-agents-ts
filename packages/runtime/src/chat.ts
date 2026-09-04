@@ -61,6 +61,18 @@ export interface ChatReply {
    * lossy compressed preview in `reasoningSteps[].content`.
    */
   scratchpad?: Readonly<Record<string, string>>;
+  /**
+   * Result of `validateCitations()` against tool-observation evidence — only
+   * populated when `ChatOptions.verifyCitations` is true AND the reply was
+   * produced on the tool-capable path (there is no tool evidence to check
+   * citations against on the direct-LLM path, so the field is omitted there
+   * rather than reporting a false `ok: true`).
+   */
+  citationCheck?: {
+    ok: boolean;
+    uncitedUrls: readonly string[];
+    citedUrlCount: number;
+  };
 }
 
 /**
@@ -76,6 +88,14 @@ export interface ChatOptions {
   maxIterations?: number;
   /** Optional context prepended to the system context summary (direct-LLM path only). */
   extraContext?: string;
+  /**
+   * Deterministically verify that every URL the reply cites appears in the
+   * run's tool-observation evidence (via `validateCitations` from
+   * `@reactive-agents/reasoning`). Tool-capable path only — no-op on the
+   * direct-LLM path since there is no tool evidence to check against.
+   * Default: false (no cost unless opted in).
+   */
+  verifyCitations?: boolean;
 }
 
 /**

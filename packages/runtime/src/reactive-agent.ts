@@ -110,7 +110,7 @@ import type {
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
-import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields } from '@reactive-agents/reasoning'
+import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields, validateCitations } from '@reactive-agents/reasoning'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
@@ -2388,6 +2388,13 @@ export class ReactiveAgent<TOut = unknown> {
             toolNamesFromMetadata && toolNamesFromMetadata.length > 0
                 ? [...new Set(toolNamesFromMetadata)]
                 : result.debrief?.toolsUsed.map((t) => t.name)
+        const citationCheck = options?.verifyCitations
+            ? validateCitations(
+                  result.output,
+                  (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
+                  new Map(Object.entries(result.metadata.scratchpad ?? {}))
+              )
+            : undefined
         return {
             message: result.output,
             toolsUsed,
@@ -2396,6 +2403,7 @@ export class ReactiveAgent<TOut = unknown> {
             cost: result.metadata.cost,
             reasoningSteps: result.metadata.reasoningSteps,
             scratchpad: result.metadata.scratchpad,
+            ...(citationCheck ? { citationCheck } : {}),
         }
     }
 
