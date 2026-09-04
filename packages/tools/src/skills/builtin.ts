@@ -24,6 +24,7 @@ import { contextStatusTool, makeContextStatusHandler } from "./context-status.js
 import { finalAnswerTool } from "./final-answer.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
 import { recallTool, makeRecallHandler, type RecallConfig } from "./recall.js";
+import { relateTool, makeRelateHandler, type RelateState } from "./relate.js";
 import { findTool, makeFindHandler, type FindConfig, type FindState } from "./find.js";
 import { checkpointTool, makeCheckpointHandler, type CheckpointConfig } from "./checkpoint.js";
 import { briefTool, buildBriefResponse, computeEntropyGrade, type BriefInput } from "./brief.js";
@@ -73,6 +74,12 @@ export {
   makeRecallHandler,
   type RecallConfig,
 } from "./recall.js";
+export {
+  relateTool,
+  makeRelateHandler,
+  type RelateState,
+  type RelateEntry,
+} from "./relate.js";
 export {
   findTool,
   makeFindHandler,
@@ -236,6 +243,7 @@ export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   findTool,
   pulseTool,
   recallTool,
+  relateTool,
   checkpointTool,
   discoverToolsTool,
 ];

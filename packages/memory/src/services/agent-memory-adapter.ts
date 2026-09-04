@@ -19,8 +19,10 @@
 // the whole point of the port.
 
 import { Effect, Layer } from "effect";
-import { AgentMemory, type AgentMemoryEntry } from "@reactive-agents/core";
+import { AgentMemory, type AgentMemoryEntry, type AgentMemoryRelatedEntry } from "@reactive-agents/core";
 import { MemoryService } from "./memory-service.js";
+import { SemanticMemoryService } from "./semantic-memory.js";
+import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { MemoryId } from "../types.js";
 import type { SemanticEntry } from "../types.js";
 
@@ -29,32 +31,80 @@ import type { SemanticEntry } from "../types.js";
  * `MemoryService`. The adapter widens the narrow `AgentMemoryEntry` shape
  * back into a full `SemanticEntry` (with branded `MemoryId`) before
  * delegating; conversion is the adapter's responsibility, not the port's.
+ *
+ * Also implements the port's optional `getRelated` by reading the
+ * Zettelkasten link graph (`ZettelkastenService`) and enriching each
+ * neighbor id with a content preview from `SemanticMemoryService` — a bare
+ * id list would be nearly useless to a model, which never saw the id minted.
+ * A neighbor that no longer resolves (evicted, or from another agent — the
+ * link graph is not agent-scoped) is skipped rather than surfaced as a
+ * broken entry.
  */
-export const AgentMemoryFromMemoryService: Layer.Layer<AgentMemory, never, MemoryService> =
-  Layer.effect(
-    AgentMemory,
-    Effect.gen(function* () {
-      const memory = yield* MemoryService;
-      return {
-        storeSemantic: (entry: AgentMemoryEntry) => {
-          const branded = MemoryId.make(entry.id);
-          const semantic: SemanticEntry = {
-            id: branded,
-            agentId: entry.agentId,
-            content: entry.content,
-            summary: entry.summary,
-            importance: entry.importance,
-            verified: entry.verified,
-            tags: entry.tags,
-            createdAt: entry.createdAt,
-            updatedAt: entry.updatedAt,
-            accessCount: entry.accessCount,
-            lastAccessedAt: entry.lastAccessedAt,
-          };
-          return memory.storeSemantic(semantic).pipe(
-            Effect.map((id) => id as string),
-          );
-        },
-      };
-    }),
-  );
+export const AgentMemoryFromMemoryService: Layer.Layer<
+  AgentMemory,
+  never,
+  MemoryService | ZettelkastenService | SemanticMemoryService
+> = Layer.effect(
+  AgentMemory,
+  Effect.gen(function* () {
+    const memory = yield* MemoryService;
+    const zettel = yield* ZettelkastenService;
+    const semantic = yield* SemanticMemoryService;
+
+    const preview = (id: string): Effect.Effect<string | undefined, never> =>
+      semantic.get(MemoryId.make(id)).pipe(
+        Effect.map((entry) => entry.summary || entry.content.slice(0, 200)),
+        Effect.catchAll(() => Effect.succeed(undefined)),
+      );
+
+    return {
+      storeSemantic: (entry: AgentMemoryEntry) => {
+        const branded = MemoryId.make(entry.id);
+        const semanticEntry: SemanticEntry = {
+          id: branded,
+          agentId: entry.agentId,
+          content: entry.content,
+          summary: entry.summary,
+          importance: entry.importance,
+          verified: entry.verified,
+          tags: entry.tags,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          accessCount: entry.accessCount,
+          lastAccessedAt: entry.lastAccessedAt,
+        };
+        return memory.storeSemantic(semanticEntry).pipe(
+          Effect.map((id) => id as string),
+        );
+      },
+
+      getRelated: (id, mode, depth) =>
+        Effect.gen(function* () {
+          if (mode === "traverse") {
+            const ids = yield* zettel.traverse(MemoryId.make(id), depth);
+            const previews = yield* Effect.forEach(ids, (rid) =>
+              preview(rid).pipe(
+                Effect.map((p): AgentMemoryRelatedEntry | undefined =>
+                  p === undefined ? undefined : { id: String(rid), preview: p },
+                ),
+              ),
+            );
+            return previews.filter((e): e is AgentMemoryRelatedEntry => e !== undefined);
+          }
+
+          const links = yield* zettel.getLinks(MemoryId.make(id));
+          const entries = yield* Effect.forEach(links, (link) => {
+            const targetId = String(link.source) === id ? String(link.target) : String(link.source);
+            return preview(targetId).pipe(
+              Effect.map((p): AgentMemoryRelatedEntry | undefined =>
+                p === undefined
+                  ? undefined
+                  : { id: targetId, preview: p, strength: link.strength, type: link.type },
+              ),
+            );
+          });
+          return entries.filter((e): e is AgentMemoryRelatedEntry => e !== undefined);
+        }).pipe(Effect.catchAll(() => Effect.succeed([] as readonly AgentMemoryRelatedEntry[]))),
+    };
+  }),
+);

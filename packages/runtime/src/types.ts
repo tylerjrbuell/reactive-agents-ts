@@ -1010,6 +1010,15 @@ export interface MetaToolsConfig {
   find?: boolean;
   pulse?: boolean;
   recall?: boolean;
+  /**
+   * `relate` — queries the memory link graph (auto-linked entries by
+   * content similarity when `.withMemory()` is configured). Explicit opt-in
+   * only — never enabled by the no-args or full-suite meta-tools defaults —
+   * AND takes effect only when memory's adapter actually implements the
+   * relationship-query surface; requesting it without memory configured is
+   * a harmless no-op, not an error.
+   */
+  relate?: boolean;
   /** Universal task checklist (P6a) — model plans multi-step work and checks
    *  items off; every call renders the full list. Default ON with tools. */
   todo?: boolean;

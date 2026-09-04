@@ -141,10 +141,19 @@ export const ZettelkastenServiceLive = Layer.effect(
       // Text-based auto-linking via FTS5 search (or LIKE fallback)
       autoLinkText: (memoryId, content, agentId, threshold = 0.85) =>
         Effect.gen(function* () {
+          // Each term is quoted as an FTS5 string literal (embedded `"`
+          // doubled per FTS5 escaping rules) so it is matched as literal
+          // text, not parsed as query syntax. An unquoted term containing a
+          // hyphen, colon, or other FTS5-special character (e.g. "Effect-TS")
+          // was previously fed straight into MATCH and crashed the query
+          // ("no such column: TS") — silently swallowed by the caller's
+          // catchAll, so auto-linking quietly never ran on realistic content.
           const searchTerms = content
             .split(/\s+/)
+            .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
             .filter((w) => w.length > 3)
             .slice(0, 10)
+            .map((w) => `"${w.replace(/"/g, '""')}"`)
             .join(" OR ");
 
           if (searchTerms.length === 0) return [];

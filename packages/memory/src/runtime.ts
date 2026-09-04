@@ -76,9 +76,11 @@ export const createMemoryLayer = (
   // implementation to the narrow `AgentMemory` Tag in @reactive-agents/core
   // that the kernel actually consumes. Provided here so any consumer of
   // `createMemoryLayer` automatically satisfies the kernel's port lookup —
-  // no extra wiring required for the standard happy path.
+  // no extra wiring required for the standard happy path. Also needs
+  // `coreServices` (ZettelkastenService + SemanticMemoryService) for the
+  // port's `getRelated` — the `relate` tool's data source.
   const agentMemoryAdapter = AgentMemoryFromMemoryService.pipe(
-    Layer.provide(memoryServiceLayer),
+    Layer.provide(Layer.mergeAll(memoryServiceLayer, coreServices)),
   );
 
   return Layer.mergeAll(

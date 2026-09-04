@@ -370,6 +370,7 @@ export const buildBaseRuntimeAndEngine = (
         pulse: mt.pulse,
         recall: mt.recall,
         recallConfig: mt.recallConfig,
+        relate: mt.relate,
         todo: mt.todo,
         // Overhaul A/B (branch overhaul/agentic-core): register write_result_to_file
         // when RA_OVERHAUL=1 so the model can materialize a deliverable by reference

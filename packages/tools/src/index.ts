@@ -323,6 +323,12 @@ export {
   type RecallConfig,
 } from "./skills/recall.js";
 export {
+  relateTool,
+  makeRelateHandler,
+  type RelateState,
+  type RelateEntry,
+} from "./skills/relate.js";
+export {
   findTool,
   makeFindHandler,
   type FindConfig,

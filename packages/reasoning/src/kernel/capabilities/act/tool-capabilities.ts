@@ -6,6 +6,8 @@ import {
   todoTool,
   recallTool,
   makeRecallHandler,
+  relateTool,
+  makeRelateHandler,
   findTool,
   makeFindHandler,
   checkpointTool,
@@ -22,7 +24,7 @@ import {
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, AgentMemory } from "@reactive-agents/core";
 import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
 type ToolCapabilitySnapshot = {
@@ -113,6 +115,23 @@ export const resolveExecutableToolCapabilities = (input: {
           .register(recallTool, makeRecallHandler(scratchpadStoreRef, input.metaTools.recallConfig))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
+      }
+
+      // `relate` — only registered when BOTH the caller opted in AND a
+      // memory adapter implementing `getRelated` is actually present (e.g.
+      // `.withMemory()`'s Zettelkasten-backed adapter). Requesting it with
+      // no such adapter is silently a no-op (matches find's webFallback
+      // precedent) — not an error, since the caller may share a builder
+      // config across agents where memory is optional.
+      if (input.metaTools?.relate) {
+        const agentMemoryOpt = yield* Effect.serviceOption(AgentMemory);
+        if (agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.getRelated) {
+          const getRelated = agentMemoryOpt.value.getRelated;
+          yield* toolService
+            .register(relateTool, makeRelateHandler({ getRelated }))
+            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:relate", tag: errorTag(err) })));
+          append(toToolSchema(relateTool));
+        }
       }
 
       if (input.metaTools?.writeResultToFile) {
