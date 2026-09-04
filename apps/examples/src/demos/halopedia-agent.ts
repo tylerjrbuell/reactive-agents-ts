@@ -739,14 +739,6 @@ const HalopediaCompare = halopedia.tool({
 })
 
 // ─── Banter vs. lore-dive tool gating ──────────────────────────────────────
-// Persona instructions above handle *tone*; this heuristic handles whether a
-// Halopedia round-trip is worth the latency at all. The framework's default
-// tool-intent heuristic (`requiresTools()`) treats "tell me about"/"explain"/
-// "describe"/"how did" as recall of a past run and routes to chat-only —
-// exactly the phrasing people use to ask for lore, which would silently kill
-// tool calls across this agent's whole domain. `.withToolIntent()` below
-// replaces the default classifier for every call on this agent instead of
-// re-deriving routing logic outside the framework.
 const BANTER_PATTERNS = [
     /\b(what if|headcanon|hot take|unpopular opinion|imo|lol|lmao)\b/i,
     /\b(who('d| would) win|coolest|favorite|worst|best|funny|fun)\b/i,
@@ -757,11 +749,6 @@ const needsHalopedia = (message: string): boolean =>
 
 const agent = await ReactiveAgents.create()
     .withName('Halopedia-Agent')
-    // Stable id, not the default `${name}-${Date.now()}` — .withMemory()'s
-    // default db path is `~/.reactive-agents/<agentId>/memory.db`, so
-    // without this every process run mints a fresh agentId and therefore a
-    // fresh, empty memory store. This is the one line that makes memory
-    // actually persist across sessions.
     .withAgentId('halopedia-agent')
     .withTracing()
     .withProvider('ollama')
@@ -819,38 +806,12 @@ const agent = await ReactiveAgents.create()
     })
     .withReasoning({
         defaultStrategy: 'reactive',
-        // NOTE: do NOT set enableStrategySwitching:false here — tried it as a
-        // defense-in-depth backstop, but it's actively harmful: the entropy/
-        // loop-detector dispatcher still REQUESTS a switch whenever it sees
-        // flat entropy (unrelated to think.ts's noToolRequired fix below,
-        // which only helps once the model's thought already looks like a
-        // complete answer). With switching disabled, a request the dispatcher
-        // makes for a genuinely-stuck run hits iterate-pass.ts's "switching
-        // not enabled" branch and terminates immediately with an EMPTY
-        // passthrough deliverable — turning a slow-but-eventually-successful
-        // escalation into a hard failure (confirmed via rax-diagnose: verifier
-        // rejected `final-answer` success=false, terminatedBy=switching_exhausted).
-        // The real fix for the reported banter-loop issue is the
-        // `noToolRequired` condition in think.ts (see comment there) — verified
-        // standalone, with switching left at its default (enabled), to resolve
-        // no-tool-needed turns in 2 iterations with no switch ever requested.
     })
     .withToolIntent(needsHalopedia)
-    // Persistent cross-session memory (SQLite, ~/.reactive-agents/<agentId>/).
-    // Every substantial reply gets auto-extracted into semantic memory and
-    // auto-linked by content similarity — the substrate find(scope:"memory")
-    // and relate() below read from. A REPL that runs indefinitely across many
-    // conversations is exactly the case where this pays for itself: lore
-    // worked out three sessions ago becomes reusable instead of re-derived.
     .withMemory({
         tier: 'enhanced',
     })
     .withMemoryConsolidation()
-    // find (keyword search over remembered content, real per-entry ids) and
-    // relate (read/write the memory-entry relationship graph) — see the
-    // persona instructions above for the intended usage pattern. recall
-    // (durable notes) is part of the same family; harnessSkill:false keeps
-    // the harness-skill preamble out since the persona already covers usage.
     .withMetaTools({
         recall: true,
         find: true,
@@ -872,25 +833,22 @@ const agent = await ReactiveAgents.create()
     .build()
 
 // ─── Rolling-summary context compaction ────────────────────────────────────
-// The session below windows history at the framework's own turn/char cap and
-// would otherwise drop anything older; `onOverflow` folds those dropped turns
-// into a running summary instead of losing them. The framework owns the
-// windowing threshold and splice mechanics (`applyHistoryWindowWithOverflow`
-// in `@reactive-agents/runtime`) — this callback only owns the summarization
-// content, and a small merge cache so a long session doesn't re-summarize its
-// entire history on every turn.
 const SUMMARY_WORD_CAP = 300
 let storySoFar = ''
 let summarizedTurns = 0
 
 const chatSession = agent.session({
+    persist: true,
     onOverflow: async (dropped) => {
         const newTurns = dropped.slice(summarizedTurns)
         summarizedTurns = dropped.length
         if (newTurns.length === 0) return storySoFar
 
         const transcript = newTurns
-            .map((m) => `${m.role === 'user' ? 'You' : 'Halopedia'}: ${m.content}`)
+            .map(
+                (m) =>
+                    `${m.role === 'user' ? 'You' : 'Halopedia'}: ${m.content}`
+            )
             .join('\n')
         const summaryPrompt = storySoFar
             ? `Existing summary of an earlier Halo conversation:\n${storySoFar}\n\n` +
@@ -938,7 +896,7 @@ try {
                 verifyCitations: true,
             })
 
-            console.log(`\nHalopedia: ${reply.message}`)
+            console.log(`\nHalopedia Agent: ${reply.message}`)
             if (reply.toolsUsed && reply.toolsUsed.length > 0) {
                 console.log(
                     `\nSources/tools used: ${reply.toolsUsed.join(', ')}`
