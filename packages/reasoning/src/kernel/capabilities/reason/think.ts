@@ -1391,16 +1391,31 @@ export function handleThinking(
     });
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
-    // If this is the first iteration, the model produced no tool call, no
-    // FINAL ANSWER prefix (handled by the oracle), and the response is
-    // substantive, exit immediately without running the termination oracle or
-    // tool-parsing pipeline. Avoids 4-6 extra loop iterations that meta-tool
-    // injection + entropy scoring would otherwise add to simple Q&A.
+    // If the model produced no tool call, no FINAL ANSWER prefix (handled by
+    // the oracle), and the response is substantive, exit immediately without
+    // running the termination oracle or tool-parsing pipeline. Avoids 4-6
+    // extra loop iterations that meta-tool injection + entropy scoring would
+    // otherwise add to simple Q&A.
     // SKIP fast-path when required tools are specified — the agent must use
     // them before it can exit, even if the model already knows the answer.
+    //
+    // NOT gated to iteration 0 (2026-09-04 root fix): a plain conversational
+    // end_turn reply with no tool call is just as terminal on iteration 3 as
+    // on iteration 0. Gating this to iteration 0 only meant a run that missed
+    // the fast-path on its first pass (e.g. the model chose to "think" before
+    // answering) had NO equivalent short-circuit afterward — every later
+    // iteration fell through the full tool-oriented arbitrator pipeline with
+    // no path to recognize "the model is just talking, not acting" until the
+    // loop-detector's multi-iteration grace period (maxConsecutiveThoughts,
+    // default 3-5) forcibly rescued it. Observed live: a banter/opinion chat
+    // turn re-generated near-identical conversational replies for 6
+    // iterations before `graceful_thought` finally delivered iteration 0's
+    // answer verbatim — see wiki/Research/Harness-Reports/2026-09-04-*.
+    // The veto (`shouldVetoSuccess`) below still guards every iteration this
+    // fires on, so a run that genuinely needed controller activity (tool
+    // calls, verifier work) before this thought is still caught.
     const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
     if (
-      state.iteration === 0 &&
       !hasRequiredTools &&
       !thought.match(/ACTION:/i) &&
       !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&

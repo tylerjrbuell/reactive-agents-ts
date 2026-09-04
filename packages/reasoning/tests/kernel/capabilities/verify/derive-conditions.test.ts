@@ -246,3 +246,55 @@ describe("deriveConditions — availableWritingTools (FM-15 layer 5)", () => {
     expect(c).toContainEqual(artifactProduced("./out.md"));
   });
 });
+
+// Root fix 2026-09-04: `ReactiveAgent.chat()`'s tool-capable path and
+// `withHistoryBlock()` both prepend prior-turn prose to the task text before
+// the kernel ever sees it — "Context from prior run:\n<debrief>\n\nNew
+// request: <message>" and "--- Conversation history ---\n<turns>\n\n
+// --- Current message ---\n<message>" respectively, and the two compose. A
+// prior turn's rich answer prose routinely contains MUTATION_VERB +
+// EXTERNAL_RESOURCE_NOUN combinations (e.g. "shared a summary of the page")
+// describing PAST work, not the current ask — deriving an unsatisfiable
+// SideEffectLanded condition from it made a plain conversational follow-up
+// loop indefinitely (verified live via a real Halopedia-persona 2-turn chat:
+// a lore question followed by "Halo lore is so cool and deep" looped 6
+// iterations before the loop-detector's grace-period rescue, because the
+// post-condition steer could never land a side-effect a banter reply was
+// never going to produce).
+describe("deriveConditions — prior-context contamination (root fix 2026-09-04)", () => {
+  it("ignores mutation-verb+noun combos in a 'Context from prior run' / 'New request:' prefix", () => {
+    const task =
+      "Context from prior run:\nThe agent shared a summary of the page and posted a comment on the thread.\n\n" +
+      "New request: Halo lore is so cool and deep.";
+    expect(deriveConditions(task, [])).toEqual([]);
+  });
+
+  it("ignores mutation-verb+noun combos in a '--- Conversation history ---' / '--- Current message ---' block", () => {
+    const task =
+      "--- Conversation history ---\n" +
+      "User: Tell me about the SPARTAN-II program.\n" +
+      "Assistant: We shared a detailed summary and posted a note about Halsey's role.\n\n" +
+      "--- Current message ---\nHalo lore is so cool and deep.";
+    expect(deriveConditions(task, [])).toEqual([]);
+  });
+
+  it("handles the composed case: chat's 'New request:' wrapping the history block's 'Current message'", () => {
+    const task =
+      "Context from prior run:\nSummary text.\n\nNew request: " +
+      "--- Conversation history ---\nUser: hi\nAssistant: shared a note on the thread\n\n" +
+      "--- Current message ---\nHalo lore is so cool and deep.";
+    expect(deriveConditions(task, [])).toEqual([]);
+  });
+
+  it("still derives a genuine SideEffectLanded condition from the CURRENT request text", () => {
+    const task =
+      "--- Conversation history ---\nUser: hi\nAssistant: sure thing\n\n" +
+      "--- Current message ---\nPlease send an email to the team about the release.";
+    expect(deriveConditions(task, [])).toEqual([{ kind: "SideEffectLanded" }]);
+  });
+
+  it("byte-identical for a plain task with no prefix markers", () => {
+    const task = "Please send an email to the team about the release.";
+    expect(deriveConditions(task, [])).toEqual([{ kind: "SideEffectLanded" }]);
+  });
+});
