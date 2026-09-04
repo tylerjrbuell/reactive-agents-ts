@@ -210,6 +210,8 @@ export class ReactiveAgent<TOut = unknown> {
             outputValidatorOptions?: { maxRetries?: number }
             customTermination?: (state: { output: string }) => boolean
             modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' }
+            /** Per-agent override for chat()'s tool-need auto-detection, from `.withToolIntent()`. */
+            toolIntentClassifier?: (message: string) => boolean
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
         private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
@@ -2276,7 +2278,10 @@ export class ReactiveAgent<TOut = unknown> {
      * - **Direct LLM path** (fast, no tools): conversational/factual questions, simple queries
      * - **Tool-capable path**: messages requiring search, file ops, computation, etc.
      *
-     * Use `options.useTools` to override the automatic routing.
+     * Use `options.useTools` to override the automatic routing for a single call,
+     * or `.withToolIntent(classifier)` (on the builder) to override the default
+     * classifier for every call on this agent. Precedence: `options.useTools` >
+     * agent-level classifier from `.withToolIntent()` > default `requiresTools()`.
      *
      * @param message - The user's conversational message
      * @param options - Optional routing overrides and iteration limits
@@ -2296,7 +2301,7 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string
     ): Promise<ChatReply> {
-        const useTools = options?.useTools ?? requiresTools(message)
+        const useTools = options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(message)
         const contextSummary = buildChatSystemContext(
             this._config?.taskContext,
             this._lastDebrief,

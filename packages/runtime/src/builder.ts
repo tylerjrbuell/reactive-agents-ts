@@ -473,6 +473,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
     private _outputValidatorOptions?: { maxRetries?: number }
     private _customTermination?: (state: { output: string }) => boolean
+    private _toolIntentClassifier?: (message: string) => boolean
     private _enableReactiveIntelligence: boolean = true
     private _reactiveIntelligenceOptions?: Partial<
         import('@reactive-agents/reactive-intelligence').ReactiveIntelligenceConfig
@@ -2125,6 +2126,29 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Override `agent.chat()`'s automatic tool-need detection for this agent.
+     *
+     * By default, `chat()` routes each message through the built-in
+     * `requiresTools()` heuristic (`chat.ts`) to decide between the direct-LLM
+     * path and the tool-capable path. That heuristic is domain-agnostic and can
+     * misclassify messages whose phrasing is common in one agent's domain but
+     * ambiguous in general (e.g. "tell me about X" defaults to chat-only, but
+     * for an agent whose "X" is always a live lookup, that's a false negative).
+     * Use this to replace the default classifier for every `chat()` call on
+     * this agent, without having to reimplement or fork the whole heuristic.
+     *
+     * Precedence per call: explicit `chat(msg, { useTools })` always wins,
+     * then this agent-level classifier (if set), then the default
+     * `requiresTools()`.
+     * @param classifier - Receives the raw chat message; return true to route to the tool-capable path
+     * @returns `this` for chaining
+     */
+    withToolIntent(classifier: (message: string) => boolean): this {
+        this._toolIntentClassifier = classifier
+        return this
+    }
+
+    /**
      * Configure the Reactive Intelligence Layer — entropy-based metacognitive sensing.
      *
      * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
@@ -2724,6 +2748,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
                     modelRouting: self._modelRouting,
+                    toolIntentClassifier: self._toolIntentClassifier,
                 },
                 // Phase C: when durable runs are enabled, resolve the same
                 // checkpoint dir + identity configHash execute-stream computes

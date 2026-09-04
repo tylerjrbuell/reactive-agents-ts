@@ -140,6 +140,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withTestScenario` | _overlay — test-scenario rig (not data)_ | overlay | Load a test scenario. |
 | `withThinking` | `thinking` | config | Extended thinking / reasoning effort. |
 | `withTimeout` | `execution.timeoutMs` | config | Run timeout (ms). |
+| `withToolIntent` | _overlay — code-only_ | overlay | Configure tool intent. |
 | `withTools` | `tools`, `features.tools` | config | Tools layer + allowed/focused/adaptive/terminal/required options. |
 | `withTracing` | _overlay — trace persistence — observability alias (see withObservability({tracing}))_ | overlay | JSONL trace persistence. |
 | `withUserInteraction` | _overlay — durable ask overlay (channel adapters are code-only)_ | overlay | Durable user interaction. |

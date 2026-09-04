@@ -63,6 +63,13 @@ export interface AgentInstantiationDeps {
     outputValidatorOptions?: { maxRetries?: number };
     customTermination?: (state: { output: string }) => boolean;
     modelRouting?: ModelRoutingOptions;
+    /**
+     * Optional per-agent override for `agent.chat()`'s tool-need auto-detection,
+     * set via `.withToolIntent()`. When present, `chat()` uses this instead of
+     * the default `requiresTools()` heuristic (still overridable per-call via
+     * `ChatOptions.useTools`).
+     */
+    toolIntentClassifier?: (message: string) => boolean;
   };
   /**
    * Durable resume context (Phase C). Present only when `.withDurableRuns()`

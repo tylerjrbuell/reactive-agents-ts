@@ -82,7 +82,13 @@ export interface ChatReply {
  * the message content. Use these options to force a specific path.
  */
 export interface ChatOptions {
-  /** Override automatic tool-need detection. Default: auto-detected via heuristic */
+  /**
+   * Override automatic tool-need detection for this call.
+   *
+   * Precedence: this explicit `useTools` > the agent-level classifier set via
+   * `.withToolIntent()` on the builder (if any) > the default `requiresTools()`
+   * heuristic. Default: auto-detected via heuristic.
+   */
   useTools?: boolean;
   /** Maximum iterations for the tool-capable path. Default: 5 */
   maxIterations?: number;
