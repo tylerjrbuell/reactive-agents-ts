@@ -110,7 +110,7 @@ export const resolveExecutableToolCapabilities = (input: {
 
       if (input.metaTools?.recall) {
         yield* toolService
-          .register(recallTool, makeRecallHandler(scratchpadStoreRef))
+          .register(recallTool, makeRecallHandler(scratchpadStoreRef, input.metaTools.recallConfig))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
       }

@@ -199,6 +199,35 @@ describe("executeToolCall", () => {
     expect(result.content).toContain("Written to");
   });
 
+  // 2026-09-03: http-get's own handler returns `{status, statusText, body}`
+  // (packages/tools/src/skills/http-client.ts), but normalizeObservation's
+  // HTML-strip branch checked `parsed.content` — a field http-get never
+  // emits — so the strip never fired and raw HTML tags rode into context.
+  // The tool's own description falsely claims "HTML pages are automatically
+  // stripped to plain text."
+  it("strips HTML from an http-get result's `body` field (not the nonexistent `content` field)", async () => {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
+      execute: (_input) =>
+        Effect.succeed({
+          result: JSON.stringify({
+            status: 200,
+            statusText: "OK",
+            body: "<html><head><script>evil()</script><style>.x{}</style></head><body><p>Hello world</p></body></html>",
+          }),
+          success: true,
+        }),
+      getTool: (_name) => Effect.succeed({ parameters: [{ name: "url", type: "string", required: true }] }),
+    });
+
+    const result = await Effect.runPromise(
+      executeToolCall(mockToolService, { tool: "http-get", input: '{"url": "https://example.com"}' }, {}),
+    );
+    expect(result.content).toContain("Hello world");
+    expect(result.content).not.toContain("<script>");
+    expect(result.content).not.toContain("<style>");
+    expect(result.content).not.toContain("<html>");
+  });
+
   it("resolves plain string input to first required parameter", async () => {
     let capturedArgs: Record<string, unknown> = {};
     const mockToolService: Option.Option<ToolServiceInstance> = Option.some({

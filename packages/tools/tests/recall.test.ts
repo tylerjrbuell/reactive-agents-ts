@@ -66,6 +66,37 @@ describe("recall read mode", () => {
     const result = await Effect.runPromise(handler({ key: "missing" })) as any;
     expect(result.found).toBe(false);
   });
+
+  // 2026-09-03: recall(full: true) was uncapped — a stored http-get result
+  // measured live at 731K tokens for one fetched page rode out in a single
+  // tool response, able to blow the model's context window in one call.
+  it("caps full: true at fullReturnCapChars (default 20_000), with an actionable hint", async () => {
+    const huge = "x".repeat(30_000);
+    await Effect.runPromise(handler({ key: "huge", content: huge }));
+    const result = await Effect.runPromise(handler({ key: "huge", full: true })) as any;
+    expect(result.truncated).toBe(true);
+    expect(result.content.length).toBe(20_000);
+    expect(result.cappedAt).toBe(20_000);
+    expect(result.hint).toContain("recall(\"huge\"");
+  });
+
+  it("honors a custom fullReturnCapChars from config", async () => {
+    const customHandler = makeRecallHandler(storeRef, { fullReturnCapChars: 50 });
+    await Effect.runPromise(customHandler({ key: "big", content: "y".repeat(10_000) }));
+    const result = await Effect.runPromise(customHandler({ key: "big", full: true })) as any;
+    expect(result.truncated).toBe(true);
+    expect(result.content.length).toBe(50);
+    expect(result.cappedAt).toBe(50);
+  });
+
+  it("does not cap full: true when content is within the cap", async () => {
+    const ok = "z".repeat(15_000);
+    await Effect.runPromise(handler({ key: "ok", content: ok }));
+    const result = await Effect.runPromise(handler({ key: "ok", full: true })) as any;
+    expect(result.truncated).toBe(false);
+    expect(result.content.length).toBe(15_000);
+    expect(result.cappedAt).toBeUndefined();
+  });
 });
 
 describe("recall list mode", () => {

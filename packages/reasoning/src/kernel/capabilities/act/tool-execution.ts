@@ -383,8 +383,8 @@ function normalizeObservation(toolName: string, result: string): string {
       return lines || result;
     }
 
-    if (toolName === "http-get" && typeof parsed.content === "string") {
-      return cleanWebSnippet(parsed.content);
+    if (toolName === "http-get" && typeof parsed.body === "string") {
+      return cleanWebSnippet(parsed.body);
     }
 
     if (toolName === "shell-execute" && typeof parsed === "object" && parsed !== null) {
