@@ -3,6 +3,11 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentDebrief } from "./debrief.js";
+import {
+  applyHistoryWindowWithOverflow,
+  type HistoryOverflowHandler,
+} from "./gateway-context-formatting.js";
+export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -341,6 +346,7 @@ export class AgentSession {
     private readonly onSave?: (history: ChatMessage[]) => Promise<void>,
     initialHistory?: ChatMessage[],
     historyLoader?: () => Promise<ChatMessage[]>,
+    private readonly onOverflow?: HistoryOverflowHandler,
   ) {
     if (initialHistory) this._history = [...initialHistory];
     if (historyLoader) this._historyLoader = historyLoader;
@@ -351,7 +357,15 @@ export class AgentSession {
       this._history = await this._historyLoader();
       this._historyLoaded = true;
     }
-    const reply = await this.chatFn(message, this._history, options);
+    // Full history always accumulates unbounded (preserved for persistence —
+    // see applyHistoryWindow's doc comment). Only the copy handed to chatFn is
+    // windowed, and only folds dropped turns into a summary turn when the
+    // caller opted in via `onOverflow` (session({ onOverflow }))  — unset,
+    // this is byte-for-byte the same raw `this._history` passed before.
+    const historyForChat = this.onOverflow
+      ? await applyHistoryWindowWithOverflow(this._history, this.onOverflow)
+      : this._history;
+    const reply = await this.chatFn(message, historyForChat, options);
     this._history.push({ role: "user", content: message, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     if (this.onSave) await this.onSave(this._history);

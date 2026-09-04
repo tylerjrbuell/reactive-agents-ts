@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import {
   applyHistoryWindow,
+  applyHistoryWindowWithOverflow,
   formatHistoryBlock,
   formatEpisodicContext,
   buildEnrichedInstruction,
@@ -38,6 +39,63 @@ describe("applyHistoryWindow", () => {
     const history = [msg("user", "x".repeat(9000))];
     const windowed = applyHistoryWindow(history);
     expect(windowed).toHaveLength(0);
+  });
+});
+
+describe("applyHistoryWindowWithOverflow", () => {
+  test("no onOverflow, no overflow: identical to applyHistoryWindow (regression)", async () => {
+    const history = [msg("user", "hello"), msg("assistant", "hi")];
+    const result = await applyHistoryWindowWithOverflow(history);
+    expect(result).toEqual(applyHistoryWindow(history));
+    expect(result).toEqual(history);
+  });
+
+  test("no onOverflow, overflow occurs: pure drop, identical to applyHistoryWindow (regression)", async () => {
+    const history = Array.from({ length: 50 }, (_, i) =>
+      msg(i % 2 === 0 ? "user" : "assistant", `msg ${i}`),
+    );
+    const result = await applyHistoryWindowWithOverflow(history);
+    expect(result).toEqual(applyHistoryWindow(history));
+    expect(result).toHaveLength(40);
+    expect(result[0]!.content).toBe("msg 10");
+  });
+
+  test("onOverflow provided but nothing overflows: handler never called, output unchanged", async () => {
+    const history = [msg("user", "hello"), msg("assistant", "hi")];
+    let calls = 0;
+    const onOverflow = async (_dropped: readonly ChatMessage[]) => {
+      calls++;
+      return "should not be called";
+    };
+    const result = await applyHistoryWindowWithOverflow(history, onOverflow);
+    expect(calls).toBe(0);
+    expect(result).toEqual(history);
+  });
+
+  test("onOverflow provided and turns overflow: called with exactly the dropped turns, summary spliced in as leading turn", async () => {
+    const history = Array.from({ length: 50 }, (_, i) =>
+      msg(i % 2 === 0 ? "user" : "assistant", `msg ${i}`, i),
+    );
+    let receivedDropped: readonly ChatMessage[] | undefined;
+    const onOverflow = async (dropped: readonly ChatMessage[]) => {
+      receivedDropped = dropped;
+      return "the story so far";
+    };
+    const result = await applyHistoryWindowWithOverflow(history, onOverflow);
+
+    // Handler received exactly the dropped prefix (the first 10 turns, msg 0..9)
+    expect(receivedDropped).toHaveLength(10);
+    expect(receivedDropped![0]!.content).toBe("msg 0");
+    expect(receivedDropped![9]!.content).toBe("msg 9");
+
+    // Result: 1 synthetic summary turn + the 40 non-overflowed turns, untouched
+    expect(result).toHaveLength(41);
+    expect(result[0]!.role).toBe("assistant");
+    expect(result[0]!.content).toBe("Summary of earlier conversation: the story so far");
+    expect(result[1]!.content).toBe("msg 10");
+    expect(result[result.length - 1]!.content).toBe("msg 49");
+    // Non-overflowed turns are the exact same objects (untouched)
+    expect(result.slice(1)).toEqual(applyHistoryWindow(history));
   });
 });
 

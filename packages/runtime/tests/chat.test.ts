@@ -135,6 +135,103 @@ describe("agent.chat()", () => {
     expect((chatTurnEvents[1]?.tokensUsed ?? 0) > 0).toBe(true);
   });
 
+  describe("AgentSession onOverflow", () => {
+    const msg = (role: "user" | "assistant", content: string, timestamp = 0) =>
+      ({ role, content, timestamp }) as import("../src/chat.js").ChatMessage;
+
+    it("no onOverflow: chatFn receives the raw, unwindowed history (regression)", async () => {
+      const { AgentSession } = await import("../src/chat.js");
+      let receivedRef: unknown;
+      let receivedLengthAtCallTime = -1;
+      const seedHistory = Array.from({ length: 50 }, (_, i) =>
+        msg(i % 2 === 0 ? "user" : "assistant", `msg ${i}`, i),
+      );
+      const session = new AgentSession(
+        async (_message, history) => {
+          receivedRef = history;
+          receivedLengthAtCallTime = history.length;
+          return { message: "reply" };
+        },
+        undefined,
+        undefined,
+        seedHistory,
+        undefined,
+        undefined,
+      );
+
+      await session.chat("hi");
+      // Unset onOverflow: chatFn sees the exact same (unwindowed) history array
+      // reference internal to the session (same identity as this._history — asserted
+      // via the shared-mutation side effect below), 50 turns at call time.
+      expect(receivedLengthAtCallTime).toBe(50);
+      expect((receivedRef as unknown[]).length).toBe(52); // same reference, mutated by later push
+    });
+
+    it("onOverflow provided, overflow occurs: handler called with exactly the dropped turns, summary appears as a leading turn in chatFn's history", async () => {
+      const { AgentSession } = await import("../src/chat.js");
+      const seedHistory = Array.from({ length: 50 }, (_, i) =>
+        msg(i % 2 === 0 ? "user" : "assistant", `msg ${i}`, i),
+      );
+      let receivedDropped: readonly { content: string }[] | undefined;
+      const onOverflow = async (dropped: readonly { content: string }[]) => {
+        receivedDropped = dropped;
+        return "condensed summary";
+      };
+      const received: unknown[] = [];
+      const session = new AgentSession(
+        async (_message, history) => {
+          received.push(history);
+          return { message: "reply" };
+        },
+        undefined,
+        undefined,
+        seedHistory,
+        undefined,
+        onOverflow,
+      );
+
+      await session.chat("hi");
+
+      expect(receivedDropped).toHaveLength(10);
+      expect(receivedDropped![0]!.content).toBe("msg 0");
+
+      const historySeenByChatFn = received[0] as { role: string; content: string }[];
+      expect(historySeenByChatFn).toHaveLength(41);
+      expect(historySeenByChatFn[0]!.content).toBe("Summary of earlier conversation: condensed summary");
+      expect(historySeenByChatFn[1]!.content).toBe("msg 10");
+
+      // Full accumulated history is NOT truncated — only the copy handed to chatFn is windowed.
+      expect(session.history().length).toBe(52); // 50 seeded + user + assistant turn just added
+    });
+
+    it("onOverflow provided but no overflow occurs: handler is never called", async () => {
+      const { AgentSession } = await import("../src/chat.js");
+      const seedHistory = [msg("user", "hello"), msg("assistant", "hi")];
+      let calls = 0;
+      const onOverflow = async (_dropped: readonly { content: string }[]) => {
+        calls++;
+        return "should not run";
+      };
+      const received: unknown[] = [];
+      const session = new AgentSession(
+        async (_message, history) => {
+          received.push(history);
+          return { message: "reply" };
+        },
+        undefined,
+        undefined,
+        seedHistory,
+        undefined,
+        onOverflow,
+      );
+
+      await session.chat("hi");
+
+      expect(calls).toBe(0);
+      expect(received[0]).toEqual(seedHistory);
+    });
+  });
+
   describe("directChat extraContext", () => {
     it("prepends extraContext to system prompt when provided", async () => {
       const { directChat } = await import("../src/chat.js");

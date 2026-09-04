@@ -96,6 +96,7 @@ import {
     type ChatOptions,
     type ChatReply,
     type SessionOptions,
+    type HistoryOverflowHandler,
 } from './chat.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
@@ -2428,12 +2429,35 @@ export class ReactiveAgent<TOut = unknown> {
      * console.log(session.history()); // [{role:"user",...}, {role:"assistant",...}, ...]
      * await session.end();
      * ```
+     * @example Overflow summarization — fold dropped turns into a summary instead of losing them
+     * ```typescript
+     * const session = agent.session({
+     *   onOverflow: async (dropped) => {
+     *     const { message } = await agent.chat(
+     *       `Summarize these turns in 2-3 sentences:\n${dropped.map(d => d.content).join("\n")}`,
+     *       { useTools: false }
+     *     );
+     *     return message;
+     *   },
+     * });
+     * ```
      */
     session(
         options?: SessionOptions & {
             persist?: boolean
             id?: string
             maxAgeDays?: number
+            /**
+             * Called when history windowing would drop turns for this
+             * session's `chat()` calls, with exactly the dropped turns
+             * (oldest-to-newest). Its returned summary text is spliced back
+             * in as a synthetic leading turn instead of the dropped turns
+             * being silently discarded. The framework owns the windowing
+             * decision and splice mechanics only — this callback owns all
+             * summarization content (prompt, LLM call, etc). Unset: pure
+             * drop, identical to today's behavior.
+             */
+            onOverflow?: HistoryOverflowHandler
         }
     ): AgentSession {
         const persist = options?.persist ?? this._sessionPersist
@@ -2487,7 +2511,8 @@ export class ReactiveAgent<TOut = unknown> {
             undefined,
             onSave,
             undefined,
-            historyLoader
+            historyLoader,
+            options?.onOverflow
         )
     }
 
