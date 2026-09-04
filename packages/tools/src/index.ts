@@ -91,6 +91,8 @@ export {
 export {
   builtinTools,
   BUILTIN_TOOL_NAMES,
+  BUILTIN_TOOLSET_ALIASES,
+  resolveBuiltinNames,
   metaToolDefinitions,
   ragMemoryStore,
   scratchpadStoreRef,
@@ -115,6 +117,7 @@ export {
   getFileRoot,
 } from "./skills/file-operations.js";
 export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";
+export { grepTool, grepHandler } from "./skills/grep.js";
 // Overhaul — pure result renderer (shared by reasoning ContextManager + write-result-to-file).
 export { renderValue, describeShape, asArray, type ResultFormat } from "./skills/render-result.js";
 export {

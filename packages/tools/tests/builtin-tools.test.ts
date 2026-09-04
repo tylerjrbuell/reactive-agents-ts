@@ -9,7 +9,7 @@ import { fileReadHandler, fileWriteHandler } from "../src/skills/file-operations
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
 import { ToolExecutionError } from "../src/errors.js";
-import { builtinTools } from "../src/skills/builtin.js";
+import { builtinTools, BUILTIN_TOOL_NAMES, BUILTIN_TOOLSET_ALIASES, resolveBuiltinNames } from "../src/skills/builtin.js";
 
 describe("builtinTools registration", () => {
   it("does not include scratchpad-write (superseded by recall)", () => {
@@ -34,6 +34,51 @@ describe("builtinTools registration", () => {
     expect(names).toContain("file-read");
     expect(names).toContain("file-write");
     expect(names).toContain("code-execute");
+    expect(names).toContain("grep");
+  });
+});
+
+describe("resolveBuiltinNames (toolset aliases)", () => {
+  it("expands a named alias to its curated built-in subset", () => {
+    expect([...resolveBuiltinNames(["research"])].sort()).toEqual(
+      ["grep", "http-get", "web-search"],
+    );
+  });
+
+  it("matches aliases case-insensitively", () => {
+    expect([...resolveBuiltinNames(["Research"])].sort()).toEqual(
+      [...resolveBuiltinNames(["research"])].sort(),
+    );
+  });
+
+  it("'*' and 'all' resolve to every canonical built-in", () => {
+    const viaStar = resolveBuiltinNames(["*"]);
+    const viaAll = resolveBuiltinNames(["ALL"]);
+    expect(viaStar.size).toBe(BUILTIN_TOOL_NAMES.size);
+    expect(viaAll.size).toBe(BUILTIN_TOOL_NAMES.size);
+    for (const n of BUILTIN_TOOL_NAMES) {
+      expect(viaStar.has(n)).toBe(true);
+    }
+  });
+
+  it("mixes literal tool names and aliases in the same array", () => {
+    expect([...resolveBuiltinNames(["grep", "git"])].sort()).toEqual(
+      ["gh-cli", "git-cli", "grep"],
+    );
+  });
+
+  it("passes an unrecognized token through unchanged as a literal name", () => {
+    expect([...resolveBuiltinNames(["some-custom-tool"])]).toEqual(["some-custom-tool"]);
+  });
+
+  it("every alias expands only into names BUILTIN_TOOL_NAMES already contains", () => {
+    // The framework's core policy: an alias is sugar for an explicit list,
+    // never a way to pull in something the caller couldn't have named directly.
+    for (const names of Object.values(BUILTIN_TOOLSET_ALIASES)) {
+      for (const n of names) {
+        expect(BUILTIN_TOOL_NAMES.has(n)).toBe(true);
+      }
+    }
   });
 });
 

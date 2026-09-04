@@ -30,7 +30,7 @@
  * avoid spurious "required tool missing" failures on valid non-MCP agents.
  */
 
-import { BUILTIN_TOOL_NAMES, shellExecuteTool } from "@reactive-agents/tools";
+import { BUILTIN_TOOL_NAMES, resolveBuiltinNames, shellExecuteTool } from "@reactive-agents/tools";
 import type { TaskContract } from "@reactive-agents/core";
 import type { ToolsOptions } from "./types.js";
 
@@ -53,7 +53,7 @@ export function computeExposedToolNames(
   if (builtins === true) {
     for (const n of BUILTIN_TOOL_NAMES) optedInBuiltins.add(n);
   } else if (Array.isArray(builtins)) {
-    for (const n of builtins) optedInBuiltins.add(n);
+    for (const n of resolveBuiltinNames(builtins)) optedInBuiltins.add(n);
   }
   for (const n of allowed ?? []) optedInBuiltins.add(n);
   for (const n of requiredTools ?? []) optedInBuiltins.add(n);

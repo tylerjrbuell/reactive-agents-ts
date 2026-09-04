@@ -25,6 +25,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import {
   BUILTIN_TOOL_NAMES,
+  resolveBuiltinNames,
   buildFinalAnswerDescription,
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
@@ -114,7 +115,7 @@ export const prepareReasoningToolSchemas = (
       // Opt-in to all built-ins (legacy behavior).
       for (const name of BUILTIN_TOOL_NAMES) optedInBuiltins.add(name);
     } else if (Array.isArray(builtinsOpt)) {
-      for (const name of builtinsOpt) optedInBuiltins.add(name);
+      for (const name of resolveBuiltinNames(builtinsOpt)) optedInBuiltins.add(name);
     }
     // Always honor explicit allowedTools / requiredTools — those are
     // the consumer's intent regardless of the builtins opt-in default.

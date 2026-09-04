@@ -247,6 +247,20 @@ describe("withContract — exposed-tool-set mirrors runtime base-schema", () => 
     expect(exposed).toContain("file-read");
     expect(exposed).not.toContain("web-search");
   });
+
+  it("a named toolset alias in builtins[] expands to its curated subset (build-time mirror)", () => {
+    // computeExposedToolNames MIRRORS tool-schemas.ts's real runtime resolution —
+    // both call the shared resolveBuiltinNames, so this pins that an alias
+    // resolves identically at build-time-validation and execute-time.
+    const exposed = computeExposedToolNames({ builtins: ["research"] });
+    expect(exposed.sort()).toEqual(["grep", "http-get", "web-search"]);
+  });
+
+  it("'*' in builtins[] is equivalent to builtins: true", () => {
+    const viaStar = computeExposedToolNames({ builtins: ["*"] }).sort();
+    const viaTrue = computeExposedToolNames({ builtins: true }).sort();
+    expect(viaStar).toEqual(viaTrue);
+  });
 });
 
 describe("withContract — available kind requires exposure", () => {
