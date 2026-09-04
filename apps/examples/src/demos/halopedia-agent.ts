@@ -745,6 +745,12 @@ const HalopediaCompare = halopedia.tool({
 
 const agent = await ReactiveAgents.create()
     .withName('Halopedia-Agent')
+    // Stable id, not the default `${name}-${Date.now()}` — .withMemory()'s
+    // default db path is `~/.reactive-agents/<agentId>/memory.db`, so
+    // without this every process run mints a fresh agentId and therefore a
+    // fresh, empty memory store. This is the one line that makes memory
+    // actually persist across sessions.
+    .withAgentId('halopedia-agent')
     .withTracing()
     .withProvider('ollama')
     .withModel('gemma4')
@@ -782,7 +788,21 @@ const agent = await ReactiveAgents.create()
             'formality, just good conversation. Genuine lore questions — facts, timelines, comparisons, "what really ' +
             'happened", canon disputes — deserve the full research-and-cite treatment above. When a message could be ' +
             'either, lean toward banter unless it names specific canon details that need verifying. Never let one mode ' +
-            'bleed into the other: a joke does not need a References section, and a factual claim never skips one.',
+            'bleed into the other: a joke does not need a References section, and a factual claim never skips one.\n\n' +
+            "You have persistent memory across sessions, distinct from halopedia-explore (which walks Halopedia's own " +
+            'wiki-link structure). Before doing a fresh Halopedia lookup, use find(query, scope:"memory") to check ' +
+            'whether this topic came up in an earlier conversation — reuse what you already worked out instead of ' +
+            're-fetching and re-deriving it. When you land on a substantive finding (a resolved contradiction, a ' +
+            'timeline you pieced together, a comparison verdict), use recall(key, content) to jot a short durable note ' +
+            'so future turns and future sessions can find it. Memory entries you write get auto-linked by content ' +
+            'similarity; use relate(id, mode:"links") on an id a find() result returned to surface other things you\'ve ' +
+            "previously discussed that are connected to it — a second, complementary graph to halopedia-explore's " +
+            'wiki links, this one built from your own conversation history. If you notice two remembered findings are ' +
+            'connected in a way plain similarity would not catch — one caused another, one contradicts another, one ' +
+            'elaborates on another — use relate(id, mode:"link", targetId, type) to assert it explicitly, so the next ' +
+            'find/relate pass surfaces that connection too. None of this replaces citing Halopedia sources: memory is ' +
+            'for continuity across turns and sessions, not a substitute for grounding factual claims in halopedia-* ' +
+            'tool evidence.',
         tone: 'enthusiastic, precise, lore-aware, and clear — a knowledgeable friend who can riff casually or dig into deep canon depending on what the moment calls for',
     })
     .withReasoning({
@@ -802,6 +822,27 @@ const agent = await ReactiveAgents.create()
         // `noToolRequired` condition in think.ts (see comment there) — verified
         // standalone, with switching left at its default (enabled), to resolve
         // no-tool-needed turns in 2 iterations with no switch ever requested.
+    })
+    // Persistent cross-session memory (SQLite, ~/.reactive-agents/<agentId>/).
+    // Every substantial reply gets auto-extracted into semantic memory and
+    // auto-linked by content similarity — the substrate find(scope:"memory")
+    // and relate() below read from. A REPL that runs indefinitely across many
+    // conversations is exactly the case where this pays for itself: lore
+    // worked out three sessions ago becomes reusable instead of re-derived.
+    .withMemory({
+        tier: 'enhanced',
+    })
+    .withMemoryConsolidation()
+    // find (keyword search over remembered content, real per-entry ids) and
+    // relate (read/write the memory-entry relationship graph) — see the
+    // persona instructions above for the intended usage pattern. recall
+    // (durable notes) is part of the same family; harnessSkill:false keeps
+    // the harness-skill preamble out since the persona already covers usage.
+    .withMetaTools({
+        recall: true,
+        find: true,
+        relate: true,
+        harnessSkill: false,
     })
     .withTools({
         builtins: false,
