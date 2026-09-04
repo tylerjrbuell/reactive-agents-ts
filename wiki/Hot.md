@@ -71,9 +71,14 @@ Supersedes the simplification program as the WIP=1 item; the simplification
 program's motivating figure (555–640% harness overhead) was **retracted** on
 2026-07-28 because the instrument was broken (`2f97ca1e`).
 
-**Highest open defect:** [[Failure-Modes/RUNNING-CATALOGUE#F10]] — the request
-prefix churns every iteration, so the prompt cache never hits. Lazy tool
-disclosure saves 41% of tokens and costs 17% MORE money.
+**F10 RESOLVED (2026-08-26, `4f7c4bc0`, closed `89bb8a43`):**
+[[Failure-Modes/RUNNING-CATALOGUE#F10]] — was the request prefix churning every
+iteration so the prompt cache never hit. Root cause: per-iteration harness
+guidance appended to the system-prompt string tail still invalidated the
+cache (system precedes messages in Anthropic's cache hierarchy); guidance
+now rides as a trailing user message instead. Live-Sonnet rebaseline confirms
+nonzero `cacheRead` on every disclosure arm. Do not cite the old 41%-tokens/
+17%-more-money figure as current.
 
 **Do not cite** any token-overhead figure predating `2f97ca1e`.
 

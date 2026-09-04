@@ -166,6 +166,12 @@ export interface ToolObserveResult {
   readonly extractedFact?: string;
   readonly durationMs: number;
   readonly healed: boolean;
+  /** Post-heal args (D-2026-07-28-D): the resolved absolute-path arguments the
+   *  tool actually ran with, same as what `ToolCallCompleted`/the trace record.
+   *  Callers that mint their own ledger entry with pre-heal args (plan-execute's
+   *  `step-executor.ts`) should use this instead so the ledger matches the
+   *  trace on every path-taking tool call. */
+  readonly healedArgs: Record<string, unknown>;
 }
 
 const defaultEmitLog = (event: LogEvent): Effect.Effect<void, never> =>
@@ -426,6 +432,7 @@ export function executeToolAndObserve(
           success: false,
           durationMs: 0,
           healed,
+          healedArgs: args,
         } satisfies ToolObserveResult;
       }
     }
@@ -456,6 +463,7 @@ export function executeToolAndObserve(
         success: false,
         durationMs: 0,
         healed,
+        healedArgs: args,
       } satisfies ToolObserveResult;
     }
 
@@ -472,6 +480,7 @@ export function executeToolAndObserve(
         success: false,
         durationMs: 0,
         healed,
+        healedArgs: args,
       } satisfies ToolObserveResult;
     }
 
@@ -669,6 +678,7 @@ export function executeToolAndObserve(
       ...(exec.extractedFact ? { extractedFact: exec.extractedFact } : {}),
       durationMs,
       healed,
+      healedArgs: args,
     } satisfies ToolObserveResult;
   });
 }

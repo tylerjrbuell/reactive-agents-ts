@@ -343,15 +343,16 @@ export function executeStep(
         },
         // Canonical ledger pair (see StepExecResult.ledgerSteps). The action's
         // toolCall.id must equal the callId executeToolAndObserve stamped on
-        // obsStep.metadata.toolCallId. Arguments are the RESOLVED pre-heal args
-        // (the plan's declared intent); isArtifactProduced reconciles
-        // relative-vs-absolute at match time.
+        // obsStep.metadata.toolCallId. Arguments are the POST-heal absolute-path
+        // args (D-2026-07-28-D) — same values `ToolCallCompleted`/the trace
+        // record, so the replay lane's argsHash no longer diverges from its own
+        // trace on path-taking tools.
         ledgerSteps: [
           makeStep("action", `[DISPATCH ${step.id}] ${step.toolName}`, {
             toolCall: {
               id: `${plan.id}_${step.id}`,
               name: step.toolName!,
-              arguments: resolvedArgs,
+              arguments: observe.healedArgs,
             },
           }),
           observe.obsStep,

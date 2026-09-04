@@ -309,9 +309,20 @@ path) — only the `goal_state` half of that analysis is unverified in practice.
 unreachable. Separate task — out of scope for the gap-closure plan, which does
 not touch kernel state population.
 
-### D-2026-07-28-D — plan-execute replay-lane `argsHash` divergence
+### D-2026-07-28-D — plan-execute replay-lane `argsHash` divergence — ✅ RESOLVED 2026-09-04
 
-**Class:** latent correctness bug in the replay/observability boundary, not in
+**✅ RESOLVED 2026-09-04.** `ToolObserveResult` (`kernel/capabilities/act/tool-observe.ts`)
+gained a `healedArgs: Record<string, unknown>` field, populated at all 4 return
+sites from the already-in-scope post-heal `args` local (the same value
+`ToolCallCompleted`/the trace already record). `step-executor.ts`'s
+`ledgerSteps` action-step now stores `observe.healedArgs` instead of the
+pre-heal `resolvedArgs`, so the ledger and the trace agree on every
+path-taking tool call. `packages/benchmarks/tests/replay-lane.test.ts`'s
+`KNOWN_ARGS_HASH_DIVERGENCE` skip removed — `planned-tool-loop` now replays
+clean along with every other committed golden (9/9). `reasoning`/`benchmarks`/
+`runtime` suites green (4838 tests, 0 fail), build 37/37.
+
+**Class (historical):** latent correctness bug in the replay/observability boundary, not in
 the kernel itself.
 
 `step-executor.ts`'s `ledgerSteps` action-step stores PRE-heal (relative) tool
@@ -537,12 +548,17 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
   rewritten to per-run facts; `emitCuratorDecision` removed from
   KNOWN_DEAD_EMITTERS. `db5cd724`.
 
-### D-2026-07-30-L — open catalog from the 2026-07-30 hunt (not yet fixed)
+### D-2026-07-30-L — open catalog from the 2026-07-30 hunt
 
 **Class:** cataloged, lower priority.
-- **`emitAlternativesConsidered` is genuinely dead** (0 callers, verified) — the
-  counterfactual/alternatives signal is blind. Delete (event + normalize case +
-  helper) OR wire at the decision/arbitration site. Clean §4 candidate.
+- ✅ **RESOLVED 2026-09-04** — `emitAlternativesConsidered` was genuinely dead
+  (0 non-test callers, verified). Deleted outright rather than wired: the
+  emitter function, the `AlternativesConsideredEmitted` AgentEvent union
+  member, the `alternatives-considered` TraceEvent kind + `AlternativesConsideredEvent`
+  interface, the `Debrief.alternatives` field + `DebriefAlternatives` type, the
+  `normalize.ts`/`debrief/build.ts`/`debrief/renderer.ts` consumer plumbing,
+  the `KNOWN_DEAD_EMITTERS` entry in `analyze.ts`, and the cortex UI timeline
+  filter's dead set-member. Full suite green (9210/9240, 0 fail), build 37/37.
 - **Weak-model (qwen3:4b) file-deliverable thrash:** on rw-2, qwen3:4b burned
   16.7K tokens / 69s, called `final-answer` 3× but never `file-write`, and the
   harness assembled a fallback the verifier correctly rejected
