@@ -20,6 +20,7 @@ import { join } from "node:path";
 import {
   resolveTracePath,
   listTraces,
+  candidateTraceDirs,
   replayCommand,
   grepCommand,
   diffCommand,
@@ -139,13 +140,18 @@ describe("resolveTracePath / listTraces", () => {
     await expect(promise).rejects.toThrow(/Trace file not found/);
   });
 
-  it("resolves a bare runId by looking in DEFAULT_TRACE_DIR", async () => {
-    // resolve.ts captures DEFAULT_TRACE_DIR at module-load time, so the
-    // env var has no effect on the bare-id branch within the same process.
-    // The absolute-path branch already covered the path resolution shape;
-    // here we just confirm the function reaches the bare-id branch and
-    // throws a useful "no trace found" error when the dir is empty.
-    await expect(resolveTracePath("run-aaa")).rejects.toThrow(/No trace found for runId/);
+  it("resolves a bare runId against REACTIVE_AGENTS_TRACE_DIR (read fresh per call, not cached)", async () => {
+    // candidateTraceDirs() reads REACTIVE_AGENTS_TRACE_DIR on every call
+    // (2026-09-04 root fix — the multi-dir search that replaced the old
+    // module-load-time DEFAULT_TRACE_DIR constant), so the env var set in
+    // beforeAll is honored here even though it was set after this module
+    // first loaded.
+    const resolved = await resolveTracePath("run-aaa");
+    expect(resolved).toBe(traceA);
+  });
+
+  it("throws a useful error for a runId that doesn't exist in any candidate dir", async () => {
+    await expect(resolveTracePath("run-does-not-exist")).rejects.toThrow(/No trace found for runId/);
   });
 
   it("provides a did-you-mean suggestion for unknown runIds", async () => {
@@ -165,6 +171,54 @@ describe("resolveTracePath / listTraces", () => {
     expect(files[0].runId).toBe("run-bbb"); // newer mtime
     expect(files[1].runId).toBe("run-aaa");
     expect(files[0].sizeBytes).toBeGreaterThan(0);
+  });
+
+  it("listTraces merges multiple directories, deduping a runId present in both by newest mtime", async () => {
+    const otherDir = mkdtempSync(join(tmpdir(), "diagnose-test-other-"));
+    try {
+      // Same runId as traceA, but written later — the merge must keep this one.
+      const dupPath = join(otherDir, "run-aaa.jsonl");
+      writeFileSync(dupPath, buildTrace("run-aaa"));
+      const uniquePath = join(otherDir, "run-ccc.jsonl");
+      writeFileSync(uniquePath, buildTrace("run-ccc"));
+
+      const files = await listTraces([tmpDir, otherDir]);
+      const runIds = files.map((f) => f.runId).sort();
+      expect(runIds).toEqual(["run-aaa", "run-bbb", "run-ccc"]);
+
+      const aaa = files.find((f) => f.runId === "run-aaa")!;
+      expect(aaa.path).toBe(dupPath); // the newer copy, not traceA
+    } finally {
+      rmSync(otherDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── candidateTraceDirs ──────────────────────────────────────────────────────
+describe("candidateTraceDirs", () => {
+  it("returns exactly the override when REACTIVE_AGENTS_TRACE_DIR is set", () => {
+    const prior = process.env.REACTIVE_AGENTS_TRACE_DIR;
+    process.env.REACTIVE_AGENTS_TRACE_DIR = "/tmp/some-override-dir";
+    try {
+      expect(candidateTraceDirs()).toEqual(["/tmp/some-override-dir"]);
+    } finally {
+      if (prior === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR;
+      else process.env.REACTIVE_AGENTS_TRACE_DIR = prior;
+    }
+  });
+
+  it("searches both the home-dir and cwd-relative trace dirs when no override is set", () => {
+    const prior = process.env.REACTIVE_AGENTS_TRACE_DIR;
+    delete process.env.REACTIVE_AGENTS_TRACE_DIR;
+    try {
+      const dirs = candidateTraceDirs("/some/repo/root");
+      expect(dirs).toEqual([
+        join(require("node:os").homedir(), ".reactive-agents", "traces"),
+        join("/some/repo/root", ".reactive-agents", "traces"),
+      ]);
+    } finally {
+      if (prior !== undefined) process.env.REACTIVE_AGENTS_TRACE_DIR = prior;
+    }
   });
 });
 
