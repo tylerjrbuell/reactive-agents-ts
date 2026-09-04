@@ -83,6 +83,18 @@ describe("the guard itself is unchanged", () => {
     expect(err.message).toContain(root);
   });
 
+  it("refuses a sibling whose name only shares the root string prefix", async () => {
+    const root = await mkdtemp(join(tmpdir(), "corrective-guard-"));
+    const sibling = `${root}-secrets`;
+    await mkdir(sibling);
+    await writeFile(join(sibling, "keys.txt"), "outside\n");
+
+    const err = await readIn(root, join(sibling, "keys.txt"));
+
+    expect(err.message).toContain("Path traversal");
+    expect(err.message).toContain(root);
+  });
+
   it("a suggestion never escapes the root: ../logs.txt outside is not offered", async () => {
     // Sibling layout: root/inner is the sandbox, root/logs.txt sits OUTSIDE it.
     // The rejected path's suffix (logs.txt) exists only outside, so no

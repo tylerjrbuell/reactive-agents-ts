@@ -37,6 +37,14 @@ export function getFileRoot(): string {
 // path actually exists under the root, names that path outright, so the next
 // call can be the right one.
 
+function isWithinRoot(base: string, candidate: string): boolean {
+  const relative = path.relative(base, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
+  );
+}
+
 /** Longest suffix of `rejected`'s components that exists under `base`, as a
  * "./"-prefixed relative path — or undefined. Probes at most `maxProbes`
  * suffixes (deepest first, so "./data/logs.txt" beats "./logs.txt" when both
@@ -52,7 +60,7 @@ async function existingSuffixUnder(
     const candidate = parts.slice(parts.length - take).join("/");
     const probe = path.resolve(base, candidate);
     // The probe itself must stay confined — a candidate that escapes is no fix.
-    if (!path.normalize(probe).startsWith(path.normalize(base))) continue;
+    if (!isWithinRoot(base, probe)) continue;
     try {
       await fs.access(probe);
       return `./${candidate}`;
@@ -75,7 +83,7 @@ export async function confinePath(filePath: string): Promise<string> {
   const resolved = path.isAbsolute(filePath)
     ? path.resolve(filePath)
     : path.resolve(allowedBase, filePath);
-  if (path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
+  if (isWithinRoot(allowedBase, resolved)) {
     return resolved;
   }
   const suggestion = await existingSuffixUnder(allowedBase, filePath);
