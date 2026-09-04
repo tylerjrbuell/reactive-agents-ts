@@ -4,12 +4,11 @@ import type {
   DebriefStep,
   DebriefAssumption,
   DebriefCuratorAction,
-  DebriefAlternatives,
 } from "./types.js";
 
 /**
  * Build a Debrief from a trace JSONL path. Folds every rationale-bearing event
- * (tool calls, assumptions, curator decisions, alternatives, termination)
+ * (tool calls, assumptions, curator decisions, termination)
  * into a structured timeline.
  *
  * Skips iterations that produced no rationale-bearing activity so the output
@@ -23,7 +22,6 @@ export async function buildDebrief(tracePath: string): Promise<Debrief> {
   const path: DebriefStep[] = [];
   const assumptions: DebriefAssumption[] = [];
   const curatorActions: DebriefCuratorAction[] = [];
-  const alternatives: DebriefAlternatives[] = [];
   let termination: Debrief["termination"] = { by: "unknown" };
   let verdict: Debrief["verdict"] | undefined;
 
@@ -67,14 +65,6 @@ export async function buildDebrief(tracePath: string): Promise<Debrief> {
         });
         break;
       }
-      case "alternatives-considered": {
-        alternatives.push({
-          iter: ev.iter,
-          chosen: ev.chosen,
-          rejected: ev.alternatives,
-        });
-        break;
-      }
       case "kernel-state-snapshot": {
         if (ev.terminatedBy) {
           termination = {
@@ -103,7 +93,6 @@ export async function buildDebrief(tracePath: string): Promise<Debrief> {
     path,
     assumptions,
     curatorActions,
-    alternatives,
     termination,
     ...(verdict ? { verdict } : {}),
   };
@@ -119,7 +108,6 @@ export function foldDebrief(events: readonly TraceEvent[], runId: string): Debri
   const path: DebriefStep[] = [];
   const assumptions: DebriefAssumption[] = [];
   const curatorActions: DebriefCuratorAction[] = [];
-  const alternatives: DebriefAlternatives[] = [];
   let termination: Debrief["termination"] = { by: "unknown" };
   let verdict: Debrief["verdict"] | undefined;
 
@@ -150,9 +138,6 @@ export function foldDebrief(events: readonly TraceEvent[], runId: string): Debri
           rationale: ev.rationale,
         });
         break;
-      case "alternatives-considered":
-        alternatives.push({ iter: ev.iter, chosen: ev.chosen, rejected: ev.alternatives });
-        break;
       case "kernel-state-snapshot":
         if (ev.terminatedBy) {
           termination = {
@@ -179,7 +164,6 @@ export function foldDebrief(events: readonly TraceEvent[], runId: string): Debri
     path,
     assumptions,
     curatorActions,
-    alternatives,
     termination,
     ...(verdict ? { verdict } : {}),
   };

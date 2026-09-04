@@ -31,7 +31,6 @@ export type TraceEvent =
   | HarnessSignalInjectedEvent
   // ─── Decision rationale events (v0.11.x — observable "why") ───
   | AssumptionRecordedEvent
-  | AlternativesConsideredEvent
   | CuratorDecisionEvent
   // ─── Overhaul Phase 2 (2026-07-07 — tool-surface compiler) ───
   | ToolSurfaceResolvedEvent
@@ -348,19 +347,6 @@ export interface AssumptionRecordedEvent extends TraceEventBase {
 }
 
 /**
- * Alternatives considered at a decision point (chose A, rejected B and C).
- * Captures the counterfactuals the model weighed.
- */
-export interface AlternativesConsideredEvent extends TraceEventBase {
-  readonly kind: "alternatives-considered"
-  readonly chosen: string
-  readonly alternatives: readonly {
-    readonly option: string
-    readonly rejectedBecause: string
-  }[]
-}
-
-/**
  * Context curator action — what was kept, dropped, compressed, or flagged as
  * untrusted, and why. Pairs the curator's existing trustLevel/justification
  * with a structured rationale.
@@ -513,7 +499,6 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "llm-exchange": ["provider", "model", "requestKind", "messages", "toolSchemaNames", "response"],
   "harness-signal-injected": ["signalKind", "origin", "contentPreview", "contentLen"],
   "assumption-recorded": ["assumption", "rationale"],
-  "alternatives-considered": ["chosen", "alternatives"],
   "curator-decision": ["action", "targetRef", "rationale"],
   "tool-surface-resolved": ["visible", "callable", "reasons"],
   "contract-compiled": ["requirements", "deliverables", "horizon"],

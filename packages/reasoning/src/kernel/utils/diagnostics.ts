@@ -195,35 +195,6 @@ export function emitCuratorDecision(args: {
   });
 }
 
-export function emitAlternativesConsidered(args: {
-  readonly taskId: string;
-  readonly iteration: number;
-  readonly chosen: string;
-  readonly alternatives: readonly { readonly option: string; readonly rejectedBecause: string }[];
-}): Effect.Effect<void, never> {
-  return Effect.gen(function* () {
-    const busOpt = yield* Effect.serviceOption(EventBus);
-    if (busOpt._tag !== "Some") return;
-    yield* busOpt.value
-      .publish({
-        _tag: "AlternativesConsideredEmitted",
-        taskId: args.taskId,
-        iteration: args.iteration,
-        timestamp: Date.now(),
-        chosen: args.chosen,
-        alternatives: args.alternatives,
-      })
-      .pipe(
-        Effect.catchAll((err) =>
-          emitErrorSwallowed({
-            site: "reasoning/src/kernel/utils/diagnostics.ts:emitAlternativesConsidered",
-            tag: errorTag(err),
-          }),
-        ),
-      );
-  });
-}
-
 // ── ToolSurfaceResolved ──────────────────────────────────────────────────────
 
 /**

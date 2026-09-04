@@ -1116,21 +1116,6 @@ export type AgentEvent =
       readonly proposals: readonly { readonly source: string; readonly action: string }[];
     }
   | {
-      /**
-       * Decision point where multiple candidates were considered and one chosen
-       * (v0.11.x). Surfaces the counterfactuals the model weighed.
-       */
-      readonly _tag: "AlternativesConsideredEmitted";
-      readonly taskId: string;
-      readonly iteration: number;
-      readonly timestamp: number;
-      readonly chosen: string;
-      readonly alternatives: readonly {
-        readonly option: string;
-        readonly rejectedBecause: string;
-      }[];
-    }
-  | {
       readonly _tag: "VerifierVerdictEmitted";
       readonly taskId: string;
       readonly iteration: number;
