@@ -16,6 +16,42 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.16.0 — Harness control & memory reliability (September 2026)
+
+<Aside type="note" title="No breaking changes">
+v0.16 is additive: a new builder method, new chat/session controls, a new builtin tool, and a memory reliability fix. No builder-surface removals, no migration needed.
+</Aside>
+
+### Harness Control Surface — `.withHarness({...})`
+
+A typed, per-agent config for the harness's internal mechanisms: tool disclosure, tool discovery, tool index, verbose rules, context budgets, and more. Precedence is config over `RA_*` env vars over the default, and the resolved config is inherited by sub-agents. `ContextProfile.toolDisclosureMode` is now wired through to this resolved config, so a tier's disclosure preset (e.g. local tiers defaulting to index mode) actually changes tool-visibility behavior instead of being computed and discarded. See [Harness Control Surface](/features/harness-control/).
+
+### Chat & session controls
+
+- **`.withToolIntent()`** — agent-level tool-routing override for `chat()`.
+- **`verifyCitations`** — a new `ChatOptions` field that checks cited claims against tool observations.
+- **`onOverflow`** — a history-overflow-summarize hook on `agent.session()`, so a long multi-turn conversation summarizes older turns instead of silently dropping them.
+
+See [Chat & Sessions](/cookbook/chat-and-sessions/).
+
+### New tools
+
+- **`grep` builtin** — opt-in, alongside the existing task-tool set.
+- **`defineToolset`** — named toolset alias shortcuts for grouping related tools under one flag.
+- **`relate`** — a memory-graph tool for the agent to record and query relationships between memory entries; `find` now returns real memory-entry ids instead of synthetic ones.
+
+### Reasoning: Plan-Execute recites remaining sub-goals
+
+Plan-Execute's composite steps now pass the titles of other pending/in-progress plan steps to their sub-kernel as `remainingGoals`, rendered as a "Remaining steps: ..." recitation in the message tail. This closes a gap where that recitation path existed but had no producer feeding it. Opt-in by construction — absent or empty, behavior is unchanged.
+
+### Fixes
+
+- Memory and runtime now agree on the default `dbPath`, fixing embedding/content/consolidation corruption caused by the mismatch. Memory writes are now screened for injection and PII before persisting, matching the guardrails already applied to LLM input.
+- Plan-execute's ledger now records the healed (post-repair) tool-call arguments instead of the pre-heal ones, so the ledger matches the trace it's compared against during replay.
+- The dead `alternatives-considered` trace event (zero live emitters) was removed end to end.
+
+---
+
 ## v0.15.0 — Hardening pass (August 2026)
 
 <Aside type="note" title="No breaking changes">

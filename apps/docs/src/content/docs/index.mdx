@@ -219,19 +219,19 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## New in v0.15
+## New in v0.16
 
-Two headline capabilities just landed: **sub-agents inherit your safety constraints** and **dynamic provider config at runtime**.
+Two headline capabilities just landed: **a typed harness control surface** and **richer chat/session controls**.
 
 <div class="ra-v12-cards">
 <CardGrid>
-    <Card title="Sub-Agents Inherit Judgment + Safety" icon="approve-check">
-        A delegated sub-agent now runs under the parent's `taskContract`, `fabricationGuard`, `grounding`, and `approvalPolicy`: a true sub-agent, not a rubber-stamped one. A `requiresApproval` tool it calls is refused, not executed unattended.
+    <Card title="Harness Control Surface" icon="setting">
+        `.withHarness({...})` is a typed, per-agent config for the harness's internal mechanisms — tool disclosure, discovery, tool index, context budgets, and more. Config beats `RA_*` env vars, which beat the default, and the resolved config is inherited by sub-agents.
 
-        [Read the guide →](/guides/sub-agents/)
+        [Read the guide →](/features/harness-control/)
     </Card>
-    <Card title="Dynamic Provider Config" icon="setting">
-        `.withProvider(provider, { baseUrl, apiKey, headers })` now works at runtime for the whole OpenAI-compatible family: point at llama.cpp, Deepseek, or a custom proxy without predefining env vars.
+    <Card title="Chat & Session Controls" icon="approve-check">
+        `.withToolIntent()` for agent-level tool-routing overrides, a `verifyCitations` chat option, and an `onOverflow` hook on `agent.session()` so a long conversation summarizes older turns instead of silently dropping them.
 
         [See What's New →](/guides/whats-new/)
     </Card>
