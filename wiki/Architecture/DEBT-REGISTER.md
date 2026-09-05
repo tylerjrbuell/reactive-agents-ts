@@ -279,9 +279,39 @@ the §6 lift rule on rungs 2 and 3 of the ladder.
 
 **Gate:** `scripts/check-volatile-placement.sh` (Task 10).
 
-### D-2026-07-28-C — `goal_state` is write-only in production
+### D-2026-07-28-C — `goal_state` is write-only in production — ⚠️ WIRED 2026-09-05, LIFT UNMEASURED
 
-**Class:** dead-signal defect, same family as the H1 composed-but-never-rendered
+**⚠️ WIRED, not yet promoted (2026-09-05, `d5000dd4`).** Root-cause chased first
+against [[../Research/Audit-Reports-2026-07-08/04-goal-decomposition-progress|the 2026-07-08
+goal-decomposition audit]]: `Plan.steps` is the ONLY typed sub-goal ledger
+anywhere in RA — reactive/ToT/reflexion track progress as tool-name coverage,
+not named sub-goals, so they have no data to feed `goal_state` from.
+`KernelInput.remainingGoals` (new, per-pass) now threads plan-execute
+composite steps' pending/in_progress sibling titles through
+`executeReActKernel` → `buildKernelInput` → `fromKernelState`, which seeds
+the `goal_state` event when non-empty. Structurally opt-in — every other
+caller passes nothing, so reactive/ToT/reflexion/blueprint and 0-1-step
+plan-execute runs are byte-identical. Reuses the F10-safe message-tail
+recitation, so no cache-churn cost. Proven live end-to-end (not a fixture)
+by `packages/reasoning/tests/strategies/plan-execute-remaining-goals.test.ts`
+— a real 2-composite-step plan-execute run over the deterministic test
+provider, asserting on the sub-kernel's own request content; confirmed
+red-on-cut.
+
+**Still open: cross-tier LIFT measurement**, matching the discipline
+09-UNIFIED-PROGRAM §7 Step 5 already applied to `recall` (0.0pp lift, 3
+injection shapes × 2 tiers → park, don't build further). This entry has NOT
+had that measurement — it's live for every 2+ composite-step plan-execute
+run today on priors alone, not evidence. Needed before it can be
+default-on with confidence, or extended to a second producer
+(reactive/ToT would need their own typed sub-goal signal first, which
+doesn't exist): a multi-composite-step plan-execute task where the SIBLING
+step's content is load-bearing (e.g. avoiding duplicate work, or correctly
+sequencing information across steps) × 2+ local tiers × n≥5, wired vs the
+pre-2026-09-05 no-op, scored on task success / token overhead — same shape
+as the recall ablation script (`scripts/probes/`).
+
+**Class (historical):** dead-signal defect, same family as the H1 composed-but-never-rendered
 regression already fixed once in this codebase.
 
 `packages/reasoning/src/assembly/stages/system-prompt.ts:55` reads

@@ -229,8 +229,12 @@ path, run fails after successful execution. *Fix = pick one authority, delete th
 narrower than the "canonical argument identity everywhere" the 08-10 proposals asked for.*
 
 **6.7 Work paid for and discarded.** `iterate-pass.ts:630-671` computes recall context and
-skills, then `void`s both — the comment admits it. `volatile-tail.ts` reads a `goal_state`
-that has no live producer.
+skills, then `void`s both — the comment admits it. The `goal_state` half is RESOLVED
+(2026-09-05, `d5000dd4`): plan-execute's composite steps now thread `Plan.steps`
+(the codebase's one typed sub-goal ledger) into `KernelInput.remainingGoals`, so
+`volatile-tail.ts` has a live producer. Cross-tier lift measurement is still
+open (Step 5's own bar — recall got it, this hasn't) before promoting beyond
+plan-execute; see DEBT-REGISTER D-2026-07-28-C.
 
 **6.8 Two memory consolidators. RESOLVED (verified 2026-08-24).**
 `packages/memory/src/extraction/` contains only `memory-extractor.ts`;
