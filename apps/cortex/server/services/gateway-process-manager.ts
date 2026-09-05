@@ -293,6 +293,7 @@ export class GatewayProcessManager {
           : undefined;
       const _budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
       const _grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
+      const _fabricationGuard = config.fabricationGuard as "off" | "warn" | "block" | undefined;
       const _modelRouting =
         config.modelRouting && typeof config.modelRouting === "object" && (config.modelRouting as { enabled?: boolean }).enabled
           ? (config.modelRouting as { enabled?: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>> })
@@ -342,6 +343,7 @@ export class GatewayProcessManager {
         ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
         ...(_budget && ((_budget.tokenLimit ?? 0) > 0 || (_budget.costLimit ?? 0) > 0) ? { budget: _budget } : {}),
         ...(_grounding?.mode ? { grounding: _grounding } : {}),
+        ...(_fabricationGuard ? { fabricationGuard: _fabricationGuard } : {}),
         ...(_modelRouting?.enabled ? { modelRouting: _modelRouting } : {}),
         ...(_rawConfig ? { rawConfig: _rawConfig } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
@@ -375,12 +377,12 @@ export class GatewayProcessManager {
             durableApprovals.register({ agentId: agentId_, durableRunId: r.pendingApproval.runId, agent, startedAt: Date.now() });
           }
           // Emit debrief if available
-          const debrief = (result as any).debrief;
+          const debrief = result.debrief;
           if (debrief) {
             Effect.runFork(
               ingest.handleEvent(agentId_, runId, {
                 v: 1, agentId: agentId_, runId,
-                event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief } as any,
+                event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief },
               }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:316", tag: errorTag(err) }))),
             );
           }

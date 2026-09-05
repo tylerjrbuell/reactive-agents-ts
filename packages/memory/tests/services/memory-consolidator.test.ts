@@ -6,7 +6,7 @@ import {
 } from "../../src/services/memory-consolidator.js";
 import type { ConsolidatorConfig } from "../../src/services/memory-consolidator.js";
 import { SemanticMemoryService, SemanticMemoryServiceLive } from "../../src/services/semantic-memory.js";
-import { MemoryDatabaseLive } from "../../src/database.js";
+import { MemoryDatabase, MemoryDatabaseLive } from "../../src/database.js";
 import type { SemanticEntry, MemoryId } from "../../src/types.js";
 import { defaultMemoryConfig } from "../../src/types.js";
 import * as fs from "node:fs";
@@ -19,6 +19,7 @@ const makeSemanticEntry = (
   id: string,
   content: string,
   importance: number = 0.5,
+  opts: { accessCount?: number; lastAccessedAt?: Date } = {},
 ): SemanticEntry => ({
   id: id as MemoryId,
   agentId: "agent-test",
@@ -29,8 +30,8 @@ const makeSemanticEntry = (
   tags: ["test"],
   createdAt: new Date(),
   updatedAt: new Date(),
-  accessCount: 0,
-  lastAccessedAt: new Date(),
+  accessCount: opts.accessCount ?? 0,
+  lastAccessedAt: opts.lastAccessedAt ?? new Date(),
 });
 
 const config = { ...defaultMemoryConfig("agent-test"), dbPath: TEST_DB };
@@ -144,6 +145,64 @@ describe("MemoryConsolidatorService", () => {
     );
   });
 
+  // ─── decayUnused / promoteActive (absorbed from the retired standalone
+  //     extraction/memory-consolidator.ts service, 2026-08-21 dedupe) ─────────
+
+  it("decayUnused reduces importance of entries not accessed recently", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+        const staleDate = new Date(Date.now() - 10 * 86_400_000);
+
+        yield* semantic.store(
+          makeSemanticEntry("stale", "old fact", 0.5, { lastAccessedAt: staleDate }),
+        );
+        yield* svc.decayUnused("agent-test", 0.1);
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "stale");
+        expect(entry!.importance).toBeCloseTo(0.4, 5);
+      }),
+    );
+  });
+
+  it("decayUnused does not affect recently accessed entries", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+
+        yield* semantic.store(
+          makeSemanticEntry("fresh", "recent fact", 0.5, { lastAccessedAt: new Date() }),
+        );
+        yield* svc.decayUnused("agent-test", 0.1);
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "fresh");
+        expect(entry!.importance).toBeCloseTo(0.5, 5);
+      }),
+    );
+  });
+
+  it("promoteActive boosts importance of frequently accessed entries", async () => {
+    await run(
+      Effect.gen(function* () {
+        const semantic = yield* SemanticMemoryService;
+        const svc = yield* MemoryConsolidatorService;
+
+        yield* semantic.store(
+          makeSemanticEntry("popular", "frequently used fact", 0.5, { accessCount: 10 }),
+        );
+        yield* svc.promoteActive("agent-test");
+
+        const entries = yield* semantic.listByAgent("agent-test", 10);
+        const entry = entries.find((e) => e.id === "popular");
+        expect(entry!.importance).toBeCloseTo(0.55, 5);
+      }),
+    );
+  });
+
   // ─── notifyEntry ──────────────────────────────────────────────────────────
 
   it("notifyEntry returns false before threshold is reached", async () => {
@@ -237,5 +296,53 @@ describe("MemoryConsolidatorService", () => {
     );
 
     expect(count).toBe(0);
+  });
+
+  // ─── Per-agent isolation ────────────────────────────────────────────────────
+
+  it("consolidation_state does not leak last_run across agents sharing one db", async () => {
+    // Regression: consolidation_state used to be a single 'id=singleton' row.
+    // Any agent's consolidate() run stomped every other agent's last_run,
+    // so replay() would undercount (or zero out) entries for agents that
+    // didn't run last — a real risk since every consolidation query is
+    // already agent_id-scoped, implying multiple agents CAN share one db.
+    const dbLayer = MemoryDatabaseLive({ ...defaultMemoryConfig("agent-A"), dbPath: TEST_DB });
+    const consolidatorLayer = MemoryConsolidatorServiceLive().pipe(Layer.provideMerge(dbLayer));
+
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const db = yield* MemoryDatabase;
+          const cons = yield* MemoryConsolidatorService;
+          const now = new Date().toISOString();
+
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ["e1", "agent-A", "2026-09-04", "hello A", "observation", now],
+          );
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ["e2", "agent-B", "2026-09-04", "hello B", "observation", now],
+          );
+
+          const resultA = yield* cons.consolidate("agent-A");
+          const resultB = yield* cons.consolidate("agent-B");
+          const rows = yield* db.query<{ agent_id: string; total_runs: number }>(
+            `SELECT agent_id, total_runs FROM consolidation_state ORDER BY agent_id`,
+          );
+
+          return { resultA, resultB, rows };
+        }).pipe(Effect.provide(consolidatorLayer)),
+      ),
+    );
+
+    expect(result.resultA.replayed).toBe(1);
+    // agent-B's own episodic entry must still be counted even though
+    // agent-A consolidated first and set a last_run timestamp.
+    expect(result.resultB.replayed).toBe(1);
+    expect(result.rows).toEqual([
+      { agent_id: "agent-A", total_runs: 1 },
+      { agent_id: "agent-B", total_runs: 1 },
+    ]);
   });
 });

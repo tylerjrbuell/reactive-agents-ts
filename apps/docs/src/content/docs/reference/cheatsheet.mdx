@@ -107,6 +107,7 @@ const agent = await ReactiveAgents.create()
 | `.withVerificationStep({ mode: "reflect" })` | LLM self-review; on a REVISE verdict it re-runs once with the feedback so the answer is actually revised |
 | `.withOutputValidator(fn)` | Retry until output passes a predicate |
 | `.withCustomTermination(fn)` | User-defined "done" check |
+| `.withToolIntent(fn)` | Override `agent.chat()`'s default tool-routing heuristic for this agent |
 | `.withDurableRuns({ dir, checkpointEvery })` | Checkpoint every iteration to SQLite; crash-resume via `resumeRun` ([Durable Execution](/guides/durable-execution/)) |
 
 ### Multi-agent & gateway

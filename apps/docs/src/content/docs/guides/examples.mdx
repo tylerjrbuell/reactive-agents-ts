@@ -26,6 +26,7 @@ The repo includes a complete, tested example suite at [`apps/examples/`](https:/
   - **messaging/** Signal + Telegram via MCP
   - **interaction/** 5 autonomy modes
   - **advanced/** cost · observability · self-improvement · eval
+  - **demos/** standalone showcase apps (not part of the numbered/CI catalog)
   - index.ts CLI runner — `bun run index.ts --filter <category>`
   - README.md
 </FileTree>
@@ -158,6 +159,17 @@ Cost tracking, observability, self-improvement, evaluation.
 | 18 | [self-improvement](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/18-self-improvement.ts) | Cross-task strategy outcome learning |
 | 20 | [compose-harness](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/20-compose-harness.ts) | Composable harness pipeline |
 | 22 | [durable-hitl](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/durable-hitl.ts) | Durable approval gates — `run()` pause → `approveRun`/`denyRun` + `onApproval` |
+
+## Demos
+
+Standalone showcase apps under `apps/examples/src/demos/` — not part of the numbered `index.ts` catalog above (no `run()` export, not exercised in CI), each with its own usage notes.
+
+| Example | What it shows |
+|---------|---------------|
+| [halopedia-agent](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/halopedia-agent.ts) | Full-featured interactive research agent: 7 custom domain tools (search, page/section/table fetch, cross-entity compare, link-graph explore), persistent cross-session memory (`.withMemory()` + `find`/`recall`/`relate` meta-tools), `.withToolIntent()` for domain-tuned chat routing, `agent.session({ onOverflow })` for summarize-on-overflow history compaction, and `verifyCitations: true` to catch uncited/fabricated sources — run `bun run apps/examples/src/demos/halopedia-agent.ts` for a live Halo-lore REPL (requires Ollama) |
+| [local-vs-frontier](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts) | Same builder chain run twice — a local 4B model and a frontier model complete the same tool-using task, only the provider/model line changes (see [demos/README.md](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/README.md) for GIF recording) |
+| [canonical-chat-session](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/canonical-chat-session.ts) | Reference `agent.session()` conversational loop |
+| [durable-resume](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/durable-resume.ts) | Crash-resume via `.withDurableRuns()` outside the eval-scoped `22-durable-hitl` example |
 
 ---
 

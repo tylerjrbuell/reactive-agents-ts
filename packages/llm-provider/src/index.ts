@@ -171,6 +171,9 @@ export { retryPolicy } from "./retry.js";
 export type { PricingProvider, ModelPricing } from "./pricing.js";
 export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 
+// ─── Cost Instrumentation ───
+export { billedInputTokens, type BilledTokens, type UsageLike } from "./billed-tokens.js";
+
 // ─── Structured Output Schemas ───
 export {
   ReActActionSchema,
@@ -235,10 +238,6 @@ export type { CircuitBreakerConfig } from "./retry.js";
 export { makeRateLimiter } from "./rate-limiter.js";
 export type { RateLimiterConfig, RateLimiter } from "./rate-limiter.js";
 export { makeRateLimitedProvider } from "./rate-limited-provider.js";
-
-// ─── Fallback Chain ───
-export { FallbackChain } from "./fallback-chain.js";
-export type { FallbackConfig, FallbackCallback } from "./fallback-chain.js";
 
 // ─── Validation ───
 export { validateAndRepairMessages } from "./validation.js";

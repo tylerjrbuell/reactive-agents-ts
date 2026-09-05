@@ -110,6 +110,13 @@ export const executeDirect = (
   Effect.gen(function* () {
     const start = Date.now();
 
+    // Finding 2 (harness-control-surface final fix wave): resolve the envelope
+    // here so its `harness` can reach `resolveExecutableToolCapabilities`
+    // below — without it, the capability resolver falls back to a fresh
+    // `resolveHarnessConfig()` re-read of the environment, silently ignoring
+    // any per-agent `.withHarness({ toolDiscovery: ... })` config.
+    const envelope = yield* RunEnvelope;
+
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/direct.ts:emitLog");
 
     yield* emitLog({ _tag: "phase_started", phase: "direct:kernel", timestamp: new Date() });
@@ -141,6 +148,7 @@ export const executeDirect = (
       availableToolSchemas: toolSchemas,
       allToolSchemas: undefined,
       metaTools: undefined,
+      harness: envelope.harness,
     });
 
     const kernelInput: KernelInput = {

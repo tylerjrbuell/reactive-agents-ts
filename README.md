@@ -4,23 +4,23 @@
 
 # Reactive Agents
 
-A harness you fully control for agent loops that actually finish, on any model, with proof.
+The transparent, composable harness for TypeScript agents. The same code runs the full agent loop on a local 4B model or a frontier API, with tool-call healing, verification, and a signed evidence receipt for every run.
 
-Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand you back prose you have to take on faith. Reactive Agents is built around four things instead:
+Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand back prose you have to take on faith. Reactive Agents is built around four things instead:
 
-- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay, all locally, no SaaS dashboard required. Not a black box you debug by reading logs.
-- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the *same code* finish the agent loop on a local 4B Ollama model and on Claude / GPT / Gemini, with no per-model rewrites.
-- 🧩 **Composable and controllable.** A typed builder of opt-in layers. Start with a model; add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
-- 🧾 **Accountable.** Every run returns a signed `receipt`: a claim→evidence record with a verdict and confidence, not just an answer you have to trust.
+- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required.
+- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites.
+- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for.
+- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust.
 
 Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throws.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **One import to start**      | Everything else (reasoning, memory, guardrails, cost routing) is opt-in, added one `.with()` call at a time |
-| **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
-| **8 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Direct · Code-Action (@exp) |
-| **8,920 tests**             | Verified with `bun test` on every PR                            |
+| **One import to start**      | Reasoning, memory, guardrails, and cost routing are all opt-in, added one `.with()` call at a time |
+| **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM (40+ models), Test |
+| **8 reasoning strategies**   | ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action (@experimental) |
+| **9,241 tests**             | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -42,21 +42,21 @@ Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throw
 
 <div align="center">
 
-### Reliable on every tier — see it for yourself
+### Reliable on every tier, see it for yourself
 
 <img src="apps/docs/src/assets/local-vs-frontier.gif" alt="The same Reactive Agents code investigating an incident with two tools and recommending a fix — completing on a local 4B Ollama model and on Claude, only the provider/model line changes" width="820" />
 
-<em>The same agent investigates an incident, calls two tools, correlates the data, and recommends a fix — and <strong>finishes the job on a 4B local model just like on Claude</strong>. One builder, the only line that changes is the model. <a href="apps/examples/src/demos/local-vs-frontier.ts">Demo source</a>.</em>
+<em>The same agent investigates an incident, calls two tools, correlates the data, and recommends a fix, finishing the job on a 4B local model just like on Claude. One builder; the only line that changes is the model. <a href="apps/examples/src/demos/local-vs-frontier.ts">Demo source</a>.</em>
 
 </div>
 
 <div align="center">
 
-### …and survives a crash mid-run
+### And survives a crash mid-run
 
 <img src="apps/docs/src/assets/durable-resume.gif" alt="An agent checkpointing each step to disk, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing the job" width="820" />
 
-<em>Durable execution: kill the process mid-run, and a <strong>fresh process reconstructs the run from its last on-disk checkpoint and finishes the job</strong> — completed tools never re-run. <a href="apps/examples/src/demos/durable-resume.ts">Demo source</a>.</em>
+<em>Durable execution: kill the process mid-run, and a fresh process reconstructs the run from its last on-disk checkpoint and finishes the job. Completed tools never re-run. <a href="apps/examples/src/demos/durable-resume.ts">Demo source</a>.</em>
 
 </div>
 
@@ -64,39 +64,19 @@ Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throw
 
 ## Why Reactive Agents?
 
-Most AI agent frameworks pick a lane and make you live with it: dynamically typed, monolithic, opaque about what the model actually did, and tuned for one model tier. Reactive Agents is organized around four pillars instead, each one a direct answer to a specific way those frameworks fall short.
+An agent is a loop: LLM, tool, observe, repeat. Hand-rolling it works for a prototype. Under real workloads, everything that isn't the loop is where the work lives: malformed tool calls, loops that don't terminate, context that overflows mid-run, provider-specific streaming quirks, and no clean escape hatch when your edge case shows up.
 
-**🔍 Transparent harness**: nothing happens off the record
-| Where it falls short elsewhere | How Reactive Agents answers it |
-| --- | --- |
-| Opaque decisions, debugged by reading logs | 12-phase execution engine with `before`/`after`/`error` hooks on every phase |
-| No type safety at service boundaries | Effect-TS schemas validate every boundary at compile time |
+That's harness engineering, and there are three honest paths: build it yourself (workable, but an ongoing maintenance cost), use a black-box harness (fast to start, hard to debug or override), or use a transparent one. Reactive Agents is the third: every phase emits typed events, prompts are readable templates rather than buried strings, and components like the healing pipeline and context curator are exported and inspectable, not hidden behind a proprietary loop.
 
-**🛡️ Reliable on every model tier**: same code, any model
-| Where it falls short elsewhere | How Reactive Agents answers it |
-| --- | --- |
-| Model lock-in, assumes GPT-4-class | Model-adaptive context profiles (4 tiers: local, mid, large, frontier) help smaller models punch above their weight |
-| Single reasoning mode | 8 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action @experimental) |
-
-**🧩 Composable and controllable**: you own the loop
-| Where it falls short elsewhere | How Reactive Agents answers it |
-| --- | --- |
-| Monolithic, all-or-nothing | 15 independent layers: enable only what you need, one `.with()` call at a time |
-| Unsafe by default | Guardrails block injection/PII/toxicity before the LLM sees input |
-| No cost control | Complexity router picks the cheapest capable model; budget enforcement at 4 levels |
-
-**🧾 Accountable**: an answer you can check, not just trust
-| Where it falls short elsewhere | How Reactive Agents answers it |
-| --- | --- |
-| "Trust me" prose output | `result.receipt`: signed claim→evidence record with verdict and confidence, generated every run |
+See [full documentation](https://docs.reactiveagents.dev/) for the complete case, including a side-by-side breakdown against LangChain, the Vercel AI SDK, and AutoGen/CrewAI in [Comparison](#comparison) below.
 
 ## Cortex Studio
 
-A full-featured local studio for live debugging — start it with `.withCortex()` or `rax run --cortex`:
+A local studio for live debugging. Start it with `.withCortex()` or `rax run --cortex`.
 
 <div align="center">
   <img src="apps/docs/src/assets/cortex-beacon.png" alt="Cortex Beacon — live agent canvas with real-time cognitive state, entropy signal, and per-step token usage" width="800" />
-  <p><em>Beacon view: live agent canvas — cognitive state, entropy signal, token usage per step</em></p>
+  <p><em>Beacon view: live agent canvas with cognitive state, entropy signal, and token usage per step</em></p>
 </div>
 
 <div align="center">
@@ -104,85 +84,86 @@ A full-featured local studio for live debugging — start it with `.withCortex()
   <p><em>Run details: vitals strip, step-by-step execution trace, and AI-generated debrief summary</em></p>
 </div>
 
-[→ Full Cortex documentation with more screenshots](https://docs.reactiveagents.dev/features/cortex/)
+[Full Cortex documentation with more screenshots →](https://docs.reactiveagents.dev/features/cortex/)
 
 ## Features
 
-Grouped by capability. **Every layer is opt-in** — call `.with*()` only for what you need.
+Grouped by capability. Every layer is opt-in: call `.with*()` only for what you need.
 
 ### 🧠 Reasoning & Cognition
--   **8 reasoning strategies** — ReAct, Blueprint (efficient static-decomposable), Reflexion, Plan-Execute, Tree-of-Thought, Adaptive (meta-strategy), Direct, Code-Action (@experimental)
--   **Intelligent context synthesis** — fast-template or deep-LLM transcript shaping per iteration (`ContextSynthesized` on EventBus)
--   **Reactive intelligence** — detects when a run is going off the rails and intervenes: stalls, loops, and context pressure trigger corrective actions like early-stop, compression, or a strategy switch (under the hood: a multi-source entropy sensor, a reactive controller, and a Thompson Sampling bandit — [docs](https://docs.reactiveagents.dev/features/reactive-intelligence/))
--   **Adaptive calibration** — three-tier live learning (shipped prior → community profile → local posterior) with per-run observations and classifier bypass
+- **8 reasoning strategies**: ReAct, Blueprint (ReWOO-style plan-once-execute-parallel), Reflexion, Plan-Execute, Tree-of-Thought, Adaptive (meta-strategy), Direct, Code-Action (@experimental)
+- **Context synthesis**: fast-template or deep-LLM transcript shaping per iteration, emitted as `ContextSynthesized` on the EventBus
+- **Reactive intelligence**: an entropy sensor and reactive controller detect stalls, loops, and context pressure, and trigger early-stop, compression, or a strategy switch
+- **Adaptive calibration**: three-tier live learning (shipped prior, community profile, local posterior) with per-run observations
 
 ### 💾 Memory & Skills
--   **4-layer memory** — working, episodic, semantic (vector + FTS5), procedural — backed by `bun:sqlite` with background consolidation + decay
--   **ExperienceStore** — cross-agent learning loop closed by `ToolCallObservation`
--   **Living Skills System** — agentskills.io `SKILL.md` compatible, SQLite-backed, LLM-refined evolution, 5-stage compression, context-aware injection guard
--   **Agent debrief + chat** — `agent.chat()` for one-shot Q&A, `agent.session()` for multi-turn (optional SQLite persistence), post-run `DebriefSynthesizer`
+- **4-layer memory**: working, episodic, semantic (vector + FTS5), procedural, backed by `bun:sqlite` with background consolidation and decay
+- **ExperienceStore**: a cross-agent learning loop closed by `ToolCallObservation`
+- **Living Skills**: `SKILL.md`-compatible, SQLite-backed, LLM-refined evolution with context-aware injection
+- **Chat and debrief**: `agent.chat()` for one-shot Q&A, `agent.session()` for multi-turn (optional SQLite persistence), and a post-run `DebriefSynthesizer`
 
 ### 🔌 Providers & Models
--   **8 LLM providers** — Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
--   **Model-adaptive context profiles** — 4 tiers (local / mid / large / frontier) with tier-aware prompts, compaction, and truncation; **4B+ Ollama models work** with the same code
--   **Adaptive tool calling** — FC dialect probe routes to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code)
--   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution, so malformed tool calls from smaller models get repaired instead of failing
--   **Provider fallback chains** — `withFallbacks()` for graceful degradation across providers and models
--   **Native thinking mode** — `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning across all four cloud/local adapters (off unless enabled); `.withModel({ thinking: true })` is the quick boolean
--   **Cost-aware model routing** — `.withModelRouting()` (opt-in, off by default) routes each run to the cheapest *capable* model of the configured provider by task complexity, degrading to the configured model on any error
+- **8 LLM providers**: Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
+- **Model-adaptive context**: 4 tiers (local, mid, large, frontier) with tier-aware prompts and compaction; this is what makes 4B+ Ollama models viable for tool-calling agents
+- **Adaptive tool calling**: an FC dialect probe routes to a native function-calling driver or a 3-tier text-parse driver (XML, JSON, pseudo-code)
+- **Healing pipeline**: normalizes tool-name aliases, parameter aliases, paths, and type coercion before every execution, so malformed calls from smaller models get repaired instead of failing
+- **Fallback chains**: `withFallbacks()` for graceful degradation across providers and models
+- **Native thinking mode**: `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning; `.withModel({ thinking: true })` is the quick boolean
+- **Cost-aware routing**: `.withModelRouting()` (opt-in) routes each run to the cheapest capable model by task complexity, falling back to the configured model on any error
 
 ### 🛡️ Production Safety
--   **Guardrails** — pre-LLM injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
--   **Ed25519 identity** — real cryptographic agent certificates, RBAC, delegation chains, audit trails
--   **Verification** — semantic entropy, fact decomposition, NLI hallucination detection
--   **Fabrication guard** — `.withFabricationGuard()` is **on by default**; rejects invented empirical performance measurements (benchmark timings, % speed-ups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
--   **Stall / no-progress policy** — `.withStallPolicy()` bounds wasted iterations when the model ignores required-tool nudges: fast-escalate after N ignored nudges instead of looping to the full cap (progress resets the streak)
--   **Harness-forced abstention** — when grounding is structurally impossible (a required tool is missing, or synthesis is repeatedly rejected as ungrounded), the run ends honestly with `terminatedBy: "abstained"` and `result.abstention { reason, missing }` instead of fabricating or grinding to `max_iterations`
--   **Cost controls** — multi-factor complexity router (task length, code presence, multi-step markers, tool-reliability escalation), semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
--   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
--   **Deliverable-truth** — the run tells you exactly which promised outputs never landed: `result.receipt.deliverables[]` names each declared output as **produced or missing**, so a partial multi-file run reports what's incomplete instead of claiming success. **Default-on** in a reasoning run
--   **Evidence ledger** — the receipt is backed by an append-only ledger of what actually happened (tool invocations, written artifacts with path + content digest, verifier verdicts, the answer's evidence claims) that survives crash-resume
+- **Guardrails**: pre-LLM injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
+- **Ed25519 identity**: cryptographic agent certificates, RBAC, delegation chains, audit trails
+- **Verification**: semantic entropy, fact decomposition, NLI hallucination detection
+- **Fabrication guard**: on by default; rejects invented empirical measurements (benchmark timings, speedups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
+- **Stall policy**: `.withStallPolicy()` fast-escalates after N ignored tool nudges instead of looping to the full iteration cap
+- **Forced abstention**: when grounding is structurally impossible (a required tool is missing, or synthesis is repeatedly rejected as ungrounded), the run ends with `terminatedBy: "abstained"` and a reason instead of fabricating or grinding to `max_iterations`
+- **Cost controls**: a multi-factor complexity router, semantic cache, and budget enforcement that persists across restarts
+- **Required tools**: ensure critical tools are called before answering, with per-tool call budgets
+- **Deliverable truth**: `result.receipt.deliverables[]` names each declared output as produced or missing, so a partial multi-file run reports what's incomplete rather than claiming success
+- **Evidence ledger**: an append-only record of what actually happened (tool invocations, artifact digests, verifier verdicts) that backs the receipt and survives crash-resume
 
 ### 🔭 Observability
--   **12-phase execution engine** — deterministic lifecycle with `before` / `after` / `on-error` hooks per phase
--   **Professional metrics dashboard** — EventBus-driven execution timeline, tool-call summary, cost estimation, smart alerts (zero manual instrumentation)
--   **Distributed tracing** (OTLP) + structured logging via `withLogging({ level, format, filePath })`
--   **Cortex Studio live reporting** — `.withCortex(url?)` streams runtime telemetry over WebSocket
--   **Streaming + SSE** — `agent.runStream()` with `AbortSignal` cancellation; one-line SSE endpoint via `AgentStream.toSSE()`
--   **Per-iteration run assessment** — every iteration emits an `assessment` trace event (requirements satisfied/outstanding, deliverables, evidence delta, run phase — orient/gather/execute/synthesize/verify — pace band, health), visible in `rax diagnose replay`. The measurement is always on; its consumption by adaptive pacing is behind the opt-in flags below
+- **12-phase execution engine** with `before` / `after` / `on-error` hooks per phase
+- **Metrics dashboard**: an EventBus-driven execution timeline, tool-call summary, and cost estimate, with zero manual instrumentation
+- **Distributed tracing** (OTLP) and structured logging via `withLogging({ level, format, filePath })`
+- **Cortex live reporting**: `.withCortex(url?)` streams runtime telemetry over WebSocket
+- **Streaming and SSE**: `agent.runStream()` with `AbortSignal` cancellation, and a one-line SSE endpoint via `AgentStream.toSSE()`
+- **Per-iteration assessment**: every iteration emits requirements satisfied/outstanding, evidence delta, run phase, and pace, visible in `rax diagnose replay`
 
 ### 🧩 Composition & Multi-Agent
--   **Builder API** — chains capabilities in one place; **Agent-as-data** via `toConfig()` / `fromJSON()` for save/share/restore
--   **Two-line entry point** — `ReactiveAgents.quick()` resolves provider, model, and iteration defaults from the environment and returns a ready-to-run agent
--   **Functional combinators** — `agentFn()`, `pipe()`, `parallel()`, `race()` for declarative agent pipelines
--   **A2A protocol** — Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool
--   **Orchestration** — sequential, parallel, pipeline, map-reduce; dynamic sub-agent spawning with depth limits
--   **Persistent gateway** — adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine, **chat mode** with per-sender SQLite session history
+- **Builder API**: chains capabilities in one place; agent-as-data via `toConfig()` / `fromJSON()` for save, share, and restore
+- **`ReactiveAgents.quick()`**: resolves provider, model, and iteration defaults from the environment
+- **Functional combinators**: `agentFn()`, `pipe()`, `parallel()`, `race()` for declarative agent pipelines
+- **A2A protocol**: Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool
+- **Orchestration**: sequential, parallel, pipeline, map-reduce, with dynamic sub-agent spawning under a depth limit
+- **Persistent gateway**: adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), a composable policy engine, and chat mode with per-sender SQLite history
 
 ### ⚙️ Builder Hardening
-- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withTaskContext()`
-- **`defineTool`** typed tool authoring — Standard Schema input (Effect Schema / Zod / Valibot / ArkType) + a plain async handler with arg types inferred from the schema; malformed options (`parameters`/`execute` instead of `input`/`handler`) fail fast with a typed error
-- **ToolBuilder** fluent API — define tools without raw schema objects
-- **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
-- **`.withLongHorizon()`** *(opt-in, off by default)* — scales the guard thresholds (stall, consecutive-thoughts, redirect/nudge budgets) proportionally to `maxIterations` so a 40+ iteration research run isn't tripped by guards tuned for short runs. Verified to let a long-horizon task run to completion; **not yet lift-gated for default-on**. When not called, behavior is byte-identical to the default
-- **`.withAdaptiveHarness()`** *(opt-in, experimental)* — a policy compiler derives the run's harness (strategy, guard depth, horizon profile) from model tier + task classification + horizon at run-start, and recompiles mid-run on progress evidence; explicit `.withX()` withers override the compiled plan. **Experimental and opt-in — not yet validated for default-on**
+- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()`, `withRetryPolicy()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withTaskContext()`
+- **`defineTool`**: Standard Schema input (Effect Schema, Zod, Valibot, or ArkType) plus a plain async handler with arg types inferred from the schema
+- **`ToolBuilder`**: a fluent API for defining tools without raw schema objects
+- **Dynamic tool registration**: `agent.registerTool()` / `agent.unregisterTool()` at runtime
+- **`.withLongHorizon()`** *(opt-in)*: scales guard thresholds (stall, consecutive-thoughts, nudge budgets) proportionally to `maxIterations` so long research runs aren't tripped by guards tuned for short ones
+- **`.withAdaptiveHarness()`** *(opt-in, experimental)*: a policy compiler derives the run's harness from model tier, task classification, and horizon, and recompiles mid-run on progress evidence
+- **`.withHarness({...})`**: typed per-agent config for the harness mechanisms (tool disclosure, discovery, context budgets, and more), inherited by sub-agents. See [Harness Control Surface](https://docs.reactiveagents.dev/features/harness-control/)
 
 ### 🌐 Frontend Integration
-- **`@reactive-agents/ui-core`** — headless, framework-agnostic core: versioned wire protocol, resumable stream client (cursor reconnect), run state machine, safe generative-UI trees, durable human-in-the-loop rails, and zero-token fixture testing. The engine the bindings share.
-- **`@reactive-agents/react`** — React 18+ hooks + components: `useRun`, `useResumableRun`, `useInteractions`, `useTaskInbox`, `useRunCost`/`useRunSteps`, `AgentSurface`, `AgentDevtools`, and the `useAgentStream`/`useAgent` classics
-- **`@reactive-agents/vue`** — Vue 3 composables with reactive refs
-- **`@reactive-agents/svelte`** — Svelte 4/5 stores (`createRun`, `createResumableRun`, `createInteractions`, `createAgentStream`, …)
-- All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
+- **`@reactive-agents/ui-core`**: a headless, framework-agnostic core, versioned wire protocol, resumable stream client, run state machine, safe generative-UI trees, and durable human-in-the-loop rails
+- **`@reactive-agents/react`**: React 18+ hooks and components (`useRun`, `useResumableRun`, `useInteractions`, `AgentSurface`, `AgentDevtools`)
+- **`@reactive-agents/vue`**: Vue 3 composables with reactive refs
+- **`@reactive-agents/svelte`**: Svelte 4/5 stores
+- All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **8,920 tests** across 1158 files, verified `bun test` on every PR
-- **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
+- **9,241 tests** across 1202 files, verified with `bun test` on every PR
+- **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
 
 Install and run your first TypeScript AI agent in under 60 seconds.
 
-> **Recommended: [Bun](https://bun.sh) ≥1.0.0** — optimal performance with native SQLite, subprocess, and HTTP APIs. **Node.js 22.5+ is now also supported** via `@reactive-agents/runtime-shim` — same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
+> **Recommended: [Bun](https://bun.sh) ≥1.0.0** for native SQLite, subprocess, and HTTP APIs. Node.js 22.5+ is also supported via `@reactive-agents/runtime-shim`, same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 # Bun (recommended)
@@ -192,18 +173,15 @@ bun add reactive-agents
 npm install reactive-agents
 ```
 
-> **Note:** `effect` is included as a dependency of `reactive-agents` and installed automatically. If you import from `effect` directly in your own code (e.g. `import { Effect } from "effect"`), add it to your project explicitly: `bun add effect` (or `npm install effect`).
+> **Note:** `effect` ships as a dependency of `reactive-agents` and installs automatically. If you import from `effect` directly in your own code, add it explicitly: `bun add effect` (or `npm install effect`).
 
-Set your provider key first (each provider's variable is listed in
-[Environment Variables](#environment-variables) below):
+Set your provider key first (each provider's variable is listed in [Environment Variables](#environment-variables) below):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...   # or put it in .env
 ```
 
-`createAgent(config)` is the front door — one declarative config object, the
-shape you already know from the Vercel AI SDK and OpenAI SDK. This is the 90%
-case:
+`createAgent(config)` is the front door: one declarative config object, the shape you already know from the Vercel AI SDK and OpenAI SDK. This is the 90% case:
 
 ```typescript
 import { createAgent } from 'reactive-agents'
@@ -221,9 +199,7 @@ console.log(result.metadata) // { duration, cost, tokensUsed, stepsCount }
 
 ### Add Capabilities
 
-Add capabilities as config keys — grouped by domain, so autocomplete reads like
-a menu. Start from a `profile` preset (`"lean"`, `"balanced"`, `"intelligent"`)
-and override individual keys:
+Add capabilities as config keys, grouped by domain so autocomplete reads like a menu. Start from a `profile` preset (`"lean"`, `"balanced"`, `"intelligent"`) and override individual keys:
 
 ```typescript
 import { createAgent } from 'reactive-agents'
@@ -240,20 +216,13 @@ const agent = await createAgent({
 
 Pick the profile that matches the workload:
 
-- **`"lean"`** — model + nothing else. Latency- and cost-sensitive paths;
-  benchmark ablations.
-- **`"balanced"`** — today's production defaults (memory + reactive
-  intelligence + verifier + strategy switching).
-- **`"intelligent"`** — balanced + skill persistence for cross-session
-  compounding learning.
+- **`"lean"`**: model and nothing else. For latency- and cost-sensitive paths, and benchmark ablations.
+- **`"balanced"`**: today's production defaults (memory, reactive intelligence, verifier, strategy switching).
+- **`"intelligent"`**: balanced plus skill persistence for cross-session compounding learning.
 
 ### Advanced: the fluent builder
 
-`createAgent(config)` and the fluent builder are the **same API in two
-syntaxes** — same names, same nesting. Reach for the builder when construction
-is *conditional or imperative* (branch on runtime state, inject code-only
-escape hatches like hooks/layers, or compose a precise chokepoint) — things
-that read awkwardly as static data:
+`createAgent(config)` and the fluent builder are the same API in two syntaxes: same names, same nesting. Reach for the builder when construction is conditional or imperative (branch on runtime state, inject hooks or layers, compose a precise chokepoint):
 
 ```typescript
 import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
@@ -277,13 +246,11 @@ const agent = await builder
     .build()
 ```
 
-The full builder / config reference is generated from the schema (the single
-source of truth): [builder-api](https://docs.reactiveagents.dev/reference/builder-api/)
-· [configuration](https://docs.reactiveagents.dev/reference/configuration/).
+The full builder / config reference is generated from the schema, the single source of truth: [builder-api](https://docs.reactiveagents.dev/reference/builder-api/) · [configuration](https://docs.reactiveagents.dev/reference/configuration/).
 
 ### Conversational Chat
 
-Use `agent.chat()` for single-turn Q&A or `agent.session()` for multi-turn conversations with adaptive routing -- direct LLM for simple questions, full ReAct loop for tool-capable queries:
+Use `agent.chat()` for single-turn Q&A or `agent.session()` for multi-turn conversations with adaptive routing: a direct LLM call for simple questions, the full ReAct loop for tool-capable ones.
 
 ```typescript
 // Single-turn chat
@@ -295,9 +262,11 @@ await session.chat("Summarize yesterday's logs")
 await session.chat('Which errors were most frequent?')
 ```
 
+See [`apps/examples/src/demos/canonical-chat-session.ts`](apps/examples/src/demos/canonical-chat-session.ts) for a full runnable session (Bun), or [`apps/examples/src/demos/canonical-chat-session-node.ts`](apps/examples/src/demos/canonical-chat-session-node.ts) for the Node-portable version using `node:readline/promises`.
+
 ### Agent Config (Agent as Data)
 
-Define agents as JSON-serializable config objects. Save, share, and reconstruct agents without code:
+Define agents as JSON-serializable config objects, so you can save, share, and reconstruct them without code:
 
 ```typescript
 import { agentConfigToJSON, ReactiveAgents } from 'reactive-agents'
@@ -361,7 +330,7 @@ await fastest.dispose()
 
 ### Streaming
 
-Tokens arrive as they're generated via AsyncGenerator. Pass an `AbortSignal` to cancel mid-stream:
+Tokens arrive as they're generated via `AsyncGenerator`. Pass an `AbortSignal` to cancel mid-stream:
 
 ```typescript
 const controller = new AbortController()
@@ -394,14 +363,14 @@ handle.pause(); handle.resume()
 
 const result = await agent.run(task)
 result.receipt                                // { verdict: "tool-grounded", toolsUsed: ["calculator"], … }
-// graded evidence about HOW the answer was produced — not a truth certificate
+// graded evidence about how the answer was produced, not a truth certificate
 // optional Ed25519 signing via .withReceiptSigning() certifies provenance
 
-await agent.fork(runId, { at: 1 })            // counterfactual restart from iteration 1's checkpoint —
+await agent.fork(runId, { at: 1 })            // counterfactual restart from iteration 1's checkpoint,
                                               // live LLM calls after the fork point, never "time-travel"
 ```
 
-From the terminal: `rax ps` lists durable runs, `rax attach <runId>` tails one. Recorded runs re-execute with zero tokens via exact replay (`makeReplayLLMLayer` — unchanged prompts only; drift misses loudly). [→ The Process Model docs](https://docs.reactiveagents.dev/features/process-model/) · [demo](apps/examples/src/advanced/process-model-demo.ts)
+From the terminal: `rax ps` lists durable runs, `rax attach <runId>` tails one. Recorded runs re-execute with zero tokens via exact replay (`makeReplayLLMLayer`; unchanged prompts only, drift misses loudly). [The Process Model docs →](https://docs.reactiveagents.dev/features/process-model/) · [demo](apps/examples/src/advanced/process-model-demo.ts)
 
 ### Lifecycle Hooks
 
@@ -443,27 +412,27 @@ Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`
 
 ## Comparison
 
-We'd rather ship a short, defensible comparison than a long one where a single wrong row undermines the rest. This is scoped to where Reactive Agents is structurally different, not a feature-count contest: most of these frameworks ship token streaming, tool calling, and multi-agent orchestration too.
+Scoped to where Reactive Agents is structurally different, not a feature-count contest. Most of these frameworks ship token streaming, tool calling, and multi-agent orchestration too.
 
 | Capability                       | Reactive Agents         | LangChain JS | Vercel AI SDK | Mastra    |
 | --------------------------------- | :----------------------: | :----------: | :-----------: | :-------: |
-| Full type safety (Effect-TS)      |           Yes            |      --      |    Partial    |  Partial  |
-| Typed per-phase lifecycle hooks   |   12 phases, `before`/`after`/`error`   |  Callbacks   |  Middleware   |    --     |
-| Model-adaptive context by tier    |         4 tiers          |      --      |      --       |    --     |
-| Signed run receipt (claim→evidence) |           Yes           |      --      |      --       |    --     |
-| Production guardrails             |           Yes            |      --      |      --       |  Partial (processors) |
-| Durable crash-resume              |           Yes            |      --      |      --       | Partial (Temporal-backed workflows) |
+| Full type safety (Effect-TS)      |           Yes            |      No      |    Partial    |  Partial  |
+| Typed per-phase lifecycle hooks   |   12 phases, `before`/`after`/`error`   |  Callbacks   |  Middleware   |    No     |
+| Model-adaptive context by tier    |         4 tiers          |      No      |      No       |    No     |
+| Signed run receipt (claim to evidence) |           Yes           |      No      |      No       |    No     |
+| Production guardrails             |           Yes            |      No      |      No       |  Partial (processors) |
+| Durable crash-resume              |           Yes            |      No      |      No       | Partial (Temporal-backed workflows) |
 
-<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-08. `--` means we found no first-party equivalent, not that none exists; these move fast. Corrections welcome: [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
+<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-09. "No" means we found no first-party equivalent, not that none exists; these move fast. Corrections welcome: [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
 ## Use Cases
 
--   **Autonomous engineering agents** with tool execution and code generation
--   **Research and reporting workflows** with verifiable reasoning steps
--   **Scheduled background agents** using heartbeats, cron jobs, and webhooks
--   **Secure enterprise copilots** with RBAC, audit trails, and policy controls
--   **Hybrid local/cloud AI deployments** with adaptive context profiles
--   **Multi-agent teams** with A2A protocol and dynamic sub-agent delegation
+- Autonomous engineering agents with tool execution and code generation
+- Research and reporting workflows with verifiable reasoning steps
+- Scheduled background agents using heartbeats, cron jobs, and webhooks
+- Secure enterprise copilots with RBAC, audit trails, and policy controls
+- Hybrid local/cloud deployments with adaptive context profiles
+- Multi-agent teams with A2A protocol and dynamic sub-agent delegation
 
 ## Architecture
 
@@ -487,7 +456,7 @@ ReactiveAgentBuilder
     -> ExecutionEngine   12-phase lifecycle with hooks
 ```
 
-Every layer is an Effect `Layer` -- composable, independently testable, and tree-shakeable.
+Every layer is an Effect `Layer`: composable, independently testable, and tree-shakeable.
 
 ## 12-Phase Execution Engine
 
@@ -504,32 +473,32 @@ Verify --> Memory Flush --> Cost Track --> Audit --> Complete
 ```
 
 | Phase             | Service Called           | What It Does                                       |
-| ----------------- | ------------------------ | -------------------------------------------------- |
+| ----------------- | ------------------------ | --------------------------------------------------- |
 | Bootstrap         | MemoryService            | Load context from semantic/episodic memory         |
-| Guardrail         | GuardrailService         | Block unsafe input before LLM sees it              |
-| Cost Route        | CostService              | Select optimal model tier by complexity            |
-| Strategy Select   | ReasoningService         | Pick reasoning strategy (or direct LLM)            |
+| Guardrail         | GuardrailService         | Block unsafe input before the LLM sees it          |
+| Cost Route        | CostService              | Select the optimal model tier by complexity        |
+| Strategy Select   | ReasoningService         | Pick a reasoning strategy, or a direct LLM call     |
 | Think/Act/Observe | LLMService + ToolService | Reasoning loop with real tool execution            |
 | Verify            | VerificationService      | Fact-check output (entropy, decomposition, NLI)    |
-| Memory Flush      | MemoryService            | Persist session + episodic memories                |
+| Memory Flush      | MemoryService            | Persist session and episodic memories               |
 | Cost Track        | CostService              | Record spend against budget                        |
-| Audit             | ObservabilityService     | Log audit trail (tokens, cost, strategy, duration) |
-| Complete          | --                       | Build final result with metadata                   |
+| Audit             | ObservabilityService     | Log the audit trail (tokens, cost, strategy, duration) |
+| Complete          | (none)                   | Build the final result with metadata                |
 
 Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When observability is enabled, every phase emits trace spans and metrics.
 
 ## Reasoning Strategies
 
 | Strategy                | How It Works                               | Best For                           |
-| ----------------------- | ------------------------------------------ | ---------------------------------- |
-| **ReAct**               | Think -> Act -> Observe loop               | Tool use, step-by-step tasks       |
-| **Blueprint**           | ReWOO-style: plan once -> execute in parallel -> solve (alias `rewoo`) | Cheap runs on decomposable, tool-heavy tasks |
-| **Reflexion**           | Generate -> Critique -> Improve            | Quality-critical output            |
-| **Plan-Execute**        | Plan steps -> Execute -> Reflect -> Refine | Structured multi-step work         |
-| **Tree-of-Thought**     | Branch -> Score -> Prune -> Synthesize     | Creative, open-ended problems      |
-| **Adaptive**            | Analyze task -> Auto-select best strategy  | Mixed workloads                    |
+| ----------------------- | ------------------------------------------ | ----------------------------------- |
+| **ReAct**               | Think, act, observe loop                   | Tool use, step-by-step tasks       |
+| **Blueprint**           | ReWOO-style: plan once, execute in parallel, solve (alias `rewoo`) | Cheap runs on decomposable, tool-heavy tasks |
+| **Reflexion**           | Generate, critique, improve                | Quality-critical output            |
+| **Plan-Execute**        | Plan steps, execute, reflect, refine       | Structured multi-step work         |
+| **Tree-of-Thought**     | Branch, score, prune, synthesize           | Creative, open-ended problems      |
+| **Adaptive**            | Analyze the task, auto-select the best strategy | Mixed workloads                |
 | **Direct**              | Single LLM call, no reasoning loop         | Simple questions, minimal latency  |
-| **Code-Action** `@exp`  | LLM generates a TypeScript IIFE run in a Worker sandbox; tools exposed as async functions | Multi-tool orchestration, pure computation |
+| **Code-Action** `@exp`  | LLM generates a TypeScript IIFE run in a Worker sandbox, tools exposed as async functions | Multi-tool orchestration, pure computation |
 
 ```typescript
 // Auto-select the best strategy per task
@@ -538,7 +507,7 @@ const agent = await ReactiveAgents.create()
     .withReasoning({ defaultStrategy: 'adaptive' })
     .build()
 
-// Strategy switching is on by default — customize or disable explicitly
+// Strategy switching is on by default; customize or disable explicitly
 const agent2 = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning({
@@ -552,23 +521,19 @@ const agent2 = await ReactiveAgents.create()
 ## Multi-Provider Support
 
 | Provider          | Models                       | Tool Calling | Streaming |
-| ----------------- | ---------------------------- | :----------: | :-------: |
-| **Anthropic**     | Claude Haiku, Sonnet, Opus   |     Yes      |    Yes    |
-| **OpenAI**        | GPT-4o, GPT-4o-mini          |     Yes      |    Yes    |
-| **Google Gemini** | Gemini Flash, Pro            |     Yes      |    Yes    |
+| ----------------- | ----------------------------- | :----------: | :-------: |
+| **Anthropic**     | Claude Haiku, Sonnet, Opus     |     Yes      |    Yes    |
+| **OpenAI**        | GPT-4o, GPT-4o-mini            |     Yes      |    Yes    |
+| **Google Gemini** | Gemini Flash, Pro              |     Yes      |    Yes    |
 | **Groq**          | Llama, Qwen, and more (hosted) |     Yes      |    Yes    |
-| **xAI**           | Grok models                  |     Yes      |    Yes    |
-| **Ollama**        | Any local model              |     Yes      |    Yes    |
-| **LiteLLM**       | 40+ models via LiteLLM proxy |     Yes      |    Yes    |
-| **Test**          | Mock (deterministic)         |      --      |    --     |
+| **xAI**           | Grok models                    |     Yes      |    Yes    |
+| **Ollama**        | Any local model                |     Yes      |    Yes    |
+| **LiteLLM**       | 40+ models via LiteLLM proxy   |     Yes      |    Yes    |
+| **Test**          | Mock (deterministic)           |     No       |    No     |
 
-Switch providers with one line -- agent code stays the same.
+Switch providers with one line; agent code stays the same.
 
-`openai`/`groq`/`xai`/`litellm` all speak the OpenAI-compatible wire protocol,
-so `.withProvider(provider, { baseUrl, apiKey, headers })` can point any of
-them at any OpenAI-compatible endpoint at runtime -- a llama.cpp server,
-Deepseek, a LiteLLM proxy on a non-default host -- without predefining env
-vars. See [LLM Providers](https://docs.reactiveagents.dev/features/llm-providers/) for details.
+`openai`, `groq`, `xai`, and `litellm` all speak the OpenAI-compatible wire protocol, so `.withProvider(provider, { baseUrl, apiKey, headers })` can point any of them at any OpenAI-compatible endpoint at runtime, such as a llama.cpp server, Deepseek, or a LiteLLM proxy on a non-default host, without predefining env vars. See [LLM Providers](https://docs.reactiveagents.dev/features/llm-providers/) for details.
 
 ## Model-Adaptive Context
 
@@ -585,16 +550,15 @@ const agent = await ReactiveAgents.create()
 ```
 
 | Tier         | Models                      | Context Strategy                                                       |
-| ------------ | --------------------------- | ---------------------------------------------------------------------- |
+| ------------ | ---------------------------- | ------------------------------------------------------------------------ |
 | `"local"`    | Ollama small models (<=14b) | Lean prompts, aggressive compaction after 6 steps, 800-char truncation |
-| `"mid"`      | Mid-range models            | Balanced prompts, moderate compaction                                  |
-| `"large"`    | Anthropic, OpenAI, Gemini   | Full context, standard compaction                                      |
-| `"frontier"` | Flagship models             | Maximum context, minimal compaction                                    |
+| `"mid"`      | Mid-range models             | Balanced prompts, moderate compaction                                  |
+| `"large"`    | Anthropic, OpenAI, Gemini    | Full context, standard compaction                                      |
+| `"frontier"` | Flagship models               | Maximum context, minimal compaction                                    |
 
 ### Context Window Override (`numCtx`)
 
-Pin the exact context window the provider is given, instead of relying on the
-model's assumed maximum. Pass it via the `.withModel()` object form:
+Pin the exact context window the provider is given, instead of relying on the model's assumed maximum. Pass it via the `.withModel()` object form:
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -604,58 +568,55 @@ const agent = await ReactiveAgents.create()
     .build()
 ```
 
-`numCtx` is also a first-class **`AgentConfig`** field, so it round-trips through
-`toConfig()` / `fromJSON()` and the Cortex Studio agent builder:
+`numCtx` is also a first-class `AgentConfig` field, so it round-trips through `toConfig()` / `fromJSON()` and the Cortex Studio agent builder:
 
 ```jsonc
 { "provider": "ollama", "model": "qwen3:4b", "numCtx": 32768 }
 ```
 
-Provider applicability: honored by providers that expose a context-window knob
-(Ollama maps it to `num_ctx`). Cloud providers that don't expose one ignore the
-field. When set, it becomes the authoritative denominator for the context-usage
-gauge in Cortex Studio.
+Provider applicability: honored by providers that expose a context-window knob (Ollama maps it to `num_ctx`). Cloud providers that don't expose one ignore the field. When set, it becomes the authoritative denominator for the context-usage gauge in Cortex Studio.
 
 ## Packages
 
 | Package                                                                    | Description                                                                                                                                                                               |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@reactive-agents/core`](packages/core)                                   | EventBus pub/sub, AgentService lifecycle, TaskService state machine, canonical types                                                                                                      |
 | [`@reactive-agents/runtime`](packages/runtime)                             | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
-| [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, and Test providers                                                                                                  |
-| [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite; ExperienceStore cross-agent learning; background consolidation + decay                                            |
-| [`@reactive-agents/reasoning`](packages/reasoning)                         | 8 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, ToT, Adaptive, Direct, Code-Action @experimental) with composable kernel architecture                                                               |
+| [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, and Test providers                                                                                       |
+| [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on `bun:sqlite`; ExperienceStore cross-agent learning; background consolidation and decay                                       |
+| [`@reactive-agents/reasoning`](packages/reasoning)                         | 8 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, ToT, Adaptive, Direct, Code-Action @experimental) with a composable kernel architecture                                          |
 | [`@reactive-agents/tools`](packages/tools)                                 | Tool registry with sandboxed execution, MCP client, agent-as-tool adapter, dynamic sub-agent spawning                                                                                     |
 | [`@reactive-agents/guardrails`](packages/guardrails)                       | Pre-LLM safety: injection detection, PII filtering, toxicity blocking                                                                                                                     |
 | [`@reactive-agents/verification`](packages/verification)                   | Post-LLM quality: semantic entropy, fact decomposition, NLI hallucination detection                                                                                                       |
-| [`@reactive-agents/cost`](packages/cost)                                   | Multi-factor complexity routing, per-execution budget enforcement, semantic cache                                                                                                            |
+| [`@reactive-agents/cost`](packages/cost)                                   | Multi-factor complexity routing, per-execution budget enforcement, semantic cache                                                                                                         |
 | [`@reactive-agents/identity`](packages/identity)                           | Ed25519 agent certificates, RBAC policies, delegation chains, audit logging                                                                                                               |
-| [`@reactive-agents/observability`](packages/observability)                 | Distributed tracing (OTLP), MetricsCollector, structured logging, console + JSON exporters                                                                                                |
-| [`@reactive-agents/trace`](packages/trace)                                 | Structured execution traces: `TraceEvent` schema, recorders, span helpers — backs replay and diagnose                                                                                     |
+| [`@reactive-agents/observability`](packages/observability)                 | Distributed tracing (OTLP), MetricsCollector, structured logging, console and JSON exporters                                                                                              |
+| [`@reactive-agents/trace`](packages/trace)                                 | Structured execution traces: `TraceEvent` schema, recorders, span helpers, backing replay and diagnose                                                                                    |
 | [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning                                                                                                                  |
-| [`@reactive-agents/prompts`](packages/prompts)                             | Version-controlled template engine with variable interpolation and prompt library                                                                                                         |
+| [`@reactive-agents/prompts`](packages/prompts)                             | Version-controlled template engine with variable interpolation and a prompt library                                                                                                       |
 | [`@reactive-agents/eval`](packages/eval)                                   | Evaluation framework: LLM-as-judge scoring, EvalStore persistence, comparison reports                                                                                                     |
-| [`@reactive-agents/a2a`](packages/a2a)                                     | A2A protocol: Agent Cards, JSON-RPC 2.0 server/client, SSE streaming                                                                                                                      |
+| [`@reactive-agents/judge-server`](packages/judge-server)                   | LLM-as-judge HTTP server backing `@reactive-agents/eval` (private, never published)                                                                                                        |
+| [`@reactive-agents/a2a`](packages/a2a)                                     | A2A protocol: Agent Cards, JSON-RPC 2.0 server/client, SSE streaming                                                                                                                       |
 | [`@reactive-agents/gateway`](packages/gateway)                             | Persistent autonomous harness: adaptive heartbeats, cron scheduling, webhook ingestion, composable policy engine                                                                          |
-| [`@reactive-agents/channels`](packages/channels)                           | External channel triggers — webhook adapter, FIFO session bridge, wired via `.withChannels()`                                                                                             |
-| [`@reactive-agents/compose`](packages/compose)                             | Harness composition + killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`)                                                                     |
+| [`@reactive-agents/channels`](packages/channels)                           | External channel triggers: webhook adapter, FIFO session bridge, wired via `.withChannels()`                                                                                              |
+| [`@reactive-agents/compose`](packages/compose)                             | Harness composition and killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`)                                                                   |
 | [`@reactive-agents/testing`](packages/testing)                             | Mock services (LLM, tools, EventBus), assertion helpers, deterministic test fixtures                                                                                                      |
-| [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 20 tasks x 5 tiers, overhead measurement, report generation                                                                                                              |
+| [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 20 tasks across 5 tiers, overhead measurement, report generation                                                                                                         |
 | [`@reactive-agents/health`](packages/health)                               | Health checks and readiness probes for production deployments                                                                                                                             |
 | [`@reactive-agents/reactive-intelligence`](packages/reactive-intelligence) | Metacognitive layer: entropy sensor (5 sources), reactive controller (early-stop, compression, strategy switch), learning engine (calibration, bandit, skill synthesis), telemetry client |
-| [`@reactive-agents/ui-core`](packages/ui-core)                             | Headless, dependency-free UI engine: versioned wire protocol, resumable stream client (cursor reconnect + backoff), run state machine, safe generative-UI trees (`uiTreeSchema`/`reconcileUiTree`), durable HITL rails (`respondToInteraction`/`decideApproval`), inbox fetch, and zero-token fixture testing — shared by all framework bindings |
-| [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks + components over `ui-core`: `useRun`, `useResumableRun`, `useInteractions`, `useTaskInbox`, `useRunCost`/`useRunSteps`, `AgentSurface`, `AgentDevtools` (+ `useAgentStream`/`useAgent`)                    |
+| [`@reactive-agents/ui-core`](packages/ui-core)                             | Headless, dependency-free UI engine: versioned wire protocol, resumable stream client, run state machine, safe generative-UI trees, durable HITL rails, inbox fetch, and fixture testing, shared by all framework bindings |
+| [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks and components over `ui-core`: `useRun`, `useResumableRun`, `useInteractions`, `useTaskInbox`, `useRunCost`/`useRunSteps`, `AgentSurface`, `AgentDevtools`                 |
 | [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs                                                                                                                        |
 | [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores over `ui-core`: `createRun`, `createResumableRun`, `createInteractions`, `createAgentStream`, `createAgent`                                                              |
-| [`@reactive-agents/observe`](packages/observe)                             | Zero-config OpenTelemetry tracing — maps `AgentStarted/Completed`, `LLMRequest*`, and `ToolCall*` events to OpenInference-compliant OTLP spans                                            |
-| [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay — record any run to a snapshot file, re-run with different model/prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`              |
-| [`@reactive-agents/diagnose`](packages/diagnose)                           | Trace diagnostics + replay-driven root-cause analysis — powers the `rax diagnose` CLI                                                                                                     |
-| [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter — lets the framework run on Node.js 22.5+ in addition to Bun; provides unified `Database`, `spawn`, `serve`, and file I/O primitives                               |
-| [`create-reactive-agent`](packages/create-reactive-agent)                  | Project scaffolder — `bunx create-reactive-agent my-app` generates a runnable agent project with template, provider, and package-manager selection                                        |
+| [`@reactive-agents/observe`](packages/observe)                             | Zero-config OpenTelemetry tracing: maps `AgentStarted`/`Completed`, `LLMRequest*`, and `ToolCall*` events to OpenInference-compliant OTLP spans                                            |
+| [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay: record any run to a snapshot file, re-run with a different model or prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`          |
+| [`@reactive-agents/diagnose`](packages/diagnose)                           | Trace diagnostics and replay-driven root-cause analysis; powers the `rax diagnose` CLI                                                                                                    |
+| [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter letting the framework run on Node.js 22.5+ in addition to Bun; unified `Database`, `spawn`, `serve`, and file I/O primitives                                        |
+| [`create-reactive-agent`](packages/create-reactive-agent)                  | Project scaffolder: `bunx create-reactive-agent my-app` generates a runnable agent project with template, provider, and package-manager selection                                        |
 
 ## Observability & Metrics Dashboard
 
-When observability is enabled, the agent displays a professional metrics dashboard after each execution:
+When observability is enabled, the agent prints an execution summary after each run:
 
 ```
 +-------------------------------------------------------------+
@@ -676,13 +637,7 @@ Tool Execution (2 called)
 |- web-search    ok  2 calls, 280ms avg
 ```
 
--   Per-phase execution timing and bottleneck identification
--   Tool call summary (success/error counts, average duration)
--   Smart alerts and optimization tips
--   Cost estimation in USD
--   EventBus-driven collection (no manual instrumentation)
-
-Enable with:
+Includes per-phase timing, tool-call summary, cost estimate, and smart alerts, all EventBus-driven with no manual instrumentation. Enable with:
 
 <!-- docs-skip-typecheck -->
 ```typescript
@@ -703,9 +658,9 @@ rax run "Task" --cortex --provider anthropic             # Stream events to Cort
 
 ## Register Custom Tools
 
-Tools are registered at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools (web search, file I/O, HTTP, code execution) are registered but hidden from the model by default; opt in with `.withTools({ builtins: true })` or `{ builtins: [...] }` for a named subset. Dynamic sub-agents add `spawn-agent`. `.withTools()` always injects **`recall`** by default; **`find`** auto-enables once you ingest documents via `.withDocuments()`; **`brief`** and **`pulse`** are opt-in via `.withMetaTools({ brief: true, pulse: true })` (or disable the whole suite with `.withMetaTools(false)`).
+Tools register at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools (web search, file I/O, HTTP, code execution) are registered but hidden from the model by default; opt in with `.withTools({ builtins: true })`, or `{ builtins: [...] }` for a named subset. Dynamic sub-agents add `spawn-agent`. `.withTools()` always injects `recall` by default; `find` auto-enables once you ingest documents via `.withDocuments()`; `brief` and `pulse` are opt-in via `.withMetaTools({ brief: true, pulse: true })` (or disable the whole suite with `.withMetaTools(false)`).
 
-Use `defineTool` — a schema plus a plain async handler with arg types inferred from the schema. `input` accepts an Effect `Schema.Struct` or any Standard Schema (Zod / Valibot / ArkType):
+Use `defineTool`, a schema plus a plain async handler with arg types inferred from the schema. `input` accepts an Effect `Schema.Struct` or any Standard Schema (Zod, Valibot, ArkType):
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
@@ -727,7 +682,7 @@ const agent = await ReactiveAgents.create()
     .build()
 ```
 
-Or the `ToolBuilder` fluent API to build the tool *definition* without raw schema objects — the Effect handler is supplied at registration:
+Or the `ToolBuilder` fluent API to build the tool definition without raw schema objects, with the Effect handler supplied at registration:
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
@@ -841,18 +796,18 @@ const agent = await ReactiveAgents.create()
 Sub-agents receive a clean context window, inherit the parent's provider and model by default, and are depth-limited to `MAX_RECURSION_DEPTH = 3`.
 
 | Approach                         | When to use                                            |
-| -------------------------------- | ------------------------------------------------------ |
+| --------------------------------- | -------------------------------------------------------- |
 | `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role    |
-| `.withDynamicSubAgents()`        | Ad-hoc delegation at model's discretion, unknown tasks |
+| `.withDynamicSubAgents()`        | Ad-hoc delegation at the model's discretion, unknown tasks |
 
 ## MCP (Model Context Protocol)
 
-Connect any MCP-compatible server — 9,400+ public servers covering filesystem, GitHub, Slack, browsers, databases, and more. Use `.withMCP()` for each server you need:
+Connect any MCP-compatible server, including the 9,400+ public servers covering filesystem, GitHub, Slack, browsers, and databases. Use `.withMCP()` for each server you need:
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
 
-// stdio transport — subprocess communicates via JSON-RPC over stdin/stdout
+// stdio transport: subprocess communicates via JSON-RPC over stdin/stdout
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning()
@@ -871,7 +826,7 @@ const agent = await ReactiveAgents.create()
     })
     .build()
 
-// Streamable HTTP transport — modern cloud-hosted MCP servers
+// Streamable HTTP transport: modern cloud-hosted MCP servers
 const agent2 = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withMCP({
@@ -883,7 +838,7 @@ const agent2 = await ReactiveAgents.create()
     .build()
 ```
 
-MCP tools appear in the tool registry alongside custom tools — the LLM sees them all uniformly. Mix MCP servers with `ToolBuilder` custom tools in the same agent. See [full MCP docs](https://docs.reactiveagents.dev/guides/tools/).
+MCP tools appear in the tool registry alongside custom tools; the LLM sees them all uniformly. Mix MCP servers with `ToolBuilder` custom tools in the same agent. See [full MCP docs](https://docs.reactiveagents.dev/guides/tools/).
 
 ## Testing
 
@@ -928,7 +883,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (8,920 tests / 1158 files, ~110s)
+bun test                 # Run full test suite (9,241 tests / 1202 files, ~110s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
@@ -941,7 +896,7 @@ GOOGLE_API_KEY=...                    # Google Gemini
 GROQ_API_KEY=gsk_...                  # Groq (optional: GROQ_BASE_URL)
 XAI_API_KEY=xai-...                   # xAI Grok (optional: XAI_BASE_URL)
 LITELLM_BASE_URL=http://localhost:4000  # LiteLLM proxy (optional: LITELLM_API_KEY)
-OLLAMA_ENDPOINT=http://localhost:11434  # Ollama — local, no API key needed (this is the default)
+OLLAMA_ENDPOINT=http://localhost:11434  # Ollama, local, no API key needed (this is the default)
 EMBEDDING_PROVIDER=openai             # For vector memory
 EMBEDDING_MODEL=text-embedding-3-small
 LLM_DEFAULT_MODEL=claude-sonnet-4-6
@@ -949,12 +904,12 @@ LLM_DEFAULT_MODEL=claude-sonnet-4-6
 
 ## Documentation
 
-Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.dev/)**
+Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/):
 
--   [Getting Started](https://docs.reactiveagents.dev/guides/quickstart/) -- Build an agent in 5 minutes
--   [Reasoning Strategies](https://docs.reactiveagents.dev/guides/choosing-strategies/) -- All 8 strategies explained
--   [Architecture](https://docs.reactiveagents.dev/concepts/architecture/) -- Layer system deep dive
--   [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
+- [Getting Started](https://docs.reactiveagents.dev/guides/quickstart/), build an agent in 5 minutes
+- [Reasoning Strategies](https://docs.reactiveagents.dev/guides/choosing-strategies/), all 8 strategies explained
+- [Architecture](https://docs.reactiveagents.dev/concepts/architecture/), layer system deep dive
+- [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/), testing, multi-agent patterns, production deployment
 
 ## Used By
 
@@ -966,15 +921,14 @@ Reactive Agents is in early access. If you're using it in production or a resear
 
 ## Roadmap
 
-Public milestone tracker: [`ROADMAP.md`](./ROADMAP.md) — synced with the internal roadmap spec.
-Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/users/tylerjrbuell/projects/1).
+Public milestone tracker: [`ROADMAP.md`](./ROADMAP.md), synced with the internal roadmap spec. Live board: [GitHub Projects: Reactive Agents Roadmap](https://github.com/users/tylerjrbuell/projects/1).
 
 ## Getting Help
 
--   **Discord** -- [Join the community](https://discord.gg/Mp99vQam3Q) for questions, discussions, and support
--   **GitHub Issues** -- [Report bugs or request features](https://github.com/tylerjrbuell/reactive-agents-ts/issues)
--   **GitHub Discussions** -- [Ask questions and share ideas](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)
--   **Security** -- File privately via [GitHub Security Advisory](https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new)
+- **Discord**: [Join the community](https://discord.gg/Mp99vQam3Q) for questions, discussions, and support
+- **GitHub Issues**: [Report bugs or request features](https://github.com/tylerjrbuell/reactive-agents-ts/issues)
+- **GitHub Discussions**: [Ask questions and share ideas](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)
+- **Security**: File privately via [GitHub Security Advisory](https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new)
 
 ## Contributors
 

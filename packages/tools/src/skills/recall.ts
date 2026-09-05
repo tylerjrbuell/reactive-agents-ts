@@ -8,6 +8,16 @@ export interface RecallConfig {
   autoFullThreshold?: number;
   maxEntries?: number;
   maxTotalBytes?: number;
+  /**
+   * Hard ceiling on `recall(key, full: true)` in a single call. Without this,
+   * a large stored entry (e.g. an http-get result — measured 731K raw tokens
+   * for one fetched Wikipedia page) rides out uncapped in one tool response,
+   * able to blow the model's context window in a single call. Default 20,000
+   * chars (~6K tokens). Exceeding it doesn't fail the call — it returns the
+   * first `fullReturnCapChars` plus a hint pointing at segmented recall
+   * (start/maxChars or lineStart/lineCount) to read the rest.
+   */
+  fullReturnCapChars?: number;
 }
 
 export const recallTool: ToolDefinition = {
@@ -67,6 +77,7 @@ export const makeRecallHandler =
     Effect.gen(function* () {
       const previewLength = config?.previewLength ?? 200;
       const autoFullThreshold = config?.autoFullThreshold ?? 300;
+      const fullReturnCapChars = config?.fullReturnCapChars ?? 20_000;
 
       const key = args.key as string | undefined;
       const content = args.content as string | undefined;
@@ -212,7 +223,23 @@ export const makeRecallHandler =
         }
 
         const returnFull = full || value.length <= autoFullThreshold;
-        if (returnFull) return { key, content: value, bytes: value.length, truncated: false };
+        if (returnFull) {
+          if (value.length > fullReturnCapChars) {
+            return {
+              key,
+              content: value.slice(0, fullReturnCapChars),
+              bytes: value.length,
+              truncated: true,
+              cappedAt: fullReturnCapChars,
+              hint:
+                `Full content is ${value.length} chars — exceeds the ${fullReturnCapChars}-char ` +
+                `safety cap for one recall(full: true) call, showing the first ${fullReturnCapChars}. ` +
+                `Read the rest with recall("${key}", start: ${fullReturnCapChars}, maxChars: N) or ` +
+                `recall("${key}", lineStart: N, lineCount: N).`,
+            };
+          }
+          return { key, content: value, bytes: value.length, truncated: false };
+        }
         return { key, preview: value.slice(0, previewLength), bytes: value.length, truncated: true };
       }
 

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/observe",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "description": "OpenInference-compliant OpenTelemetry tracing for reactive-agents — maps AgentEvent stream to semantic spans",
   "keywords": [
     "ai",
@@ -29,8 +29,8 @@
     "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
     "@opentelemetry/resources": "^2.6.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
+    "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/observability": "0.16.0",
     "effect": "^3.10.0"
   },
   "devDependencies": {

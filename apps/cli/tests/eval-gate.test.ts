@@ -5,7 +5,7 @@ function verdict(decision: "default-on" | "opt-in" | "reject", tiersCovered: num
   return {
     decision,
     perTier: [],
-    aggregate: { liftPp: 0, tokenOverheadPct: 0, tiersCovered },
+    aggregate: { liftPp: 0, tokenOverheadPct: 0, billedTokenOverheadPct: 0, tiersCovered },
     partial: false,
     rationale: "",
     baselineVariantId: "b",

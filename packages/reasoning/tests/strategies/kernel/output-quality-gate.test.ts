@@ -340,6 +340,38 @@ describe("output quality gate", () => {
     expect(state.status).not.toBe("done");
   });
 
+  it("falls back to a de-scaffolded join (not the raw ✓-prefixed dump) when output-gate synthesis returns empty content (2026-08-21, scratch.ts triage #3)", async () => {
+    // Real-model trace (gemma4:e4b, react, 2026-08-15): 5 vague web-search
+    // snippets, model never called final-answer, harness assembled a
+    // multi-observation harness_synthesis deliverable, the output-gate
+    // synthesis call ran but a weak local model can return empty/garbled
+    // content for it — and the raw tool-scaffolded dump (✓-prefixed, no
+    // prose) shipped as the literal final answer.
+    const kernel = makeQuotaSatisfyingSearchKernel([
+      "✓ web-search: I Shouldn't Be Alive is a survival documentary series.",
+      "✓ web-search: The show has aired multiple seasons on Discovery Channel.",
+      "✓ web-search: Episode guides for the series are not consistently indexed.",
+    ]);
+    const emptySynthesisLayer = TestLLMServiceLayer([{ text: "" }]);
+    const state = await Effect.runPromise(
+      runKernel(
+        kernel,
+        {
+          task: "Research the episode list and put it in a table",
+          requiredTools: ["web-search"],
+          requiredToolQuantities: { "web-search": 3 },
+        },
+        { ...defaultOptions, maxIterations: 5 },
+      ).pipe(Effect.provide(emptySynthesisLayer)),
+    );
+    expect(state.status).toBe("done");
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    // The raw tool-call scaffolding marker must never reach the user verbatim
+    // as the WHOLE answer — synthesis failing is not a license to ship the
+    // internal artifact-join untouched.
+    expect(state.output ?? "").not.toMatch(/^✓ web-search:/);
+  });
+
   it("Pivot A REWORK — harness-deliverable fires verifier gate but does not retry", async () => {
     // M3 REWORK (2026-05-12): Terminal retry loop removed per ablation verdict.
     // Verifier gate still fires at harness_deliverable path (emits verdict event)

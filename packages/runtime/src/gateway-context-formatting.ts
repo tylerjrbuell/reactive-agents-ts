@@ -24,6 +24,49 @@ export function applyHistoryWindow(history: readonly ChatMessage[]): ChatMessage
 }
 
 /**
+ * Caller-supplied summarizer for turns dropped by history windowing.
+ *
+ * Receives the dropped turns (oldest-to-newest, the exact prefix of `history`
+ * that fell outside the `MAX_TURNS`/`MAX_CHARS` window) and returns summary
+ * text. The framework owns the windowing decision and the splice mechanics —
+ * this callback owns domain content only (e.g. an LLM call, a template, a
+ * running "story so far" string). No summarization prompt or LLM call is
+ * baked into the framework itself.
+ */
+export type HistoryOverflowHandler = (
+  dropped: readonly ChatMessage[],
+) => Promise<string>;
+
+/**
+ * Window conversation history like {@link applyHistoryWindow}, but when
+ * `onOverflow` is supplied and turns would be dropped, fold those turns into
+ * a synthetic leading turn — `{ role: "assistant", content: "Summary of
+ * earlier conversation: ${summary}" }` — instead of silently discarding them.
+ *
+ * Without `onOverflow` (or when nothing overflows), behavior is identical to
+ * `applyHistoryWindow`: no synthetic turn, no handler call.
+ */
+export async function applyHistoryWindowWithOverflow(
+  history: readonly ChatMessage[],
+  onOverflow?: HistoryOverflowHandler,
+): Promise<ChatMessage[]> {
+  const windowed = applyHistoryWindow(history);
+  if (!onOverflow) return windowed;
+
+  const droppedCount = history.length - windowed.length;
+  if (droppedCount <= 0) return windowed;
+
+  const dropped = history.slice(0, droppedCount);
+  const summary = await onOverflow(dropped);
+  const summaryTurn: ChatMessage = {
+    role: "assistant",
+    content: `Summary of earlier conversation: ${summary}`,
+    timestamp: dropped[dropped.length - 1]!.timestamp,
+  };
+  return [summaryTurn, ...windowed];
+}
+
+/**
  * Format a windowed history slice as a labeled conversation block.
  */
 export function formatHistoryBlock(history: readonly ChatMessage[]): string {

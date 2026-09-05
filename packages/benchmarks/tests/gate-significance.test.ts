@@ -53,7 +53,10 @@ const cell = (
     { type: "internal", id: variantId, label: variantId, config: {} },
     scores.map(run),
   );
-  return { ...agg, meanTokens };
+  // No-caching case (2026-08-24 amendment): billed === raw so the raw-token
+  // assertions in this file — written before the billed leg existed — stay
+  // numerically unchanged under the new default `tokenLeg: "billed"`.
+  return { ...agg, meanTokens, meanBilledTokens: meanTokens, meanCacheReadTokens: 0 };
 };
 
 const report = (rows: readonly TaskVariantReport[]): SessionReport =>

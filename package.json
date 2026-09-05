@@ -12,6 +12,7 @@
     "apps/cortex/ui"
   ],
   "scripts": {
+    "postinstall": "bash scripts/link-skills.sh",
     "build": "turbo run build",
     "build:packages": "turbo run build --filter='./packages/*'",
     "build:apps": "turbo run build --filter='./apps/*'",
@@ -39,6 +40,7 @@
     "gate:propose": "bun scripts/gate-propose.ts",
     "docs:gen:api": "bun packages/runtime/scripts/gen-api-docs.ts",
     "docs:examples:check": "bun scripts/check-doc-examples.ts",
+    "docs:sync:check": "bun scripts/check-docs-sync.ts",
     "docs:dev": "cd apps/docs && bun x astro dev",
     "docs:build": "cd apps/docs && bun x astro build",
     "docs:preview": "cd apps/docs && bun x astro preview",

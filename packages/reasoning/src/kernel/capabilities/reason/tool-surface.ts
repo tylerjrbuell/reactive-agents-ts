@@ -37,7 +37,7 @@
 
 import { filterToolsByRelevance, type ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS as META_TOOL_SET } from "../../state/kernel-constants.js";
-import { stableToolSurfaceEnabled } from "../../../harness-flags.js";
+import type { ResolvedHarness } from "../../../harness-config.js";
 
 /**
  * Pure prune-set computation for the think-phase tool disclosure.
@@ -195,6 +195,9 @@ export interface ToolSurfaceInputs {
    * See `computePromptSchemas`.
    */
   readonly floorTools?: readonly string[];
+  /** Resolved harness config for this run — the ONLY source for mechanism
+   *  switches at this site. Threaded from `KernelInput.harness` by think.ts. */
+  readonly harness: ResolvedHarness;
 }
 
 export interface ResolvedToolSurface {
@@ -272,26 +275,6 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   );
 
   const augmented = permitted([...inputs.augmented, ...discoveredFromCatalog]);
-
-  // F10 stable mode: the visible set is the full permitted surface for the whole
-  // run, so the FC `tools` array is byte-stable across iterations and the cache
-  // prefix survives. Denied and gate-blocked tools are STILL removed — those are
-  // correctness constraints, not attention management, and a contract deny-list
-  // that leaked under a caching flag would be a security defect.
-  //
-  // Placed AFTER the `augmented` / `permitted` computation (which applies the
-  // contract deny-list to the schema universe) and BEFORE the pressure gate and
-  // Stage 2 pruning, so deny still beats everything by construction.
-  if (stableToolSurfaceEnabled()) {
-    const blocked = new Set(inputs.gateBlockedTools);
-    const stableVisible = augmented.filter((ts) => !blocked.has(ts.name));
-    return {
-      universe: augmented,
-      visible: stableVisible,
-      callable: stableVisible,
-      reasons: new Map(stableVisible.map((ts) => [ts.name, "stable-surface"])),
-    };
-  }
 
   // Stage 1 — context-pressure hard gate (non-lazy arm only; under lazy mode
   // the disclosure filter owns visibility and premature narrowing induces

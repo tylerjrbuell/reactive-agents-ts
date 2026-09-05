@@ -142,6 +142,13 @@ export interface BuildCortexAgentParams {
   readonly budget?: { readonly tokenLimit?: number; readonly costLimit?: number };
   /** Numeric evidence-grounding (v0.12) — `.withGrounding()`. Checks figures in the answer against tool data. */
   readonly grounding?: { readonly mode: "warn" | "block"; readonly tolerance?: number };
+  /**
+   * Fabrication guard — `.withFabricationGuard()`. Flags invented named
+   * entities/measurements not backed by tool evidence; distinct from numeric
+   * grounding. Always-on at `block` by default even if this is never set —
+   * only pass this to override to `warn` or `off`.
+   */
+  readonly fabricationGuard?: "off" | "warn" | "block";
   /** Cost-aware model routing (v0.13) — `.withModelRouting()`. Routes cheap/expensive turns by tier. */
   readonly modelRouting?: {
     readonly enabled?: boolean;
@@ -318,7 +325,7 @@ export async function buildCortexAgent(
   if (params.skills?.paths?.length) {
     b = b.withSkills({
       paths: [...params.skills.paths],
-      ...(params.skills.evolution ? { evolution: { ...params.skills.evolution } } : {}),
+      ...(params.skills.activate?.length ? { activate: [...params.skills.activate] } : {}),
     });
   }
 
@@ -365,6 +372,11 @@ export async function buildCortexAgent(
       mode: params.grounding.mode,
       ...(params.grounding.tolerance != null ? { tolerance: params.grounding.tolerance } : {}),
     });
+  }
+
+  // Fabrication guard — always-on at "block" already; only call to override.
+  if (params.fabricationGuard) {
+    b = b.withFabricationGuard(params.fabricationGuard);
   }
 
   // Cost-aware model routing (v0.13) — opt-in; degrades to the configured model.

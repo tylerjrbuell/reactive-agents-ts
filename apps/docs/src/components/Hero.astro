@@ -1,0 +1,475 @@
+---
+/**
+ * Custom splash Hero (home page only). Replaces the oversized brand-mark
+ * graphic with a "code → proof" visual: a rotating set of REAL builder
+ * chains, each a genuine snippet from the docs/README, cycling through the
+ * shapes the SDK actually supports (ReAct, guardrailed, MCP, structured
+ * output, chat, gateway, declarative config, multi-agent compose). Each
+ * badge names that snippet's headline capability — it is not a run verdict;
+ * the one real captured run's receipt lives further down the page
+ * (RunReplay / EvidenceReceipt), not here. The brand glyph is kept as a
+ * small, calm accent beside the headline. Any non-home page that uses the
+ * splash template falls back to Starlight's default Hero.
+ */
+import Default from '@astrojs/starlight/components/Hero.astro'
+import { LinkButton } from '@astrojs/starlight/components'
+import logoDark from '../assets/logo-dark.svg'
+import goldenRun from '../data/golden-run.json'
+
+const route = Astro.locals.starlightRoute
+const { entry } = route
+const isHome = (entry.id || 'index') === 'index'
+const data = entry.data
+const hero = data.hero
+const { title = data.title, tagline, actions = [] } = hero ?? {}
+
+// Real receipt summary from the same captured run RunReplay/EvidenceReceipt
+// use further down the page — a small, honest preview of the actual proof,
+// not another cycling capability claim. Fixed (doesn't change with the
+// snippet cycle above it).
+const receipt = goldenRun.receipt!
+const deliveredCount = receipt.deliverables.filter((d: { produced: boolean }) => d.produced).length
+const deliverableTotal = receipt.deliverables.length
+
+// Rotating builder snippets — real API surface, real doc/README examples,
+// spanning the different shapes the SDK supports. Each `badge` names that
+// snippet's headline capability (not a pass/fail verdict — the real receipt
+// lives in the RunReplay/EvidenceReceipt sections below, sourced from the
+// one real captured run).
+const SNIPPETS: { file: string; badge: string; features: string[]; lines: string[] }[] = [
+    {
+        file: 'agent.ts',
+        badge: 'ReAct + tools',
+        features: ['ReAct reasoning', 'built-in tools', 'runs on a local 4B model'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// or "anthropic"</span>`,
+            `  .<span class="rm">withReasoning</span>()          <span class="rc">// ReAct</span>`,
+            `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+            ``,
+            `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
+        ],
+    },
+    {
+        file: 'support-bot.ts',
+        badge: 'guardrails + HITL',
+        features: ['PII-blocking guardrails', 'human-approval gate', 'per-customer memory'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withGuardrails</span>({ blockPII: <span class="rk">true</span> })`,
+            `  .<span class="rm">withApprovalPolicy</span>(<span class="rs">"require-human"</span>)`,
+            `  .<span class="rm">withMemory</span>()             <span class="rc">// per-customer context</span>`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'research-agent.ts',
+        badge: 'MCP + observability',
+        features: ['MCP tool servers', 'full trace observability', 'entropy + NLI verification'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withMCP</span>({`,
+            `    name: <span class="rs">"filesystem"</span>,`,
+            `    transport: <span class="rs">"stdio"</span>,`,
+            `    command: <span class="rs">"bunx"</span>,`,
+            `    args: [<span class="rs">"-y"</span>, <span class="rs">"@modelcontextprotocol/server-filesystem"</span>, <span class="rs">"."</span>],`,
+            `  })`,
+            `  .<span class="rm">withObservability</span>()      <span class="rc">// full trace, every hop</span>`,
+            `  .<span class="rm">withVerification</span>()       <span class="rc">// entropy + NLI check</span>`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'extractor.ts',
+        badge: 'typed structured output',
+        features: ['schema-locked output', 'cost-aware model routing', 'runs on a local 4B model'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)   <span class="rc">// 4B model, no API key</span>`,
+            `  .<span class="rm">withOutputSchema</span>(InvoiceSchema)`,
+            `  .<span class="rm">withModelRouting</span>({ costAware: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'chat.ts',
+        badge: 'single-shot chat',
+        features: ['no tool loop', 'smallest surface area', 'direct-LLM latency'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">build</span>()          <span class="rc">// no .withReasoning(), direct LLM</span>`,
+            ``,
+            `<span class="rk">const</span> reply = <span class="rk">await</span> agent.<span class="rm">run</span>(<span class="rs">"Explain functors in one paragraph."</span>)`,
+        ],
+    },
+    {
+        file: 'chat-session.ts',
+        badge: 'multi-turn chat session',
+        features: ['conversation history', 'persistent memory', 'stateful across calls'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withMemory</span>()            <span class="rc">// persists across turns</span>`,
+            `  .<span class="rm">build</span>()`,
+            ``,
+            `<span class="rk">const</span> reply = <span class="rk">await</span> agent.<span class="rm">run</span>(nextMessage, { history })`,
+        ],
+    },
+    {
+        file: 'strategy.ts',
+        badge: 'tree-of-thought reasoning',
+        features: ['multi-branch exploration', '8 pluggable strategies', 'swap with one config key'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withReasoning</span>({ defaultStrategy: <span class="rs">"tree-of-thought"</span> })`,
+            `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'gateway.ts',
+        badge: 'autonomous gateway',
+        features: ['scheduled cron triggers', 'heartbeat wake cycle', 'daily token budget'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
+            `  .<span class="rm">withProvider</span>(<span class="rs">"anthropic"</span>)`,
+            `  .<span class="rm">withGateway</span>({`,
+            `    heartbeat: { intervalMs: 1_800_000 },`,
+            `    crons: [{ schedule: <span class="rs">"0 9 * * MON"</span>, instruction: <span class="rs">"Weekly review"</span> }],`,
+            `  })`,
+            `  .<span class="rm">build</span>()`,
+        ],
+    },
+    {
+        file: 'declarative.ts',
+        badge: 'declarative config',
+        features: ['one config object', 'same engine, no chain', 'Vercel-AI-SDK-shaped'],
+        lines: [
+            `<span class="rk">const</span> agent = <span class="rk">await</span> <span class="rm">createAgent</span>({`,
+            `  name: <span class="rs">"researcher"</span>,`,
+            `  provider: <span class="rs">"anthropic"</span>,`,
+            `  reasoning: {},`,
+            `  tools: { builtins: <span class="rk">true</span> },`,
+            `})`,
+        ],
+    },
+    {
+        file: 'multi-agent.ts',
+        badge: 'multi-agent pipeline',
+        features: ['compose() primitives', 'pipe · parallel · race', "one agent's output feeds the next"],
+        lines: [
+            `<span class="rk">const</span> draft = <span class="rm">agentFn</span>({ name: <span class="rs">"writer"</span> }, (b) => b.<span class="rm">withReasoning</span>())`,
+            `<span class="rk">const</span> critic = <span class="rm">agentFn</span>({ name: <span class="rs">"editor"</span> }, (b) => b.<span class="rm">withReasoning</span>())`,
+            ``,
+            `<span class="rk">const</span> pipeline = <span class="rm">pipe</span>(draft, critic)`,
+            `<span class="rk">const</span> result = <span class="rk">await</span> pipeline(<span class="rs">"Draft a release note"</span>)`,
+        ],
+    },
+]
+// Plain-text per line (tags stripped) drives the typing/backspace animation;
+// the HTML version snaps in as syntax highlighting once a line finishes typing.
+const stripTags = (s: string) => s.replace(/<[^>]+>/g, '')
+const snippetsData = SNIPPETS.map((s) => ({
+    file: s.file,
+    badge: s.badge,
+    features: s.features,
+    lines: s.lines.map((html) => ({ html, plain: stripTags(html) })),
+}))
+const firstLines = snippetsData[0].lines
+// Pin the code window to the tallest snippet's line count so backspace/type
+// transitions (which briefly add/remove line elements) never resize the box.
+const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
+---
+
+{
+    isHome ? (
+        <div class="ra-hero">
+            {/* Ambient animated banner — the real brand mark (same file as the
+                header logo: gradient strokes + glow filters + built-in SMIL
+                pulse, not a redrawn flat copy), blown up, faded, and pinned
+                to the viewport so it stays visible while the page scrolls
+                past it rather than disappearing with the hero. Purely
+                decorative (aria-hidden), sits behind everything via z-index. */}
+            <img class="ra-hero-glyph-bg" src={logoDark.src} alt="" aria-hidden="true" />
+
+            <div class="ra-hero-copy">
+                <h1 id="_top" data-page-title set:html={title} />
+                {tagline && <div class="ra-hero-tagline" set:html={tagline} />}
+
+                {actions.length > 0 && (
+                    <div class="ra-hero-actions">
+                        {actions.map((a) => (
+                            <LinkButton href={a.link} variant={a.variant} icon={a.icon?.name}>
+                                {a.text}
+                            </LinkButton>
+                        ))}
+                    </div>
+                )}
+
+                <div class="ra-hero-props" role="list" aria-label="At a glance">
+                    <span role="listitem">TypeScript-native</span>
+                    <span role="listitem">Local 4B → frontier</span>
+                    <span role="listitem">MCP-native</span>
+                    <span role="listitem">Effect-TS</span>
+                    <span role="listitem">MIT licensed</span>
+                </div>
+            </div>
+
+            <div class="ra-hero-visual">
+                <div
+                    class="ra-hero-win ra-hero-cycle"
+                    data-hero-cycle
+                    data-snippets={JSON.stringify(snippetsData)}
+                >
+                    <div class="ra-hero-winbar">
+                        <span class="ra-hero-live-dot" aria-hidden="true" />
+                        <span class="ra-hero-winttl" data-hero-file>{snippetsData[0].file}</span>
+                    </div>
+                    <pre class="ra-hero-code" style={`height:calc(${maxLines} * 1.75em + 30px)`}><code data-hero-code>{firstLines.map((l) => (
+                        <div class="rl" set:html={l.html || '​'} />
+                    ))}</code></pre>
+                    <div class="ra-hero-verdict">
+                        <span class="ra-hero-vbadge" data-hero-badge>◆ {snippetsData[0].badge}</span>
+                        <div class="ra-hero-vfeatures" data-hero-features>
+                            {snippetsData[0].features.map((f) => (
+                                <span class="ra-hero-vtag">{f}</span>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Fixed — the real captured run's receipt, not part of the
+                        cycle above. This is the site's actual signature: proof,
+                        not a capability claim. */}
+                    <a class="ra-hero-receipt-strip" href="#the-proof">
+                        <span class="ra-hero-receipt-dot" aria-hidden="true" />
+                        <span>verified receipt · {goldenRun.model.id} · {deliveredCount}/{deliverableTotal} deliverables · {receipt.toolCallStats.failed} tool failures</span>
+                        <span class="ra-hero-receipt-link">see it ↓</span>
+                    </a>
+                </div>
+                <div class="ra-hero-dots" role="tablist" aria-label="Code example" data-hero-dots>
+                    {snippetsData.map((s, idx) => (
+                        <button
+                            type="button"
+                            class="ra-hero-dot"
+                            data-hero-dot={idx}
+                            role="tab"
+                            aria-selected={idx === 0 ? 'true' : 'false'}
+                            aria-label={s.file}
+                            title={s.file}
+                        >
+                            <span class="ra-hero-dot-core" />
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    ) : (
+        <Default />
+    )
+}
+
+<script>
+    type Line = { html: string; plain: string }
+    type Snippet = { file: string; badge: string; features: string[]; lines: Line[] }
+
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
+
+    // Longest common prefix/suffix of two line arrays (by plain text) — the
+    // untouched edges stay put; only the differing middle range is edited,
+    // like a real diff-driven edit rather than a full rewrite.
+    function diffRange(a: Line[], b: Line[]) {
+        let start = 0
+        while (start < a.length && start < b.length && a[start].plain === b[start].plain) start++
+        let endA = a.length - 1
+        let endB = b.length - 1
+        while (endA >= start && endB >= start && a[endA].plain === b[endB].plain) {
+            endA--
+            endB--
+        }
+        return { start, removed: a.slice(start, endA + 1), added: b.slice(start, endB + 1) }
+    }
+
+    async function backspaceLine(el: HTMLElement, plain: string, shouldAbort: () => boolean) {
+        el.classList.add('is-editing')
+        el.textContent = plain
+        for (let n = plain.length; n >= 0; n--) {
+            if (shouldAbort()) return
+            el.textContent = plain.slice(0, n) || '​'
+            await wait(20)
+        }
+    }
+
+    async function typeLine(el: HTMLElement, plain: string, shouldAbort: () => boolean) {
+        el.classList.add('is-editing')
+        for (let n = 1; n <= plain.length; n++) {
+            if (shouldAbort()) return
+            el.textContent = plain.slice(0, n)
+            await wait(28)
+        }
+        if (!shouldAbort()) await wait(120)
+    }
+
+    function setIdleCaret(codeEl: HTMLElement, on: boolean) {
+        const last = codeEl.lastElementChild as HTMLElement | null
+        last?.classList.toggle('is-editing', on)
+    }
+
+    // Checks `shouldAbort` between every typed/backspaced character so a dot
+    // click can interrupt an in-flight animation immediately instead of
+    // waiting for the current line to finish.
+    async function transition(codeEl: HTMLElement, current: Line[], target: Snippet, shouldAbort: () => boolean) {
+        const { start, removed, added } = diffRange(current, target.lines)
+        const lineEls = Array.from(codeEl.children) as HTMLElement[]
+
+        for (let i = removed.length - 1; i >= 0; i--) {
+            if (shouldAbort()) return
+            const el = lineEls[start + i]
+            if (!el) continue
+            await backspaceLine(el, removed[i].plain, shouldAbort)
+            el.remove()
+        }
+        if (shouldAbort()) return
+
+        const anchor = lineEls[start + removed.length]?.isConnected ? lineEls[start + removed.length] : null
+        for (const line of added) {
+            if (shouldAbort()) return
+            const el = document.createElement('div')
+            el.className = 'rl'
+            codeEl.insertBefore(el, anchor)
+            await typeLine(el, line.plain, shouldAbort)
+            el.innerHTML = line.html || '​'
+            el.classList.remove('is-editing')
+        }
+    }
+
+    // Animates the tag row's height between snippets instead of reserving a
+    // fixed 2-row block for every snippet — most sets only need one row, so
+    // a static reservation wasted a full blank row underneath them.
+    async function swapFeatures(el: HTMLElement, features: string[]) {
+        el.style.height = `${el.getBoundingClientRect().height}px`
+        el.classList.add('is-fading')
+        await wait(180)
+        el.innerHTML = ''
+        for (const f of features) {
+            const tag = document.createElement('span')
+            tag.className = 'ra-hero-vtag'
+            tag.textContent = f
+            el.appendChild(tag)
+        }
+        const target = el.scrollHeight
+        // Force layout before reading, so the height transition below has a
+        // real starting value to animate from rather than jumping instantly.
+        void el.offsetHeight
+        el.style.height = `${target}px`
+        el.classList.remove('is-fading')
+        await wait(260)
+        el.style.height = '' // release the pinned height once settled
+    }
+
+    async function swapBadge(el: HTMLElement, badge: string) {
+        el.classList.add('is-fading')
+        await wait(180)
+        el.textContent = `◆ ${badge}`
+        el.classList.remove('is-fading')
+    }
+
+    function initHeroCycle(root: HTMLElement) {
+        const snippets: Snippet[] = JSON.parse(root.dataset.snippets ?? '[]')
+        const codeEl = root.querySelector<HTMLElement>('[data-hero-code]')
+        const fileEl = root.querySelector<HTMLElement>('[data-hero-file]')
+        const featuresEl = root.querySelector<HTMLElement>('[data-hero-features]')
+        const badgeEl = root.querySelector<HTMLElement>('[data-hero-badge]')
+        // The dot rail is a sibling of `root` (root is just the code window),
+        // not a descendant — scope the lookup to the shared visual wrapper.
+        const scope = root.closest<HTMLElement>('.ra-hero-visual') ?? root.parentElement ?? root
+        const dots = Array.from(scope.querySelectorAll<HTMLButtonElement>('[data-hero-dot]'))
+        if (!codeEl || !fileEl || snippets.length < 2) return
+
+        const updateDots = (idx: number) => {
+            dots.forEach((d, di) => {
+                d.classList.toggle('is-active', di === idx)
+                d.setAttribute('aria-selected', di === idx ? 'true' : 'false')
+            })
+        }
+
+        // Snaps every panel (code, file label, badge, feature tags, dots) to
+        // snippet `idx` with no animation — used for the reduced-motion path
+        // and to make a dot click land immediately instead of queuing behind
+        // the idle timer.
+        const renderInstant = (idx: number) => {
+            fileEl.textContent = snippets[idx].file
+            if (badgeEl) badgeEl.textContent = `◆ ${snippets[idx].badge}`
+            if (featuresEl) {
+                featuresEl.innerHTML = ''
+                for (const f of snippets[idx].features) {
+                    const tag = document.createElement('span')
+                    tag.className = 'ra-hero-vtag'
+                    tag.textContent = f
+                    featuresEl.appendChild(tag)
+                }
+            }
+            codeEl.innerHTML = ''
+            for (const l of snippets[idx].lines) {
+                const el = document.createElement('div')
+                el.className = 'rl'
+                el.innerHTML = l.html || '​'
+                codeEl.appendChild(el)
+            }
+            updateDots(idx)
+        }
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        if (reduceMotion) {
+            dots.forEach((d, idx) => d.addEventListener('click', () => renderInstant(idx)))
+            return
+        }
+
+        let i = 0
+        let current = snippets[0].lines
+        let paused = false
+        let cancelled = false
+        let jumpTo: number | null = null
+        updateDots(0)
+        root.addEventListener('mouseenter', () => { paused = true })
+        root.addEventListener('mouseleave', () => { paused = false })
+        dots.forEach((d, idx) => d.addEventListener('click', () => {
+            if (idx === i && jumpTo === null) return
+            jumpTo = idx
+        }))
+
+        const loop = async () => {
+            while (!cancelled) {
+                if (jumpTo !== null) {
+                    const idx = jumpTo
+                    jumpTo = null
+                    i = idx
+                    current = snippets[idx].lines
+                    renderInstant(idx)
+                    continue
+                }
+                setIdleCaret(codeEl, true)
+                let waited = 0
+                while (waited < 3200 && jumpTo === null && !cancelled) {
+                    if (!paused) waited += 100
+                    await wait(100)
+                }
+                setIdleCaret(codeEl, false)
+                if (cancelled) return
+                if (jumpTo !== null) continue
+                i = (i + 1) % snippets.length
+                updateDots(i)
+                fileEl.textContent = snippets[i].file
+                if (badgeEl) void swapBadge(badgeEl, snippets[i].badge)
+                if (featuresEl) void swapFeatures(featuresEl, snippets[i].features)
+                await transition(codeEl, current, snippets[i], () => jumpTo !== null)
+                current = snippets[i].lines
+            }
+        }
+        loop()
+        document.addEventListener('astro:before-swap', () => { cancelled = true }, { once: true })
+    }
+    document.querySelectorAll<HTMLElement>('[data-hero-cycle]').forEach(initHeroCycle)
+</script>

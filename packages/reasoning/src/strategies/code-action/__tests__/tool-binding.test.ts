@@ -74,4 +74,23 @@ describe("generateToolBindings", () => {
     const matches = bindings.match(/Promise<unknown>/g);
     expect(matches?.length).toBe(2);
   });
+
+  it("includes the tool return shape so generated code can use tool results", () => {
+    const bindings = generateToolBindings([
+      {
+        name: "crypto-price",
+        description: "Get cryptocurrency prices",
+        returnType: "{ prices: Array<{ symbol: string, price: number }> }",
+        parameters: {
+          type: "object",
+          properties: { coins: { type: "array" } },
+          required: ["coins"],
+        },
+      },
+    ]);
+
+    expect(bindings).toContain(
+      "Returns: { prices: Array<{ symbol: string, price: number }> }",
+    );
+  });
 });

@@ -53,6 +53,9 @@ export default defineConfig({
                 starlightLinksValidator({
                     errorOnRelativeLinks: false, // Starlight uses many relative paths; only block hard breaks
                     errorOnInvalidHashes: false, // anchors get added/renamed often; warn but don't block
+                    // /playground/ is a plain Astro page (src/pages/), not a
+                    // content/docs entry, so the validator can't resolve it.
+                    exclude: ['/playground/'],
                 }),
                 // Click-to-zoom on every image. Cortex screenshots are large and
                 // unreadable inline; zoom modal makes the actual UI visible.
@@ -140,6 +143,14 @@ export default defineConfig({
                 // Adds per-page og:image/twitter:image + Schema.org JSON-LD on top of
                 // Starlight's default head (SEO rich snippets + AEO answer-engine grounding).
                 Head: './src/components/Head.astro',
+                // Adds a "Playground" button to the header's right-hand group,
+                // linking straight to the full-page StackBlitz editor.
+                Header: './src/components/Header.astro',
+                // Custom splash hero on the home page: a "code → proof" visual
+                // (builder snippet resolving into a real verdict) with the brand
+                // glyph kept as a small accent. Falls back to Starlight's default
+                // Hero on any other splash page.
+                Hero: './src/components/Hero.astro',
                 PageTitle: './src/components/PageTitle.astro',
                 Footer: './src/components/Footer.astro',
                 // Append the release-subscribe form under the right-hand TOC on every page.
@@ -258,7 +269,7 @@ export default defineConfig({
                         {
                             label: 'Durable Human-in-the-Loop',
                             link: 'guides/durable-hitl/',
-                            badge: { text: 'New ', variant: 'success' },
+                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Cost Optimization',
@@ -395,7 +406,7 @@ export default defineConfig({
                         {
                             label: "What's New",
                             link: 'guides/whats-new/',
-                            badge: { text: 'v0.15', variant: 'success' },
+                            badge: { text: 'v0.16', variant: 'success' },
                         },
                         { label: 'Contributing', link: 'guides/contributing/' },
                     ],

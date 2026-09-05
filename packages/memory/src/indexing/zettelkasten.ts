@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { MemoryId, ZettelLink, LinkType } from "../types.js";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
+import { toFts5Query } from "../fts5-query.js";
 
 // ─── Service Tag ───
 
@@ -138,14 +139,14 @@ export const ZettelkastenServiceLive = Layer.effect(
           )
           .pipe(Effect.asVoid),
 
-      // Text-based auto-linking via FTS5 search (or LIKE fallback)
+      // Text-based auto-linking via FTS5 search (or LIKE fallback). Query
+      // terms go through `toFts5Query` — an unquoted term containing an
+      // FTS5-special character (e.g. "Effect-TS") previously crashed the
+      // query ("no such column: TS"), silently swallowed by the caller's
+      // catchAll, so auto-linking quietly never ran on realistic content.
       autoLinkText: (memoryId, content, agentId, threshold = 0.85) =>
         Effect.gen(function* () {
-          const searchTerms = content
-            .split(/\s+/)
-            .filter((w) => w.length > 3)
-            .slice(0, 10)
-            .join(" OR ");
+          const searchTerms = toFts5Query(content);
 
           if (searchTerms.length === 0) return [];
 

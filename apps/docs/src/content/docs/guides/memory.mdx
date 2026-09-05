@@ -13,6 +13,23 @@ Reactive Agents provides a four-layer memory architecture inspired by cognitive 
 The four memory layers are available through two retrieval tiers you pick at build time: **`"standard"`** (FTS5 keyword search, with no embedding provider required) or **`"enhanced"`** (FTS5 + vector embeddings, requiring an embedding provider and `sqlite-vec`). Default is `"standard"`. Pick `"enhanced"` only if you need semantic similarity recall over old conversations or stored documents.
 </Aside>
 
+## Storage Location
+
+With no explicit `dbPath`, memory always resolves to the same location, regardless of which
+API enabled it (`.withMemory()`, `.withLearning()`, a `HarnessProfile`, or `createMemoryLayer()`
+directly) or which directory the process runs from:
+
+```
+~/.reactive-agents/memory/<agentId>/memory.db   # SQLite — source of truth
+~/.reactive-agents/memory/<agentId>/memory.md   # human-readable projection, regenerated on flush
+```
+
+This means a second process — a later run, or the `rax skills` CLI inspecting a stored
+agent — finds the same store no matter where it's launched from. Pass `dbPath` for a custom
+or project-local path (as most examples on this page do); `memory.md` always follows it,
+written next to whatever file `dbPath` points to. `NODE_ENV=test` / the `test` provider
+resolve to SQLite `:memory:` instead, so tests never write to disk.
+
 ## Memory Types
 
 ### Working Memory

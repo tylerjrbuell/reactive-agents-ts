@@ -60,6 +60,7 @@ import {
   buildFinalAnswerCandidate,
   finalizeOutput,
   buildSynthesisPrompt,
+  deScaffoldRawDeliverable,
   type FinalizedOutput,
 } from "./output-synthesis.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -610,6 +611,9 @@ export function runKernel(
           state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
         }
       }
+      // Matching 'after' hook — the 'before' fire above had none, leaving
+      // every bootstrap pairing in a trace permanently orphaned.
+      yield* Effect.promise(() => runPhaseHooks(harnessPipeline, 'after', 'bootstrap', 0, state));
     }
 
     // ── Durable HITL resume re-entry (Phase D) ───────────────────────────────
@@ -1497,16 +1501,43 @@ export function runKernel(
       );
       const finalized = yield* finalizeOutput(candidate, taskIntent, effectiveInput.task);
 
+      // `taskIntent.format` is a regex parse of the raw task string — it can't
+      // tell "write a markdown table to ./out.md" (deliverable = the FILE)
+      // apart from "give me a markdown table" (deliverable = the chat reply
+      // itself). The RunContract already makes that distinction explicitly
+      // (`deliverables: [{kind:"file", ...}]` from deriveDeliverablePaths, run-
+      // contract.ts:278) — a file deliverable means the real output already
+      // landed via a tool call, and the chat reply's job is just to confirm
+      // that, not restate the file's content in its format. Without this
+      // check, a plain "wrote it to ./crypto.md" confirmation gets forced
+      // through an LLM resynthesis pass trying to turn it into a markdown
+      // table (with no fetched data to draw one from), fails both format and
+      // content validation, and logs a scary-looking but harmless
+      // "[output-gate] Synthesis attempted but validation still failed"
+      // warning on a run that actually succeeded (confirmed live via
+      // rax-diagnose on scratch.ts's "fetch crypto prices ... write to
+      // ./crypto.md" task — file was written correctly, only the redundant
+      // chat-reply reformat failed).
+      const hasFileDeliverable = (state.meta.runContract?.deliverables ?? []).some(
+        (d) => d.kind === "file",
+      );
+      // Only the FORMAT trigger is scoped by hasFileDeliverable — the
+      // harness/oracle trigger stays independent. Those sources mean the
+      // model never produced real prose (raw tool JSON got assembled as the
+      // "answer"), which is worth cleaning up regardless of whether a file
+      // was also written; it's a readability fix, not a format-matching one.
+      const formatAppliesToReply = Boolean(taskIntent.format) && !hasFileDeliverable;
+
       // Determine if synthesis is needed:
-      // 1. Explicit format requested but validation failed
+      // 1. Explicit format requested (for the REPLY, not a file deliverable) but validation failed
       // 2. Harness/oracle source — raw tool artifacts need professional formatting
       const needsSynthesis = !finalized.formatValidated &&
-        (taskIntent.format || terminationSource === "harness" || terminationSource === "oracle");
+        (formatAppliesToReply || terminationSource === "harness" || terminationSource === "oracle");
 
       if (needsSynthesis) {
         const llmOpt = yield* Effect.serviceOption(LLMService);
         if (llmOpt._tag === "Some") {
-          const synthesisFormat = taskIntent.format ?? "prose";
+          const synthesisFormat = formatAppliesToReply ? taskIntent.format! : "prose";
           const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
           // H3 (2026-07-08, audit 05-E2): format/quality re-synthesis replaces
           // state.output wholesale — the deliverable render, not a side call.
@@ -1523,8 +1554,8 @@ export function runKernel(
           const synthContent = safeSynth.content;
 
           if (synthContent && synthContent.length > 0) {
-            const formatOk = taskIntent.format
-              ? validateOutputFormat(synthContent, taskIntent.format).valid
+            const formatOk = formatAppliesToReply
+              ? validateOutputFormat(synthContent, taskIntent.format!).valid
               : true;
             const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
 
@@ -1567,6 +1598,20 @@ export function runKernel(
               });
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             }
+          } else if (terminationSource === "harness" || terminationSource === "oracle") {
+            // LLM synthesis was attempted but returned empty content (weak
+            // local models fail this call in practice — see
+            // deScaffoldRawDeliverable's docstring). Shipping the raw
+            // harness_synthesis join verbatim means the user sees internal
+            // `✓ toolName: ` scaffolding as if it were the answer. Strip that
+            // scaffolding as a deterministic floor under the failed LLM call
+            // — honestly still unsynthesized (outputSynthesized stays false),
+            // but no longer visibly an internal artifact dump.
+            state = commitDeliverable(
+              state,
+              harnessSynthesisDeliverable([], undefined, deScaffoldRawDeliverable(state.output ?? "")),
+              { outputFormatValidated: false, outputFormatReason: finalized.validationReason },
+            );
           } else {
             state = transitionState(state, {
               meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
@@ -1577,8 +1622,13 @@ export function runKernel(
             meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
           });
         }
-      } else if (taskIntent.format) {
-        // Format was requested and validated successfully
+      } else if (taskIntent.format && !hasFileDeliverable) {
+        // Format was requested and validated successfully. Skipped for a
+        // file-deliverable task — hasFileDeliverable means the format
+        // constraint applies to the FILE (already written by a tool call),
+        // not the chat reply, so "no synthesis needed" here says nothing
+        // about whether the reply itself matches the format — it doesn't
+        // need to.
         state = transitionState(state, {
           meta: { ...state.meta, outputFormatValidated: true },
         });

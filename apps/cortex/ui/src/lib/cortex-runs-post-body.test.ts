@@ -160,3 +160,27 @@ describe("cortexRunsPostBody — budget + grounding (Phase C)", () => {
     expect(body.grounding?.mode).toBe("block");
   });
 });
+
+describe("cortexRunsPostBody — fabricationGuard + skills.activate", () => {
+  it("omits fabricationGuard when left at default", () => {
+    const body = cortexRunsPostBody("x", defaultConfig()) as { fabricationGuard?: unknown };
+    expect(body.fabricationGuard).toBeUndefined();
+  });
+  it("sends fabricationGuard as a bare mode string when overridden", () => {
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), fabricationGuard: { mode: "warn" } }) as { fabricationGuard?: string };
+    expect(body.fabricationGuard).toBe("warn");
+  });
+  it("sends skills.activate when set, omits when empty", () => {
+    const withActivate = cortexRunsPostBody("x", {
+      ...defaultConfig(),
+      skills: { paths: ["./skills"], activate: ["forced-skill"] },
+    }) as { skills?: { paths?: string[]; activate?: string[] } };
+    expect(withActivate.skills?.activate).toEqual(["forced-skill"]);
+
+    const withoutActivate = cortexRunsPostBody("x", {
+      ...defaultConfig(),
+      skills: { paths: ["./skills"] },
+    }) as { skills?: { paths?: string[]; activate?: string[] } };
+    expect(withoutActivate.skills?.activate).toBeUndefined();
+  });
+});

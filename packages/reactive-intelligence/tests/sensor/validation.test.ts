@@ -1,11 +1,16 @@
 import { describe, test, expect } from "bun:test";
-import { Effect } from "effect";
-import { EntropySensorService } from "@reactive-agents/core";
+import { Effect, Layer } from "effect";
+import { EntropySensorService, EventBusLive } from "@reactive-agents/core";
 import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 import { VALIDATION_DATASET } from "./validation-dataset.js";
 
 describe("validation dataset accuracy", () => {
-  const layer = createReactiveIntelligenceLayer();
+  // RI layer's calibration-update subscriber requires EventBus.
+  // calibrationDbPath: ":memory:" — CalibrationStore defaults to a REAL disk
+  // path (~/.reactive-agents/calibration.db); tests must never touch it.
+  const layer = createReactiveIntelligenceLayer({ calibrationDbPath: ":memory:" }).pipe(
+    Layer.provide(EventBusLive),
+  );
 
   /**
    * High-signal examples: well-structured reasoning with tool progress.

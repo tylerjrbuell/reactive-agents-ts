@@ -40,12 +40,6 @@ const makeEvents = (): TraceEvent[] => [
     rationale: { why: "no audit trail" },
   },
   {
-    kind: "alternatives-considered",
-    runId, iter: 2, seq: 5, timestamp: 2200,
-    chosen: "calculator",
-    alternatives: [{ option: "ask-human", rejectedBecause: "no human in loop" }],
-  },
-  {
     kind: "kernel-state-snapshot",
     runId, iter: 3, seq: 6, timestamp: 3000,
     status: "done",
@@ -101,13 +95,6 @@ describe("foldDebrief", () => {
     expect(d.curatorActions[0]?.targetRef).toBe("obs:scrape-1");
   });
 
-  it("captures alternatives", () => {
-    const d = foldDebrief(makeEvents(), runId);
-    expect(d.alternatives).toHaveLength(1);
-    expect(d.alternatives[0]?.chosen).toBe("calculator");
-    expect(d.alternatives[0]?.rejected[0]?.option).toBe("ask-human");
-  });
-
   it("captures termination with rationale", () => {
     const d = foldDebrief(makeEvents(), runId);
     expect(d.termination.by).toBe("quality_threshold");
@@ -130,7 +117,7 @@ describe("foldDebrief", () => {
 });
 
 describe("renderDebrief (markdown)", () => {
-  it("includes goal, path, why, assumptions, curator, alternatives, termination, verdict", () => {
+  it("includes goal, path, why, assumptions, curator, termination, verdict", () => {
     const d = foldDebrief(makeEvents(), runId);
     const md = renderDebrief(d, "markdown");
     expect(md).toContain(`Debrief: run ${runId}`);
@@ -144,8 +131,6 @@ describe("renderDebrief (markdown)", () => {
     expect(md).toContain("conf: 0.60");
     expect(md).toContain("Curator");
     expect(md).toContain("marked-untrusted obs:scrape-1");
-    expect(md).toContain("Alternatives considered");
-    expect(md).toContain("ask-human");
     expect(md).toContain("Termination: quality_threshold");
     expect(md).toContain("Verdict: success");
     expect(md).toContain("1500 tok");

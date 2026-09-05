@@ -249,25 +249,65 @@ describe("makeObservableLLM — ContextPressure on the complete() path (plan-exe
   }, 15000);
 });
 
+// Shared exchange-capture helper: builds the observable layer over a stub
+// LLMService carrying `cachedStreamEvents`, runs one stream() consumption, and
+// returns the single captured LLMExchangeEmitted. Both the pre-existing
+// cache-usage test and the new hash-stamping tests below use this — no
+// per-test layer-setup duplication.
+const captureExchange = async (opts: {
+  readonly systemPrompt: string;
+  readonly tools: readonly { readonly name: string }[];
+}) => {
+  const captured = await Effect.runPromise(
+    captureStreamWith(makeInnerLLM(cachedStreamEvents))({
+      messages: [{ role: "user", content: "say hi" } as any],
+      systemPrompt: opts.systemPrompt,
+      tools: opts.tools as any,
+      maxTokens: 64,
+      temperature: 0.1,
+      traceContext: { taskId: "run-CACHE", iteration: 2 },
+    } satisfies CompletionRequest),
+  );
+  expect(captured.length).toBe(1);
+  return captured[0]! as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
+};
+
 describe("makeObservableLLM — streamed prompt-cache stats", () => {
   it("surfaces cacheReadInputTokens/cacheCreationInputTokens from the usage StreamEvent into the emitted exchange", async () => {
-    const captured = await Effect.runPromise(
-      captureStreamWith(makeInnerLLM(cachedStreamEvents))({
-        messages: [{ role: "user", content: "say hi" } as any],
-        systemPrompt: "You are a test agent.",
-        maxTokens: 64,
-        temperature: 0.1,
-        traceContext: { taskId: "run-CACHE", iteration: 2 },
-      } satisfies CompletionRequest),
-    );
+    const ev = await captureExchange({
+      systemPrompt: "You are a test agent.",
+      tools: [],
+    });
 
-    expect(captured.length).toBe(1);
-    const ev = captured[0]! as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
     expect(ev.requestKind).toBe("stream");
     // The fix: the stream accumulator must copy the cache fields off the usage
     // event so emitForRequest can surface them. Before the fix these are dropped
     // and both assertions fail (undefined).
     expect(ev.response.cacheReadTokensIn).toBe(3215);
     expect(ev.response.cacheCreationTokensIn).toBe(1090);
+  }, 15000);
+});
+
+describe("makeObservableLLM — cache explainability hashes (W2)", () => {
+  it("stamps promptPrefixHash and toolSurfaceHash on the emitted exchange", async () => {
+    const exchange = await captureExchange({
+      systemPrompt: "you are a test agent",
+      tools: [{ name: "file-read" }, { name: "file-write" }],
+    });
+
+    expect(exchange.promptPrefixHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(exchange.toolSurfaceHash).toMatch(/^[0-9a-f]{16}$/);
+  }, 15000);
+
+  it("changes toolSurfaceHash when the wire tool order changes", async () => {
+    const a = await captureExchange({
+      systemPrompt: "s",
+      tools: [{ name: "file-read" }, { name: "file-write" }],
+    });
+    const b = await captureExchange({
+      systemPrompt: "s",
+      tools: [{ name: "file-write" }, { name: "file-read" }],
+    });
+    expect(a.toolSurfaceHash).not.toBe(b.toolSurfaceHash);
   }, 15000);
 });

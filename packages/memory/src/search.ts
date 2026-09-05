@@ -4,6 +4,7 @@ import type { SearchOptions, SemanticEntry, DailyLogEntry } from "./types.js";
 import type { MemoryId } from "./types.js";
 import { DatabaseError } from "./errors.js";
 import { safeJsonParse } from "./json-utils.js";
+import { toFts5Query } from "./fts5-query.js";
 
 // ─── Service Tag ───
 
@@ -43,6 +44,8 @@ export const MemorySearchServiceLive = Layer.effect(
       searchSemantic: (options) =>
         Effect.gen(function* () {
           const limit = options.limit ?? 10;
+          const ftsQuery = toFts5Query(options.query);
+          if (db.hasFTS5 && ftsQuery.length === 0) return [];
           const rows = yield* db.query<{
             id: string;
             agent_id: string;
@@ -71,7 +74,7 @@ export const MemorySearchServiceLive = Layer.effect(
                  ORDER BY created_at DESC
                  LIMIT ?`,
             db.hasFTS5
-              ? [options.query, options.agentId, limit]
+              ? [ftsQuery, options.agentId, limit]
               : [`%${options.query}%`, options.agentId, limit],
           );
 
@@ -93,6 +96,8 @@ export const MemorySearchServiceLive = Layer.effect(
       searchEpisodic: (options) =>
         Effect.gen(function* () {
           const limit = options.limit ?? 20;
+          const ftsQuery = toFts5Query(options.query);
+          if (db.hasFTS5 && ftsQuery.length === 0) return [];
           const rows = yield* db.query<{
             id: string;
             agent_id: string;
@@ -120,7 +125,7 @@ export const MemorySearchServiceLive = Layer.effect(
                  ORDER BY created_at DESC
                  LIMIT ?`,
             db.hasFTS5
-              ? [options.query, options.agentId, limit]
+              ? [ftsQuery, options.agentId, limit]
               : [`%${options.query}%`, options.agentId, limit],
           );
 
@@ -192,7 +197,13 @@ export const MemorySearchServiceLive = Layer.effect(
             verified: Boolean(r.verified),
             tags: safeJsonParse<string[]>(r.tags, []),
             embedding: r.embedding
-              ? Array.from(new Float32Array(r.embedding))
+              ? Array.from(
+                  new Float32Array(
+                    r.embedding instanceof ArrayBuffer
+                      ? r.embedding
+                      : ((r.embedding as unknown) as Uint8Array).buffer as ArrayBuffer,
+                  ),
+                )
               : undefined,
             createdAt: new Date(r.created_at),
             updatedAt: new Date(r.updated_at),

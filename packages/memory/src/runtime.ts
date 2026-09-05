@@ -10,7 +10,6 @@ import { PlanStoreServiceLive } from "./services/plan-store.js";
 import { MemoryServiceLive } from "./services/memory-service.js";
 import { AgentMemoryFromMemoryService } from "./services/agent-memory-adapter.js";
 import { MemoryDatabaseLive } from "./database.js";
-import { MemoryConsolidatorLive } from "./extraction/memory-consolidator.js";
 import { MemoryExtractorLive, MemoryExtractorTier2Live } from "./extraction/memory-extractor.js";
 import { CompactionServiceLive } from "./compaction/compaction-service.js";
 import type { MemoryConfig, MemoryLLM } from "./types.js";
@@ -60,11 +59,6 @@ export const createMemoryLayer = (
   // File system layer (no deps)
   const fsLayer = MemoryFileSystemLive;
 
-  // Consolidator layer (depends on DB)
-  const consolidatorLayer = MemoryConsolidatorLive(config).pipe(
-    Layer.provide(dbLayer),
-  );
-
   // Compaction layer (depends on DB)
   const compactionLayer = CompactionServiceLive.pipe(Layer.provide(dbLayer));
 
@@ -82,9 +76,12 @@ export const createMemoryLayer = (
   // implementation to the narrow `AgentMemory` Tag in @reactive-agents/core
   // that the kernel actually consumes. Provided here so any consumer of
   // `createMemoryLayer` automatically satisfies the kernel's port lookup —
-  // no extra wiring required for the standard happy path.
-  const agentMemoryAdapter = AgentMemoryFromMemoryService.pipe(
-    Layer.provide(memoryServiceLayer),
+  // no extra wiring required for the standard happy path. Also needs
+  // `coreServices` (ZettelkastenService + SemanticMemoryService +
+  // MemorySearchService) for the port's `getRelated`/`search` — the
+  // `relate` and `find(scope:"memory")` tools' data source.
+  const agentMemoryAdapter = AgentMemoryFromMemoryService(agentId).pipe(
+    Layer.provide(Layer.mergeAll(memoryServiceLayer, coreServices)),
   );
 
   return Layer.mergeAll(
@@ -94,7 +91,6 @@ export const createMemoryLayer = (
     fsLayer,
     memoryServiceLayer,
     agentMemoryAdapter,
-    consolidatorLayer,
     compactionLayer,
     extractorLayer,
   );

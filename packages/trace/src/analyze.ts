@@ -514,10 +514,9 @@ export interface RunAnalysis {
 /** Emitters verified to have zero call sites. Keep this list HONEST — a stale
  *  "dead" entry sends future agents chasing a wiring gap that no longer exists
  *  (emitCuratorDecision was wired at the projection boundary 2026-07-30; removed
- *  here in the same change). */
-const KNOWN_DEAD_EMITTERS = [
-  "emitAlternativesConsidered (0 callers — counterfactual signal blind)",
-];
+ *  here in the same change; emitAlternativesConsidered deleted outright
+ *  2026-09-04, D-2026-07-30-L — the signal was never wired anywhere). */
+const KNOWN_DEAD_EMITTERS: readonly string[] = [];
 
 export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis {
   const interventions = analyzeInterventions(trace, opts);

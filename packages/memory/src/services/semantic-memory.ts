@@ -66,7 +66,13 @@ export const SemanticMemoryServiceLive = Layer.effect(
       verified: Boolean(r.verified),
       tags: safeJsonParse<string[]>(r.tags as string | null, []),
       embedding: r.embedding
-        ? Array.from(new Float32Array(r.embedding as ArrayBuffer))
+        ? Array.from(
+            new Float32Array(
+              r.embedding instanceof ArrayBuffer
+                ? r.embedding
+                : (r.embedding as Uint8Array).buffer as ArrayBuffer,
+            ),
+          )
         : undefined,
       createdAt: new Date(r.created_at as string),
       updatedAt: new Date(r.updated_at as string),

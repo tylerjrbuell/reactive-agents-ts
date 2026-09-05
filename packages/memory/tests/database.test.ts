@@ -130,4 +130,78 @@ describe("MemoryDatabase", () => {
     // so the count may be > 1. We just check that at least 1 change was made.
     expect(changes).toBeGreaterThanOrEqual(1);
   });
+
+  // Regression: semantic_memory, episodic_log, session_snapshots,
+  // procedural_memory, and zettel_links had no indexes beyond their primary
+  // key — every agent_id-scoped lookup (bootstrap, flush, recall,
+  // consolidation decay/prune) full-table-scanned. Pin both that the
+  // indexes exist AND that SQLite's planner actually uses them for the
+  // real hot-path queries — an index that exists but isn't selected by the
+  // planner (wrong column order, etc.) would pass a naive existence check.
+  it("indexes agent_id-scoped lookups on all core memory tables", async () => {
+    const config = { ...defaultMemoryConfig("test-agent"), dbPath: TEST_DB };
+    const layer = MemoryDatabaseLive(config);
+
+    const { indexNames, plans } = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const db = yield* MemoryDatabase;
+
+          const indexRows = yield* db.query<{ name: string }>(
+            `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'`,
+          );
+
+          const planFor = (sql: string, params: readonly unknown[]) =>
+            db.query<{ detail: string }>(`EXPLAIN QUERY PLAN ${sql}`, params);
+
+          const plans = {
+            semantic: yield* planFor(
+              `SELECT * FROM semantic_memory WHERE agent_id = ? ORDER BY importance DESC`,
+              ["a"],
+            ),
+            episodic: yield* planFor(
+              `SELECT * FROM episodic_log WHERE agent_id = ? AND date = ?`,
+              ["a", "2026-01-01"],
+            ),
+            sessions: yield* planFor(
+              `SELECT * FROM session_snapshots WHERE agent_id = ? ORDER BY ended_at DESC LIMIT 1`,
+              ["a"],
+            ),
+            procedural: yield* planFor(
+              `SELECT * FROM procedural_memory WHERE agent_id = ?`,
+              ["a"],
+            ),
+            zettel: yield* planFor(
+              `SELECT * FROM zettel_links WHERE source_id = ? OR target_id = ?`,
+              ["x", "x"],
+            ),
+          };
+
+          return { indexNames: indexRows.map((r) => r.name), plans };
+        }).pipe(Effect.provide(layer)),
+      ),
+    );
+
+    for (const name of [
+      "idx_semantic_agent_importance",
+      "idx_episodic_agent_date",
+      "idx_snapshots_agent_ended",
+      "idx_procedural_agent",
+      "idx_zettel_target",
+    ]) {
+      expect(indexNames).toContain(name);
+    }
+
+    const usesNoScan = (rows: { detail: string }[]) =>
+      rows.some((r) => r.detail.includes("USING INDEX")) &&
+      !rows.some((r) => /\bSCAN\b/.test(r.detail) && !r.detail.includes("USING INDEX"));
+
+    expect(usesNoScan(plans.semantic)).toBe(true);
+    expect(usesNoScan(plans.episodic)).toBe(true);
+    expect(usesNoScan(plans.sessions)).toBe(true);
+    expect(usesNoScan(plans.procedural)).toBe(true);
+    // zettel_links: OR across source_id (PK) / target_id (new index) —
+    // SQLite plans this as MULTI-INDEX OR, not a single "USING INDEX" line.
+    expect(plans.zettel.some((r) => r.detail.includes("idx_zettel_target"))).toBe(true);
+  });
 });

@@ -5,7 +5,7 @@ import type { AgentStreamEvent } from "./types.js";
 
 export interface AgentStreamState {
   text: string;
-  events: AgentStreamEvent[];
+  events: readonly AgentStreamEvent[];
   status: "idle" | "streaming" | "completed" | "error";
   error: string | null;
   output: string | null;
@@ -54,7 +54,7 @@ export function createAgentStream(
   inner.subscribe((rs) => {
     store.set({
       text: rs.text,
-      events: rs.events as AgentStreamEvent[],
+      events: rs.events,
       status: toLegacy(rs.status),
       error: rs.error ?? null,
       output: rs.output ?? null,

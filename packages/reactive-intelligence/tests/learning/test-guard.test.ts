@@ -5,7 +5,7 @@ import type { RunCompletedData } from "../../src/learning/learning-engine.js";
 import type { CalibrationStore } from "../../src/calibration/calibration-store.js";
 import type { BanditStore } from "../../src/learning/bandit-store.js";
 
-const mockCalibrationStore = new (await import("../../src/calibration/calibration-store.js")).CalibrationStore();
+const mockCalibrationStore = new (await import("../../src/calibration/calibration-store.js")).CalibrationStore(":memory:");
 const mockBanditStore = new (await import("../../src/learning/bandit-store.js")).BanditStore();
 
 const makeData = (overrides: Partial<RunCompletedData> = {}): RunCompletedData => ({

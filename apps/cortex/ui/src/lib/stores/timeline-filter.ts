@@ -29,7 +29,7 @@ export interface TimelineRow {
 const CONTROL_KINDS = new Set([
   "strategy-switched", "verifier-verdict", "guard-fired", "reactive-decision",
   "decision-evaluated", "intervention-dispatched", "intervention-suppressed",
-  "curator-decision", "alternatives-considered", "harness-signal-injected",
+  "curator-decision", "harness-signal-injected",
 ]);
 
 const AUX_SYSTEM_PROMPT_MARKERS = ["tool classifier", "classify", "respond with only valid json"];

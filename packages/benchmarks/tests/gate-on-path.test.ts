@@ -38,6 +38,9 @@ const cell = (
     meanScores: [{ dimension: "accuracy", score: accuracy }],
     variance: 0,
     meanTokens,
+    // No-caching case (2026-08-24 amendment): billed === raw.
+    meanBilledTokens: meanTokens,
+    meanCacheReadTokens: 0,
     meanDurationMs: 10,
     passRate: accuracy,
   }) as TaskVariantReport;

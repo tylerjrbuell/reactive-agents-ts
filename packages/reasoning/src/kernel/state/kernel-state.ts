@@ -6,7 +6,7 @@
  * function. The state is immutable — each iteration produces a new state via
  * `transitionState()`. Serialization helpers support persistence and debugging.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
 import type { RunLedger, LedgerEntry } from "../ledger/run-ledger.js";
 import { projectStepsToLedger } from "../ledger/step-projection.js";
@@ -36,7 +36,8 @@ export const asKernelStateLike = (s: Readonly<KernelState>): Readonly<KernelStat
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
-export type KernelStatus = "thinking" | "acting" | "observing" | "done" | "failed" | "evaluating";
+import type { KernelStatus } from "./kernel-status.js";
+export type { KernelStatus } from "./kernel-status.js";
 
 // ── SkillsContext — pre-rendered skill XML for system-prompt injection ────────
 
@@ -47,11 +48,8 @@ export interface SkillsContext {
 
 // ── KernelMessage — Provider-agnostic conversation message ───────────────────
 
-/** Provider-agnostic conversation message for the kernel's native FC conversation history. */
-export type KernelMessage =
-  | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCallSpec[] }
-  | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly isError?: boolean; readonly storedKey?: string }
-  | { readonly role: "user"; readonly content: string };
+import type { KernelMessage } from "./kernel-message.js";
+export type { KernelMessage } from "./kernel-message.js";
 
 // ── PendingGuidance — harness signals for the next think turn ────────────────
 
@@ -643,15 +641,8 @@ export interface KernelState {
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
 
-/** Opt-in numeric evidence-grounding. Presence on KernelInput = enabled. */
-export interface GroundingConfig {
-  /** block: suppress + corrective retry → degrade to warn. warn: advisory only. */
-  readonly mode: "block" | "warn";
-  /** Numeric match tolerance as a fraction (rounding). Default 0.01 (1%). */
-  readonly tolerance?: number;
-  /** block mode: corrective retries before degrading to warn. Default 1. */
-  readonly maxRetries?: number;
-}
+import type { GroundingConfig } from "./grounding-config.js";
+export type { GroundingConfig } from "./grounding-config.js";
 
 /**
  * Stall / no-progress policy — bounds wasted iterations when the model ignores
@@ -698,6 +689,16 @@ export interface KernelInput {
   /** Full unfiltered tool schemas — used by completion guard to detect all MCP namespaces */
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly priorContext?: string;
+  /**
+   * Named sub-goals not yet complete, recited each iteration alongside the
+   * task goal (D-2026-07-28-C). The only typed producer today is
+   * plan-execute's `Plan.steps` (pending + in_progress titles) — reactive/ToT/
+   * reflexion track progress as tool-name coverage, not named sub-goals, so
+   * they have nothing to populate this from. Rendered by `volatileTailStage`
+   * into the message tail (`Remaining steps: …`), same recitation pattern as
+   * `priorContext`, so it carries no F10 cache-churn risk.
+   */
+  readonly remainingGoals?: readonly string[];
   readonly contextProfile?: Partial<ContextProfile>;
   readonly resultCompression?: ResultCompressionConfig;
   readonly temperature?: number;
@@ -795,6 +796,12 @@ export interface KernelInput {
    * debrief gracefully lacks the why.
    */
   readonly auditRationale?: boolean;
+  /**
+   * Resolved harness mechanism config for this pass (W3). Folded in from the
+   * RunEnvelope by `runKernel`; an explicit value here wins, so a sub-kernel
+   * can be handed a narrower harness than the run's.
+   */
+  readonly harness?: import("../../harness-config.js").ResolvedHarness;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
@@ -983,8 +990,6 @@ export interface KernelInput {
 
 // ── Narrow service types ─────────────────────────────────────────────────────
 
-export type MaybeService<T> = { _tag: "Some"; value: T } | { _tag: "None" };
-
 /** Minimal ToolService surface used by kernel calls (execute + getTool) */
 export type ToolServiceInstance = {
   readonly execute: (input: {
@@ -1090,13 +1095,13 @@ export interface KernelContext {
   readonly input: KernelInput;
   readonly profile: ContextProfile;
   readonly compression: ResultCompressionConfig;
-  readonly toolService: MaybeService<ToolServiceInstance>;
+  readonly toolService: Option.Option<ToolServiceInstance>;
   readonly hooks: KernelHooks;
   /** Driver selected from calibration toolCallDialect ("native-fc" → NativeFCDriver, else TextParseDriver). */
   readonly toolCallingDriver: ToolCallingDriver;
   /** Memory service for semantic storage of successful tool results. None when
    *  the memory layer is not registered. Store calls are forked (non-blocking). */
-  readonly memoryService: MaybeService<MemoryServiceInstance>;
+  readonly memoryService: Option.Option<MemoryServiceInstance>;
 }
 
 // ── ThoughtKernel — The core computation type ────────────────────────────────
@@ -1293,80 +1298,6 @@ export function transitionState(
     return { ...next, output: null };
   }
   return next;
-}
-
-// ── Serialization ────────────────────────────────────────────────────────────
-
-/** JSON-safe representation of KernelState (Set → array, Map → object) */
-export interface SerializedKernelState
-  extends Omit<KernelState, "toolsUsed" | "scratchpad" | "steps" | "messages"> {
-  readonly toolsUsed: readonly string[];
-  readonly scratchpad: Readonly<Record<string, string>>;
-  readonly steps: readonly ReasoningStep[];
-  readonly messages: readonly KernelMessage[];
-  readonly controllerDecisionLog: readonly string[];
-}
-
-/**
- * Convert KernelState to a JSON-serializable form.
- * ReadonlySet → sorted array, ReadonlyMap → plain object.
- */
-export function serializeKernelState(state: KernelState): SerializedKernelState {
-  return {
-    taskId: state.taskId,
-    strategy: state.strategy,
-    kernelType: state.kernelType,
-    steps: state.steps,
-    ledger: state.ledger,
-    messages: state.messages,
-    toolsUsed: [...state.toolsUsed].sort(),
-    scratchpad: Object.fromEntries(state.scratchpad),
-    iteration: state.iteration,
-    tokens: state.tokens,
-    inputTokens: state.inputTokens,
-    outputTokens: state.outputTokens,
-    cost: state.cost,
-    status: state.status,
-    output: state.output,
-    error: state.error,
-    llmCalls: state.llmCalls,
-    priorThought: state.priorThought,
-    meta: state.meta,
-    controllerDecisionLog: state.controllerDecisionLog,
-    pendingGuidance: state.pendingGuidance,
-    consecutiveLowDeltaCount: state.consecutiveLowDeltaCount,
-  };
-}
-
-/**
- * Reconstruct KernelState from its serialized form.
- * Array → Set, object → Map.
- */
-export function deserializeKernelState(raw: SerializedKernelState): KernelState {
-  return {
-    taskId: raw.taskId,
-    strategy: raw.strategy,
-    kernelType: raw.kernelType,
-    steps: raw.steps,
-    ledger: raw.ledger,
-    messages: raw.messages,
-    toolsUsed: new Set(raw.toolsUsed),
-    scratchpad: new Map(Object.entries(raw.scratchpad)),
-    iteration: raw.iteration,
-    tokens: raw.tokens,
-    inputTokens: raw.inputTokens,
-    outputTokens: raw.outputTokens,
-    cost: raw.cost,
-    status: raw.status,
-    output: raw.output,
-    error: raw.error,
-    llmCalls: raw.llmCalls,
-    priorThought: raw.priorThought,
-    meta: raw.meta,
-    controllerDecisionLog: (raw.controllerDecisionLog as string[]) ?? [],
-    pendingGuidance: raw.pendingGuidance,
-    consecutiveLowDeltaCount: raw.consecutiveLowDeltaCount,
-  };
 }
 
 // ── Noop hooks ───────────────────────────────────────────────────────────────

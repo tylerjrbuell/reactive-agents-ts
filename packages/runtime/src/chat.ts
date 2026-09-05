@@ -3,6 +3,11 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentDebrief } from "./debrief.js";
+import {
+  applyHistoryWindowWithOverflow,
+  type HistoryOverflowHandler,
+} from "./gateway-context-formatting.js";
+export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -40,6 +45,39 @@ export interface ChatReply {
   steps?: number;
   /** Estimated cost in USD (when available) */
   cost?: number;
+  /**
+   * Full reasoning-step evidence (tool-capable path only). Structurally
+   * typed to mirror `@reactive-agents/reasoning`'s `ReasoningStep` without a
+   * cross-package import (same pattern as `TaskResult.metadata.reasoningSteps`
+   * in runtime/src/types.ts). Pass this to `validateCitations(message, steps)`
+   * (from `@reactive-agents/reasoning`) to deterministically check that every
+   * URL the reply cites appears in the run's actual tool-observation evidence.
+   */
+  reasoningSteps?: readonly {
+    id?: string;
+    type: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+  }[];
+  /**
+   * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+   * Pass this to `validateCitations(message, steps, new Map(Object.entries(scratchpad)))`
+   * so it reads the same evidence corpus the kernel's own grounding checks use, not the
+   * lossy compressed preview in `reasoningSteps[].content`.
+   */
+  scratchpad?: Readonly<Record<string, string>>;
+  /**
+   * Result of `validateCitations()` against tool-observation evidence — only
+   * populated when `ChatOptions.verifyCitations` is true AND the reply was
+   * produced on the tool-capable path (there is no tool evidence to check
+   * citations against on the direct-LLM path, so the field is omitted there
+   * rather than reporting a false `ok: true`).
+   */
+  citationCheck?: {
+    ok: boolean;
+    uncitedUrls: readonly string[];
+    citedUrlCount: number;
+  };
 }
 
 /**
@@ -49,12 +87,26 @@ export interface ChatReply {
  * the message content. Use these options to force a specific path.
  */
 export interface ChatOptions {
-  /** Override automatic tool-need detection. Default: auto-detected via heuristic */
+  /**
+   * Override automatic tool-need detection for this call.
+   *
+   * Precedence: this explicit `useTools` > the agent-level classifier set via
+   * `.withToolIntent()` on the builder (if any) > the default `requiresTools()`
+   * heuristic. Default: auto-detected via heuristic.
+   */
   useTools?: boolean;
   /** Maximum iterations for the tool-capable path. Default: 5 */
   maxIterations?: number;
   /** Optional context prepended to the system context summary (direct-LLM path only). */
   extraContext?: string;
+  /**
+   * Deterministically verify that every URL the reply cites appears in the
+   * run's tool-observation evidence (via `validateCitations` from
+   * `@reactive-agents/reasoning`). Tool-capable path only — no-op on the
+   * direct-LLM path since there is no tool evidence to check against.
+   * Default: false (no cost unless opted in).
+   */
+  verifyCitations?: boolean;
 }
 
 /**
@@ -294,6 +346,7 @@ export class AgentSession {
     private readonly onSave?: (history: ChatMessage[]) => Promise<void>,
     initialHistory?: ChatMessage[],
     historyLoader?: () => Promise<ChatMessage[]>,
+    private readonly onOverflow?: HistoryOverflowHandler,
   ) {
     if (initialHistory) this._history = [...initialHistory];
     if (historyLoader) this._historyLoader = historyLoader;
@@ -304,7 +357,15 @@ export class AgentSession {
       this._history = await this._historyLoader();
       this._historyLoaded = true;
     }
-    const reply = await this.chatFn(message, this._history, options);
+    // Full history always accumulates unbounded (preserved for persistence —
+    // see applyHistoryWindow's doc comment). Only the copy handed to chatFn is
+    // windowed, and only folds dropped turns into a summary turn when the
+    // caller opted in via `onOverflow` (session({ onOverflow }))  — unset,
+    // this is byte-for-byte the same raw `this._history` passed before.
+    const historyForChat = this.onOverflow
+      ? await applyHistoryWindowWithOverflow(this._history, this.onOverflow)
+      : this._history;
+    const reply = await this.chatFn(message, historyForChat, options);
     this._history.push({ role: "user", content: message, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     if (this.onSave) await this.onSave(this._history);

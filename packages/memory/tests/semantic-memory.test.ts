@@ -147,4 +147,26 @@ describe("SemanticMemoryService", () => {
     expect(md).toContain("# Agent Memory");
     expect(md).toContain("test-agent");
   });
+
+  it("round-trips an embedding through SQLite without corruption", async () => {
+    // Regression: bun:sqlite returns BLOB columns as Uint8Array, not
+    // ArrayBuffer. `new Float32Array(uint8array)` doesn't reinterpret the
+    // bytes — it treats the Uint8Array as an array-like of numbers, so a
+    // 3-float vector silently came back as 12 garbage values. Store an
+    // embedding whose vector length wouldn't survive that bug undetected.
+    const embedding = [0.125, -0.5, 1.5, 3.25, -2.75];
+    const result = await run(
+      Effect.gen(function* () {
+        const svc = yield* SemanticMemoryService;
+        yield* svc.store({ ...makeEntry("sem-emb", "vector content"), embedding });
+        return yield* svc.get("sem-emb" as MemoryId);
+      }),
+    );
+
+    expect(result.embedding).toBeDefined();
+    expect(result.embedding).toHaveLength(embedding.length);
+    for (let i = 0; i < embedding.length; i++) {
+      expect(result.embedding![i]).toBeCloseTo(embedding[i]!, 5);
+    }
+  });
 });

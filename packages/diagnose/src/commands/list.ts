@@ -1,18 +1,19 @@
 // `rax diagnose list` — show recent traces in the default trace dir.
 
-import { listTraces, DEFAULT_TRACE_DIR } from "../lib/resolve.js";
+import { listTraces, candidateTraceDirs } from "../lib/resolve.js";
 import { bold, dim, fmtBytes, gray } from "../lib/format.js";
 
 export async function listCommand(opts: { limit?: number } = {}): Promise<void> {
-  const files = await listTraces();
+  const dirs = candidateTraceDirs();
+  const files = await listTraces(dirs);
   if (files.length === 0) {
-    console.log(`No traces found in ${DEFAULT_TRACE_DIR}`);
+    console.log(`No traces found in: ${dirs.join(", ")}`);
     console.log(dim("Run an agent to generate one (tracing is on by default in Sprint 3.6+)."));
     return;
   }
   const limit = opts.limit ?? 20;
   console.log("");
-  console.log(bold(`Recent traces in ${DEFAULT_TRACE_DIR}`));
+  console.log(bold(`Recent traces in ${dirs.join(", ")}`));
   console.log("");
   for (const f of files.slice(0, limit)) {
     const age = humanAge(f.mtime);

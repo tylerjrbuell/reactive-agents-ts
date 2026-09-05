@@ -70,7 +70,6 @@ export type {
   KernelStatePatch,
 } from "./controller/intervention.js";
 export { defaultInterventionConfig } from "./controller/intervention.js";
-export { applyPatches } from "./controller/patch-applier.js";
 export { defaultInterventionRegistry } from "./controller/handlers/index.js";
 export { earlyStopHandler } from "./controller/handlers/early-stop.js";
 
@@ -88,6 +87,13 @@ export { selectArm, updateArm } from "./learning/bandit.js";
 export { shouldSynthesizeSkill, extractSkillFragment, skillFragmentToProceduralEntry, skillFragmentToSkillRecord } from "./learning/skill-synthesis.js";
 export { LearningEngineService, LearningEngineServiceLive } from "./learning/learning-engine.js";
 export type { RunCompletedData, LearningResult } from "./learning/learning-engine.js";
+export {
+  StrategySelectorService,
+  StrategySelectorServiceLive,
+  deriveContextBucket,
+  DEFAULT_BANDIT_ARM_IDS,
+} from "./learning/strategy-selector.js";
+export type { StrategySelectionContext } from "./learning/strategy-selector.js";
 
 // ── Event Subscriber ──
 export { subscribeEntropyScoring } from "./sensor/entropy-event-subscriber.js";

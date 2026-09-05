@@ -16,6 +16,68 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.16.0 — Harness control & memory reliability (September 2026)
+
+<Aside type="note" title="No breaking changes">
+v0.16 is additive: a new builder method, new chat/session controls, new tools, and a broad correctness/accuracy sweep. No builder-surface removals, no migration needed.
+</Aside>
+
+### Harness Control Surface — `.withHarness({...})`
+
+A typed, per-agent config for the harness's internal mechanisms: tool disclosure, tool discovery, tool index, verbose rules, context budgets, and more. Precedence is config over `RA_*` env vars over the default, and the resolved config is inherited by sub-agents. `ContextProfile.toolDisclosureMode` is now wired through to this resolved config, so a tier's disclosure preset (e.g. local tiers defaulting to index mode) actually changes tool-visibility behavior instead of being computed and discarded. See [Harness Control Surface](/features/harness-control/).
+
+### Chat & session controls
+
+- **`.withToolIntent()`** — agent-level tool-routing override for `chat()`.
+- **`verifyCitations`** — a new `ChatOptions` field that checks cited claims against tool observations.
+- **`onOverflow`** — a history-overflow-summarize hook on `agent.session()`, so a long multi-turn conversation summarizes older turns instead of silently dropping them.
+
+See [Chat & Sessions](/cookbook/chat-and-sessions/).
+
+### Lightweight tool index (opt-in)
+
+For large tool catalogs, a compact listed-only view of available tools, controlled via `ContextProfile.toolDisclosureMode` and `RA_TOOL_INDEX_MAX_ENTRIES`. Off by default. Building it surfaced two real bugs, both fixed: index-listed tools are now actually callable through function-calling (previously listed but not promoted into the callable set), and the discover-tools catalog dump no longer gets silently truncated and re-paraphrased by the model.
+
+### New tools
+
+- **`grep` builtin** — opt-in, alongside the existing task-tool set.
+- **`defineToolset`** — named toolset alias shortcuts for grouping related tools under one flag.
+- **`relate`** — a memory-graph tool for the agent to record and query relationships between memory entries; `find` now returns real memory-entry ids instead of synthetic ones.
+- **Tool-authoring toolkit** — `fetchJsonTool`, `boundedMap`, `searchThenFetch`/`resolveThenRetrieve`, `withToolObservability`/`withToolRetry`, and `testTool`/`mockFetchOnce` for building and testing custom tools. `defineTool` now accepts an output schema, validated at runtime.
+
+### Reasoning: Plan-Execute recites remaining sub-goals
+
+Plan-Execute's composite steps now pass the titles of other pending/in-progress plan steps to their sub-kernel as `remainingGoals`, rendered as a "Remaining steps: ..." recitation in the message tail. This closes a gap where that recitation path existed but had no producer feeding it. Opt-in by construction — absent or empty, behavior is unchanged.
+
+### Cost and tracing accuracy
+
+`LLMRequestCompleted` never had a producer, silently starving nine downstream consumers (OTel LLM spans, cost accounting, cache-hit reporting) — now fixed. `cacheReadInputTokens` is now surfaced in Gemini, OpenAI, and LiteLLM usage (previously Anthropic-only), Anthropic caching switched to automatic mode, and Haiku's documented prompt-cache minimum was corrected (2048 → 4096 tokens).
+
+### Kernel lifecycle-hook and prompt-cache fixes
+
+A hook-firing audit found three gaps, now fixed: the kernel's `bootstrap`-`after` hook never fired, `think` hooks incorrectly fired on tool-execution passes, and the kernel's own `observe` hook was missing entirely. Harness guidance text (required-tool reminders, nudges, hints) moved out of the system prompt and into the message tail, restoring the Anthropic prompt-cache breakpoint that guidance text was invalidating on every iteration.
+
+### Answer-quality and behavioral-contract fixes
+
+The fabrication guard now catches invented named entities, not just fabricated numbers. A raw tool-scaffolded dump no longer ships as the answer when output-gate synthesis fails, a no-tool-needed conversational reply is now auto-promoted instead of forced through tool-output framing, and the output gate no longer forces file-shaped formatting onto plain chat replies. `.withContract()` behavioral-contract enforcement, previously silently dead on the kernel execution path, is now wired.
+
+### Reactive intelligence
+
+The Thompson Sampling bandit is now wired into the strategy-selector seam (opt-in, off by default), and the calibration-drift and calibration feedback loops — both previously fully dead — are fixed. `NoticesManager` adds a notice-suppression mechanism (`REACTIVE_AGENTS_SUPPRESS_NOTICES`) for quieting repeated one-time warnings.
+
+### Fixes
+
+- Memory and runtime now agree on the default `dbPath`, fixing embedding/content/consolidation corruption caused by the mismatch. Memory writes are now screened for injection and PII before persisting, matching the guardrails already applied to LLM input.
+- Plan-execute's ledger now records the healed (post-repair) tool-call arguments instead of the pre-heal ones, so the ledger matches the trace it's compared against during replay.
+- `isTraceEvent` now validates required fields per event kind instead of a single shared shape, and `rax diagnose` now searches both known trace directories instead of only one.
+- `codeExecuteHandler` now accepts `config.sandbox` like its sibling handlers; the `http-get` tool and A2A egress guards get a consistent factory-shaped config surface.
+- MCP client connection state is now isolated per-instance instead of per-process, preventing cross-contamination across multiple MCP clients in the same process.
+- Cortex: fixed a skill-evolution crash, and synced skill activation state with the fabrication guard.
+- The dead `alternatives-considered` trace event and nine unused `AgentEvent` tags (zero live emitters) were removed end to end; `BudgetExhausted` — which does have real consumers — is now actually published when a budget killswitch aborts a run.
+- React, Vue, and Svelte now dedupe their `AgentStreamEvent` type onto `ui-core`'s canonical `UiStreamEvent`, removing three divergent copies of the same wire-event shape.
+
+---
+
 ## v0.15.0 — Hardening pass (August 2026)
 
 <Aside type="note" title="No breaking changes">

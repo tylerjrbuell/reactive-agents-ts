@@ -9,10 +9,10 @@
  * uses these hooks instead of publishing events directly. This prevents double-counting
  * in MetricsCollector and ensures consistent event shapes across all strategies.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import type { AgentEvent, LedgerEntryAppendedEvent } from "@reactive-agents/core";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
-import type { KernelHooks, KernelState, EventBusInstance, MaybeService } from "./kernel-state.js";
+import type { KernelHooks, KernelState, EventBusInstance } from "./kernel-state.js";
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
 import { ledgerEntriesForEvent, type LedgerEntry } from "../ledger/run-ledger.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
@@ -57,7 +57,7 @@ function getKernelPass(state: KernelState): string {
  * Each hook publishes the appropriate event(s) via `publishReasoningStep`, which
  * handles the None case internally and swallows publish errors.
  */
-export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>, agentId?: string): KernelHooks {
+export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agentId?: string): KernelHooks {
   return {
     onThought: (state: KernelState, thought: string, prompt?: { system: string; user: string; messages?: readonly { readonly role: string; readonly content: string }[]; rawResponse?: string }): Effect.Effect<void, never> =>
       Effect.gen(function* () {
@@ -246,8 +246,10 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>, agent
       taskId: string,
       agentId: string,
     ): Effect.Effect<void, never> =>
-      eventBus._tag === "Some"
-        ? eventBus.value
+      Option.match(eventBus, {
+        onNone: () => Effect.void,
+        onSome: (bus) =>
+          bus
             .publish({
               _tag: "ContextSynthesized",
               taskId,
@@ -268,8 +270,8 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>, agent
                 lastErrors: synthesized.signalsSnapshot.lastErrors,
               },
             } as AgentEvent)
-            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/state/kernel-hooks.ts:197", tag: errorTag(err) })))
-        : Effect.void,
+            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/state/kernel-hooks.ts:197", tag: errorTag(err) }))),
+      }),
 
     onLedgerAppend: (
       state: KernelState,

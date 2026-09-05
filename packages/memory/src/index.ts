@@ -125,10 +125,6 @@ export {
   MemoryExtractorLive,
   MemoryExtractorTier2Live,
 } from "./extraction/memory-extractor.js";
-export {
-  MemoryConsolidator,
-  MemoryConsolidatorLive,
-} from "./extraction/memory-consolidator.js";
 
 // ─── Indexing ───
 export {

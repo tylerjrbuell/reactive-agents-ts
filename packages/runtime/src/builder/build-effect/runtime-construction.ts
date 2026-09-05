@@ -78,6 +78,40 @@ export function resolveCalibrationSetting(
 }
 
 /**
+ * Test-environment isolation for `CalibrationStore` — mirrors the
+ * `memoryOptions.dbPath` auto-resolution below in
+ * {@link buildBaseRuntimeAndEngine}. `CalibrationStore` (unlike
+ * `BanditStore`, which already defaults to `:memory:`) defaults to a REAL
+ * disk path (`~/.reactive-agents/calibration.db`). Left unguarded, any test
+ * that completes a task with entropy scoring on (the default) writes real
+ * rows into the user's live, potentially months-old calibration cache, keyed
+ * by whatever `defaultModel` string the test used — and since
+ * `EntropySensorService.updateCalibration` accumulates onto whatever scores
+ * already exist for that modelId, a test that happens to reuse a real model
+ * id can silently corrupt real historical calibration data. (Confirmed via
+ * a real incident 2026-08-24: a single `bun test` run injected rows for
+ * "test"/"test-model"/"sentinel-model"/"unknown" and appended synthetic
+ * scores onto at least one real, months-old model's row.)
+ *
+ * @param options - The value passed to `.withReactiveIntelligence()`, or `undefined` if never called.
+ * @param enableReactiveIntelligence - The resolved `_enableReactiveIntelligence` flag (default `true`).
+ * @param provider - The resolved `_provider` field.
+ * @param nodeEnv - `process.env.NODE_ENV`, injected for testability.
+ * @returns The options to forward to the runtime, with `calibrationDbPath` pinned to `:memory:` under test conditions unless the caller set one explicitly.
+ */
+export function resolveReactiveIntelligenceOptions(
+  options: Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> | undefined,
+  enableReactiveIntelligence: boolean,
+  provider: ProviderName,
+  nodeEnv: string | undefined,
+): Partial<import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig> | undefined {
+  if (!enableReactiveIntelligence) return options;
+  if (options?.calibrationDbPath) return options;
+  if (provider !== "test" && nodeEnv !== "test") return options;
+  return { ...(options ?? {}), calibrationDbPath: ":memory:" };
+}
+
+/**
  * Structural view over the builder state fields read by
  * {@link buildBaseRuntimeAndEngine}. The `ReactiveAgentBuilder` class
  * structurally satisfies this interface — call sites cast via
@@ -115,8 +149,8 @@ export interface BuilderRuntimeStateView {
   readonly _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
   readonly _enableSelfImprovement: boolean;
   readonly _testScenario?: TestTurn[];
-  readonly _extraLayers?: Layer.Layer<any, any, any>;
-  readonly _llmOverrideLayer?: Layer.Layer<any, any, any>;
+  readonly _extraLayers?: Layer.Layer<never, unknown, unknown>;
+  readonly _llmOverrideLayer?: Layer.Layer<LLMService>;
   readonly _environmentContext?: Record<string, string>;
   readonly _mcpServers: MCPServerConfig[];
   readonly _reasoningOptions?: ReasoningOptions;
@@ -335,6 +369,8 @@ export const buildBaseRuntimeAndEngine = (
         find: mt.find,
         pulse: mt.pulse,
         recall: mt.recall,
+        recallConfig: mt.recallConfig,
+        relate: mt.relate,
         todo: mt.todo,
         // Overhaul A/B (branch overhaul/agentic-core): register write_result_to_file
         // when RA_OVERHAUL=1 so the model can materialize a deliverable by reference
@@ -362,7 +398,20 @@ export const buildBaseRuntimeAndEngine = (
       kernelMetaTools = { userInteraction: true };
     }
 
-    const composedExtraLayers = state._extraLayers;
+    // Widening boundary: `_extraLayers` is `Layer.Layer<never, unknown, unknown>`
+    // on the public builder seam (builder.ts `withLayers()`) — `never` is the
+    // maximally-permissive success-channel type given `Layer`'s `in ROut`
+    // (contravariant) variance, deliberately chosen over `any`/`unknown` so
+    // the public signature still requires a real `Layer`. `RuntimeOptions
+    // .extraLayers` (runtime-types.ts) is `Layer.Layer<any, any, any>` —
+    // pre-existing debt in `createRuntime`'s own option surface, out of scope
+    // here — and TypeScript's variance-annotated generic comparison does not
+    // let `any` silently absorb a `never` ROut at that position, so one
+    // explicit widening is required to bridge the two. This is the ONE place
+    // that widening happens for `_extraLayers`.
+    const composedExtraLayers = state._extraLayers as
+      | Layer.Layer<any, any, any>
+      | undefined;
     const llmOverrideLayer = state._llmOverrideLayer;
     /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
     let cortexReporterLayer: Layer.Layer<unknown> | null = null;
@@ -415,9 +464,10 @@ export const buildBaseRuntimeAndEngine = (
       enableSelfImprovement: state._enableSelfImprovement,
       testScenario: state._testScenario,
       extraLayers: composedExtraLayers,
-      // Erasure cast: the builder field is Layer<any,any,any> (public seam);
-      // the option contract is a fully-resolved LLMService layer.
-      llmOverrideLayer: llmOverrideLayer as Layer.Layer<LLMService> | undefined,
+      // No cast needed: `_llmOverrideLayer` is typed `Layer.Layer<LLMService>`
+      // on the public builder seam (builder.ts `withReplayLLM`), matching
+      // `RuntimeOptions.llmOverrideLayer` exactly.
+      llmOverrideLayer,
       systemPrompt: composedSystemPrompt,
       environmentContext: state._environmentContext,
       mcpServers:
@@ -435,7 +485,7 @@ export const buildBaseRuntimeAndEngine = (
       // off in a bare builder, so this means the user opted in via
       // `.withMemory()` / `.withLearning()` / a HarnessProfile without
       // passing `{ dbPath }`) resolve a stable
-      // user-scope db path (`~/.reactive-agents/<agentId>/memory.db`).
+      // user-scope db path (`~/.reactive-agents/memory/<agentId>/memory.db`).
       // Explicit `.withMemory({ dbPath: ... })` consumers keep their
       // configured path; explicit-disable paths bypass this entirely.
       //
@@ -445,7 +495,7 @@ export const buildBaseRuntimeAndEngine = (
       // OS-scope path. Catches both the TestLLMServiceLayer convention
       // AND builder-contracts tests that use `.withProvider("anthropic")`
       // for shape-only validation without real LLM calls. Avoids
-      // accumulating `~/.reactive-agents/<agentId>/memory.db` files on
+      // accumulating `~/.reactive-agents/memory/<agentId>/memory.db` files on
       // dev machines + CI runners; tests still exercise the full memory
       // stack but discard state on process exit.
       memoryOptions:
@@ -512,7 +562,12 @@ export const buildBaseRuntimeAndEngine = (
       outputValidatorOptions: state._outputValidatorOptions,
       customTermination: state._customTermination,
       enableReactiveIntelligence: state._enableReactiveIntelligence,
-      reactiveIntelligenceOptions: state._reactiveIntelligenceOptions,
+      reactiveIntelligenceOptions: resolveReactiveIntelligenceOptions(
+        state._reactiveIntelligenceOptions,
+        state._enableReactiveIntelligence,
+        state._provider,
+        process.env.NODE_ENV,
+      ),
       // `.withSkills()` guarantees non-empty paths (it throws otherwise —
       // v0.14 P0-10), so presence of the config IS the gate.
       ...(state._skillsConfig

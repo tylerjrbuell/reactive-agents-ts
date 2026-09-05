@@ -343,6 +343,9 @@ export type {
   BuildRunEnvelopeOptions,
 } from "./kernel/envelope/run-envelope.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
+// ─── HarnessConfig — the typed per-agent harness control surface (W3) ───
+export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode } from "./harness-config.js";
+export type { HarnessConfig, ResolvedHarness, ToolDisclosureMode } from "./harness-config.js";
 // The single tool-policy gate (P0-4 / boundary B1). Exported so the ENGINE's
 // inline agent loop can delegate to the same decision the kernel act path uses,
 // instead of running an independent allow/deny implementation — or, as was the
@@ -421,6 +424,8 @@ export { groundFields } from "./structured-output/grounded/field-provenance.js";
 export type { GroundResult } from "./structured-output/grounded/field-provenance.js";
 export { buildEvidenceCorpusFromSteps, detectFabricatedMeasurement, resolveFabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
 export type { FabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
+export { extractUrls, validateCitations } from "./kernel/capabilities/verify/citation-policy.js";
+export type { CitationValidationResult } from "./kernel/capabilities/verify/citation-policy.js";
 export { DEFAULT_STALL_POLICY } from "./kernel/state/kernel-state.js";
 export type { StallPolicy } from "./kernel/state/kernel-state.js";
 export { parsePartial } from "./structured-output/partial-parse.js";
@@ -459,7 +464,6 @@ export {
 // Harness killswitch resolution — one place decides what each env flag means.
 export {
   lazyDisclosureEnabled,
-  stableToolSurfaceEnabled,
   toolDiscoveryEnabled,
   verboseRulesEnabled,
   recencyBudgetCharsOverride,

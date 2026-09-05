@@ -1,10 +1,11 @@
-import { Effect, Layer, Stream, Schema, Duration } from 'effect'
+import { Effect, Layer, Stream, Schema } from 'effect'
 import { LLMService } from '../llm-service.js'
 import { LLMConfig } from '../llm-config.js'
 import type { ProviderCapabilities } from '../capabilities.js'
-import { LLMTimeoutError, LLMParseError } from '../errors.js'
-import type { LLMErrors, ParseAttemptError } from '../errors.js'
+import { LLMTimeoutError } from '../errors.js'
+import type { LLMErrors } from '../errors.js'
 import { mapProviderError } from '../provider-error.js'
+import { runStructuredParseWithRetry } from '../structured-parse-retry.js'
 import type {
     CompletionResponse,
     StreamEvent,
@@ -14,7 +15,7 @@ import type {
     TokenLogprob,
 } from '../types.js'
 import { estimateTokenCount } from '../token-counter.js'
-import { retryPolicy, retryStreamBeforeFirstEmission } from '../retry.js'
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from '../retry.js'
 import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
@@ -614,13 +615,12 @@ export const LocalProviderLive = Layer.effect(
                             ? { resolvedParams: { contextWindow: numCtx } }
                             : {}),
                     } satisfies CompletionResponse
-                }).pipe(
-                    Effect.retry(retryPolicy),
-                    Effect.timeout(Duration.millis(timeoutMs)),
-                    Effect.catchTag('TimeoutException', () => {
-                        const elapsedMs = Date.now() - startedAt
-                        return Effect.fail(
-                            new LLMTimeoutError({
+                }).pipe((effect) =>
+                    withRetryAndTimeout(effect, {
+                        timeoutMs,
+                        onTimeout: () => {
+                            const elapsedMs = Date.now() - startedAt
+                            return new LLMTimeoutError({
                                 message:
                                     `Local LLM request for model "${model}" timed out after ` +
                                     `${elapsedMs}ms (limit ${timeoutMs}ms). The model may be ` +
@@ -632,8 +632,8 @@ export const LocalProviderLive = Layer.effect(
                                 model,
                                 elapsedMs,
                             })
-                        )
-                    })
+                        },
+                    }),
                 )
                 }),
 
@@ -977,11 +977,12 @@ export const LocalProviderLive = Layer.effect(
                             ? request.model
                             : request.model?.model ?? defaultModel
 
-                    let lastError: unknown = null
-                    const parseAttempts: ParseAttemptError[] = []
-                    const maxRetries = request.maxParseRetries ?? 2
-
-                    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                    return yield* runStructuredParseWithRetry({
+                        outputSchema: request.outputSchema,
+                        schemaStr,
+                        maxRetries: request.maxParseRetries ?? 2,
+                        runAttempt: ({ attempt, lastError }) =>
+                            Effect.gen(function* () {
                         const msgs = toOllamaMessages(
                             attempt === 0
                                 ? [
@@ -1065,35 +1066,9 @@ export const LocalProviderLive = Layer.effect(
                             catch: (error) => ollamaError(error, model),
                         })
 
-                        const content = response.message?.content ?? ''
-
-                        try {
-                            const parsed = JSON.parse(content)
-                            const decoded = Schema.decodeUnknownEither(
-                                request.outputSchema
-                            )(parsed)
-
-                            if (decoded._tag === 'Right') {
-                                return decoded.right
-                            }
-                            lastError = decoded.left
-                            parseAttempts.push({ attempt, error: decoded.left })
-                        } catch (e) {
-                            lastError = e
-                            parseAttempts.push({ attempt, error: e })
-                        }
-                    }
-
-                    return yield* Effect.fail(
-                        new LLMParseError({
-                            message: `Failed to parse structured output after ${
-                                maxRetries + 1
-                            } attempts`,
-                            rawOutput: String(lastError),
-                            expectedSchema: schemaStr,
-                            attempts: parseAttempts,
-                        })
-                    )
+                        return response.message?.content ?? ''
+                            }),
+                    })
                 }),
 
             embed: (texts, model) =>

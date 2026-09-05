@@ -32,11 +32,12 @@
 // below, plus the Layer-2 wiring test.
 
 import { afterEach, describe, expect, it } from "bun:test";
-import { Effect, Layer, Ref, Stream } from "effect";
+import { Effect, Layer, Option, Ref, Stream } from "effect";
 import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver, discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { resolveToolSurface, type ToolSurfaceInputs } from "./tool-surface.js";
 import { handleThinking } from "./think.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 import {
   initialKernelState,
   noopHooks,
@@ -71,6 +72,7 @@ const baseInputs = (over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs =>
   missingRequiredTools: [],
   pruneMinTools: 15,
   catalog: [schema("file-write"), schema("web-search"), schema("http-get")],
+  harness: resolveHarnessConfig(),
   ...over,
 });
 
@@ -195,7 +197,7 @@ const captureSystemPrompt = async (state: KernelState, input: KernelInput): Prom
     input,
     profile: CONTEXT_PROFILES.local,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-    toolService: { _tag: "None" },
+    toolService: Option.none(),
     hooks: {
       ...noopHooks,
       onThought: (_s: KernelState, _t: string, prompt?: { system: string }) => {
@@ -204,7 +206,7 @@ const captureSystemPrompt = async (state: KernelState, input: KernelInput): Prom
       },
     },
     toolCallingDriver: new NativeFCDriver(),
-    memoryService: { _tag: "None" },
+    memoryService: Option.none(),
   };
   capturedFCToolNames = [];
   await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));

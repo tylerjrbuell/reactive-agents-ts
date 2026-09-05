@@ -6,6 +6,8 @@ import {
   todoTool,
   recallTool,
   makeRecallHandler,
+  relateTool,
+  makeRelateHandler,
   findTool,
   makeFindHandler,
   checkpointTool,
@@ -22,8 +24,8 @@ import {
 } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../../../types/kernel-meta-tools.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { toolDiscoveryEnabled } from "../../../harness-flags.js";
+import { emitErrorSwallowed, errorTag, AgentMemory } from "@reactive-agents/core";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
 type ToolCapabilitySnapshot = {
   readonly availableToolSchemas: readonly ToolSchema[];
@@ -75,8 +77,11 @@ export const resolveExecutableToolCapabilities = (input: {
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly metaTools?: KernelMetaToolsConfig;
+  /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
+  readonly harness?: ResolvedHarness;
 }): Effect.Effect<ToolCapabilitySnapshot, never> =>
   Effect.gen(function* () {
+    const h = input.harness ?? resolveHarnessConfig();
     const available = [...(input.availableToolSchemas ?? [])];
     const all = [...(input.allToolSchemas ?? input.availableToolSchemas ?? [])];
 
@@ -93,11 +98,49 @@ export const resolveExecutableToolCapabilities = (input: {
     if (toolServiceOpt._tag === "Some") {
       const toolService = toolServiceOpt.value;
 
+      // Reset discovered-set at the start of each run (idempotent across
+      // re-resolutions; the kernel calls resolveExecutableToolCapabilities
+      // once per run). Fixed 2026-08-19: this used to live inside the
+      // `h.toolDiscovery` branch below, so a run with
+      // RA_TOOL_DISCOVERY=0 never reset it — a PRIOR run's discovered set
+      // (in the same process) leaked forward and widened tool-surface.ts's
+      // visibility floor for every later discovery-off run. `discovered` is
+      // consumed unconditionally by tool-surface.ts regardless of whether
+      // discover-tools itself is registered (it also backs the lightweight
+      // tool-index, RA_TOOL_INDEX), so the reset must be unconditional too.
+      yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
+
       if (input.metaTools?.recall) {
         yield* toolService
-          .register(recallTool, makeRecallHandler(scratchpadStoreRef))
+          .register(recallTool, makeRecallHandler(scratchpadStoreRef, input.metaTools.recallConfig))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
+      }
+
+      // Resolved once, shared by `relate` (getRelated/link) and `find`
+      // (search) below — all are optional AgentMemory port methods, only
+      // present when a graph/search-capable memory adapter (e.g.
+      // `.withMemory()`'s Zettelkasten-backed one) is actually wired.
+      const agentMemoryOpt = yield* Effect.serviceOption(AgentMemory);
+
+      // `relate` — only registered when BOTH the caller opted in AND a
+      // memory adapter implementing `getRelated` is actually present.
+      // Requesting it with no such adapter is silently a no-op (matches
+      // find's webFallback precedent) — not an error, since the caller may
+      // share a builder config across agents where memory is optional.
+      // `link` (mode "link", writing a relationship) is independently
+      // optional — passed through when present, undefined otherwise, so
+      // `relate`'s own handler decides how to respond to a link request
+      // an adapter doesn't support.
+      if (input.metaTools?.relate) {
+        if (agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.getRelated) {
+          const getRelated = agentMemoryOpt.value.getRelated;
+          const link = agentMemoryOpt.value.link;
+          yield* toolService
+            .register(relateTool, makeRelateHandler({ getRelated, link }))
+            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:relate", tag: errorTag(err) })));
+          append(toToolSchema(relateTool));
+        }
       }
 
       if (input.metaTools?.writeResultToFile) {
@@ -108,12 +151,17 @@ export const resolveExecutableToolCapabilities = (input: {
       }
 
       if (input.metaTools?.find) {
+        const searchMemory =
+          agentMemoryOpt._tag === "Some" && agentMemoryOpt.value.search
+            ? agentMemoryOpt.value.search
+            : undefined;
         yield* toolService
           .register(
             findTool,
             makeFindHandler({
               ragStore: ragMemoryStore,
               webSearchHandler,
+              searchMemory,
               recallStoreRef: scratchpadStoreRef,
               config: {},
             }),
@@ -137,12 +185,7 @@ export const resolveExecutableToolCapabilities = (input: {
       // wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
       // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
       // adapt.
-      if (toolDiscoveryEnabled()) {
-        // Reset discovered-set at the start of each run (idempotent across
-        // re-resolutions). The kernel calls resolveExecutableToolCapabilities
-        // once per run, so this fires on initial wiring.
-        yield* Ref.set(discoveredToolsStoreRef, new Set<string>());
-
+      if (h.toolDiscovery) {
         const catalog = input.allToolSchemas ?? [];
         yield* toolService
           .register(

@@ -81,5 +81,5 @@ export function gateReceiptFor(
     policy,
     options,
   );
-  return `  ${baselineVariantId} → ${candidateVariantId}\n${formatGateReceipt(verdict)}`;
+  return `  ${baselineVariantId} → ${candidateVariantId}\n${formatGateReceipt(verdict, policy)}`;
 }

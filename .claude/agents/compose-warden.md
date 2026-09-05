@@ -1,6 +1,6 @@
 ---
 name: compose-warden
-description: Bounded warden for the Compose API (packages/compose/**). Owns harness composition + 6 killswitches + RunHandle + RI→Compose bridge tag emission. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Bounded warden for the Compose API (packages/compose/**). Owns harness composition + 6 killswitches + RunHandle + RI→Compose bridge tag emission. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -54,5 +54,6 @@ Compose API for harness composition. 6 killswitches: `maxIterations`, `budgetLim
 ## Workflow per spawn
 Standard warden workflow ([[kernel-warden]] §Workflow). Killswitch edits MUST include real-runtime-state test checklist above. TDD: [[agent-tdd]].
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

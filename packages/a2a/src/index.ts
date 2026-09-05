@@ -6,7 +6,12 @@ export { createTaskHandler, type TaskExecutor } from "./server/task-handler.js";
 export { formatSSEEvent, createSSEStream, type StreamEvent } from "./server/streaming.js";
 export { A2AClient, createA2AClient } from "./client/a2a-client.js";
 export type { ClientConfig } from "./client/a2a-client.js";
-export { discoverAgent, discoverMultipleAgents } from "./client/discovery.js";
+export {
+  discoverAgent,
+  discoverMultipleAgents,
+  agentEgressGuard,
+  type AgentEgressConfig,
+} from "./client/discovery.js";
 export { matchCapabilities, findBestAgent, type MatchResult } from "./client/capability-matcher.js";
 export { generateAgentCard, toolsToSkills, type AgentCardGeneratorConfig } from "./agent-card.js";
 export { A2AService, A2AServiceLive } from "./a2a-service.js";

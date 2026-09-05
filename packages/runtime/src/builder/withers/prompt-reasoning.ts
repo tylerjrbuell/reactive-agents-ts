@@ -32,6 +32,12 @@ export const applyWithSystemPrompt = (
  * options. Also propagates `options.maxIterations` to the top-level
  * `_maxIterations` field (explicit iteration override per the
  * most-restrictive resolution rule in `strategies/reactive.ts`).
+ *
+ * Preserves any existing `harness` sub-field across the replace: `.withHarness()`
+ * merges its config into `_reasoningOptions.harness`, and since this call
+ * historically did a wholesale replace, calling `.withReasoning()` after
+ * `.withHarness()` would silently wipe the harness config. Carry it forward
+ * unless the caller's own `options` explicitly supplies a `harness` field.
  */
 export const applyWithReasoning = (
   builder: ReactiveAgentBuilder,
@@ -39,7 +45,13 @@ export const applyWithReasoning = (
 ): void => {
   const s = asBuilderState(builder);
   s._enableReasoning = true;
-  if (options) s._reasoningOptions = options;
+  if (options) {
+    const existingHarness = s._reasoningOptions?.harness;
+    s._reasoningOptions =
+      existingHarness && options.harness === undefined
+        ? { ...options, harness: existingHarness }
+        : options;
+  }
   if (options?.maxIterations !== undefined) s._maxIterations = options.maxIterations;
 };
 

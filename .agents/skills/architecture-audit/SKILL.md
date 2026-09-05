@@ -43,8 +43,9 @@ Read in this order:
 
 ```
 AGENTS.md                                        # canonical architecture + build order
-wiki/Architecture/Specs/04-PROJECT-STATE.md      # current empirical state
-wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md  # architecture target
+wiki/Hot.md                                       # current empirical state
+wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md    # canonical sequencing + architecture target
+wiki/Architecture/DEBT-REGISTER.md               # canonical technical debt
 apps/cortex/AGENTS.md                            # Cortex-specific patterns
 ```
 

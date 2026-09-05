@@ -5,7 +5,18 @@ tags: [packages, architecture, index]
 
 # Package Index
 
-**Purpose:** Central reference for all 29 packages and 5 apps, organized by architectural layer.
+> ⚠️ **STALE (flagged 2026-09-03).** This index is a 2026-05-04, v0.10.0-era snapshot.
+> Actual current count: **34 packages** (`ls packages/`) **+ 6 apps** (`ls apps/`), not
+> 29+5. Per-entry test counts, "Owner" fields, and "Status: Stable (v0.10.0)" tags below
+> are unverified since authoring and likely stale — do not trust them without checking
+> the package directly. Three entries below (`calibration`, `orchestration`, `skills`)
+> no longer exist as packages. `cortex`, `docs`, `examples` are apps (`apps/`), not
+> packages — listed here under "Apps" further down, correctly. See the **"Not Yet
+> Indexed"** section at the bottom for 14 real packages missing from this file entirely.
+> For ground truth on any single package, its `package.json` `description` field is
+> always current; this index is not.
+
+**Purpose:** Central reference for packages and apps, organized by architectural layer.
 
 **Quick Navigation:** [[MOCs/Packages MOC|Packages MOC]] for complete layer breakdown
 
@@ -237,6 +248,31 @@ tags: [packages, architecture, index]
 - **Owner:** Performance team
 - **Results:** Frontier 100%, bare-llm 85% (pending frozen judge)
 - **Status:** ✅ Shipping with v0.10.0
+
+---
+
+## Not Yet Indexed (as of 2026-09-03)
+
+14 packages exist in `packages/` with no entry above — added since this index was last
+updated. Descriptions below are pulled directly from each `package.json` (ground truth);
+layer placement/detail pages not yet done.
+
+- **channels** — External channel layer — webhooks, bot transports, triggers, and session bridging for the gateway
+- **compose** — Prebuilt killswitch compositions for reactive agents
+- **create-reactive-agent** — Scaffold a new Reactive Agents project in seconds. Run `npm create reactive-agent`.
+- **diagnose** — Forensic CLI for recorded Reactive Agents traces — replay, grep, diff, and debrief agent runs
+- **health** — Health checks and readiness probes for Reactive Agents production deployments
+- **observe** — OpenInference-compliant OpenTelemetry tracing for reactive-agents — maps AgentEvent stream to semantic spans
+- **react** — React hooks + components for Reactive Agents agentic UI — runs, durable interactions, inbox, dynamic render
+- **reactive-intelligence** — Reactive Intelligence layer for Reactive Agents — entropy sensing, adaptive control, and learning
+- **replay** — Deterministic re-run of recorded reactive-agent traces with prompt/model overrides
+- **runtime-shim** — Cross-runtime adapter — unified API for Bun and Node.js fast paths
+- **svelte** — Svelte stores for Reactive Agents — agentStream, agentRun
+- **trace** — Structured execution trace recording and inspection for Reactive Agents
+- **ui-core** — Headless core for Reactive Agents UI bindings — wire protocol, resumable stream client, run state machines, fixture testing
+- **vue** — Vue composables for Reactive Agents — useAgentStream, useAgent
+
+Also missing: `apps/advocate` and `apps/stackblitz` (2 of the 6 current apps not listed in "Apps" above — that section is stale too, same 2026-05-04 snapshot).
 
 ---
 

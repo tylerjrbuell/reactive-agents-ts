@@ -14,7 +14,7 @@
  * Do NOT relax these assertions to force a pass.
  */
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type {
   KernelStateLike,
@@ -28,7 +28,6 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-  type MaybeService,
   type ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
@@ -39,16 +38,13 @@ const CALL_ID = "tc-golden-1";
 
 // Real ToolService (Some) whose execute succeeds and echoes a deterministic
 // result. Mirrors the stub used by the Phase A primitive test.
-function successToolService(): MaybeService<ToolServiceInstance> {
-  return {
-    _tag: "Some",
-    value: {
+function successToolService(): Option.Option<ToolServiceInstance> {
+  return Option.some({
       execute: (req) =>
         Effect.succeed({ success: true, result: { hits: 3, query: req.toolName } }),
       getTool: () => Effect.fail(new Error("no schema")),
       listTools: () => Effect.succeed([]),
-    },
-  };
+    });
 }
 
 // Recording pipeline via the public RegistrationHarness → HarnessPipeline path.

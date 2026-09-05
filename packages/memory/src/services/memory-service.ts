@@ -1,4 +1,5 @@
 import { Effect, Context, Layer } from "effect";
+import * as path from "node:path";
 import { EventBus } from "@reactive-agents/core";
 import type {
   MemoryBootstrapResult,
@@ -20,6 +21,16 @@ import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Service Tag ───
+//
+// `storeSemantic`/`logEpisode` are typed to admit `MemoryError` even though
+// this package's own implementation never raises one — `packages/runtime`
+// wraps the constructed layer with guardrail screening (F-6, 2026-08-24
+// external-research-convergence amendment, W6) via `withMemoryGuardrails`
+// in `packages/runtime/src/memory-guardrails.ts`, which fails with
+// `MemoryError` on a critical injection/PII match. The screening cannot
+// live in this package: `packages/guardrails` depends on
+// `packages/llm-provider`, which depends on `packages/memory` — importing
+// guardrails here would close that cycle.
 
 export class MemoryService extends Context.Tag("MemoryService")<
   MemoryService,
@@ -59,14 +70,14 @@ export class MemoryService extends Context.Tag("MemoryService")<
      */
     readonly storeSemantic: (
       entry: SemanticEntry,
-    ) => Effect.Effect<MemoryId, DatabaseError>;
+    ) => Effect.Effect<MemoryId, DatabaseError | MemoryError>;
 
     /**
      * Log an episodic event (persists to SQLite).
      */
     readonly logEpisode: (
       entry: DailyLogEntry,
-    ) => Effect.Effect<MemoryId, DatabaseError>;
+    ) => Effect.Effect<MemoryId, DatabaseError | MemoryError>;
 
     /**
      * Get current working memory contents.
@@ -97,7 +108,29 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
       );
       const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
-      const basePath = `.reactive-agents/memory`;
+      // memory.md must live next to the actual SQLite file (config.dbPath),
+      // not a hardcoded cwd-relative path — dbPath resolves to `~/.reactive-agents/...`
+      // when memory is auto-enabled (GH #122) but to `<cwd>/.reactive-agents/...`
+      // for explicit `.withMemory()` callers. A fixed cwd-relative basePath here
+      // silently split the SQLite source of truth and its markdown projection
+      // across two different directories (even different filesystem roots)
+      // whenever auto-enabled memory was in play.
+      // `MemoryFileSystem` always joins `basePath/agentId/memory.md`. Both
+      // default resolvers shape dbPath as `<base>/<agentId>/memory.db`, so
+      // basePath there is two dirnames up. A caller-supplied dbPath isn't
+      // required to follow that convention (e.g. a flat custom file) — detect
+      // it by checking whether dbPath's parent dir is actually named after
+      // this agent; otherwise fall back to dbPath's own directory so
+      // memory.md still lands beside memory.db instead of at an unrelated
+      // hardcoded path.
+      // `:memory:` (test-only in-process db) has no real directory — fall
+      // back to the historical cwd-relative default so tests keep working.
+      const basePath =
+        config.dbPath === ":memory:"
+          ? `.reactive-agents/memory`
+          : path.basename(path.dirname(config.dbPath)) === config.agentId
+            ? path.dirname(path.dirname(config.dbPath))
+            : path.dirname(config.dbPath);
 
       return {
         bootstrap: (agentId) =>

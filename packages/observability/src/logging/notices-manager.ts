@@ -21,6 +21,17 @@ export interface NoticesManager {
 }
 
 /**
+ * Blanket environment-level notice suppression (no code change required).
+ * `REACTIVE_AGENTS_SUPPRESS_NOTICES=1|true` silences every notice routed
+ * through a `NoticesManager`, mirroring the `REACTIVE_AGENTS_TELEMETRY`
+ * opt-out convention in `telemetry-client.ts`.
+ */
+export function noticesSuppressedByEnv(): boolean {
+  const v = process.env["REACTIVE_AGENTS_SUPPRESS_NOTICES"];
+  return v !== undefined && v !== "" && v !== "0" && v.toLowerCase() !== "false";
+}
+
+/**
  * Create a notices manager for the session.
  */
 export function makeNoticesManager(): NoticesManager {
@@ -28,7 +39,8 @@ export function makeNoticesManager(): NoticesManager {
 
   return {
     shouldShow(noticeId: string): boolean {
-      if (shown.has(noticeId)) {
+      if (shown.has(noticeId) || noticesSuppressedByEnv()) {
+        shown.add(noticeId);
         return false;
       }
       shown.add(noticeId);

@@ -9,36 +9,33 @@ import {
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 import { KillSwitchService, KillSwitchServiceLive } from "@reactive-agents/guardrails";
 
-// ─── Mock LLM that returns a simple answer ───
-
+// ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mock this file used
+// to drive the (now-deleted) inline arm directly is no longer on the
+// execution path. The kill-switch checks under test all fire at a
+// phase-boundary BEFORE the reasoningOpt branch split is even reached, so
+// swapping in a minimal `ReasoningService` stub (matching the pattern in
+// `chat-history-seeds-kernel.test.ts`) preserves every assertion's meaning
+// unchanged — only the "normal execution, no kill switch triggered" tests
+// actually reach it.
 const MockLLMServiceLive = Layer.succeed(
   Context.GenericTag<{
-    complete: (req: unknown) => Effect.Effect<{
-      content: string;
-      stopReason: string;
-      toolCalls?: unknown[];
-      usage: {
-        inputTokens: number;
-        outputTokens: number;
-        totalTokens: number;
-        estimatedCost: number;
-      };
-      model: string;
+    execute: (params: { [k: string]: unknown }) => Effect.Effect<{
+      output: unknown;
+      status: "completed" | "failed" | "partial";
+      steps?: readonly { id: string; type: string; content: string }[];
+      metadata: { cost: number; tokensUsed: number; stepsCount: number };
     }>;
-  }>("LLMService"),
+  }>("ReasoningService"),
   {
-    complete: (_req: unknown) =>
+    execute: (_params: { [k: string]: unknown }) =>
       Effect.succeed({
-        content: "Task completed: Here is the answer.",
-        stopReason: "end_turn",
-        toolCalls: [],
-        usage: {
-          inputTokens: 10,
-          outputTokens: 20,
-          totalTokens: 30,
-          estimatedCost: 0.001,
-        },
-        model: "test-model",
+        output: "Task completed: Here is the answer.",
+        status: "completed" as const,
+        steps: [{ id: "step-1", type: "thought", content: "Task completed: Here is the answer." }],
+        metadata: { cost: 0, tokensUsed: 30, stepsCount: 1 },
       }),
   },
 );

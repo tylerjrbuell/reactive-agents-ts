@@ -1,6 +1,6 @@
 ---
 name: debrief-scribe
-description: After-action review writer. Composes debrief markdown from a warden's UpwardReport + git diff + (optional) ablation verdict, files to wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md. Closes the AAR loop per Extreme Ownership doctrine without recreating the project's existing synthesizeDebrief mechanism. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: After-action review writer. Composes debrief markdown from a warden's UpwardReport + git diff + (optional) ablation verdict, files to wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md. Closes the AAR loop per Extreme Ownership doctrine without recreating the project's existing synthesizeDebrief mechanism. Mandatory MissionBrief + UpwardReport.
 tools: Read, Grep, Glob, Bash, Edit
 ---
 
@@ -84,5 +84,6 @@ related:
 6. Write to `wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md`.
 7. Return `UpwardReport` with `evidence-anchors[]` listing the debrief path + the source anchors I cited.
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

@@ -14,12 +14,20 @@ export function budgetLimit(options: BudgetLimitOptions): (harness: Harness) => 
     harness.before('think', (ctx) => {
       const tokens = (ctx.state as { tokens?: number }).tokens ?? 0;
       if (maxTokens !== undefined && tokens >= maxTokens) {
-        return { abort: onTrigger, reason: `budget-limit:tokens:${tokens}/${maxTokens}` };
+        return {
+          abort: onTrigger,
+          reason: `budget-limit:tokens:${tokens}/${maxTokens}`,
+          meta: { budgetType: 'tokens', limit: maxTokens, used: tokens },
+        };
       }
       if (maxCostUSD !== undefined) {
         const estimatedCost = tokens * costPerToken;
         if (estimatedCost >= maxCostUSD) {
-          return { abort: onTrigger, reason: `budget-limit:cost:${estimatedCost.toFixed(4)}/${maxCostUSD}` };
+          return {
+            abort: onTrigger,
+            reason: `budget-limit:cost:${estimatedCost.toFixed(4)}/${maxCostUSD}`,
+            meta: { budgetType: 'cost', limit: maxCostUSD, used: estimatedCost },
+          };
         }
       }
       return undefined;

@@ -26,7 +26,6 @@ import type {
   ToolCallEvent,
   AssumptionRecordedEvent,
   CuratorDecisionEvent,
-  AlternativesConsideredEvent,
   ToolSurfaceResolvedEvent,
   ContractCompiledEvent,
   AssessmentEvent,
@@ -312,19 +311,6 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         action: raw.action,
         targetRef: raw.targetRef,
         rationale: raw.rationale,
-      }
-      return ev
-    }
-
-    case "AlternativesConsideredEmitted": {
-      const ev: AlternativesConsideredEvent = {
-        kind: "alternatives-considered",
-        runId: raw.taskId,
-        timestamp: raw.timestamp,
-        iter: raw.iteration,
-        seq,
-        chosen: raw.chosen,
-        alternatives: raw.alternatives,
       }
       return ev
     }

@@ -17,7 +17,7 @@ import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
-import { RunEnvelope, emptyRunEnvelope } from "../kernel/envelope/run-envelope.js";
+import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
 
 // ─── Service Tag ───
@@ -145,7 +145,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        * `interactionResponse` (rails). Cascade Task 5 deleted all seven as
        * individual execute params: they used to be spread into the strategy
        * input, where five of eight strategies silently dropped them. Absent ⇒
-       * `emptyRunEnvelope`.
+       * a freshly-resolved `buildRunEnvelope()` (Finding 4 fix — no longer the
+       * frozen `emptyRunEnvelope` module constant, so a `RA_*` env var set
+       * after module load is still honored on this path).
        */
       readonly envelope?: RunEnvelopeData;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
@@ -176,7 +178,10 @@ export const ReasoningServiceLive = (
       // Capture ToolService optionally — strategies like ReAct need it
       // for tool execution. When not available, strategies degrade gracefully.
       const toolServiceOpt = yield* Effect.serviceOption(ToolService);
-      let strategyLayer: Layer.Layer<any, never> = llmLayer;
+      // `Layer`'s ROut position is contravariant, so the loosest type both
+      // `llmLayer` alone and the ToolService-merged layer satisfy is the
+      // narrower `LLMService` — not the `LLMService | ToolService` union.
+      let strategyLayer: Layer.Layer<LLMService, never> = llmLayer;
       if (toolServiceOpt._tag === "Some") {
         strategyLayer = Layer.merge(
           strategyLayer,
@@ -213,15 +218,23 @@ export const ReasoningServiceLive = (
               params.adaptiveHarness === true && params.modelRoutingPool !== undefined;
             // THE single production provision site (gate-enforced by
             // check-cross-cutting.sh). Every strategy effect runs with
-            // RunEnvelope provided — absent params.envelope ⇒ emptyRunEnvelope,
-            // so a zero-config run behaves exactly as it did before the cascade.
+            // RunEnvelope provided — absent params.envelope, resolve a FRESH
+            // envelope via buildRunEnvelope() (Finding 4, harness-control-surface
+            // final fix wave). The frozen `emptyRunEnvelope` module constant
+            // resolves its `harness` field ONCE at module-import time, so any
+            // RA_* environment variable set after that import was silently
+            // ignored on this — the actual production — path. buildRunEnvelope()
+            // re-resolves per call, matching the pre-cascade behavior where env
+            // was always read at call time. A zero-config run still behaves
+            // exactly as it did before the cascade — it just re-resolves fresh
+            // instead of reusing a stale snapshot.
             const provided = Effect.provideService(
               strategyFn({
                 ...params,
                 config,
               }),
               RunEnvelope,
-              params.envelope ?? emptyRunEnvelope,
+              params.envelope ?? buildRunEnvelope(),
             );
             const result = yield* provided.pipe(
               Effect.provide(strategyLayer),

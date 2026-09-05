@@ -90,7 +90,7 @@ export const runReasoningPostThink = (
             id: crypto.randomUUID().replace(/-/g, ""),
             agentId: ctx.agentId,
             date: epNow.toISOString().slice(0, 10),
-            content: `Task: ${String(task.input).slice(0, 200)} → ${String(thinkRes.output).slice(0, 300)}`,
+            content: `Task: ${extractTaskText(task.input).slice(0, 200)} → ${extractTaskText(thinkRes.output).slice(0, 300)}`,
             taskId: ctx.taskId,
             eventType: config.enableSelfImprovement ? "strategy-outcome" : "task-completed",
             createdAt: epNow,
@@ -102,7 +102,7 @@ export const runReasoningPostThink = (
               durationMs,
               ...(config.enableSelfImprovement ? {
                 selfImprovement: true,
-                taskDescription: String(task.input).slice(0, 500),
+                taskDescription: extractTaskText(task.input).slice(0, 500),
                 taskType: task.type,
               } : {}),
             },
@@ -123,7 +123,7 @@ export const runReasoningPostThink = (
               metadata: {
                 strategy: strategyUsed,
                 critiqueCount: reflexionCritiques.length,
-                taskDescription: String(task.input).slice(0, 500),
+                taskDescription: extractTaskText(task.input).slice(0, 500),
               },
             }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-post-think.ts:log-reflexion-critique", tag: errorTag(err) })));
           }

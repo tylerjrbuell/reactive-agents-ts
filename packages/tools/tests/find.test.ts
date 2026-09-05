@@ -9,12 +9,19 @@ import { ToolExecutionError } from "../src/errors.js";
 async function buildHandler(opts: {
   ragStore?: RagMemoryStore;
   webHandler?: (a: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>;
+  searchMemory?: (
+    query: string,
+    limit: number,
+  ) => Effect.Effect<readonly { id: string; preview: string }[], unknown>;
+  bootstrapMemoryContent?: string;
   config?: FindConfig;
 }) {
   const recallRef = await Effect.runPromise(Ref.make(new Map<string, string>()));
   return makeFindHandler({
     ragStore: opts.ragStore ?? new Map(),
     webSearchHandler: opts.webHandler,
+    searchMemory: opts.searchMemory,
+    bootstrapMemoryContent: opts.bootstrapMemoryContent,
     recallStoreRef: recallRef,
     config: opts.config ?? {},
   });
@@ -47,6 +54,50 @@ describe("find scope: documents", () => {
     const result = await Effect.runPromise(handler({ query: "quantum", scope: "documents" })) as any;
     expect(result.totalResults).toBe(0);
     expect(result.results).toHaveLength(0);
+  });
+});
+
+describe("find scope: memory", () => {
+  // 2026-09-03: find(scope:"memory") previously had no live search source —
+  // only a flat `bootstrapMemoryContent` string that was never populated in
+  // the real kernel wiring, and its "results" carried a synthetic
+  // "memory-bootstrap" identifier, not a real per-entry id `relate(id)`
+  // could use. `searchMemory` is the fix.
+  it("returns real per-entry ids from searchMemory, not the bootstrap placeholder", async () => {
+    const handler = await buildHandler({
+      searchMemory: () =>
+        Effect.succeed([{ id: "real-entry-42", preview: "Effect-TS dependency injection notes" }]),
+    });
+    const result = await Effect.runPromise(handler({ query: "dependency injection", scope: "memory" })) as any;
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].identifier).toBe("real-entry-42");
+    expect(result.results[0].source).toBe("memory");
+    expect(result.sourcesSearched).toContain("memory");
+  });
+
+  it("merges searchMemory hits with the bootstrapMemoryContent fallback when both are present", async () => {
+    const handler = await buildHandler({
+      searchMemory: () => Effect.succeed([{ id: "real-1", preview: "live hit" }]),
+      bootstrapMemoryContent: "some bootstrapped fact line",
+    });
+    const result = await Effect.runPromise(handler({ query: "fact", scope: "memory" })) as any;
+    const identifiers = result.results.map((r: any) => r.identifier);
+    expect(identifiers).toContain("real-1");
+    expect(identifiers).toContain("memory-bootstrap");
+  });
+
+  it("degrades gracefully (no results, not an error) when neither memory source is configured", async () => {
+    const handler = await buildHandler({});
+    const result = await Effect.runPromise(handler({ query: "anything", scope: "memory" })) as any;
+    expect(result.totalResults).toBe(0);
+  });
+
+  it("does not fail the call when searchMemory itself rejects", async () => {
+    const handler = await buildHandler({
+      searchMemory: () => Effect.fail(new Error("db unreachable")),
+    });
+    const result = await Effect.runPromise(handler({ query: "x", scope: "memory" })) as any;
+    expect(result.totalResults).toBe(0);
   });
 });
 

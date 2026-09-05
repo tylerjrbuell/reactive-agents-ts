@@ -45,14 +45,18 @@ export function coerceTaskContextRecord(raw: unknown): Record<string, string> | 
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** Living skills / SKILL.md paths + optional evolution options for `withSkills`. */
+/**
+ * Living skills / SKILL.md paths for `withSkills`.
+ *
+ * NOTE: `evolution` was a Cortex-only field that the framework's `withSkills()`
+ * accepted-but-ignored; v0.14 (DEBT-REGISTER P0-10) made passing it throw
+ * instead. Do not reintroduce an `evolution` key here — parse and drop it if
+ * ever seen, never forward it to the builder.
+ */
 export type CortexSkillsConfig = {
   readonly paths: readonly string[];
-  readonly evolution?: {
-    readonly mode?: string;
-    readonly refinementThreshold?: number;
-    readonly rollbackOnRegression?: boolean;
-  };
+  /** Skill names to ALWAYS load (bypasses task-relevance auto-activation). Framework `withSkills({ activate })`. */
+  readonly activate?: readonly string[];
 };
 
 /** Parses `skills` from a raw config blob for the builder's `withSkills`. */
@@ -66,25 +70,8 @@ export function parseCortexSkillsConfig(raw: unknown): CortexSkillsConfig | unde
     .map((x) => x.trim());
   if (paths.length === 0) return undefined;
 
-  const evRaw = o.evolution;
-  if (!evRaw || typeof evRaw !== "object" || Array.isArray(evRaw)) {
-    return { paths };
-  }
-  const e = evRaw as Record<string, unknown>;
-  const mode = typeof e.mode === "string" && e.mode.trim() ? e.mode.trim() : undefined;
-  const refinementThreshold = asFiniteNumber(e.refinementThreshold);
-  const rollbackOnRegression = e.rollbackOnRegression === true;
-  if (!mode && refinementThreshold === undefined && !rollbackOnRegression) {
-    return { paths };
-  }
-  return {
-    paths,
-    evolution: {
-      ...(mode ? { mode } : {}),
-      ...(refinementThreshold !== undefined ? { refinementThreshold } : {}),
-      ...(rollbackOnRegression ? { rollbackOnRegression: true } : {}),
-    },
-  };
+  const activate = asStringArray(o.activate);
+  return { paths, ...(activate ? { activate } : {}) };
 }
 
 /**
@@ -231,9 +218,13 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (skillsParsed !== undefined) {
     out.skills = {
       paths: [...skillsParsed.paths],
-      ...(skillsParsed.evolution ? { evolution: { ...skillsParsed.evolution } } : {}),
+      ...(skillsParsed.activate?.length ? { activate: [...skillsParsed.activate] } : {}),
     };
   } else delete out.skills;
+
+  const fg = raw.fabricationGuard;
+  if (fg === "off" || fg === "warn" || fg === "block") out.fabricationGuard = fg;
+  else delete out.fabricationGuard;
 
   // ── Five previously dead-end fields ─────────────────────────────────────
 

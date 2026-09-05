@@ -22,6 +22,8 @@ export interface ToolSpec {
   name: string;
   description: string;
   parameters: ToolParameters;
+  /** Human-readable return shape used to ground generated code. */
+  returnType?: string;
 }
 
 // ── Identifier sanitization ───────────────────────────────────────────────────
@@ -80,7 +82,7 @@ function toTsType(jsonType: string, enumValues?: string[]): string {
 }
 
 function generateFunctionSignature(tool: ToolSpec, fnName: string): string {
-  const { name, description, parameters } = tool;
+  const { name, description, parameters, returnType } = tool;
   const required = new Set(parameters.required ?? []);
   const params = Object.entries(parameters.properties)
     .map(([paramName, schema]) => {
@@ -93,8 +95,9 @@ function generateFunctionSignature(tool: ToolSpec, fnName: string): string {
   // Name the underlying tool when the identifier differs, so the mapping is
   // visible to the model (and to anyone reading the prompt).
   const doc = fnName === name ? description : `${description} (tool: ${name})`;
+  const returnDoc = returnType ? `\n * Returns: ${returnType}` : "";
   return [
-    `/** ${doc} */`,
+    `/** ${doc}${returnDoc} */`,
     `declare async function ${fnName}(params: { ${params} }): Promise<unknown>;`,
   ].join("\n");
 }

@@ -49,17 +49,6 @@ function renderMarkdown(d: Debrief): string {
     }
   }
 
-  // ── Alternatives considered ──
-  if (d.alternatives.length > 0) {
-    lines.push(`├─ Alternatives considered`);
-    for (const a of d.alternatives) {
-      lines.push(`│   • iter ${a.iter} chose ${a.chosen}`);
-      for (const r of a.rejected) {
-        lines.push(`│     ✗ ${r.option} — ${truncate(r.rejectedBecause, 80)}`);
-      }
-    }
-  }
-
   // ── Termination ──
   const termWhy = d.termination.rationale?.why;
   const termLine = termWhy

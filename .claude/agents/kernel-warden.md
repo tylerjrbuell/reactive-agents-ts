@@ -1,6 +1,6 @@
 ---
 name: kernel-warden
-description: Bounded warden for the composable reasoning kernel (packages/reasoning/src/kernel/**). Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, terminate-as-single-owner, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use ONLY during team-ownership pilot window (2026-05-23 → 2026-06-15) for kernel-scoped tasks.
+description: Bounded warden for the composable reasoning kernel (packages/reasoning/src/kernel/**). Refuses cross-package edits. Loads domain primer at spawn (phase map, loop-detector streak rule, terminate-as-single-owner, M3 REWORK history). Mandatory MissionBrief input, mandatory UpwardReport output. Use for kernel-scoped tasks.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -97,6 +97,6 @@ packages/reasoning/src/kernel/
 6. Compose final `upward-report` with honest confidence. Confidence < 0.7 when: untested edge case remains, suite green but mechanism is new, ablation not run.
 7. Return.
 
-## Pilot expiry
+## Status
 
-Pilot window: 2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]]. On revert, this file is removed.
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

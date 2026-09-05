@@ -9,6 +9,7 @@ import { httpGetTool, httpGetHandler } from "./http-client.js";
 import { fileReadTool, fileReadHandler } from "./file-operations.js";
 import { fileWriteTool, fileWriteHandler } from "./file-operations.js";
 import { listDirectoryTool, listDirectoryHandler } from "./file-operations.js";
+import { grepTool, grepHandler } from "./grep.js";
 import { codeExecuteTool, codeExecuteHandler } from "./code-execution.js";
 import { gitCliTool, gitCliHandler } from "./cli/git-cli.js";
 import { ghCliTool, ghCliHandler } from "./cli/gh-cli.js";
@@ -23,6 +24,7 @@ import { contextStatusTool, makeContextStatusHandler } from "./context-status.js
 import { finalAnswerTool } from "./final-answer.js";
 import type { RagMemoryStore } from "./rag-ingest.js";
 import { recallTool, makeRecallHandler, type RecallConfig } from "./recall.js";
+import { relateTool, makeRelateHandler, type RelateState } from "./relate.js";
 import { findTool, makeFindHandler, type FindConfig, type FindState } from "./find.js";
 import { checkpointTool, makeCheckpointHandler, type CheckpointConfig } from "./checkpoint.js";
 import { briefTool, buildBriefResponse, computeEntropyGrade, type BriefInput } from "./brief.js";
@@ -72,6 +74,12 @@ export {
   makeRecallHandler,
   type RecallConfig,
 } from "./recall.js";
+export {
+  relateTool,
+  makeRelateHandler,
+  type RelateState,
+  type RelateEntry,
+} from "./relate.js";
 export {
   findTool,
   makeFindHandler,
@@ -145,11 +153,12 @@ export const builtinTools: ReadonlyArray<{
 }> = [
   { definition: webSearchTool, handler: webSearchHandler },
   { definition: cryptoPriceTool, handler: cryptoPriceHandler },
-  { definition: httpGetTool, handler: httpGetHandler },
+  { definition: httpGetTool, handler: httpGetHandler() },
   { definition: fileReadTool, handler: fileReadHandler },
   { definition: listDirectoryTool, handler: listDirectoryHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
-  { definition: codeExecuteTool, handler: codeExecuteHandler },
+  { definition: grepTool, handler: grepHandler },
+  { definition: codeExecuteTool, handler: codeExecuteHandler() },
   { definition: gitCliTool, handler: gitCliHandler },
   { definition: ghCliTool, handler: ghCliHandler },
   { definition: gwsCliTool, handler: gwsCliHandler },
@@ -176,6 +185,54 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Named toolset shortcuts for `.withTools({ builtins: [...] })` — lets a
+ * caller ask for a curated group instead of enumerating tool names one by
+ * one, while keeping the framework's core policy (nothing built-in is on
+ * the wire unless a caller explicitly asks) unchanged: an alias only ever
+ * expands to a subset of `BUILTIN_TOOL_NAMES`, resolved once at build time,
+ * so declaring `["research"]` costs exactly what declaring
+ * `["web-search", "http-get", "grep"]` would have. Matched case-insensitively;
+ * an unmatched token is treated as a literal tool name (unchanged behavior).
+ */
+export const BUILTIN_TOOLSET_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  research: ["web-search", "http-get", "grep"],
+  web: ["web-search", "http-get"],
+  file: ["file-read", "file-write", "list-directory", "grep"],
+  code: ["code-execute"],
+  git: ["git-cli", "gh-cli"],
+  workspace: ["gws-cli"],
+};
+
+/** Tokens meaning "every canonical built-in" — equivalent to `builtins: true`. */
+const ALL_BUILTINS_TOKENS = new Set(["*", "all"]);
+
+/**
+ * Expand `builtins: [...]` entries — resolving `"*"`/`"all"` and named
+ * aliases (`BUILTIN_TOOLSET_ALIASES`) into concrete tool names, passing any
+ * unrecognized token through unchanged as a literal tool name. Shared by
+ * every schema-assembly site that reads `config.builtins` (runtime's
+ * `tool-schemas.ts` and the build-time `contract-tool-set.ts` mirror) so the
+ * two can never drift on what an alias means.
+ */
+export function resolveBuiltinNames(names: Iterable<string>): Set<string> {
+  const resolved = new Set<string>();
+  for (const raw of names) {
+    const token = raw.toLowerCase();
+    if (ALL_BUILTINS_TOKENS.has(token)) {
+      for (const n of BUILTIN_TOOL_NAMES) resolved.add(n);
+      continue;
+    }
+    const alias = BUILTIN_TOOLSET_ALIASES[token];
+    if (alias) {
+      for (const n of alias) resolved.add(n);
+      continue;
+    }
+    resolved.add(raw);
+  }
+  return resolved;
+}
+
+/**
  * Meta-tool definitions (no default handlers — must be wired with live state).
  * Exported for schema inspection, documentation, and dynamic registration.
  */
@@ -186,6 +243,7 @@ export const metaToolDefinitions: ReadonlyArray<ToolDefinition> = [
   findTool,
   pulseTool,
   recallTool,
+  relateTool,
   checkpointTool,
   discoverToolsTool,
 ];

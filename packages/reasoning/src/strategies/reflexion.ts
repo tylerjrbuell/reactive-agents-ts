@@ -52,7 +52,10 @@ import {
   evaluateTerminalGate,
   REFLEXION_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
-import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
+import {
+  getMissingRequiredToolsFromSteps,
+  deriveRequirementEvidence,
+} from "../kernel/capabilities/verify/requirement-state.js";
 import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
 import {
   describeUnmet,
@@ -160,6 +163,13 @@ export const executeReflexion = (
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
+    // Finding 2 (harness-control-surface final fix wave): resolve the envelope
+    // here so its `harness` can reach `resolveExecutableToolCapabilities`
+    // below — without it, the capability resolver falls back to a fresh
+    // `resolveHarnessConfig()` re-read of the environment, silently ignoring
+    // any per-agent `.withHarness({ toolDiscovery: ... })` config.
+    const envelope = yield* RunEnvelope;
+
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reflexion.ts:emitLog");
 
     // Wave C.2 slice 3b-ii — the announced ledger seam. Before it, reflexion's
@@ -179,6 +189,7 @@ export const executeReflexion = (
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
+      harness: envelope.harness,
     });
 
     // FM-I (#195): build the run-wide cross-cutting bundle ONCE and feed it to
@@ -562,9 +573,12 @@ export const executeReflexion = (
           const gateDecision = evaluateTerminalGate({
             terminatedBy: REFLEXION_SATISFIED,
             requiredTools: input.requiredTools ?? [],
-            coveredTools: new Set(
-              (input.requiredTools ?? []).filter((t) => !missingRequired.includes(t)),
-            ),
+            // Step 3c (09 §6.5) — one ledger-backed derivation instead of a
+            // locally re-filtered set; same underlying
+            // getMissingRequiredToolsFromSteps call `missingRequired` above
+            // already uses, so this is byte-identical, not a behavior change.
+            coveredTools: deriveRequirementEvidence(s.allSideEffectSteps, input.requiredTools ?? [])
+              .coveredTools,
             hasSubstantiveGrounding: true,
             redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },
             coverageExhaustionPolicy: "abstain",

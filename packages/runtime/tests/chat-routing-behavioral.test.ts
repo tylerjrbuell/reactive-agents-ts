@@ -317,3 +317,84 @@ describe("ChatOptions.useTools override", () => {
     expect(reply.toolsUsed).toContain("noop");
   });
 });
+
+// ─── Integration tests: .withToolIntent() agent-level classifier override ────
+
+describe(".withToolIntent() classifier override", () => {
+  it("without an override, chat() falls back to the default requiresTools() heuristic (regression)", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("chat-toolintent-default-fallback")
+      .withTestScenario([{ text: "It was great" }])
+      .withTools({
+        tools: [
+          { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },
+        ],
+      })
+      .build();
+
+    let reply;
+    try {
+      // "tell me about" is a CHAT_OVERRIDE_PATTERN — default requiresTools() -> false
+      reply = await agent.chat("tell me about the weather");
+    } finally {
+      await agent.dispose();
+    }
+
+    // Direct path never sets toolsUsed
+    expect(reply.toolsUsed).toBeUndefined();
+  });
+
+  it("a custom classifier overrides the default for phrasing the default misclassifies", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("chat-toolintent-custom-override")
+      .withTestScenario([
+        { toolCalls: [{ name: "noop", args: { input: "x" } }] },
+        { text: "FINAL ANSWER: done" },
+      ])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTools({
+        tools: [
+          { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },
+        ],
+      })
+      .withRequiredTools({ tools: ["noop"] })
+      // Domain-specific override: "tell me about" always means a live lookup
+      // for this agent, even though the default requiresTools() treats it as
+      // a past-tense chat override and would route to the direct-LLM path.
+      .withToolIntent((message) => /tell me about/i.test(message))
+      .build();
+
+    let reply;
+    try {
+      reply = await agent.chat("tell me about the weather");
+    } finally {
+      await agent.dispose();
+    }
+
+    expect(reply.toolsUsed).toContain("noop");
+  });
+
+  it("explicit options.useTools still wins over the agent-level classifier override", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("chat-toolintent-explicit-wins")
+      .withTestScenario([{ text: "Forced direct reply" }])
+      .withTools({
+        tools: [
+          { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },
+        ],
+      })
+      // Override would force the tool path for ANY message...
+      .withToolIntent(() => true)
+      .build();
+
+    let reply;
+    try {
+      // ...but the explicit per-call useTools:false must still take priority.
+      reply = await agent.chat("tell me about the weather", { useTools: false });
+    } finally {
+      await agent.dispose();
+    }
+
+    expect(reply.toolsUsed).toBeUndefined();
+  });
+});

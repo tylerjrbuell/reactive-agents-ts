@@ -1,6 +1,6 @@
 ---
 name: provider-warden
-description: Bounded warden for the LLM provider layer (packages/llm-provider/**). Owns 6 provider adapters (Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic)), streaming quirks, native function-call wiring, and 7-hook adapter contract. Mandatory MissionBrief input + UpwardReport output. Refuses cross-package edits. Pilot 2026-05-23 → 2026-06-15.
+description: Bounded warden for the LLM provider layer (packages/llm-provider/**). Owns 6 provider adapters (Anthropic, OpenAI, Gemini, LiteLLM, Ollama, test (deterministic)), streaming quirks, native function-call wiring, and 7-hook adapter contract. Mandatory MissionBrief input + UpwardReport output. Refuses cross-package edits.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -64,6 +64,6 @@ Standard warden workflow (see [[kernel-warden]] §Workflow — identical sequenc
 
 TDD reference: [[agent-tdd]] + [[provider-streaming]] skills.
 
-## Pilot expiry
+## Status
 
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

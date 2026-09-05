@@ -20,19 +20,12 @@ export type DebriefCuratorAction = {
   readonly rationale: Rationale;
 };
 
-export type DebriefAlternatives = {
-  readonly iter: number;
-  readonly chosen: string;
-  readonly rejected: readonly { option: string; rejectedBecause: string }[];
-};
-
 export type Debrief = {
   readonly runId: string;
   readonly goal: string;
   readonly path: readonly DebriefStep[];
   readonly assumptions: readonly DebriefAssumption[];
   readonly curatorActions: readonly DebriefCuratorAction[];
-  readonly alternatives: readonly DebriefAlternatives[];
   readonly termination: {
     readonly by: string;
     readonly rationale?: Rationale;

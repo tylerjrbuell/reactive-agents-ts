@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 import * as otelApi from "@opentelemetry/api";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, type AgentEvent } from "@reactive-agents/core";
 import { redactSecrets, defaultRedactors } from "@reactive-agents/observability";
 
 // ─── OpenInference semantic attribute keys ───
@@ -29,7 +29,7 @@ const SpanKind = {
 
 // ─── State ───
 
-interface SpanMap {
+export interface SpanMap {
   /** taskId → root workflow span */
   workflows: Map<string, otelApi.Span>;
   /** requestId → LLM child span */
@@ -38,7 +38,7 @@ interface SpanMap {
   toolCalls: Map<string, otelApi.Span>;
 }
 
-function createSpanMap(): SpanMap {
+export function createSpanMap(): SpanMap {
   return {
     workflows: new Map(),
     llmCalls: new Map(),
@@ -46,17 +46,19 @@ function createSpanMap(): SpanMap {
   };
 }
 
-// ─── Layer ───
-
-export const OpenInferenceTracerLayer = Layer.scopedDiscard(
-  Effect.gen(function* () {
-    const bus = yield* EventBus;
-    const tracer = otelApi.trace.getTracer("reactive-agents", "0.11.0");
-    const spans = createSpanMap();
-
-    const unsub = yield* bus.subscribe((event) =>
-      Effect.sync(() => {
-        switch (event._tag) {
+/**
+ * Pure event dispatch — the switch statement that drives OTel spans off the
+ * EventBus's AgentEvent stream. Extracted so it can be driven directly in
+ * tests (no EventBus/Effect runtime required) and shared with the live
+ * subscription in `OpenInferenceTracerLayer`, guaranteeing test and
+ * production run the identical code path.
+ */
+export function handleTracerEvent(
+  tracer: otelApi.Tracer,
+  spans: SpanMap,
+  event: AgentEvent,
+): void {
+  switch (event._tag) {
           case "AgentStarted": {
             const span = tracer.startSpan(`agent:${event.agentId}`, {
               kind: otelApi.SpanKind.INTERNAL,
@@ -108,7 +110,12 @@ export const OpenInferenceTracerLayer = Layer.scopedDiscard(
                   [OI.SPAN_KIND]: SpanKind.LLM,
                   [OI.LLM_MODEL_NAME]: event.model,
                   [OI.LLM_PROVIDER]: event.provider,
-                  [OI.LLM_TOKEN_COUNT_PROMPT]: event.contextSize,
+                  // contextSize is optional (2026-08-27): the pre-call
+                  // chokepoint has no honest measurement for it, so it may be
+                  // absent — never fabricate an attribute value for it here.
+                  ...(typeof event.contextSize === "number"
+                    ? { [OI.LLM_TOKEN_COUNT_PROMPT]: event.contextSize }
+                    : {}),
                   "task.id": event.taskId,
                   "request.id": event.requestId,
                 },
@@ -204,8 +211,19 @@ export const OpenInferenceTracerLayer = Layer.scopedDiscard(
 
           default:
             break;
-        }
-      }),
+  }
+}
+
+// ─── Layer ───
+
+export const OpenInferenceTracerLayer = Layer.scopedDiscard(
+  Effect.gen(function* () {
+    const bus = yield* EventBus;
+    const tracer = otelApi.trace.getTracer("reactive-agents", "0.11.0");
+    const spans = createSpanMap();
+
+    const unsub = yield* bus.subscribe((event) =>
+      Effect.sync(() => handleTracerEvent(tracer, spans, event)),
     );
 
     // Clean up subscription when layer is released

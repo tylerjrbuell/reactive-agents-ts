@@ -279,9 +279,55 @@ the §6 lift rule on rungs 2 and 3 of the ladder.
 
 **Gate:** `scripts/check-volatile-placement.sh` (Task 10).
 
-### D-2026-07-28-C — `goal_state` is write-only in production
+### D-2026-07-28-C — `goal_state` is write-only in production — ⚠️ WIRED 2026-09-05, LIFT UNMEASURED
 
-**Class:** dead-signal defect, same family as the H1 composed-but-never-rendered
+**⚠️ WIRED, not yet promoted (2026-09-05, `d5000dd4`).** Root-cause chased first
+against [[../Research/Audit-Reports-2026-07-08/04-goal-decomposition-progress|the 2026-07-08
+goal-decomposition audit]]: `Plan.steps` is the ONLY typed sub-goal ledger
+anywhere in RA — reactive/ToT/reflexion track progress as tool-name coverage,
+not named sub-goals, so they have no data to feed `goal_state` from.
+`KernelInput.remainingGoals` (new, per-pass) now threads plan-execute
+composite steps' pending/in_progress sibling titles through
+`executeReActKernel` → `buildKernelInput` → `fromKernelState`, which seeds
+the `goal_state` event when non-empty. Structurally opt-in — every other
+caller passes nothing, so reactive/ToT/reflexion/blueprint and 0-1-step
+plan-execute runs are byte-identical. Reuses the F10-safe message-tail
+recitation, so no cache-churn cost. Proven live end-to-end (not a fixture)
+by `packages/reasoning/tests/strategies/plan-execute-remaining-goals.test.ts`
+— a real 2-composite-step plan-execute run over the deterministic test
+provider, asserting on the sub-kernel's own request content; confirmed
+red-on-cut. **Also confirmed against a REAL `gemma4:e4b` live via ollama**
+(2026-09-05, ad hoc in-repo probe, reverted, no diff): calling
+`executeReActKernel({ remainingGoals: [...] })` directly, the real outgoing
+provider request's message tail literally contained
+`"Remaining steps: Write the pricing and ordering section"`. This is the
+only piece a deterministic-provider test can't prove (real tokenization,
+real model, real wire).
+
+**Planner note for the future ablation:** `gemma4:e4b`'s planner picked
+`tool_call`/`analysis` steps over `composite` in 2 separate live attempts to
+elicit one (including a task explicitly framed as needing "multiple tools /
+multiple attempts per step") — `composite` needs a task genuinely requiring
+multi-tool reasoning within one step, and local models default hard to
+`tool_call`. A future ablation should hand-construct the `Plan` (bypass the
+planner LLM call) rather than rely on the planner naturally choosing
+`composite`, or it will spend most of its budget fighting step-type
+selection instead of measuring the actual signal.
+
+**Still open: cross-tier LIFT measurement**, matching the discipline
+09-UNIFIED-PROGRAM §7 Step 5 already applied to `recall` (0.0pp lift, 3
+injection shapes × 2 tiers → park, don't build further). This entry has NOT
+had that measurement — it's live for every 2+ composite-step plan-execute
+run today on priors alone, not evidence. Needed before it can be
+default-on with confidence, or extended to a second producer
+(reactive/ToT would need their own typed sub-goal signal first, which
+doesn't exist): a multi-composite-step plan-execute task where the SIBLING
+step's content is load-bearing (e.g. avoiding duplicate work, or correctly
+sequencing information across steps) × 2+ local tiers × n≥5, wired vs the
+pre-2026-09-05 no-op, scored on task success / token overhead — same shape
+as the recall ablation script (`scripts/probes/`).
+
+**Class (historical):** dead-signal defect, same family as the H1 composed-but-never-rendered
 regression already fixed once in this codebase.
 
 `packages/reasoning/src/assembly/stages/system-prompt.ts:55` reads
@@ -309,9 +355,20 @@ path) — only the `goal_state` half of that analysis is unverified in practice.
 unreachable. Separate task — out of scope for the gap-closure plan, which does
 not touch kernel state population.
 
-### D-2026-07-28-D — plan-execute replay-lane `argsHash` divergence
+### D-2026-07-28-D — plan-execute replay-lane `argsHash` divergence — ✅ RESOLVED 2026-09-04
 
-**Class:** latent correctness bug in the replay/observability boundary, not in
+**✅ RESOLVED 2026-09-04.** `ToolObserveResult` (`kernel/capabilities/act/tool-observe.ts`)
+gained a `healedArgs: Record<string, unknown>` field, populated at all 4 return
+sites from the already-in-scope post-heal `args` local (the same value
+`ToolCallCompleted`/the trace already record). `step-executor.ts`'s
+`ledgerSteps` action-step now stores `observe.healedArgs` instead of the
+pre-heal `resolvedArgs`, so the ledger and the trace agree on every
+path-taking tool call. `packages/benchmarks/tests/replay-lane.test.ts`'s
+`KNOWN_ARGS_HASH_DIVERGENCE` skip removed — `planned-tool-loop` now replays
+clean along with every other committed golden (9/9). `reasoning`/`benchmarks`/
+`runtime` suites green (4838 tests, 0 fail), build 37/37.
+
+**Class (historical):** latent correctness bug in the replay/observability boundary, not in
 the kernel itself.
 
 `step-executor.ts`'s `ledgerSteps` action-step stores PRE-heal (relative) tool
@@ -380,6 +437,35 @@ the REAL `effectiveSchemas` descriptions, `lazyMode`, and `hasClassification`
 values on this exact run, before attempting a fix. Do not patch the
 heuristic's word-matching based on the isolated-probe result above — it
 already showed that surface isn't where the gap is.
+
+**Attempted reproduction, 2026-09-05 — does NOT reproduce.** Instrumented
+`resolveToolSurface`'s call site in `think.ts` with a temporary
+`RA_DEBUG_TOOL_SURFACE=1` probe (dumping `lazyMode`, `hasClassification`,
+`taskText`, and every tool's visibility reason), then ran 3 live in-repo
+probes over `ollama`, never `/tmp` (D-2026-07-30-J discipline observed):
+(1) the committed `scratch.ts` task as-is (`gemma4:e4b`, crypto-price +
+file-write, mid tier); (2) a more abstract paraphrase of the same intent on
+the same model; (3) an intentionally vague, near-zero-domain-keyword task
+("check on that thing... keep a note of it") on `llama3.2:3b` (genuinely
+`local` tier, the tier the original hypothesis (a) implicated). All 3: the
+free keyword heuristic (`filterToolsByRelevance`) correctly kept every
+domain tool visible — worst case (probe 3) it degraded to a broad
+over-inclusive set (`web-search`/`http-get`/`file-read`/`file-write`/`grep`/
+`code-execute`/`gh-cli`) rather than empty. `lazyMode`/`hasClassification`/
+`taskText` all resolved correctly on every run, ruling out candidates (b) and
+(c) directly; candidate (a) doesn't hold structurally either — `toolSchemaDetail`
+stripping (`context-profile.ts` `local.toolSchemaDetail = "names-and-types"`)
+is applied downstream of `resolveToolSurface` in `think.ts` (~L820), not
+before it, so `augmentedToolSchemas` still carries full descriptions when the
+heuristic runs, on every tier. Probe code reverted, no repo diff.
+**Verdict:** downgrading — the empty-surface failure this entry was filed
+against was real (evidence-based, not guessed) but has not recurred across 3
+varied live probes on 2 tiers since 2026-07-29; whatever fixed it was
+incidental to other work in that window (candidate: the F-4 discover-tools
+tier-aware gating fix, or a heuristic broadening — not confirmed which).
+Leave filed rather than delete (absence of reproduction on 3 probes is not
+proof of absence), but this is no longer the highest-priority open item in
+this file.
 
 ---
 
@@ -537,12 +623,17 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
   rewritten to per-run facts; `emitCuratorDecision` removed from
   KNOWN_DEAD_EMITTERS. `db5cd724`.
 
-### D-2026-07-30-L — open catalog from the 2026-07-30 hunt (not yet fixed)
+### D-2026-07-30-L — open catalog from the 2026-07-30 hunt
 
 **Class:** cataloged, lower priority.
-- **`emitAlternativesConsidered` is genuinely dead** (0 callers, verified) — the
-  counterfactual/alternatives signal is blind. Delete (event + normalize case +
-  helper) OR wire at the decision/arbitration site. Clean §4 candidate.
+- ✅ **RESOLVED 2026-09-04** — `emitAlternativesConsidered` was genuinely dead
+  (0 non-test callers, verified). Deleted outright rather than wired: the
+  emitter function, the `AlternativesConsideredEmitted` AgentEvent union
+  member, the `alternatives-considered` TraceEvent kind + `AlternativesConsideredEvent`
+  interface, the `Debrief.alternatives` field + `DebriefAlternatives` type, the
+  `normalize.ts`/`debrief/build.ts`/`debrief/renderer.ts` consumer plumbing,
+  the `KNOWN_DEAD_EMITTERS` entry in `analyze.ts`, and the cortex UI timeline
+  filter's dead set-member. Full suite green (9210/9240, 0 fail), build 37/37.
 - **Weak-model (qwen3:4b) file-deliverable thrash:** on rw-2, qwen3:4b burned
   16.7K tokens / 69s, called `final-answer` 3× but never `file-write`, and the
   harness assembled a fallback the verifier correctly rejected
@@ -561,6 +652,46 @@ qwen3:4b/cogito:8b/haiku × rw-2, trace-driven).
 **Fix (2026-08-07):** threaded `state.ledger` into the requirement-state counters + the run-failing kernel call sites (§8 + `iterate-pass.ts:1561` in-loop redirect + `loop-resolution.ts` nudge); `low_delta_guard`'s site (`iterate-pass.ts:836`) deliberately left steps-blind (inverted polarity, unmeasured). Ledger tool-result successes de-duped against local steps by `toolCallId` (projected from the same `meta.toolCallId`, so no double-count); ledger-omitted ⇒ byte-identical. Reachability source-traced (`transitionState`→`stepToEntries` folds `subAgentLedger` in-loop). Report: `wiki/Research/Harness-Reports/2026-08-07-qa-sweep-findings.md#F6`.
 
 **Verdict:** PROVEN (unit) — 4 red-on-cut tests in `requirement-state.test.ts`, mutating the ledger read reddens 2. **Residual (honest):** no end-to-end kernel-delegation cell — blocked by test-provider scripting limits (the OB-3 "sub-agent merge on the kernel parent path untested" area); a false-negative *rate* drop is owner-gated live-arm work, not claimed.
+
+### D-2026-08-21-N — fabrication-guard "block degrades to warn" doesn't actually restore success — live false-fail on cortex ✅ RESOLVED 2026-08-21 (`bbc8e16d`)
+
+**Class:** correctness bug (guard enforcement leaves the run mis-terminated after the documented degrade).
+
+**Resolution:** root cause was actually in check 4e's own extraction, not the degrade path — `detectFabricatedListedEntities` treated any bold-list title as a named-entity claim, including the model's own synthesized category headers ending in `:`. Excluded those from extraction; severity for this specific check changed to always `warn`, never `reject` (unlike 4c/4d, its exact-substring grounding is inherently paraphrase-sensitive and not near-zero-false-positive by construction). Verified end-to-end: reverted the fix, reproduced the exact production failure through the full builder→runtime→kernel→verifier stack via the deterministic test provider, restored the fix, confirmed success with detection still visible as a warning. See `packages/reasoning/src/kernel/capabilities/verify/evidence-grounding.ts`/`verifier.ts`, tests in the same commit.
+
+Original finding preserved below for provenance.
+
+Caught via cortex's own run history (`apps/cortex/.cortex/cortex.db`, run `01M0KB5MTA4NJP907V93RHKFGK`, 2026-08-21, `ollama`/`gemma4:e4b`, `reactive` strategy). The run is a genuine success being reported as a failure end-to-end: `terminationReason: "end_turn"` (clean stop), debrief `outcome: "success"` / `confidence: "high"`, `gh-cli` called twice with 100% tool success, and a complete, well-formed markdown report as the answer — yet `cortex_runs.status = "failed"` and `error_message` contains that SAME full report text verbatim (not an error).
+
+Root cause traced through the kernel:
+1. Task ("fetch the last 10 commits... summarize... in a nice markdown report") has a small local model synthesize `gh-cli`'s raw output into categorized prose + a markdown table.
+2. `verifier.ts` check 4e (`detectFabricatedListedEntities`, `packages/reasoning/src/kernel/capabilities/verify/verifier.ts:640-646`) — part of the always-on fabrication-guard family broadened by the same-day commit `2f8432fa` — flags the bold list items / table rows as unverifiable "invented named entities" against the tool-evidence corpus. A model's reasonable paraphrase/categorization of real tool output is exactly the shape this heuristic risks false-positiving on.
+3. In `block` mode this is documented as "suppress + retry, degrades to warn" (`verifier.ts:651` comment) — i.e. after one retry the answer should still ship, just flagged, not fail the run.
+4. It doesn't degrade cleanly: `execution-engine.ts:1226` (`rr.status === "failed" ? executionSucceeded = false`) still reads the pre-degrade failed status, and `run-finalize.ts:74` (`!executionSucceeded && result.error ? { error: result.error }`) then ships the full answer text as `error` — so the "degrade" the comment promises isn't actually clearing status/error by the time the result reaches `TaskResult`/`AgentCompleted`.
+
+Only 1 sample so far (cortex's DB had 4 total runs, 1 failed) — not yet cross-tier confirmed, but the mechanism is traced to specific lines, not inferred from the symptom alone. Prime suspects for who else hits this: any local/weaker model doing prose synthesis (summaries, reports, categorized write-ups) from tool output, since check 4e's heuristic is aimed at exactly that shape.
+
+**Discharge (superseded by resolution above):** find the actual "degrades to warn" implementation site referenced by `verifier.ts:651`'s "see runner" and confirm whether it (a) never runs for the 4c/4d/4e fabrication-guard family (only for the opt-in numeric-grounding check 5), or (b) runs but doesn't propagate the restored status back through `execution-engine.ts`'s `rr.status`/`ctx.metadata.lastResponse` read path. Needs a red-on-cut regression test pinning "block mode + fabrication flag + retry + still-flagged → ships as `status: completed` with a warn-level verdict, not `status: failed` with the answer as the error." Owner-gated — kernel retry/degrade state machine, not a one-line fix.
+
+### D-2026-08-23-A — 5 builder features have zero kernel-arm equivalent; only reachable via the dead inline direct-LLM branch ✅ RESOLVED 2026-08-23 — CORRECTED: the "5 missing features" claim was itself wrong
+
+**Class:** dead-code-deletion blocker / silent feature gap (same shape as D-2026-08-21-M below, discovered while resolving it). **Resolution note:** the original investigation below was based on an incomplete read — all 5 features already had a wired kernel-arm equivalent; the real remaining work was migrating 3 test files off the dead arm's mock shape onto the kernel arm's, not building new plumbing.
+
+`packages/runtime/src/execution-engine.ts`'s `else if (!cacheHit)` inline direct-LLM branch (backed by `engine/phases/agent-loop/inline-{think,act,observe,harness-hooks}.ts` + `iteration-guards.ts` + `engine/finalize/snapshot-final.ts`) had been dead in ALL real production usage since Move 1 (2026-08-13) made the kernel/`ReasoningService` arm the sole path `createRuntime()` ever builds. A debt-sweep set out to delete it after migrating the ~10 runtime tests that were incidentally still exercising it via a minimal test-only layer stack. 9 of 10 migrated cleanly onto the kernel arm with zero behavior loss; the 10th (`behavioral-contract-enforcement.test.ts`) exposed a real silently-dead safety feature, fixed separately (D-2026-08-23-B below).
+
+An attempted deletion after that fix caused 17 test failures across `feature-contract.test.ts`, `harness-improvements.test.ts`, `verification-step-wired.test.ts`, and the original write-up here claimed (WRONG) that `.withMinIterations()` / `.withCustomTermination()` / `.withVerificationStep()` / `.withOutputValidator()` / `.withTaskContext()` had "zero kernel-arm equivalent." A follow-up read of `reasoning-harness-hooks.ts` (already wired at `execution-engine.ts`'s reasoning-arm branch) found it is an explicit, deliberate mirror of `inline-harness-hooks.ts` — same `needsRevision` → re-run-with-feedback shape for all 4 continuation-based features — and `reasoning-think.ts:162-167` already handles `taskContext` injection (into `memoryContext`, prefixed `--- Task Context ---`, rather than the inline arm's `formatTaskContextForChat` system-message carrier). The 17 failures were a TEST gap, not a FEATURE gap: the 3 files drove `ExecutionEngineLive` with a raw `LLMService` mock (which only the now-dead inline arm reads), not the `ReasoningService` stub the kernel arm reads.
+
+**Resolution:** migrated all inline-arm-exercising tests in the 3 files onto content-aware/call-counting `ReasoningService` stubs (same pattern as `verification-quality-gate.test.ts` / `chat-history-seeds-kernel.test.ts` from the earlier 9-file migration) — 7 tests in `harness-improvements.test.ts`, 14 in `feature-contract.test.ts` (2 of which, "think fires multiple times when tools cause loop continuation" / "iteration increments correctly across multiple loops," had no literal kernel-arm equivalent — the outer `think` hook fires once per task on the kernel arm since the tool-use loop runs inside `ReasoningService.execute()` — redesigned to pin the real invariant: think fires once, and `reasoning-post-think.ts`'s `ctx.iteration = stepsCount` wiring still reflects the reasoning pass's real step count), 1 in `verification-step-wired.test.ts`. Then deleted: `execution-engine.ts`'s `else if (!cacheHit)` branch (250 LOC), `inline-{think,act,observe,harness-hooks}.ts` (1,204 LOC), `iteration-guards.ts` (121 LOC, sole caller was the deleted branch — its behavioral-contract-iteration check is superseded by D-2026-08-23-B's bridge), `engine/finalize/snapshot-final.ts` (47 LOC, sole caller was the deleted branch — a per-run `ObservabilityService.captureSnapshot` convenience call with no test coverage; not re-wired into the kernel arm, flagged as a minor observability gap rather than silently restored). Net: 1,626 LOC removed from `packages/runtime/src/`. `bun test packages/runtime` 1518 pass / 0 fail (unchanged from pre-deletion baseline — no tests lost, only their execution arm changed); `packages/reasoning` 2761 pass / 0 fail; full-monorepo `bunx turbo run typecheck` clean.
+
+### D-2026-08-23-B — behavioral-contract enforcement was silently dead in production (deniedTools/allowedTools/maxToolCalls/maxIterations for ~9 days; checkOutput ever) ✅ RESOLVED 2026-08-23 (`481965a8`)
+
+**Class:** correctness bug, safety-feature silent failure (found while investigating D-2026-08-23-A).
+
+`BehavioralContractService.checkToolCall`/`checkIteration` (backing `.withBehavioralContract({deniedTools, allowedTools, maxToolCalls, maxIterations, ...})`) were called ONLY from `inline-act.ts`/`iteration-guards.ts` — both reachable only from the same dead inline branch as D-2026-08-23-A. Any user who opted into a behavioral contract got zero enforcement of those 4 fields since Move 1 (2026-08-13), silently — no error, no warning, the contract simply didn't apply. `checkOutput` (`maxOutputLength`/`deniedTopics`/`requireDisclosure`) was never called from anywhere in the monorepo, in either arm, ever — an older, deeper gap.
+
+**Resolution:** `packages/runtime/src/engine/phases/agent-loop/behavioral-contract-bridge.ts` (new) translates each contract field into a mechanism the kernel already natively enforces, since `packages/reasoning` cannot depend on `@reactive-agents/guardrails`: `deniedTools`/`allowedTools` merge into `config.forbiddenTools` + a synthesized `config.taskContract.tools` entry (feeds the kernel's real `evaluateToolPolicy` gate); `maxIterations` tightens `config.contextProfile.maxIterations` via `Math.min`; `maxToolCalls` (no kernel-native equivalent — a running count, not a per-tool-name rule) is enforced via a new EventBus subscriber counting `ToolCallCompleted` and triggering `KillSwitchService.terminate()` past the cap, reusing the abort mechanism the kernel's run-fiber already respects; `checkOutput` runs once in the shared post-arm code where the final output is visible regardless of arm. Also fixed: `.withBehavioralContracts({maxToolCalls})` alone (no `.withKillSwitch()`) previously wouldn't even have `KillSwitchService` in the DI graph — widened the auto-provision condition in `runtime.ts`.
+
+**Verdict:** PROVEN — `behavioral-contract-enforcement.test.ts` rewritten (9 tests) against the real kernel arm via `.withTestScenario()`, no stubs, covering all 4 dimensions with both positive (violation blocks/aborts) and negative (compliant run succeeds) cases. `packages/reasoning` untouched (0 boundary violation). Full runtime/guardrails/reasoning suites green.
 
 ---
 

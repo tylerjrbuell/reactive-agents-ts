@@ -97,12 +97,7 @@ import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
-import {
-  lazyDisclosureEnabled,
-  assemblyDebugEnabled,
-  promptDumpPathPrefix,
-  rationaleAuditEnabled,
-} from "../../../harness-flags.js";
+import { resolveHarnessConfig, type ResolvedHarness } from "../../../harness-config.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -137,21 +132,132 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
 // here so existing consumers/tests keep their import path.
 export { computePromptSchemas } from "./tool-surface.js";
 
+/**
+ * Lightweight tool index (2026-08-19, RA_TOOL_INDEX — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md).
+ * One line per hidden tool — name, params, first sentence of description —
+ * so the model always knows a hidden tool exists, without paying the FC
+ * schema tax `discover-tools` pays on every call. Empty when nothing is
+ * hidden (an unpruned surface renders nothing).
+ */
+/**
+ * Shared by `buildToolIndexText` and `buildToolIndexCallableSchemas` — the
+ * hidden set an index render operates over, capped identically for both so
+ * the prose and the promoted FC schemas never describe a different set of
+ * tools than they make callable.
+ */
+function cappedHiddenTools(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+  maxEntries?: number,
+): { readonly capped: readonly ToolSchema[]; readonly overflow: number } {
+  const visibleNames = new Set(visible.map((ts) => ts.name));
+  const hidden = universe.filter((ts) => !visibleNames.has(ts.name));
+  const capped = maxEntries && maxEntries > 0 && hidden.length > maxEntries
+    ? hidden.slice(0, maxEntries)
+    : hidden;
+  return { capped, overflow: hidden.length - capped.length };
+}
+
+/**
+ * The other half of the index mechanism's fix (2026-08-19, root-caused via a
+ * live wire-level trace — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+ * §6e). `buildToolIndexText` only renders PROSE describing hidden tools; on a
+ * native-fc dialect the provider API can only invoke a function present in
+ * the request's declared `tools:` array, which is built from
+ * `toolSurface.callable`/`.visible` — NEVER from `.universe`, where the index
+ * text's hidden set lives. A tool named only in prose was therefore
+ * structurally uncallable, confirmed live: a model reading the index,
+ * wanting the tool, and being unable to invoke it improvised a fake
+ * workaround via an unrelated tool instead (0% solved across a 5-rep,
+ * 2-catalog-size ablation).
+ *
+ * This promotes the SAME capped hidden set into real (but compact —
+ * first-sentence-only description, matching the index text's own economy)
+ * ToolSchema entries so they can be unioned into the wire schema array
+ * (`llmTools`, below) and actually invoked. Text-parse/sentinel dialects
+ * don't need this (their `tools:` param isn't sent to the provider at all —
+ * see the `context.toolCallingDriver.mode !== "text-parse"` gate below — and
+ * per the same investigation, the healing pipeline already resolves a
+ * model-named call against `toolSurface.universe` regardless of the FC
+ * array on those dialects, so prose-only disclosure may already work there;
+ * untested, flagged as the next measurement in the plan doc).
+ */
+export function buildToolIndexCallableSchemas(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+  maxEntries?: number,
+): readonly ToolSchema[] {
+  const { capped } = cappedHiddenTools(universe, visible, maxEntries);
+  return capped.map((ts) => {
+    const firstSentence = ts.description.split(/(?<=[.!?])\s/)[0] ?? ts.description;
+    return { ...ts, description: firstSentence };
+  });
+}
+
+/**
+ * The overflow-only note for tools past the cap — see the "double-payment"
+ * fix below for why this is ALL this function renders now.
+ */
+export function buildToolIndexText(
+  universe: readonly ToolSchema[],
+  visible: readonly ToolSchema[],
+  /**
+   * "hybrid" mode's cap (ContextProfile.toolIndexMaxEntries) — truncate the
+   * index and defer the remainder to discover-tools' query search instead of
+   * letting an unbounded catalog turn the index itself into a wall of text.
+   * Undefined/0 ⇒ no cap ("index" mode's unbounded behavior).
+   */
+  maxEntries?: number,
+): string {
+  // Fix (2026-08-19, found live investigating why `index` mode cost MORE
+  // per tool than `full` mode despite carrying LESS information per tool):
+  // every capped/promoted tool used to get a prose line here AND a real FC
+  // schema via buildToolIndexCallableSchemas (name/params/description sent
+  // TWICE — once as text, once as the structured tool the provider already
+  // shows the model). A tool present in the `tools:` array needs no prose
+  // call-out; the schema itself is the disclosure. Only tools that did NOT
+  // get promoted (the overflow, capped-out portion — unreachable except via
+  // discover-tools' query search) still need a mention, and only as a count,
+  // not a per-tool description nobody asked to see rendered twice.
+  const { overflow } = cappedHiddenTools(universe, visible, maxEntries);
+  if (overflow === 0) return "";
+  return (
+    `${overflow} additional tool(s) exist beyond what's shown above — ` +
+    `call discover-tools with a query to search them.`
+  );
+}
+
+// Strong negative signals — these are planning patterns, not answers. Use
+// word-boundary matches so the heuristic doesn't fire on substring mentions
+// like "I should explain..." in a real answer.
+const PLANNING_PATTERNS = [
+  /\b(?:i (?:should|need to|will|am going to|'ll|'m going to) (?:call|use|invoke|fetch|search|look up|check)\b)/i,
+  /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
+  /\bnext (?:step|i'll|i will|i should)\b/i,
+  /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
+  /^(?:thinking|reasoning|planning|analysis)\b/i,
+];
+
+/**
+ * Weaker completeness check than {@link looksLikeFinalAnswer}: substantial,
+ * coherent prose that doesn't read like the model is still planning its next
+ * move. No structural-signal requirement (no header/list/"in summary" etc.) —
+ * appropriate ONLY when no tool was ever required or used this run, where a
+ * plain conversational reply IS the answer and shouldn't need research-answer
+ * formatting to be trusted as complete.
+ */
+export function looksLikeCompleteProse(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.length < 100) return false;
+  return !PLANNING_PATTERNS.some((re) => re.test(trimmed));
+}
+
 export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
   if (trimmed.length < 100) return false;
-
-  // Strong negative signals — these are planning patterns, not answers.
-  // Use word-boundary matches so the heuristic doesn't fire on substring
-  // mentions like "I should explain..." in a real answer.
-  const planningPatterns = [
-    /\b(?:i (?:should|need to|will|am going to|'ll|'m going to) (?:call|use|invoke|fetch|search|look up|check)\b)/i,
-    /\b(?:let me (?:call|use|invoke|fetch|try|check|verify|search)\b)/i,
-    /\bnext (?:step|i'll|i will|i should)\b/i,
-    /\b(?:i (?:don't|do not) have (?:enough|the)) (?:information|data|context)\b/i,
-    /^(?:thinking|reasoning|planning|analysis)\b/i,
-  ];
-  if (planningPatterns.some((re) => re.test(trimmed))) return false;
+  if (PLANNING_PATTERNS.some((re) => re.test(trimmed))) return false;
 
   // Positive signals — structural indicators that this IS the answer.
   const positiveSignals = [
@@ -198,13 +304,20 @@ export function buildThinkProviderRequest(
    * the interface). Defaults to `"text-parse"` = render, the pre-fix behaviour.
    */
   dialect: "native-fc" | "text-parse" | "none" = "text-parse",
+  /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
+  harness?: ResolvedHarness,
+  /**
+   * D-2026-07-28-C: KernelInput.remainingGoals — rendered by
+   * volatileTailStage's `goal_state` read as "Remaining steps: …".
+   */
+  remainingGoals?: readonly string[],
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
   return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect),
+    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals),
   );
 }
 
@@ -217,6 +330,10 @@ export function handleThinking(
     const { input, profile, hooks } = context;
     const strategy = state.strategy;
     const temp = input.temperature ?? profile.temperature ?? 0.7;
+    // Carried harness config (Task 3) — the ONLY source for the mechanism
+    // switches below. Falls back to env/default resolution when this pass
+    // was constructed without an envelope (see harness-control-surface plan).
+    const h = input.harness ?? resolveHarnessConfig();
 
     const maxIter = (state.meta.maxIterations as number) ?? 10;
 
@@ -305,7 +422,7 @@ export function handleThinking(
     // re-invoke tools it's already used). Pressure-narrowing-to-final-answer-
     // only induces panic dumps on local models when fired prematurely, so the
     // resolver applies it only on the non-lazy arm.
-    const lazyMode = lazyDisclosureEnabled();
+    const lazyMode = h.lazyDisclosure;
 
     // ── Tool surface resolution (Overhaul Phase 2) ───────────────────────────
     // One resolver computes the entire per-iteration surface — classification
@@ -365,6 +482,7 @@ export function handleThinking(
       // Consumer-intent floor, carried separately from classifier relevance so
       // `hasClassification` above stays honest.
       floorTools: input.builtinFloorTools ?? [],
+      harness: h,
     });
     const promptSchemas = toolSurface.visible;
 
@@ -489,6 +607,8 @@ export function handleThinking(
       // in-prompt tool reference is skipped on native-FC (tools ride the FC
       // `tools` array); text-parse/weak-FC still get the in-prompt copy.
       context.toolCallingDriver.mode,
+      h,
+      input.remainingGoals,
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
@@ -622,13 +742,13 @@ export function handleThinking(
       }
     }
 
-    if (assemblyDebugEnabled()) {
+    if (h.assemblyDebug) {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }
 
     // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
     // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-iter{N}.json
-    const promptDumpPrefix = promptDumpPathPrefix();
+    const promptDumpPrefix = h.promptDumpPathPrefix;
     if (promptDumpPrefix) {
       const path = `${promptDumpPrefix}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
       try {
@@ -729,7 +849,7 @@ export function handleThinking(
     // When ON, this reduces to the prior `hasReachableTools ? [...] : ""`, so the
     // emitted prompt is byte-identical to the old default.
     const auditRationaleOn =
-      input.auditRationale === true || rationaleAuditEnabled();
+      input.auditRationale === true || h.auditRationale;
     const hasReachableTools = gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools && auditRationaleOn
       ? [
@@ -746,13 +866,49 @@ export function handleThinking(
         ].join("\n")
       : "";
 
+    // Lightweight tool index (2026-08-19, RA_TOOL_INDEX — see
+    // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md).
+    // Counter-proposal to 09 §5.2's discover-tools removal: `discover-tools`
+    // never fires (§5.2's own evidence) because the model has no signal
+    // anything is hidden — tool-surface.ts's `reasons` map already computes
+    // WHY each tool is hidden, every iteration, but only for tracing. This
+    // renders a cheap name+one-line index of the hidden set directly, no FC
+    // schema tax. Default OFF pending an ablation-warden measurement.
+    const toolIndexText = h.toolIndex
+      ? buildToolIndexText(
+          toolSurface.universe,
+          toolSurface.visible,
+          profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
+        )
+      : "";
+
     const parts = [systemPromptText];
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
-    // Hotfix 0.5-1 (2026-07-07): render harness guidance into the dynamic
-    // tail. GuidanceContext was previously assembled (and pendingGuidance
-    // cleared) but never passed to assembly — every guidance-channel signal
-    // was a silent no-op. Tail placement keeps the stable prefix intact.
+    if (toolIndexText) parts.push(toolIndexText);
+    // Hotfix 0.5-1 (2026-07-07): GuidanceContext was previously assembled
+    // (and pendingGuidance cleared) but never passed to assembly — every
+    // guidance-channel signal was a silent no-op.
+    //
+    // Automatic-caching fix (2026-08-24): guidance used to be rendered into
+    // the SYSTEM PROMPT's dynamic tail, on the claim that "tail placement
+    // keeps the stable prefix intact." That claim was wrong — appending
+    // anywhere inside the system STRING still changes the whole string's
+    // content and hash, and Anthropic's prompt cache hierarchy puts system
+    // before messages, so any system-content change invalidates the cache
+    // for that call and everything downstream. Live traces confirmed this:
+    // system-prompt length churned 444 -> 649 -> 444 -> 444 chars across
+    // iterations, tracking exactly when guidance fired. Guidance now lands
+    // as a trailing message-thread entry instead (see guidanceText's use
+    // building `messagesForRequest` below) — the system prompt stays
+    // byte-identical across iterations whenever nothing structural changed,
+    // maximizing automatic-caching reuse, while the message thread's
+    // EXPECTED per-iteration growth absorbs the volatile content, exactly
+    // matching how the automatic-caching breakpoint is designed to move
+    // forward. The guidance message is request-only — it is built from
+    // `conversationMessages` (a fresh per-iteration projection, not the
+    // kernel's canonical `state.messages`) and never written back to state,
+    // so it stays as ephemeral as the old system-prompt-tail approach was.
     //
     // `prompt.guidance` compose hook (2026-08-16): of the 9 guidance channels
     // (required-tools reminders, oracle/ICS nudges, error-recovery, the
@@ -775,8 +931,14 @@ export function handleThinking(
           })
         )
       : defaultGuidanceText;
-    if (guidanceText) parts.push(guidanceText);
     const systemPromptWithDriver = parts.join("\n\n");
+    // guidanceText rides as a trailing user-role message on the OUTGOING
+    // request only — conversationMessages (and therefore state.messages)
+    // stays untouched, so guidance never becomes part of persisted
+    // conversation history that gets replayed/compacted/traced.
+    const messagesForRequest: LLMMessage[] = guidanceText
+      ? [...conversationMessages, { role: "user" as const, content: guidanceText }]
+      : conversationMessages;
 
     // ── Control-plane invariant: the FC array is DOMAIN-ONLY on native-FC ────
     // (2026-08-08-control-plane-vs-meta-tools). A harness-scope tool
@@ -788,11 +950,32 @@ export function handleThinking(
     // when set, else `META_TOOLS` (single source). Domain tools always stay, so
     // an in-progress task never loses a real affordance.
     const isNativeFC = context.toolCallingDriver.mode === "native-fc";
-    const wireToolSchemas = isNativeFC
+    const baseWireToolSchemas = isNativeFC
       ? gatedToolSchemas.filter(
           (ts) => ts.scope === "domain" || (ts.scope !== "harness" && !META_TOOL_SET.has(ts.name)),
         )
       : gatedToolSchemas;
+    // The other half of the index fix (2026-08-19, see buildToolIndexCallableSchemas'
+    // JSDoc) — only matters on native-fc (text-parse doesn't send a `tools:`
+    // param at all, see the mode check below, so promoted schemas here are
+    // harmless no-ops for it). Dedup against gatedToolSchemas defensively —
+    // should never overlap by construction (promoted = hidden = not visible
+    // = not in gatedToolSchemas) but a name collision must not double-list.
+    const indexPromotedSchemas = h.toolIndex
+      ? buildToolIndexCallableSchemas(
+          toolSurface.universe,
+          toolSurface.visible,
+          profile.toolIndexMaxEntries ?? h.toolIndexMaxEntries,
+        )
+      : [];
+    const wireToolSchemas = indexPromotedSchemas.length === 0
+      ? baseWireToolSchemas
+      : [
+          ...baseWireToolSchemas,
+          ...indexPromotedSchemas.filter(
+            (ts) => !baseWireToolSchemas.some((existing) => existing.name === ts.name),
+          ),
+        ];
     const llmTools = wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       description: ts.description,
@@ -841,7 +1024,7 @@ export function handleThinking(
         ? { budgetTokens: state.maxOutputTokensOverride }
         : {}),
     }, {
-      messages: conversationMessages,
+      messages: messagesForRequest,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
       temperature: temp,
@@ -1214,16 +1397,31 @@ export function handleThinking(
     });
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
-    // If this is the first iteration, the model produced no tool call, no
-    // FINAL ANSWER prefix (handled by the oracle), and the response is
-    // substantive, exit immediately without running the termination oracle or
-    // tool-parsing pipeline. Avoids 4-6 extra loop iterations that meta-tool
-    // injection + entropy scoring would otherwise add to simple Q&A.
+    // If the model produced no tool call, no FINAL ANSWER prefix (handled by
+    // the oracle), and the response is substantive, exit immediately without
+    // running the termination oracle or tool-parsing pipeline. Avoids 4-6
+    // extra loop iterations that meta-tool injection + entropy scoring would
+    // otherwise add to simple Q&A.
     // SKIP fast-path when required tools are specified — the agent must use
     // them before it can exit, even if the model already knows the answer.
+    //
+    // NOT gated to iteration 0 (2026-09-04 root fix): a plain conversational
+    // end_turn reply with no tool call is just as terminal on iteration 3 as
+    // on iteration 0. Gating this to iteration 0 only meant a run that missed
+    // the fast-path on its first pass (e.g. the model chose to "think" before
+    // answering) had NO equivalent short-circuit afterward — every later
+    // iteration fell through the full tool-oriented arbitrator pipeline with
+    // no path to recognize "the model is just talking, not acting" until the
+    // loop-detector's multi-iteration grace period (maxConsecutiveThoughts,
+    // default 3-5) forcibly rescued it. Observed live: a banter/opinion chat
+    // turn re-generated near-identical conversational replies for 6
+    // iterations before `graceful_thought` finally delivered iteration 0's
+    // answer verbatim — see wiki/Research/Harness-Reports/2026-09-04-*.
+    // The veto (`shouldVetoSuccess`) below still guards every iteration this
+    // fires on, so a run that genuinely needed controller activity (tool
+    // calls, verifier work) before this thought is still caught.
     const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
     if (
-      state.iteration === 0 &&
       !hasRequiredTools &&
       !thought.match(/ACTION:/i) &&
       !thought.match(/FINAL\s+ANSWER\s*[:：]/i) &&
@@ -1544,11 +1742,43 @@ export function handleThinking(
         const hasRealToolWork = [...state.toolsUsed].some(
           (t) => !META_TOOL_SET.has(t),
         );
+        // Banter/no-tool turns never set hasRealToolWork (no tool is ever
+        // offered), so they'd otherwise never hit this short-circuit and
+        // would loop until the oracle/loop-detector forces an exit instead.
+        const noToolsOffered = (input.availableToolSchemas ?? []).every(
+          (ts) => META_TOOL_SET.has(ts.name),
+        );
+        // `noToolsOffered` only covers agents with ZERO tools registered —
+        // it silently misses the far more common case of an agent that has
+        // tools registered but this particular turn doesn't need one (e.g.
+        // a chat turn routed into the tool-capable path where the model
+        // reasonably declines every offered tool). `reqTools.length === 0`
+        // (no tool is MANDATORY for this task) is the correct proxy for
+        // "tool use isn't required to trust this thought as the answer" —
+        // conflating "tools exist" with "a tool was required" left every
+        // such turn with no fast-accept path, forcing repeated re-prompts
+        // (flat entropy) until the loop-detector intervened.
+        const noToolRequired = reqTools.length === 0;
+        // A no-tool-required turn that also never used a tool is exactly the
+        // conversational case looksLikeFinalAnswer's structural-signal check
+        // was never meant for (it's tuned for research-style answers with
+        // headers/lists/"in summary" — a casual banter reply has none of
+        // that, even though the LLM itself reports stopReason:"end_turn").
+        // Confirmed live via rax-diagnose: 6 iterations regenerating a
+        // complete, valid, DIFFERENTLY-WORDED banter answer each time before
+        // the loop-detector gave up — looksLikeFinalAnswer rejected every one.
+        // Trust the weaker prose check here instead; the stricter structural
+        // check stays in force for anything that used or required a tool,
+        // where the persona's citation/grounding requirements still apply.
+        const noToolNeeded = noToolRequired && !hasRealToolWork;
+        const qualifiesAsFinalAnswer = noToolNeeded
+          ? looksLikeCompleteProse(thinkingContent)
+          : looksLikeFinalAnswer(thinkingContent);
         if (
-          hasRealToolWork &&
+          (hasRealToolWork || noToolsOffered || noToolNeeded) &&
           missingReq.length === 0 &&
           state.iteration > 0 &&
-          looksLikeFinalAnswer(thinkingContent)
+          qualifiesAsFinalAnswer
         ) {
           const stateWithThought = transitionState(state, {
             steps: [...newSteps, makeStep("thought", thinkingContent)],

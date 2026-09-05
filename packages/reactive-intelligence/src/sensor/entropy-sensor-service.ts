@@ -77,6 +77,7 @@ export function uncalibratedDefault(modelId: string): ModelCalibrationLike {
     sampleCount: 0,
     highEntropyThreshold: 0.8,
     convergenceThreshold: 0.4,
+    driftDetected: false,
   };
 }
 
@@ -242,6 +243,7 @@ export const EntropySensorServiceLive = (
               sampleCount: stored.sampleCount,
               highEntropyThreshold: stored.highEntropyThreshold,
               convergenceThreshold: stored.convergenceThreshold,
+              driftDetected: stored.driftDetected,
             } as ModelCalibrationLike;
           }),
 
@@ -257,6 +259,7 @@ export const EntropySensorServiceLive = (
               sampleCount: updated.sampleCount,
               highEntropyThreshold: updated.highEntropyThreshold,
               convergenceThreshold: updated.convergenceThreshold,
+              driftDetected: updated.driftDetected,
             } as ModelCalibrationLike;
           }),
 

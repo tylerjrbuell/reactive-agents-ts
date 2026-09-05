@@ -12,6 +12,7 @@
 // compressToolResult preview — which carries an honest "M of N shown" count
 // and a working recall() hint, instead of re-truncating the raw full text.
 import { describe, expect, it } from "bun:test";
+import { Option } from "effect";
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import { NativeFCDriver } from "@reactive-agents/tools";
 import { assembleConversation } from "./conversation-assembly.js";
@@ -24,10 +25,10 @@ const context: KernelContext = {
   input: { task: "Find the last 25 commits.", availableToolSchemas: [] },
   profile: CONTEXT_PROFILES.local,
   compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-  toolService: { _tag: "None" },
+  toolService: Option.none(),
   hooks: noopHooks,
   toolCallingDriver: new NativeFCDriver(),
-  memoryService: { _tag: "None" },
+  memoryService: Option.none(),
 };
 
 const adapter: ProviderAdapter = {};

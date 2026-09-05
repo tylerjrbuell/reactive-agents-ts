@@ -29,6 +29,8 @@ export interface ToolSchema {
   readonly name: string;
   readonly description: string;
   readonly parameters: readonly ToolParamSchema[];
+  /** Human-readable return shape, when supplied by the tool definition. */
+  readonly returnType?: string;
   /**
    * Which channel this tool belongs to (control-plane design,
    * 2026-08-08-control-plane-vs-meta-tools). `"domain"` (default) = the agent
@@ -243,6 +245,23 @@ export function compressToolResult(
   budget: number,
   previewItems: number,
 ): CompressResult {
+  // discover-tools exemption (2026-08-19 — root-caused via a live trace, see
+  // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+  // §6e root cause 2). discover-tools' "honest exhaustion" branch
+  // (discover-tools.ts) deliberately dumps the COMPLETE tool catalog so the
+  // model has ground truth instead of assuming a hidden tool exists — that
+  // is the entire point of the design, stated in its own 2026-08-06 fix
+  // comment. The generic preview-compressor below truncated that dump right
+  // back down to `previewItems` lines (frontier tier: 3) + a "...N more
+  // lines" marker, silently defeating the guarantee: confirmed live, a model
+  // whose target tool was in the truncated tail never saw it, never called
+  // recall() to retrieve the rest, and answered "I don't have access" with
+  // the correct tool sitting uncompressed two lines further down in
+  // storage. discover-tools' own output is already terse (one line per
+  // tool, formatToolLine) — it is the wrong shape for a "preview + recall"
+  // treatment designed for noisy CLI/JSON payloads, not a curated listing
+  // meant to be read whole.
+  if (toolName === "discover-tools") return { content: result };
   if (result.length <= budget) return { content: result };
 
   const key = nextToolResultKey();
@@ -265,28 +284,40 @@ export function compressToolResult(
       parsed = lines.map((l) => JSON.parse(l));
     }
 
-    // CLI-tool-result envelope unwrap — gh-cli, shell-execute, docker-execute
-    // and code-execute all wrap their real payload as `{command, stdout,
-    // stderr, exitCode, ...}`. Compressing the OUTER envelope treats the
-    // actual data a task asked for as one opaque `stdout` string field
-    // (sliced to 80 chars by the generic object-branch below); the array/
-    // object detectors never see it. Recurse on `stdout` alone — dropping the
-    // wrapper's fixed overhead (command text, stderr, escaping) from the
-    // budget check also means many payloads that fit once unwrapped get
-    // shown in full with no STORED/recall dance at all.
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      !Array.isArray(parsed) &&
-      typeof (parsed as Record<string, unknown>).stdout === "string" &&
-      ("command" in (parsed as object) || "exitCode" in (parsed as object))
-    ) {
-      const envelope = parsed as { command?: string; stdout: string; exitCode?: number };
-      const inner = compressToolResult(envelope.stdout, toolName, budget, previewItems);
-      const prefix =
-        `[${toolName}${envelope.command ? `: ${envelope.command}` : ""}` +
-        `${typeof envelope.exitCode === "number" ? ` (exit ${envelope.exitCode})` : ""}]\n`;
-      return { content: prefix + inner.content, stored: inner.stored };
+    // CLI-tool-result envelope unwrap — gh-cli wraps its payload as `{command,
+    // stdout, stderr, exitCode, ...}`; docker-execute and code-execute wrap
+    // theirs as `{executed, output, exitCode, ...}` (no `stdout` field — verified
+    // against docker-execution.ts / code-execution.ts, which never emit `stdout`;
+    // this branch previously checked `stdout` only, so it silently never fired
+    // for either tool). Compressing the OUTER envelope treats the actual data a
+    // task asked for as one opaque string field (sliced to 80 chars by the
+    // generic object-branch below); the array/object detectors never see it.
+    // Recurse on the payload alone — dropping the wrapper's fixed overhead
+    // (command text, stderr, escaping) from the budget check also means many
+    // payloads that fit once unwrapped get shown in full with no STORED/recall
+    // dance at all.
+    {
+      const record = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : undefined;
+      const payloadField =
+        record && typeof record.stdout === "string" ? "stdout" :
+        record && typeof record.output === "string" ? "output" :
+        undefined;
+      if (
+        record &&
+        payloadField &&
+        ("command" in record || "exitCode" in record)
+      ) {
+        const payload = record[payloadField] as string;
+        const command = typeof record.command === "string" ? record.command : undefined;
+        const exitCode = typeof record.exitCode === "number" ? record.exitCode : undefined;
+        const inner = compressToolResult(payload, toolName, budget, previewItems);
+        const prefix =
+          `[${toolName}${command ? `: ${command}` : ""}` +
+          `${exitCode !== undefined ? ` (exit ${exitCode})` : ""}]\n`;
+        return { content: prefix + inner.content, stored: inner.stored };
+      }
     }
 
     if (Array.isArray(parsed)) {
@@ -442,8 +473,20 @@ export function compressToolResult(
 
     // JSON object
     if (typeof parsed === "object" && parsed !== null) {
+      // Budget-scaled key count + per-value slice length — previously a fixed
+      // 8 keys x 80 chars regardless of `budget`, so a fetched http-get page
+      // (one giant `body` string) rendered byte-identical output at every
+      // model tier (600-char local tier vs 4000-char frontier tier measured
+      // live 2026-09-03, see wiki/Research/Harness-Reports). `budget` is the
+      // one knob a caller has to widen an object preview; it must move the
+      // output.
+      const totalKeys = Object.keys(parsed as object).length;
+      const available = Math.max(0, budget - HEADER_OVERHEAD);
+      const maxKeysShown = Math.max(4, Math.min(totalKeys, Math.floor(available / 40)));
+      const valueSliceLen = Math.max(40, Math.min(200, Math.floor(available / Math.max(maxKeysShown, 1)) - 6));
+
       const entries = Object.entries(parsed as Record<string, unknown>)
-        .slice(0, 8)
+        .slice(0, maxKeysShown)
         .map(([k, v]) => {
           const val =
             v === null
@@ -452,12 +495,10 @@ export function compressToolResult(
                 ? `Array(${v.length})`
                 : typeof v === "object"
                   ? `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
-                  : String(v).slice(0, 80);
+                  : String(v).slice(0, valueSliceLen);
           return `  ${k}: ${val}`;
         })
         .join("\n");
-
-      const totalKeys = Object.keys(parsed as object).length;
       const content =
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Object(${totalKeys} keys)\n` +

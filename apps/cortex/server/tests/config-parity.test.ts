@@ -13,7 +13,7 @@
  *   5. apps/cortex/ui/src/routes/lab/+page.svelte      (builder run() call + AgentConfig types)
  *   `additionalToolNames` → merge in `build-cortex-agent.ts` (`mergeCortexUiToolNames`) into `allowedTools`
  *   Phase 1: taskContext, healthCheck → withTaskContext / withHealthCheck
- *   Phase 2: skills → withSkills({ paths, evolution })
+ *   Phase 2: skills → withSkills({ paths, activate })
  *   MCP / sub-agents also wire through gateway `fireAgent` + `normalizeCortexAgentConfig`.
  *
  * HOW TO USE: Run `bun test apps/cortex/server/tests --timeout 15000`.
@@ -82,10 +82,12 @@ const FULL_CONFIG_BODY = {
   healthCheck:        true,
   skills: {
     paths: ["./.claude/skills", "./skills"],
-    evolution: { mode: "suggest", refinementThreshold: 10, rollbackOnRegression: true },
+    activate: ["forced-skill"],
   },
   /** Phase A — cost-aware model routing (`withModelRouting`) */
   modelRouting:       { enabled: true, minTier: "haiku" },
+  /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" without this. */
+  fabricationGuard:   "warn",
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -161,13 +163,36 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.healthCheck).toBe(true);
 
     expect(p.skills?.paths).toEqual(["./.claude/skills", "./skills"]);
-    expect(p.skills?.evolution?.mode).toBe("suggest");
-    expect(p.skills?.evolution?.refinementThreshold).toBe(10);
-    expect(p.skills?.evolution?.rollbackOnRegression).toBe(true);
+    expect(p.skills?.activate).toEqual(["forced-skill"]);
 
     // ── Model routing (Phase A) ──────────────────────────────────────────
     expect(p.modelRouting?.enabled).toBe(true);
     expect(p.modelRouting?.minTier).toBe("haiku");
+
+    // ── Fabrication guard ─────────────────────────────────────────────────
+    expect(p.fabricationGuard).toBe("warn");
+  });
+
+  it("never forwards a removed 'evolution' skills key — withSkills() throws on it (v0.14, DEBT-REGISTER P0-10)", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(
+      runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)),
+    );
+    const res = await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...FULL_CONFIG_BODY,
+          skills: { paths: ["./.claude/skills"], evolution: { mode: "suggest" } },
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(captured.params?.skills?.paths).toEqual(["./.claude/skills"]);
+    expect((captured.params?.skills as Record<string, unknown> | undefined)?.evolution).toBeUndefined();
   });
 });
 

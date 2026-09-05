@@ -8,45 +8,47 @@ import {
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
-// ─── Mock LLM Service ───
+// ─── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ───────────
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available; the raw `LLMService` mocks this file used
+// to drive the (now-deleted) inline arm directly are no longer on the
+// execution path. These tests exercise generic engine-level wiring
+// (token/metadata pass-through, observability spans, guardrail/verification/
+// cost-service hook firing) that doesn't depend on which reasoning
+// implementation runs underneath, so a minimal `ReasoningService` stub —
+// matching the pattern in `chat-history-seeds-kernel.test.ts` — preserves
+// each assertion's meaning. Two tests (C4, C2) asserted on raw
+// `LLMService.complete()` request/response shape, which is inline-arm-only
+// plumbing; those are redesigned below to assert the equivalent real
+// boundary on the kernel arm (the params `ReasoningService.execute()`
+// receives, and the metadata it reports), not a hollowed-out pass.
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
+};
 
-const makeMockLLM = (opts?: {
-  toolCalls?: unknown[];
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
+
+const makeMockReasoning = (opts?: {
   content?: string;
   tokenCount?: number;
+  stepsCount?: number;
 }) => {
   const tokenCount = opts?.tokenCount ?? 30;
-  return Layer.succeed(
-    Context.GenericTag<{
-      complete: (req: unknown) => Effect.Effect<{
-        content: string;
-        stopReason: string;
-        toolCalls?: unknown[];
-        usage: {
-          inputTokens: number;
-          outputTokens: number;
-          totalTokens: number;
-          estimatedCost: number;
-        };
-        model: string;
-      }>;
-    }>("LLMService"),
-    {
-      complete: (_req: unknown) =>
-        Effect.succeed({
-          content: opts?.content ?? "Task completed.",
-          stopReason: opts?.toolCalls?.length ? "tool_use" : "end_turn",
-          toolCalls: opts?.toolCalls ?? [],
-          usage: {
-            inputTokens: Math.floor(tokenCount / 2),
-            outputTokens: Math.floor(tokenCount / 2),
-            totalTokens: tokenCount,
-            estimatedCost: tokenCount * 0.00001,
-          },
-          model: "test-model",
-        }),
-    },
-  );
+  return Layer.succeed(ReasoningServiceTag, {
+    execute: (_params: { [k: string]: unknown }) =>
+      Effect.succeed({
+        output: opts?.content ?? "Task completed.",
+        status: "completed" as const,
+        steps: [{ id: "step-1", type: "thought", content: opts?.content ?? "Task completed." }],
+        metadata: { cost: tokenCount * 0.00001, tokensUsed: tokenCount, stepsCount: opts?.stepsCount ?? 1 },
+      }),
+  });
 };
 
 // ─── Helpers ───
@@ -62,19 +64,19 @@ const mockTask = {
   createdAt: new Date(),
 };
 
-const makeTestLayer = (llmLayer: Layer.Layer<any, any>, config = defaultReactiveAgentsConfig("agent-001")) => {
+const makeTestLayer = (reasoningLayer: Layer.Layer<any, any>, config = defaultReactiveAgentsConfig("agent-001")) => {
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
   );
-  return Layer.mergeAll(hookLayer, engineLayer, llmLayer);
+  return Layer.mergeAll(hookLayer, engineLayer, reasoningLayer);
 };
 
 // ─── C5: Token Tracking ───
 
 describe("C5: Token Tracking", () => {
   it("should accumulate tokensUsed from LLM responses", async () => {
-    const testLayer = makeTestLayer(makeMockLLM({ tokenCount: 42 }));
+    const testLayer = makeTestLayer(makeMockReasoning({ tokenCount: 42 }));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -89,57 +91,13 @@ describe("C5: Token Tracking", () => {
   });
 
   it("should accumulate tokens across multiple iterations", async () => {
-    let callCount = 0;
-    const llmLayer = Layer.succeed(
-      Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: unknown[];
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
-        }>;
-      }>("LLMService"),
-      {
-        complete: (_req: unknown) => {
-          callCount++;
-          // First call returns a tool call, second returns end_turn
-          if (callCount === 1) {
-            return Effect.succeed({
-              content: "Calling a tool",
-              stopReason: "tool_use",
-              toolCalls: [{ id: "call-1", name: "test_tool", input: {} }],
-              usage: {
-                inputTokens: 10,
-                outputTokens: 10,
-                totalTokens: 20,
-                estimatedCost: 0.001,
-              },
-              model: "test-model",
-            });
-          }
-          return Effect.succeed({
-            content: "Done",
-            stopReason: "end_turn",
-            toolCalls: [],
-            usage: {
-              inputTokens: 15,
-              outputTokens: 15,
-              totalTokens: 30,
-              estimatedCost: 0.002,
-            },
-            model: "test-model",
-          });
-        },
-      },
-    );
-
-    const testLayer = makeTestLayer(llmLayer);
+    // Reports the SAME total a 2-iteration inline run would have produced
+    // (20 + 30 = 50) — the kernel arm sums tokens across its own internal
+    // iterations and reports the total via ReasoningResult.metadata, so
+    // this asserts the engine passes that total through unchanged rather
+    // than re-deriving multi-iteration LLM call mechanics that are now
+    // internal to the kernel.
+    const testLayer = makeTestLayer(makeMockReasoning({ tokenCount: 50, stepsCount: 2 }));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -149,44 +107,37 @@ describe("C5: Token Tracking", () => {
     );
 
     expect(result.success).toBe(true);
-    // Should accumulate 20 + 30 = 50 tokens
     expect(result.metadata.tokensUsed).toBe(50);
+    expect(result.metadata.stepsCount).toBe(2);
   });
 });
 
 // ─── C4: Tool Definition Type Adapter ───
 
 describe("C4: Tool Definition Type Adapter", () => {
-  it("should pass tools to LLM when ToolService is available", async () => {
-    let receivedTools: unknown = undefined;
-    const llmLayer = Layer.succeed(
-      Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: unknown[];
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
-        }>;
-      }>("LLMService"),
-      {
-        complete: (req: unknown) => {
-          receivedTools = (req as any).tools;
-          return Effect.succeed({
-            content: "Done",
-            stopReason: "end_turn",
-            toolCalls: [],
-            usage: { inputTokens: 5, outputTokens: 5, totalTokens: 10, estimatedCost: 0 },
-            model: "test-model",
-          });
-        },
+  it("should pass tools from ToolService to the reasoning layer", async () => {
+    // REDESIGN NOTE (Move 1 dead-arm removal, 2026-08-21): this test used to
+    // intercept the raw `LLMService.complete()` request's `tools` field —
+    // inline-arm-only plumbing (the kernel arm never calls `complete()`
+    // directly with a bare `tools` array; it threads schemas through
+    // `ReasoningService.execute({ availableToolSchemas })`
+    // instead, per `packages/runtime/src/execution-engine.ts`'s kernel
+    // branch). Asserting on THAT boundary instead proves the same real
+    // fact — tools registered on `ToolService` reach whatever executes the
+    // task — at the boundary that is actually live in production now.
+    let receivedToolNames: readonly string[] | undefined;
+    const capturingReasoningLayer = Layer.succeed(ReasoningServiceTag, {
+      execute: (params: { [k: string]: unknown }) => {
+        const schemas = params.availableToolSchemas as readonly { name: string }[] | undefined;
+        receivedToolNames = schemas?.map((s) => s.name);
+        return Effect.succeed({
+          output: "Done",
+          status: "completed" as const,
+          steps: [{ id: "step-1", type: "thought", content: "Done" }],
+          metadata: { cost: 0, tokensUsed: 10, stepsCount: 1 },
+        });
       },
-    );
+    });
 
     // Mock ToolService that returns tools in function-calling format
     const mockToolService = Layer.succeed(
@@ -214,7 +165,7 @@ describe("C4: Tool Definition Type Adapter", () => {
             },
           ]),
         listTools: () =>
-          Effect.succeed([{ name: "search", description: "Search the web" }]),
+          Effect.succeed([{ name: "search", description: "Search the web", parameters: [] }]),
         execute: () => Effect.succeed({ toolName: "search", success: true, result: "result", executionTimeMs: 0 }),
         register: () => Effect.void,
         connectMCPServer: () => Effect.succeed({} as any),
@@ -225,7 +176,7 @@ describe("C4: Tool Definition Type Adapter", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(llmLayer),
+      makeTestLayer(capturingReasoningLayer),
       mockToolService,
     );
 
@@ -237,12 +188,9 @@ describe("C4: Tool Definition Type Adapter", () => {
     );
 
     expect(result.success).toBe(true);
-    // Verify tools were passed to LLM
-    expect(receivedTools).toBeDefined();
-    expect(Array.isArray(receivedTools)).toBe(true);
-    const tools = receivedTools as any[];
-    expect(tools.length).toBe(1);
-    expect(tools[0].name).toBe("search");
+    // Verify tools were passed to the reasoning layer
+    expect(receivedToolNames).toBeDefined();
+    expect(receivedToolNames).toContain("search");
   });
 });
 
@@ -293,7 +241,7 @@ describe("H1: Observability Integration", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(makeMockLLM()),
+      makeTestLayer(makeMockReasoning()),
       mockObs,
     );
 
@@ -340,7 +288,7 @@ describe("H2: Stub Phases Wired", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(makeMockLLM(), config),
+      makeTestLayer(makeMockReasoning(), config),
       mockGuardrail,
     );
 
@@ -381,7 +329,7 @@ describe("H2: Stub Phases Wired", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(makeMockLLM(), config),
+      makeTestLayer(makeMockReasoning(), config),
       failingGuardrail,
     );
 
@@ -435,7 +383,7 @@ describe("H2: Stub Phases Wired", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(makeMockLLM(), config),
+      makeTestLayer(makeMockReasoning(), config),
       mockVerification,
     );
 
@@ -485,7 +433,7 @@ describe("H2: Stub Phases Wired", () => {
     );
 
     const testLayer = Layer.mergeAll(
-      makeTestLayer(makeMockLLM(), config),
+      makeTestLayer(makeMockReasoning(), config),
       mockCost,
     );
 
@@ -504,55 +452,24 @@ describe("H2: Stub Phases Wired", () => {
 // ─── OpenAI Tool Calling (C2) ───
 
 describe("C2: OpenAI Tool Calling Format", () => {
-  it("should extract tool_calls from LLM response and execute them", async () => {
-    let callCount = 0;
-    const llmLayer = Layer.succeed(
-      Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: unknown[];
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
-        }>;
-      }>("LLMService"),
-      {
-        complete: (_req: unknown) => {
-          callCount++;
-          if (callCount === 1) {
-            // First call: return tool calls (simulating OpenAI format)
-            return Effect.succeed({
-              content: "",
-              stopReason: "tool_use",
-              toolCalls: [
-                {
-                  id: "call-abc123",
-                  name: "calculator",
-                  input: { expression: "2+2" },
-                },
-              ],
-              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-              model: "test-model",
-            });
-          }
-          // Second call: return final answer
-          return Effect.succeed({
-            content: "The answer is 4.",
-            stopReason: "end_turn",
-            toolCalls: [],
-            usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-            model: "test-model",
-          });
-        },
-      },
+  it("should reflect tool-call-bearing multi-step reasoning results in the TaskResult", async () => {
+    // REDESIGN NOTE (Move 1 dead-arm removal, 2026-08-21): this test used to
+    // drive the inline arm's raw `LLMService.complete()` mock through two
+    // calls (a tool_use turn, then an end_turn) and assert on `callCount`
+    // and the summed `usage.totalTokens` across both — inline-arm-only
+    // mechanics; the kernel arm makes and sums its own LLM calls
+    // internally and reports only the aggregate via `ReasoningResult`. The
+    // real end-to-end proof that OpenAI-style tool_calls are extracted and
+    // executed by the live kernel arm is
+    // `execution-engine.test.ts`'s "should record tool execution metrics
+    // when tools are called" test (drives a real scripted tool call through
+    // the builder + real kernel). This test instead proves the ENGINE-level
+    // contract still under test here: a multi-step ReasoningResult (as a
+    // tool-call turn followed by a final-answer turn would produce) is
+    // faithfully reflected in the assembled TaskResult.
+    const testLayer = makeTestLayer(
+      makeMockReasoning({ content: "The answer is 4.", tokenCount: 40, stepsCount: 2 }),
     );
-
-    const testLayer = makeTestLayer(llmLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -562,7 +479,7 @@ describe("C2: OpenAI Tool Calling Format", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(callCount).toBe(2);
-    expect(result.metadata.tokensUsed).toBe(40); // 20 + 20
+    expect(result.metadata.stepsCount).toBe(2);
+    expect(result.metadata.tokensUsed).toBe(40); // 20 + 20, the two-turn total
   });
 });

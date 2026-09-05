@@ -43,7 +43,12 @@ describe("WS-4 Phase 3 — @reactive-agents/observe wire-up", () => {
       expect(typeof mod["autoConfigureExporter"]).toBe("function");
     });
 
-    it("lists @reactive-agents/observe as a workspace dep on the umbrella", () => {
+    it("lists @reactive-agents/observe as a dependency of the umbrella", () => {
+      // `release.ts` pins every `workspace:*` dep to the literal release
+      // version before publishing (npm can't resolve the workspace
+      // protocol), so this field legitimately reads "workspace:*" in
+      // between releases and a real semver right after one is stamped.
+      // Assert presence + a resolvable range, not a specific literal.
       const pkgPath = resolve(
         REPO_ROOT,
         "packages/reactive-agents/package.json",
@@ -51,8 +56,10 @@ describe("WS-4 Phase 3 — @reactive-agents/observe wire-up", () => {
       const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
         dependencies?: Record<string, string>;
       };
-      expect(pkg.dependencies?.["@reactive-agents/observe"]).toBe(
-        "workspace:*",
+      const range = pkg.dependencies?.["@reactive-agents/observe"];
+      expect(range).toBeDefined();
+      expect(range === "workspace:*" || /^\d+\.\d+\.\d+/.test(range!)).toBe(
+        true,
       );
     });
   });

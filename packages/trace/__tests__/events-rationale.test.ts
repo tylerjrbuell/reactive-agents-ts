@@ -3,7 +3,6 @@ import type {
   ToolCallEvent,
   AssumptionRecordedEvent,
   CuratorDecisionEvent,
-  AlternativesConsideredEvent,
   KernelStateSnapshotEvent,
   StrategySwitchedEvent,
   DecisionEvaluatedEvent,
@@ -40,17 +39,6 @@ describe("rationale-bearing events (structural)", () => {
     };
     expect(e.kind).toBe("assumption-recorded");
     expect(e.rationale.confidence).toBe(0.6);
-  });
-
-  it("AlternativesConsideredEvent", () => {
-    const e: AlternativesConsideredEvent = {
-      kind: "alternatives-considered",
-      runId: "r1", iter: 2, seq: 3, timestamp: 0,
-      chosen: "tool_a",
-      alternatives: [{ option: "tool_b", rejectedBecause: "stale data" }],
-    };
-    expect(e.chosen).toBe("tool_a");
-    expect(e.alternatives).toHaveLength(1);
   });
 
   it("CuratorDecisionEvent", () => {
@@ -120,12 +108,6 @@ describe("rationale-bearing events (structural)", () => {
         rationale: { why: "y" },
       },
       {
-        kind: "alternatives-considered",
-        runId: "r1", iter: 0, seq: 0, timestamp: 0,
-        chosen: "x",
-        alternatives: [],
-      },
-      {
         kind: "curator-decision",
         runId: "r1", iter: 0, seq: 0, timestamp: 0,
         action: "kept",
@@ -133,6 +115,6 @@ describe("rationale-bearing events (structural)", () => {
         rationale: { why: "high signal" },
       },
     ];
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(2);
   });
 });

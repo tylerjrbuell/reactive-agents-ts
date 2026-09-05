@@ -37,10 +37,37 @@ export class IterationLimitError extends Data.TaggedError(
   readonly stepsCompleted: number;
 }> {}
 
+// ─── KernelState codec failure (kernel-codec.ts) ───
+// Thrown (not Effect.fail'd) by serializeKernelState/deserializeKernelState:
+// the codec is a pure synchronous function called from many non-Effect
+// contexts (unit tests, iterate-pass.ts's plain try/catch checkpoint
+// callbacks). A typed throw still lets `instanceof KernelCodecError` /
+// `err.reason` discriminate without forcing every caller onto Effect.
+export class KernelCodecError extends Data.TaggedError("KernelCodecError")<{
+  readonly message: string;
+  /** Discriminates the failure shape without parsing `message`. */
+  readonly reason: "invalid-json" | "invalid-envelope" | "version-mismatch" | "invalid-state";
+  readonly cause?: unknown;
+}> {}
+
+// ─── Tool transform expression parse/eval failure (tool-parsing.ts) ───
+// Thrown by the safeEval walker inside evaluateTransform(); always caught
+// there and folded into a "[Transform error: ...]" string, so this never
+// escapes the module — the typed class only replaces plain `Error` for
+// internal instanceof/tag discrimination and future callers.
+export class ToolExpressionParseError extends Data.TaggedError(
+  "ToolExpressionParseError",
+)<{
+  readonly message: string;
+  readonly expression?: string;
+}> {}
+
 // ─── Union type for service signatures ───
 export type ReasoningErrors =
   | ReasoningError
   | StrategyNotFoundError
   | SelectionError
   | ExecutionError
-  | IterationLimitError;
+  | IterationLimitError
+  | KernelCodecError
+  | ToolExpressionParseError;

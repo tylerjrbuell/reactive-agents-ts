@@ -193,6 +193,45 @@ describe("MCPClient", () => {
     // Should not throw
     expect(() => cleanupMcpTransport("never-connected")).not.toThrow();
   });
+
+  it("isolates connection tables across two makeMCPClient instances", async () => {
+    // Regression test for cross-instance state sharing: two Layer instances
+    // (e.g. two concurrent agents) built in the same process must each own
+    // their own connection table (`activeConnections`), not a shared
+    // module-level Map. Connecting a server of the SAME name on instance A
+    // must not be visible to instance B, and disconnecting that name on B
+    // must not tear down A's live transport.
+    const program = Effect.gen(function* () {
+      const clientA = yield* makeMCPClient;
+      const clientB = yield* makeMCPClient;
+
+      yield* clientA.connect({
+        name: "shared-name",
+        transport: "streamable-http",
+        endpoint: `http://localhost:${server.port}/mcp`,
+      });
+
+      // B never connected — its own table must still be empty.
+      const serversB = yield* clientB.listServers();
+      expect(serversB).toHaveLength(0);
+
+      // Disconnecting "shared-name" on B must be a no-op for B (never
+      // connected there) and must NOT reach into A's connection table.
+      // Under the old module-level-Map bug, this call would delete the
+      // shared entry out from under A, and A's subsequent callTool would
+      // fail with "not connected".
+      yield* clientB.disconnect("shared-name");
+
+      const result = yield* clientA.callTool("shared-name", "test-tool", {});
+      expect(result).toBeDefined();
+
+      const serversA = yield* clientA.listServers();
+      expect(serversA).toHaveLength(1);
+      expect(serversA[0].status).toBe("connected");
+    });
+
+    await Effect.runPromise(program);
+  });
 });
 
 describe("docker arg shaping", () => {

@@ -13,7 +13,7 @@
  * no longer calls storeSemantic on either path.
  */
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type { ObservationStepLike } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -25,41 +25,34 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-  type MaybeService,
   type MemoryServiceInstance,
   type ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import type { StepId } from "../../../src/types/step.js";
 
-function successToolService(): MaybeService<ToolServiceInstance> {
-  return {
-    _tag: "Some",
-    value: {
+function successToolService(): Option.Option<ToolServiceInstance> {
+  return Option.some({
       execute: (req) =>
         Effect.succeed({ success: true, result: { ok: req.toolName } }),
       getTool: () => Effect.fail(new Error("no schema")),
       listTools: () => Effect.succeed([]),
-    },
-  };
+    });
 }
 
 // Mock MemoryService that records every storeSemantic call.
 function recordingMemoryService(): {
-  service: MaybeService<MemoryServiceInstance>;
+  service: Option.Option<MemoryServiceInstance>;
   stored: unknown[];
 } {
   const stored: unknown[] = [];
   return {
-    service: {
-      _tag: "Some",
-      value: {
-        storeSemantic: (entry) => {
-          stored.push(entry);
-          return Effect.succeed("mem-id" as MemoryId);
-        },
+    service: Option.some({
+      storeSemantic: (entry) => {
+        stored.push(entry);
+        return Effect.succeed("mem-id" as MemoryId);
       },
-    },
+    }),
     stored,
   };
 }
@@ -101,7 +94,7 @@ function baseState(pendingCalls: { id: string; name: string; arguments: Record<s
 
 function baseContext(
   pipeline: HarnessPipeline,
-  opts?: { batch?: boolean; memoryService?: MaybeService<MemoryServiceInstance> },
+  opts?: { batch?: boolean; memoryService?: Option.Option<MemoryServiceInstance> },
 ): KernelContext {
   const profile = CONTEXT_PROFILES["mid"];
   return {

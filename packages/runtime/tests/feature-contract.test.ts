@@ -24,45 +24,11 @@ import {
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
 // ─── Mock Primitives ───────────────────────────────────────────────────────
-
-function makeMockLLM(opts: {
-  content?: string;
-  toolCalls?: unknown[];
-  tokens?: number;
-  cost?: number;
-  stopOnSecondCall?: boolean;
-}) {
-  let callCount = 0;
-  return Layer.succeed(
-    Context.GenericTag<{
-      complete: (req: unknown) => Effect.Effect<{
-        content: string;
-        stopReason: string;
-        toolCalls?: unknown[];
-        usage: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
-        model: string;
-      }>;
-    }>("LLMService"),
-    {
-      complete: (_req: unknown) => {
-        callCount++;
-        const isFirstCall = callCount === 1;
-        return Effect.succeed({
-          content: opts.content ?? "FINAL ANSWER: Task completed.",
-          stopReason: "end_turn",
-          toolCalls: isFirstCall && !opts.stopOnSecondCall ? (opts.toolCalls ?? []) : [],
-          usage: {
-            inputTokens: 100,
-            outputTokens: opts.tokens ?? 50,
-            totalTokens: (opts.tokens ?? 50) + 100,
-            estimatedCost: opts.cost ?? 0.001,
-          },
-          model: "test-model",
-        });
-      },
-    },
-  );
-}
+//
+// The raw `LLMService` mock this file used to also carry (`makeMockLLM`) drove
+// the dead inline direct-LLM arm (deleted alongside `execution-engine.ts`'s
+// `else if (!cacheHit)` branch, Move 1, 2026-08-13) — every test below now
+// routes through the kernel arm via `makeMockReasoningService`.
 
 // Mock ToolService that always succeeds
 const MockToolServiceLayer = Layer.succeed(
@@ -153,13 +119,20 @@ function makeEngine(config?: Partial<import("../src/types.js").ReactiveAgentsCon
 
 // ─── HOOK CONTRACTS ────────────────────────────────────────────────────────
 
-describe("Hook contracts — direct-LLM path (no reasoning)", () => {
+// Migrated off the dead inline arm (Move 1, 2026-08-13). These tests used to
+// drive `ExecutionEngineLive` with ONLY a raw `LLMService` mock, which
+// exercised the direct-LLM branch (`reasoningOpt` resolves to `None`). Now
+// routed through the kernel arm via `makeMockReasoningService`, same as the
+// "reasoning path" describe block below — the hook contracts themselves
+// (iteration numbering, taskId, tool results, accumulated tokens, before/after
+// ordering) are arm-agnostic, so the assertions carry over unchanged.
+describe("Hook contracts — kernel arm (single ReasoningService pass)", () => {
   it("iteration counter starts at 1 on first think hook", async () => {
     const iterations: number[] = [];
-    const { config, engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: 4" });
+    const { engineLayer } = makeEngine();
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: 4" });
 
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -182,8 +155,8 @@ describe("Hook contracts — direct-LLM path (no reasoning)", () => {
   it("think hook fires with correct maxIterations", async () => {
     let capturedMax = -1;
     const { engineLayer } = makeEngine({ maxIterations: 7 });
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -206,8 +179,8 @@ describe("Hook contracts — direct-LLM path (no reasoning)", () => {
   it("complete hook fires with correct taskId", async () => {
     let capturedTaskId = "";
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
     const task = mockTask();
 
     await Effect.runPromise(
@@ -228,16 +201,13 @@ describe("Hook contracts — direct-LLM path (no reasoning)", () => {
     expect(capturedTaskId).toBe(String(task.id));
   });
 
-  it("act hook fires and receives toolResults when LLM calls tools", async () => {
+  it("act hook fires and receives toolResults when the reasoning pass calls tools", async () => {
     const actContexts: unknown[] = [];
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({
-      content: "FINAL ANSWER: done",
-      toolCalls: [
-        { id: "call-1", name: "web_search", input: { query: "bitcoin price" } },
-      ],
+    const reasoningLayer = makeMockReasoningService({
+      toolsUsed: [{ name: "web_search", result: "bitcoin price: $65,000" }],
     });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer, MockToolServiceLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -263,15 +233,11 @@ describe("Hook contracts — direct-LLM path (no reasoning)", () => {
   it("tokensUsed in complete hook reflects accumulated usage", async () => {
     let completedTokens = 0;
     const { engineLayer } = makeEngine();
-    // LLM returns 200 tokens per call, first call has tools → 2 LLM calls
-    const llmLayer = makeMockLLM({
-      content: "FINAL ANSWER: done",
-      tokens: 200,
-      toolCalls: [
-        { id: "call-1", name: "web_search", input: {} },
-      ],
+    // makeMockReasoningService reports tokensUsed: 500 in its metadata.
+    const reasoningLayer = makeMockReasoningService({
+      toolsUsed: [{ name: "web_search", result: "result" }],
     });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer, MockToolServiceLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -288,15 +254,15 @@ describe("Hook contracts — direct-LLM path (no reasoning)", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // At least one LLM call happened → tokens should be positive
+    // The reasoning pass reported real usage → tokens should be positive
     expect(completedTokens).toBeGreaterThan(0);
   });
 
   it("hook fires 'before' then 'after' for the same phase", async () => {
     const order: string[] = [];
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -464,8 +430,8 @@ describe("Hook contracts — reasoning path (withReasoning)", () => {
 describe("TaskResult shape contracts", () => {
   it("result.success is true on normal completion", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -479,11 +445,10 @@ describe("TaskResult shape contracts", () => {
 
   it("result.metadata.stepsCount > 0 when tool calls occur", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({
-      content: "FINAL ANSWER: done",
-      toolCalls: [{ id: "c1", name: "web_search", input: {} }],
+    const reasoningLayer = makeMockReasoningService({
+      toolsUsed: [{ name: "web_search", result: "result" }],
     });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer, MockToolServiceLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -496,8 +461,8 @@ describe("TaskResult shape contracts", () => {
 
   it("result.metadata.tokensUsed > 0", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done", tokens: 75 });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -514,8 +479,8 @@ describe("TaskResult shape contracts", () => {
   // breaking downstream consumers that read either name.
   it("result.metadata.totalTokens mirrors tokensUsed (GH #126 alias)", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done", tokens: 75 });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -533,8 +498,8 @@ describe("TaskResult shape contracts", () => {
 
   it("result.metadata.duration > 0", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -583,8 +548,8 @@ describe("TaskResult shape contracts", () => {
 
   it("result.agentId matches the configured agent", async () => {
     const { engineLayer } = makeEngine();
-    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+    const reasoningLayer = makeMockReasoningService({ output: "FINAL ANSWER: done" });
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer);
     const task = mockTask();
     task.agentId = "my-specific-agent" as any;
 
@@ -599,17 +564,40 @@ describe("TaskResult shape contracts", () => {
 });
 
 // ─── MULTI-ITERATION CONTRACTS ────────────────────────────────────────────
-
-describe("Multi-iteration contracts (direct-LLM path)", () => {
-  it("think fires multiple times when tools cause loop continuation", async () => {
+//
+// Migrated off the dead inline arm (Move 1, 2026-08-13). The inline direct-LLM
+// while-loop drove the outer engine's `think` hook once per LLM round-trip, so
+// a multi-tool-call task fired `think` N times with `ctx.iteration` counting
+// 1, 2, 3... That per-round-trip loop lived entirely in `inline-think.ts` /
+// `execution-engine.ts`'s deleted `else if (!cacheHit)` branch — the kernel
+// arm's tool-use loop runs INSIDE `ReasoningService.execute()`, invisible to
+// the outer engine, so the outer `think` hook now fires exactly ONCE per task
+// regardless of how many tool rounds the reasoning pass took internally (see
+// "think hook fires once with iteration >= 1" in the reasoning-path describe
+// block above). There is no kernel-arm mechanism that makes the OUTER think
+// hook fire multiple times — that specific mechanism doesn't exist on the
+// sole remaining arm, by construction.
+//
+// The tests' actual intent — "the iteration count reflects the amount of
+// real multi-step work the agent did, not a hardcoded 1" — DOES have a
+// kernel-arm equivalent: `reasoning-post-think.ts` sets
+// `ctx.iteration = ctx.metadata.stepsCount` after the pass completes, so a
+// multi-tool-call run's iteration count in the `complete` hook reflects the
+// reasoning service's real step count. Redesigned below to pin that contract
+// instead of the now-impossible per-round-trip think-hook-firing one.
+describe("Multi-iteration contracts (kernel arm)", () => {
+  it("think hook fires exactly once per task regardless of internal tool-use rounds", async () => {
     const thinkIterations: number[] = [];
     const { engineLayer } = makeEngine();
-    // First call: returns tool call; Second call: FINAL ANSWER (terminates loop)
-    const llmLayer = makeMockLLM({
-      content: "FINAL ANSWER: done",
-      toolCalls: [{ id: "c1", name: "web_search", input: { q: "test" } }],
+    // Reasoning pass internally used 2 tools (multiple "rounds" from the
+    // reasoning service's perspective) — the outer think hook still fires once.
+    const reasoningLayer = makeMockReasoningService({
+      toolsUsed: [
+        { name: "web_search", result: "result 1" },
+        { name: "web_search", result: "result 2" },
+      ],
     });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer, MockToolServiceLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -623,38 +611,37 @@ describe("Multi-iteration contracts (direct-LLM path)", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Iteration 1: think fires at 1, tool called → loop
-    // Iteration 2: think fires at 2 (no tool call) → FINAL ANSWER → done
-    expect(thinkIterations.length).toBe(2);
+    expect(thinkIterations.length).toBe(1);
     expect(thinkIterations[0]).toBe(1);
-    expect(thinkIterations[1]).toBe(2);
   });
 
-  it("iteration increments correctly across multiple loops", async () => {
-    const thinkIterations: number[] = [];
+  it("final iteration count reflects the reasoning pass's real step count, not a hardcoded 1", async () => {
+    let finalIteration = -1;
     const { engineLayer } = makeEngine({ maxIterations: 5 });
-    const llmLayer = makeMockLLM({
-      content: "FINAL ANSWER: done",
-      toolCalls: [{ id: "c1", name: "web_search", input: {} }],
+    // toolsUsed: 2 tools → stepsCount = 2*2+1 = 5 (thought + action/observation
+    // per tool + final thought), per makeMockReasoningService's default.
+    const reasoningLayer = makeMockReasoningService({
+      toolsUsed: [
+        { name: "web_search", result: "result 1" },
+        { name: "web_search", result: "result 2" },
+      ],
     });
-    const testLayer = Layer.mergeAll(engineLayer, llmLayer, MockToolServiceLayer);
+    const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
     await Effect.runPromise(
       Effect.gen(function* () {
         const engine = yield* ExecutionEngine;
         yield* engine.registerHook({
-          phase: "think",
+          phase: "complete",
           timing: "after",
-          handler: (ctx) => { thinkIterations.push(ctx.iteration); return Effect.succeed(ctx); },
+          handler: (ctx) => { finalIteration = ctx.iteration; return Effect.succeed(ctx); },
         });
         yield* engine.execute(mockTask());
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Iterations should be consecutive starting at 1: [1, 2]
-    expect(thinkIterations[0]).toBe(1);
-    for (let i = 1; i < thinkIterations.length; i++) {
-      expect(thinkIterations[i]).toBe(thinkIterations[i - 1]! + 1);
-    }
+    // Gutting the stepsCount → iteration wiring (reasoning-post-think.ts)
+    // would leave this at 1 → RED.
+    expect(finalIteration).toBe(5);
   });
 });

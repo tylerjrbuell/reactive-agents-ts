@@ -63,7 +63,7 @@ import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
 } from './builder/build-effect/runtime-construction.js'
-import type { TestTurn } from '@reactive-agents/llm-provider'
+import type { TestTurn, LLMService } from '@reactive-agents/llm-provider'
 import type { TaskContract } from '@reactive-agents/core'
 import type {
     LifecycleHook,
@@ -73,7 +73,7 @@ import type {
 } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError } from './errors.js'
-import type { ContextProfile } from '@reactive-agents/reasoning'
+import type { ContextProfile, HarnessConfig } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
 import type { ResultCompressionConfig } from '@reactive-agents/tools'
@@ -330,14 +330,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _memoryTier: '1' | '2' = '1'
     /**
      * Memory is OFF by default (v0.12 — "Durable & Honest"). A bare
-     * `.create()....build()` is stateless: no `~/.reactive-agents/<agentId>/`
+     * `.create()....build()` is stateless: no `~/.reactive-agents/memory/<agentId>/`
      * SQLite writes, predictable in CI, no surprise cross-session state.
      * Opt in with one line — `.withMemory()` (tier-1 working memory + SQLite
      * cross-session store) — or via `HarnessProfile.balanced()` /
      * `.intelligent()`, both of which enable it explicitly. A bare
      * `.withMemory()` (no `dbPath`) resolves to a stable user-scope store at
-     * `~/.reactive-agents/<agentId>/memory.db`; pass `.withMemory({ dbPath })`
-     * to keep a project-local path. Under `test` provider / `NODE_ENV=test`
+     * `~/.reactive-agents/memory/<agentId>/memory.db`; pass `.withMemory({ dbPath })`
+     * to use a custom path. Under `test` provider / `NODE_ENV=test`
      * it resolves to SQLite `:memory:` so runs never write to disk.
      *
      * Migration from v0.11 (memory was default-on, GH #122): add `.withMemory()`
@@ -376,8 +376,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enablePrompts: boolean = false
     private _promptsOptions?: PromptsOptions
     private _testScenario?: TestTurn[]
-    private _extraLayers?: Layer.Layer<any, any, any>
-    private _llmOverrideLayer?: Layer.Layer<any, any, any>
+    // ROut is contravariant on `Layer` (`in ROut`), so `never` — not `unknown`
+    // — is the maximally-permissive success-channel type here: it accepts a
+    // layer providing ANY service. `unknown` would reject every concrete
+    // layer (see withLayers() below for why `any` was replaced with this
+    // rather than `unknown`).
+    private _extraLayers?: Layer.Layer<never, unknown, unknown>
+    // Exact target type: this is force-cast to `Layer.Layer<LLMService>` at
+    // the sole consumption site (runtime-construction.ts, RuntimeOptions
+    // .llmOverrideLayer). Typing it precisely here removes that cast.
+    private _llmOverrideLayer?: Layer.Layer<LLMService>
     // Tracing is on by default (Sprint 3.6) so `rax diagnose <runId>` always
     // has data to inspect — a productized DX win. Disable explicitly with
     // .withObservability({ tracing: false }) or REACTIVE_AGENTS_TRACE=off.
@@ -465,6 +473,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
     private _outputValidatorOptions?: { maxRetries?: number }
     private _customTermination?: (state: { output: string }) => boolean
+    private _toolIntentClassifier?: (message: string) => boolean
     private _enableReactiveIntelligence: boolean = true
     private _reactiveIntelligenceOptions?: Partial<
         import('@reactive-agents/reactive-intelligence').ReactiveIntelligenceConfig
@@ -561,8 +570,41 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *   `this.withHarness(fn)`); use whichever reads more clearly at the
      *   call site.
      */
-    withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
-        this._harnessRegistrations = [...this._harnessRegistrations, fn]
+    withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this
+    /**
+     * Configure harness mechanisms directly — the switches that decide how much
+     * the harness spends per model turn and how much it hides from the model.
+     *
+     * This is the second, unrelated overload of `.withHarness()`: the pipeline-
+     * composition overload above registers a `Harness` callback, this one
+     * merges a plain data object. They are distinguished at the call site by
+     * argument shape (function vs plain config object) and never collide in
+     * practice — no `HarnessConfig` field is itself callable.
+     *
+     * Precedence: this config wins over the matching `RA_`-prefixed
+     * environment variable, which wins over the built-in default. Calls
+     * merge, so `.withHarness({a}).withHarness({b})` keeps both.
+     *
+     * @example
+     * // Small-model profile: show everything, no discovery round trips:
+     * .withHarness({ lazyDisclosure: false, toolDiscovery: false, verboseRules: true })
+     *
+     * @see {@link HarnessProfile} — capability presets (memory/RI/verifier).
+     *   `.withHarness()` is the mechanism layer beneath them.
+     * @returns `this` for chaining
+     */
+    withHarness(config: HarnessConfig): this
+    withHarness(
+        arg: ((harness: import('@reactive-agents/core').Harness) => void) | HarnessConfig,
+    ): this {
+        if (typeof arg === 'function') {
+            this._harnessRegistrations = [...this._harnessRegistrations, arg]
+            return this
+        }
+        this._reasoningOptions = {
+            ...this._reasoningOptions,
+            harness: { ...this._reasoningOptions?.harness, ...arg },
+        }
         return this
     }
 
@@ -908,7 +950,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *   .withReactiveIntelligence()  // already on by default
      * ```
      *
-     * The OS-default dbPath (`~/.reactive-agents/<agentId>/memory.db`)
+     * The OS-default dbPath (`~/.reactive-agents/memory/<agentId>/memory.db`)
      * applies when no explicit `opts.dbPath` is provided. Useful as a
      * single-line opt-in to make `agent.skills()` cross-session by default
      * even when the user wants to be explicit about it.
@@ -2084,6 +2126,29 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Override `agent.chat()`'s automatic tool-need detection for this agent.
+     *
+     * By default, `chat()` routes each message through the built-in
+     * `requiresTools()` heuristic (`chat.ts`) to decide between the direct-LLM
+     * path and the tool-capable path. That heuristic is domain-agnostic and can
+     * misclassify messages whose phrasing is common in one agent's domain but
+     * ambiguous in general (e.g. "tell me about X" defaults to chat-only, but
+     * for an agent whose "X" is always a live lookup, that's a false negative).
+     * Use this to replace the default classifier for every `chat()` call on
+     * this agent, without having to reimplement or fork the whole heuristic.
+     *
+     * Precedence per call: explicit `chat(msg, { useTools })` always wins,
+     * then this agent-level classifier (if set), then the default
+     * `requiresTools()`.
+     * @param classifier - Receives the raw chat message; return true to route to the tool-capable path
+     * @returns `this` for chaining
+     */
+    withToolIntent(classifier: (message: string) => boolean): this {
+        this._toolIntentClassifier = classifier
+        return this
+    }
+
+    /**
      * Configure the Reactive Intelligence Layer — entropy-based metacognitive sensing.
      *
      * The Entropy Sensor monitors reasoning quality per-iteration across 5 sources
@@ -2094,6 +2159,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * @example .withReactiveIntelligence(false) // disable RI
      * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
+     * @example .withReactiveIntelligence({ notice: false }) // silence the one-time telemetry banner (telemetry itself still runs)
      * @see {@link HarnessProfile.balanced} (RI default-on) /
      *   {@link HarnessProfile.lean} (RI off) — composable presets. Config
      *   overrides also flow through `.compose(...)` or the
@@ -2220,7 +2286,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @param layers - Effect-TS Layer(s) to add
      * @returns `this` for chaining
      */
-    withLayers(layers: Layer.Layer<any, any>): this {
+    withLayers(layers: Layer.Layer<never, unknown, unknown>): this {
         this._extraLayers = layers
         return this
     }
@@ -2235,9 +2301,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * LLM layer to run the entire harness against recorded model responses with
      * no live provider.
      *
-     * @param layer - an Effect Layer providing LLMService
+     * @param layer - an Effect Layer providing LLMService, with no unresolved
+     * requirements or errors — it must be able to run standalone as the
+     * whole-runtime replacement for the base `LLMService` layer.
      */
-    withReplayLLM(layer: Layer.Layer<any, any>): this {
+    withReplayLLM(layer: Layer.Layer<LLMService>): this {
         this._llmOverrideLayer = layer
         return this
     }
@@ -2248,14 +2316,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Each run writes a `<runId>.jsonl` file to `dir` containing all trace events
      * (entropy scores, reactive decisions, strategy switches).
      *
-     * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
+     * @param opts.dir - Directory to write JSONL files (default: `~/.reactive-agents/traces` —
+     *   same canonical location `defaultTracingConfig()` uses when tracing is
+     *   left on its implicit default, and the one `rax diagnose` reads by
+     *   default. Previously defaulted to the cwd-relative `.reactive-agents/traces`,
+     *   which silently diverged from that location — every trace written by an
+     *   explicit `.withTracing()` call was invisible to `rax diagnose` unless
+     *   the agent happened to run from the CLI's own cwd. Fixed 2026-09-04.)
      *
      * Composable equivalent: `.withObservability({ tracing: { dir } })` or
      *   the `REACTIVE_AGENTS_TRACE` env config (process-wide) — tracing also
      *   rides the observability stack.
      */
     withTracing(opts: { dir?: string } = {}): this {
-        this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
+        this._tracingConfig = { dir: opts.dir ?? join(homedir(), '.reactive-agents', 'traces') }
         return this
     }
 
@@ -2674,6 +2748,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
                     modelRouting: self._modelRouting,
+                    toolIntentClassifier: self._toolIntentClassifier,
                 },
                 // Phase C: when durable runs are enabled, resolve the same
                 // checkpoint dir + identity configHash execute-stream computes
@@ -2710,4 +2785,109 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             })
         }) as Effect.Effect<ReactiveAgent<TOut>, Error>
     }
+
+    /**
+     * Compile-time drift guard for {@link BuilderRuntimeStateView}
+     * (packages/runtime/src/builder/build-effect/runtime-construction.ts),
+     * which `build()` reaches via `self as unknown as BuilderRuntimeStateView`
+     * above. That cast is a genuine structural (not nominal) relationship —
+     * TypeScript's class-privacy branding otherwise blocks a class from ever
+     * being assignable to a plain interface, and `keyof`/`Pick` over a class
+     * type always exclude its private members, so neither can express this
+     * check. Naming each field explicitly, from *inside* the class body
+     * (where private access is legal), is the only mechanism that actually
+     * reaches them: if a field referenced by `BuilderRuntimeStateView` is
+     * renamed or removed here, the corresponding `self._field` access below
+     * fails to compile (TS2339); if its type narrows incompatibly, the
+     * object-literal-to-`BuilderRuntimeStateView` assignment fails (TS2322/
+     * TS2741). Never constructed at runtime — type-checked only.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    private static readonly _assertRuntimeStateViewShape = (
+        self: ReactiveAgentBuilder<any>
+    ): BuilderRuntimeStateView => ({
+        _a2aOptions: self._a2aOptions,
+        _adaptiveHarness: self._adaptiveHarness,
+        _approvalPolicy: self._approvalPolicy,
+        _behavioralContract: self._behavioralContract,
+        _budgetLimits: self._budgetLimits,
+        _calibration: self._calibration,
+        _circuitBreakerConfig: self._circuitBreakerConfig,
+        _consolidationConfig: self._consolidationConfig,
+        _contextProfile: self._contextProfile,
+        _cortexUrl: self._cortexUrl,
+        _costTrackingOptions: self._costTrackingOptions,
+        _customTermination: self._customTermination,
+        _documents: self._documents,
+        _durableRuns: self._durableRuns,
+        _enableAudit: self._enableAudit,
+        _enableBehavioralContracts: self._enableBehavioralContracts,
+        _enableCostTracking: self._enableCostTracking,
+        _enableExperienceLearning: self._enableExperienceLearning,
+        _enableGuardrails: self._enableGuardrails,
+        _enableHealthCheck: self._enableHealthCheck,
+        _enableKillSwitch: self._enableKillSwitch,
+        _enableMemory: self._enableMemory,
+        _enableMemoryConsolidation: self._enableMemoryConsolidation,
+        _enableObservability: self._enableObservability,
+        _enablePrompts: self._enablePrompts,
+        _enableReactiveIntelligence: self._enableReactiveIntelligence,
+        _enableReasoning: self._enableReasoning,
+        _enableSelfImprovement: self._enableSelfImprovement,
+        _enableTools: self._enableTools,
+        _enableVerification: self._enableVerification,
+        _environmentContext: self._environmentContext,
+        _executionTimeoutMs: self._executionTimeoutMs,
+        _extraLayers: self._extraLayers,
+        _fabricationGuard: self._fabricationGuard,
+        _fallbackConfig: self._fallbackConfig,
+        _gatewayOptions: self._gatewayOptions,
+        _groundingConfig: self._groundingConfig,
+        _guardrailsOptions: self._guardrailsOptions,
+        _harnessRegistrations: self._harnessRegistrations,
+        _leanHarness: self._leanHarness,
+        _llmOverrideLayer: self._llmOverrideLayer,
+        _loggingConfig: self._loggingConfig,
+        _longHorizon: self._longHorizon,
+        _maxIterations: self._maxIterations,
+        _maxTokens: self._maxTokens,
+        _mcpServers: self._mcpServers,
+        _memoryOptions: self._memoryOptions,
+        _memoryTier: self._memoryTier,
+        _metaTools: self._metaTools,
+        _minIterations: self._minIterations,
+        _model: self._model,
+        _modelRouting: self._modelRouting,
+        _numCtx: self._numCtx,
+        _observabilityOptions: self._observabilityOptions,
+        _ollamaTimeoutMs: self._ollamaTimeoutMs,
+        _outputValidator: self._outputValidator,
+        _outputValidatorOptions: self._outputValidatorOptions,
+        _pricingRegistry: self._pricingRegistry,
+        _provider: self._provider,
+        _providerConfig: self._providerConfig,
+        _rateLimiterConfig: self._rateLimiterConfig,
+        _reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
+        _reasoningOptions: self._reasoningOptions,
+        _receiptSigningKey: self._receiptSigningKey,
+        _requiredToolsConfig: self._requiredToolsConfig,
+        _resultCompression: self._resultCompression,
+        _retryPolicy: self._retryPolicy,
+        _sessionMaxAgeDays: self._sessionMaxAgeDays,
+        _sessionPersist: self._sessionPersist,
+        _skillPersistence: self._skillPersistence,
+        _skillsConfig: self._skillsConfig,
+        _stallPolicy: self._stallPolicy,
+        _taskContext: self._taskContext,
+        _taskContract: self._taskContract,
+        _telemetryConfig: self._telemetryConfig,
+        _temperature: self._temperature,
+        _testScenario: self._testScenario,
+        _thinking: self._thinking,
+        _thinkingOptions: self._thinkingOptions,
+        _toolsOptions: self._toolsOptions,
+        _userInteraction: self._userInteraction,
+        _verificationOptions: self._verificationOptions,
+        _verificationStep: self._verificationStep,
+    })
 }

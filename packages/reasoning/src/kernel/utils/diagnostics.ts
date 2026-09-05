@@ -23,6 +23,7 @@ import {
   truncateExchangeText,
   EXCHANGE_SYSTEM_PROMPT_MAX,
   EXCHANGE_MESSAGE_MAX,
+  billedInputTokens,
 } from "@reactive-agents/llm-provider";
 
 // ── KernelStateLike ─────────────────────────────────────────────────────────
@@ -187,35 +188,6 @@ export function emitCuratorDecision(args: {
         Effect.catchAll((err) =>
           emitErrorSwallowed({
             site: "reasoning/src/kernel/utils/diagnostics.ts:emitCuratorDecision",
-            tag: errorTag(err),
-          }),
-        ),
-      );
-  });
-}
-
-export function emitAlternativesConsidered(args: {
-  readonly taskId: string;
-  readonly iteration: number;
-  readonly chosen: string;
-  readonly alternatives: readonly { readonly option: string; readonly rejectedBecause: string }[];
-}): Effect.Effect<void, never> {
-  return Effect.gen(function* () {
-    const busOpt = yield* Effect.serviceOption(EventBus);
-    if (busOpt._tag !== "Some") return;
-    yield* busOpt.value
-      .publish({
-        _tag: "AlternativesConsideredEmitted",
-        taskId: args.taskId,
-        iteration: args.iteration,
-        timestamp: Date.now(),
-        chosen: args.chosen,
-        alternatives: args.alternatives,
-      })
-      .pipe(
-        Effect.catchAll((err) =>
-          emitErrorSwallowed({
-            site: "reasoning/src/kernel/utils/diagnostics.ts:emitAlternativesConsidered",
             tag: errorTag(err),
           }),
         ),
@@ -523,6 +495,25 @@ export function emitGuardFired(args: {
   });
 }
 
+// ── RequestId ────────────────────────────────────────────────────────────────
+
+/**
+ * The id that correlates `LLMRequestStarted` with `LLMRequestCompleted`.
+ *
+ * Derived, not minted: both bookends can compute it independently from
+ * `request.traceContext`, so no id has to be threaded through the LLM service
+ * boundary. Two calls of the SAME kind in the SAME iteration would collide —
+ * accepted, because the kernel makes at most one call per (iteration, kind),
+ * and a collision degrades to a reused span rather than a wrong one.
+ */
+export function deriveRequestId(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly requestKind: string;
+}): string {
+  return `${args.taskId}:${args.iteration}:${args.requestKind}`;
+}
+
 // ── LLMExchange ──────────────────────────────────────────────────────────────
 
 export function emitLLMExchange(args: {
@@ -538,6 +529,13 @@ export function emitLLMExchange(args: {
   readonly purpose?: LlmCallPurpose;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  /**
+   * Stable hash of the cacheable system-prompt prefix (W2). Optional so call
+   * sites that do not compute it (tests, un-mediated calls) stay valid.
+   */
+  readonly promptPrefixHash?: string;
+  /** Stable hash of the ordered wire tool surface (W2). */
+  readonly toolSurfaceHash?: string;
   readonly response: {
     readonly content: string;
     readonly toolCalls?: readonly { readonly name: string; readonly arguments?: unknown }[];
@@ -580,6 +578,8 @@ export function emitLLMExchange(args: {
         ...(args.purpose ? { purpose: args.purpose } : {}),
         temperature: args.temperature,
         maxTokens: args.maxTokens,
+        ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
+        ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
         response: {
           content: respTrunc.text ?? "",
           ...(respTrunc.truncated ? { truncated: true } : {}),
@@ -602,6 +602,54 @@ export function emitLLMExchange(args: {
         Effect.catchAll((err) =>
           emitErrorSwallowed({
             site: "reasoning/src/kernel/utils/diagnostics.ts:emitLLMExchange",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+
+    // LLMRequestCompleted had NINE consumers and ZERO producers before this
+    // (spec finding F-1): the bench's token accumulator, both observability
+    // collectors, the observe tracer, runtime.ts, and four Cortex readouts all
+    // subscribed to an event nobody emitted. This is the single site that sees
+    // provider, model, usage, cache figures, duration and cost together, so it
+    // is the one producer. Publishing from anywhere else would recreate the
+    // boundary multiplicity this program exists to remove.
+    const billed = billedInputTokens({
+      inputTokens: args.response.tokensIn,
+      outputTokens: args.response.tokensOut,
+      cacheReadInputTokens: args.response.cacheReadTokensIn,
+    });
+    const rawTotal =
+      (args.response.tokensIn ?? 0) + (args.response.tokensOut ?? 0);
+
+    yield* busOpt.value
+      .publish({
+        _tag: "LLMRequestCompleted",
+        taskId: args.taskId,
+        requestId: deriveRequestId(args),
+        model: args.model,
+        provider: args.provider,
+        durationMs: args.response.durationMs ?? 0,
+        tokensUsed: rawTotal,
+        ...(typeof args.response.tokensIn === "number"
+          ? { tokensIn: args.response.tokensIn }
+          : {}),
+        ...(typeof args.response.tokensOut === "number"
+          ? { tokensOut: args.response.tokensOut }
+          : {}),
+        cached: billed.cacheRead > 0,
+        ...(typeof args.response.cacheReadTokensIn === "number"
+          ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
+          : {}),
+        billedTokens: billed.billedTotal,
+        ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
+        ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
+        estimatedCost: args.response.costUsd ?? 0,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitLLMRequestCompleted",
             tag: errorTag(err),
           }),
         ),

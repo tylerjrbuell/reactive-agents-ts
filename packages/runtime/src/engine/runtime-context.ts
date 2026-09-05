@@ -54,9 +54,14 @@ export type ObsLike = {
   captureSnapshot: (agentId: string, state: Record<string, unknown>) => Effect.Effect<unknown, never>;
   debug: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
   info: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
+  warn: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
+  error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
   getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
   flush: () => Effect.Effect<void, never>;
   verbosity: () => string;
+  attachChildren: (
+    children: readonly { readonly name: string; readonly data: unknown }[],
+  ) => Effect.Effect<void, never>;
 };
 
 /**

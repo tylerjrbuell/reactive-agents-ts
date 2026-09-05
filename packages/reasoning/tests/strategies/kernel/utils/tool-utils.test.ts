@@ -578,4 +578,41 @@ describe("compressToolResult", () => {
     expect(compressed.content).toContain(envelope.command);
     expect(compressed.stored?.value).toBe(stdout);
   });
+
+  // 2026-09-03: docker-execute and code-execute wrap their real payload as
+  // `{executed, output, exitCode, ...}` — never `stdout`. The envelope-unwrap
+  // branch above only checked `stdout`, so it silently never fired for either
+  // tool (confirmed live via grep — neither emits a `stdout` field); their
+  // output fell to the generic 8-key/80-char object branch instead of the
+  // intended unwrap-and-recurse treatment.
+  it("unwraps a docker-execute/code-execute envelope keyed on `output`, not just `stdout`", () => {
+    const items = [
+      { id: 1, name: "one hundred and twenty three thousand four hundred fifty six" },
+      { id: 2, name: "two hundred and thirty four thousand five hundred sixty seven" },
+    ];
+    const output = JSON.stringify(items);
+    const envelope = { executed: true, result: null, output, exitCode: 0, durationMs: 12 };
+    const raw = JSON.stringify(envelope);
+    const compressed = compressToolResult(raw, "code-execute", 60, 5);
+
+    expect(compressed.content).not.toContain("Object(5 keys)");
+    expect(compressed.content).toContain("Array(2)");
+    expect(compressed.content).toContain("(exit 0)");
+    expect(compressed.stored?.value).toBe(output);
+  });
+
+  // 2026-09-03: the JSON-object branch previously hard-capped 8 keys x 80
+  // chars regardless of `budget` — a fetched http-get page (one giant `body`
+  // string) rendered byte-identical output at every model tier. Live probe
+  // measured 343 chars at both the 600-char local tier and the 4000-char
+  // frontier tier. `budget` must move the output.
+  it("scales the object-branch preview (key count + per-value slice) with budget, not a fixed 8x80", () => {
+    const pageLike = JSON.stringify({ status: 200, statusText: "OK", body: "A".repeat(2_000_000) });
+
+    const local = compressToolResult(pageLike, "http-get", 600, 3);
+    const frontier = compressToolResult(pageLike, "http-get", 4000, 3);
+
+    expect(local.content.length).toBeLessThan(frontier.content.length);
+    expect(frontier.content).toContain("A".repeat(120)); // frontier's wider value slice fits well past 80 chars
+  });
 });

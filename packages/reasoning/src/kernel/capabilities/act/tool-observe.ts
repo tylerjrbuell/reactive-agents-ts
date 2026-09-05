@@ -46,7 +46,6 @@ import {
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type {
-  MaybeService,
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 
@@ -167,6 +166,12 @@ export interface ToolObserveResult {
   readonly extractedFact?: string;
   readonly durationMs: number;
   readonly healed: boolean;
+  /** Post-heal args (D-2026-07-28-D): the resolved absolute-path arguments the
+   *  tool actually ran with, same as what `ToolCallCompleted`/the trace record.
+   *  Callers that mint their own ledger entry with pre-heal args (plan-execute's
+   *  `step-executor.ts`) should use this instead so the ledger matches the
+   *  trace on every path-taking tool call. */
+  readonly healedArgs: Record<string, unknown>;
 }
 
 const defaultEmitLog = (event: LogEvent): Effect.Effect<void, never> =>
@@ -243,8 +248,80 @@ export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPo
   return { blocked: false };
 }
 
+/** One call in a batch, plus the per-call fields `ToolObserveContext` needs. */
+export interface ToolObserveBatchCall {
+  readonly toolName: string;
+  readonly args: Record<string, unknown>;
+  readonly rationale?: { readonly why: string; readonly confidence?: number };
+  readonly callId: string;
+  /** Same meaning as `ToolObserveContext.healed` — pre-healed upstream, or left
+   *  for `config.heal` to compute internally when that config is supplied. */
+  readonly healed?: boolean;
+}
+
+/** A single member's result, carrying back the call identity for the caller's
+ *  own per-call bookkeeping (action-step duration patch, toolsUsed, etc). */
+export interface ToolObserveBatchResult extends ToolObserveResult {
+  readonly callId: string;
+  readonly toolName: string;
+}
+
+/**
+ * Batch-capable entry point (one execution boundary, 2026-08-18). Runs N calls
+ * through the SAME per-call pipeline `executeToolAndObserve` runs for one call
+ * (heal/tool-policy/approval/execute/errorRecovery/fact-extraction/verification,
+ * each still config-gated exactly as before) — the single-call path is the
+ * degenerate `calls.length === 1` case of this same primitive, not a second
+ * implementation. Concurrency lets a caller keep today's "all members race in
+ * parallel" behavior (kernel parallel-batch loop) or force sequential (1).
+ *
+ * Consolidates the kernel act.ts parallel-batch loop's hand-duplicated
+ * `resolveBlockApproval` / `adapter.errorRecovery?.()` / `extractObservationFacts`
+ * / `defaultVerifier.verify()` call sites — see
+ * wiki/Planning/Implementation-Plans/2026-08-18-step-3-one-execution-boundary.md §3b.
+ *
+ * NOTE on verification ordering: when `config.verifierContext.priorSteps` is a
+ * single snapshot shared by every member (the natural way to call this for a
+ * concurrent batch), each member's `verify()` sees the SAME priorSteps — it does
+ * NOT accumulate sibling results within the same batch turn the way the old
+ * act.ts loop did (which verified sequentially in a post-processing `for`, so
+ * result[1]'s verify() saw result[0]'s freshly-appended obsStep). This is a
+ * known, deliberate, documented behavior delta — see the UpwardReport for this
+ * branch. It does not affect cross-turn behavior: the next iteration's
+ * `state.steps` still includes every member's obsStep as normal.
+ */
+export function executeToolAndObserveBatch(
+  toolService: Option.Option<ToolServiceInstance>,
+  calls: readonly ToolObserveBatchCall[],
+  ctx: Omit<ToolObserveContext, "callId" | "healed" | "schemas"> & {
+    readonly schemas?: readonly ToolSchemaLite[];
+  },
+  config: ToolObserveConfig,
+  concurrency: number,
+): Effect.Effect<readonly ToolObserveBatchResult[], never, LLMService> {
+  return Effect.all(
+    calls.map((call) =>
+      executeToolAndObserve(
+        toolService,
+        { toolName: call.toolName, args: call.args, rationale: call.rationale },
+        { ...ctx, callId: call.callId, healed: call.healed },
+        config,
+      ).pipe(
+        Effect.map(
+          (result): ToolObserveBatchResult => ({
+            ...result,
+            callId: call.callId,
+            toolName: call.toolName,
+          }),
+        ),
+      ),
+    ),
+    { concurrency: Math.max(1, concurrency) },
+  );
+}
+
 export function executeToolAndObserve(
-  toolService: MaybeService<ToolServiceInstance>,
+  toolService: Option.Option<ToolServiceInstance>,
   call: {
     readonly toolName: string;
     readonly args: Record<string, unknown>;
@@ -355,6 +432,7 @@ export function executeToolAndObserve(
           success: false,
           durationMs: 0,
           healed,
+          healedArgs: args,
         } satisfies ToolObserveResult;
       }
     }
@@ -385,11 +463,12 @@ export function executeToolAndObserve(
         success: false,
         durationMs: 0,
         healed,
+        healedArgs: args,
       } satisfies ToolObserveResult;
     }
 
     // ── 2. ToolService unavailable → failed observation (parity with act.ts) ─
-    if (toolService._tag === "None") {
+    if (Option.isNone(toolService)) {
       const content = `[Tool "${toolName}" requested but ToolService is not available]`;
       const obsStep = makeStep("observation", content, {
         toolCallId: ctx.callId,
@@ -401,6 +480,7 @@ export function executeToolAndObserve(
         success: false,
         durationMs: 0,
         healed,
+        healedArgs: args,
       } satisfies ToolObserveResult;
     }
 
@@ -478,7 +558,20 @@ export function executeToolAndObserve(
     }
 
     // ── 7. LLM fact extraction (kernel shouldExtract path) ───────────────────
-    if (exec.success && config.extractFactsLLM) {
+    // discover-tools exemption (2026-08-19, same root cause as
+    // compressToolResult's exemption in tool-formatting.ts — see
+    // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+    // §6e root cause 2). Fixing the length-based preview compressor
+    // uncovered a SECOND, independent compression path: with the raw dump
+    // now reaching here, LLM fact-extraction paraphrased discover-tools'
+    // exact name→description directory listing into a lossy "key facts"
+    // summary — confirmed live to fabricate an answer (echoed the query's
+    // own transaction ID back as if it were the looked-up value; the real
+    // target tool's exact name never survived the paraphrase). A directory
+    // listing where exact names matter for subsequent tool-calling must
+    // never go through an LLM summarization pass — there is nothing to
+    // "extract," every line is already the payload.
+    if (exec.success && config.extractFactsLLM && toolName !== "discover-tools") {
       const extracted = yield* extractObservationFacts(
         toolName,
         exec.content,
@@ -585,6 +678,7 @@ export function executeToolAndObserve(
       ...(exec.extractedFact ? { extractedFact: exec.extractedFact } : {}),
       durationMs,
       healed,
+      healedArgs: args,
     } satisfies ToolObserveResult;
   });
 }

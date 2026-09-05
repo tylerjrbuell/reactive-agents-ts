@@ -1,4 +1,4 @@
-import { resolve, basename } from "node:path"
+import { resolve } from "node:path"
 import { homedir } from "node:os"
 import type { HealingAction } from "../drivers/tool-calling-driver.js"
 
@@ -47,13 +47,15 @@ export function resolvePaths(
       continue
     }
 
-    // Hallucinated absolute path (not within working dir) → remap filename to working dir
-    if (!resolved.startsWith(workingDir)) {
-      const remapped = resolve(workingDir, basename(resolved))
-      healed[key] = remapped
-      actions.push({ stage: "path", from: value, to: remapped })
-      continue
-    }
+    // An out-of-root absolute path is deliberately left unmodified here.
+    // file-operations.ts's `Path traversal detected:` throw is the sole
+    // confinement authority (09-UNIFIED-PROGRAM.md §6.6 / F9) — this used to
+    // silently remap the argument to `<workingDir>/<basename>`, which let the
+    // write/read succeed at a path the model never asked for while terminal
+    // verification (checking the model's original path) reported the run
+    // FAILED next to a file that was actually written correctly. Passing the
+    // out-of-root path through unchanged lets the tool's own throw fire, so
+    // the model sees a legible, recoverable error instead of a silent rescue.
 
     if (resolved !== value) {
       healed[key] = resolved

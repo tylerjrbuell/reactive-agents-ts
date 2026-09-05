@@ -58,9 +58,9 @@ Commands:
   debrief <runId> [--json]        Decision timeline with rationale (why this path)
 
 Run IDs:
-  - bare ULID resolves under ~/.reactive-agents/traces/
+  - bare ULID resolves under ~/.reactive-agents/traces/ or <cwd>/.reactive-agents/traces/
   - absolute path to a .jsonl file
-  - "latest" — most recently modified trace
+  - "latest" — most recently modified trace across both directories
 
 Examples:
   rax-diagnose list
@@ -70,7 +70,9 @@ Examples:
   rax-diagnose diff 01KQ80... 01KQ81...
 
 Env:
-  REACTIVE_AGENTS_TRACE_DIR  override the default trace directory
+  REACTIVE_AGENTS_TRACE_DIR  override trace directory search to this ONE dir
+                             (default: search both ~/.reactive-agents/traces
+                             and <cwd>/.reactive-agents/traces)
   REACTIVE_AGENTS_TRACE=off  disable trace recording in agent runs
 `);
 }

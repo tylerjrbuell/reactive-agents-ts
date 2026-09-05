@@ -1,6 +1,6 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage, recordMessage } from "../trace.js";
-import { thoughtContinuityEnabled } from "../../harness-flags.js";
+import { resolveHarnessConfig } from "../../harness-config.js";
 
 /**
  * Build the provider-valid conversation thread and project each tool result.
@@ -23,6 +23,7 @@ import { thoughtContinuityEnabled } from "../../harness-flags.js";
  * turns are reconstructed faithfully.
  */
 export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
+  const h = c.harness ?? resolveHarnessConfig();
   let messages = [...c.messages];
   let trace = c.trace;
   let full = 0;
@@ -85,7 +86,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   // so accumulated prose cannot crowd out tool results. A trailing thought
   // with no following tool call is NOT rendered — that is the terminal
   // answer, which reaches the caller by its own path.
-  const renderThoughts = thoughtContinuityEnabled();
+  const renderThoughts = h.thoughtContinuity;
   const THOUGHT_CAP = 600;
   let pendingThought: string | undefined;
   const flush = () => {

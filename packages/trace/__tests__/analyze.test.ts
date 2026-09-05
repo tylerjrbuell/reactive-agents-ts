@@ -157,10 +157,10 @@ describe("analyzeRun — full decision-grade signal", () => {
     const a = analyzeRun(richFixture({ substantive: true }));
     const blind = a.coverage.blindSpots.map((b) => b.metric).join(" | ");
     expect(blind).toContain("cache"); // llm-exchange missing THIS run
-    // emitCuratorDecision was wired at the projection boundary 2026-07-30 and
-    // removed from the dead list; emitAlternativesConsidered is still the only
-    // genuinely-dead emitter. Asserting the live one here would re-pin a stale claim.
-    expect(a.coverage.knownDeadEmitters.join(" ")).toContain("emitAlternativesConsidered");
+    // emitCuratorDecision was wired at the projection boundary 2026-07-30;
+    // emitAlternativesConsidered was deleted outright 2026-09-04 (never wired
+    // anywhere, D-2026-07-30-L). No known-dead emitters remain.
+    expect(a.coverage.knownDeadEmitters).toEqual([]);
     // ≤1 guard fired on this fixture → overlap visibility flagged blind
     expect(blind.toLowerCase()).toContain("overlap");
   });

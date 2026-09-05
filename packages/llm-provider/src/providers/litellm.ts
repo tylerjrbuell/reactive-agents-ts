@@ -1,14 +1,14 @@
-import { Effect, Layer, Stream, Schema, Duration } from "effect";
+import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
 import { mapProviderError } from "../provider-error.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -17,7 +17,7 @@ import type {
   ToolCall,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { resolveCapability } from "../capability-resolver.js";
@@ -108,6 +108,9 @@ type LiteLLMRawResponse = {
     // Some LiteLLM proxies include cost directly
     input_cost?: number;
     output_cost?: number;
+    // LiteLLM normalizes prompt-caching token counts to this OpenAI-shaped
+    // field for providers that support it (LiteLLM docs).
+    prompt_tokens_details?: { cached_tokens?: number };
   };
   model: string;
 };
@@ -183,6 +186,9 @@ const mapLiteLLMResponse = (
             }
           : undefined,
       ),
+      ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
+        ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
     },
     model: response.model ?? model,
     toolCalls,
@@ -302,20 +308,18 @@ export const LiteLLMProviderLive = Layer.effect(
             model,
             config.pricingRegistry,
           );
-        }).pipe(
-          Effect.retry(retryPolicy),
+        }).pipe((effect) =>
           // G2 default is 120s (thinking/reasoning models exceed 30s); F4
           // makes it request/config-resolvable — see resolveCloudTimeoutMs.
-          Effect.timeout(Duration.millis(timeoutMs)),
-          Effect.catchTag("TimeoutException", () =>
-            Effect.fail(
+          withRetryAndTimeout(effect, {
+            timeoutMs,
+            onTimeout: () =>
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "litellm",
                 timeoutMs,
               }),
-            ),
-          ),
+          }),
         );
       },
 
@@ -406,7 +410,11 @@ export const LiteLLMProviderLive = Layer.effect(
                   { id: string; name: string; arguments: string }
                 > = new Map();
                 let finalUsage:
-                  | { prompt_tokens: number; completion_tokens: number }
+                  | {
+                      prompt_tokens: number;
+                      completion_tokens: number;
+                      prompt_tokens_details?: { cached_tokens?: number };
+                    }
                   | undefined;
                 // Synthesis is single-shot: finish_reason fires first, then
                 // [DONE] arrives. Without the guard both paths would emit
@@ -505,6 +513,9 @@ export const LiteLLMProviderLive = Layer.effect(
                             undefined,
                             config.pricingRegistry,
                           ),
+                          ...(typeof finalUsage?.prompt_tokens_details?.cached_tokens === "number"
+                            ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
+                            : {}),
                         },
                       });
                       emit.end();
@@ -530,6 +541,7 @@ export const LiteLLMProviderLive = Layer.effect(
                         usage?: {
                           prompt_tokens: number;
                           completion_tokens: number;
+                          prompt_tokens_details?: { cached_tokens?: number };
                         };
                       };
 
@@ -618,10 +630,6 @@ export const LiteLLMProviderLive = Layer.effect(
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
-          const maxRetries = request.maxParseRetries ?? 2;
-
           // Loop-invariant: model + F6 thinking/capability chain (mirrors
           // complete() above) resolve once, not per parse attempt.
           const model =
@@ -637,73 +645,54 @@ export const LiteLLMProviderLive = Layer.effect(
           });
           const structuredTokenField = buildTokenField(structuredCap, structuredAnswerBudget, structuredReserve, config.thinkingOptions?.effort ?? "medium");
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messagesWithFormat
-                : [
-                    ...messagesWithFormat,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
-                    },
-                  ];
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries: request.maxParseRetries ?? 2,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messagesWithFormat
+                    : [
+                        ...messagesWithFormat,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response was not valid JSON. The parse error was: ${String(lastError)}. Please try again with valid JSON only.`,
+                        },
+                      ];
 
-            const completeResult = yield* Effect.tryPromise({
-              try: () =>
-                liteLLMFetch(
-                  baseURL,
-                  "/chat/completions",
-                  {
-                    model,
-                    ...structuredTokenField,
-                    // I1 parity: omit temperature on the reasoning path.
-                    ...(structuredReserve === undefined
-                      ? { temperature: request.temperature ?? config.defaultTemperature }
-                      : {}),
-                    messages: toLiteLLMMessages(msgs),
-                  },
-                  apiKey,
-                  extraHeaders,
-                ),
-              catch: (error) => toEffectError(error),
-            });
+                const completeResult = yield* Effect.tryPromise({
+                  try: () =>
+                    liteLLMFetch(
+                      baseURL,
+                      "/chat/completions",
+                      {
+                        model,
+                        ...structuredTokenField,
+                        // I1 parity: omit temperature on the reasoning path.
+                        ...(structuredReserve === undefined
+                          ? { temperature: request.temperature ?? config.defaultTemperature }
+                          : {}),
+                        messages: toLiteLLMMessages(msgs),
+                      },
+                      apiKey,
+                      extraHeaders,
+                    ),
+                  catch: (error) => toEffectError(error),
+                });
 
-            const response = mapLiteLLMResponse(
-              completeResult as LiteLLMRawResponse,
-              model,
-              config.pricingRegistry,
-            );
-
-            try {
-              const parsed = JSON.parse(response.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapLiteLLMResponse(
+                  completeResult as LiteLLMRawResponse,
+                  model,
+                  config.pricingRegistry,
+                ).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>

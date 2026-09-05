@@ -64,6 +64,42 @@ export const ContextProfileSchema = Schema.Struct({
    * turns → escalation thrash → timeout).
    */
   thinkingModel: Schema.optional(Schema.Boolean),
+  /**
+   * Tool-disclosure mode (2026-08-19 — counters 09-UNIFIED-PROGRAM.md §5.2's
+   * unconditional discover-tools removal ruling with a per-tier policy
+   * instead). See
+   * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+   * for the full case analysis this taxonomy is derived from.
+   *
+   *   "full"     — no lazy pruning (RA_LAZY_TOOLS=0 equivalent). Best when the
+   *                catalog is small enough that pruning is pure overhead.
+   *   "discover" — today's default: lazy pruning + the discover-tools meta-tool,
+   *                no index. Kept for back-compat / explicit choice.
+   *   "index"    — lazy pruning + an always-visible name+one-line index of
+   *                hidden tools (RA_TOOL_INDEX), no discover-tools registered.
+   *                Avoids the round-trip cost discovery pays, at the cost of a
+   *                small recurring per-iteration text block.
+   *   "hybrid"   — lazy pruning + a CAPPED index (see `toolIndexMaxEntries`)
+   *                AND discover-tools registered as the fallback for anything
+   *                beyond the cap. For catalogs too large for an unbounded
+   *                index to stay cheap.
+   *
+   * Unset ⇒ resolves from the per-tier default set below in CONTEXT_PROFILES,
+   * via `fromDisclosureMode()` in harness-config.ts (spec finding F-4). Those
+   * four tier defaults are declarations of intent, not measured verdicts —
+   * see the commit that wired this field for the full ruling. Explicit
+   * `.withReasoning({ contextProfile: { toolDisclosureMode } })` or a
+   * `profileOverrides` entry always wins over the tier default.
+   */
+  toolDisclosureMode: Schema.optional(Schema.Literal("full", "discover", "index", "hybrid")),
+  /**
+   * Cap on hidden-tool index entries before `"hybrid"` mode truncates and
+   * defers the remainder to discover-tools' query search. Ignored outside
+   * `"hybrid"` mode (`"index"` always renders the full hidden set — no
+   * catalog this project has measured yet is large enough for that to matter,
+   * but `"hybrid"` exists for the case where it does).
+   */
+  toolIndexMaxEntries: Schema.optional(Schema.Number),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 
@@ -92,6 +128,9 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     // the conservative probe ceiling so the pressure gate doesn't trip
     // prematurely even before that wiring lands.
     maxTokens: 32_768,
+    // A large tool array is itself the failure mode for small models — pay
+    // the small recurring index-text cost, avoid discovery round trips.
+    toolDisclosureMode: "index",
   },
   mid: {
     tier: "mid",
@@ -101,6 +140,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 10,
     temperature: 0.5,
     maxTokens: 32_768,
+    toolDisclosureMode: "hybrid",
   },
   large: {
     tier: "large",
@@ -110,6 +150,7 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 10,
     temperature: 0.5,
     maxTokens: 32768,
+    toolDisclosureMode: "discover",
   },
   frontier: {
     tier: "frontier",
@@ -119,6 +160,8 @@ export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
     maxIterations: 12,
     temperature: 0.6,
     maxTokens: 128000,
+    // Biggest context, cheapest attention — pruning buys least here.
+    toolDisclosureMode: "discover",
   },
 };
 

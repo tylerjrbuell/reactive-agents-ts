@@ -7,11 +7,11 @@
  *
  * Extracted from kernel-runner.ts to keep the main loop focused on iteration logic.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
-import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
+import type { KernelState, KernelRunOptions, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
 import type { ModelTier } from "../../../context/context-profile.js";
@@ -63,7 +63,7 @@ function calibratedMinEntropy(
 export function runReactiveObserver(
   state: KernelState,
   services: StrategyServices,
-  eventBus: MaybeService<EventBusInstance>,
+  eventBus: Option.Option<EventBusInstance>,
   prevStepCount: number,
   currentOptions: KernelRunOptions,
   tier: ModelTier,
@@ -73,7 +73,7 @@ export function runReactiveObserver(
     let s = state;
 
     // ── Entropy scoring (post-kernel, pre-loop-detection) ──────────────
-    if (services.entropySensor._tag === "Some") {
+    if (Option.isSome(services.entropySensor)) {
       const newThoughtSteps = s.steps.filter(
         (step, idx) => step.type === "thought" && idx >= prevStepCount,
       );
@@ -132,7 +132,7 @@ export function runReactiveObserver(
                 timestamp: new Date(),
               });
 
-              if (eventBus._tag === "Some") {
+              if (Option.isSome(eventBus)) {
                 // score may have richer fields from reactive-intelligence beyond EntropyScoreLike
                 const richScore = score as Record<string, unknown>;
                 return Effect.all([
@@ -146,6 +146,7 @@ export function runReactiveObserver(
                     confidence: richScore["confidence"],
                     modelTier: richScore["modelTier"],
                     iterationWeight: richScore["iterationWeight"],
+                    modelId: s.meta.entropy?.modelId ?? "unknown",
                   }),
                   logEntropy,
                 ], { concurrency: "unbounded" }).pipe(Effect.asVoid);
@@ -159,7 +160,7 @@ export function runReactiveObserver(
     const newPrevStepCount = s.steps.length;
 
     // ── Reactive Controller evaluation ──────────────────────────────────
-    if (services.reactiveController._tag === "Some") {
+    if (Option.isSome(services.reactiveController)) {
       // `entropyHistory` is declared `readonly EntropyScoreLike[]` on the kernel
       // state (kernel-state.ts), so no cast is needed — the richer runtime entries
       // are read through the EntropyScoreLike view.
@@ -176,7 +177,7 @@ export function runReactiveObserver(
           readonly sampleCount: number;
         } = { highEntropyThreshold: 0.8, convergenceThreshold: 0.4, calibrated: false, sampleCount: 0 };
 
-        if (services.entropySensor._tag === "Some") {
+        if (Option.isSome(services.entropySensor)) {
           const cal = yield* services.entropySensor.value.getCalibration(modelId).pipe(
             Effect.catchAll(() => Effect.succeed(calibration)),
           );
@@ -189,7 +190,7 @@ export function runReactiveObserver(
 
           // ── Emit CalibrationDrift event when drift is detected ──
           const calWithDrift = cal as typeof cal & { driftDetected?: boolean; expectedMean?: number; observedMean?: number; deviationSigma?: number };
-          if (calWithDrift.driftDetected && eventBus._tag === "Some") {
+          if (calWithDrift.driftDetected && Option.isSome(eventBus)) {
             yield* eventBus.value.publish({
               _tag: "CalibrationDrift",
               taskId: s.taskId,
@@ -203,7 +204,7 @@ export function runReactiveObserver(
 
         // Collect available tool names for evaluators that need them (e.g. tool-inject)
         const availableToolNames: string[] = [];
-        if (services.toolService._tag === "Some") {
+        if (Option.isSome(services.toolService)) {
           const toolList = yield* services.toolService.value.listTools().pipe(
             Effect.catchAll(() => Effect.succeed([] as readonly { readonly name: string }[])),
           );
@@ -290,7 +291,7 @@ export function runReactiveObserver(
 
         for (const decision of decisions) {
           // Publish ReactiveDecision event
-          if (eventBus._tag === "Some") {
+          if (Option.isSome(eventBus)) {
             yield* eventBus.value.publish({
               _tag: "ReactiveDecision",
               taskId: s.taskId,
@@ -328,7 +329,7 @@ export function runReactiveObserver(
           // Dispatch decisions through the handler registry when the dispatcher
           // service is available. Patches are folded back into KernelState via
           // transitionState using only fields that exist on KernelMeta / KernelState.
-          if (services.dispatcher._tag === "Some") {
+          if (Option.isSome(services.dispatcher)) {
             const richLatest = latestScore as {
               composite?: number; token?: number; structural?: number;
               semantic?: number; behavioral?: number;
@@ -392,7 +393,7 @@ export function runReactiveObserver(
             // patch.kind for both, conflating 8 names for 5 decisions in
             // trace analytics.
             for (const { decisionType, patch } of dispatchResult.appliedPatches) {
-              if (eventBus._tag === "Some") {
+              if (Option.isSome(eventBus)) {
                 yield* eventBus.value.publish({
                   _tag: "InterventionDispatched",
                   taskId: s.taskId,
@@ -447,7 +448,7 @@ export function runReactiveObserver(
                   // variant in @reactive-agents/core EventBus AgentEvent union).
                   // Source discriminant: "dispatcher" distinguishes this from the
                   // verbosity-detector emission site below.
-                  if (eventBus._tag === "Some") {
+                  if (Option.isSome(eventBus)) {
                     yield* eventBus.value.publish({
                       _tag: "CompressionRecommendation",
                       taskId: s.taskId,
@@ -518,7 +519,7 @@ export function runReactiveObserver(
 
             // Emit InterventionSuppressed events for skipped decisions
             for (const skipped of dispatchResult.skipped) {
-              if (eventBus._tag === "Some") {
+              if (Option.isSome(eventBus)) {
                 yield* eventBus.value.publish({
                   _tag: "InterventionSuppressed",
                   taskId: s.taskId,
@@ -577,7 +578,7 @@ export function runReactiveObserver(
         // discriminant. Lets observers distinguish detector-driven vs
         // dispatcher-driven recommendations without colliding their
         // thresholds.
-        if (eventBus._tag === "Some") {
+        if (Option.isSome(eventBus)) {
           yield* eventBus.value.publish({
             _tag: "CompressionRecommendation",
             taskId: s.taskId,

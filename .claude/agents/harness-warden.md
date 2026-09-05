@@ -1,6 +1,6 @@
 ---
 name: harness-warden
-description: Cross-cutting specialist that runs framework probes against real models, owns wiki/Research/Harness-Reports/, and interprets rax-diagnose CLI output. Does NOT edit framework code — surfaces findings via UpwardReport and dispatches domain wardens for fixes. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Cross-cutting specialist that runs framework probes against real models, owns wiki/Research/Harness-Reports/, and interprets rax-diagnose CLI output. Does NOT edit framework code — surfaces findings via UpwardReport and dispatches domain wardens for fixes. Mandatory MissionBrief + UpwardReport.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -63,5 +63,6 @@ Surface findings via `UpwardReport.blockers[]` with anchors like `kernel/loop/ru
 5. Surface findings + anchors in `UpwardReport.blockers[]` with `planned-actions-pending-approval` listing which domain warden(s) to dispatch.
 6. Return — parent dispatches domain wardens, then re-spawns me for before/after verification probe.
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

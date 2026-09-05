@@ -16,7 +16,7 @@
 // the pool and never mutates the ledger.
 
 import type { ModelConfig } from "@reactive-agents/llm-provider";
-import type { LlmPurpose } from "../llm-gateway.js";
+import type { LlmCallPurpose as LlmPurpose } from "@reactive-agents/llm-provider";
 
 /**
  * The two routing tiers G2 distinguishes. Deliberately coarse (cheap vs strong)

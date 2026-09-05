@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
 
@@ -9,7 +9,7 @@ type CodeExecResult =
 
 async function run(code: string): Promise<CodeExecResult> {
   return Effect.runPromise(
-    codeExecuteHandler({ code }) as Effect.Effect<CodeExecResult, never, never>,
+    codeExecuteHandler()({ code }) as Effect.Effect<CodeExecResult, never, never>,
   );
 }
 
@@ -70,5 +70,37 @@ describe("code-execute", () => {
     if (!r.executed) {
       expect(r.error).toContain("storage key");
     }
+  });
+
+  describe("config.sandbox override", () => {
+    // Pins the fix: codeExecuteHandler used to read RA_SANDBOX directly with
+    // no way to override per call, unlike its sibling shellExecuteHandler
+    // (config.sandbox). config.sandbox must now win over the env var, and
+    // calling with no config must be byte-identical to the historical
+    // env-only behavior.
+    const saved = process.env.RA_SANDBOX;
+    afterEach(() => {
+      if (saved === undefined) delete process.env.RA_SANDBOX;
+      else process.env.RA_SANDBOX = saved;
+    });
+
+    it("config.sandbox: 'host' wins even when RA_SANDBOX=docker", async () => {
+      process.env.RA_SANDBOX = "docker";
+      const r = await Effect.runPromise(
+        codeExecuteHandler({ sandbox: "host" })({ code: "return 1 + 1" }) as Effect.Effect<
+          CodeExecResult,
+          never,
+          never
+        >,
+      );
+      expect(r.executed).toBe(true);
+      if (r.executed) expect(r.result).toBe(2);
+    });
+
+    it("no config falls back to the env var exactly as before", async () => {
+      delete process.env.RA_SANDBOX;
+      const r = await run("return 1 + 1");
+      expect(r.executed).toBe(true);
+    });
   });
 });

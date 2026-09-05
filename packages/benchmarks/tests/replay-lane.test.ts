@@ -21,22 +21,16 @@ describe("bench:replay lane — committed goldens", () => {
     expect(names).toContain("tool-write");
   });
 
-  // planned-tool-loop is a plan-execute golden — the first one in the corpus.
-  // It exposes a real, pre-existing divergence (DEBT-REGISTER D-2026-07-28-D):
-  // plan-execute's ledgerSteps action-step stores PRE-heal (relative) tool args
-  // in metadata.toolCall.arguments, while the observability trace records
-  // POST-heal (absolute) paths; only `isArtifactProduced` reconciles the two.
-  // replay-agent.ts's toolCallsFromResult hashes the pre-heal args with no
-  // reconciliation, so this golden's argsHash never matches its own trace.
-  // reactive-strategy goldens never hit this (no pre/post-heal asymmetry in
-  // ReAct's action-step construction). Skipped here, not fixed, because the
-  // fix lives in replay-agent.ts / step-executor.ts and is out of scope for
-  // adding this golden — see the debt entry for the discharge plan.
-  const KNOWN_ARGS_HASH_DIVERGENCE = new Set(["planned-tool-loop"]);
-
+  // planned-tool-loop is a plan-execute golden — was the first one in the
+  // corpus to expose DEBT-REGISTER D-2026-07-28-D: plan-execute's ledgerSteps
+  // action-step stored PRE-heal (relative) tool args in
+  // metadata.toolCall.arguments while the observability trace recorded
+  // POST-heal (absolute) paths, so its argsHash never matched its own trace.
+  // Fixed 2026-09-04: `step-executor.ts` now uses `ToolObserveResult.healedArgs`
+  // (the same post-heal value `ToolCallCompleted`/the trace records) instead of
+  // the pre-heal `resolvedArgs`. No goldens are known to diverge any more.
   for (const entry of goldens) {
-    const runner = KNOWN_ARGS_HASH_DIVERGENCE.has(entry.sidecar.name) ? it.skip : it;
-    runner(`replays clean: ${entry.sidecar.name}`, async () => {
+    it(`replays clean: ${entry.sidecar.name}`, async () => {
       const res = await checkGolden(entry);
       expect(res.failures).toEqual([]);
       expect(res.ok).toBe(true);

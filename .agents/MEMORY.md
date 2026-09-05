@@ -2,18 +2,115 @@
 
 **For any AI coding agent (Claude/Cursor/Codex/Aider/etc.).** This file is a repository-local operational cache, not an authority above current source, tests, or canonical wiki specs. Historical detail belongs in [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md). ▶ = active/open, ✅ = shipped, ⚠️ = caution, 📍 = audit/reference.
 
-## Current Status (2026-08-16)
+## Current Status (2026-08-18)
 
-**`VERSION=0.15.0`** (VERSION file), **34 packages** in `packages/` (32 published, 2 private: benchmarks, judge-server). Local `main` is ahead of `origin/main`; verify exact divergence with git before release or branch decisions. The working tree may contain active documentation and package changes.
-**Last commit:** `3e32ee65` (CSS formatting). Active thread = the **harness-improvement-loop** (`/harness-improvement-loop` skill); current open work is recorded in `wiki/Architecture/DEBT-REGISTER.md` and the active plans index. Do not re-derive current debt from the historical entries below.
+**`VERSION=0.15.0`** (VERSION file), **34 packages** in `packages/` (32 published, 2 private: benchmarks, judge-server) — verified 2026-08-18 (`ls packages` briefly read 35 due to a stray gitignored `note.md` artifact in the dir; removed, real count is 34). Local `main` is ahead of `origin/main`; verify exact divergence with git before release or branch decisions.
+**Last commit:** `78b35085` ("docs: retro + Hot.md sync for #200 closeout") — was `3e32ee65` as of 2026-08-16; 2026-08-16→18 work (backlog bundles closing #200/#61/#188/#184/#155, a repo-context cleanup pass) is logged in `wiki/Hot.md`, not narrated here — see it for the detailed session log. Active thread = the **harness-improvement-loop** (`/harness-improvement-loop` skill); current open work is recorded in `wiki/Architecture/DEBT-REGISTER.md` and the active plans index. Do not re-derive current debt from the historical entries below.
 **Canonical docs, priority order:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) > `Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified). **Canonical debt ledger = `wiki/Architecture/DEBT-REGISTER.md`** — verdict taxonomy (PROVEN/SILENT/ORPHAN/INERT/FALSE), §1 ratchet counts only go down. Do not write a new north-star doc — amend 09.
 **Stale references confirmed dead:** `AUDIT-overhaul-2026.md` (cited in the old "Architecture debt" section below and in prior memory) **no longer exists anywhere in the repo** — superseded by DEBT-REGISTER.md. `wiki/Architecture/Specs/04-PROJECT-STATE.md` and `05-DESIGN-NORTH-STAR.md` still exist on disk but are superseded by 09/08 per the priority order above — check before trusting either as current.
 **Verified 2026-08-16 (v0.15.0 release-prep pass, post health-sweep):** last recorded suite = **8,905 pass / 0 fail / 26 skip / 4 todo / 1,157 files**; `bunx turbo run build` clean (37/37); `bun run release:dry 0.15.0` clean (34 public packages, 12 changesets). This is the latest recorded verification, not a substitute for rerunning checks after changes. Memory is default-off (`builder.ts` `_enableMemory`); `.withLeanHarness()` and cross-cutting checks remain live.
 **Repo-workflow reminder (re-confirmed 2026-08-16):** this repo holds unreleased work on local `main`, unpushed, until a release/tag event — do NOT assume `origin/main` reflects current state, and do NOT open a GitHub PR against `origin/main` for interim work (it'll show every unpushed commit as part of the diff). Merge feature/bundle branches to local `main` directly instead; push happens at tag time.
 
+**2026-08-19: Custom-agent and tool DX feedback from Halopedia prototype.** Building a stateful Halopedia lore agent exposed several high-value DX gaps:
+- `defineTool` input schemas are strong, but `returnType` is only a descriptive string. Custom tools cannot declare an output schema, so evidence fields, source URLs, and citation contracts are not runtime-validated.
+- Citation behavior is currently persona-dependent. The model can be instructed to cite sources, but the framework cannot guarantee every factual response has citations or that cited URLs came from tool evidence.
+- Custom tool setup repeats metadata (`category`, timeout, risk, approval, return type, handler). A domain `defineToolset` helper with shared defaults would reduce boilerplate and improve consistency.
+- `agent.session()` and `session.chat()` are effective for stateful chat, but discovering the API required source-code searching. A prominent canonical chat-session example should be part of the primary docs and starter templates.
+- Higher-level research tools such as `explore` and `compare` require hand-written orchestration for resolution, bounded fan-out, normalization, evidence extraction, and source aggregation. Reusable orchestration primitives would make domain agents much easier to build.
+- Custom handlers repeatedly implement HTTP status handling, missing-resource errors, invalid input, retries, and empty-result policy. A standard fetch/tool adapter would improve reliability and reduce accidental behavior differences.
+- Testing custom tools is not turnkey. A helper should mock `fetch`, invoke a defined tool through decoded input, assert output schemas, and expose tool-call/evidence traces without requiring full agent construction.
+- Scratch examples use the repository's Bun type configuration, while a portable interactive loop naturally uses `node:readline/promises`; the example needed separate Node type configuration for validation. Runtime-portable CLI/chat examples should have an officially supported path.
+- Tool observability is easy to omit. Tool calls should automatically expose latency, retries, request identity, source URLs, page IDs, evidence excerpts, and provenance in a standard result envelope.
+
+**Recommended DX direction:** add output schemas to `defineTool`; support a first-class `produces: "evidence"`/`references` extractor; provide `defineToolset` defaults; ship `searchThenFetch`, `resolveThenRetrieve`, bounded parallel fetch, evidence extraction, and comparison helpers; provide a canonical custom-tool template and test harness; and add an answer policy such as `requireCitations`/`requireReferencesSection` that can retry or mark unsupported claims instead of relying only on persona instructions. The highest-leverage architectural improvement is connecting tool outputs, evidence lineage, and final-answer validation so trustworthy custom agents are structurally easy to build.
+
 ## Projects — Aug 2026
 
 Entries in this section are dated evidence and historical context. They are not current status unless the entry is explicitly marked as verified above or corroborated by source/tests and the canonical wiki debt register.
+
+**2026-09-05: full docs/architecture audit — README `judge-server` gap fixed, `docs:gen:api --check` wired into CI, stale dual-agent-loop defect note purged from Claude memory.**
+Ran a real (non-ledger) audit per user request: (1) all 80 builder methods confirmed present in
+`builder-api.md`; (2) config-field reference (`configuration.md`) is machine-generated from
+`AgentConfigSchema` via `bun run docs:gen:api` — verified in sync (158/158 schema leaves, 0
+orphans) but **was not gated in CI**, now added as a step in `docs-gates`; (3) README's packages
+table was missing `judge-server` (private, added `1f509c2b`) — fixed; (4) architecture check for
+"the loop removed this release" — `e36cd897` (2026-08-23) deleted the dead inline agent-loop arm
+in `execution-engine.ts` (Move 1's single-kernel-loop follow-through). README/`architecture.mdx`/
+`composable-kernel.md`/`09-UNIFIED-PROGRAM.md` already correctly describe single-loop only — no
+repo-doc fix needed there. But Claude's own auto-memory `MEMORY.md` still listed the dual-loop as
+a "known live defect (confirmed 2026-08-11)" — stale, corrected. Lesson: doc audits must include
+the agent's own memory, not just repo files — it's a doc surface too and drifts the same way.
+
+**2026-09-05: `update-docs` skill widened to full lint/validate/update + deterministic docs-sync ledger shipped.**
+`.agents/skills/update-docs/SKILL.md` now covers CAPABILITIES.md manifest sync (Step 5), Starlight
+What's New release banners (Step 6), and a mandatory Step 10 "Full Lint & Validate Pass" run every
+invocation, not just when a change looks doc-relevant. New mechanical gate:
+`scripts/check-docs-sync.ts` + `scripts/docs-sync-ledger.json` — rule-based, walks
+`git log <ledgerSha>..HEAD` per rule (code paths ↔ doc paths); passes with zero judgment when
+nothing changed or docs moved with the code, fails only on real drift. Seeded with 3 rules
+(capabilities-manifest, changelog-whats-new, builder-api-docs), baseline = commit
+`4075fc2e`. Wired: `bun run docs:sync:check`, CI `docs-gates` job (needs `fetch-depth: 0` for full
+git history). `--ack <id>`/`--ack-all` force-advance a reviewed rule; extend by adding a rule to the
+ledger JSON, no code change needed.
+
+**2026-08-24→09-03: External-research convergence — 09 amendment RATIFIED, W1-W3 SHIPPED.**
+`wiki/Decisions/2026-08-24-external-research-convergence-amendment.md` status is RATIFIED, W1-W3
+shipped 2026-09-03 (re-verified against code 2026-09-03). Plan
+`wiki/Planning/Implementation-Plans/2026-08-24-cost-instrument-truth.md` (W1+W2) is complete.
+
+Shipped (verified 2026-09-03):
+- **W1 cost-instrument truth** — `LLMRequestCompleted` now HAS a producer
+  (`emitLLMRequestCompleted`, `reasoning/src/kernel/utils/diagnostics.ts:656`). Billed-token gate leg
+  live at `benchmarks/src/gate/gate.ts:221-222` (`meanBilledTokens ?? meanTokens`).
+  `RA_STABLE_TOOL_SURFACE` re-measured under it → **REMOVED** (+66.5% billed overhead vs 15% ceiling,
+  `a05a0e8a`/`61d90cb7`).
+- **W2 cache explainability** — folded into dead-signal-wiring pass; OTel LLM spans populate
+  (`dfef915e`, `479a2d7e`).
+- **W3 profile completion** — `toolDisclosureMode` wired via `fromDisclosureMode()`
+  (`reasoning/src/harness-config.ts:154`); `.withHarness()` ships as config>env>default surface.
+- **F-6 partial** — memory writes now screened for injection/PII before persist
+  (`memory/src/services/memory-service.ts:26-32`, `a6ff634b`). Default-on measurement NOT done —
+  `_enableMemory` still `false` (`runtime/src/builder.ts:346`, re-verified 2026-09-03).
+- **F-5 trace schema** — per-kind required-field validation shipped (`5d8c024e`).
+
+**W6 CLOSED 2026-09-03 — REWORK verdict, both flags stay opt-in.**
+`ablation-warden` ran the default-on measurement:
+`wiki/Research/Harness-Reports/2026-09-03-memory-default-on-ablation.md`.
+- `_enableMemory` (`builder.ts:346`) — REWORK: +67-100pp lift but +81%/+121% billed-token overhead
+  (30% ceiling) plus cross-tier divergence, two independent REWORK triggers (reused 2026-08-21
+  ablation, still valid — guardrail screening added since is deterministic non-LLM code).
+- `_enableMemoryConsolidation` (`builder.ts:451`) — REWORK: new ablation
+  (`packages/benchmarks/src/memory-consolidation-ablation.ts`, n=3×2 tiers, 12/12 clean cells)
+  found **0.0pp lift both tiers** (ceiling effect, both arms already at 100% recall), token overhead
+  noise-level (consolidator is pure SQL, zero `LLMService` calls). No-lift clause fails the rule
+  regardless of the near-zero cost.
+
+**OPEN — next highest-leverage, ranked:**
+- **W5 — τ-bench score (F-7).** `benchmarks/src/tau-bench/` (adapter/loader/pass-k + vendored
+  airline+retail data) never run — zero reports in `wiki/Research/Harness-Reports/` (re-verified
+  2026-09-03, still zero).
+- **W4 — harness-quality metrics in `packages/eval`.** Only 5 dimensions exist
+  (accuracy/completeness/cost-efficiency/relevance/safety); the 4 new ones (Context Efficiency Ratio,
+  Verification Cost Overhead, Trajectory Recovery Rate, Memory Hygiene Index) are NOT built.
+  RunLedger already holds the inputs — projection, not new instrumentation.
+- **W7 residue** — `tools/src/mcp/` still client-only (re-verified 2026-09-03), unlike `packages/a2a`
+  (client+server). Cheap, unblocked.
+
+Do NOT re-litigate: topology/orchestration surface (09 C5 gates it), RL/distillation pipeline, the
+28-pattern catalog, another north-star doc.
+
+Research-doc claims that must NOT be cited: "+25pp classification-head fine-tuning on tiny models"
+(the actual paper, arXiv 2607.03801, reports +2–3pp); "4.5M executions / 56.6% success" and "30pp
+harness variance" (both unsourced); its benchmark table (understates frontier agents and omits the
+2026-04-12 UC Berkeley RDI result that all eight major agent benchmarks were broken by reward
+hacking). Sound and usable: arXiv 2605.13850 (7×6 cognitive-function × execution-topology taxonomy),
+2602.14690 (harness-engineering study of 70 systems), 2606.22528 (governance decay under compaction).
+
+Workstream order set by the amendment: W1 cost-instrument truth → W2 cache explainability (same
+slice, WIP=1) → W3 profile completion → W4 harness-quality metrics in `packages/eval` → W5 τ-bench
+score → W6 memory hygiene → W7 residue. Explicitly NOT authorized: a topology/orchestration surface
+(09 C5 gates it behind RunAssessment), any RL/distillation pipeline, the 28-pattern catalog, or
+another north-star document.
 
 **2026-08-16: Health sweep (pre-release) — HS-224..228 fixed, HS-229..232 filed, 1 false P0.**
 User-requested DX/cleanliness pass before v0.15.0. 4 parallel scan agents. **Real correctness bug in
@@ -196,18 +293,16 @@ vs. engine's own empty-output-but-all-deliverables-verified branch (legitimately
 `engine-empty-output-invariant.test.ts`). Needs the `allProduced` deliverable-completeness signal
 threaded earlier to distinguish them — **read that test file first** before touching this rule again.
 
-**2026-08-15: scratch.ts research-task triage — 3 root causes, 1 fixed (`b13550f2`).** `rax diagnose`
-on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode names/descriptions" task)
-found: (1) **FIXED** — `evaluateToolInject` (reactive-intelligence) unconditionally suggested another
-`web-search` on knowledge-gap entropy even when the model already fetched real content (HTTP 200 from
-Wikipedia/TVGuide) compressed to the scratchpad and never called `recall()` to read it back. Fixed by
-threading `hasUnconsumedStoredEvidence` (`computeHasUnconsumedStoredEvidence` in `reactive-observer.ts`)
-so the evaluator now prefers `recall(key, full:true)` over redundant search. (2) **OPEN, high-value** —
-fabrication guards (`evidence-grounding.ts`) are NUMERIC-ONLY; plan-execute-reflect invented 9 complete
-fake episode titles from 5 vague search snippets and the verifier reported "9 checks passed" — zero
-grounding coverage for narrative/factual fabrication, likely the framework's biggest trust gap for
-research tasks. (3) **OPEN** — react's final-answer path can degenerate to a raw ✓-prefixed dump of tool
-observations with no LLM synthesis pass at all. Also noted: `http-get` on IMDb returns 202/empty body
+**2026-08-15→09-03: scratch.ts research-task triage — RESOLVED, all 3 root causes fixed.**
+`rax diagnose` on 3 live gemma4:e4b traces (plan-execute-reflect + react, "list episode
+names/descriptions" task) found 3 root causes, all now fixed (re-verified 2026-09-03): (1) **FIXED
+`b13550f2`** — `evaluateToolInject` unconditionally suggested another `web-search` on knowledge-gap
+entropy even with unread real content already in the scratchpad; fixed via `hasUnconsumedStoredEvidence`
+threading. (2) **FIXED `2f8432fa`, hardened `bbc8e16d`** — fabrication guards were NUMERIC-ONLY;
+`detectFabricatedListedEntities` (`evidence-grounding.ts:407`) now catches wholesale-invented
+table rows/bolded titles with zero corpus overlap (softened to non-fatal after a live false-fail).
+(3) **FIXED `60e745da`** — react's raw ✓-prefixed tool-dump no longer ships as final answer when
+output-gate synthesis fails. Residue, not re-verified: `http-get` on IMDb returns 202/empty body
 (bot mitigation) with no signal to the model that the fetch was wasted. Full detail: Claude memory
 `project_scratch_ts_research_task_triage_2026_08_15.md`.
 
@@ -305,7 +400,13 @@ Reverse-chronological within the month; each links to nothing (detail lives in M
 **Kernel:** `packages/reasoning/src/kernel/` = `capabilities/` (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify) + `loop/` (runner.ts, react-kernel.ts, terminate.ts = single terminal owner) + `state/` + `utils/`.
 **Two records:** `state.messages[]` = LLM-visible thread; `state.steps[]` = systems-observed (entropy/metrics/debrief).
 **Build patterns:** all providers pass `tools` to both `complete()` and `stream()`; Anthropic streaming uses raw `streamEvent` (helper events fire `inputJson` before `contentBlock`); Gemini needs `msg.toolName` (not hardcoded) for `functionResponse.name` and must walk `candidates[0].content.parts[]` directly (`chunk.text` strips functionCall parts); Ollama emits `tool_calls` on `chunk.done`. Loop detection: `maxConsecutiveThoughts:3`, only ACTION steps reset the streak (`kernel/capabilities/reflect/loop-detector.ts`).
-**Known open architecture debt:** ToT outer loop still doesn't honor `dispatcher-early-stop` (per-inner fixed; outer branches are separate sub-kernels) — long-standing, not verified fixed as of this condensation. Full historical debt list (mostly resolved) → MEMORY-ARCHIVE.md; current debt is DEBT-REGISTER.md, not this file.
+**Known open architecture debt:** none tracked here as of 2026-08-18 — the "ToT outer loop doesn't honor `dispatcher-early-stop`" item was RESOLVED by #127 (verified live in `tree-of-thought.ts:734-775`, closed #61). Full historical debt list (mostly resolved) → MEMORY-ARCHIVE.md; current debt is DEBT-REGISTER.md, not this file.
+
+## Determinism gate gap (2026-09-03, HS-233/HS-236 in Running Issues Log)
+
+Fixed: `rw-1` bench task declared no `task.tools`/`task.fixtures`, so `runner.ts`'s builtins computation fell into the unrestricted `else` branch and `withRequiredTools(...)` was never called — 3 identical reruns produced 3 different trust outcomes (0/4/2 tool calls). Fixed by declaring `tools: [{kind:"required",name:"web-search"},{kind:"required",name:"file-write"}]`.
+
+Filed, not built: with no `.withRequiredTools()`/`TaskContract`, the framework has **no gate of any kind** on tool use — fully permissive by design (the `{adaptive:true}` LLM classifier default was correctly killed 2026-07-28 for 0pp lift; reviving it is not the fix). Any real caller with a tool-dependent task and no explicit `requiredTools` gets the same non-deterministic first-iteration branch. Proposed direction: a free static-regex heuristic over deliverable phrasing (not an LLM call) — scope (file-write only vs. also research verbs) undecided, user chose document-only for now.
 
 ## Working rules (cross-cutting, keep applying)
 
@@ -314,6 +415,7 @@ Reverse-chronological within the month; each links to nothing (detail lives in M
 - Keep this repository file aligned with current source, tests, `wiki/Hot.md`, and canonical specs. Personal agent memory is optional context and must never be treated as repository authority.
 - Use native `git`/`grep`/`find`, bound output yourself (`| head`, `| wc -l`, `-c`). **Do not use `rtk`** — revised 2026-07-27, it silently truncated output with no marker (measured: `git log` 50 vs 145 real, `find` 5 vs 1510 real) and was costing correctness, not saving tokens. Do not restore it.
 - Frontier API keys live in the repo's `.env` (bun auto-loads it) — do not conclude "no keys" from `echo $VAR` against shell env.
+- **Push `main` before tagging a release — always, overriding the "push at tag time" convention above.** `publish.yml`'s post-publish sync step does `git checkout -f -B main origin/main` then reapplies only VERSION/CHANGELOG/package.json — it does not carry the tagged commit's own ancestry. If `origin/main` is behind the tag when it's pushed, the sync discards every commit main is missing and lands its commit on stale history (2026-09-05 incident, v0.16.0: 222 unpushed commits, required a manual merge + 32-file conflict resolution to fix). `git push origin main` immediately before `git tag`/`git push origin vX.Y.Z` — see `prepare-release/SKILL.md` Step 7, and the CI-side guard added in `publish.yml` ("Guard — origin/main must already contain this release").
 - On a working tree with other pending/staged branch work, re-check `git diff --cached --stat` as the LITERAL LAST STEP before `git commit` — a check done even a few tool calls earlier can go stale if other work gets staged in between (happened 2026-08-16: a commit briefly swept in unrelated `bundle/providers-dynamic-config` changes; fixed with `git reset --soft HEAD~1` + selective re-staging).
 
 ## Lost / pending re-implementation

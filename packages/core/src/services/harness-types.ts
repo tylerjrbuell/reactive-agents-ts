@@ -168,7 +168,19 @@ export type PhaseHookFn<_Ph extends Phase> = (ctx: { readonly phase: _Ph; readon
   | void
   | Promise<void>
   | { readonly skip: true }
-  | { readonly abort: 'stop' | 'terminate'; readonly reason?: string };
+  | {
+      readonly abort: 'stop' | 'terminate';
+      readonly reason?: string;
+      /**
+       * Structured twin of `reason` for killswitches whose abort corresponds
+       * to a real budget figure (D-1 amendment, 2026-08-27 dead-signal-wiring
+       * plan, Task 3 narrowed). `reason` stays the human `terminatedBy`
+       * string; `meta`, when present, lets the hook-consumption site publish
+       * a typed `BudgetExhausted` EventBus event without re-parsing `reason`.
+       * Optional and killswitch-specific — most killswitches never set it.
+       */
+      readonly meta?: { readonly budgetType: string; readonly limit: number; readonly used: number };
+    };
 
 export type ErrorHookFn<_Ph extends Phase | '*'> = (
   error: unknown,

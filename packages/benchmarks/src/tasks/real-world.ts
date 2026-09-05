@@ -840,6 +840,20 @@ Note: some sources you find may have conflicting benchmark data for the same dat
 
 Write the final answer to databases.json in your working directory: a JSON array with exactly one object per database. Each object MUST have exactly these keys: "name", "license", "wasmSupport" ("yes" or "no"), "latency100k", "verdict" — plus an optional "conflicts" key describing any conflicting data you found for that database.`,
     requiresTools: true,
+    // Tool contract (added 2026-09-03, root-caused via a 3-run determinism
+    // probe on qwen3.5:latest: same task/model/config, tool-call count
+    // varied 0/4/2 across identical reruns and one run answered with zero
+    // tool calls, shipping an unparseable databases.json. Root cause: this
+    // task declared no `tools:` field and no `fixtures`, so runner.ts's
+    // builtins computation fell through to the unrestricted `else` branch
+    // (builder.withTools() with no grounding set), which never calls
+    // withRequiredTools — the agent-took-action and F1 terminal-gate checks
+    // were structurally inert. Same root-cause class as rw-4's 2026-08-15
+    // fix; this task was simply never migrated to the explicit contract.
+    tools: [
+      { kind: "required", name: "web-search" },
+      { kind: "required", name: "file-write" },
+    ],
     maxIterations: 20,
     // 2026-07-11 keyword→graded conversion: accuracy was an llm-judge rubric
     // that instructed a binary verdict — Bernoulli by construction. Now a

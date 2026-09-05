@@ -1,8 +1,8 @@
 // Run: bun test packages/reasoning/tests/kernel/calibration-wiring.test.ts --timeout 15000
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { describe, it, expect } from "bun:test";
 import { runReactiveObserver } from "../../src/kernel/capabilities/reflect/reactive-observer.js";
-import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../src/kernel/state/kernel-state.js";
+import type { KernelState, KernelRunOptions, EventBusInstance } from "../../src/kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../src/kernel/utils/service-utils.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,12 +55,12 @@ function makeRunOptions(): KernelRunOptions {
   };
 }
 
-function noneService<T>(): MaybeService<T> {
-  return { _tag: "None" };
+function noneService<T>(): Option.Option<T> {
+  return Option.none();
 }
 
-function someService<T>(value: T): MaybeService<T> {
-  return { _tag: "Some", value };
+function someService<T>(value: T): Option.Option<T> {
+  return Option.some(value);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

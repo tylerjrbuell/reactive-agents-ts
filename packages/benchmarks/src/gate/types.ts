@@ -51,7 +51,14 @@ export interface ClassVerdict {
   readonly perTier: readonly TierEvidence[];
   readonly aggregate: {
     readonly liftPp: number;
+    /** Mean RAW token overhead across conclusive tiers. Always reported. */
     readonly tokenOverheadPct: number;
+    /**
+     * Mean BILLED token overhead across conclusive tiers. Always reported.
+     * `policy.tokenLeg` decides which of the two the verdict was scored on;
+     * receipts and the rationale print the SCORED one, labeled.
+     */
+    readonly billedTokenOverheadPct: number;
     readonly tiersCovered: number;
   };
   readonly partial: boolean;
@@ -65,6 +72,22 @@ export interface LiftPolicy {
   readonly minLiftPp: number;
   /** Maximum tolerated token overhead, percent. */
   readonly maxTokenOverheadPct: number;
+  /**
+   * Which token figure the cost leg scores (2026-08-24 amendment §4).
+   *
+   * "billed" — `(input - cacheRead) + output`. The default. Raw tokens stopped
+   *            tracking cost when prompt caching shipped: a cached prefix read
+   *            is billed at roughly a tenth of a fresh one, so the raw leg
+   *            penalised the only mechanism that caches by construction
+   *            (RA_STABLE_TOOL_SURFACE: +33.3% raw tokens, -4.4% money).
+   * "raw"    — pre-amendment behavior. Retained so an archived report can be
+   *            re-scored under the rule that was in force when it was produced.
+   *
+   * The leg stays denominated in TOKENS in both cases. USD was considered and
+   * rejected: it imports vendor pricing into a gate that must stay comparable
+   * across providers and across time.
+   */
+  readonly tokenLeg: "raw" | "billed";
   /** Minimum distinct model tiers that must be covered by both variants. */
   readonly minTiers: number;
   /**
@@ -99,6 +122,7 @@ export const DEFAULT_LIFT_POLICY: LiftPolicy = {
   metric: "accuracy",
   minLiftPp: 3,
   maxTokenOverheadPct: 15,
+  tokenLeg: "billed",
   minTiers: 2,
   significanceK: 1,
   promotionSignificanceK: 1.96,
@@ -120,6 +144,10 @@ export interface TierEvidence {
   readonly liftPp: number;
   /** (candidateTokens − baselineTokens) / baselineTokens × 100. */
   readonly tokenOverheadPct: number;
+  /** (candidateBilled − baselineBilled) / baselineBilled × 100. Scored by default. */
+  readonly billedTokenOverheadPct: number;
+  /** Candidate `meanCacheReadTokens / meanTokens`, 0..1. 0 when unreported. */
+  readonly cacheHitRate: number;
   /**
    * Max stddev (0..1 score units) across the cells for this tier. RETAINED for
    * receipts/back-compat only — it is NOT the noise floor any more, because a
@@ -206,7 +234,14 @@ export interface GateVerdict {
   readonly perTier: readonly TierEvidence[];
   readonly aggregate: {
     readonly liftPp: number;
+    /** Mean RAW token overhead across conclusive tiers. Always reported. */
     readonly tokenOverheadPct: number;
+    /**
+     * Mean BILLED token overhead across conclusive tiers. Always reported.
+     * `policy.tokenLeg` decides which of the two the verdict was scored on;
+     * receipts and the rationale print the SCORED one, labeled.
+     */
+    readonly billedTokenOverheadPct: number;
     readonly tiersCovered: number;
   };
   /** True if any covered tier is inconclusive — blocks `default-on`. */
@@ -223,4 +258,19 @@ export interface GateVerdict {
    * deliverable; short on the historical token-overhead rule).
    */
   readonly byClass?: readonly ClassVerdict[];
+}
+
+/**
+ * The token-overhead figure a verdict was actually SCORED on — raw or billed
+ * per `policy.tokenLeg`. Receipts and rationales must surface THIS number:
+ * printing the raw leg while deciding on the billed one makes the headline
+ * disagree with the decision, with nothing on the page to say so.
+ */
+export function scoredTokenOverheadPct(
+  aggregate: GateVerdict["aggregate"],
+  policy: LiftPolicy,
+): number {
+  return policy.tokenLeg === "raw"
+    ? aggregate.tokenOverheadPct
+    : aggregate.billedTokenOverheadPct;
 }

@@ -1,14 +1,14 @@
-import { Effect, Layer, Stream, Schema, Duration } from "effect";
+import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
 import { mapProviderError } from "../provider-error.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -20,7 +20,7 @@ import type {
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
-import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
@@ -151,16 +151,37 @@ export const isStrictToolCallingSupported = (model: string): boolean => {
 };
 
 /**
+ * Minimal recursive JSON-Schema shape covering exactly what `toStrictToolSchema`
+ * branches on below: object schemas (properties/required/additionalProperties),
+ * array schemas (items), anyOf unions, and scalar leaf schemas (type/enum/default).
+ * Arbitrary extra JSON-Schema keywords (description, title, format, ...) are
+ * preserved via the `unknown`-typed index signature rather than widening to `any`.
+ */
+export interface JSONSchema {
+  type?: string;
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  additionalProperties?: boolean | JSONSchema;
+  items?: JSONSchema;
+  anyOf?: JSONSchema[];
+  enum?: unknown[];
+  default?: unknown;
+  [key: string]: unknown;
+}
+
+const isJSONSchemaObject = (value: unknown): value is JSONSchema =>
+  typeof value === "object" && value !== null;
+
+/**
  * Transform a JSON Schema into an OpenAI-compatible "Strict" schema.
  * 1. Sets additionalProperties: false
  * 2. Moves all properties into the required array
  * 3. Removes 'default' values (not supported in strict mode)
  */
 /** @internal Exported for testing only */
-export const toStrictToolSchema = (schema: any): any => {
-  if (!schema || typeof schema !== "object") return schema;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- toStrictToolSchema is a pre-existing `(schema: any): any` mutator; the clone keeps that local shape.
-  const newSchema = deepClone<any>(schema);
+export const toStrictToolSchema = (schema: unknown): unknown => {
+  if (!isJSONSchemaObject(schema)) return schema;
+  const newSchema = deepClone<JSONSchema>(schema);
 
   if (newSchema.type === "object" && newSchema.properties) {
     const originalRequired = new Set<string>(newSchema.required ?? []);
@@ -172,13 +193,13 @@ export const toStrictToolSchema = (schema: any): any => {
       const prop = newSchema.properties[key];
 
       // Remove 'default' as it's not supported in OpenAI Strict Mode
-      if (typeof prop === "object" && prop !== null) {
+      if (isJSONSchemaObject(prop)) {
         delete prop.default;
       }
 
       // Properties that were NOT originally required become nullable so the
       // model can pass null instead of omitting them (strict mode forbids omission)
-      if (!originalRequired.has(key) && prop && typeof prop === "object") {
+      if (!originalRequired.has(key) && isJSONSchemaObject(prop)) {
         if (prop.type && prop.type !== "null" && !prop.anyOf) {
           prop.anyOf = [{ type: prop.type }, { type: "null" }];
           delete prop.type;
@@ -187,16 +208,16 @@ export const toStrictToolSchema = (schema: any): any => {
 
       // Recursively apply to nested objects and anyOf branches
       if (prop.type === "object" && prop.properties) {
-        newSchema.properties[key] = toStrictToolSchema(prop);
+        newSchema.properties[key] = toStrictToolSchema(prop) as JSONSchema;
       } else if (prop.anyOf) {
-        prop.anyOf = prop.anyOf.map((variant: any) =>
-          variant && variant.type === "object"
+        prop.anyOf = prop.anyOf.map((variant) =>
+          isJSONSchemaObject(variant) && variant.type === "object"
             ? { ...variant, additionalProperties: false }
             : variant,
         );
       }
       if (prop.type === "array" && prop.items && prop.items.type === "object") {
-        newSchema.properties[key].items = toStrictToolSchema(prop.items);
+        newSchema.properties[key].items = toStrictToolSchema(prop.items) as JSONSchema;
       }
     }
   }
@@ -376,21 +397,19 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             );
           }
           return mapped;
-        }).pipe(
-          Effect.retry(retryPolicy),
+        }).pipe((effect) =>
           // G2 default is 120s (30s was too tight for thinking/reasoning
           // models); F4 makes it request/config-resolvable — see
           // resolveCloudTimeoutMs.
-          Effect.timeout(Duration.millis(timeoutMs)),
-          Effect.catchTag("TimeoutException", () =>
-            Effect.fail(
+          withRetryAndTimeout(effect, {
+            timeoutMs,
+            onTimeout: () =>
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: providerName,
                 timeoutMs,
               }),
-            ),
-          ),
+          }),
         );
       },
 
@@ -603,6 +622,9 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                       cacheUsage,
                       config.pricingRegistry,
                     ),
+                    ...(typeof cacheUsage.cached_tokens === "number"
+                      ? { cacheReadInputTokens: cacheUsage.cached_tokens }
+                      : {}),
                   },
                 });
                 emit.end();
@@ -662,65 +684,43 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messages
+                    : [
+                        ...messages,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
+                        },
+                      ];
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messages
-                : [
-                    ...messages,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
-                    },
-                  ];
+                const completeResult = yield* Effect.tryPromise({
+                  try: () =>
+                    client.chat.completions.create({
+                      ...requestBody,
+                      messages: toOpenAIMessages(msgs),
+                    }),
+                  catch: (error) => toEffectError(error, providerName),
+                });
 
-            const completeResult = yield* Effect.tryPromise({
-              try: () =>
-                client.chat.completions.create({
-                  ...requestBody,
-                  messages: toOpenAIMessages(msgs),
-                }),
-              catch: (error) => toEffectError(error, providerName),
-            });
-
-            const response = mapOpenAIResponse(
-              completeResult as OpenAIRawResponse,
-              model,
-              config.pricingRegistry,
-            );
-
-            try {
-              const parsed = JSON.parse(response.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapOpenAIResponse(
+                  completeResult as OpenAIRawResponse,
+                  model,
+                  config.pricingRegistry,
+                ).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>
@@ -952,6 +952,9 @@ const mapOpenAIResponse = (
         },
         registry,
       ),
+      ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
+        ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
+        : {}),
     },
     model: response.model ?? model,
     toolCalls,

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/trace",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "description": "Structured execution trace recording and inspection for Reactive Agents",
   "keywords": [
     "ai",
@@ -24,8 +24,8 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
+    "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/observability": "0.16.0",
     "effect": "^3.10.0"
   },
   "devDependencies": {

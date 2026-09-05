@@ -99,6 +99,26 @@ export const shouldUseLongHorizon = (task: {
 }): boolean => task.tags?.includes("horizon:long") ?? false;
 
 /**
+ * Billed/cache-read fields for a `TaskResult`, gated on whether the
+ * `LLMRequestCompleted` subscriber ever actually fired for this run.
+ *
+ * A subscribe race or a dropped event must not report a defined-but-wrong `0`
+ * for `billedTokens` — `aggregateRuns`'s `r.billedTokens ?? r.tokensUsed`
+ * fallback only engages on `undefined`, so a defined `0` would silently read
+ * as "genuinely billed nothing" and violate the never-default-to-0 guarantee.
+ * Omitting the fields entirely when the subscriber never fired lets that
+ * fallback correctly engage and use the run's raw `tokensUsed` instead.
+ */
+export const billedTokenFields = (
+  sawLLMRequestCompleted: boolean,
+  cumulativeBilledTokens: number,
+  cumulativeCacheReadTokens: number,
+): { billedTokens?: number; cacheReadTokens?: number } =>
+  sawLLMRequestCompleted
+    ? { billedTokens: cumulativeBilledTokens, cacheReadTokens: cumulativeCacheReadTokens }
+    : {};
+
+/**
  * Run a single benchmark task against a real LLM.
  * Returns a TaskResult with real timing, token usage, cost, and pass/fail status.
  */
@@ -156,6 +176,16 @@ const runTask = async (
     let agentResult: Awaited<ReturnType<typeof agent.run>>;
     let cumulativeTokens = 0;
     let cumulativeCost = 0;
+    let cumulativeBilledTokens = 0;
+    let cumulativeCacheReadTokens = 0;
+    // Set true the first time LLMRequestCompleted actually fires. A subscribe
+    // race or a dropped event must not leave cumulativeBilledTokens sitting at
+    // its 0 initializer and reported as a genuine "0 billed tokens" — that
+    // would silently violate the never-default-to-0 guarantee downstream
+    // (aggregateRuns's `??` fallback only engages on undefined, not on a
+    // defined-but-wrong 0). Both return sites below omit the fields entirely
+    // when this stays false, so the raw-tokensUsed fallback correctly engages.
+    let sawLLMRequestCompleted = false;
     let iterations = 0;
 
     // Listen for progress to capture tokens/cost even on timeout
@@ -163,6 +193,12 @@ const runTask = async (
       if (event._tag === "LLMRequestCompleted") {
         cumulativeTokens += event.tokensUsed;
         cumulativeCost += event.estimatedCost;
+        // Before the F-1 fix nothing published this event, so these
+        // accumulators sat at 0 and the bench silently fell through to
+        // agentResult.metadata.tokensUsed. They are live now.
+        cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed;
+        cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0;
+        sawLLMRequestCompleted = true;
       }
       if (event._tag === "ReasoningStepCompleted") {
         iterations++;
@@ -216,6 +252,7 @@ const runTask = async (
         status: "fail",
         durationMs,
         tokensUsed: cumulativeTokens,
+        ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
         estimatedCost: cumulativeCost,
         iterations,
         output: error instanceof Error ? `Error: ${error.message}` : String(error),
@@ -235,6 +272,11 @@ const runTask = async (
       status: passed ? "pass" : "fail",
       durationMs,
       tokensUsed: agentResult.metadata.tokensUsed || cumulativeTokens,
+      // AgentResultMetadata does not (yet) carry a billed/cache-read split, so
+      // these fall back to the event-stream accumulator directly rather than
+      // ORing against a nonexistent metadata field. Omit entirely (not 0) when
+      // the subscriber never fired, so aggregateRuns falls back to raw tokensUsed.
+      ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
       estimatedCost: agentResult.metadata.cost || cumulativeCost,
       iterations: agentResult.metadata.stepsCount || iterations,
       output: agentResult.output.slice(0, 1000),
@@ -787,6 +829,25 @@ async function runInternal(
     const agent = await builder.build()
     console.log = _log
 
+    // Billed-token instrument (2026-08-24 amendment §4). This is the SAME
+    // mechanism `runTask` uses (see the subscription there): the per-call
+    // `LLMRequestCompleted` event is the only live source of the cache split.
+    // Without this subscription the gate/ablation path — which flows through
+    // runInternal, NOT runTask — reported meanBilledTokens === meanTokens and
+    // cacheHitRate === 0 on every real measurement, leaving the ratified
+    // billed-token rule inert on the exact path it was ratified for.
+    let cumulativeBilledTokens = 0
+    let cumulativeCacheReadTokens = 0
+    // Never report a defined-but-wrong 0: see `billedTokenFields`.
+    let sawLLMRequestCompleted = false
+    const unsubBilled = await agent.subscribe((event) => {
+      if (event._tag === "LLMRequestCompleted") {
+        cumulativeBilledTokens += event.billedTokens ?? event.tokensUsed
+        cumulativeCacheReadTokens += event.cacheReadTokensIn ?? 0
+        sawLLMRequestCompleted = true
+      }
+    })
+
     // M3 ablation: when the variant config requests the noop verifier, set the
     // env-var signal consumed by strategies/reactive.ts. The strategy swaps
     // `defaultVerifier` for `noopVerifier` only when no explicit verifier was
@@ -841,8 +902,25 @@ async function runInternal(
           else if (ev._tag === "StreamError") streamError = ev.cause
         }
         if (!completed) throw new Error(streamError ?? "timeout")
-        const meta = completed.metadata as { tokensUsed?: number; stepsCount?: number; terminatedBy?: string }
+        const meta = completed.metadata as {
+          tokensUsed?: number
+          stepsCount?: number
+          terminatedBy?: string
+          billedTokens?: number
+          cacheReadTokens?: number
+        }
         const terminatedBy = completed.abstention ? "abstained" : meta.terminatedBy
+        // PRIMARY: the live LLMRequestCompleted subscription above.
+        // SECONDARY: AgentResult.metadata, which does not carry these fields
+        // yet (that wiring lives in packages/runtime/src/execution-engine.ts
+        // and is a deferred fast-follow) — it reads through for free the
+        // moment it does, and is only consulted when the event never fired.
+        const billed = sawLLMRequestCompleted
+          ? billedTokenFields(true, cumulativeBilledTokens, cumulativeCacheReadTokens)
+          : {
+              ...(meta.billedTokens != null ? { billedTokens: meta.billedTokens } : {}),
+              ...(meta.cacheReadTokens != null ? { cacheReadTokens: meta.cacheReadTokens } : {}),
+            }
         return {
           output: completed.output,
           tokensUsed: meta.tokensUsed ?? 0,
@@ -851,6 +929,7 @@ async function runInternal(
           status: "pass",
           ...(traceDir && completed.taskId ? { traceId: completed.taskId } : {}),
           ...(terminatedBy != null ? { terminatedBy } : {}),
+          ...billed,
         }
       } finally {
         clearTimeout(killTimer)
@@ -866,6 +945,7 @@ async function runInternal(
         }
       }
     } finally {
+      unsubBilled()
       await agent.dispose()
       if (config.verifier === "noop") {
         if (prevVerifierEnv === undefined) delete process.env[VERIFIER_ENV];
@@ -955,7 +1035,8 @@ export function aggregateRuns(
 ): TaskVariantReport {
   if (runs.length === 0) {
     return { taskId, modelVariantId, variantId: variant.id, variantLabel: variant.label,
-      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanDurationMs: 0, passRate: 0, solveRate: 0 }
+      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanBilledTokens: 0, meanCacheReadTokens: 0,
+      meanDurationMs: 0, passRate: 0, solveRate: 0 }
   }
 
   const dims = [...new Set(runs.flatMap(r => r.dimensions.map(d => d.dimension)))] as QualityDimension[]
@@ -1008,6 +1089,14 @@ export function aggregateRuns(
     meanScores,
     variance: Math.sqrt(variance),
     meanTokens: Math.round(runs.reduce((a, r) => a + r.tokensUsed, 0) / runs.length),
+    // Fall back to the RAW figure per run, not to 0 — a provider with no cache
+    // reporting must score as "billed everything", which is the truth.
+    meanBilledTokens: Math.round(
+      runs.reduce((a, r) => a + (r.billedTokens ?? r.tokensUsed), 0) / runs.length,
+    ),
+    meanCacheReadTokens: Math.round(
+      runs.reduce((a, r) => a + (r.cacheReadTokens ?? 0), 0) / runs.length,
+    ),
     meanDurationMs: Math.round(runs.reduce((a, r) => a + r.durationMs, 0) / runs.length),
     passRate: completionRateOf(runs),
     solveRate: solveRateOf(runs),
@@ -1348,6 +1437,8 @@ export async function runSession(
             meanScores: [],
             variance: 0,
             meanTokens: 0,
+            meanBilledTokens: 0,
+            meanCacheReadTokens: 0,
             meanDurationMs: 0,
             passRate: 0,
             solveRate: 0,
@@ -1427,6 +1518,8 @@ export async function runSession(
               ...(result.traceId ? { traceId: result.traceId } : {}),
               ...(diagnosis ? { diagnosis } : {}),
               ...(trust ? { trust } : {}),
+              ...(result.billedTokens != null ? { billedTokens: result.billedTokens } : {}),
+              ...(result.cacheReadTokens != null ? { cacheReadTokens: result.cacheReadTokens } : {}),
             })
             if (diagnosis) {
               const diagLine = formatDiagnosisLine(diagnosis);

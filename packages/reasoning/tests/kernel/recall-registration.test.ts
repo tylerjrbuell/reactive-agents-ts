@@ -98,4 +98,67 @@ describe("Recall tool auto-registration", () => {
     expect(result).toBeDefined();
     expect((result as any).result).toBeDefined();
   }, 15000);
+
+  // 2026-09-03: `metaTools.recallConfig` (the public `.withMetaTools({ recall:
+  // true, recallConfig })` builder surface) was declared on the builder-level
+  // type but dropped when `kernelMetaTools` was assembled in
+  // runtime-construction.ts — `makeRecallHandler` always ran with
+  // `config: undefined`. A user setting `recallConfig` observed no behavior
+  // change. Fixed by threading it through KernelMetaToolsSchema ->
+  // runtime-construction.ts -> resolveExecutableToolCapabilities.
+  it("threads metaTools.recallConfig into the registered recall handler end-to-end", async () => {
+    const program = Effect.gen(function* () {
+      yield* resolveExecutableToolCapabilities({
+        availableToolSchemas: [],
+        metaTools: { recall: true, recallConfig: { fullReturnCapChars: 50 } },
+      });
+
+      const toolService = yield* ToolService;
+      yield* toolService.execute({
+        toolName: "recall",
+        arguments: { key: "big", content: "x".repeat(10_000) },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+      return yield* toolService.execute({
+        toolName: "recall",
+        arguments: { key: "big", full: true },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
+    const payload = (result as any).result;
+    expect(payload.truncated).toBe(true);
+    expect(payload.content.length).toBe(50); // custom cap honored, not the 20_000 default
+    expect(payload.cappedAt).toBe(50);
+  }, 15000);
+
+  it("falls back to the 20_000-char default cap when recallConfig is not set", async () => {
+    const program = Effect.gen(function* () {
+      yield* resolveExecutableToolCapabilities({
+        availableToolSchemas: [],
+        metaTools: { recall: true },
+      });
+      const toolService = yield* ToolService;
+      yield* toolService.execute({
+        toolName: "recall",
+        arguments: { key: "big2", content: "y".repeat(30_000) },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+      return yield* toolService.execute({
+        toolName: "recall",
+        arguments: { key: "big2", full: true },
+        agentId: "test-agent",
+        sessionId: "test-session",
+      });
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(fullLayer)));
+    const payload = (result as any).result;
+    expect(payload.truncated).toBe(true);
+    expect(payload.content.length).toBe(20_000);
+  }, 15000);
 });

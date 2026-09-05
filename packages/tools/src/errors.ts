@@ -58,6 +58,20 @@ export class ToolTimeoutError extends Data.TaggedError("ToolTimeoutError")<{
   readonly timeoutMs: number;
 }> {}
 
+/**
+ * Raised by `defineTool` when a handler's resolved return value fails to
+ * decode against the tool's declared `output` schema. Only fires when the
+ * tool author opted in via `output: ToolSchema<O>` — tools without one keep
+ * today's unvalidated-return behavior.
+ */
+export class ToolOutputValidationError extends Data.TaggedError(
+  "ToolOutputValidationError",
+)<{
+  readonly message: string;
+  readonly toolName: string;
+  readonly rawOutput?: unknown;
+}> {}
+
 export class ToolValidationError extends Data.TaggedError(
   "ToolValidationError",
 )<{

@@ -71,9 +71,14 @@ Supersedes the simplification program as the WIP=1 item; the simplification
 program's motivating figure (555–640% harness overhead) was **retracted** on
 2026-07-28 because the instrument was broken (`2f97ca1e`).
 
-**Highest open defect:** [[Failure-Modes/RUNNING-CATALOGUE#F10]] — the request
-prefix churns every iteration, so the prompt cache never hits. Lazy tool
-disclosure saves 41% of tokens and costs 17% MORE money.
+**F10 RESOLVED (2026-08-26, `4f7c4bc0`, closed `89bb8a43`):**
+[[Failure-Modes/RUNNING-CATALOGUE#F10]] — was the request prefix churning every
+iteration so the prompt cache never hit. Root cause: per-iteration harness
+guidance appended to the system-prompt string tail still invalidated the
+cache (system precedes messages in Anthropic's cache hierarchy); guidance
+now rides as a trailing user message instead. Live-Sonnet rebaseline confirms
+nonzero `cacheRead` on every disclosure arm. Do not cite the old 41%-tokens/
+17%-more-money figure as current.
 
 **Do not cite** any token-overhead figure predating `2f97ca1e`.
 
@@ -114,5 +119,16 @@ tool-callers. Promotion requires rungs 2 and 3 to agree in sign.
 
 At session end: replace "Latest Session" with new date + key updates, demote prior to one-line pointers, update "What's Next." Keep under 120 lines.
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-08-18
 **Current Phase:** v0.14 launch line + wire-or-delete sweep (post root-cause fortnight)
+
+## Session Note (2026-08-18)
+Executed backlog bundle `health-export-surface` + `umbrella-export-surface` (issue #155). Re-verified all 4 sub-items natively (RTK/stale claims): HS-D-01 (observe) and HS-D-02 (vue) already dead — coverage landed since the 2026-05-27 sweep. HS-D-17 (health) and HS-D-19 (umbrella) fixed with additive shape tests (`adc3dbe1`, `f8063744`). Issue closed. Build 37/37, `bun test packages/health/` 9/0, `bun test packages/reactive-agents/` 20/0. See wiki/Research/Debriefs/2026-08-18-health-umbrella-export-surface-execution-debrief.md.
+
+Continued same session: closed #61 (v0.11.0 tracker — all 3 sub-items resolved/stale; ToT `dispatcher-early-stop` debt item confirmed fixed by #127, synced `.agents/MEMORY.md`). Closed #188 (AgentStreamEvent 3-way divergence) — original claims mostly dead (ui-core now exists as the shared entry point), but found and fixed a live successor bug: react/svelte/vue each independently hand-rolled a lossy 5-tag escape-hatch `AgentStreamEvent` masking a silent cast that dropped 15 of 20 real event tags. Fixed all 3 (`2afbd7c8`, `92d28315`, `d4aae9c1`). Build 37/37. See wiki/Research/Debriefs/2026-08-18-agentstreamevent-dedup-execution-debrief.md.
+
+Closed #184 (kernel import cycles) — drift found (assembly/context relocated out of kernel/, cycle count 9→14). Fixed the still-matching cluster (5 assembly project↔stages cycles, `5dd47133`, pure type-extraction to `assembly-ctx.ts`). Filed #200 with accurate current-state evidence for the remaining 8 (not one coherent bundle — different root causes). Amended SKILL.md's execute-backlog Phase 3.5 (branch-before-edit discipline, v15) after catching a branch-discipline slip mid-pass. #124/#125 reviewed and left open — large open research RFCs, not root-cause-fixable bugs, out of this skill's scope. See wiki/Research/Debriefs/2026-08-18-kernel-assembly-cycle-fix-execution-debrief.md.
+
+Followed up on #200 same session: fixed 6 of its 8 cycles (`9cc56f78`) — ledger cluster (3), llm-gateway↔purpose-routing (1), kernel-state↔synthesis-types (1), kernel-state↔verifier (1), all via the same leaf-extraction shape. Left #200 open, scoped to the remaining 2 (kernel-state↔completion-envelope/completion-status) — genuinely different shape, envelope/status derive FROM the full KernelState by design, needs a Pick<> narrowing refactor not a leaf extraction. `bunx madge --circular src/kernel`: 8→2. Build 37/37, reasoning tests 2718/0/4todo unchanged.
+
+Closed #200 out same session (`ad89fe88`): the last 2 cycles fixed via structural narrowing rather than a shared-type extraction — `envelopeFromKernelState`/`resolveCompletionStatus`/etc. only read 5 meta fields + status, so a narrow `CompletionAuthorityState` interface (any real `KernelState` satisfies it for free, zero call-site casts) broke the cycle. `bunx madge --circular src/kernel`: 0 (was 8 at #200's filing). New reusable pattern for future god-object cycles noted in the retro. Build 37/37, reasoning tests unchanged.

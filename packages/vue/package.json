@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/vue",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "description": "Vue composables for Reactive Agents — useAgentStream, useAgent",
   "keywords": [
     "ai",
@@ -31,7 +31,7 @@
     "dist"
   ],
   "dependencies": {
-    "@reactive-agents/ui-core": "workspace:*"
+    "@reactive-agents/ui-core": "0.16.0"
   },
   "peerDependencies": {
     "vue": ">=3.0.0"

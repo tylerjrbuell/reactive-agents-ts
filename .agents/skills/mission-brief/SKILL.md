@@ -1,11 +1,11 @@
 ---
 name: mission-brief
-description: Compose a MissionBrief YAML block to prepend to any Agent dispatch during the team-ownership dev-contract pilot (2026-05-23 → 2026-06-15). Use BEFORE spawning kernel-warden or any future warden. Fails if missing end-state, why, authority-bounds, or success-criteria.
+description: Compose a MissionBrief YAML block to prepend to any Agent dispatch to a warden. Use BEFORE spawning kernel-warden or any other warden. Fails if missing end-state, why, authority-bounds, or success-criteria.
 ---
 
 # MissionBrief
 
-Mandatory input contract for warden dispatch during the team-ownership pilot.
+Mandatory input contract for warden dispatch.
 
 ## When to invoke
 
@@ -59,6 +59,6 @@ mission-brief:
   retries-allowed: 2
 ```
 
-## Pilot expiry
+## Status
 
-This skill is part of the team-ownership dev-contract pilot. See [[2026-05-23-team-ownership-dev-contract-pilot]]. If pilot is killed on 2026-06-15, this file is removed in the revert commit.
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

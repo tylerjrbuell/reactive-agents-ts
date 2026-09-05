@@ -4,6 +4,7 @@
  *
  * Extracted from tool-utils.ts. All functions are pure (no Effect dependencies).
  */
+import { ToolExpressionParseError } from "../../errors/errors.js";
 
 // ── Final Answer Parsing ──────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ function safeEval(expr: string, result: unknown): unknown {
     // Bracket access: [0] or ["key"] or ['key']
     if (remaining.startsWith("[")) {
       const closeIdx = remaining.indexOf("]");
-      if (closeIdx === -1) throw new Error("Unclosed bracket in expression");
+      if (closeIdx === -1) throw new ToolExpressionParseError({ message: "Unclosed bracket in expression", expression: expr });
       const inner = remaining.slice(1, closeIdx).trim();
       remaining = remaining.slice(closeIdx + 1);
 
@@ -149,12 +150,12 @@ function safeEval(expr: string, result: unknown): unknown {
         current = (current as Record<string, unknown>)[strMatch[1]!];
         continue;
       }
-      throw new Error(`Unsupported bracket expression: [${inner}]`);
+      throw new ToolExpressionParseError({ message: `Unsupported bracket expression: [${inner}]`, expression: expr });
     }
 
     // Property or method name
     const nameMatch = remaining.match(/^(\w+)/);
-    if (!nameMatch) throw new Error(`Unexpected token in expression: ${remaining.slice(0, 20)}`);
+    if (!nameMatch) throw new ToolExpressionParseError({ message: `Unexpected token in expression: ${remaining.slice(0, 20)}`, expression: expr });
     const name = nameMatch[1]!;
     remaining = remaining.slice(name.length);
 
@@ -176,7 +177,7 @@ function safeEval(expr: string, result: unknown): unknown {
     // Method call: name(args)
     if (remaining.startsWith("(")) {
       if (!SAFE_METHODS.has(name)) {
-        throw new Error(`Method '${name}' is not allowed in transforms`);
+        throw new ToolExpressionParseError({ message: `Method '${name}' is not allowed in transforms`, expression: expr });
       }
       // Find matching close paren
       const args = extractParenContent(remaining);
@@ -185,9 +186,9 @@ function safeEval(expr: string, result: unknown): unknown {
       // Parse arguments
       const parsedArgs = parseMethodArgs(args, name);
 
-      if (current == null) throw new Error(`Cannot call .${name}() on null/undefined`);
+      if (current == null) throw new ToolExpressionParseError({ message: `Cannot call .${name}() on null/undefined`, expression: expr });
       const method = (current as Record<string, unknown>)[name];
-      if (typeof method !== "function") throw new Error(`'${name}' is not a function`);
+      if (typeof method !== "function") throw new ToolExpressionParseError({ message: `'${name}' is not a function`, expression: expr });
       current = (method as Function).apply(current, parsedArgs);
       continue;
     }
@@ -197,7 +198,7 @@ function safeEval(expr: string, result: unknown): unknown {
       current = (current as { length: number }).length;
       continue;
     }
-    if (current == null) throw new Error(`Cannot access '${name}' on null/undefined`);
+    if (current == null) throw new ToolExpressionParseError({ message: `Cannot access '${name}' on null/undefined`, expression: expr });
     current = (current as Record<string, unknown>)[name];
   }
 
@@ -215,7 +216,7 @@ function extractParenContent(str: string): string {
       if (depth === 0) return str.slice(1, i);
     }
   }
-  throw new Error("Unclosed parenthesis in expression");
+  throw new ToolExpressionParseError({ message: "Unclosed parenthesis in expression" });
 }
 
 /** Parse method arguments — supports literals and simple arrow lambdas. */

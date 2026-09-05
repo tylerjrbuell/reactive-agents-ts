@@ -1,0 +1,26 @@
+Final retest after double-payment fix (commit bffe8a48), 2026-08-19/20.
+
+gpt-4o-mini, index mode, REPS=5:
+  small: solvedRate=100% avgTokens=1271 (was 1770 pre-fix, 0% two fixes ago)
+  large: solvedRate=100% avgTokens=3351 (was 5210 pre-fix, 0% two fixes ago)
+
+qwen3:14b, index mode, REPS=5:
+  small: solvedRate=100% avgTokens=2903 (was 40% pre-fix)
+  large: solvedRate=60% avgTokens=5204 (was 60% pre-fix, unchanged)
+
+index_capped (cap=8, no discover-tools) diagnostic, gpt-4o-mini, REPS=5:
+  small: solvedRate=0% -- target tool (registered last) never survives the
+    naive registration-order truncation; cap has no relevance ranking.
+  large: solvedRate=0% -- same cause, confirmed via debug trace showing
+    the target tool in the "8 more" overflow line every time.
+
+full mode sweep, gpt-4o-mini, n=3/size, diverse-domain fillers:
+  n=15: solvedRate=100% avgTokens=1495
+  n=30: solvedRate=100% avgTokens=2243
+  n=45: solvedRate=100% avgTokens=3047
+  n=60: solvedRate=100% avgTokens=3621
+  (never degrades up to 60 tools; generic "filler-N" names instead of
+  diverse domain names produced a false 0% at n=15 in an earlier flawed
+  attempt at this sweep -- semantically null names give the model nothing
+  to rule out, so it thrashes trying each one; this is a probe-design
+  confound, not a finding about full mode itself, corrected before citing)

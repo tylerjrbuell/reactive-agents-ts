@@ -448,10 +448,33 @@ export const MemoryConfigSchema = Schema.Struct({
 });
 export type MemoryConfig = typeof MemoryConfigSchema.Type;
 
+/**
+ * Single canonical resolver for the default SQLite db path, keyed by
+ * agentId. Used by both `defaultMemoryConfig()` (standalone `packages/memory`
+ * consumers, e.g. `createMemoryLayer()` with no explicit `dbPath`) and
+ * `defaultUserMemoryPath()` (the runtime builder's auto-enabled-memory path,
+ * GH #122). These used to diverge — cwd-relative vs `$HOME`-anchored, with
+ * two different directory shapes depending on which one ran — which meant
+ * the actual location of an agent's memory silently depended on which API
+ * created it and which directory the process happened to be running from.
+ * A CLI or a second `.withMemory()` call from a different cwd would look in
+ * the wrong place and find nothing. One resolver, one location, always.
+ *
+ * Resolution: `$HOME/.reactive-agents/memory/<agentId>/memory.db`. Falls
+ * back to the cwd-relative `.reactive-agents/memory/<agentId>/memory.db`
+ * only when `$HOME` is unavailable (sandboxed/non-POSIX runtimes) — a
+ * degenerate case, not a routine default.
+ */
+export const defaultUserMemoryPath = (agentId: string): string => {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) return `.reactive-agents/memory/${agentId}/memory.db`;
+  return `${home}/.reactive-agents/memory/${agentId}/memory.db`;
+};
+
 export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({
   tier: "1",
   agentId,
-  dbPath: `.reactive-agents/memory/${agentId}/memory.db`,
+  dbPath: defaultUserMemoryPath(agentId),
   working: { capacity: 7, evictionPolicy: "fifo" },
   semantic: { maxMarkdownLines: 200, importanceThreshold: 0.7 },
   episodic: { retainDays: 30, maxSnapshotsPerSession: 3 },
@@ -468,23 +491,6 @@ export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({
     maxLinksPerEntry: 10,
   },
 });
-
-/**
- * Resolve the user-scope SQLite db path used by the builder when memory is
- * default-on (GH #122). Distinguished from `defaultMemoryConfig().dbPath`
- * (cwd-relative) so explicit `.withMemory()` consumers keep their existing
- * project-local default while auto-enabled memory lands in a stable
- * cross-project location.
- *
- * Resolution: `$HOME/.reactive-agents/<agentId>/memory.db`. Falls back to
- * `.reactive-agents/memory/<agentId>/memory.db` (cwd) when `$HOME` is
- * unavailable (sandboxed/non-POSIX runtimes).
- */
-export const defaultUserMemoryPath = (agentId: string): string => {
-  const home = process.env.HOME ?? process.env.USERPROFILE;
-  if (!home) return `.reactive-agents/memory/${agentId}/memory.db`;
-  return `${home}/.reactive-agents/${agentId}/memory.db`;
-};
 
 // ─── Memory LLM Interface ───
 

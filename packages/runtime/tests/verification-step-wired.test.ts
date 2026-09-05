@@ -7,12 +7,20 @@
  *
  * Now a `REVISE:` verdict feeds back as a continuation signal: the harness
  * re-runs once with the verification feedback injected, so the final answer
- * addresses the gap the verify pass found. This test drives the full engine
- * (inline harness path — no ReasoningService in the layer) with a
- * content-aware mock and asserts the output was actually revised.
+ * addresses the gap the verify pass found.
+ *
+ * Migrated off the dead inline arm (Move 1, 2026-08-13) onto the kernel arm's
+ * equivalent mechanism, `reasoning-harness-hooks.ts`'s reflect-mode
+ * verify+revise block — a deliberate mirror of the old inline-harness-hooks.ts
+ * logic (same `needsRevision` → re-run-with-feedback shape), already wired at
+ * `execution-engine.ts`'s reasoning-arm branch. This test drives the engine
+ * with a content-aware STUB `ReasoningService` (not `LLMService` — the verify
+ * and revise calls both go through `reasoningOpt.value.execute()`) and asserts
+ * the output was actually revised.
  *
  * Red-on-cut: delete the `if (needsRevision) { ...re-run... }` block in
- * inline-harness-hooks.ts and the output stays the un-revised "initial answer".
+ * reasoning-harness-hooks.ts and the output stays the un-revised "initial
+ * answer".
  */
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Context } from "effect";
@@ -23,28 +31,35 @@ import {
   LifecycleHookRegistryLive,
 } from "../src/index.js";
 
-type LLMShape = {
-  complete: (req: unknown) => Effect.Effect<{
-    content: string;
-    stopReason: string;
-    usage: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
-    model: string;
-  }>;
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
 };
-const LLMTag = Context.GenericTag<LLMShape>("LLMService");
+
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
 
 const INITIAL = "initial answer without the keyword";
 const REVISE_VERDICT = "REVISE: the answer must mention BANANA";
 const REVISED = "Final answer: BANANA is now included.";
 
-/** Content-aware mock: verify prompt → REVISE; continuation → revised answer. */
-function makeVerifyMock(): { layer: Layer.Layer<LLMShape>; callCount: () => number } {
+/**
+ * Content-aware stub ReasoningService: the reflect-mode verify prompt (built
+ * in reasoning-harness-hooks.ts around line 239, carrying "Respond PASS")
+ * gets a REVISE verdict; the follow-up continuation carrying that verdict in
+ * its `initialMessages` gets the revised answer; anything else (the initial
+ * think pass) gets the un-revised initial answer.
+ */
+function makeVerifyReasoningStub(): { layer: Layer.Layer<never, never, never>; callCount: () => number } {
   let calls = 0;
   return {
-    layer: Layer.succeed(LLMTag, {
-      complete: (req: unknown) => {
+    layer: Layer.succeed(ReasoningServiceTag, {
+      execute: (params: { [k: string]: unknown }) => {
         calls++;
-        const s = JSON.stringify(req);
+        const s = JSON.stringify(params);
         let content: string;
         if (s.includes("Respond PASS")) {
           // The reflect-mode verification prompt.
@@ -56,10 +71,10 @@ function makeVerifyMock(): { layer: Layer.Layer<LLMShape>; callCount: () => numb
           content = INITIAL;
         }
         return Effect.succeed({
-          content,
-          stopReason: "end_turn",
-          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-          model: "test",
+          output: content,
+          status: "completed" as const,
+          steps: [{ id: `step-${calls}`, type: "thought", content }],
+          metadata: { cost: 0, tokensUsed: 10, stepsCount: 1 },
         });
       },
     }),
@@ -67,9 +82,12 @@ function makeVerifyMock(): { layer: Layer.Layer<LLMShape>; callCount: () => numb
   };
 }
 
-async function runTask(config: ReturnType<typeof defaultReactiveAgentsConfig>, llmLayer: Layer.Layer<LLMShape>) {
+async function runTask(
+  config: ReturnType<typeof defaultReactiveAgentsConfig>,
+  reasoningLayer: Layer.Layer<never, never, never>,
+) {
   const engineLayer = ExecutionEngineLive(config).pipe(Layer.provide(LifecycleHookRegistryLive));
-  const runLayer = Layer.mergeAll(engineLayer, llmLayer);
+  const runLayer = Layer.mergeAll(engineLayer, reasoningLayer);
   return Effect.runPromise(
     ExecutionEngine.pipe(
       Effect.flatMap((engine) =>
@@ -91,7 +109,7 @@ async function runTask(config: ReturnType<typeof defaultReactiveAgentsConfig>, l
 
 describe("withVerificationStep — P0-8 REVISE verdict changes the output", () => {
   it("re-runs with feedback and surfaces the revised answer", async () => {
-    const mock = makeVerifyMock();
+    const mock = makeVerifyReasoningStub();
     const config = defaultReactiveAgentsConfig("verify-wired-agent", {
       maxIterations: 5,
       verificationStep: { mode: "reflect" },
@@ -105,7 +123,7 @@ describe("withVerificationStep — P0-8 REVISE verdict changes the output", () =
     // tokens.
     expect(output).toContain("BANANA");
     expect(output).not.toBe(INITIAL);
-    // initial + verify + revise = at least 3 LLM calls.
+    // initial + verify + revise = at least 3 ReasoningService calls.
     expect(mock.callCount()).toBeGreaterThanOrEqual(3);
   });
 });

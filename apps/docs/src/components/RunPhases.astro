@@ -1,0 +1,54 @@
+---
+/**
+ * RunPhases — the 12-phase execution engine, annotated with what actually
+ * fired for the SAME golden run shown in the hero/receipt/debrief sections.
+ *
+ * Only 7 of 12 phases fire for this run's config (no guardrails, cost
+ * tracking, or audit enabled) — shown honestly rather than hidden. That's
+ * itself the composability proof: phases run only when your config asks for
+ * them, nothing runs uninvited.
+ */
+import data from '../data/golden-run.json'
+
+const DESCRIPTIONS: Record<string, string> = {
+    bootstrap: 'Load context, semantic + episodic memory',
+    guardrail: 'Block injection, PII, toxicity pre-LLM',
+    'cost-route': 'Pick cheapest capable model tier',
+    'strategy-select': 'ReAct · Reflexion · Plan-Execute · ToT',
+    think: 'LLM reasoning step (one of N iterations)',
+    act: 'Tool execution + healing pipeline',
+    observe: 'Append tool results, curate context',
+    verify: 'Entropy, fact decomposition, NLI check',
+    'memory-flush': 'Persist session, episodic, procedural',
+    'cost-track': 'Record spend, enforce budget',
+    audit: 'Emit audit events for compliance',
+    complete: 'Build AgentResult with full metadata',
+}
+
+const { phases } = data
+const firedCount = phases.filter((p) => p.fired).length
+---
+
+<p class="ra-flow-legend">
+    12-phase lifecycle · <span>↻</span> runs inside the loop body · this run's
+    real activity: <b>{firedCount}/{phases.length} phases fired</b>
+</p>
+
+<div class="ra-flow-grid">
+    {phases.map((p, i) => (
+        <div class:list={['ra-phase', p.fired ? 'ra-phase--fired' : 'ra-phase--optin']} data-loop={p.loop ? '1' : undefined}>
+            <span class="ra-phase-num">{String(i + 1).padStart(2, '0')}</span>
+            <div class="ra-phase-body">
+                <p class="ra-phase-name">{p.name}</p>
+                <p class="ra-phase-desc">{DESCRIPTIONS[p.name] ?? ''}</p>
+                <p class="ra-phase-fired">
+                    {p.fired ? (
+                        <><span class="ra-phase-dot ra-phase-dot--ok" /> fired{p.count > 1 ? ` ×${p.count}` : ''}</>
+                    ) : (
+                        <><span class="ra-phase-dot ra-phase-dot--off" /> opt-in, not configured</>
+                    )}
+                </p>
+            </div>
+        </div>
+    ))}
+</div>

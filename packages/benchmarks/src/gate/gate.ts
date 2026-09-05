@@ -19,6 +19,7 @@ import {
   type LiftPolicy,
   type TaskClass,
   type TierEvidence,
+  scoredTokenOverheadPct,
 } from "./types.js";
 
 /**
@@ -208,6 +209,22 @@ function computeEvidence(
   const tokenOverheadPct =
     baseTokens === 0 ? 0 : ((candTokens - baseTokens) / baseTokens) * 100;
 
+  // Billed leg (2026-08-24 amendment §4). Both figures are computed and both
+  // are reported; `policy.tokenLeg` decides which one the AND is evaluated on.
+  // Raw is NEVER dropped — archived reports and prior verdicts stay auditable.
+  //
+  // The `??` fallbacks are load-bearing, not defensive noise: a SessionReport
+  // archived before this amendment carries neither field, and `mean(undefined)`
+  // is NaN — which fails `<= maxTokenOverheadPct` and would silently flip every
+  // archived report's cost verdict to false. Falling back to the raw figure
+  // makes an un-instrumented report score exactly as it did pre-amendment.
+  const baseBilled = mean(pairedBase.map((r) => r.meanBilledTokens ?? r.meanTokens));
+  const candBilled = mean(pairedCand.map((r) => r.meanBilledTokens ?? r.meanTokens));
+  const billedTokenOverheadPct =
+    baseBilled === 0 ? 0 : ((candBilled - baseBilled) / baseBilled) * 100;
+  const candCacheRead = mean(pairedCand.map((r) => r.meanCacheReadTokens ?? 0));
+  const cacheHitRate = candTokens === 0 ? 0 : candCacheRead / candTokens;
+
   const variance = maxOf(pairedCells.map((r) => r.variance));
 
   // ── SE(D̄): the larger of two noise sources ────────────────────────────────
@@ -272,6 +289,9 @@ function computeEvidence(
   let costOk: boolean;
   let longHorizonFields: Pick<TierEvidence, "taskClass" | "costPerDeliverable"> = {};
   if (taskClass === "long-horizon") {
+    // Long-horizon CPD keeps the RAW numerator for now. Switching it is a
+    // separate ruling the 2026-08-24 amendment deliberately did not make.
+    //
     // Deliverable-check pass-rate = the partial-credit metric score (0..1),
     // already computed in the result rows. CPD = tokens ÷ pass-rate.
     const candCPD =
@@ -283,7 +303,9 @@ function computeEvidence(
       !zeroDelivery && (candCPD <= baseCPD || candidateMetric >= baselineMetric);
     longHorizonFields = { taskClass: "long-horizon", costPerDeliverable: candCPD };
   } else {
-    costOk = tokenOverheadPct <= policy.maxTokenOverheadPct;
+    const scoredOverheadPct =
+      policy.tokenLeg === "raw" ? tokenOverheadPct : billedTokenOverheadPct;
+    costOk = scoredOverheadPct <= policy.maxTokenOverheadPct;
   }
 
   // Promotion demands the 95% band (`promotable`) AND pass^8 non-regression
@@ -305,6 +327,8 @@ function computeEvidence(
     candidateMetric,
     liftPp,
     tokenOverheadPct,
+    billedTokenOverheadPct,
+    cacheHitRate,
     variance,
     noisePp,
     promotionNoisePp,
@@ -386,6 +410,7 @@ function decide(
   const aggregate = {
     liftPp: mean(conclusive.map((t) => t.liftPp)),
     tokenOverheadPct: mean(conclusive.map((t) => t.tokenOverheadPct)),
+    billedTokenOverheadPct: mean(conclusive.map((t) => t.billedTokenOverheadPct)),
     tiersCovered,
   };
 
@@ -420,8 +445,13 @@ function buildRationale(
   anySignificant = true,
 ): string {
   const lift = aggregate.liftPp.toFixed(1);
-  const tok = aggregate.tokenOverheadPct.toFixed(1);
-  const base = `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ${tok}% tok`;
+  // Print the leg the verdict was actually SCORED on, labeled. Printing the
+  // raw figure while deciding on the billed one made the headline number and
+  // the decision disagree with no way for a reader to tell.
+  const tok = scoredTokenOverheadPct(aggregate, policy).toFixed(1);
+  const base =
+    `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ` +
+    `${tok}% ${policy.tokenLeg} tok`;
   if (decision === "underpowered")
     return `${base} — too few runs to resolve ≥${policy.minLiftPp}pp; this is NOT evidence of no effect`;
   if (decision === "reject") return `${base} — a tier significantly regresses`;

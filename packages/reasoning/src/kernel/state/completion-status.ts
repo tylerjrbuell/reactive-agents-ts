@@ -27,7 +27,7 @@
 // makes `success === false` through the EXISTING mapping — no new flag for a
 // caller to remember to check, which is precisely how the old markers died.
 
-import type { KernelState } from "./kernel-state.js";
+import type { CompletionAuthorityMeta, CompletionAuthorityState } from "./completion-authority-state.js";
 
 /**
  * Did the harness ship output the terminal verifier did not bless?
@@ -37,7 +37,7 @@ import type { KernelState } from "./kernel-state.js";
  * the answer with a warning attached — an explicit, blessed outcome rather than
  * an unverified ship.
  */
-export function shippedUnverified(meta: KernelState["meta"]): boolean {
+export function shippedUnverified(meta: CompletionAuthorityMeta): boolean {
   return meta.harnessAuthoredOutput === true || meta.budgetTerminalPartial === true;
 }
 
@@ -49,7 +49,7 @@ export function shippedUnverified(meta: KernelState["meta"]): boolean {
  * `partial`, matching the pre-existing strategy mapping.
  */
 export function resolveCompletionStatus(
-  state: KernelState,
+  state: CompletionAuthorityState,
 ): "completed" | "partial" | "failed" {
   if (state.status === "failed") return "failed";
   if (state.status !== "done") return "partial";
@@ -62,7 +62,7 @@ export function resolveCompletionStatus(
  * default result shape is unchanged.
  */
 export function honestPartialMetadata(
-  meta: KernelState["meta"],
+  meta: CompletionAuthorityMeta,
 ): Record<string, unknown> {
   return {
     ...(meta.verificationWarning !== undefined

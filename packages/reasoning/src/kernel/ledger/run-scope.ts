@@ -30,16 +30,14 @@
 
 import type { LedgerEntry, RunLedger } from "./run-ledger.js";
 import { appendEntries } from "./run-ledger.js";
+import type { LedgerPass } from "./ledger-pass.js";
 
 /**
  * Which pass of a run produced an entry. A sub-agent's whole ledger merges under
  * `sub-agent:<name>`, so a parent can see what a child actually did rather than
  * a summary string.
  */
-export type LedgerPass =
-  | "verification-retry"
-  | "continuation"
-  | `sub-agent:${string}`;
+export type { LedgerPass };
 
 /**
  * Merge one completed pass's ledger into the run's, re-basing `seq` and stamping

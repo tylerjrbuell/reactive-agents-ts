@@ -422,7 +422,23 @@ Phase 2. Enforcement is by rejection, not by list mutation — the Anthropic API
 exposes no per-tool logit masking, so the industry "masking" rule cannot be
 applied literally here.
 
-**Status.** OPEN.
+**Update (2026-08-26, `4f7c4bc0`).** Root cause was one layer deeper than the
+system-prompt-tail framing above: per-iteration harness guidance was appended
+to the *tail of the system prompt string*, not moved out of it — any change
+inside that string still invalidates Anthropic's cache since `system` sits
+ahead of `messages` in its cache hierarchy. Guidance now rides as a trailing
+user-role message on the outgoing request instead (never written back into
+kernel state). Live-model rebaseline against real Sonnet/Anthropic billed
+tokens ([[../Research/Harness-Reports/2026-08-25-billed-token-rebaseline]])
+confirms nonzero `cacheRead` on every disclosure arm, including `prune-only`
+and `stable-surface` — the case that was 0 in the original 2026-07-28
+measurement above. A second, unrelated stale-threshold bug found during the
+chase (Haiku 4.5's real cache minimum is 4,096 tokens, not the retired Haiku
+3.5's 2,048) was fixed in the same pass. Closed out in `89bb8a43`
+(2026-09-03).
+
+**Status.** RESOLVED (2026-08-26). Do not cite the 2026-07-28 zero-`cacheRead`
+table above as current — it predates the fix.
 
 ---
 

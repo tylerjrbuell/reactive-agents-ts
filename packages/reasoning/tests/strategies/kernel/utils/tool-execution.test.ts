@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import {
   truncateForDisplay,
   executeToolCall,
@@ -7,7 +7,7 @@ import {
   type ToolExecutionResult,
 } from "../../../../src/kernel/capabilities/act/tool-execution.js";
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
-import type { MaybeService, ToolServiceInstance } from "../../../../src/kernel/state/kernel-state.js";
+import type { ToolServiceInstance } from "../../../../src/kernel/state/kernel-state.js";
 import { scratchpadStoreRef, makeRecallHandler } from "@reactive-agents/tools";
 
 // ── makeObservationResult ────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ describe("truncateForDisplay", () => {
 // ── executeToolCall ──────────────────────────────────────────────────────────
 
 describe("executeToolCall", () => {
-  const noneToolService: MaybeService<ToolServiceInstance> = { _tag: "None" };
+  const noneToolService: Option.Option<ToolServiceInstance> = Option.none();
 
   it("returns 'not available' message when ToolService is None", async () => {
     const result = await Effect.runPromise(
@@ -100,9 +100,7 @@ describe("executeToolCall", () => {
   });
 
   it("executes tool call successfully with mock ToolService", async () => {
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) =>
           Effect.succeed({
             result: JSON.stringify({ data: "hello world" }),
@@ -112,8 +110,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "query", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(
@@ -127,9 +124,7 @@ describe("executeToolCall", () => {
   });
 
   it("enriches error with schema hint on tool execution failure", async () => {
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) => Effect.fail(new Error("Missing required field: path")),
         getTool: (_name) =>
           Effect.succeed({
@@ -141,8 +136,7 @@ describe("executeToolCall", () => {
         // Required by ToolServiceInstance; the error path now consults it to
         // decide whether a recovery hint may name a tool (e.g. list-directory).
         listTools: () => Effect.succeed([]),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(
@@ -160,16 +154,13 @@ describe("executeToolCall", () => {
   });
 
   it("falls back to plain error when getTool also fails", async () => {
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) => Effect.fail(new Error("connection refused")),
         getTool: (_name) => Effect.fail(new Error("tool registry unavailable")),
         // Required by ToolServiceInstance; the error path now consults it to
         // decide whether a recovery hint may name a tool (e.g. list-directory).
         listTools: () => Effect.succeed([]),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(
@@ -185,9 +176,7 @@ describe("executeToolCall", () => {
   });
 
   it("normalizes file-write output to compact form", async () => {
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) =>
           Effect.succeed({
             result: JSON.stringify({ written: true, path: "/tmp/output.txt" }),
@@ -197,8 +186,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "path", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(
@@ -211,11 +199,38 @@ describe("executeToolCall", () => {
     expect(result.content).toContain("Written to");
   });
 
+  // 2026-09-03: http-get's own handler returns `{status, statusText, body}`
+  // (packages/tools/src/skills/http-client.ts), but normalizeObservation's
+  // HTML-strip branch checked `parsed.content` — a field http-get never
+  // emits — so the strip never fired and raw HTML tags rode into context.
+  // The tool's own description falsely claims "HTML pages are automatically
+  // stripped to plain text."
+  it("strips HTML from an http-get result's `body` field (not the nonexistent `content` field)", async () => {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
+      execute: (_input) =>
+        Effect.succeed({
+          result: JSON.stringify({
+            status: 200,
+            statusText: "OK",
+            body: "<html><head><script>evil()</script><style>.x{}</style></head><body><p>Hello world</p></body></html>",
+          }),
+          success: true,
+        }),
+      getTool: (_name) => Effect.succeed({ parameters: [{ name: "url", type: "string", required: true }] }),
+    });
+
+    const result = await Effect.runPromise(
+      executeToolCall(mockToolService, { tool: "http-get", input: '{"url": "https://example.com"}' }, {}),
+    );
+    expect(result.content).toContain("Hello world");
+    expect(result.content).not.toContain("<script>");
+    expect(result.content).not.toContain("<style>");
+    expect(result.content).not.toContain("<html>");
+  });
+
   it("resolves plain string input to first required parameter", async () => {
     let capturedArgs: Record<string, unknown> = {};
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (input) => {
           capturedArgs = input.arguments;
           return Effect.succeed({ result: "ok", success: true });
@@ -224,8 +239,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "query", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     await Effect.runPromise(
       executeToolCall(
@@ -240,9 +254,7 @@ describe("executeToolCall", () => {
   it("uses agentId and sessionId from config", async () => {
     let capturedAgentId = "";
     let capturedSessionId = "";
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (input) => {
           capturedAgentId = input.agentId;
           capturedSessionId = input.sessionId;
@@ -252,8 +264,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "query", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     await Effect.runPromise(
       executeToolCall(
@@ -269,9 +280,7 @@ describe("executeToolCall", () => {
   it("defaults agentId and sessionId when not provided", async () => {
     let capturedAgentId = "";
     let capturedSessionId = "";
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (input) => {
           capturedAgentId = input.agentId;
           capturedSessionId = input.sessionId;
@@ -281,8 +290,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "query", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     await Effect.runPromise(
       executeToolCall(
@@ -303,9 +311,7 @@ describe("executeToolCall", () => {
     const fullJson = JSON.stringify(commits);
     const scratchpad = new Map<string, string>();
 
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) =>
           Effect.succeed({
             success: true,
@@ -321,8 +327,7 @@ describe("executeToolCall", () => {
           Effect.succeed({
             parameters: [{ name: "command", type: "string", required: true }],
           }),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(
@@ -556,13 +561,10 @@ describe("extractObservationFacts", () => {
 
 describe("non-JSON-serializable tool results (#58)", () => {
   it("executeToolCall: undefined result fails with a message naming the tool", async () => {
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) => Effect.succeed({ result: undefined, success: true }),
         getTool: (_name) => Effect.succeed({ parameters: [] }),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(mockToolService, { tool: "bad-tool", input: "{}" }, {}),
@@ -575,13 +577,10 @@ describe("non-JSON-serializable tool results (#58)", () => {
   it("executeToolCall: circular-reference result fails with a message naming the tool, not an uncaught throw", async () => {
     const circular: Record<string, unknown> = { a: 1 };
     circular.self = circular;
-    const mockToolService: MaybeService<ToolServiceInstance> = {
-      _tag: "Some",
-      value: {
+    const mockToolService: Option.Option<ToolServiceInstance> = Option.some({
         execute: (_input) => Effect.succeed({ result: circular, success: true }),
         getTool: (_name) => Effect.succeed({ parameters: [] }),
-      },
-    };
+    });
 
     const result = await Effect.runPromise(
       executeToolCall(mockToolService, { tool: "circular-tool", input: "{}" }, {}),

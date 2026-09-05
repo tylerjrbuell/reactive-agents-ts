@@ -1,4 +1,4 @@
-import type { AssemblyCtx } from "../project.js";
+import type { AssemblyCtx } from "../assembly-ctx.js";
 import { pushStage } from "../trace.js";
 import { renderStandingFrame, type StandingFrameSection } from "../standing-frame.js";
 
@@ -23,12 +23,15 @@ import { renderStandingFrame, type StandingFrameSection } from "../standing-fram
  * Only the destination changed. A run with neither a frame nor a plan appends
  * nothing and is byte-identical to the pre-F10 behaviour.
  *
- * NOTE on `goal_state`: nothing on the live kernel path appends that event today
- * (DEBT-REGISTER D-2026-07-28-C), so in production only the standing-frame half
- * of this relocation currently fires. The `Remaining steps:` branch is kept
- * because `project()` must honour the AssemblyInput contract regardless of which
- * producers exist — and because the moment an emitter lands it must not
- * re-poison the cached prefix.
+ * NOTE on `goal_state` (DEBT-REGISTER D-2026-07-28-C): wired 2026-09-05.
+ * `KernelInput.remainingGoals` — populated today only by plan-execute's
+ * composite steps, from `Plan.steps` (the one typed sub-goal ledger in the
+ * codebase; reactive/ToT/reflexion track progress as tool-name coverage, not
+ * named sub-goals, so they have nothing to feed this from) — seeds this event
+ * via `fromKernelState`. Structurally opt-in: absent/empty ⇒ no event ⇒
+ * byte-identical to the pre-wiring no-op, so wiring it costs plan-execute
+ * callers nothing until measured. See the D-2026-07-28-C ablation report
+ * before wiring a second producer (e.g. reactive/ToT) off this result.
  */
 export const volatileTailStage = (c: AssemblyCtx): AssemblyCtx => {
   const remaining = c.log.byKind("goal_state").at(-1)?.remaining ?? [];

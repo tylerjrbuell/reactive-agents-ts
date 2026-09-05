@@ -10,7 +10,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { EventBus } from "@reactive-agents/core";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import type { EventBusInstance, KernelMessage, MaybeService } from "../kernel/state/kernel-state.js";
+import type { EventBusInstance, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -39,6 +39,7 @@ import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabi
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
 import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep } from "../kernel/utils/service-utils.js";
 
 /**
  * The child ledger(s) off a sub-agent tool result (Wave C.2), narrowed to a
@@ -132,16 +133,30 @@ export const executeCodeAction = (
     const llm = yield* LLMService;
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     // Wave C.2 slice 3b-ii — the bus the run ledger announces its growth on.
-    // Same narrowing `resolveStrategyServices` applies (service-utils.ts:184):
-    // Effect's `Option` and the kernel's `MaybeService` are the same two-case
-    // shape, and the kernel types against its own.
-    const ebOptRaw = yield* Effect.serviceOption(EventBus).pipe(
-      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-    );
-    const ebOpt = ebOptRaw as MaybeService<EventBusInstance>;
+    // Narrowed to the kernel's structural EventBusInstance (its `publish` takes
+    // `unknown`, not `AgentEvent`) — same narrowing `resolveStrategyServices`
+    // applies (service-utils.ts).
+    const ebOpt = (yield* Effect.serviceOption(EventBus).pipe(
+      Effect.catchAll(() => Effect.succeed(Option.none())),
+    )) as unknown as Option.Option<EventBusInstance>;
 
     const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
     const verifier = input.verifier ?? noopVerifier;
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/code-action.ts:emitLog");
+    const appendStep = (step: ReasoningStep, kernelPass: string): Effect.Effect<void, never> => {
+      steps.push(step);
+      return publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "code-action",
+        strategy: "code-action",
+        step: steps.length,
+        totalSteps: steps.length,
+        ...(step.type === "thought" ? { thought: step.content } : {}),
+        ...(step.type === "action" ? { action: step.content } : {}),
+        ...(step.type === "observation" ? { observation: step.content } : {}),
+        kernelPass,
+      });
+    };
 
     // ── Build tool specs for binding generation ─────────────────────────────
     const toolSpecs: ToolSpec[] = (input.availableToolSchemas ?? []).map((s) => {
@@ -154,6 +169,7 @@ export const executeCodeAction = (
       return {
         name: s.name,
         description: s.description,
+        ...(s.returnType !== undefined ? { returnType: s.returnType } : {}),
         parameters: { type: "object" as const, properties, required },
       };
     });
@@ -202,7 +218,11 @@ export const executeCodeAction = (
       }
     }
 
-    steps.push(makeStep("thought", `[CODE-ACTION] Plan: generating code for "${input.taskDescription.slice(0, 80)}"`));
+    yield* emitLog({ _tag: "phase_started", phase: "code-action:plan", timestamp: new Date() });
+    yield* appendStep(
+      makeStep("thought", `[CODE-ACTION] Plan: generating code for "${input.taskDescription.slice(0, 80)}"`),
+      "code-action:plan",
+    );
 
     // ── Plan phase — initial LLM code generation ────────────────────────────
     const planResponse = yield* Effect.mapError(
@@ -223,7 +243,18 @@ export const executeCodeAction = (
     let totalTokens = planResponse.usage.totalTokens;
     let totalCost = planResponse.usage.estimatedCost ?? 0;
 
-    steps.push(makeStep("action", `[CODE-ACTION] Generated code block (${generatedCode.length} chars)`));
+    yield* appendStep(
+      makeStep("action", `[CODE-ACTION] Generated code block (${generatedCode.length} chars)`),
+      "code-action:plan",
+    );
+    yield* emitPhaseEnd({ emitLog, phase: "code-action:plan", startedAt: start, totalTokens });
+    yield* emitLog({
+      _tag: "log",
+      level: "info",
+      message: `Code-action plan ready: ${generatedCode.length} chars, ${toolHandlers.size} callable tool(s)`,
+      source: "framework",
+      timestamp: new Date(),
+    });
 
     let lastToolCalls: ToolCallRecord[] = [];
     let lastResult: unknown = undefined;
@@ -244,6 +275,12 @@ export const executeCodeAction = (
 
     while (!done) {
       iteration++;
+      const executeStartedAt = Date.now();
+      yield* emitLog({
+        _tag: "phase_started",
+        phase: `code-action:execute:${iteration}`,
+        timestamp: new Date(),
+      });
 
       // ── Execute phase — run in Worker sandbox ─────────────────────────────
       // A sandbox failure (generated code doesn't parse, throws, times out) is
@@ -256,7 +293,7 @@ export const executeCodeAction = (
 
       if (sandboxExit._tag === "Left") {
         lastSandboxError = sandboxExit.left.message;
-        steps.push(
+        yield* appendStep(
           makeStep(
             "observation",
             `[CODE-ACTION] Sandbox execution failed: ${lastSandboxError}`,
@@ -268,13 +305,27 @@ export const executeCodeAction = (
               ),
             },
           ),
+          `code-action:execute:${iteration}`,
         );
+        yield* emitPhaseEnd({
+          emitLog,
+          phase: `code-action:execute:${iteration}`,
+          startedAt: executeStartedAt,
+          status: "success",
+        });
+        yield* emitLog({
+          _tag: "warning",
+          message: `Code-action execution failed on iteration ${iteration}: ${lastSandboxError}`,
+          context: "code-action",
+          timestamp: new Date(),
+        });
         lastVerdict = "FAIL";
         lastVerifySummary = `sandbox execution failed: ${lastSandboxError}`;
         if (iteration >= maxIterations) {
           done = true;
-          steps.push(
+          yield* appendStep(
             makeStep("thought", `[CODE-ACTION] Terminating: sandbox failed on final iteration ${iteration}`),
+            `code-action:execute:${iteration}`,
           );
           break;
         }
@@ -306,6 +357,17 @@ export const executeCodeAction = (
         totalTokens += repairResponse.usage.totalTokens;
         totalCost += repairResponse.usage.estimatedCost ?? 0;
         llmCalls += 1;
+        yield* appendStep(
+          makeStep("action", `[CODE-ACTION] Regenerated code block (${generatedCode.length} chars)`),
+          `code-action:plan:${iteration + 1}`,
+        );
+        yield* emitLog({
+          _tag: "log",
+          level: "info",
+          message: `Code-action repair plan ready: ${generatedCode.length} chars`,
+          source: "framework",
+          timestamp: new Date(),
+        });
         continue;
       }
 
@@ -336,7 +398,7 @@ export const executeCodeAction = (
               : JSON.stringify(subAgentResultForDisplay(tc.result)) ?? "";
           const obsContent = `[${tc.name} result]\n${resultText}`;
           const subAgentLedger = childRunLedgerOf(tc.result);
-          steps.push(
+          yield* appendStep(
             makeStep("action", `[CODE-ACTION] ${tc.name}`, {
               toolCall: {
                 id: callId,
@@ -344,14 +406,28 @@ export const executeCodeAction = (
                 arguments: (tc.args ?? {}) as Record<string, unknown>,
               },
             }),
+            `code-action:execute:${iteration}`,
           );
           const obsStep = makeStep("observation", obsContent, {
             toolCallId: callId,
             observationResult: makeObservationResult(tc.name, true, obsContent),
             ...(subAgentLedger ? { subAgentLedger } : {}),
           } as ReasoningStep["metadata"]);
-          steps.push(obsStep);
+          yield* appendStep(obsStep, `code-action:execute:${iteration}`);
           iterationLedger.push({ obsStep, tc, callId });
+          yield* emitLog({
+            _tag: "tool_call",
+            tool: tc.name,
+            iteration,
+            timestamp: new Date(),
+          });
+          yield* emitLog({
+            _tag: "tool_result",
+            tool: tc.name,
+            duration: tc.durationMs ?? 0,
+            status: "success",
+            timestamp: new Date(),
+          });
         }
       }
 
@@ -387,12 +463,19 @@ export const executeCodeAction = (
         }
       }
 
-      steps.push(
+      yield* appendStep(
         makeStep(
           "observation",
           `[CODE-ACTION] Sandbox: ${sandboxResult.toolCalls.length} tool calls, result type=${typeof sandboxResult.finalResult}`,
         ),
+        `code-action:execute:${iteration}`,
       );
+      yield* emitPhaseEnd({
+        emitLog,
+        phase: `code-action:execute:${iteration}`,
+        startedAt: executeStartedAt,
+        totalTokens,
+      });
 
       // ── Observe phase — format result for verifier / next iteration ───────
       const observationText = formatObservationMessage(
@@ -401,6 +484,8 @@ export const executeCodeAction = (
       );
 
       // ── Reflect phase — verifier gate ─────────────────────────────────────
+      const verifyStartedAt = Date.now();
+      yield* emitLog({ _tag: "phase_started", phase: `code-action:verify:${iteration}`, timestamp: new Date() });
       const verifyResult = verifier.verify({
         action: "code-execution",
         content: observationText,
@@ -412,15 +497,40 @@ export const executeCodeAction = (
       const verdict: VerifierVerdict = verifyResult.verified ? "PASS" : "FAIL";
       lastVerdict = verdict;
       lastVerifySummary = verifyResult.summary;
+      yield* emitLog({
+        _tag: "log",
+        level: verdict === "PASS" ? "info" : "warn",
+        message: `Code-action verification ${verdict}: ${verifyResult.summary}`,
+        source: "framework",
+        timestamp: new Date(),
+      });
+      yield* emitPhaseEnd({
+        emitLog,
+        phase: `code-action:verify:${iteration}`,
+        startedAt: verifyStartedAt,
+        status: "success",
+      });
 
       if (shouldTerminate({ verdict, iteration, maxIterations })) {
         done = true;
-        steps.push(makeStep("thought", `[CODE-ACTION] Terminating: verdict=${verdict}, iteration=${iteration}`));
+        yield* appendStep(
+          makeStep("thought", `[CODE-ACTION] Terminating: verdict=${verdict}, iteration=${iteration}`),
+          `code-action:verify:${iteration}`,
+        );
         break;
       }
 
       // ── Retry — regenerate code with verifier feedback ────────────────────
-      steps.push(makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`));
+      yield* appendStep(
+        makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`),
+        `code-action:verify:${iteration}`,
+      );
+      yield* emitLog({
+        _tag: "warning",
+        message: `Code-action retry scheduled after iteration ${iteration}: ${verifyResult.summary}`,
+        context: "code-action",
+        timestamp: new Date(),
+      });
 
       const retryUser = [
         `Previous attempt failed verification. Reason: ${verifyResult.summary}`,
@@ -451,6 +561,17 @@ export const executeCodeAction = (
       totalTokens += retryResponse.usage.totalTokens;
       totalCost += retryResponse.usage.estimatedCost ?? 0;
       llmCalls += 1;
+      yield* appendStep(
+        makeStep("action", `[CODE-ACTION] Regenerated code block (${generatedCode.length} chars)`),
+        `code-action:plan:${iteration + 1}`,
+      );
+      yield* emitLog({
+        _tag: "log",
+        level: "info",
+        message: `Code-action retry plan ready: ${generatedCode.length} chars`,
+        source: "framework",
+        timestamp: new Date(),
+      });
     }
 
     const resultString =

@@ -104,6 +104,41 @@ describe('budgetLimit', () => {
     const result = await hooks[0]!(ctx);
     expect(result).toMatchObject({ abort: 'stop' });
   });
+
+  // D-1 amendment (2026-08-27 dead-signal-wiring plan, Task 3 narrowed): the
+  // abort return now carries a `meta` field with the real budgetType/limit/used
+  // figures already computed above — `iterate-pass.ts`'s beforeThinkAbort
+  // handling reads this to publish `BudgetExhausted` to the EventBus. `reason`
+  // stays a human string for `terminatedBy`; `meta` is the structured twin.
+  it('carries structured meta (tokens) on abort', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxTokens: 1000 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    const ctx = { phase: 'think' as const, iteration: 1, state: { ...mockState, tokens: 1500 } };
+    const result = await hooks[0]!(ctx);
+    expect(result).toMatchObject({
+      abort: 'stop',
+      meta: { budgetType: 'tokens', limit: 1000, used: 1500 },
+    });
+  });
+
+  it('carries structured meta (cost) on abort', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxCostUSD: 0.01, costPerToken: 0.000001 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    const ctx = { phase: 'think' as const, iteration: 1, state: { ...mockState, tokens: 10000 } };
+    const result = await hooks[0]!(ctx);
+    expect(result).toMatchObject({
+      abort: 'stop',
+      meta: { budgetType: 'cost', limit: 0.01, used: 0.01 },
+    });
+  });
+
+  it('carries no meta when under budget', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxTokens: 1000 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    const ctx = { phase: 'think' as const, iteration: 1, state: { ...mockState, tokens: 500 } };
+    const result = await hooks[0]!(ctx);
+    expect(result).toBeUndefined();
+  });
 });
 
 describe('timeoutAfter', () => {

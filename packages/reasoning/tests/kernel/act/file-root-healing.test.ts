@@ -50,7 +50,17 @@ describe("healing pipeline path resolution respects withFileRoot sandbox", () =>
     });
   });
 
-  it("remaps a hallucinated absolute path back into the sandbox, not the real cwd", () => {
+  // Step 3a (09 §6.6 / F9, 2026-08-18): the healer used to silently remap an
+  // out-of-root absolute path to `<root>/<basename>` here — which let the
+  // write succeed at a path the model never asked for while terminal
+  // verification (checking the model's original path) reported the run
+  // FAILED next to a file that was actually written correctly. That remap
+  // branch is deleted; file-operations.ts's own `Path traversal detected:`
+  // throw is now the sole confinement authority. The healer's root-sourcing
+  // fix (getFileRoot(), not process.cwd() — this file's original regression)
+  // is unaffected: it still governs relative-path resolution, verified by
+  // the sibling tests above and below.
+  it("does not remap a hallucinated absolute path — passes it through so the tool's own traversal guard fires", () => {
     withFileRoot("/sandbox/run-abc", () => {
       const call: ToolCallSpec = {
         id: "2",
@@ -65,7 +75,7 @@ describe("healing pipeline path resolution respects withFileRoot sandbox", () =>
         {},
         {},
       );
-      expect(result.call.arguments.path).toBe("/sandbox/run-abc/out.txt");
+      expect(result.call.arguments.path).toBe("/some/other/repo/out.txt");
     });
   });
 

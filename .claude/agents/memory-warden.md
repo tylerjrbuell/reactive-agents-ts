@@ -1,6 +1,6 @@
 ---
 name: memory-warden
-description: Bounded warden for the memory layer (packages/memory/**). Owns 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5, sqlite-vec KNN, Zettelkasten, ExperienceSummary loop. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Bounded warden for the memory layer (packages/memory/**). Owns 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5, sqlite-vec KNN, Zettelkasten, ExperienceSummary loop. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -53,5 +53,6 @@ Store+recall works; 0.05ms/entry overhead. Tier 1.5 action items: key-term extra
 ## Workflow per spawn
 Standard warden workflow ([[kernel-warden]] §Workflow). TDD: [[agent-tdd]] + [[memory-patterns]].
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

@@ -131,6 +131,16 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Guard against transient horizontal scroll on mobile — pre-`.is-visible`
+   scroll-reveal transforms (.ra-story's translateX entrance, etc.) shift
+   elements past the viewport edge before they animate in; without this
+   that briefly widens the page's scrollable area on narrow viewports.
+   Any element that genuinely needs its own horizontal scroll (code blocks)
+   already scopes overflow-x:auto on itself, so this is safe site-wide. */
+body {
+    overflow-x: hidden;
+}
+
 /* ── Animations ─────────────────────────────────────────────── */
 @keyframes ra-title-flow {
     0% {
@@ -250,7 +260,9 @@ html {
 /* ── Gradient-border panel — exact carousel treatment ───────── */
 .ra-panel {
     position: relative;
-    max-width: 980px;
+    /* No max-width of its own — fills the same Starlight content column
+       (--sl-content-width) the hero above it uses, so edges line up instead
+       of the panel looking narrower than the hero. */
     margin-left: auto;
     margin-right: auto;
     padding: 1px;
@@ -267,21 +279,54 @@ html {
 }
 
 .ra-panel-inner {
-    background: #12131a;
+    /* Translucent + frosted, not opaque — lets the fixed ambient glyph
+       (.ra-hero-glyph-bg) read through every card as the page scrolls,
+       instead of stopping dead at the hero. Blur keeps text legible over it. */
+    background: rgba(18, 19, 26, 0.82);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
     border-radius: 19px;
     padding: 2.5rem 2.8rem;
+    /* Clip any flush-edge child (a table, a scroll container, an image) to
+       the panel's own rounded corners instead of letting square content
+       corners poke past the curve. */
+    overflow: hidden;
+}
+@media (max-width: 640px) {
+    .ra-panel-inner {
+        /* Desktop's 2.8rem side padding ate ~90px of a 390px screen —
+           nearly a quarter of the viewport gone before content even starts. */
+        padding: 1.75rem 1.25rem;
+    }
 }
 
 /* ── Stats bar ──────────────────────────────────────────────── */
 .ra-stats-panel {
-    margin: 2.5rem auto 3.5rem;
+    margin: 1.75rem auto 1.75rem;
+}
+
+.ra-stats-inner {
+    padding-top: 1.5rem;
+    padding-bottom: 1.75rem;
+}
+
+.ra-stats-head {
+    text-align: center;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ra-cyan);
+    opacity: 0.65;
+    margin: 0 0 1.15rem !important;
 }
 
 .ra-stats {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     align-items: center;
-    padding: 2rem 0.5rem;
+    padding: 0 0.5rem;
 }
 
 /* Reset any Starlight markdown-content margins on stat children */
@@ -294,9 +339,21 @@ html {
     text-align: center;
     padding: 0 0.25rem;
     border-left: 1px solid rgba(139, 92, 246, 0.18);
+    transition: transform 0.2s ease;
 }
 .ra-stat:first-child {
     border-left: none;
+}
+.ra-stat:hover {
+    transform: translateY(-2px);
+}
+
+.ra-stat-icon {
+    display: block;
+    font-size: 1.05rem;
+    line-height: 1;
+    margin-bottom: 0.5rem !important;
+    opacity: 0.85;
 }
 
 .ra-stat-value {
@@ -324,11 +381,41 @@ html {
 
 /* ── Section cards ───────────────────────────────────────────── */
 .ra-section-card {
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.75rem;
 }
 
 .ra-section-card .ra-panel-inner h2 {
     margin-top: 0 !important;
+    font-size: clamp(1.5rem, 2.6vw, 2.05rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.22;
+}
+
+/* ── The run narrative (see-it-run → start-in-60s) — a real sequence, so
+   a step marker earns its keep here (unlike the feature-grid sections
+   below, which aren't ordered and don't get one). Left-aligned prose reads
+   as documentation/evidence rather than centered marketing copy. ────── */
+.ra-story .ra-panel-inner {
+    text-align: left;
+}
+.ra-story-eyebrow {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ra-cyan);
+    margin: 0 0 0.65rem !important;
+}
+.ra-story .ra-panel-inner > p {
+    max-width: 62ch;
+}
+/* The intro paragraph (2nd <p>: 1st is the eyebrow) needs real breathing
+   room before the evidence panel/image that follows it — it was sitting
+   almost flush against the box below. */
+.ra-story .ra-panel-inner > p:nth-of-type(2) {
+    margin-bottom: 1.75rem;
 }
 
 /* ── Scroll-driven reveals ────────────────────────────────────────
@@ -586,6 +673,26 @@ html {
     html.js-reveal .ra-stats-panel.is-visible .ra-stat-value {
         text-shadow: 0 0 18px rgba(139, 92, 246, 0.18);
     }
+
+    /* The 6 run-narrative panels (data-stack 1-6) get their own entrance —
+       alternating left/right instead of the generic panels' uniform
+       translateY, since these are a real ordered sequence, not a grid. */
+    html.js-reveal .ra-story[data-stack] {
+        transform: translateY(24px);
+    }
+    html.js-reveal .ra-story[data-stack='1'],
+    html.js-reveal .ra-story[data-stack='3'],
+    html.js-reveal .ra-story[data-stack='5'] {
+        transform: translateX(-44px) translateY(18px) rotate(-0.6deg);
+    }
+    html.js-reveal .ra-story[data-stack='2'],
+    html.js-reveal .ra-story[data-stack='4'],
+    html.js-reveal .ra-story[data-stack='6'] {
+        transform: translateX(44px) translateY(18px) rotate(0.6deg);
+    }
+    html.js-reveal .ra-story[data-stack].is-visible {
+        transform: translateY(0) translateX(0) rotate(0deg);
+    }
 }
 
 /* Reduced-motion users get content immediately, no animation choreography. */
@@ -648,7 +755,7 @@ html {
 }
 
 [data-theme='light'] .ra-panel-inner {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.82);
 }
 
 [data-theme='light'] .ra-stat {
@@ -743,6 +850,15 @@ html {
 .sl-link-button.secondary,
 .sl-link-button.minimal {
     border-color: rgba(139, 92, 246, 0.3);
+    /* Starlight's base .minimal gives padding-inline:0 (borderless-text
+       style); we render it with a visible border above, so it needs the
+       same inline padding as .secondary or text sits flush on the border. */
+    padding-inline: 1.125rem;
+}
+@media (min-width: 50rem) {
+    .sl-link-button.minimal {
+        padding-inline: 1.25rem;
+    }
 }
 .sl-link-button.secondary:hover,
 .sl-link-button.minimal:hover {
@@ -1365,6 +1481,11 @@ html {
     text-align: right;
     margin-bottom: 1.25rem !important;
     font-feature-settings: 'tnum' 1;
+    /* This is a data readout, not prose — the .ra-story intro-paragraph
+       62ch reading-width cap doesn't apply and was wrapping it early.
+       !important: that rule's selector (.ra-story .ra-panel-inner > p)
+       outranks a single class here. */
+    max-width: none !important;
 }
 .ra-flow-legend span {
     color: var(--ra-cyan);
@@ -2316,4 +2437,1300 @@ starlight-toc a[data-ra-changed]::before {
     border-radius: 3px;
     padding: 0.1em 0.45em;
     font-family: var(--sl-font-mono, monospace);
+}
+
+/* ================================================================
+   Marketing hero add-ons — trust bar, demo CTAs, honest-replay
+   label, and the Google "Preferred Sources" badge.
+   ================================================================ */
+
+/* ── Trust bar: compact credibility strip under the hero ─────── */
+.ra-trustbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem 1.35rem;
+    max-width: 980px;
+    margin: 0.25rem auto -1rem;
+    padding: 0 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--sl-color-gray-2);
+}
+.ra-trustbar span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    opacity: 0.9;
+}
+/* Bullet separators between items (not before the first) */
+.ra-trustbar span + span::before {
+    content: '';
+    position: absolute;
+    left: -0.7rem;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--ra-violet);
+    opacity: 0.6;
+}
+.ra-trustbar code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.82em;
+    color: var(--ra-cyan);
+}
+
+/* ── Demo call-to-action lines (run-it-yourself) ─────────────── */
+.ra-demo-cta {
+    margin: 1.1rem 0 0;
+    max-width: 60ch;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-2);
+    text-align: left;
+}
+.ra-demo-cta code {
+    font-size: 0.85em;
+    background: color-mix(in srgb, var(--ra-violet) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ra-violet) 30%, transparent);
+    border-radius: 5px;
+    padding: 0.12em 0.4em;
+    white-space: nowrap;
+}
+
+/* ── Google "Preferred Sources" badge ────────────────────────── */
+.ra-prefsrc {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--ra-violet) 32%, transparent);
+    background: color-mix(in srgb, var(--ra-violet) 8%, var(--sl-color-black));
+    color: var(--sl-color-white);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    transition: border-color 0.18s ease, transform 0.18s ease,
+        box-shadow 0.18s ease;
+}
+.ra-prefsrc:hover {
+    border-color: color-mix(in srgb, var(--ra-cyan) 55%, transparent);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+}
+.ra-prefsrc-g {
+    flex: 0 0 auto;
+}
+.ra-prefsrc-star {
+    flex: 0 0 auto;
+    color: var(--ra-violet);
+}
+.ra-prefsrc:hover .ra-prefsrc-star {
+    color: var(--ra-cyan);
+}
+.ra-prefsrc--compact {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    gap: 0.4rem;
+}
+
+/* ================================================================
+   Evidence receipt showcase — the on-brand "verified, not vibes"
+   proof surface. Renders a REAL captured TrustReceipt.
+   ================================================================ */
+.ra-receipt-fig {
+    /* Fills the story panel's width and starts flush at its left edge —
+       matching the left-aligned heading/intro above it instead of sitting
+       centered and narrower, which read as misaligned against them. */
+    margin: 0;
+    max-width: 100%;
+}
+.ra-receipt-panel {
+    padding: 1px;
+    border-radius: 18px;
+    background: linear-gradient(
+        135deg,
+        rgba(139, 92, 246, 0.6) 0%,
+        rgba(6, 182, 212, 0.3) 50%,
+        rgba(139, 92, 246, 0.6) 100%
+    );
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45),
+        0 0 80px rgba(139, 92, 246, 0.08);
+}
+.ra-receipt {
+    background: #101119;
+    border-radius: 17px;
+    padding: 1.4rem 1.5rem 1.25rem;
+    font-size: 0.9rem;
+    text-align: left;
+    overflow: hidden;
+}
+[data-theme='light'] .ra-receipt {
+    background: #fbfbfe;
+}
+
+/* Header */
+.ra-receipt-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+.ra-receipt-kicker {
+    display: block;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    color: var(--sl-color-white);
+}
+.ra-receipt-sub {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-3);
+    margin-top: 0.15rem;
+}
+.ra-verdict {
+    flex: 0 0 auto;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.32rem 0.7rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.ra-verdict--tool-grounded {
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+.ra-verdict--partially-grounded {
+    color: #facc15;
+    background: rgba(234, 179, 8, 0.12);
+    border: 1px solid rgba(234, 179, 8, 0.4);
+}
+.ra-verdict--ungrounded,
+.ra-verdict--abstained {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+}
+.ra-verdict--failed {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Identity row */
+.ra-receipt-idrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
+}
+.ra-chip {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    color: var(--sl-color-gray-1);
+}
+.ra-chip--model {
+    background: color-mix(in srgb, var(--ra-cyan) 14%, transparent);
+    border-color: color-mix(in srgb, var(--ra-cyan) 40%, transparent);
+    color: var(--sl-color-white);
+    font-weight: 700;
+}
+.ra-chip--muted {
+    background: none;
+    border-color: rgba(148, 163, 184, 0.25);
+    color: var(--sl-color-gray-3);
+}
+.ra-receipt-task {
+    margin: 0.7rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--sl-color-gray-2);
+}
+
+/* Metric grid */
+.ra-receipt-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.6rem 0.5rem;
+    margin: 1.1rem 0 0.4rem;
+    padding: 0.9rem 0;
+    border-top: 1px solid rgba(139, 92, 246, 0.1);
+    border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+}
+.ra-receipt-metrics div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.rm-k {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sl-color-gray-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rm-v {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--sl-color-white);
+}
+.rm-good {
+    color: #4ade80;
+}
+
+/* Sections */
+.ra-receipt-section {
+    margin-top: 1rem;
+}
+.ra-receipt-legend {
+    margin: 0 0 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ra-cyan);
+    opacity: 0.85;
+}
+.ra-receipt-list,
+.ra-receipt-checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.ra-receipt-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.ra-receipt-list code {
+    font-size: 0.76rem;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--sl-color-gray-1);
+}
+.ra-receipt-checks li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.74rem;
+}
+.ra-check-name {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    color: var(--sl-color-gray-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.ra-check-detail {
+    color: var(--sl-color-gray-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.ra-tick {
+    flex: 0 0 auto;
+    font-weight: 800;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+.ra-tick--ok {
+    color: #4ade80;
+}
+.ra-tick--miss {
+    color: #f87171;
+}
+
+/* Footnote + raw */
+.ra-receipt-foot {
+    margin: 1.1rem 0 0;
+    font-size: 0.74rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-3);
+}
+.ra-receipt-foot code {
+    font-size: 0.9em;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.22);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+    color: var(--sl-color-gray-1);
+}
+.ra-receipt-raw {
+    margin-top: 0.9rem;
+    border-top: 1px solid rgba(139, 92, 246, 0.1);
+    padding-top: 0.7rem;
+}
+.ra-receipt-raw summary {
+    cursor: pointer;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--ra-violet);
+    list-style: revert;
+}
+.ra-receipt-raw summary:hover {
+    color: var(--ra-cyan);
+}
+.ra-receipt-raw pre {
+    margin: 0.6rem 0 0;
+    padding: 0.8rem 0.9rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(139, 92, 246, 0.14);
+    border-radius: 9px;
+    overflow-x: auto;
+}
+[data-theme='light'] .ra-receipt-raw pre {
+    background: rgba(15, 23, 42, 0.04);
+}
+.ra-receipt-raw code {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: var(--sl-color-gray-1);
+    background: none;
+    border: none;
+    padding: 0;
+    white-space: pre;
+}
+.ra-receipt-cap {
+    margin: 0.9rem 0 0;
+    /* No 60ch cap — that was sized for the old centered 720px box. The
+       figure now fills the full panel width, so a short one-sentence
+       caption capped at 60ch wrapped early for no reason. */
+    max-width: 100%;
+    text-align: left;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-3);
+}
+.ra-receipt-cap code {
+    font-size: 0.9em;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--ra-cyan);
+}
+
+@media (max-width: 560px) {
+    .ra-receipt-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .ra-receipt-checks li {
+        grid-template-columns: auto 1fr;
+    }
+    .ra-check-detail {
+        display: none;
+    }
+}
+
+/* ================================================================
+   Custom splash hero — "code → proof" (src/components/Hero.astro)
+   Two-column: copy + a builder window resolving into a real verdict.
+   The brand glyph lives as a large ambient animated banner behind both
+   columns (.ra-hero-glyph-bg) instead of a small icon duplicating the
+   H1 text next to it. Theme-aware.
+   ================================================================ */
+.ra-hero {
+    position: relative;
+    display: grid;
+    /* Code pane gets more room than the copy pane so longer snippets (the
+       multi-agent/gateway examples) don't feel cramped against a 50/50 split.
+       Not pushed further than 0.85fr — the CTA row needs enough width to
+       stay on one line (see .ra-hero-actions below). */
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: center;
+    gap: 2.75rem;
+    padding: 1rem 0 1.5rem;
+}
+
+/* Ambient banner — the real brand mark (gradient strokes + glow filters +
+   its own built-in SMIL pulse, same file as the header logo), blown up,
+   faded, and pinned to the viewport (not the hero) so it stays visible as
+   the page scrolls past it instead of disappearing with the hero section.
+   A slow CSS drift is layered on top of the file's own internal animation
+   for extra life (composio.dev-style ambient background). */
+.ra-hero-glyph-bg {
+    position: fixed;
+    /* True vertical center, sized against viewport height too (not just
+       width) — at top:42% + a width-only cap, the glyph's top edge ran
+       past y:0 on shorter viewports and got clipped by the header bar. */
+    top: 50%;
+    left: 50%;
+    width: min(52rem, 130vw, 82vh);
+    height: auto;
+    transform: translate(-50%, -50%);
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+}
+[data-theme='light'] .ra-hero-glyph-bg {
+    opacity: 0.11;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .ra-hero-glyph-bg {
+        animation: ra-glyph-drift 24s ease-in-out infinite;
+        transform-origin: center;
+    }
+}
+@keyframes ra-glyph-drift {
+    0%, 100% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) rotate(3deg) scale(1.04);
+    }
+}
+
+.ra-hero-copy,
+.ra-hero-visual {
+    position: relative;
+    z-index: 1;
+}
+
+@media (max-width: 50rem) {
+    .ra-hero {
+        /* minmax(0, 1fr), not bare 1fr — a plain 1fr track's minimum width
+           is its content's min-content size, and the code panel's long
+           unbroken lines (.ra-hero-code) blew that out past the viewport,
+           pushing the whole page into horizontal scroll on mobile. */
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2rem;
+        text-align: center;
+    }
+}
+
+/* Headline — mirror the site's animated gradient title */
+.ra-hero h1 {
+    font-size: clamp(2.1rem, 4.4vw, 3.4rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+    margin: 0;
+    background: linear-gradient(
+        165deg,
+        #c4b5fd 0%,
+        #a78bfa 16%,
+        #8b5cf6 32%,
+        #06b6d4 48%,
+        #a78bfa 62%,
+        #8b5cf6 76%,
+        #7c3aed 90%,
+        #6d28d9 100%
+    );
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: ra-title-flow 8s ease-in-out infinite;
+}
+.ra-hero-tagline {
+    font-size: 1.12rem;
+    line-height: 1.65;
+    color: var(--sl-color-gray-2);
+    max-width: 46ch;
+    margin: 1.1rem 0 0;
+}
+@media (max-width: 50rem) {
+    .ra-hero-tagline {
+        margin-inline: auto;
+    }
+}
+.ra-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    margin-top: 1.6rem;
+}
+/* Slightly tighter than Starlight's default button size so Get Started +
+   See it run + Star on GitHub fit on one line in the narrower copy column
+   (the code panel took the extra width — see .ra-hero grid-template-columns). */
+.ra-hero-actions .sl-link-button {
+    padding-inline: 0.9rem;
+    font-size: 0.86rem;
+    gap: 0.3rem;
+}
+@media (max-width: 50rem) {
+    .ra-hero-actions {
+        justify-content: center;
+    }
+}
+/* Data chips, not a dot-separated text list — same mono/pill language as
+   the code window's feature tags, so this reads as spec data rather than
+   marketing copy. */
+.ra-hero-props {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.6rem;
+}
+@media (max-width: 50rem) {
+    .ra-hero-props {
+        justify-content: center;
+    }
+}
+.ra-hero-props span {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--sl-color-gray-2);
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.18);
+    border-radius: 999px;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
+}
+
+/* ── The code → proof window ─────────────────────────────────── */
+.ra-hero-win {
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(
+        135deg,
+        rgba(139, 92, 246, 0.55),
+        rgba(6, 182, 212, 0.28),
+        rgba(139, 92, 246, 0.55)
+    );
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5), 0 0 70px rgba(139, 92, 246, 0.1);
+    overflow: hidden;
+}
+.ra-hero-win > .ra-hero-winbar,
+.ra-hero-win > .ra-hero-code,
+.ra-hero-win > .ra-hero-verdict,
+.ra-hero-win > .ra-hero-receipt-strip {
+    background: #101119;
+}
+[data-theme='light'] .ra-hero-win > .ra-hero-winbar,
+[data-theme='light'] .ra-hero-win > .ra-hero-code,
+[data-theme='light'] .ra-hero-win > .ra-hero-verdict,
+[data-theme='light'] .ra-hero-win > .ra-hero-receipt-strip {
+    background: #fbfbfe;
+}
+.ra-hero-winbar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 15px;
+    border-radius: 15px 15px 0 0;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+/* Inside .sl-markdown-content (RunReplay's context, unlike Hero's), any
+   winbar child past the first silently picks up Starlight's prose
+   margin-top rhythm rule and drifts out of vertical alignment with its
+   siblings — reset margins on the whole row defensively. */
+.ra-hero-winbar > * {
+    margin: 0;
+}
+/* On narrow viewports the title + Trace/Code tabs + Replay button don't
+   fit one row — title wrapped mid-text while the buttons overflowed past
+   the panel's clipped edge. Wrap the bar and force the title onto its own
+   first row so the controls get a clean second row instead. */
+@media (max-width: 640px) {
+    .ra-hero-winbar {
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
+    .ra-hero-live-dot {
+        order: -2;
+    }
+    .ra-hero-winttl {
+        flex: 1 1 auto;
+        order: -1;
+        margin-left: 8px;
+        white-space: normal;
+    }
+}
+/* Single live-status dot — replaces the stock macOS traffic-light dots
+   (every devtool site fakes those) with something that actually signals
+   "this is live" instead of decorating the window as an OS chrome prop. */
+.ra-hero-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: var(--ra-cyan);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.16);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .ra-hero-live-dot {
+        animation: ra-live-pulse 2.2s ease-in-out infinite;
+    }
+}
+@keyframes ra-live-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.16);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(6, 182, 212, 0.05);
+        opacity: 0.75;
+    }
+}
+.ra-hero-winttl {
+    margin-left: 8px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--sl-color-gray-3);
+}
+.ra-hero-code {
+    margin: 0;
+    padding: 15px 18px;
+    overflow-x: auto;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.82rem;
+    line-height: 1.75;
+    color: #c8d1e4;
+    /* Never inherit the hero's mobile text-align:center — code must stay
+       left-aligned or the monospace indentation staggers per line. */
+    text-align: left;
+    /* height is pinned inline (Hero.astro) to the tallest snippet's line
+       count, so backspace/type transitions never resize the window. */
+    overflow-y: hidden;
+}
+.ra-hero-code code {
+    display: block;
+}
+.ra-hero-code .rl {
+    white-space: pre;
+    min-height: 1.75em;
+}
+.ra-hero-code .rl.is-editing {
+    position: relative;
+}
+.ra-hero-code .rl.is-editing::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: -0.15em;
+    background: var(--ra-cyan);
+    animation: ra-hero-caret 0.85s steps(1) infinite;
+}
+@keyframes ra-hero-caret {
+    0%, 49% {
+        opacity: 1;
+    }
+    50%, 100% {
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ra-hero-code .rl.is-editing::after {
+        animation: none;
+    }
+}
+.ra-hero-verdict,
+.ra-hero-winbar {
+    text-align: left;
+}
+[data-theme='light'] .ra-hero-code {
+    color: #334155;
+}
+.ra-hero-code code {
+    font-family: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    white-space: pre;
+}
+.ra-hero-code .rk {
+    color: #c4b5fd;
+}
+.ra-hero-code .rm {
+    color: #67e8f9;
+}
+.ra-hero-code .rs {
+    color: #86efac;
+}
+.ra-hero-code .rc {
+    color: #5b6472;
+    font-style: italic;
+}
+[data-theme='light'] .ra-hero-code .rk {
+    color: #7c3aed;
+}
+[data-theme='light'] .ra-hero-code .rm {
+    color: #0369a1;
+}
+[data-theme='light'] .ra-hero-code .rs {
+    color: #15803d;
+}
+[data-theme='light'] .ra-hero-code .rc {
+    color: #94a3b8;
+}
+.ra-hero-verdict {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+    /* No bottom radius of its own — the receipt strip below it is now the
+       window's true last child, so it owns the bottom corners. Rounding
+       both created a visible square notch at the seam between them. */
+    border-top: 1px solid rgba(139, 92, 246, 0.15);
+    background: rgba(139, 92, 246, 0.06) !important;
+}
+.ra-hero-receipt-strip {
+    border-radius: 0 0 15px 15px;
+}
+.ra-hero-vbadge {
+    flex: 0 0 auto;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 999px;
+    padding: 0.28rem 0.65rem;
+    white-space: nowrap;
+    transition: opacity 0.18s ease;
+}
+.ra-hero-vbadge.is-fading {
+    opacity: 0;
+}
+[data-theme='light'] .ra-hero-vbadge {
+    color: #6d28d9;
+}
+.ra-hero-vfeatures {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.35rem;
+    overflow: hidden;
+    /* No static min-height reservation (that wasted a full row of blank
+       space for every 1-row snippet). The height is animated in JS
+       (swapFeatures in Hero.astro) between each snippet's real content
+       height, so the panel only ever takes the space it needs. */
+    transition: opacity 0.18s ease, height 0.22s ease;
+}
+.ra-hero-vfeatures.is-fading {
+    opacity: 0;
+}
+.ra-hero-vtag {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.66rem;
+    color: var(--ra-cyan);
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 999px;
+    padding: 0.16rem 0.55rem;
+    white-space: nowrap;
+}
+.ra-hero-vcap {
+    margin: 0.85rem 0 0;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--sl-color-gray-3);
+}
+/* RunReplay reuses this caption class inside the now-left-aligned story
+   sections — match that alignment instead of the hero's centered one. */
+.ra-story .ra-hero-vcap {
+    text-align: left;
+}
+
+/* Real-receipt strip — fixed footer of the code window, deliberately
+   visually distinct (neutral border, not the violet capability gradient)
+   from the cycling badge/tags above it: that's a feature preview, this is
+   the actual signed proof, pulled forward from #the-proof so the site's
+   real signature starts in the hero instead of three scrolls down. */
+.ra-hero-receipt-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 18px;
+    border-top: 1px solid rgba(139, 92, 246, 0.14);
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.ra-hero-receipt-strip:hover {
+    background: rgba(6, 182, 212, 0.05);
+    color: var(--sl-color-gray-2);
+}
+.ra-hero-receipt-strip:hover .ra-hero-receipt-link {
+    color: var(--ra-cyan);
+}
+.ra-hero-receipt-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex: 0 0 auto;
+}
+.ra-hero-receipt-strip span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ra-hero-receipt-link {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--sl-color-gray-3);
+    text-decoration: underline dotted;
+}
+
+/* Example dot rail — click to jump straight to a snippet, hover/focus shows
+   its filename. Auto-cycle keeps advancing dots when nothing is pending. */
+.ra-hero-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.9rem 0 0;
+}
+.ra-hero-dot {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    padding: 0.3rem;
+    margin: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ra-hero-dot-core {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.38);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.ra-hero-dot:hover .ra-hero-dot-core {
+    background: rgba(139, 92, 246, 0.7);
+}
+.ra-hero-dot.is-active .ra-hero-dot-core {
+    background: var(--ra-cyan);
+    box-shadow: 0 0 6px rgba(6, 182, 212, 0.65);
+}
+.ra-hero-dot:focus-visible {
+    outline: 2px solid var(--ra-cyan);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ================================================================
+   RunPhases — real per-run phase-fired annotation on the 12-phase
+   grid (.ra-flow-grid / .ra-phase already defined above).
+   ================================================================ */
+.ra-phase-fired {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.35rem 0 0 !important;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.ra-phase-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+}
+.ra-phase-dot--ok {
+    background: #4ade80;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+.ra-phase-dot--off {
+    background: var(--sl-color-gray-4);
+}
+.ra-phase--fired .ra-phase-fired {
+    color: #4ade80;
+}
+.ra-phase--optin .ra-phase-fired {
+    color: var(--sl-color-gray-4);
+}
+.ra-phase--optin {
+    opacity: 0.62;
+}
+.ra-phase--optin:hover {
+    opacity: 1;
+}
+
+/* ================================================================
+   RunReplay — real tool-call trace body, reusing the .ra-hero-win chrome.
+   ================================================================ */
+.ra-trace-win {
+    max-width: 760px;
+    margin: 0 auto;
+}
+.ra-trace-body {
+    background: #101119;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    /* The section wrapper sets text-align:center for its prose; the trace
+       is code/log content and must stay left-aligned regardless. */
+    text-align: left;
+}
+[data-theme='light'] .ra-trace-body {
+    background: #fbfbfe;
+}
+.ra-trace-row {
+    margin: 0;
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+}
+.ra-trace-label {
+    flex: 0 0 auto;
+    color: var(--ra-cyan);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-top: 0.2rem;
+}
+.ra-trace-val {
+    color: var(--sl-color-gray-1);
+}
+.ra-trace-task {
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.12);
+    margin-bottom: 0.15rem;
+}
+.ra-trace-call {
+    padding-left: 0.1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+.ra-trace-idx {
+    flex: 0 0 auto;
+    color: var(--sl-color-gray-4);
+    font-size: 0.72rem;
+}
+.ra-trace-tool {
+    flex: 0 0 auto;
+    color: #4ade80;
+    font-weight: 700;
+}
+.ra-trace-args {
+    color: var(--sl-color-gray-3);
+    overflow-wrap: anywhere;
+}
+.ra-trace-out {
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(139, 92, 246, 0.12);
+    margin-top: 0.15rem;
+}
+
+/* ================================================================
+   RunReplay — animated playback of the same real run's timeline,
+   synced feed + phase rail. Paced from real relative gaps (see
+   generate-golden-run.ts `timeline`), clamped for readability.
+   ================================================================ */
+.ra-replay-win {
+    /* Fills the story panel's width, left-aligned to match the heading/
+       intro above it instead of sitting centered and narrower. */
+    max-width: 100%;
+    margin: 0;
+    position: relative;
+}
+.ra-replay-btn {
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: var(--sl-color-gray-2);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ra-replay-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+    color: var(--sl-color-white);
+}
+
+/* Trace / Code tabs — peek at the exact builder chain that produced this
+   run without leaving the window or breaking the replay animation running
+   underneath (it keeps ticking; only the visible panel swaps). */
+.ra-replay-tabs {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.ra-replay-tab {
+    appearance: none;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    /* Inside .sl-markdown-content, Starlight adds margin-top to any element
+       with a preceding sibling (prose rhythm) — the 2nd tab button was
+       picking that up and sitting lower than the 1st. Not prose; reset. */
+    margin: 0;
+    background: rgba(139, 92, 246, 0.07);
+    border: 1px solid rgba(139, 92, 246, 0.16);
+    color: var(--sl-color-gray-3);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ra-replay-tab:hover {
+    color: var(--sl-color-gray-1);
+}
+.ra-replay-tab.is-active {
+    background: rgba(6, 182, 212, 0.14);
+    border-color: rgba(6, 182, 212, 0.4);
+    color: var(--ra-cyan);
+}
+.ra-replay-code {
+    min-height: 15rem;
+    border-radius: 0 0 15px 15px;
+}
+.ra-replay-code[hidden] {
+    display: none;
+}
+/* Unlike Hero.astro's code panel (rendered outside the MDX body), this one
+   lives inside .sl-markdown-content, which stacks a 16px top margin onto
+   every generic block child for prose rhythm — wrong for tightly-packed
+   code lines. Reset it. */
+.ra-replay-code .rl {
+    margin: 0;
+}
+.ra-replay-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: stretch;
+    margin: 0;
+}
+/* An author `display:grid` rule beats the UA `[hidden]{display:none}` rule
+   on a specificity tie (same pattern already hit on .ra-replay-detail-list)
+   — without this, the trace grid stays visible under the code panel when
+   the Code tab is active. */
+.ra-replay-grid[hidden] {
+    display: none;
+}
+.ra-replay-feed {
+    min-height: 15rem;
+    /* This is the window's true bottom-left corner. The parent's
+       overflow:hidden clip doesn't reliably round an opaque child's own
+       square corner in every browser — match it explicitly, same pattern
+       as the winbar/verdict-strip elsewhere in this window chrome. */
+    border-radius: 0 0 0 15px;
+}
+.ra-replay-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.ra-replay-line,
+.ra-replay-tick {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.ra-replay-line.is-in,
+.ra-replay-tick.is-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+.ra-replay-tick {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.66rem;
+    color: var(--sl-color-gray-4);
+    letter-spacing: 0.03em;
+}
+.ra-replay-tick.ra-replay-has-detail {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-toggle {
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--ra-cyan);
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-toggle:hover {
+    text-decoration-style: solid;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-chevron {
+    color: var(--ra-cyan);
+    opacity: 0.75;
+}
+.ra-replay-tick.ra-replay-has-detail .ra-replay-detail {
+    margin-left: 0.85rem;
+    font-size: 0.66rem;
+}
+.ra-replay-toggle {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    width: 100%;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+}
+.ra-replay-has-detail:not(.is-in) .ra-replay-toggle {
+    pointer-events: none;
+}
+.ra-replay-toggle:hover .ra-trace-tool {
+    text-decoration: underline;
+}
+.ra-replay-chevron {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--sl-color-gray-4);
+    font-size: 0.68rem;
+    transition: transform 0.15s ease;
+}
+.ra-replay-toggle[aria-expanded='true'] .ra-replay-chevron {
+    transform: rotate(-180deg);
+}
+.ra-replay-detail {
+    margin: 0.35rem 0 0.15rem 1.4rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(6, 182, 212, 0.05);
+    border: 1px solid rgba(6, 182, 212, 0.18);
+    border-radius: 8px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: var(--sl-color-gray-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 12rem;
+    overflow-y: auto;
+}
+.ra-replay-detail-list {
+    max-height: none;
+    overflow-y: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.ra-replay-detail-list[hidden] {
+    /* An author display:flex rule beats the UA [hidden]{display:none} rule
+       on specificity ties — restore the collapse explicitly. */
+    display: none;
+}
+.ra-replay-obs + .ra-replay-obs {
+    padding-top: 0.5rem;
+    border-top: 1px dashed rgba(6, 182, 212, 0.2);
+}
+.ra-replay-obs-head {
+    margin: 0 0 0.25rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ra-cyan);
+    opacity: 0.85;
+}
+.ra-replay-obs-body {
+    margin: 0;
+    max-height: 8rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.ra-replay-tick-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--ra-cyan);
+    flex: 0 0 auto;
+}
+.ra-replay-verdict-row {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.ra-replay-verdict-row.is-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+.ra-replay-rail {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 0.3rem;
+    padding: 1rem 0.9rem;
+    border-left: 1px solid rgba(139, 92, 246, 0.12);
+}
+.ra-replay-dot {
+    width: 10px;
+    height: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ra-replay-dot-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sl-color-gray-5);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.ra-replay-dot--off .ra-replay-dot-core {
+    opacity: 0.35;
+}
+.ra-replay-dot.is-active .ra-replay-dot-core {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.75);
+    transform: scale(1.35);
+}
+@media (max-width: 40rem) {
+    .ra-replay-grid {
+        grid-template-columns: 1fr;
+    }
+    .ra-replay-rail {
+        flex-direction: row;
+        border-left: none;
+        border-top: 1px solid rgba(139, 92, 246, 0.12);
+        justify-content: center;
+        flex-wrap: wrap;
+    }
 }

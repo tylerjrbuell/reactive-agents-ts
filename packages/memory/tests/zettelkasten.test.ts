@@ -117,4 +117,39 @@ describe("ZettelkastenService", () => {
 
     expect(result.length).toBe(0);
   });
+
+  // 2026-09-03: autoLinkText joined RAW words into an FTS5 MATCH string
+  // ("word1 OR word2 OR ..."). A word containing an FTS5-special character
+  // (hyphen, colon, etc. — e.g. "Effect-TS") was parsed as query SYNTAX, not
+  // literal text, and threw `SQLiteError: no such column: TS`. The call site
+  // in memory-service.ts silently swallows this (Effect.catchAll ->
+  // emitErrorSwallowed), so auto-linking quietly never ran on any content
+  // containing such a word — most real prose. Fixed by quoting each term as
+  // an FTS5 string literal.
+  it("auto-links similar content even when it contains FTS5-special characters (hyphens, colons)", async () => {
+    const links = await run(
+      Effect.gen(function* () {
+        const svc = yield* ZettelkastenService;
+        return yield* svc.autoLinkText(
+          "entry-1" as MemoryId,
+          "The framework uses Effect-TS for composable service layers: dependency injection, streams, and error tracking.",
+          "test-agent",
+          0,
+        );
+      }),
+    );
+    // Threshold 0 with no other stored entries: the query must not throw —
+    // regardless of match count, a crash here means the bug is back.
+    expect(Array.isArray(links)).toBe(true);
+  });
+
+  it("does not throw on content that is punctuation-only after word filtering", async () => {
+    const links = await run(
+      Effect.gen(function* () {
+        const svc = yield* ZettelkastenService;
+        return yield* svc.autoLinkText("entry-1" as MemoryId, "-- :: ---", "test-agent", 0);
+      }),
+    );
+    expect(links).toEqual([]);
+  });
 });

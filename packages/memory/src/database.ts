@@ -66,6 +66,8 @@ const SCHEMA_CORE_SQL = `
     last_accessed_at TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS idx_semantic_agent_importance ON semantic_memory(agent_id, importance DESC);
+
   CREATE TABLE IF NOT EXISTS episodic_log (
     id          TEXT PRIMARY KEY,
     agent_id    TEXT NOT NULL,
@@ -78,6 +80,9 @@ const SCHEMA_CORE_SQL = `
     metadata    TEXT DEFAULT '{}',
     created_at  TEXT NOT NULL
   );
+
+  CREATE INDEX IF NOT EXISTS idx_episodic_agent_date ON episodic_log(agent_id, date);
+  CREATE INDEX IF NOT EXISTS idx_episodic_agent_created ON episodic_log(agent_id, created_at);
 
   CREATE TABLE IF NOT EXISTS session_snapshots (
     id          TEXT PRIMARY KEY,
@@ -92,6 +97,8 @@ const SCHEMA_CORE_SQL = `
     total_tokens INTEGER NOT NULL DEFAULT 0
   );
 
+  CREATE INDEX IF NOT EXISTS idx_snapshots_agent_ended ON session_snapshots(agent_id, ended_at DESC);
+
   CREATE TABLE IF NOT EXISTS procedural_memory (
     id          TEXT PRIMARY KEY,
     agent_id    TEXT NOT NULL,
@@ -105,6 +112,8 @@ const SCHEMA_CORE_SQL = `
     updated_at  TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS idx_procedural_agent ON procedural_memory(agent_id);
+
   CREATE TABLE IF NOT EXISTS zettel_links (
     source_id   TEXT NOT NULL,
     target_id   TEXT NOT NULL,
@@ -113,6 +122,10 @@ const SCHEMA_CORE_SQL = `
     created_at  TEXT NOT NULL,
     PRIMARY KEY (source_id, target_id)
   );
+
+  -- getLinks() queries WHERE source_id=? OR target_id=?; the PK only
+  -- serves the source_id side, so target_id lookups full-scan without this.
+  CREATE INDEX IF NOT EXISTS idx_zettel_target ON zettel_links(target_id);
 
   -- Plan persistence tables
   CREATE TABLE IF NOT EXISTS plans (

@@ -59,7 +59,7 @@ export interface RunState {
   /** Populated from `DebriefCompleted` — shape matches framework `DebriefPayload`. */
   readonly debrief: unknown | null;
   readonly isChat: boolean;
-  /** Accumulated streaming text from TextDeltaReceived events (live only, not persisted).
+  /** Accumulated streaming text from TextDelta events (live only, not persisted).
    *  Resets at each ReasoningIterationProgress boundary. */
   readonly streamText: string;
   /** Error message from AgentCompleted or TaskFailed when run failed. */
@@ -247,9 +247,9 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         if (typeof msg.payload.objectError === "string") structuredError = msg.payload.objectError;
       }
 
-      // Live streaming text — accumulate TextDeltaReceived, clear on new iteration
+      // Live streaming text — accumulate TextDelta, clear on new iteration
       let streamText = s.streamText;
-      if (msg.type === "TextDeltaReceived" || msg.type === "TextDelta") {
+      if (msg.type === "TextDelta") {
         const delta = typeof msg.payload.text === "string" ? msg.payload.text
           : typeof msg.payload.delta === "string" ? msg.payload.delta : "";
         streamText = s.streamText + delta;

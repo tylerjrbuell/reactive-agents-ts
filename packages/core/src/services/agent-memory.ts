@@ -48,6 +48,44 @@ export interface AgentMemoryEntry {
   readonly lastAccessedAt: Date;
 }
 
+/** One entry returned by {@link AgentMemory.getRelated} — a neighbor in the
+ *  memory link graph, enriched with a short content preview so the kernel
+ *  never has to make a second round-trip just to know what an id means. */
+export interface AgentMemoryRelatedEntry {
+  readonly id: string;
+  readonly preview: string;
+  /** Link strength 0..1, when the adapter's graph tracks it (mode "links"). */
+  readonly strength?: number;
+  /** Link type (e.g. "similar"), when the adapter's graph tracks it. */
+  readonly type?: string;
+}
+
+/**
+ * Relationship types a caller may assert via {@link AgentMemory.link}.
+ * Mirrors `@reactive-agents/memory`'s `LinkType` (kept as a literal union
+ * here, not an import, per this port's no-runtime-dependency-on-memory
+ * rule) — richer than the "similar" auto-linking does on its own: a model
+ * can assert *why* two entries relate (one caused another, one contradicts
+ * another), not just that they're topically close.
+ */
+export type AgentMemoryLinkType =
+  | "similar"
+  | "sequential"
+  | "causal"
+  | "contradicts"
+  | "supports"
+  | "elaborates";
+
+/** One entry returned by {@link AgentMemory.search} — a keyword-matched
+ *  memory entry, carrying its REAL id (2026-09-03: nothing surfaced a real
+ *  entry id to the model before this — `find(scope:"memory")` rendered a
+ *  flat markdown dump with no per-entry identifier, so `relate(id)` was
+ *  unreachable without a human hand-feeding an id). */
+export interface AgentMemorySearchResult {
+  readonly id: string;
+  readonly preview: string;
+}
+
 /**
  * AgentMemory port. The kernel resolves THIS Tag, not the heavier
  * `MemoryService` Tag from `@reactive-agents/memory`.
@@ -56,6 +94,14 @@ export interface AgentMemoryEntry {
  * caller-supplied id), and is permitted to fail with `unknown` errors —
  * the kernel call site swallows-and-emits via `emitErrorSwallowed`, since
  * memory writes are best-effort.
+ *
+ * `getRelated` is OPTIONAL — added deliberately (per this file's own
+ * widening policy) for the `relate` tool, which queries an adapter's
+ * relationship graph (e.g. the memory package's Zettelkasten auto-links).
+ * An adapter that does not maintain such a graph simply omits it; the
+ * kernel offers the `relate` tool only when this method is present, so a
+ * custom AgentMemory provider that predates this field keeps compiling and
+ * running exactly as before.
  */
 export class AgentMemory extends Context.Tag("AgentMemory")<
   AgentMemory,
@@ -63,5 +109,36 @@ export class AgentMemory extends Context.Tag("AgentMemory")<
     readonly storeSemantic: (
       entry: AgentMemoryEntry,
     ) => Effect.Effect<string, unknown>;
+    readonly getRelated?: (
+      id: string,
+      mode: "links" | "traverse",
+      depth: number,
+    ) => Effect.Effect<readonly AgentMemoryRelatedEntry[], unknown>;
+    /**
+     * Optional keyword search over stored entries, each result carrying its
+     * REAL id — the thing `find(scope:"memory")` needs so a model can chain
+     * find -> relate instead of `relate` being reachable only when a human
+     * hands it an id. An adapter that doesn't maintain a queryable store
+     * simply omits this; `find`'s memory scope degrades gracefully (no
+     * results from that source, not an error) when absent.
+     */
+    readonly search?: (
+      query: string,
+      limit: number,
+    ) => Effect.Effect<readonly AgentMemorySearchResult[], unknown>;
+    /**
+     * Optional: explicitly assert a relationship between two memory entries
+     * (a manual bridge, as opposed to `getRelated`'s auto-similarity links).
+     * `strength` defaults to 1.0 at the adapter when omitted — an explicit
+     * assertion is maximally confident by construction, unlike a measured
+     * similarity score. An adapter without a mutable link store omits this;
+     * the `relate` tool's "link" mode is only offered when it's present.
+     */
+    readonly link?: (
+      sourceId: string,
+      targetId: string,
+      type: AgentMemoryLinkType,
+      strength?: number,
+    ) => Effect.Effect<void, unknown>;
   }
 >() {}

@@ -140,6 +140,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withTestScenario` | _overlay — test-scenario rig (not data)_ | overlay | Load a test scenario. |
 | `withThinking` | `thinking` | config | Extended thinking / reasoning effort. |
 | `withTimeout` | `execution.timeoutMs` | config | Run timeout (ms). |
+| `withToolIntent` | _overlay — code-only_ | overlay | Configure tool intent. |
 | `withTools` | `tools`, `features.tools` | config | Tools layer + allowed/focused/adaptive/terminal/required options. |
 | `withTracing` | _overlay — trace persistence — observability alias (see withObservability({tracing}))_ | overlay | JSONL trace persistence. |
 | `withUserInteraction` | _overlay — durable ask overlay (channel adapters are code-only)_ | overlay | Durable user interaction. |
@@ -285,7 +286,7 @@ interface ThinkingOptions {
 | Field                 | Type                              | Default / notes                                                  |
 | --------------------- | --------------------------------- | ---------------------------------------------------------------- |
 | `tier`                | `"standard" \| "enhanced"`        | `"standard"` — enhanced = 4-layer memory + embeddings            |
-| `dbPath`              | `string`                          | SQLite path (default under `.reactive-agents/memory/{agentId}/`) |
+| `dbPath`              | `string`                          | SQLite path (default `~/.reactive-agents/memory/{agentId}/memory.db`) |
 | `maxEntries`          | `number`                          | Compaction cap                                                   |
 | `capacity`            | `number`                          | Working memory slots (default `7`)                               |
 | `evictionPolicy`      | `"fifo" \| "lru" \| "importance"` | Working set eviction                                             |

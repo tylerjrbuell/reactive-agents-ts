@@ -31,7 +31,6 @@ export type TraceEvent =
   | HarnessSignalInjectedEvent
   // ─── Decision rationale events (v0.11.x — observable "why") ───
   | AssumptionRecordedEvent
-  | AlternativesConsideredEvent
   | CuratorDecisionEvent
   // ─── Overhaul Phase 2 (2026-07-07 — tool-surface compiler) ───
   | ToolSurfaceResolvedEvent
@@ -348,19 +347,6 @@ export interface AssumptionRecordedEvent extends TraceEventBase {
 }
 
 /**
- * Alternatives considered at a decision point (chose A, rejected B and C).
- * Captures the counterfactuals the model weighed.
- */
-export interface AlternativesConsideredEvent extends TraceEventBase {
-  readonly kind: "alternatives-considered"
-  readonly chosen: string
-  readonly alternatives: readonly {
-    readonly option: string
-    readonly rejectedBecause: string
-  }[]
-}
-
-/**
  * Context curator action — what was kept, dropped, compressed, or flagged as
  * untrusted, and why. Pairs the curator's existing trustLevel/justification
  * with a structured rationale.
@@ -477,7 +463,66 @@ export interface LedgerEntryTraceEvent extends TraceEventBase {
   readonly entries: ReadonlyArray<Record<string, unknown>>
 }
 
-/** Type-narrowing helper. */
+/**
+ * Required (non-optional) field names per `kind`, beyond the base
+ * `runId`/`timestamp`/`iter`/`seq`. Used by `isTraceEvent` to catch a
+ * truncated or hand-edited JSONL line whose `kind` is a real trace-event
+ * kind but whose payload doesn't match it — a gap `isTraceEvent` left open
+ * (F-8 residue, 2026-08-24 external-research-convergence amendment, W7):
+ * previously it checked only that `kind` and `runId` were present, so any
+ * object with those two keys parsed as a valid event of whatever kind it
+ * claimed. This does not validate nested shapes or field types — only that
+ * the fields a reader of that `kind` will dereference actually exist.
+ */
+const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly string[]>> = {
+  "run-started": ["task", "model", "provider", "config"],
+  "run-completed": ["status", "totalTokens", "totalCostUsd", "durationMs"],
+  "phase-enter": ["phase"],
+  "phase-exit": ["phase"],
+  "iteration-enter": [],
+  "iteration-exit": [],
+  "entropy-scored": ["composite", "sources"],
+  "decision-evaluated": ["decisionType", "confidence", "reason"],
+  "intervention-dispatched": ["decisionType", "patchKind", "cost", "telemetry"],
+  "intervention-suppressed": ["decisionType", "reason"],
+  "state-patch-applied": ["patchKind", "diff"],
+  "tool-call-start": ["toolName"],
+  "tool-call-end": ["toolName"],
+  "message-appended": ["role", "tokenCount"],
+  "strategy-switched": ["from", "to", "reason"],
+  "kernel-state-snapshot": [
+    "status", "toolsUsed", "scratchpadKeys", "stepsCount", "stepsByType",
+    "outputPreview", "outputLen", "messagesCount", "tokens", "cost", "llmCalls",
+  ],
+  "verifier-verdict": ["action", "terminal", "verified", "summary", "checks"],
+  "guard-fired": ["guard", "outcome", "reason"],
+  "llm-exchange": ["provider", "model", "requestKind", "messages", "toolSchemaNames", "response"],
+  "harness-signal-injected": ["signalKind", "origin", "contentPreview", "contentLen"],
+  "assumption-recorded": ["assumption", "rationale"],
+  "curator-decision": ["action", "targetRef", "rationale"],
+  "tool-surface-resolved": ["visible", "callable", "reasons"],
+  "contract-compiled": ["requirements", "deliverables", "horizon"],
+  "assessment": [
+    "phase", "band", "evidenceDelta", "requirementsSatisfied", "requirementsOutstanding",
+    "deliverablesProduced", "deliverablesMissing", "burnRatio",
+  ],
+  "projection-rendered": ["sections", "refs", "droppedRefs", "chars"],
+  "control-resolution": ["action", "reason", "proposals"],
+  "ledger-entry": ["entries"],
+}
+
+/** Type-narrowing helper. Validates the base fields, that `kind` is a known
+ * trace-event kind, and that the fields that kind's payload requires are
+ * present — see `REQUIRED_FIELDS_BY_KIND`. */
 export function isTraceEvent(x: unknown): x is TraceEvent {
-  return typeof x === "object" && x !== null && "kind" in x && "runId" in x
+  if (typeof x !== "object" || x === null) return false
+  const record = x as Record<string, unknown>
+  if (typeof record.runId !== "string") return false
+  if (typeof record.timestamp !== "number") return false
+  if (typeof record.iter !== "number") return false
+  if (typeof record.seq !== "number") return false
+  if (typeof record.kind !== "string") return false
+  const required = REQUIRED_FIELDS_BY_KIND[record.kind as TraceEvent["kind"]]
+  if (required === undefined) return false
+  return required.every((field) => field in record)
 }

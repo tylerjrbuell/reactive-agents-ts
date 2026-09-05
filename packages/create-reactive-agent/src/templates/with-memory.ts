@@ -24,7 +24,7 @@ function renderIndex(opts: ScaffoldOptions): string {
 ${envCheck}
 
 // Memory is OFF by default. .withMemory() enables tier-1 working memory plus a
-// cross-session SQLite store under ~/.reactive-agents/<agentId>/memory.db. Give
+// cross-session SQLite store under ~/.reactive-agents/memory/<agentId>/memory.db. Give
 // the agent a stable id so it recalls the SAME store on every run.
 const agent = await ReactiveAgents.create()
   .withName("memory-assistant")

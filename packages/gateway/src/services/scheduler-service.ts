@@ -145,7 +145,7 @@ export const SchedulerServiceLive = (
                       minute: "2-digit",
                       second: "2-digit",
                     });
-                    console.log(
+                    yield* Effect.logDebug(
                       `[CRON-CHECK] "${cron.entry.schedule}" at ${dateStr} (${tz}) → ${shouldFire ? "✓ MATCHED" : "✗ no match"}`,
                     );
                   }
@@ -154,7 +154,7 @@ export const SchedulerServiceLive = (
                     const event = createCronEvent(agentId, cron.entry);
                     events.push(event);
                     const dateStr = checkTime.toLocaleString();
-                    console.log(
+                    yield* Effect.logInfo(
                       `  ▶️  FIRING: "${cron.entry.schedule}" at ${dateStr}`,
                     );
 

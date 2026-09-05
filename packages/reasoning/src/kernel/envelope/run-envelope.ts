@@ -15,6 +15,7 @@ import { Context, Effect } from "effect";
 import type { TaskContract } from "@reactive-agents/core";
 import type { KernelInput, GroundingConfig, StallPolicy } from "../state/kernel-state.js";
 import type { FabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
+import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
 export interface RunEnvelopePolicy {
   /** Declared TaskContract (.withContract) — judged contract-vs-ledger at the terminal. */
@@ -63,6 +64,13 @@ export interface RunEnvelopeRails {
 export interface RunEnvelopeData {
   readonly policy: RunEnvelopePolicy;
   readonly rails: RunEnvelopeRails;
+  /**
+   * Harness mechanism configuration, resolved once (config > env > default).
+   * A THIRD named sub-record on the SAME service — never a second service.
+   * Spec §9's ruling stands: splitting the carrier reinvents the drop at the
+   * join. `policy` is judgment, `rails` is repair, `harness` is mechanism.
+   */
+  readonly harness: ResolvedHarness;
 }
 
 export class RunEnvelope extends Context.Tag("RunEnvelope")<RunEnvelope, RunEnvelopeData>() {}
@@ -78,6 +86,15 @@ export interface BuildRunEnvelopeOptions {
   readonly approvalPolicy?: KernelInput["approvalPolicy"];
   readonly approvalDecision?: KernelInput["approvalDecision"];
   readonly interactionResponse?: KernelInput["interactionResponse"];
+  /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
+  readonly harness?: HarnessConfig;
+  /**
+   * Lowest-priority harness layer, beneath env — a `ContextProfile` tier's
+   * disclosure-mode shorthand (`fromDisclosureMode()`). Only fills a hole an
+   * unset env var leaves; `harness` and any explicit `RA_*` var both still
+   * win. See `resolveHarnessConfig`'s `profileDefault` parameter.
+   */
+  readonly harnessProfileDefault?: HarnessConfig;
 }
 
 export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelopeData {
@@ -96,11 +113,25 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         ? { interactionResponse: opts.interactionResponse }
         : {}),
     },
+    harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
 }
 
-/** The no-config envelope: every field absent. Zero behavior change by construction. */
-export const emptyRunEnvelope: RunEnvelopeData = { policy: {}, rails: {} };
+/** The no-config envelope: every policy/rails field absent, harness fully
+ *  resolved from env+defaults. Zero behavior change by construction.
+ *
+ *  NOT used as the production default (Finding 4, harness-control-surface
+ *  final fix wave): `harness` resolves ONCE at module-import time, so a
+ *  `RA_*` env var set after import is silently ignored by any caller that
+ *  reuses this frozen constant. `reasoning-service.ts` (the sole production
+ *  provision site) falls back to a fresh `buildRunEnvelope()` call instead.
+ *  Kept exported for tests and any other caller that genuinely wants the
+ *  shared, already-resolved constant. */
+export const emptyRunEnvelope: RunEnvelopeData = {
+  policy: {},
+  rails: {},
+  harness: resolveHarnessConfig(),
+};
 
 /**
  * Fold the run-wide envelope into a `KernelInput` — the cascade's REACH step
@@ -146,16 +177,24 @@ export function mergeRunEnvelopeIntoKernelInput(
     ...(input.interactionResponse === undefined && rails.interactionResponse !== undefined
       ? { interactionResponse: rails.interactionResponse }
       : {}),
+    ...(input.harness === undefined ? { harness: envelope.harness } : {}),
   };
 }
 
 /**
  * Test helper — the ONLY sanctioned provision site outside
  * `reasoning-service.ts` (enforced by scripts/check-cross-cutting.sh).
+ *
+ * `data` defaults to a FRESH `buildRunEnvelope()` resolved at CALL time, not
+ * to the frozen `emptyRunEnvelope` module constant (that constant is snapshot
+ * once at import time — a test's `beforeAll`/`beforeEach` mutating `RA_*` env
+ * vars runs strictly after module import, so it would silently miss a
+ * pre-resolved snapshot). Explicit `data` still wins when a caller wants the
+ * exact shared constant or a hand-built envelope.
  */
 export function provideTestEnvelope<A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  data: RunEnvelopeData = emptyRunEnvelope,
+  data?: RunEnvelopeData,
 ): Effect.Effect<A, E, Exclude<R, RunEnvelope>> {
-  return Effect.provideService(effect, RunEnvelope, data);
+  return Effect.provideService(effect, RunEnvelope, data ?? buildRunEnvelope());
 }

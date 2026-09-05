@@ -31,16 +31,17 @@ import {
 } from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
-import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "../act/tool-execution.js";
-import { executeToolAndObserve, evaluateToolPolicy } from "./tool-observe.js";
-import { resolveBlockApproval } from "./approval-gate.js";
+import { executeToolAndObserve, executeToolAndObserveBatch, evaluateToolPolicy } from "./tool-observe.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
 // defaultVerifier.verify() so the structured VerificationResult is
 // attached to the observation step's metadata. Future sprints (Arbitrator
-// in S3.3, Reflection in S3.4) read this signal.
-import { defaultVerifier, contextFromObservation } from "../verify/verifier.js";
+// in S3.3, Reflection in S3.4) read this signal. One execution boundary
+// (2026-08-18) — both single-call and batch paths thread `defaultVerifier`
+// through the canonical `executeToolAndObserve[Batch]` primitive now; this
+// file no longer calls `.verify()`/`contextFromObservation` directly.
+import { defaultVerifier } from "../verify/verifier.js";
 // Sprint 3.3 — Sole Termination Authority: the final-answer-tool path
 // emits an "agent-final-answer" intent and lets the Arbitrator decide
 // success/failure. The Arbitrator applies the controller-signal veto
@@ -68,7 +69,7 @@ import { assembleConversation } from "./conversation-assembly.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
-import { toolObserveSymmetryEnabled } from "../../../harness-flags.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 
 /** Tool names that operate on the filesystem — HealingPipeline will resolve relative paths. */
 const FILE_TOOL_NAMES = new Set(["file-read", "file-write", "code-execute", "shell-execute"]);
@@ -146,6 +147,7 @@ export function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
+    const h = input.harness ?? resolveHarnessConfig();
     // profileOverrides were already merged into `profile` by kernel-runner;
     // here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
@@ -165,7 +167,7 @@ export function handleActing(
     // (sync + pure) and forks the daemon semantic-memory store — matching the batch
     // path. This is a HOT-PATH behavior change, gated so it can be benched live
     // before any default-on decision (project lift rule + no-metric-gaming doctrine).
-    const symmetry = toolObserveSymmetryEnabled();
+    const symmetry = h.toolObserveSymmetry;
 
     // ── ACTING BRANCH ──────────────────────────────────────────────────────────
     // For text-parse mode: extract tool calls from the last assistant message text
@@ -617,35 +619,17 @@ export function handleActing(
               continue;
             }
 
-            // Block-mode approval (Durable HITL, Phase D) — parity with the
-            // single/primitive path. This parallel-batch loop executes via
-            // executeNativeToolCall, bypassing the canonical primitive that
-            // gates block-approval elsewhere, so the gate must fire HERE too.
-            // Deny-by-default: a refused member is recorded + skipped, never run.
-            const batchApproval = yield* resolveBlockApproval(
-              batchCall.name,
-              batchCall.arguments,
-              input.approvalPolicy,
-              { iteration: state.iteration },
-            );
-            if (batchApproval.gated && !batchApproval.approved) {
-              const deniedActionStep = makeStep("action", `${batchCall.name}(${JSON.stringify(batchCall.arguments)})`, {
-                toolCall: { id: batchCall.id, name: batchCall.name, arguments: batchCall.arguments },
-                toolUsed: batchCall.name,
-              });
-              const deniedObsStep = makeStep("observation", batchApproval.message, {
-                toolCallId: batchCall.id,
-                observationResult: makeObservationResult(batchCall.name, false, batchApproval.message),
-              });
-              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
-              yield* hooks.onObservation(
-                transitionState(state, { steps: [...allSteps, deniedActionStep] }),
-                batchApproval.message,
-                false,
-              );
-              allSteps = [...allSteps, deniedActionStep, deniedObsStep];
-              continue;
-            }
+            // Block-mode approval (Durable HITL, Phase D) is no longer checked
+            // HERE — one execution boundary (2026-08-18): every executable
+            // batch member now flows through `executeToolAndObserveBatch`
+            // below, which delegates each call to the SAME canonical
+            // `executeToolAndObserve` primitive the single-call path uses.
+            // The primitive's own §1c block-mode approval gate (reading the
+            // ambient `RunEnvelope.rails.approvalPolicy`, into which
+            // `input.approvalPolicy` is merged upstream by
+            // `mergeRunEnvelopeIntoKernelInput`) is the ONE place a gated call
+            // is denied — deny-by-default, mirrors the single-call path
+            // exactly instead of re-deciding it here a second time.
 
             executableCalls.push(batchCall);
           }
@@ -696,53 +680,75 @@ export function handleActing(
             yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
           }
 
-          const executionResults = yield* Effect.all(
-            executableCalls.map((batchCall) =>
-              Effect.gen(function* () {
-                yield* emitLog({ _tag: "tool_call", tool: batchCall.name, iteration: state.iteration, timestamp: new Date() });
-                const startMs = Date.now();
-                const execResult = yield* executeNativeToolCall(
-                  toolService.value,
-                  batchCall,
-                  input.agentId ?? "reasoning-agent",
-                  input.sessionId ?? "reasoning-session",
-                  {
-                    compression,
-                    scratchpad: sharedScratchpad,
-                    profile,
-                    // The pruned schemas actually shown to the model this turn.
-                    // A recovery hint may name a tool only from this set — the
-                    // registry also holds built-ins the schema withheld.
-                    exposedToolNames: exposedToolNames(),
-                  },
-                );
-                const durationMs = Date.now() - startMs;
-                yield* emitLog({
-                  _tag: "tool_result",
-                  tool: batchCall.name,
-                  duration: durationMs,
-                  status: execResult.success ? "success" : "error",
-                  // The parallel-batch path (this Effect.all) was the one
-                  // tool_result emit site missing `error` — a failed call in a
-                  // parallel batch printed a bare `✗ tool 0.00s` with no
-                  // message at all, while the sequential path showed one.
-                  // Live-model QA, 2026-08-16 (rw-9, cogito:8b): two parallel
-                  // file-read calls both failed silently in the transcript.
-                  ...(execResult.success ? {} : { error: truncateForStatusLine(execResult.content) }),
-                  timestamp: new Date(),
-                });
-                return {
-                  callId: batchCall.id,
-                  toolName: batchCall.name,
-                  execResult,
-                  durationMs,
-                };
-              }),
-            ),
-            { concurrency: executableCalls.length },
+          // One execution boundary (2026-08-18) — the parallel-batch path is
+          // now a batch-of-N call into the SAME canonical primitive the
+          // single-call path uses (`executeToolAndObserve`, via its batch
+          // entry point `executeToolAndObserveBatch`). The primitive owns:
+          // emitLog(tool_call/tool_result), block-mode approval, execute,
+          // errorRecovery guidance, LLM fact-extraction, obsStep construction,
+          // and the observation.tool-result / lifecycle.failure Compose tags
+          // — byte-identical to what this loop used to hand-build. Verifier
+          // is attached unconditionally on the batch path (parity with the
+          // pre-consolidation behavior); see tool-observe.ts's
+          // `executeToolAndObserveBatch` doc comment for the one documented
+          // ordering delta (verify() sees a single shared `priorSteps`
+          // snapshot per batch turn, not a sibling-accumulating one).
+          const missingRequiredToolsForBatch = getEffectiveMissingRequiredTools(
+            allSteps,
+            input.requiredTools ?? [],
+            input.requiredToolQuantities,
           );
 
-          for (const result of executionResults) {
+          const batchResults = yield* executeToolAndObserveBatch(
+            toolService,
+            executableCalls.map((batchCall) => ({
+              toolName: batchCall.name,
+              args: batchCall.arguments as Record<string, unknown>,
+              ...(batchCall.rationale ? { rationale: batchCall.rationale } : {}),
+              callId: batchCall.id,
+              healed: healedByCallId.get(batchCall.id) ?? false,
+            })),
+            {
+              iteration: state.iteration,
+              phase: "act",
+              strategy: state.strategy ?? "react",
+              state: asKernelStateLike(state),
+              // The pruned schemas actually shown to the model this turn — a
+              // recovery hint may name a tool only from this set.
+              schemas: filteredToolSchemas,
+            },
+            {
+              compression,
+              profile,
+              scratchpad: sharedScratchpad,
+              extractFactsLLM: shouldExtract,
+              pipeline,
+              errorRecovery: (toolName, errorContent) =>
+                adapter.errorRecovery?.({
+                  toolName,
+                  errorContent,
+                  missingTools: missingRequiredToolsForBatch,
+                  tier: profile.tier ?? "mid",
+                }),
+              agentId: input.agentId,
+              sessionId: input.sessionId,
+              emitLog,
+              // Sprint 3.2 — Verifier promotion. The batch path always
+              // attached a structured VerificationResult (unlike the
+              // single-call path, which gates it behind
+              // RA_TOOL_OBSERVE_SYMMETRY=1) — preserved unconditionally here.
+              verifier: defaultVerifier,
+              verifierContext: {
+                task: input.task,
+                priorSteps: allSteps,
+                ...(input.requiredTools ? { requiredTools: input.requiredTools } : {}),
+                toolsUsed: newToolsUsed,
+              },
+            },
+            executableCalls.length,
+          );
+
+          for (const result of batchResults) {
             const actionIdx = actionIndexByCallId.get(result.callId);
             if (actionIdx !== undefined) {
               const actionStep = allSteps[actionIdx];
@@ -754,77 +760,11 @@ export function handleActing(
               }
             }
 
-            if (result.execResult.success) {
-              for (const delegatedTool of result.execResult.delegatedToolsUsed ?? []) {
+            if (result.success) {
+              for (const delegatedTool of result.delegatedToolsUsed ?? []) {
                 newToolsUsed.add(delegatedTool);
               }
             }
-
-            let obsContent = result.execResult.content;
-            if (!result.execResult.success) {
-              const missingRequiredTools = getEffectiveMissingRequiredTools(
-                allSteps,
-                input.requiredTools ?? [],
-                input.requiredToolQuantities,
-              );
-              const recovery = adapter.errorRecovery?.({
-                toolName: result.toolName,
-                errorContent: result.execResult.content,
-                missingTools: missingRequiredTools,
-                tier: profile.tier ?? "mid",
-              });
-              if (recovery) {
-                obsContent = `${result.execResult.content}\n\n[Recovery guidance: ${recovery}]`;
-              }
-            }
-
-            // LLM fact extraction — replace noisy compressed content with distilled facts.
-            // The full raw data is already in the scratchpad under _tool_result_N.
-            if (result.execResult.success && shouldExtract) {
-              const batchCall = executableCalls.find((c) => c.id === result.callId);
-              if (batchCall) {
-                const extracted = yield* extractObservationFacts(
-                  result.toolName,
-                  result.execResult.content,
-                  batchCall.arguments as Record<string, unknown>,
-                  compression.budget ?? 800,
-                  input.taskId ? { taskId: input.taskId, iteration: state.iteration } : undefined,
-                );
-                if (extracted) {
-                  obsContent = `[${result.toolName} result — key facts]\n${extracted}`;
-                }
-              }
-            }
-
-            const obsResult = makeObservationResult(result.toolName, result.execResult.success, obsContent, {
-              delegatedToolsUsed: result.execResult.delegatedToolsUsed,
-            });
-            // Sprint 3.2 — Verifier promotion: every standard tool execution
-            // gets a structured VerificationResult attached. Read by Arbitrator
-            // (S3.3) + Reflection (S3.4) downstream consumers.
-            const verification = defaultVerifier.verify(
-              contextFromObservation({
-                observation: obsResult,
-                task: input.task,
-                priorSteps: allSteps,
-                requiredTools: input.requiredTools,
-                toolsUsed: newToolsUsed,
-              }),
-            );
-            const obsStep = makeStep("observation", obsContent, {
-              toolCallId: result.callId,
-              storedKey: result.execResult.storedKey,
-              extractedFact: result.execResult.extractedFact,
-              observationResult: obsResult,
-              verification,
-              // Wave C.2 — a sub-agent call riding in a parallel batch carries
-              // the child's stamped ledger too; attach it here (the batch path
-              // builds its own obs step, bypassing the tool-observe primitive)
-              // so `stepToEntries` merges it exactly as the single path does.
-              ...(result.execResult.subAgentLedger
-                ? { subAgentLedger: result.execResult.subAgentLedger }
-                : {}),
-            });
 
             // Pass state with the action step as the last entry so
             // onObservation finds toolUsed in metadata and emits ToolCallCompleted.
@@ -835,41 +775,11 @@ export function handleActing(
               : allSteps;
             yield* hooks.onObservation(
               transitionState(state, { steps: stepsForHook }),
-              obsContent,
-              result.execResult.success,
+              result.content,
+              result.success,
             );
 
-            // Phase E (E1, unconditional) — emit the same Compose tags the single
-            // path fires (via the primitive), so parallel tool-results are visible
-            // to .on()/.tap() observers. Without this, batch (>=2 parallel calls)
-            // tool-results were silently invisible to observers — the #195 bug
-            // class for parallel turns. `healed` is now tracked per call (batch
-            // members are healed for tier parity, same as the single path).
-            yield* emitToCompose(pipeline, "observation.tool-result", obsStep, {
-              iteration: state.iteration,
-              phase: "act",
-              state: asKernelStateLike(state),
-              strategy: state.strategy ?? "react",
-              toolName: result.toolName,
-              callId: result.callId,
-              healed: healedByCallId.get(result.callId) ?? false,
-              durationMs: result.durationMs,
-            });
-            if (!result.execResult.success) {
-              yield* emitToCompose(pipeline, "lifecycle.failure", {
-                reason: "tool-error",
-                errorMessage: result.execResult.content,
-                attemptNumber: state.iteration,
-                failureStreak: 1,
-                currentStrategy: state.strategy ?? "react",
-              }, {
-                iteration: state.iteration,
-                phase: "act",
-                state: asKernelStateLike(state),
-                strategy: state.strategy ?? "react",
-              });
-            }
-            allSteps = [...allSteps, obsStep];
+            allSteps = [...allSteps, result.obsStep];
           }
 
           lastMetaToolCall = undefined;
@@ -1149,6 +1059,30 @@ export function handleActing(
         }
       }
 
+      // 'observe' hooks — the tool's observation steps are appended to
+      // `allSteps` above and the conversation context has been assembled, so
+      // this IS the observe phase the 12-phase lifecycle documents ("append
+      // tool results, curate context", a loop-body phase). The kernel never
+      // fired it: `observe` appeared exactly once per RUN, from the outer
+      // engine's synthetic end-of-run pair, so a user hook on `observe` never
+      // saw a single tool result during the loop. Fire it here, per tool
+      // round, with the same abort semantics as the surrounding phases.
+      {
+        const ctrl = yield* Effect.promise(() =>
+          runPhaseHooks(pipeline, 'before', 'observe', state.iteration, state)
+        );
+        if (ctrl) {
+          return {
+            ...state,
+            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
+            meta: {
+              ...state.meta,
+              terminatedBy: killswitchTerminatedBy(ctrl),
+            },
+          };
+        }
+      }
+
       // ── Artifact truth (Wave C / C2, audit 01-F1) ────────────────────────────
       // Emit `artifact` ledger entries for files this round produced, recognized
       // by the tool's DECLARED `produces` field (resolveProduces) + the per-
@@ -1197,6 +1131,24 @@ export function handleActing(
       if (dedupSignals.length > 0) seededLedger = appendEntries(seededLedger, dedupSignals);
       const ledgerWithArtifacts =
         artifactInputs.length > 0 || dedupSignals.length > 0 ? seededLedger : undefined;
+
+      // 'after observe' hooks — closes the pair opened above, once the round's
+      // ledger/artifact curation is done and the observation is fully settled.
+      {
+        const ctrl = yield* Effect.promise(() =>
+          runPhaseHooks(pipeline, 'after', 'observe', state.iteration, state)
+        );
+        if (ctrl) {
+          return {
+            ...state,
+            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
+            meta: {
+              ...state.meta,
+              terminatedBy: killswitchTerminatedBy(ctrl),
+            },
+          };
+        }
+      }
 
       // All native tool calls executed — transition back to thinking.
       // Any harness signals raised this round flow via pendingGuidance — think.ts

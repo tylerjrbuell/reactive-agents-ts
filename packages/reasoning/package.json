@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/reasoning",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,12 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/memory": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
-    "@reactive-agents/prompts": "workspace:*",
-    "@reactive-agents/tools": "workspace:*",
+    "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/llm-provider": "0.16.0",
+    "@reactive-agents/memory": "0.16.0",
+    "@reactive-agents/observability": "0.16.0",
+    "@reactive-agents/prompts": "0.16.0",
+    "@reactive-agents/tools": "0.16.0",
     "@standard-schema/spec": "^1.0.0",
     "@valibot/to-json-schema": "^1.7.1",
     "ulid": "^2.3.0",

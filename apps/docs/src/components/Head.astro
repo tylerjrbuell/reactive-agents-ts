@@ -1,6 +1,30 @@
 ---
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import Default from "@astrojs/starlight/components/Head.astro";
 import { siteVerification } from "../site-verification";
+
+// Read the canonical release line from the repo-root VERSION file at build
+// time so the SoftwareApplication schema never drifts (it previously hardcoded
+// 0.12.0 while the site shipped v0.15). Falls back gracefully if unreadable.
+let frameworkVersion = "0.16.0";
+try {
+  frameworkVersion = readFileSync(
+    fileURLToPath(new URL("../../../../VERSION", import.meta.url)),
+    "utf8",
+  ).trim();
+} catch {
+  // keep fallback
+}
+
+// Canonical off-site profiles — Schema.org `sameAs` ties the SoftwareApplication
+// entity to its GitHub / npm / community presences (entity consolidation for
+// SERPs + answer engines).
+const sameAs = [
+  "https://github.com/tylerjrbuell/reactive-agents-ts",
+  "https://www.npmjs.com/package/reactive-agents",
+  "https://discord.gg/Mp99vQam3Q",
+];
 
 // Custom <head> override: layers social-preview images and JSON-LD
 // structured data on top of Starlight's defaults. Two audiences:
@@ -27,6 +51,7 @@ const publisher = {
   name: "Reactive Agents",
   url: "https://reactiveagents.dev",
   logo: "https://docs.reactiveagents.dev/favicon.svg",
+  sameAs,
 };
 
 // Breadcrumb trail from the URL segments — surfaces site structure in SERPs.
@@ -68,18 +93,50 @@ const software = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: "Reactive Agents",
+  alternateName: "reactive-agents",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Cross-platform (Node.js, Bun)",
   description:
     "A composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs the full agent loop from a local 4B model to frontier APIs, with tool-call healing, output verification, and durable crash-resume on a typed, observable 12-phase engine. Built on Effect-TS, MCP-native.",
   url: "https://reactiveagents.dev",
   downloadUrl: "https://www.npmjs.com/package/reactive-agents",
-  softwareVersion: "0.12.0",
+  installUrl: "https://www.npmjs.com/package/reactive-agents",
+  softwareVersion: frameworkVersion,
   programmingLanguage: "TypeScript",
+  runtimePlatform: "Node.js, Bun",
   license: "https://opensource.org/licenses/MIT",
+  isAccessibleForFree: true,
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  keywords:
+    "TypeScript AI agent framework, LLM agents, agent harness, local model agents, Ollama tool calling, Effect-TS, MCP, ReAct, observable agents, LangChain alternative",
+  featureList: [
+    "Transparent 12-phase execution engine with per-phase before/after/on-error hooks",
+    "Self-healing tool calls that repair malformed output from smaller models",
+    "Same code runs on a local 4B model or a frontier API",
+    "Composable opt-in capability layers (memory, guardrails, reasoning, cost)",
+    "Signed evidence receipts and output verification for every run",
+    "Pluggable reasoning strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought) — bring your own",
+    "MCP-native tool I/O and durable crash-resume",
+  ],
+  sameAs,
   author: publisher,
   publisher,
+};
+
+// The framework's source is itself an entity — helps answer engines link the
+// docs, the package, and the repository as one project.
+const sourceCode = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  name: "Reactive Agents",
+  description:
+    "Open-source TypeScript framework for building reliable, observable LLM agents on a harness you fully control.",
+  codeRepository: "https://github.com/tylerjrbuell/reactive-agents-ts",
+  programmingLanguage: "TypeScript",
+  runtimePlatform: "Node.js, Bun",
+  license: "https://opensource.org/licenses/MIT",
+  author: publisher,
+  sameAs,
 };
 
 const website = {
@@ -114,7 +171,7 @@ const faqPage =
     : null;
 
 const jsonLd = [
-  ...(isHome ? [website, software] : [article]),
+  ...(isHome ? [website, software, sourceCode] : [article]),
   breadcrumb,
   ...(faqPage ? [faqPage] : []),
 ];

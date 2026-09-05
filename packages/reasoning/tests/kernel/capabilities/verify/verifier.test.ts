@@ -469,6 +469,55 @@ describe("defaultVerifier — multi-severity (GH #121)", () => {
     });
   });
 
+  describe("output-not-fabricated-listed-entities NEVER hard-fails the run (2026-08-21 cortex live false-positive)", () => {
+    // Real trace: cortex run 01M0KB5MTA4NJP907V93RHKFGK. A genuinely
+    // successful commit-summary report (terminatedBy=end_turn, real gh-cli
+    // tool evidence) was hard-failed because a summary table's Date/Action
+    // columns don't verbatim-match terse raw commit-log text -- a false
+    // positive inherent to this heuristic's design (unlike 4c/4d's
+    // near-zero-false-positive numeric/exit-code matching). Check 4e must
+    // never be able to REJECT a terminal answer, block mode or not --
+    // detection stays visible as an advisory warning only.
+    const gitStep: ReasoningStep = {
+      id: "obs1" as ReasoningStep["id"],
+      type: "observation",
+      content: "docs: update memory tier docs\nfeat: tool registration opt-in\ndocs: readme overhaul",
+      timestamp: new Date(),
+      metadata: { observationResult: { success: true, toolName: "gh-cli" } as unknown as ObservationResult },
+    };
+    const summaryTable = `| Date | Key Action / Focus Area | Impact |
+| :--- | :--- | :--- |
+| **Aug 17** | Memory Tier Docs Update | Improved technical documentation clarity. |
+| **Aug 17** | Tool Registration Opt-In | Architectural improvement for modularity. |
+| **Aug 16** | README/Site Overhaul & CI Fixes | Massive DX boost. |`;
+
+    it("flags the table as ungrounded (detection still fires) but severity is warn, not reject", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: summaryTable,
+        priorSteps: [gitStep],
+        fabricationGuard: "block",
+      });
+      const check = r.checks.find((c) => c.name === "output-not-fabricated-listed-entities");
+      expect(check?.passed).toBe(false); // detection is real, not silenced
+      expect(check?.severity).toBe("warn"); // but never escalated to reject
+    });
+
+    it("softFail stays true and the run is NOT hard-failed, even in block mode", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: summaryTable,
+        priorSteps: [gitStep],
+        fabricationGuard: "block",
+      });
+      expect(r.softFail).toBe(true);
+      expect(r.severity).not.toBe("reject");
+      expect(r.severity).not.toBe("escalate");
+    });
+  });
+
   describe("overall severity rollup (max severity wins)", () => {
     it("warn + pass → overall=warn (softFail=true, verified=false)", () => {
       // evidence-grounded fails (warn mode), no rejects/escalates.

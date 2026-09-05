@@ -96,6 +96,7 @@ import {
     type ChatOptions,
     type ChatReply,
     type SessionOptions,
+    type HistoryOverflowHandler,
 } from './chat.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
@@ -110,7 +111,7 @@ import type {
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
-import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields } from '@reactive-agents/reasoning'
+import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields, validateCitations } from '@reactive-agents/reasoning'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
@@ -210,6 +211,8 @@ export class ReactiveAgent<TOut = unknown> {
             outputValidatorOptions?: { maxRetries?: number }
             customTermination?: (state: { output: string }) => boolean
             modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' }
+            /** Per-agent override for chat()'s tool-need auto-detection, from `.withToolIntent()`. */
+            toolIntentClassifier?: (message: string) => boolean
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
         private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
@@ -1838,7 +1841,7 @@ export class ReactiveAgent<TOut = unknown> {
                                         return Effect.fail(new StructuredOutputError({
                                             rawText: agentResult.output,
                                             issues: [g.objectError],
-                                        }) as unknown as Error)
+                                        }))
                                     }
                                     const result: AgentResult = {
                                         ...agentResult,
@@ -1868,7 +1871,7 @@ export class ReactiveAgent<TOut = unknown> {
                             // If "degrade" extractObjectFromAnswer already catches and returns
                             // { objectError } in the success channel — nothing extra needed.
                             Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
-                                Effect.fail(e as unknown as Error)
+                                Effect.fail(e)
                             ),
                         )
                     }),
@@ -2276,7 +2279,10 @@ export class ReactiveAgent<TOut = unknown> {
      * - **Direct LLM path** (fast, no tools): conversational/factual questions, simple queries
      * - **Tool-capable path**: messages requiring search, file ops, computation, etc.
      *
-     * Use `options.useTools` to override the automatic routing.
+     * Use `options.useTools` to override the automatic routing for a single call,
+     * or `.withToolIntent(classifier)` (on the builder) to override the default
+     * classifier for every call on this agent. Precedence: `options.useTools` >
+     * agent-level classifier from `.withToolIntent()` > default `requiresTools()`.
      *
      * @param message - The user's conversational message
      * @param options - Optional routing overrides and iteration limits
@@ -2296,7 +2302,7 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string
     ): Promise<ChatReply> {
-        const useTools = options?.useTools ?? requiresTools(message)
+        const useTools = options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(message)
         const contextSummary = buildChatSystemContext(
             this._config?.taskContext,
             this._lastDebrief,
@@ -2388,12 +2394,22 @@ export class ReactiveAgent<TOut = unknown> {
             toolNamesFromMetadata && toolNamesFromMetadata.length > 0
                 ? [...new Set(toolNamesFromMetadata)]
                 : result.debrief?.toolsUsed.map((t) => t.name)
+        const citationCheck = options?.verifyCitations
+            ? validateCitations(
+                  result.output,
+                  (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
+                  new Map(Object.entries(result.metadata.scratchpad ?? {}))
+              )
+            : undefined
         return {
             message: result.output,
             toolsUsed,
             tokens: result.metadata.tokensUsed,
             steps: result.metadata.stepsCount,
             cost: result.metadata.cost,
+            reasoningSteps: result.metadata.reasoningSteps,
+            scratchpad: result.metadata.scratchpad,
+            ...(citationCheck ? { citationCheck } : {}),
         }
     }
 
@@ -2413,12 +2429,35 @@ export class ReactiveAgent<TOut = unknown> {
      * console.log(session.history()); // [{role:"user",...}, {role:"assistant",...}, ...]
      * await session.end();
      * ```
+     * @example Overflow summarization — fold dropped turns into a summary instead of losing them
+     * ```typescript
+     * const session = agent.session({
+     *   onOverflow: async (dropped) => {
+     *     const { message } = await agent.chat(
+     *       `Summarize these turns in 2-3 sentences:\n${dropped.map(d => d.content).join("\n")}`,
+     *       { useTools: false }
+     *     );
+     *     return message;
+     *   },
+     * });
+     * ```
      */
     session(
         options?: SessionOptions & {
             persist?: boolean
             id?: string
             maxAgeDays?: number
+            /**
+             * Called when history windowing would drop turns for this
+             * session's `chat()` calls, with exactly the dropped turns
+             * (oldest-to-newest). Its returned summary text is spliced back
+             * in as a synthetic leading turn instead of the dropped turns
+             * being silently discarded. The framework owns the windowing
+             * decision and splice mechanics only — this callback owns all
+             * summarization content (prompt, LLM call, etc). Unset: pure
+             * drop, identical to today's behavior.
+             */
+            onOverflow?: HistoryOverflowHandler
         }
     ): AgentSession {
         const persist = options?.persist ?? this._sessionPersist
@@ -2472,7 +2511,8 @@ export class ReactiveAgent<TOut = unknown> {
             undefined,
             onSave,
             undefined,
-            historyLoader
+            historyLoader,
+            options?.onOverflow
         )
     }
 

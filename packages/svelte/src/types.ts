@@ -1,11 +1,6 @@
-/** Mirrors the AgentStreamEvent union from @reactive-agents/runtime. */
-export type AgentStreamEvent =
-  | { readonly _tag: "TextDelta"; readonly text: string }
-  | { readonly _tag: "StreamCompleted"; readonly output: string; readonly metadata: Record<string, unknown>; readonly taskId?: string; readonly agentId?: string }
-  | { readonly _tag: "StreamError"; readonly cause: string }
-  | { readonly _tag: "IterationProgress"; readonly iteration: number; readonly maxIterations: number; readonly status: string }
-  | { readonly _tag: "StreamCancelled"; readonly reason: string; readonly iterationsCompleted: number }
-  | { readonly _tag: string; readonly [key: string]: unknown };
+import type { UiStreamEvent } from "@reactive-agents/ui-core";
+
+export type AgentStreamEvent = UiStreamEvent;
 
 export type AgentHookState = "idle" | "streaming" | "completed" | "error";
 
@@ -13,7 +8,7 @@ export interface UseAgentStreamReturn {
   /** Accumulated text output so far (grows as TextDelta events arrive). */
   text: string;
   /** All raw events received since the last run(). */
-  events: AgentStreamEvent[];
+  events: readonly AgentStreamEvent[];
   /** Current execution status. */
   status: AgentHookState;
   /** Error message if status === "error". */

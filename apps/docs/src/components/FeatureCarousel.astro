@@ -1,6 +1,7 @@
 ---
 // FeatureCarousel.astro — Tabbed feature-showcase for the hero page
 // Code content defined here to avoid Astro parsing { } as template expressions
+import metrics from '../data/metrics.json'
 
 const codes: Record<string, string> = {
   p0: [
@@ -147,11 +148,11 @@ const codes: Record<string, string> = {
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🔌</span>
-                <div><p class="fc-name">8 LLM Providers</p><p class="fc-desc">Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM (40+ models) — one unified interface</p></div>
+                <div><p class="fc-name">{metrics.providers} LLM Providers</p><p class="fc-desc">Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM (40+ models) — one unified interface</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🧠</span>
-                <div><p class="fc-name">5 Reasoning Strategies</p><p class="fc-desc">ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive</p></div>
+                <div><p class="fc-name">{metrics.strategies} Reasoning Strategies</p><p class="fc-desc">ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Code-Action, Adaptive — register your own</p></div>
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🔧</span>
@@ -347,7 +348,7 @@ const codes: Record<string, string> = {
               </div>
               <div class="fc-item">
                 <span class="fc-icon">🛠️</span>
-                <div><p class="fc-name">rax CLI + 3,472 Tests</p><p class="fc-desc">Scaffold, run, inspect — 25 modular packages, battle-tested across 409 test files</p></div>
+                <div><p class="fc-name">rax CLI + {metrics.tests.toLocaleString()} Tests</p><p class="fc-desc">Scaffold, run, inspect — {metrics.packagesTotal} modular packages, battle-tested across {metrics.testFiles.toLocaleString()} test files</p></div>
               </div>
             </div>
             <div class="fc-code-box fc-code-box--mono">
@@ -401,8 +402,9 @@ const codes: Record<string, string> = {
 <style>
 /* ── Wrapper & entrance ──────────────────────────────────────── */
 .fc-wrap {
-  margin: 0 auto 4rem;
-  max-width: 980px;
+  margin: 0 auto 1.75rem;
+  /* No max-width of its own — matches .ra-panel, filling the same content
+     column the hero uses so edges line up across the page. */
   animation: fc-fade-up 0.55s ease-out 0.2s both;
 }
 
@@ -445,7 +447,12 @@ const codes: Record<string, string> = {
 
 /* ── Window card ─────────────────────────────────────────────── */
 .fc-win {
-  background: #12131a;
+  /* Translucent + frosted, matching .ra-panel-inner — lets the fixed
+     ambient glyph read through here too instead of the carousel being
+     the one opaque block on the page. */
+  background: rgba(18, 19, 26, 0.82);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   border-radius: 19px;
   overflow: hidden;
 }
@@ -707,7 +714,7 @@ const codes: Record<string, string> = {
 
 /* ── Light mode ──────────────────────────────────────────────── */
 :global([data-theme="light"]) .fc-win {
-  background: #f9f9fd;
+  background: rgba(249, 249, 253, 0.82);
 }
 
 :global([data-theme="light"]) .fc-outer {
@@ -835,7 +842,21 @@ const codes: Record<string, string> = {
         goTo(i);
         startAutoAdvance();
       });
+      // Roving-tabindex arrow navigation (ARIA tablist pattern)
+      tab.addEventListener('keydown', function (ev) {
+        var delta = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+        if (!delta) return;
+        ev.preventDefault();
+        var next = ((current + delta) % TOTAL + TOTAL) % TOTAL;
+        goTo(next);
+        tabs[next].focus();
+        startAutoAdvance();
+      });
     });
+
+    var reduceMotion =
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function setPaused(val) {
       paused = val;
@@ -849,7 +870,11 @@ const codes: Record<string, string> = {
     win.addEventListener('focusin',    function () { setPaused(true); });
     win.addEventListener('focusout',   function () { setPaused(false); });
 
-    restartProgress();
-    startAutoAdvance();
+    // Respect reduced-motion: leave the carousel manual (tabs + arrow keys
+    // still work), no auto-advance and no progress animation.
+    if (!reduceMotion) {
+      restartProgress();
+      startAutoAdvance();
+    }
   });
 </script>

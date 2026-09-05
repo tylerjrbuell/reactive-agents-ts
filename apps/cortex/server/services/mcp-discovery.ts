@@ -36,7 +36,7 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
         );
       }
       yield* client.disconnect(server.name);
-      console.log(`[MCP discover] "${config.name}" → ${out.length} tool(s) cached`);
+      yield* Effect.logInfo(`[MCP discover] "${config.name}" → ${out.length} tool(s) cached`);
       return out;
     }),
   ).catch((err: unknown) => {

@@ -102,19 +102,36 @@ export const makeDiscoverToolsHandler =
       const confident = ranked.filter((r) => r.score >= RELEVANCE_FLOOR).slice(0, 8);
 
       if (confident.length === 0) {
-        // Honest exhaustion: no tool clearly does what was asked. Surface the
-        // ENTIRE catalog (marked callable) so the model has ground truth — the
-        // permitted surface is exactly this, and the wanted capability is not in
-        // it. This converts an infinite misleading dead-end into one honest turn.
+        // Honest exhaustion: no tool NAME/description keyword-matched the
+        // query. Surface the ENTIRE catalog (marked callable) so the model
+        // has ground truth. Message order fixed 2026-08-19 (root-caused via
+        // a live trace — see
+        // wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md
+        // §6e root cause 2): the ORIGINAL wording led with "No tool clearly
+        // matches... capability is NOT available", BEFORE the list — a model
+        // reading that framing gave up without scanning the list at all, even
+        // though the correct tool was sitting right there (confirmed live,
+        // gpt-4o-mini, verifier escalation: "gave up without trying tools
+        // that were still available"). The keyword scorer misses real
+        // matches whenever the model's query phrasing doesn't share a
+        // keyword with the tool's own description — an unavoidable case for
+        // paraphrased/open-ended queries, not a rare edge case. Leading with
+        // the list and putting the "if genuinely none of these" caveat AFTER
+        // it keeps the original honesty guarantee (no hallucinated hidden
+        // tool) without pre-empting the model into skipping the one place
+        // the real answer might be.
         yield* markDiscovered(state, all);
         return [
-          `No tool clearly matches "${query}". This is the COMPLETE set of TOOLS ` +
-            `(callable functions) available to you — if none does what you need, ` +
-            `that capability is NOT available as a tool; do not assume a hidden tool exists. ` +
-            `Check the ## Skills section in your system prompt for procedural instructions ` +
-            `(skills are NOT callable tools). Proceed with these or, if the task cannot ` +
-            `be done, say so via final-answer.`,
+          `Your query "${query}" didn't closely keyword-match any tool by name or ` +
+            `description. This is the COMPLETE set of TOOLS (callable functions) ` +
+            `available to you — scan it below for the one you need before concluding ` +
+            `nothing fits; a real match can still be here even without a keyword hit.`,
           ...all.map(formatToolLine),
+          `If, after checking, genuinely none of the above can do what you need, that ` +
+            `capability is NOT available as a tool; do not assume a hidden tool exists ` +
+            `beyond this list. Check the ## Skills section in your system prompt for ` +
+            `procedural instructions (skills are NOT callable tools). Proceed with one ` +
+            `of these, or if the task truly cannot be done, say so via final-answer.`,
         ].join("\n");
       }
 

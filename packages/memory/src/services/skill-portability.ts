@@ -5,6 +5,7 @@ import type {
   SkillEvolutionMode,
   SkillFragmentConfig,
 } from "@reactive-agents/core";
+import { MemoryError } from "../errors.js";
 
 const METADATA_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/;
 
@@ -114,14 +115,17 @@ export const importSkillFromMarkdown = (
 ): SkillRecord => {
   const fenceMatch = markdown.match(METADATA_FENCE_RE);
   if (!fenceMatch) {
-    throw new Error("skill-portability: missing ```json metadata block");
+    throw new MemoryError({ message: "skill-portability: missing ```json metadata block" });
   }
 
   let metadata: MetadataShape;
   try {
     metadata = JSON.parse(fenceMatch[1]!) as MetadataShape;
   } catch (e) {
-    throw new Error(`skill-portability: malformed JSON metadata — ${(e as Error).message}`);
+    throw new MemoryError({
+      message: `skill-portability: malformed JSON metadata — ${(e as Error).message}`,
+      cause: e,
+    });
   }
 
   // Strip metadata fence so we can scan section headings without false matches.

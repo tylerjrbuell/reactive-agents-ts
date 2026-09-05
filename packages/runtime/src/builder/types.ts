@@ -179,13 +179,21 @@ export interface ToolsOptions {
      *
      * Values:
      *   - `false` / unset (default): no built-ins in base schema.
-     *   - `true`: all 9 built-ins in base schema (legacy behavior).
-     *   - `readonly string[]`: explicit subset by name.
+     *   - `true`: every canonical built-in in base schema (legacy behavior).
+     *   - `readonly string[]`: explicit subset by name — entries may be exact
+     *     tool names, `"*"` / `"all"` (equivalent to `builtins: true`), or a
+     *     named toolset shortcut from `BUILTIN_TOOLSET_ALIASES`
+     *     (`@reactive-agents/tools`) such as `"research"`, `"file"`, `"code"`,
+     *     `"git"`, `"web"` — matched case-insensitively, mixable with literal
+     *     names in the same array. An alias only ever expands to built-ins
+     *     that already ship with the framework — it is sugar for typing the
+     *     same explicit list, not a way to pull in anything more.
      *
      * @example
      * ```typescript
      * agent.withTools({ tools: [...], builtins: ["file-write", "web-search"] })
-     * agent.withTools({ tools: [...], builtins: true })  // legacy
+     * agent.withTools({ tools: [...], builtins: ["research"] })  // web-search + http-get + grep
+     * agent.withTools({ tools: [...], builtins: ["all"] })       // every built-in — same as `true`
      * ```
      *
      * Default: undefined (treated as `false` — no built-ins in base schema).
@@ -930,6 +938,13 @@ export interface AgentResultMetadata {
         readonly content: string
         readonly metadata?: Record<string, unknown>
     }>
+    /**
+     * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+     * Forwarded alongside `reasoningSteps` so evidence checks (e.g. `validateCitations`
+     * from `@reactive-agents/reasoning`) read the same corpus the kernel's own grounding
+     * checks use instead of the lossy compressed step-content preview.
+     */
+    readonly scratchpad?: Readonly<Record<string, string>>
     /**
      * Derived array of tool calls extracted from `reasoningSteps`. One entry
      * per `type === "action"` step. Convenient for tests / evals that just

@@ -1,7 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { makeNoticesManager } from "../../src/logging/notices-manager.js";
 
 describe("NoticesManager", () => {
+  const savedSuppressNotices = process.env.REACTIVE_AGENTS_SUPPRESS_NOTICES;
+
+  beforeEach(() => {
+    delete process.env.REACTIVE_AGENTS_SUPPRESS_NOTICES;
+  });
+
+  afterEach(() => {
+    if (savedSuppressNotices === undefined) {
+      delete process.env.REACTIVE_AGENTS_SUPPRESS_NOTICES;
+    } else {
+      process.env.REACTIVE_AGENTS_SUPPRESS_NOTICES = savedSuppressNotices;
+    }
+  });
+
   it("shows a notice only once per session", () => {
     const manager = makeNoticesManager();
 

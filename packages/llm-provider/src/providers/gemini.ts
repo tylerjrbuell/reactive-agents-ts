@@ -1,13 +1,13 @@
-import { Effect, Layer, Stream, Schema, Duration } from "effect";
+import { Effect, Layer, Stream, Schema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
 import {
   LLMError,
   LLMTimeoutError,
-  LLMParseError,
 } from "../errors.js";
-import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import type { LLMErrors } from "../errors.js";
+import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import { mapProviderError } from "../provider-error.js";
 import type {
   CompletionResponse,
@@ -16,7 +16,7 @@ import type {
   ContentBlock,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import { retryPolicy, retryStreamBeforeFirstEmission } from "../retry.js";
+import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
@@ -230,6 +230,9 @@ const mapGeminiResponse = (
         },
         registry,
       ),
+      ...(typeof response.usageMetadata?.cachedContentTokenCount === "number"
+        ? { cacheReadInputTokens: response.usageMetadata.cachedContentTokenCount }
+        : {}),
     },
     model,
     toolCalls: toolCalls?.length ? toolCalls : undefined,
@@ -420,22 +423,20 @@ export const GeminiProviderLive = Layer.effect(
           }
 
           return mapGeminiResponse(response, model, config.pricingRegistry);
-        }).pipe(
-          Effect.retry(retryPolicy),
+        }).pipe((effect) =>
           // G2 default is 120s: 30s was too tight for thinking-mode models —
           // a single reasoning-heavy complete() (e.g. tree-of-thought
           // expansion on gemini-2.5-pro) routinely needs >30s. F4 makes the
           // ceiling request/config-resolvable — see resolveCloudTimeoutMs.
-          Effect.timeout(Duration.millis(timeoutMs)),
-          Effect.catchTag("TimeoutException", () =>
-            Effect.fail(
+          withRetryAndTimeout(effect, {
+            timeoutMs,
+            onTimeout: () =>
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "gemini",
                 timeoutMs,
               }),
-            ),
-          ),
+          }),
         );
       },
 
@@ -488,7 +489,7 @@ export const GeminiProviderLive = Layer.effect(
                 let fullContent = "";
                 let inputTokens = 0;
                 let outputTokens = 0;
-                let cachedContentTokens = 0;
+                let cachedContentTokens: number | undefined;
                 let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
                 // Raw functionCalls captured for adapter normalization at
@@ -561,7 +562,16 @@ export const GeminiProviderLive = Layer.effect(
                     inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
                     outputTokens =
                       chunk.usageMetadata.candidatesTokenCount ?? 0;
-                    cachedContentTokens = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0;
+                    // Only overwrite when the chunk genuinely reports the
+                    // field — collapsing "never reported" and "reported 0"
+                    // into the same sentinel corrupts both the surfaced
+                    // usage.cacheReadInputTokens field AND the cost calc
+                    // below (a real 0 must stay distinguishable from
+                    // absent, same rule mapGeminiResponse already applies).
+                    const chunkCached = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount;
+                    if (typeof chunkCached === "number") {
+                      cachedContentTokens = chunkCached;
+                    }
                   }
                 }
 
@@ -641,10 +651,13 @@ export const GeminiProviderLive = Layer.effect(
                       outputTokens,
                       model,
                       {
-                        cached_content_token_count: cachedContentTokens || undefined,
+                        cached_content_token_count: cachedContentTokens,
                       },
                       config.pricingRegistry,
                     ),
+                    ...(typeof cachedContentTokens === "number"
+                      ? { cacheReadInputTokens: cachedContentTokens }
+                      : {}),
                   },
                 });
                 emit.end();
@@ -678,70 +691,47 @@ export const GeminiProviderLive = Layer.effect(
             },
           ];
 
-          let lastError: unknown = null;
-          const parseAttempts: ParseAttemptError[] = [];
-          const maxRetries = request.maxParseRetries ?? 2;
+          return yield* runStructuredParseWithRetry({
+            outputSchema: request.outputSchema,
+            schemaStr,
+            maxRetries: request.maxParseRetries ?? 2,
+            runAttempt: ({ attempt, lastError }) =>
+              Effect.gen(function* () {
+                const msgs =
+                  attempt === 0
+                    ? messagesWithFormat
+                    : [
+                        ...messagesWithFormat,
+                        {
+                          role: "assistant" as const,
+                          content: String(lastError),
+                        },
+                        {
+                          role: "user" as const,
+                          content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
+                        },
+                      ];
 
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const msgs =
-              attempt === 0
-                ? messagesWithFormat
-                : [
-                    ...messagesWithFormat,
-                    {
-                      role: "assistant" as const,
-                      content: String(lastError),
-                    },
-                    {
-                      role: "user" as const,
-                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again.`,
-                    },
-                  ];
+                const response = yield* Effect.tryPromise({
+                  try: () =>
+                    client.models.generateContent({
+                      model,
+                      contents: toGeminiContents(msgs),
+                      config: buildGeminiConfig({
+                        model,
+                        maxTokens: request.maxTokens,
+                        temperature: request.temperature,
+                        systemPrompt: request.systemPrompt,
+                        responseMimeType: "application/json",
+                        responseSchema: schemaObj,
+                      }),
+                    }),
+                  catch: toEffectError,
+                });
 
-            const response = yield* Effect.tryPromise({
-              try: () =>
-                client.models.generateContent({
-                  model,
-                  contents: toGeminiContents(msgs),
-                  config: buildGeminiConfig({
-                    model,
-                    maxTokens: request.maxTokens,
-                    temperature: request.temperature,
-                    systemPrompt: request.systemPrompt,
-                    responseMimeType: "application/json",
-                    responseSchema: schemaObj,
-                  }),
-                }),
-              catch: toEffectError,
-            });
-
-            const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
-
-            try {
-              const parsed = JSON.parse(mapped.content);
-              const decoded = Schema.decodeUnknownEither(
-                request.outputSchema,
-              )(parsed);
-
-              if (decoded._tag === "Right") {
-                return decoded.right;
-              }
-              lastError = decoded.left;
-              parseAttempts.push({ attempt, error: decoded.left });
-            } catch (e) {
-              lastError = e;
-              parseAttempts.push({ attempt, error: e });
-            }
-          }
-
-          return yield* Effect.fail(
-            new LLMParseError({
-              message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
-              rawOutput: String(lastError),
-              expectedSchema: schemaStr,
-              attempts: parseAttempts,
-            }),
-          );
+                return mapGeminiResponse(response, model, config.pricingRegistry).content;
+              }),
+          });
         }),
 
       embed: (texts, model) =>

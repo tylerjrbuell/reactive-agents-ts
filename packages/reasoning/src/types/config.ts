@@ -29,7 +29,6 @@ export const PlanExecuteConfigSchema = Schema.Struct({
   stepKernelMaxIterations: Schema.optional(Schema.Number.pipe(Schema.int(), Schema.positive())),
   planMode: Schema.optional(Schema.Literal("linear", "dag")),
   stepRetries: Schema.optional(Schema.Number.pipe(Schema.int())),
-  patchStrategy: Schema.optional(Schema.Literal("in-place", "replan-remaining")),
 });
 export type PlanExecuteConfig = typeof PlanExecuteConfigSchema.Type;
 

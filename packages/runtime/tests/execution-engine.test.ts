@@ -7,38 +7,41 @@ import {
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
-// Minimal mock LLM service
-const MockLLMServiceLive = Layer.succeed(
-  Context.GenericTag<{
-    complete: (req: unknown) => Effect.Effect<{
-      content: string;
-      stopReason: string;
-      toolCalls?: unknown[];
-      usage: {
-        inputTokens: number;
-        outputTokens: number;
-        totalTokens: number;
-        estimatedCost: number;
-      };
-      model: string;
-    }>;
-  }>("LLMService"),
-  {
-    complete: (_req: unknown) =>
-      Effect.succeed({
-        content: "Task completed: Here is the answer.",
-        stopReason: "end_turn",
-        toolCalls: [],
-        usage: {
-          inputTokens: 10,
-          outputTokens: 20,
-          totalTokens: 30,
-          estimatedCost: 0,
-        },
-        model: "test-model",
-      }),
-  },
-);
+// ── Stub ReasoningService (Move 1 dead-arm removal, 2026-08-21) ────────────
+//
+// `ExecutionEngineLive` now always routes through the kernel arm when a
+// `ReasoningService` is available (`reasoningOpt._tag === "Some"`); the old
+// `else if` inline arm this file drove directly via a raw mocked `LLMService`
+// is dead in production and has been deleted. These tests exercise generic
+// engine-level behavior (result assembly, lifecycle hooks, running-context
+// tracking, tool-metrics events) that doesn't depend on which reasoning
+// implementation runs underneath — so a minimal `ReasoningService` stub,
+// matching the pattern in `chat-history-seeds-kernel.test.ts`, is enough to
+// route them through the real (now sole) production arm.
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
+  error?: string;
+};
+
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
+
+function stubReasoningLayer(impl: (params: { [k: string]: unknown }) => StubReasoningResult) {
+  return Layer.succeed(ReasoningServiceTag, {
+    execute: (params: { [k: string]: unknown }) => Effect.succeed(impl(params)),
+  });
+}
+
+const completingReasoningLayer = stubReasoningLayer(() => ({
+  output: "Task completed: Here is the answer.",
+  status: "completed",
+  steps: [{ id: "step-1", type: "thought", content: "Task completed: Here is the answer." }],
+  metadata: { cost: 0, tokensUsed: 30, stepsCount: 1 },
+}));
 
 // Minimal mock task
 const mockTask = {
@@ -60,7 +63,7 @@ describe("ExecutionEngine", () => {
     Layer.provide(hookLayer),
   );
 
-  const testLayer = Layer.mergeAll(hookLayer, engineLayer, MockLLMServiceLive);
+  const testLayer = Layer.mergeAll(hookLayer, engineLayer, completingReasoningLayer);
 
   it("should execute a task through all phases", async () => {
     const result = await Effect.runPromise(
@@ -96,38 +99,27 @@ describe("ExecutionEngine", () => {
     );
   });
 
-  it("should fail with MaxIterationsError when loop exceeds limit", async () => {
-    const LoopingLLM = Layer.succeed(
-      Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: unknown[];
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
-        }>;
-      }>("LLMService"),
-      {
-        complete: (_req: unknown) =>
-          Effect.succeed({
-            content: "Calling tool...",
-            stopReason: "tool_use",
-            toolCalls: [{ id: "call-1", name: "search", input: {} }],
-            usage: {
-              inputTokens: 5,
-              outputTokens: 5,
-              totalTokens: 10,
-              estimatedCost: 0,
-            },
-            model: "test-model",
-          }),
-      },
-    );
+  it("fails gracefully (success:false, terminatedBy:max_iterations) when the kernel exhausts maxIterations", async () => {
+    // REDESIGN NOTE (Move 1 dead-arm removal, 2026-08-21): this test used to
+    // drive the inline arm's while-loop directly (a raw `LLMService` mock
+    // that always returned `tool_use`, forcing `maxIterations` exhaustion)
+    // and assert an Effect FAILURE tagged `MaxIterationsError` — an
+    // inline-arm-only exception type that does not exist on the kernel arm.
+    // The kernel arm's real contract (confirmed against
+    // `max-iterations-enforcement.test.ts` and
+    // `packages/reasoning/src/kernel/capabilities/decide/arbitrator.ts`) is
+    // that a genuine cap exhaustion is a graceful `TaskResult.success:false`
+    // — the returned Effect SUCCEEDS with a failed-looking result, it does
+    // not fail as an Effect. This stub simulates exactly that terminal
+    // shape to prove the engine assembles a failed TaskResult correctly
+    // rather than crashing or silently reporting success.
+    const maxIterationsLayer = stubReasoningLayer(() => ({
+      output: null,
+      status: "failed",
+      steps: [{ id: "step-1", type: "thought", content: "still searching" }],
+      metadata: { cost: 0, tokensUsed: 10, stepsCount: 1 },
+      error: "Maximum iterations (2) exceeded",
+    }));
 
     const limitedConfig = { ...config, maxIterations: 2 };
     const limitedHookLayer = LifecycleHookRegistryLive;
@@ -141,14 +133,14 @@ describe("ExecutionEngine", () => {
         return yield* engine.execute(mockTask).pipe(Effect.either);
       }).pipe(
         Effect.provide(
-          Layer.mergeAll(limitedHookLayer, limitedEngineLayer, LoopingLLM),
+          Layer.mergeAll(limitedHookLayer, limitedEngineLayer, maxIterationsLayer),
         ),
       ),
     );
 
-    expect(result._tag).toBe("Left");
-    if (result._tag === "Left") {
-      expect(result.left._tag).toBe("MaxIterationsError");
+    expect(result._tag).toBe("Right");
+    if (result._tag === "Right") {
+      expect(result.right.success).toBe(false);
     }
   });
 
@@ -199,124 +191,60 @@ describe("ExecutionEngine", () => {
   });
 
   it("should record tool execution metrics when tools are called", async () => {
-    // Track how many LLM calls we've made
-    let callCount = 0;
+    // REDESIGN NOTE (Move 1 dead-arm removal, 2026-08-21): `ToolCallCompleted`
+    // is published by the KERNEL's own tool-observation hook
+    // (`packages/reasoning/src/kernel/state/kernel-hooks.ts` `onObservation`
+    // for the default reactive strategy), not by `ToolService.execute()`
+    // itself (confirmed by reading `tool-service.ts` — it only publishes an
+    // internal `"tools.executed"` custom event) and not reproducible from a
+    // `ReasoningService` stub. Producing it for real requires the actual
+    // kernel arm to run a genuine tool call end-to-end, which is exactly
+    // what `.withTestScenario()` + `.withTools()` wires via the builder
+    // (`ReactiveAgents.create()`) — switching to the builder here, rather
+    // than hand-assembling the full production layer stack
+    // (`createReasoningLayer()` + `TestLLMService` + real `ToolService`)
+    // directly against `ExecutionEngineLive`, gets the identical real
+    // tool-call path with far less wiring risk. The public, durable proof
+    // that the engine recorded the tool call is `result.receipt.toolsUsed`
+    // (Arc 1 Task 8's deterministic trust receipt) — the same field
+    // `tool-loop-behavioral.test.ts` asserts on for its own real tool-call
+    // proof.
+    const { ReactiveAgents } = await import("../src/builder.js");
 
-    // Mock LLM that returns a tool call on first iteration, then completes
-    const ToolCallingLLMServiceLive = Layer.succeed(
-      Context.GenericTag<{
-        complete: (req: unknown) => Effect.Effect<{
-          content: string;
-          stopReason: string;
-          toolCalls?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
-          usage: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCost: number;
-          };
-          model: string;
-        }>;
-      }>("LLMService"),
-      {
-        complete: (_req: unknown) =>
-          Effect.succeed((() => {
-            callCount++;
-            // First call: request a tool, second call and beyond: complete
-            if (callCount === 1) {
-              return {
-                content: "Let me read the file.\nAction: file-read\nInput: {\"path\": \"/tmp/test.txt\"}",
-                stopReason: "tool_use",
-                toolCalls: [
-                  { id: "call-001", name: "file-read", input: { path: "/tmp/test.txt" } },
-                ],
-                usage: {
-                  inputTokens: 10,
-                  outputTokens: 20,
-                  totalTokens: 30,
-                  estimatedCost: 0,
-                },
-                model: "test-model",
-              };
-            } else {
-              // Complete on second call
-              return {
-                content: "Based on the file contents, the answer is 42.",
-                stopReason: "end_turn",
-                toolCalls: [],
-                usage: {
-                  inputTokens: 10,
-                  outputTokens: 20,
-                  totalTokens: 30,
-                  estimatedCost: 0,
-                },
-                model: "test-model",
-              };
-            }
-          })()),
-      },
-    );
+    const agent = await ReactiveAgents.create()
+      .withName("tool-metrics-test")
+      .withTestScenario([
+        { toolCall: { name: "test-file-tool", args: { path: "/tmp/test.txt" } } },
+        { text: "Based on the file contents, the answer is 42." },
+      ])
+      .withTools({
+        tools: [
+          {
+            definition: {
+              name: "test-file-tool",
+              description: "Read a file",
+              parameters: [
+                { name: "path", type: "string" as const, description: "File path", required: true },
+              ],
+              riskLevel: "low" as const,
+              timeoutMs: 5_000,
+              requiresApproval: false,
+              source: "function" as const,
+            },
+            handler: () => Effect.succeed("file contents here"),
+          },
+        ],
+      })
+      .build();
 
-    // Mock tool service
-    const { ToolService } = await import("@reactive-agents/tools");
-    const MockToolServiceLive = Layer.succeed(ToolService, {
-      execute: (_params: unknown) =>
-        Effect.succeed({ result: "file contents here" }),
-      listTools: () =>
-        Effect.succeed([
-          { name: "file-read", description: "Read a file", parameters: {} },
-        ]),
-      registerTool: () => Effect.void,
-      getTool: () => Effect.succeed(null),
-      toFunctionCallingFormat: () =>
-        Effect.succeed([
-          { name: "file-read", description: "Read a file", parameters: {} },
-        ]),
-    } as any);
-
-    // Capture ToolCallCompleted events to verify metrics are recorded via EventBus
-    const { EventBus, EventBusLive } = await import("@reactive-agents/core");
-    const { MetricsCollectorLive } = await import("@reactive-agents/observability");
-    let toolCallEvents: Array<{ toolName: string; durationMs: number; success: boolean }> = [];
-
-    const testLayer = Layer.mergeAll(
-      LifecycleHookRegistryLive,
-      ExecutionEngineLive(config).pipe(
-        Layer.provide(LifecycleHookRegistryLive),
-      ),
-      ToolCallingLLMServiceLive,
-      MockToolServiceLive,
-      EventBusLive,
-      MetricsCollectorLive,
-    );
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const engine = yield* ExecutionEngine;
-        const bus = yield* EventBus;
-
-        // Subscribe to ToolCallCompleted events to capture what was published
-        yield* bus.on("ToolCallCompleted", (event) =>
-          Effect.gen(function* () {
-            toolCallEvents.push({
-              toolName: event.toolName,
-              durationMs: event.durationMs,
-              success: event.success,
-            });
-          }),
-        );
-
-        yield* engine.execute(mockTask);
-      }).pipe(Effect.provide(testLayer)),
-    );
-
-    // Verify that a ToolCallCompleted event was published for the executed tool
-    expect(toolCallEvents.length).toBeGreaterThan(0);
-    const fileReadEvent = toolCallEvents.find((e) => e.toolName === "file-read");
-    expect(fileReadEvent).toBeDefined();
-    if (fileReadEvent) {
-      expect(fileReadEvent.success).toBe(true);
-      expect(fileReadEvent.durationMs).toBeGreaterThanOrEqual(0);
+    let result;
+    try {
+      result = await agent.run("read the file and tell me the answer");
+    } finally {
+      await agent.dispose();
     }
+
+    expect(result.success).toBe(true);
+    expect(result.receipt?.toolsUsed).toEqual(["test-file-tool"]);
   });
 });

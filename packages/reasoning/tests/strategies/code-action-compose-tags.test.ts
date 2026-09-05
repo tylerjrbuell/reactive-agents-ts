@@ -9,7 +9,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { ToolService } from "@reactive-agents/tools";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
+import { EventBus, EventBusLive, HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
@@ -78,5 +78,38 @@ describe("code-action emits observation.tool-result for sandbox tool calls (#195
     expect(observations.length).toBeGreaterThanOrEqual(1);
     expect(observations[0]!.type).toBe("observation");
     expect(observations[0]!.metadata?.observationResult?.toolName).toBe("search");
+  }, 15000);
+
+  it("publishes detailed reasoning steps for live progress logging", async () => {
+    const events: Array<{ readonly _tag?: string; readonly thought?: string; readonly action?: string; readonly observation?: string }> = [];
+    const llm = TestLLMServiceLayer([
+      { text: "```typescript\n(async () => { return await search({ query: 'x' }); })()\n```" },
+    ]);
+
+    const result = await Effect.runPromise(provideTestEnvelope(
+      Effect.gen(function* () {
+        const eventBus = yield* EventBus;
+        const unsubscribe = yield* eventBus.subscribe((event) => {
+          events.push(event);
+          return Effect.void;
+        });
+        const result = yield* executeCodeAction({
+          taskDescription: "search and finish",
+          taskType: "simple",
+          memoryContext: "",
+          availableTools: ["search"],
+          availableToolSchemas: [TOOL_SCHEMA],
+          config: defaultReasoningConfig,
+        }).pipe(Effect.provide(Layer.merge(llm, toolLayer())));
+        unsubscribe();
+        return result;
+      }).pipe(Effect.provide(EventBusLive)),
+    ));
+
+    expect(result.status).toBe("completed");
+    const reasoningSteps = events.filter((event) => event._tag === "ReasoningStepCompleted");
+    expect(reasoningSteps.some((event) => event.thought?.includes("Plan: generating code"))).toBe(true);
+    expect(reasoningSteps.some((event) => event.action?.includes("search"))).toBe(true);
+    expect(reasoningSteps.some((event) => event.observation?.includes("search result"))).toBe(true);
   }, 15000);
 });

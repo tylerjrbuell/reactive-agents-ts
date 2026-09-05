@@ -156,6 +156,13 @@ export const executeReactive = (
   Effect.gen(function* () {
     const start = Date.now();
 
+    // Finding 2 (harness-control-surface final fix wave): resolve the envelope
+    // here so its `harness` can reach `resolveExecutableToolCapabilities`
+    // below — without it, the capability resolver falls back to a fresh
+    // `resolveHarnessConfig()` re-read of the environment, silently ignoring
+    // any per-agent `.withHarness({ toolDiscovery: ... })` config.
+    const envelope = yield* RunEnvelope;
+
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reactive.ts:emitLog");
 
     yield* emitLog({ _tag: "phase_started", phase: "reactive:kernel", timestamp: new Date() });
@@ -200,6 +207,7 @@ export const executeReactive = (
       availableToolSchemas: toolSchemas,
       allToolSchemas: input.allToolSchemas,
       metaTools: input.metaTools,
+      harness: envelope.harness,
     });
 
     // Cascade Task 6: the seven cross-cutting fields are NOT listed below. They
@@ -362,6 +370,13 @@ export const executeReactive = (
           : {}),
         ...(state.meta.lastDialectObserved !== undefined
           ? { lastDialectObserved: state.meta.lastDialectObserved }
+          : {}),
+        // Forward the full (uncompressed) tool-result store so external
+        // evidence checks (e.g. `validateCitations`) read the same corpus
+        // the kernel's own grounding checks use, not the lossy compressed
+        // step-content preview. See `buildEvidenceCorpusFromSteps`.
+        ...(state.scratchpad.size > 0
+          ? { scratchpad: Object.fromEntries(state.scratchpad) }
           : {}),
       },
     });

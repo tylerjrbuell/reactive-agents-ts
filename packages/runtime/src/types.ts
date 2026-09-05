@@ -173,6 +173,10 @@ export const ExecutionContextSchema = Schema.Struct({
   cost: Schema.Number,
   /** Cumulative tokens consumed */
   tokensUsed: Schema.Number,
+  /** Provider-billed tokens: `(input - cacheRead) + output`. Absent when unreported. */
+  billedTokens: Schema.optional(Schema.Number),
+  /** Input tokens served from a prompt-cache hit. Absent when unreported. */
+  cacheReadTokens: Schema.optional(Schema.Number),
   /** Timestamp when execution started */
   startedAt: Schema.DateFromSelf,
   /** Arbitrary metadata (tags, custom data, state) */
@@ -331,6 +335,13 @@ export interface ExecutionContextMetadata {
   }[];
   /** Total number of reasoning steps taken */
   stepsCount?: number;
+  /**
+   * Full (uncompressed) tool-result store, keyed by `ReasoningStep.metadata.storedKey`.
+   * Forwarded alongside `reasoningSteps` so evidence checks (e.g. `validateCitations`
+   * from `@reactive-agents/reasoning`) read the same corpus the kernel's own grounding
+   * checks use instead of the lossy compressed step-content preview.
+   */
+  scratchpad?: Readonly<Record<string, string>>;
 
   // ── Direct-LLM path ─────────────────────────────────────────────────────
   /** Final text response from the direct-LLM path */
@@ -999,6 +1010,15 @@ export interface MetaToolsConfig {
   find?: boolean;
   pulse?: boolean;
   recall?: boolean;
+  /**
+   * `relate` — queries the memory link graph (auto-linked entries by
+   * content similarity when `.withMemory()` is configured). Explicit opt-in
+   * only — never enabled by the no-args or full-suite meta-tools defaults —
+   * AND takes effect only when memory's adapter actually implements the
+   * relationship-query surface; requesting it without memory configured is
+   * a harmless no-op, not an error.
+   */
+  relate?: boolean;
   /** Universal task checklist (P6a) — model plans multi-step work and checks
    *  items off; every call renders the full list. Default ON with tools. */
   todo?: boolean;

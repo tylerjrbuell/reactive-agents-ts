@@ -29,55 +29,64 @@ import {
   LifecycleHookRegistryLive,
 } from "../src/index.js";
 
-// ─── Shared mock LLM ──────────────────────────────────────────────────────────
-
-type LLMShape = {
-  complete: (req: unknown) => Effect.Effect<{
-    content: string;
-    stopReason: string;
-    toolCalls?: unknown[];
-    usage: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
-    model: string;
-    thinking?: string;
-  }>;
+// ─── Shared stub ReasoningService (kernel-arm equivalent of the old LLM mocks) ──
+//
+// The composition-precedence / minIterations / customTermination /
+// verificationStep / outputValidator / taskContext tests below used to drive
+// `ExecutionEngineLive` with ONLY an `LLMService` mock in the layer — that
+// exercised the (now-dead, Move 1, 2026-08-13) inline direct-LLM arm, since
+// omitting `ReasoningService` made `reasoningOpt` resolve to `None`. Migrated
+// onto the kernel arm's real mechanism: `reasoning-harness-hooks.ts`'s
+// withMinIterations / withCustomTermination / withVerificationStep /
+// withOutputValidator continuation loops all call
+// `reasoningOpt.value.execute()` once per pass — a stub ReasoningService at
+// that exact boundary, driven the same call-count/sequential-response way
+// the LLM mocks were, preserves each test's actual intent.
+type StubReasoningResult = {
+  output: unknown;
+  status: "completed" | "failed" | "partial";
+  steps?: readonly { id: string; type: string; content: string }[];
+  metadata: { cost: number; tokensUsed: number; stepsCount: number };
 };
 
-const LLMTag = Context.GenericTag<LLMShape>("LLMService");
+const ReasoningServiceTag = Context.GenericTag<{
+  execute: (params: { [k: string]: unknown }) => Effect.Effect<StubReasoningResult>;
+}>("ReasoningService");
 
-/** LLM that returns a different response each call from a queue. */
-function makeSequentialLLM(responses: string[]): Layer.Layer<LLMShape> {
+/** ReasoningService stub that returns a different response each call from a queue. */
+function makeSequentialReasoning(responses: string[]): Layer.Layer<never> {
   let idx = 0;
-  return Layer.succeed(LLMTag, {
-    complete: (_req: unknown) => {
+  return Layer.succeed(ReasoningServiceTag, {
+    execute: (_params) => {
       const content = responses[idx] ?? responses[responses.length - 1] ?? "done";
       idx++;
       return Effect.succeed({
-        content,
-        stopReason: "end_turn",
-        usage: { inputTokens: 20, outputTokens: 20, totalTokens: 40, estimatedCost: 0 },
-        model: "test",
+        output: content,
+        status: "completed" as const,
+        steps: [{ id: `step-${idx}`, type: "thought", content }],
+        metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
       });
     },
   });
 }
 
-/** LLM that always returns the same text. */
-function makeStaticLLM(text: string): Layer.Layer<LLMShape> {
-  return makeSequentialLLM([text]);
+/** ReasoningService stub that always returns the same text. */
+function makeStaticReasoning(text: string): Layer.Layer<never> {
+  return makeSequentialReasoning([text]);
 }
 
-/** Track how many times the LLM was called. */
-function makeCountingLLM(text: string): { layer: Layer.Layer<LLMShape>; callCount: () => number } {
+/** Track how many times ReasoningService.execute() was called. */
+function makeCountingReasoning(text: string): { layer: Layer.Layer<never>; callCount: () => number } {
   let calls = 0;
   return {
-    layer: Layer.succeed(LLMTag, {
-      complete: (_req: unknown) => {
+    layer: Layer.succeed(ReasoningServiceTag, {
+      execute: (_params) => {
         calls++;
         return Effect.succeed({
-          content: text,
-          stopReason: "end_turn",
-          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-          model: "test",
+          output: text,
+          status: "completed" as const,
+          steps: [{ id: `step-${calls}`, type: "thought", content: text }],
+          metadata: { cost: 0, tokensUsed: 10, stepsCount: 1 },
         });
       },
     }),
@@ -85,21 +94,19 @@ function makeCountingLLM(text: string): { layer: Layer.Layer<LLMShape>; callCoun
   };
 }
 
-function makeRunLayer(llmLayer: Layer.Layer<LLMShape>, config: ReturnType<typeof defaultReactiveAgentsConfig>) {
-  // LifecycleHookRegistry is a build-time dep for ExecutionEngineLive; llmLayer must
-  // remain available at runtime (same level as the engine, not nested inside it).
+function makeReasoningRunLayer(reasoningLayer: Layer.Layer<never>, config: ReturnType<typeof defaultReactiveAgentsConfig>) {
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(LifecycleHookRegistryLive),
   );
-  return Layer.mergeAll(engineLayer, llmLayer);
+  return Layer.mergeAll(engineLayer, reasoningLayer);
 }
 
-async function runTask(
+async function runTaskReasoning(
   config: ReturnType<typeof defaultReactiveAgentsConfig>,
-  llmLayer: Layer.Layer<LLMShape>,
+  reasoningLayer: Layer.Layer<never>,
   task = "do something",
 ) {
-  const runLayer = makeRunLayer(llmLayer, config);
+  const runLayer = makeReasoningRunLayer(reasoningLayer, config);
   return Effect.runPromise(
     ExecutionEngine.pipe(
       Effect.flatMap((engine) =>
@@ -134,10 +141,16 @@ describe("composition precedence (minIterations × customTermination × verifica
   const sawDone = (state: unknown) => String((state as { output?: unknown }).output ?? "").includes("DONE");
 
   it("minIterations floor overrides an early customTermination; verification runs on top", async () => {
-    // The LLM says "DONE" on call 1, so customTermination is satisfied immediately
-    // (alone it would stop at 1 call — see the withCustomTermination suite).
-    const floorOnly = makeCountingLLM("DONE");
-    await runTask(
+    // Migrated off the dead inline arm onto the kernel arm's equivalent
+    // mechanism (reasoning-harness-hooks.ts's withCustomTermination /
+    // withMinIterations / withVerificationStep continuation loops, each
+    // calling ReasoningService.execute() once per pass).
+    //
+    // The stub says "DONE" on every call, so customTermination is satisfied
+    // immediately (alone it would stop at 1 call — see the
+    // withCustomTermination suite).
+    const floorOnly = makeCountingReasoning("DONE");
+    await runTaskReasoning(
       defaultReactiveAgentsConfig("compose-floor", {
         maxIterations: 10,
         minIterations: 3,
@@ -146,8 +159,8 @@ describe("composition precedence (minIterations × customTermination × verifica
       floorOnly.layer,
     );
 
-    const floorPlusVerify = makeCountingLLM("DONE");
-    await runTask(
+    const floorPlusVerify = makeCountingReasoning("DONE");
+    await runTaskReasoning(
       defaultReactiveAgentsConfig("compose-floor-verify", {
         maxIterations: 10,
         minIterations: 3,
@@ -189,18 +202,20 @@ describe("withMinIterations", () => {
   });
 
   it("does not terminate before N iterations when using fast-path", async () => {
-    // The test LLM returns a final-looking answer on the FIRST call, which would
-    // normally let the loop terminate at iteration 1. withMinIterations(3) must
-    // block that early exit and keep consulting the LLM until at least N
-    // iterations have run. We count LLM calls as a proxy for iterations.
-    const { layer, callCount } = makeCountingLLM("FINAL ANSWER: done");
+    // Migrated off the dead inline arm onto the kernel arm's withMinIterations
+    // continuation loop (reasoning-harness-hooks.ts). The stub ReasoningService
+    // returns a final-looking answer on the FIRST call, which would normally
+    // let the run stop after one pass. withMinIterations(3) must block that
+    // early exit and keep calling ReasoningService.execute() until at least N
+    // passes have run. We count execute() calls as a proxy for iterations.
+    const { layer, callCount } = makeCountingReasoning("FINAL ANSWER: done");
 
     const config = defaultReactiveAgentsConfig("min-iter-agent", {
       maxIterations: 10,
       minIterations: 3,
     });
 
-    await runTask(config, layer);
+    await runTaskReasoning(config, layer);
 
     // Gutting withMinIterations to a no-op would make this 1 call → RED.
     expect(callCount()).toBeGreaterThanOrEqual(3);
@@ -234,15 +249,20 @@ describe("withCustomTermination", () => {
   });
 
   it("terminates when predicate returns true based on output content", async () => {
+    // Migrated off the dead inline arm onto the kernel arm's
+    // withCustomTermination continuation loop (reasoning-harness-hooks.ts):
+    // the predicate is checked against `ctx.metadata.lastResponse` after each
+    // ReasoningService.execute() pass, same semantics as the inline arm's
+    // per-iteration check.
     const config = defaultReactiveAgentsConfig("custom-term-agent", {
       maxIterations: 10,
       customTermination: (state: unknown) =>
         String((state as any).output ?? "").includes("DONE"),
     });
 
-    const result = await runTask(
+    const result = await runTaskReasoning(
       config,
-      makeSequentialLLM(["still working", "DONE: task complete"]),
+      makeSequentialReasoning(["still working", "DONE: task complete"]),
     );
     expect(String(result.output ?? "")).toContain("DONE");
   });
@@ -276,17 +296,20 @@ describe("withVerificationStep", () => {
   });
 
   it("runs an additional LLM call for reflect-mode verification after initial answer", async () => {
-    const { layer, callCount } = makeCountingLLM("verified answer");
+    // Migrated off the dead inline arm onto the kernel arm's reflect-mode
+    // verification pass (reasoning-harness-hooks.ts) — a second
+    // ReasoningService.execute() call judging the first pass's output.
+    const { layer, callCount } = makeCountingReasoning("verified answer");
 
     const config = defaultReactiveAgentsConfig("verify-agent", {
       maxIterations: 5,
       verificationStep: { mode: "reflect" },
     });
 
-    await runTask(config, layer);
+    await runTaskReasoning(config, layer);
 
-    // With verificationStep enabled, at least 2 LLM calls should occur:
-    // 1) initial reasoning  2) verification reflection
+    // With verificationStep enabled, at least 2 ReasoningService calls should
+    // occur: 1) initial reasoning  2) verification reflection
     expect(callCount()).toBeGreaterThanOrEqual(2);
   });
 
@@ -334,27 +357,32 @@ describe("withOutputValidator", () => {
   });
 
   it("accepts output that passes validation without retry", async () => {
+    // Migrated off the dead inline arm onto the kernel arm's
+    // withOutputValidator retry loop (reasoning-harness-hooks.ts).
     const config = defaultReactiveAgentsConfig("validator-agent", {
       maxIterations: 5,
       outputValidator: (output: string) => ({ valid: output.includes("COMPLETE") }),
     });
 
-    const result = await runTask(config, makeStaticLLM("COMPLETE: the answer is 42"));
+    const result = await runTaskReasoning(config, makeStaticReasoning("COMPLETE: the answer is 42"));
     expect(String(result.output ?? "")).toContain("COMPLETE");
   });
 
   it("retries with injected feedback when validator rejects output", async () => {
-    // First response lacks the required marker — would be rejected and retried
+    // Migrated off the dead inline arm. First ReasoningService.execute() call
+    // lacks the required marker — reasoning-harness-hooks.ts's
+    // withOutputValidator loop retries with the validator's feedback injected
+    // into initialMessages, same shape as the inline arm's retry.
     let callIdx = 0;
-    const retryLayer = Layer.succeed(LLMTag, {
-      complete: (_req: unknown) => {
+    const retryLayer = Layer.succeed(ReasoningServiceTag, {
+      execute: (_params) => {
         callIdx++;
         const content = callIdx === 1 ? "incomplete answer" : "COMPLETE: corrected answer";
         return Effect.succeed({
-          content,
-          stopReason: "end_turn",
-          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
-          model: "test",
+          output: content,
+          status: "completed" as const,
+          steps: [{ id: `step-${callIdx}`, type: "thought", content }],
+          metadata: { cost: 0, tokensUsed: 10, stepsCount: 1 },
         });
       },
     });
@@ -367,10 +395,10 @@ describe("withOutputValidator", () => {
       }),
     });
 
-    const result = await runTask(config, retryLayer);
+    const result = await runTaskReasoning(config, retryLayer);
     // Should have retried and eventually produced COMPLETE output
     expect(String(result.output ?? "")).toContain("COMPLETE");
-    // LLM was called at least twice (first invalid, then retry)
+    // ReasoningService was called at least twice (first invalid, then retry)
     expect(callIdx).toBeGreaterThanOrEqual(2);
   });
 });
@@ -416,37 +444,43 @@ describe("withTaskContext", () => {
   });
 
   it("run completes successfully when taskContext is configured", async () => {
+    // Migrated off the dead inline arm onto the kernel arm.
     const config = defaultReactiveAgentsConfig("context-agent", {
       maxIterations: 5,
       taskContext: { projectName: "reactive-agents", environment: "test" },
     });
 
-    const result = await runTask(config, makeStaticLLM("FINAL ANSWER: done"));
+    const result = await runTaskReasoning(config, makeStaticReasoning("FINAL ANSWER: done"));
     expect(result).toBeDefined();
   });
 
-  it("direct-LLM execution injects taskContext into the system prompt (no ReasoningService)", async () => {
-    let systemContent = "";
-    const llm = Layer.succeed(LLMTag, {
-      complete: (req: unknown) => {
-        const r = req as { messages?: ReadonlyArray<{ role?: string; content?: string }> };
-        const first = r.messages?.[0];
-        if (first?.role === "system") systemContent = first.content ?? "";
+  it("kernel-arm execution injects taskContext into the ReasoningService memoryContext", async () => {
+    // Migrated off the dead inline arm (Move 1, 2026-08-13). The inline path
+    // injected taskContext into a direct-LLM system message via
+    // formatTaskContextForChat ("## Task / session grounding" header); the
+    // kernel arm's equivalent mechanism is reasoning-think.ts:162-167, which
+    // prepends a "--- Task Context ---" block onto `memoryContext` before it
+    // reaches `reasoningService.execute()`. Same feature (static taskContext
+    // reaches the model even without prior chat history), different carrier.
+    let capturedMemoryContext = "";
+    const reasoningLayer = Layer.succeed(ReasoningServiceTag, {
+      execute: (params: { memoryContext?: string; [k: string]: unknown }) => {
+        capturedMemoryContext = params.memoryContext ?? "";
         return Effect.succeed({
-          content: "ack",
-          stopReason: "end_turn" as const,
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCost: 0 },
-          model: "test",
+          output: "ack",
+          status: "completed" as const,
+          steps: [],
+          metadata: { cost: 0, tokensUsed: 1, stepsCount: 0 },
         });
       },
     });
-    const config = defaultReactiveAgentsConfig("task-ctx-direct-llm", {
+    const config = defaultReactiveAgentsConfig("task-ctx-kernel-arm", {
       maxIterations: 3,
       taskContext: { cortexPriorRun: "RUN_CONTEXT_INJECTION_MARKER" },
     });
-    await runTask(config, llm, "hello");
-    expect(systemContent).toContain("RUN_CONTEXT_INJECTION_MARKER");
-    expect(systemContent).toContain("Task / session grounding");
+    await runTaskReasoning(config, reasoningLayer, "hello");
+    expect(capturedMemoryContext).toContain("RUN_CONTEXT_INJECTION_MARKER");
+    expect(capturedMemoryContext).toContain("--- Task Context ---");
   });
 
   it("accepts empty task context without error", async () => {

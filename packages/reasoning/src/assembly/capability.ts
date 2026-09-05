@@ -1,8 +1,5 @@
 import { CONTEXT_PROFILES } from "../context/context-profile.js";
-import {
-  recencyBudgetCharsOverride,
-  toolResultBudgetCharsOverride,
-} from "../harness-flags.js";
+import { resolveHarnessConfig, type ResolvedHarness } from "../harness-config.js";
 
 export type Tier = "local" | "mid" | "large" | "frontier";
 
@@ -11,6 +8,8 @@ export interface CapabilityInput {
   outputBudget: number;
   dialect: "native-fc" | "text-parse" | "none";
   tier: Tier;
+  /** Resolved harness config; absent ⇒ env/default resolution (see Task 3 fallback rule). */
+  readonly harness?: ResolvedHarness;
 }
 
 export interface ResolvedCapability {
@@ -61,10 +60,12 @@ const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
 };
 
 export function resolveCapability(input: CapabilityInput): ResolvedCapability {
+  const h = input.harness ?? resolveHarnessConfig();
+
   // Test knob (mirrors the legacy RA_OVERFLOW_BUDGET): force the recency budget
   // low so a normal-sized tool result deterministically exercises the
   // summary+ref overflow branch. Unset in production → derived budget stands.
-  const envRecency = recencyBudgetCharsOverride();
+  const envRecency = h.recencyBudgetChars;
   const recencyBudgetChars =
     envRecency !== undefined && Number.isFinite(envRecency) && envRecency > 0
       ? envRecency
@@ -73,7 +74,7 @@ export function resolveCapability(input: CapabilityInput): ResolvedCapability {
   // Per-result preservation cap. Env override for ablation; default mirrors
   // the legacy CONTEXT_PROFILES tier table so canonical project() collapses
   // raw tool results at the same threshold legacy curate() did.
-  const envPreserve = toolResultBudgetCharsOverride();
+  const envPreserve = h.toolResultBudgetChars;
   const toolResultPreserveBudget =
     envPreserve !== undefined && Number.isFinite(envPreserve) && envPreserve > 0
       ? envPreserve

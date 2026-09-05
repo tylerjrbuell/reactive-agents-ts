@@ -6,7 +6,7 @@ user-invocable: false
 
 # Architecture Reference — Reactive Agents
 
-> For complete framework orientation, see `NAVIGATION.md` (repo structure + file mapping) and `QUICK_START.md` (5-minute quickstart).
+> For complete framework orientation, see `AGENTS.md` (root, sole entry point) and `wiki/Development/Repo-Navigation.md` (repo structure map + file mapping).
 >
 > **For architectural questions, prefer `claude-obsidian:wiki-query "<topic>"`** over reading individual files. The wiki has MOCs, decisions, mechanism validations, and design specs that surface in semantic queries. See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]] for the canonical pattern.
 
@@ -14,13 +14,13 @@ user-invocable: false
 
 | Question | Where to look |
 |----------|---------------|
-| "What's the kernel structure?" | `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` §Cognitive Architecture |
+| "What's the kernel structure?" | `wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified kernel architecture) |
 | "Why was decision X made?" | `wiki/Decisions/Decision Index.md` |
 | "What package contains Y?" | `wiki/Packages/00 Package Index.md` |
 | "Has mechanism Z been validated?" | `wiki/Experiments/M*.md` (or `wiki/Experiments/by-verdict.base`) |
 | "What failure modes apply here?" | `wiki/Failure-Modes/by-severity.base` |
-| "Current empirical state?" | `wiki/Architecture/Specs/04-PROJECT-STATE.md` |
-| "Roadmap for v1.0?" | `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` |
+| "Current empirical state?" | `wiki/Hot.md` (04-PROJECT-STATE.md is a deprecated 2026-04-27 snapshot) |
+| "Roadmap?" | root `ROADMAP.md`, or `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` for sequencing (07-ROADMAP-v1.0.md is superseded) |
 
 ## Package Dependency Graph
 

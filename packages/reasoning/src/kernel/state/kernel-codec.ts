@@ -30,6 +30,7 @@
  * NEWER version with a descriptive error; older versions migrate here later.
  */
 import type { KernelState } from "./kernel-state.js";
+import { KernelCodecError } from "../../errors/errors.js";
 
 /** Bump when the encoding scheme changes shape. Decoder refuses newer versions. */
 export const KERNEL_CODEC_VERSION = 1;
@@ -196,33 +197,41 @@ export function serializeKernelState(state: KernelState): string {
 
 /**
  * Reconstruct a KernelState from a codec envelope produced by
- * {@link serializeKernelState}. Throws a descriptive Error on corrupt input or
- * a NEWER codec version (forward-migration guard); callers in Effect paths
- * should wrap with Effect.try.
+ * {@link serializeKernelState}. Throws a {@link KernelCodecError} (typed,
+ * `instanceof`/`.reason`-discriminable) on corrupt input or a NEWER codec
+ * version (forward-migration guard); callers in Effect paths should wrap
+ * with `Effect.try` (see `reasoning-think.ts`'s durable-resume call site).
  */
 export function deserializeKernelState(json: string): KernelState {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch (err) {
-    throw new Error(
-      `[kernel-codec] Corrupt envelope — not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new KernelCodecError({
+      message: `[kernel-codec] Corrupt envelope — not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      reason: "invalid-json",
+      cause: err,
+    });
   }
   if (!isPlainRecord(parsed) || typeof parsed["codecVersion"] !== "number" || !("state" in parsed)) {
-    throw new Error(
-      "[kernel-codec] Invalid envelope — expected { codecVersion: number, state: object }",
-    );
+    throw new KernelCodecError({
+      message: "[kernel-codec] Invalid envelope — expected { codecVersion: number, state: object }",
+      reason: "invalid-envelope",
+    });
   }
   const version = parsed["codecVersion"];
   if (version > KERNEL_CODEC_VERSION) {
-    throw new Error(
-      `[kernel-codec] Envelope codec version ${version} is newer than supported version ${KERNEL_CODEC_VERSION} — upgrade the framework to restore this run`,
-    );
+    throw new KernelCodecError({
+      message: `[kernel-codec] Envelope codec version ${version} is newer than supported version ${KERNEL_CODEC_VERSION} — upgrade the framework to restore this run`,
+      reason: "version-mismatch",
+    });
   }
   const decoded = decodeValue(parsed["state"] as JsonValue);
   if (!isPlainRecord(decoded)) {
-    throw new Error("[kernel-codec] Invalid envelope — decoded state is not an object");
+    throw new KernelCodecError({
+      message: "[kernel-codec] Invalid envelope — decoded state is not an object",
+      reason: "invalid-state",
+    });
   }
   return decoded as unknown as KernelState;
 }

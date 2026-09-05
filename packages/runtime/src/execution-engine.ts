@@ -5,7 +5,6 @@ import {
   GuardrailViolationError,
   KillSwitchTriggeredError,
   BehavioralContractViolationError,
-  MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
 import { readRunLedger } from "./engine/run-ledger-scope.js";
@@ -26,13 +25,12 @@ import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { classifyToolRelevance, filterToolsByRelevance, ReasoningService, VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "@reactive-agents/reasoning";
 import {
-  ToolService,
   BUILTIN_TOOL_NAMES,
   buildFinalAnswerDescription,
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, ChildDashboardRegistry, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
+import { ObservabilityService, ChildDashboardRegistry, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer, makeNoticesManager, NOTICE_IDS } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -41,15 +39,14 @@ import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memo
 import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations, telemetryOptedOut } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { resolveCapability } from "@reactive-agents/llm-provider";
 import { literalMentionRequired } from "./classifier-bypass.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
-import { formatTaskContextForChat } from "./chat.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Phase pipeline (W23 decomposition) ───
 import { runGuardedPhase, runObservablePhase } from "./engine/pipeline.js";
-import type { PhaseDeps } from "./engine/runtime-context.js";
+import type { PhaseDeps, ObsLike } from "./engine/runtime-context.js";
+import { asObsLike } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
 import { bootstrap } from "./engine/phases/bootstrap.js";
 import { complete } from "./engine/phases/complete.js";
@@ -64,20 +61,18 @@ import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { prepareReasoningToolSchemas } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
-import { runInlineThink, type ContextManagerLike } from "./engine/phases/agent-loop/inline-think.js";
-import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
-import { runInlineObserve } from "./engine/phases/agent-loop/inline-observe.js";
-import { runInlineHarnessHooks } from "./engine/phases/agent-loop/inline-harness-hooks.js";
 import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
 import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-harness-hooks.js";
 import { runReasoningThink } from "./engine/phases/agent-loop/reasoning-think.js";
 import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post-think.js";
 import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reasoning-stream-logger.js";
 import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
-import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
-import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
+import {
+  mergeBehavioralContractIntoConfig,
+  startMaxToolCallsGuard,
+} from "./engine/phases/agent-loop/behavioral-contract-bridge.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { verifyResultBoundary } from "./engine/finalize/result-verification.js";
 import { deriveReceiptDeliverables } from "./builder/helpers.js";
@@ -88,24 +83,8 @@ import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
 
 // ─── Narrow service types for optional deps ───
-
-type ObsLike = {
-  withSpan: <A, E>(name: string, effect: Effect.Effect<A, E>, attrs?: Record<string, unknown>) => Effect.Effect<A, E>;
-  incrementCounter: (name: string, value?: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  recordHistogram: (name: string, value: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  setGauge: (name: string, value: number, labels?: Record<string, string>) => Effect.Effect<void, never>;
-  captureSnapshot: (agentId: string, state: Record<string, unknown>) => Effect.Effect<unknown, never>;
-  debug: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  info: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  warn: (msg: string, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => Effect.Effect<void, never>;
-  getTraceContext: () => Effect.Effect<{ traceId: string; spanId: string }, never>;
-  flush: () => Effect.Effect<void, never>;
-  verbosity: () => string;
-  attachChildren: (
-    children: readonly { readonly name: string; readonly data: unknown }[],
-  ) => Effect.Effect<void, never>;
-};
+// ObsLike + asObsLike are canonical at engine/runtime-context.ts — reused here
+// rather than re-derived, per WS-5b (cast-site ceiling counts sites, not occurrences).
 
 type EbLike = {
   publish: (event: AgentEvent) => Effect.Effect<void, never>;
@@ -144,8 +123,11 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
-// Deduplicates RI telemetry notice across runs within the same process
-let _riTelemetryNoticeEmitted = false;
+// Deduplicates notices (RI telemetry banner, etc.) across runs within the
+// same process. Also honors REACTIVE_AGENTS_SUPPRESS_NOTICES (env) and
+// `.withReactiveIntelligence({ notice: false })` (config) — see the
+// TELEMETRY_ENABLED gate below.
+const _noticesManager = makeNoticesManager();
 
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
 // Re-exported here for backward compatibility with external importers.
@@ -197,7 +179,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             ).pipe(
               Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
             );
-            const obs: ObsLike | null = obsOpt._tag === "Some" ? (obsOpt.value as unknown as ObsLike) : null;
+            const obs: ObsLike | null = obsOpt._tag === "Some" ? asObsLike(obsOpt.value) : null;
 
             // Verbosity helpers — read once per execution
             // ObsLike.verbosity() is typed `() => string` (a deliberately narrow/
@@ -460,19 +442,54 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       },
                       confidence: score.confidence,
                       modelTier: score.modelTier, iterationWeight: score.iterationWeight,
+                      modelId: String(config.defaultModel ?? "unknown"),
                     });
                   }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:641", tag: errorTag(err) }))),
                 );
               }
             }
 
+            // ── Behavioral contract: resolve once, up front ──
+            // (Runtime fix, 2026-08-23 — see behavioral-contract-bridge.ts doc
+            // block for the full root-cause + mechanism writeup.) Resolved here,
+            // BEFORE the KillSwitchService acquisition below, because a declared
+            // `maxToolCalls` cap needs the kill switch even when the caller never
+            // called `.withKillSwitch()` explicitly — runtime.ts's
+            // `killSwitchOptLayer` auto-provides the service in that case (see
+            // its own comment), and this is the corresponding consumer-side
+            // widen so the service is actually ACQUIRED, not just provided.
+            let activeBehavioralContract: import("@reactive-agents/guardrails").BehavioralContract | undefined;
+            if (config.enableBehavioralContracts) {
+              const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
+                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+              );
+              if (bcOpt._tag === "Some") {
+                activeBehavioralContract = yield* bcOpt.value.getContract();
+              }
+            }
+            const configForBehavioralContract = activeBehavioralContract
+              ? mergeBehavioralContractIntoConfig(config, activeBehavioralContract)
+              : config;
+
             // ── Acquire KillSwitchService optionally ──
-            const ksOpt = config.enableKillSwitch
+            const ksOpt = config.enableKillSwitch || activeBehavioralContract?.maxToolCalls != null
               ? yield* Effect.serviceOption(KillSwitchService).pipe(
                   Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
                 )
               : { _tag: "None" as const };
             const ks = ksOpt._tag === "Some" ? ksOpt.value : null;
+
+            // ── maxToolCalls → kill-switch bridge ──
+            // Started unconditionally here (before bootstrap) so it observes
+            // every tool call for the FULL run, not just the reasoning-arm
+            // portion. No-ops when the contract declares no maxToolCalls cap.
+            yield* startMaxToolCallsGuard({
+              eb,
+              ks,
+              taskId: task.id,
+              agentId: config.agentId,
+              maxToolCalls: activeBehavioralContract?.maxToolCalls,
+            });
 
             // ── PhaseDeps bundle (W23 decomposition) ──
             // Long-lived dependency bundle threaded through every extracted phase.
@@ -545,8 +562,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:697", tag: errorTag(err) })),
                 );
 
-                // Emit RI telemetry notice once per process via structured log
-                if (config.enableReactiveIntelligence && !_riTelemetryNoticeEmitted) {
+                // Emit RI telemetry notice once per process via structured log.
+                // `_noticesManager.shouldShow` is also the single choke point for
+                // silencing it: `.withReactiveIntelligence({ notice: false })`,
+                // REACTIVE_AGENTS_SUPPRESS_NOTICES=1 (env), or a prior dismiss()
+                // all resolve here — no separate boolean to keep in sync.
+                if (
+                  config.enableReactiveIntelligence &&
+                  _noticesManager.shouldShow(NOTICE_IDS.TELEMETRY_ENABLED)
+                ) {
                   const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
                   const telemetryCfg = riOpts?.telemetry;
                   // The notice must never claim telemetry the environment has
@@ -555,8 +579,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     (telemetryCfg === undefined || telemetryCfg === true ||
                     (typeof telemetryCfg === "object" && telemetryCfg !== null &&
                       (telemetryCfg as Record<string, unknown>)["enabled"] !== false));
-                  if (telemetryEnabled) {
-                    _riTelemetryNoticeEmitted = true;
+                  const noticeEnabled = riOpts?.notice !== false;
+                  if (noticeEnabled && telemetryEnabled) {
                     yield* Effect.serviceOption(ObservableLogger).pipe(
                       Effect.tap((loggerOpt) => {
                         if (loggerOpt._tag === "Some") {
@@ -710,7 +734,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const preLoop = yield* runPreLoopDispatch({
                   ctx,
                   task,
-                  config,
+                  // Behavioral-contract-merged config (identical to `config`
+                  // when no contract is active) — carries the reasoning arm's
+                  // tightened allowedTools/forbiddenTools/maxIterations. See
+                  // behavioral-contract-bridge.ts.
+                  config: configForBehavioralContract,
                   deps,
                   resolvedCalibration,
                   obs,
@@ -744,6 +772,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const initialToolSchemas = cachedToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
+                    ...(t.returnType !== undefined ? { returnType: t.returnType as string } : {}),
                     parameters: (t.parameters ?? []).map((p: any) => ({
                       name: p.name as string,
                       type: p.type as string,
@@ -758,7 +787,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // + allowedTools prompt filter + adaptive filter ──
                   // Body extracted to engine/phases/agent-loop/setup/tool-schemas.ts (W23 step 6a-6).
                   const prepared = yield* prepareReasoningToolSchemas({
-                    config,
+                    config: configForBehavioralContract,
                     task,
                     availableToolSchemas: initialToolSchemas,
                     availableToolNames: initialToolNames,
@@ -803,7 +832,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
                     runReasoningThink(c, {
-                      config,
+                      config: configForBehavioralContract,
                       task,
                       reasoningService: reasoningOpt.value,
                       availableToolNames,
@@ -852,6 +881,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     task,
                     obs,
                     isNormal,
+                    // This fires ONE coarse act+observe pair per reasoning()
+                    // call, batching every tool the reasoning service used —
+                    // the only act/observe signal for a custom or mocked
+                    // ReasoningService that doesn't route through the kernel
+                    // (see feature-contract.test.ts "act hook fires after
+                    // reasoning when tools were used", which mocks the
+                    // service and depends on exactly this). For the real
+                    // kernel, act.ts ALSO fires its own act+observe pair per
+                    // individual tool round (finer-grained, per-call). Both
+                    // are real and intentional at different granularity —
+                    // not a duplicate to remove.
                     fireActObserveHooks: (c) =>
                       Effect.gen(function* () {
                         let cc = yield* guardedPhase(c, "act", (cx) => Effect.succeed(cx));
@@ -859,245 +899,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         return cc;
                       }) as Effect.Effect<ExecutionContext, never>,
                   });
-                } else if (!cacheHit) {
-                  // ── Minimal direct-LLM loop ──
-                  // Seed messages with the user's prompt before the first LLM call
-                  ctx = {
-                    ...ctx,
-                    messages: [
-                      {
-                        role: "user",
-                        content: extractTaskText(task.input),
-                      },
-                    ],
-                  };
-
-                  // Get tools in function-calling format for LLM requests
-                  const rawFunctionCallingTools = yield* Effect.serviceOption(
-                    ToolService,
-                  ).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.toFunctionCallingFormat()
-                        : Effect.succeed([] as readonly any[]),
-                    ),
-                    Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                  );
-
-                  // ── Tool-surface policy on the INLINE path (2026-07-11) ──
-                  // This branch exposed the RAW registry to the model: the
-                  // builtins opt-in, allowedTools/focusedTools, adaptive
-                  // filtering AND the TaskContract forbidden list ("MUST NOT
-                  // be visible to the LLM", task-contract.ts:33) were only
-                  // enforced on the reasoning path. Same transform, same
-                  // inputs — one policy, both paths.
-                  const inlinePrepared = yield* prepareReasoningToolSchemas({
-                    // Builtins opt-in nuance: on the REASONING path the
-                    // relevance classifier rescues task-relevant builtins, so
-                    // "hidden unless opted in" stays livable. The inline path
-                    // has NO classifier — filtering an un-opted `.withTools()`
-                    // here would strip EVERY builtin and leave the agent
-                    // toolless (live regression caught by probe p2: the model
-                    // printed the file contents as prose). Bare `.withTools()`
-                    // on this path therefore exposes builtins; explicit
-                    // subsets, allowedTools, and forbidden lists are enforced
-                    // exactly as declared.
-                    config: config.builtins === undefined ? { ...config, builtins: true } : config,
-                    task,
-                    availableToolSchemas: ((cachedToolDefs ?? []) as readonly any[]).map((t: any) => ({
-                      name: t.name as string,
-                      description: t.description as string,
-                      // Custom tools may declare JSON-Schema-object parameters
-                      // instead of the array shape — policy filtering only
-                      // needs names, so degrade to [] rather than throw.
-                      parameters: (Array.isArray(t.parameters) ? t.parameters : []).map((p: any) => ({
-                        name: p.name as string,
-                        type: p.type as string,
-                        description: p.description as string,
-                        required: Boolean(p.required),
-                      })),
-                    })),
-                    availableToolNames: ((cachedToolDefs ?? []) as readonly any[]).map((t: any) => t.name as string),
-                    effectiveAllowedTools,
-                    effectiveFocusedTools,
-                    effectiveRequiredTools,
-                    classifiedRelevantTools,
-                    resolvedCalibration,
-                    obs,
-                    isNormal,
-                  });
-                  const inlineExposedNames = new Set(inlinePrepared.availableToolNames);
-                  const functionCallingTools = rawFunctionCallingTools.filter((t: any) =>
-                    inlineExposedNames.has(t.name as string),
-                  );
-
-                  // Collect available tool names for hook context enrichment (Phase 1.4)
-                  const availableToolNames = functionCallingTools.map((t: any) => t.name as string);
-
-                  // H3: Get ContextWindowManager for proper context building (Phase 1.1)
-                  // Type shape shared with inline-think.ts (WS-5 Phase 2 dedupe);
-                  // rationale for the `unknown` error channels lives in the
-                  // ContextManagerLike doc-block in inline-think.ts.
-                  const contextManagerOpt = yield* Effect.serviceOption(
-                    Context.GenericTag<ContextManagerLike>("ContextWindowManager"),
-                  ).pipe(
-                    Effect.catchAll(() =>
-                      Effect.succeed({ _tag: "None" as const }),
-                    ),
-                  );
-
-                  let isComplete = false;
-
-                  // Create progress logger for per-iteration visibility
-                  const verbosity = obs ? (obs.verbosity() as "minimal" | "normal" | "verbose" | "debug") : "minimal";
-                  const progressLogger = createProgressLogger(verbosity);
-
-                  while (!isComplete && ctx.iteration <= ctx.maxIterations) {
-                    // ── Per-iteration guards (lifecycle / behavioral / budget / events / gauge) ──
-                    // Body extracted to engine/phases/agent-loop/iteration-guards.ts (W24-D step 1).
-                    {
-                      const guardResult = yield* runIterationGuards({
-                        ctx,
-                        config,
-                        eb,
-                        obs,
-                        checkLifecycle,
-                      });
-                      ctx = guardResult.ctx;
-                      if (guardResult.shouldBreak) {
-                        isComplete = true;
-                        break;
-                      }
-                    }
-
-                    // 5a. THINK
-                    // Body extracted to engine/phases/agent-loop/inline-think.ts (W23 step 6a-0).
-                    ctx = yield* guardedPhase(
-                      ctx,
-                      "think",
-                      (c) =>
-                        runInlineThink(c, {
-                          config,
-                          functionCallingTools,
-                          availableToolNames,
-                          contextManagerOpt,
-                          eb,
-                          obs,
-                          isVerbose,
-                          effectiveContextTokens: resolveCapability(
-                            String(c.provider ?? config.provider ?? "unknown"),
-                            resolveModelName(c, config),
-                          ).recommendedNumCtx,
-                        }),
-                    );
-
-                    // Log thought phase for per-iteration progress visibility
-                    yield* progressLogger.logIteration({
-                      iteration: ctx.iteration,
-                      maxIterations: ctx.maxIterations,
-                      phase: "thought",
-                      content: ctx.metadata.lastResponse ?? "",
-                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2535", tag: errorTag(err) })));
-
-                    // 5b. ACT (if tool calls present) — call real ToolService
-                    // Body extracted to engine/phases/agent-loop/inline-act.ts (W23 step 6a-1a).
-                    const pendingCalls =
-                      ctx.metadata.pendingToolCalls ?? [];
-                    if (pendingCalls.length > 0) {
-                      ctx = yield* guardedPhase(ctx, "act", (c) =>
-                        runInlineAct(c, {
-                          config,
-                          pendingCalls,
-                          eb,
-                          obs,
-                          isNormal,
-                          progressLogger,
-                          // Exposure-gated recovery hints: only tools the
-                          // model can actually call may be named.
-                          exposedToolNames: new Set(availableToolNames),
-                        }),
-                      );
-
-                      // Log action phase for each tool call
-                      for (const toolResult of ctx.toolResults.slice(-pendingCalls.length) as ReadonlyArray<{ toolName?: string; success?: boolean }>) {
-                        yield* progressLogger.logIteration({
-                          iteration: ctx.iteration,
-                          maxIterations: ctx.maxIterations,
-                          phase: "action",
-                          content: `Tool: ${toolResult.toolName}`,
-                          toolName: toolResult.toolName,
-                          toolStatus: toolResult.success ? "success" : "error",
-                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2710", tag: errorTag(err) })));
-                      }
-
-                      // 5c. OBSERVE — H5: also log episodic memories
-                      // Body extracted to engine/phases/agent-loop/inline-observe.ts (W23 step 6a-1b).
-                      ctx = yield* guardedPhase(ctx, "observe", (c) =>
-                        runInlineObserve(c, {
-                          pendingCallCount: pendingCalls.length,
-                          obs,
-                          isVerbose,
-                        }),
-                      );
-
-                      // Log observation phase with summary
-                      const recentResults = ctx.toolResults.slice(-pendingCalls.length) as ReadonlyArray<{ toolName?: string; success?: boolean; result?: unknown }>;
-                      for (const toolResult of recentResults) {
-                        const resultPreview = typeof toolResult.result === "string"
-                          ? toolResult.result.slice(0, 100)
-                          : JSON.stringify(toolResult.result).slice(0, 100);
-                        yield* progressLogger.logIteration({
-                          iteration: ctx.iteration,
-                          maxIterations: ctx.maxIterations,
-                          phase: "observation",
-                          content: resultPreview,
-                          toolName: toolResult.toolName,
-                          toolStatus: toolResult.success ? "success" : "error",
-                          errorMessage: toolResult.success ? undefined : (toolResult.result as string),
-                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2828", tag: errorTag(err) })));
-                      }
-
-                      // Log iteration summary
-                      yield* progressLogger.logIterationSummary(
-                        ctx.iteration,
-                        ctx.tokensUsed,
-                        recentResults.map((r: any) => r.toolName),
-                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2836", tag: errorTag(err) })));
-                    } else {
-                      // 5d. LOOP_CHECK
-                      isComplete = Boolean(ctx.metadata.isComplete);
-                      ctx = { ...ctx, iteration: ctx.iteration + 1 };
-
-                      // Log iteration summary even when no tools called
-                      yield* progressLogger.logIterationSummary(
-                        ctx.iteration - 1,
-                        ctx.tokensUsed,
-                        [],
-                        isComplete ? "final-answer" : "no-tools",
-                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2848", tag: errorTag(err) })));
-                    }
-                  }
-
-                  // Max iterations reached without completion
-                  if (!isComplete && ctx.iteration >= ctx.maxIterations) {
-                    return yield* Effect.fail(
-                      new MaxIterationsError({
-                        message: `Task ${task.id} exceeded max iterations (${ctx.maxIterations})`,
-                        taskId: task.id,
-                        iterations: ctx.iteration,
-                        maxIterations: ctx.maxIterations,
-                      }),
-                    );
-                  }
-
-                  // ── Harness hooks (post-think, direct-LLM path) ────────────────────
-                  // Body extracted to engine/phases/agent-loop/inline-harness-hooks.ts (W23 step 6a-1c).
-                  ctx = yield* runInlineHarnessHooks(ctx, { config, task, cacheHit, obs });
-
-                  // Phase 0.5: Capture final state snapshot after agent loop
-                  // Extracted to engine/finalize/snapshot-final.ts (W26-A step 2).
-                  yield* captureFinalSnapshot(ctx, config, obs);
                 }
+                // Dead inline direct-LLM arm removed (2026-08-23) — Move 1
+                // (2026-08-13) made `createRuntime()` always provide
+                // `ReasoningService`, so `reasoningOpt` was already `Some` on
+                // every real execution path; the `else if (!cacheHit)` branch
+                // that used to run when it was `None` had been unreachable in
+                // production for 10 days. Its last 10 test-only callers were
+                // migrated onto the kernel arm's equivalent mechanisms
+                // (reasoning-harness-hooks.ts, reasoning-think.ts) — see
+                // DEBT-REGISTER D-2026-08-23-A. `runInlineThink` /
+                // `runInlineAct` / `runInlineObserve` /
+                // `runInlineHarnessHooks` / `iteration-guards.ts`'s
+                // `runIterationGuards` were called ONLY from here and are
+                // deleted alongside it (see `inline-*.ts` file removal in the
+                // same commit).
 
                 // ── Phase 6: VERIFY (optional) ── H2
                 // Extracted to engine/phases/verify.ts (W23). Skip predicate
@@ -1192,6 +1008,51 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       ? String(sanitizedOutput).trim()
                       : "";
                 const hasSubstantiveOutput = outputForSuccess.length > 0;
+
+                // ── Behavioral contract: checkOutput (maxOutputLength / deniedTopics /
+                // requireDisclosure) ──
+                // The one dimension with no kernel-native equivalent AND no prior
+                // caller anywhere in the monorepo (a pre-existing gap, not a Move-1
+                // regression — see behavioral-contract-bridge.ts doc block). Runs
+                // ONCE here, in the shared post-arm code that sees the final output
+                // regardless of which arm produced it. A "block" severity violation
+                // fails the run the same way the old inline-arm tool/iteration
+                // violations did, for a uniform failure mode across all 3 contract
+                // dimensions. A "warning" surfaces via `obs` without failing.
+                if (config.enableBehavioralContracts) {
+                  const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (bcOpt._tag === "Some") {
+                    const violation = yield* bcOpt.value.checkOutput(outputForSuccess).pipe(
+                      Effect.catchAll(() => Effect.succeed(null)),
+                    );
+                    if (violation) {
+                      if (violation.severity === "block") {
+                        return yield* Effect.fail(
+                          new BehavioralContractViolationError({
+                            message: violation.message,
+                            taskId: ctx.taskId,
+                            rule: violation.rule,
+                            violation: violation.message,
+                          }),
+                        );
+                      }
+                      if (obs) {
+                        yield* obs
+                          .info(`⚠ [behavioral-contract] ${violation.message}`)
+                          .pipe(
+                            Effect.catchAll((err) =>
+                              emitErrorSwallowed({
+                                site: "runtime/src/execution-engine.ts:behavioral-contract-output-warning",
+                                tag: errorTag(err),
+                              }),
+                            ),
+                          );
+                      }
+                    }
+                  }
+                }
 
                 // Extract terminatedBy from reasoning metadata, with fallback inference.
                 //
@@ -1481,6 +1342,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // Forward reasoning steps so chat() can access tool results and analysis.
                     // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
                     ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
+                    // Forward the uncompressed tool-result store alongside reasoningSteps
+                    // so external evidence checks (validateCitations) aren't limited to
+                    // the lossy compressed step-content preview.
+                    ...(ctx.metadata.scratchpad ? { scratchpad: ctx.metadata.scratchpad } as Record<string, unknown> : {}),
                     // Trust receipt (Arc 1 Task 8): forward `{name, ok}` tool-call
                     // outcomes collected from ToolCallCompleted events. This is the
                     // ONLY grounding source on the minimal/inline loop (which

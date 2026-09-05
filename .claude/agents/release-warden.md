@@ -1,6 +1,6 @@
 ---
 name: release-warden
-description: Cross-cutting release gate. Runs `bun run release:dry`, verifies version-drift, audits clean-install + build + typecheck + test pipeline before any `git tag vX.Y.Z`. Never `npm publish` manually. Refuses to tag if any gate fails. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Cross-cutting release gate. Runs `bun run release:dry`, verifies version-drift, audits clean-install + build + typecheck + test pipeline before any `git tag vX.Y.Z`. Never `npm publish` manually. Refuses to tag if any gate fails. Mandatory MissionBrief + UpwardReport.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -69,5 +69,6 @@ If ANY gate fails → `status: failed`, blockers list, NEVER tag.
    - All gates green → `status: completed`, confidence ≥ 0.9, `planned-actions-pending-approval` lists exact tag command + push command for user
    - Any gate failed → `status: failed`, blockers populated, retries-allowed: 0 (release-warden never retries — fix and re-spawn)
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

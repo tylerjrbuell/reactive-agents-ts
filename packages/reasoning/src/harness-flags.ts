@@ -44,8 +44,9 @@ function isOff(v: string | undefined): boolean {
  *
  * Default ON (since 2026-04-26). Off via `RA_LAZY_TOOLS=0`.
  */
-export function lazyDisclosureEnabled(): boolean {
-  return !isOff(readFlag("RA_LAZY_TOOLS"));
+export function lazyDisclosureEnabled(defaultValue = true): boolean {
+  const v = readFlag("RA_LAZY_TOOLS");
+  return v === undefined ? defaultValue : !isOff(v);
 }
 
 /**
@@ -59,10 +60,46 @@ export function lazyDisclosureEnabled(): boolean {
  * Note the dependency, which is real rather than incidental: with pruning off
  * every permitted tool is already visible, so discovery has nothing to add.
  */
-export function toolDiscoveryEnabled(): boolean {
+export function toolDiscoveryEnabled(defaultValue = true): boolean {
   const explicit = readFlag("RA_TOOL_DISCOVERY");
   if (explicit !== undefined) return !isOff(explicit);
-  return !isOff(readFlag("RA_LAZY_TOOLS"));
+  const lazy = readFlag("RA_LAZY_TOOLS");
+  return lazy === undefined ? defaultValue : !isOff(lazy);
+}
+
+/**
+ * Always-visible lightweight index of hidden-but-permitted tools (progressive
+ * disclosure, 2026-08-19 — counter-proposal to 09-UNIFIED-PROGRAM.md §5.2's
+ * discover-tools removal ruling). `discover-tools` is a REACTIVE meta-tool —
+ * the model must already suspect something is hidden to think to call it,
+ * and `tool-surface.ts`'s own reason map (why each tool is hidden) is
+ * computed every iteration but never rendered into the prompt, so the model
+ * has zero signal. This renders a cheap name+one-line index of currently
+ * hidden tools directly in the dynamic tail instead — no FC schema tax, just
+ * plain text, only present when something is actually hidden.
+ *
+ * Default OFF pending an ablation-warden cross-tier measurement — see
+ * wiki/Planning/Implementation-Plans/2026-08-19-lightweight-tool-index-progressive-disclosure.md.
+ * `RA_TOOL_INDEX=1` to enable for probing.
+ */
+export function toolIndexEnabled(defaultValue = false): boolean {
+  const v = readFlag("RA_TOOL_INDEX");
+  return v === undefined ? defaultValue : v === "1";
+}
+
+/**
+ * Env-flag fallback for `ContextProfile.toolIndexMaxEntries` ("hybrid" mode's
+ * cap — see context-profile.ts) — no public builder API sets the field
+ * per-run yet, so this is the only way to drive it outside a
+ * `CONTEXT_PROFILES` tier default. `profile.toolIndexMaxEntries` always wins
+ * when set; this is consulted only as a fallback. Unset ⇒ undefined (no cap,
+ * "index" mode's behavior).
+ */
+export function toolIndexMaxEntriesFlag(): number | undefined {
+  const raw = readFlag("RA_TOOL_INDEX_MAX_ENTRIES");
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 /**
@@ -76,34 +113,6 @@ export function verboseRulesEnabled(): boolean {
   const explicit = readFlag("RA_VERBOSE_RULES");
   if (explicit !== undefined) return !isOff(explicit);
   return readFlag("RA_LAZY_TOOLS") === "0";
-}
-
-/**
- * Stable tool surface — the FC `tools` array and the in-prompt tool reference
- * both stay fixed for the whole run instead of being narrowed per iteration.
- *
- * Default OFF. `RA_STABLE_TOOL_SURFACE=1` turns it on.
- *
- * WHY IT EXISTS. Anthropic caches by exact prefix and `tools` is position zero
- * of that prefix, so per-iteration narrowing invalidates every cache breakpoint
- * on every turn. Measured on haiku: the pruning arm spends 39,174 tokens for
- * $0.04518 with cacheRead 0; the non-pruning arm spends 66,719 tokens for
- * $0.03871 with cacheRead 40,277. Pruning wins 41% of tokens and loses 17% of
- * the money.
- *
- * WHY IT IS NOT THE DEFAULT. That is one measurement, one tier, one task shape.
- * Promotion goes through the 09 §6 lift rule on rungs 2 and 3 of the ladder.
- *
- * NOTE ON "LOGIT MASKING". The industry rule is that tool availability should be
- * controlled by masking rather than list mutation. The Anthropic API exposes no
- * per-tool masking — `tool_choice` is auto/any/tool(name)/none only — so that
- * rule cannot be applied literally here. Availability is instead enforced at
- * execution: the schema stays in the list and a call to a withheld tool returns
- * a corrective observation. Building a masking abstraction over an API that
- * cannot mask would be the over-engineering this program exists to stop.
- */
-export function stableToolSurfaceEnabled(): boolean {
-  return readFlag("RA_STABLE_TOOL_SURFACE") === "1";
 }
 
 /**

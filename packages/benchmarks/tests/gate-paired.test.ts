@@ -52,7 +52,10 @@ const cell = (
     { type: "internal", id: variantId, label: variantId, config: {} },
     scores.map(run),
   ),
+  // No-caching case (2026-08-24 amendment): billed === raw.
   meanTokens,
+  meanBilledTokens: meanTokens,
+  meanCacheReadTokens: 0,
 });
 
 const report = (rows: readonly TaskVariantReport[]): SessionReport =>

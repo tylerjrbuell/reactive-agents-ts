@@ -185,6 +185,34 @@ Each report contains:
 
 Or disable telemetry entirely by passing `telemetry: { enabled: false }`.
 
+Environment-level opt-out (no code change, honored at the same choke point as the config option above):
+
+```sh
+DO_NOT_TRACK=1                  # console DNT convention
+# or
+REACTIVE_AGENTS_TELEMETRY=0
+```
+
+### Silencing the Notice
+
+When telemetry is on, a one-time "Reactive Intelligence" notice prints at the start of the first run in a process. Three independent ways to silence just the notice (telemetry keeps running):
+
+```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReactiveIntelligence({ notice: false })
+    .build()
+```
+
+```sh
+# Silences every framework notice, not just this one
+REACTIVE_AGENTS_SUPPRESS_NOTICES=1
+```
+
+Or dismiss programmatically at runtime via the `NoticesManager` (`@reactive-agents/observability`): `noticesManager.dismiss("telemetry-enabled")`.
+
 ## Dashboard Integration
 
 When both `.withObservability()` and `.withReactiveIntelligence()` are enabled, the metrics dashboard includes a **Reasoning Signal** section:
@@ -251,5 +279,6 @@ interface ReactiveIntelligenceConfig {
     enabled: boolean;
     endpoint?: string;
   }; // default: false — set true or { enabled: true } to send reports
+  notice?: boolean;              // default: true — show the one-time telemetry banner
 }
 ```

@@ -8,6 +8,17 @@ import { httpAllowPrivateEnabled } from "../flags.js";
 /** Max redirect hops to follow while re-validating each against the egress guard. */
 const MAX_REDIRECTS = 5;
 
+/**
+ * Hard ceiling on the raw fetched body before it ever reaches JSON parsing or
+ * compression. Defense-in-depth: a normal page/API response is orders of
+ * magnitude smaller than this (measured live: a full Wikipedia article is
+ * ~2.2M chars — already an outlier), but nothing upstream previously bounded
+ * `response.text()` / `response.json()` — a pathological multi-MB body would
+ * be read and parsed in full before `compressToolResult` (which only runs
+ * downstream, in the kernel) ever got a chance to act.
+ */
+const MAX_BODY_CHARS = 2_000_000;
+
 export const httpGetTool: ToolDefinition = {
   name: "http-get",
   description:
@@ -51,9 +62,14 @@ export const httpGetTool: ToolDefinition = {
   cardinality: "per-entity",
 };
 
+export interface HttpGetConfig {
+  readonly allowPrivate?: boolean;
+}
+
 export const httpGetHandler = (
-  args: Record<string, unknown>,
-): Effect.Effect<unknown, ToolExecutionError> =>
+  config?: HttpGetConfig,
+): ((args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>) =>
+  (args: Record<string, unknown>): Effect.Effect<unknown, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
       const url = args.url as string;
@@ -62,8 +78,9 @@ export const httpGetHandler = (
       // Egress guard (F6): the URL is model-controlled. Validate the target —
       // and every redirect hop — is public before fetching, so a prompt-injected
       // agent cannot reach cloud metadata (169.254.169.254) or internal hosts.
-      // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets.
-      const guard = { allowPrivate: httpAllowPrivateEnabled() };
+      // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets,
+      // or override per-agent via config.
+      const guard = { allowPrivate: config?.allowPrivate ?? httpAllowPrivateEnabled() };
       let current = (await assertPublicUrl(url, guard)).toString();
       let response = await fetch(current, { method: "GET", headers, redirect: "manual" });
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
@@ -75,11 +92,28 @@ export const httpGetHandler = (
       }
       const contentType = response.headers.get("content-type") ?? "";
 
+      // Read as text first (regardless of content-type) so the size cap
+      // applies before any JSON parse — `response.json()` on an oversized
+      // body would otherwise materialize the whole thing in memory first.
+      const rawText = await response.text();
+      const truncated = rawText.length > MAX_BODY_CHARS;
+      const boundedText = truncated ? rawText.slice(0, MAX_BODY_CHARS) : rawText;
+
       let body: unknown;
-      if (contentType.includes("application/json")) {
-        body = await response.json();
+      if (truncated) {
+        body =
+          `[Response body truncated: ${rawText.length} chars exceeds the ${MAX_BODY_CHARS}-char ` +
+          `safety cap — showing the first ${MAX_BODY_CHARS}]\n${boundedText}`;
+      } else if (contentType.includes("application/json")) {
+        try {
+          body = JSON.parse(boundedText);
+        } catch {
+          // Content-Type lied or the body was malformed — fall back to raw
+          // text rather than failing the whole call.
+          body = boundedText;
+        }
       } else {
-        body = await response.text();
+        body = boundedText;
       }
 
       return {

@@ -111,6 +111,35 @@ export const MyServiceLive = Layer.effect(
 - Dependencies are resolved with `yield* OtherService` inside `Effect.gen`
 - All methods return `Effect.Effect<Success, Error>`
 
+## Services: Effect.Service (app-level shortcut, since Effect 3.9)
+
+`Effect.Service` fuses the tag + layer into one class. Use it for **app-level services with exactly one concrete implementation and no swap-out need** (e.g. a single package's internal orchestrator). Keep the two-step `Context.Tag` + `Layer.effect` pattern above for **library-exported services** where multiple implementations (live/test/mock) are expected — most of this framework's cross-package services fall in that bucket, so `Effect.Service` should stay the exception, not the default.
+
+```typescript
+import { Effect } from "effect";
+
+export class Greeter extends Effect.Service<Greeter>()("Greeter", {
+  effect: Effect.gen(function* () {
+    const dep = yield* OtherService;
+    return {
+      greet: (name: string) => Effect.succeed(`Hello ${name}`),
+    };
+  }),
+}) {}
+
+// Usage: Greeter.Default is the auto-generated Layer
+Effect.gen(function* () {
+  const greeter = yield* Greeter;
+  return yield* greeter.greet("world");
+}).pipe(Effect.provide(Greeter.Default));
+```
+
+**Rules:**
+
+- Only for services with one canonical implementation, internal to a package
+- Do NOT use for any service that ships a `Live`/`Test` layer pair — use `Context.Tag` + `Layer.effect` instead
+- Still returns `Effect.Effect<Success, Error>` methods; still no `throw`, no raw mutable state
+
 ## Scoped Resources: Layer.scoped for cleanup
 
 ```typescript
@@ -218,7 +247,7 @@ Before committing any file, verify:
 - [ ] All types use `Schema.Struct`, not interfaces (exception: strategy input interfaces with Effect types)
 - [ ] All IDs use `Schema.brand()`
 - [ ] All errors use `Data.TaggedError`
-- [ ] All services use `Context.Tag` + `Layer.effect`
+- [ ] All library-exported services use `Context.Tag` + `Layer.effect`; single-impl internal services may use `Effect.Service`
 - [ ] All state uses `Ref`
 - [ ] No `throw`, no raw `await`, no mutable variables
 - [ ] No `@ts-ignore` or `@ts-expect-error` — ever
@@ -228,5 +257,9 @@ Before committing any file, verify:
 - [ ] Package exports a `createXxxLayer()` factory
 - [ ] `index.ts` re-exports all public types, errors, services, and the layer factory
 - [ ] File names kebab-case, types PascalCase, functions camelCase
+
+## Version Note (checked 2026-09-03)
+
+Repo pins `effect@^3.10.0`; installed `3.19.18`; npm latest `3.22.1`. No breaking changes found in that range — safe to bump lockfile, but run full build+test after (`bun run build && bun test`), don't assume. `Data.TaggedError` remains the default error pattern; `Schema.TaggedError` is only worth reaching for when the error itself needs schema decode/encode across a wire boundary — no changelog evidence it's now "preferred" generally.
 
 See `CODING_STANDARDS.md` for the full authoritative reference.

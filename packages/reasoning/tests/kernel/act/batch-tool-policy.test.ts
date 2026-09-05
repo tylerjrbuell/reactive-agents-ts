@@ -13,7 +13,7 @@
 // real: this test drives the actual kernel `act.ts` batch path (not a mock)
 // and proves it.
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { handleActing } from "../../../src/kernel/capabilities/act/act.js";
@@ -23,7 +23,6 @@ import {
   noopHooks,
   type KernelContext,
   type KernelState,
-  type MaybeService,
   type ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
@@ -31,18 +30,15 @@ import type { StepId } from "../../../src/types/step.js";
 
 /** A ToolService that RECORDS every executed tool name, so a policy block is
  *  provable by absence (the tool never reached the service). */
-function recordingToolService(executed: string[]): MaybeService<ToolServiceInstance> {
-  return {
-    _tag: "Some",
-    value: {
+function recordingToolService(executed: string[]): Option.Option<ToolServiceInstance> {
+  return Option.some({
       execute: (req) => {
         executed.push(req.toolName);
         return Effect.succeed({ success: true, result: { ok: req.toolName } });
       },
       getTool: () => Effect.fail(new Error("no schema")),
       listTools: () => Effect.succeed([]),
-    },
-  };
+    });
 }
 
 function baseState(pendingCalls: { id: string; name: string; arguments: Record<string, unknown> }[]): KernelState {
@@ -67,7 +63,7 @@ function baseState(pendingCalls: { id: string; name: string; arguments: Record<s
 
 function baseContext(
   pipeline: HarnessPipeline,
-  toolService: MaybeService<ToolServiceInstance>,
+  toolService: Option.Option<ToolServiceInstance>,
   allowedTools: readonly string[],
 ): KernelContext {
   const profile = CONTEXT_PROFILES["mid"];

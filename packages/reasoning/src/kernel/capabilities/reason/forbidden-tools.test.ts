@@ -24,7 +24,7 @@
 //      fails test (2).
 
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import fc from "fast-check";
 import { LLMService, type StreamEvent } from "@reactive-agents/llm-provider";
 import { NativeFCDriver } from "@reactive-agents/tools";
@@ -41,6 +41,7 @@ import {
 import { CONTEXT_PROFILES } from "../../../context/context-profile.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 
 const schema = (name: string): ToolSchema =>
   ({ name, description: `${name} tool`, parameters: [] }) as ToolSchema;
@@ -61,6 +62,7 @@ const baseInputs = (over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs =>
   gateBlockedTools: [],
   missingRequiredTools: [],
   pruneMinTools: 0,
+  harness: resolveHarnessConfig(),
   ...over,
 });
 
@@ -225,10 +227,10 @@ const captureFCTools = async (state: KernelState, input: KernelInput): Promise<s
     input,
     profile: CONTEXT_PROFILES.local,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
-    toolService: { _tag: "None" },
+    toolService: Option.none(),
     hooks: noopHooks,
     toolCallingDriver: new NativeFCDriver(),
-    memoryService: { _tag: "None" },
+    memoryService: Option.none(),
   };
   await Effect.runPromise(handleThinking(state, context).pipe(Effect.provide(stubLLM)));
   return capturedFCToolNames;

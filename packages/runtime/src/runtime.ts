@@ -18,6 +18,7 @@ import {
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive, SkillStoreServiceLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
+import { withMemoryGuardrails } from "./memory-guardrails.js";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
@@ -609,10 +610,12 @@ export const createRuntime = (options: RuntimeOptions) => {
           ),
         embed: (texts, model) => llm.embed(texts, model),
       };
-      return createMemoryLayer(
-        config.memoryTier,
-        memoryOverrides as Parameters<typeof createMemoryLayer>[1],
-        bridgedLLM,
+      return withMemoryGuardrails(
+        createMemoryLayer(
+          config.memoryTier,
+          memoryOverrides as Parameters<typeof createMemoryLayer>[1],
+          bridgedLLM,
+        ),
       );
     }),
   ).pipe(Layer.provide(Layer.merge(observableLlmLayer, eventBusLayer)));
@@ -650,7 +653,14 @@ export const createRuntime = (options: RuntimeOptions) => {
   // ── KillSwitch ──
   // Provide eventBusLayer so KillSwitchService captures the same EventBus instance
   // during its layer build (for AgentPaused/AgentResumed event emission).
-  const killSwitchOptLayer = options.enableKillSwitch
+  // Also auto-provided when a behavioral contract declares `maxToolCalls` —
+  // that dimension has no kernel-native equivalent and is enforced by
+  // triggering the kill switch from an EventBus subscriber (see
+  // engine/phases/agent-loop/behavioral-contract-bridge.ts). Without this,
+  // `.withBehavioralContracts({ maxToolCalls })` alone (no `.withKillSwitch()`)
+  // would silently never enforce the cap — the service simply wouldn't exist
+  // in the DI graph for execution-engine.ts to acquire.
+  const killSwitchOptLayer = options.enableKillSwitch || (options.enableBehavioralContracts && options.behavioralContract?.maxToolCalls != null)
     ? (() => {
         const { KillSwitchServiceLive } =
           require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
@@ -920,6 +930,12 @@ export const createRuntime = (options: RuntimeOptions) => {
                   taskId: event.taskId,
                   model: event.model,
                   tokensUsed: event.tokensUsed,
+                  // Live as of Task 3 (LLMRequestCompleted now has a real
+                  // producer). Fall back to the raw figure, never to 0 — a
+                  // provider without cache reporting must log as "billed
+                  // everything", not as free.
+                  billedTokens: event.billedTokens ?? event.tokensUsed,
+                  cacheReadTokensIn: event.cacheReadTokensIn ?? 0,
                   durationMs: event.durationMs,
                 }),
               ),
@@ -971,11 +987,18 @@ export const createRuntime = (options: RuntimeOptions) => {
       : undefined;
 
   const reactiveIntelOptLayer = options.enableReactiveIntelligence
-    ? createReactiveIntelligenceLayer(
+    ? // The RI layer's calibration-update subscriber (wired in
+      // `createReactiveIntelligenceLayer`) requires `EventBus`. Per the
+      // `Layer.mergeAll` caveat documented below (gateway/extra layers hit
+      // the same thing), sibling layers in a single `mergeAll` do NOT
+      // auto-wire each other's requirements — provide the runtime's shared
+      // `eventBusLayer` explicitly so the subscriber joins the SAME bus
+      // instance `reactive-observer.ts` publishes `EntropyScored` to.
+      createReactiveIntelligenceLayer(
         options.reactiveIntelligenceOptions,
         undefined,
         skillLayerForRi,
-      )
+      ).pipe(Layer.provide(eventBusLayer))
     : skillLayerForRi?.resolver
       ? makeSkillResolverService(skillLayerForRi.resolver)
       : Layer.empty;
@@ -1279,10 +1302,10 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
               ),
             embed: (texts, model) => llm.embed(texts, model),
           };
-          return createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM);
+          return withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM));
         }),
       ).pipe(Layer.provide(llmLayer))
-    : createMemoryLayer("1", { agentId: options.agentId });
+    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }));
 
   // Minimal hooks layer (required by ExecutionEngine)
   const hookLayer = LifecycleHookRegistryLive;

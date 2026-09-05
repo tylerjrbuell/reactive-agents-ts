@@ -346,6 +346,31 @@ export function deriveConditions(
    */
   availableWritingTools?: readonly string[],
 ): PostCondition[] {
+  // Root fix (2026-09-04): two independent call sites prepend prior-turn prose
+  // to the task text verbatim before it reaches the kernel:
+  //   - `ReactiveAgent.chat()`'s tool-capable path: "Context from prior run:
+  //     ${contextSummary}\n\nNew request: ${message}" (reactive-agent.ts)
+  //   - `withHistoryBlock()` (reactive-agent.ts, shared with the gateway's
+  //     `formatHistoryBlock`): "--- Conversation history ---\n...\n\n
+  //     --- Current message ---\n${input}" — and the two COMPOSE, since
+  //     `.run()` calls withHistoryBlock on the already-chat-enriched string.
+  // Prior-turn prose narrates what ALREADY happened ("searched the page and
+  // shared a summary of the note") in past tense — exactly the MUTATION_VERB
+  // + EXTERNAL_RESOURCE_NOUN vocabulary this heuristic scans for, but it
+  // describes PAST work, not what the CURRENT turn is asking for. Left
+  // unstripped, a plain conversational follow-up ("that's so cool") inherited
+  // an unsatisfiable SideEffectLanded condition from the previous turn's own
+  // rich prose and looped indefinitely (verified live — the post-condition
+  // steer can never land a side-effect a banter reply was never going to
+  // produce). Scan only the text after the LAST of either marker (whichever
+  // is closer to the actual current ask); absent both, byte-identical.
+  const markers = ["New request:", "--- Current message ---"];
+  const markerEnd = markers.reduce((furthest, marker) => {
+    const idx = task.lastIndexOf(marker);
+    return idx >= 0 ? Math.max(furthest, idx + marker.length) : furthest;
+  }, -1);
+  const scanTask = markerEnd >= 0 ? task.slice(markerEnd) : task;
+
   const conditions: PostCondition[] = [];
   const seen = new Set<string>();
   const push = (c: PostCondition): void => {
@@ -361,7 +386,7 @@ export function deriveConditions(
   }
 
   // 2. literal deliverable path -> ArtifactProduced + writing ToolCalled
-  const path = deriveDeliverablePath(task);
+  const path = deriveDeliverablePath(scanTask);
   if (path) {
     push(artifactProduced(path));
     const writer =
@@ -370,7 +395,7 @@ export function deriveConditions(
         : (requiredTools.find((t) => availableWritingTools.includes(t)) ??
            availableWritingTools[0]);
     if (writer !== undefined) push(toolCalled(writer));
-  } else if (MUTATION_VERB.test(task) && EXTERNAL_RESOURCE_NOUN.test(task)) {
+  } else if (MUTATION_VERB.test(scanTask) && EXTERNAL_RESOURCE_NOUN.test(scanTask)) {
     // 3. non-file mutation (create/send/… a note/email/event) -> the side-effect
     //    must LAND. Excluded when a file path derived above: ArtifactProduced's
     //    disk truth already grounds that case, and adding a terminal-success

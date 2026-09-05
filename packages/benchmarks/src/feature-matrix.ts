@@ -97,6 +97,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withSystemPrompt: { featureClass: "capability", gapReason: "prompt override would confound the harness comparison" },
   withTaskContext: { featureClass: "capability", gapReason: "task-context injection unmeasured" },
   withTestScenario: { featureClass: "capability", gapReason: "deterministic test provider; not a live-model capability" },
+  withToolIntent: { featureClass: "capability", gapReason: "chat()-level classifier override; bench runner drives run(), not chat() sessions" },
   withUserInteraction: { featureClass: "capability", gapReason: "bench has no user" },
   withVerificationStep: { featureClass: "capability", gapReason: "explicit verify step; unmeasured" },
 
@@ -160,7 +161,10 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
 // withers were REMOVED from the builder (withInteraction, withOrchestration,
 // withProgressCheckpoint — register P0-6/P0-10), shrinking the real gap. Ratchet
 // down, never up.
-export const UNCOVERED_CAPABILITY_CEILING = 35;
+// 2026-09-04: 35 → 36. New builder wither `withToolIntent` (chat()-level
+// classifier override) added; bench runner drives run(), not chat(), so no
+// wiring path exists — genuinely uncovered, not a regression to fix.
+export const UNCOVERED_CAPABILITY_CEILING = 36;
 
 /** Capability features that must have a `builder.<name>(` call in runner.ts. */
 export function coveredCapabilityFeatures(): readonly string[] {

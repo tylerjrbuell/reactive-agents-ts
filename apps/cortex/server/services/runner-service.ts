@@ -92,6 +92,8 @@ export interface LaunchParams {
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
   readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
+  /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" by default; pass to override. */
+  readonly fabricationGuard?: "off" | "warn" | "block";
   /** Cost-aware model routing (`.withModelRouting()`). enabled=false → not applied. */
   readonly modelRouting?: {
     readonly enabled?: boolean;
@@ -296,6 +298,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.budget ? { budget: params.budget } : {}),
                 ...(params.grounding ? { grounding: params.grounding } : {}),
+                ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
@@ -404,7 +407,7 @@ export const CortexRunnerServiceLive = Layer.effect(
               // The framework's DebriefCompleted event is not yet wired in the
               // execution engine. Emit it here from AgentResult.debrief so the
               // Debrief tab shows for agents launched from Cortex.
-              const debrief = (result as any).debrief;
+              const debrief = result.debrief;
               if (debrief && typeof debrief === "object") {
                 cortexLog("info", "runner", "emitting DebriefCompleted from agent result", {
                   agentId, runId,
@@ -420,7 +423,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                         taskId: runId,
                         agentId,
                         debrief,
-                      } as any,
+                      },
                     })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:248", tag: errorTag(err) }))),
                 );

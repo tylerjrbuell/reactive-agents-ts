@@ -1,6 +1,6 @@
 ---
 name: tools-warden
-description: Bounded warden for the tools layer (packages/tools/**). Owns ToolService, ToolRegistry, 11 built-in tools, MCP client (docker container lifecycle, two-phase naming), sandbox, shell-execution. Mandatory MissionBrief + UpwardReport. Pilot 2026-05-23 → 2026-06-15.
+description: Bounded warden for the tools layer (packages/tools/**). Owns ToolService, ToolRegistry, 11 built-in tools, MCP client (docker container lifecycle, two-phase naming), sandbox, shell-execution. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -58,5 +58,6 @@ See [[mcp-integration]] skill. Key invariants:
 ## Workflow per spawn
 Standard warden workflow ([[kernel-warden]] §Workflow). TDD reference: [[agent-tdd]] + [[mcp-integration]].
 
-## Pilot expiry
-2026-05-23 → 2026-06-15. See [[2026-05-23-team-ownership-dev-contract-pilot]].
+## Status
+
+Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type {
   KernelStateLike,
@@ -8,7 +8,6 @@ import type {
 } from "@reactive-agents/core";
 import { executeToolAndObserve } from "../../../src/kernel/capabilities/act/tool-observe.js";
 import type {
-  MaybeService,
   ToolServiceInstance,
 } from "../../../src/kernel/state/kernel-state.js";
 
@@ -27,18 +26,15 @@ const syntheticState: KernelStateLike = {
 };
 
 // Minimal ToolService stub: echoes args, success=true unless toolName === "boom".
-function stubToolService(): MaybeService<ToolServiceInstance> {
-  return {
-    _tag: "Some",
-    value: {
-      execute: (req) =>
-        req.toolName === "boom"
-          ? Effect.fail(new Error("kaboom"))
-          : Effect.succeed({ success: true, result: { ok: req.toolName } }),
-      getTool: () => Effect.fail(new Error("no schema")),
-      listTools: () => Effect.succeed([]),
-    },
-  };
+function stubToolService(): Option.Option<ToolServiceInstance> {
+  return Option.some({
+    execute: (req) =>
+      req.toolName === "boom"
+        ? Effect.fail(new Error("kaboom"))
+        : Effect.succeed({ success: true, result: { ok: req.toolName } }),
+    getTool: () => Effect.fail(new Error("no schema")),
+    listTools: () => Effect.succeed([]),
+  });
 }
 
 // Run an Effect whose only remaining requirement is LLMService — never reached
@@ -119,7 +115,7 @@ describe("executeToolAndObserve", () => {
   });
 
   it("returns a failed observation when ToolService is None", async () => {
-    const noneService: MaybeService<ToolServiceInstance> = { _tag: "None" };
+    const noneService: Option.Option<ToolServiceInstance> = Option.none();
     const result = await runNoLLM(
       executeToolAndObserve(
         noneService,

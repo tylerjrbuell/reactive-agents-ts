@@ -37,6 +37,9 @@ const cell = (variantId: string, accuracy: number, tokens = 1000, runs = 3): Tas
     meanScores: [{ dimension: "accuracy", score: accuracy }],
     variance: 0,
     meanTokens: tokens,
+    // No-caching case (2026-08-24 amendment): billed === raw.
+    meanBilledTokens: tokens,
+    meanCacheReadTokens: 0,
     meanDurationMs: 1,
     passRate: 1,
     solveRate: accuracy >= 1 ? 1 : 0,

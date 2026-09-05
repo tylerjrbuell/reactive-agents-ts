@@ -100,7 +100,21 @@ bun scripts/release.ts <version> --no-publish
 git restore .            # revert stamped versions + CHANGELOG + consumed changesets
 ```
 
-## Step 7: Tag and push — this triggers the release
+## Step 7: Push `main`, then tag and push — this triggers the release
+
+**Push `main` first, always — even if this repo's convention is normally
+"push at release/tag time."** `publish.yml`'s post-publish sync step resets to
+`origin/main` and reapplies only VERSION/CHANGELOG/package.json on top of it
+(`git checkout -f -B main origin/main`, not the tag's own ancestry). If
+`origin/main` is behind the tagged commit when the tag is pushed, that reset
+discards every local commit made since the last push, and the sync commit
+lands on stale history — a divergent-history mess to reconcile by hand
+(2026-09-05 incident, v0.16.0). Confirm before tagging:
+
+```bash
+git push origin main
+git merge-base --is-ancestor origin/main HEAD && echo "OK: origin/main is caught up"
+```
 
 ```bash
 git tag v<version>
@@ -138,6 +152,7 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 - [ ] Docs audited, AGENTS.md & README counts current (Step 3)
 - [ ] Changeset authored with user-facing prose (Step 4)
 - [ ] `release:dry <version>` clean (Step 6)
+- [ ] `main` pushed and `origin/main` confirmed caught up (Step 7, before tagging)
 - [ ] Tag pushed; "Publish to npm" workflow green (Step 7)
 - [ ] GitHub Release present with notes
 - [ ] `.agents/MEMORY.md` + Claude memory updated (Step 8)
@@ -148,6 +163,7 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 |---|---|
 | Hand-editing `CHANGELOG.md` | `release.ts` generates it; manual edits collide. Edit the changeset `.md` instead. |
 | Creating `docs/releases/vX.Y.Z.md` | `docs/` was eliminated — that's an orphan file. The GitHub Release is the announcement. |
+| Tagging before pushing `main` | The post-publish sync resets to `origin/main`, discarding any local commits main doesn't have yet. Push `main` first — see Step 7. |
 | Waiting for a "Version Packages" PR | changesets/action was removed. Pushing the tag is the whole trigger. |
 | Looking for a release-drafter draft | release-drafter was removed. `publish.yml` is the sole GitHub Release author. |
 | `git tag` without `git push origin <tag>` | The tag push is what fires CI. A local tag releases nothing. |

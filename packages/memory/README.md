@@ -71,6 +71,24 @@ For enhanced retrieval, use `withMemory({ tier: "enhanced" })`. The named option
 The legacy `.withMemory("1")` and `.withMemory("2")` forms remain supported but are deprecated;
 use the named `tier` options for new code.
 
+### Storage location
+
+With no explicit `dbPath`, memory always resolves to the same user-scope location, regardless
+of which API created it or which directory the process is running from:
+
+```
+~/.reactive-agents/memory/<agentId>/memory.db   # SQLite — source of truth
+~/.reactive-agents/memory/<agentId>/memory.md   # human-readable projection, regenerated on flush
+```
+
+This applies whether memory was enabled via `.withMemory()`, `.withLearning()`, a
+`HarnessProfile`, or by calling `createMemoryLayer()` directly — one location per `agentId`,
+so a second process (e.g. the `rax skills` CLI, or a second run from a different working
+directory) finds the same store. Pass `.withMemory({ dbPath })` for a custom or project-local
+path — `memory.md` follows it automatically, written next to whatever file `dbPath` points to.
+`NODE_ENV=test` / the `test` provider resolve to SQLite `:memory:` instead, so tests never
+write to disk.
+
 ## Direct service usage
 
 ```typescript
