@@ -296,7 +296,23 @@ recitation, so no cache-churn cost. Proven live end-to-end (not a fixture)
 by `packages/reasoning/tests/strategies/plan-execute-remaining-goals.test.ts`
 — a real 2-composite-step plan-execute run over the deterministic test
 provider, asserting on the sub-kernel's own request content; confirmed
-red-on-cut.
+red-on-cut. **Also confirmed against a REAL `gemma4:e4b` live via ollama**
+(2026-09-05, ad hoc in-repo probe, reverted, no diff): calling
+`executeReActKernel({ remainingGoals: [...] })` directly, the real outgoing
+provider request's message tail literally contained
+`"Remaining steps: Write the pricing and ordering section"`. This is the
+only piece a deterministic-provider test can't prove (real tokenization,
+real model, real wire).
+
+**Planner note for the future ablation:** `gemma4:e4b`'s planner picked
+`tool_call`/`analysis` steps over `composite` in 2 separate live attempts to
+elicit one (including a task explicitly framed as needing "multiple tools /
+multiple attempts per step") — `composite` needs a task genuinely requiring
+multi-tool reasoning within one step, and local models default hard to
+`tool_call`. A future ablation should hand-construct the `Plan` (bypass the
+planner LLM call) rather than rely on the planner naturally choosing
+`composite`, or it will spend most of its budget fighting step-type
+selection instead of measuring the actual signal.
 
 **Still open: cross-tier LIFT measurement**, matching the discipline
 09-UNIFIED-PROGRAM §7 Step 5 already applied to `recall` (0.0pp lift, 3
