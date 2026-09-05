@@ -4,7 +4,7 @@
 
 # Reactive Agents
 
-The transparent, composable harness for TypeScript agents. The same code runs the full agent loop on a local 4B model or a frontier API, with tool-call healing, verification, and a signed evidence receipt for every run.
+Reactive Agents is a TypeScript framework for building LLM agents: a transparent, composable harness where the same code runs the full agent loop on a local 4B model or a frontier API, with tool-call healing, verification, and a signed evidence receipt for every run.
 
 Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand back prose you have to take on faith. Reactive Agents is built around four things instead:
 
