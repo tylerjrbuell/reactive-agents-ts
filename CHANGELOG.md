@@ -1,4 +1,176 @@
+## [0.16.0] — 2026-09-05
+
+Fix a set of answer-quality regressions found in live-model QA: the fabrication guard now catches invented named entities, not just fabricated numbers; a raw tool-scaffolded dump no longer ships as the answer when output-gate synthesis fails; a no-tool-needed conversational reply is now auto-promoted instead of being forced through tool-output framing; and the output gate no longer forces file-shaped formatting onto plain chat replies. Behavioral-contract enforcement (`.withContract()`), previously silently dead on the kernel execution path, is now wired.
+
+Fix three lifecycle-hook gaps found in a hook-firing audit: the kernel's `bootstrap`-`after` hook was never fired, `think` hooks incorrectly fired on tool-execution passes (not just reasoning passes), and the kernel's own `observe` hook was missing entirely. Fix a post-condition steer that could re-loop a tool-free chat turn. Move harness guidance text (required-tool reminders, nudges, hints) out of the system prompt and into the message tail, restoring the Anthropic prompt-cache breakpoint that guidance text was invalidating on every iteration.
+
+Fix a skill-evolution crash in Cortex, and sync skill activation state with the fabrication guard so the two no longer disagree about a skill's status.
+
+Wire the Thompson Sampling bandit into the strategy-selector seam (opt-in, off by default) and fix the calibration-drift and calibration feedback loops, both previously fully dead. Add `NoticesManager` with a notice-suppression mechanism (`REACTIVE_AGENTS_SUPPRESS_NOTICES`) for quieting repeated one-time warnings.
+
+Remove the `alternatives-considered` trace event end to end (emitter, `AgentEvent` union member, debrief rendering): it had zero live emitters and was dead weight in every consumer. Fix plan-execute's ledger to record the healed (post-repair) tool-call arguments instead of the pre-heal ones, so the ledger matches the trace it's compared against during replay. Fix `isTraceEvent` to validate required fields per event kind instead of a single shared shape, and fix `rax diagnose` to search both known trace directories instead of only one.
+
+Emit detailed code-action progress events for planning, sandbox execution, tool results, retries, and verification so verbose users can follow the strategy live.
+
+Add a `grep` builtin tool and named toolset alias shortcuts (`defineToolset`), both opt-in. Add a `relate` tool for the memory graph, give `find` real memory-entry ids, and fix a second FTS5 crash site plus four dead field-name branches in tool-result compression.
+
+Add a small tool-authoring toolkit for custom tools: `fetchJsonTool` (standard HTTP adapter with retry and empty-result handling), `boundedMap` (concurrency-capped fan-out), `searchThenFetch`/`resolveThenRetrieve` (research orchestration primitives), `withToolObservability`/`withToolRetry` (envelope helpers), and `testTool`/`mockFetchOnce` (turnkey test helpers). `defineTool` now accepts an output schema, validated at runtime. Fix MCP client connection state being isolated per-process instead of per-instance, which could cross-contaminate state across multiple MCP clients in the same process. Fix `codeExecuteHandler` to accept `config.sandbox` like its sibling handlers, and factory-shape the config surface for the `http-get` tool and A2A egress guards for consistency with the rest of the tool config API.
+
+Remove nine `AgentEvent` tags that were exported on the EventBus but had no producer anywhere in the codebase (a "dead signal" audit; a new gate now asserts every consumed tag has a real producer). Fix `BudgetExhausted` specifically: it does have real consumers, and is now actually published when a budget killswitch aborts a run, instead of the abort happening silently.
+
+Dedupe each binding's `AgentStreamEvent` type onto `ui-core`'s canonical `UiStreamEvent`, removing three divergent copies of the same wire-event shape.
+
+Fix `LLMRequestCompleted` never having a producer, which silently starved nine downstream consumers (OTel LLM spans, cost accounting, cache-hit reporting). Surface `cacheReadInputTokens` in Gemini, OpenAI, and LiteLLM usage (previously Anthropic-only), switch Anthropic to automatic prompt caching, and correct Haiku's documented prompt-cache minimum (2048 → 4096). Billed tokens and cache reads now carry through to `result` and the benchmark cost/ablation gate, instead of silently reporting 0 when the event never fired.
+
+Add `.withHarness({...})`, a typed, per-agent control surface for the harness's internal mechanisms (tool disclosure, tool discovery, tool index, verbose rules, context budgets, and more). Config passed to `.withHarness()` now takes precedence over `RA_*` environment variables, which take precedence over the default, and the resolved config is inherited by sub-agents. `ContextProfile.toolDisclosureMode` is wired through to the resolved harness, so a tier's disclosure preset actually changes tool-visibility behavior instead of being computed and discarded.
+
+Fix a default `dbPath` mismatch between memory and runtime that left core memory tables unindexed, and fix embedding/content/consolidation corruption caused by it. Screen memory writes for injection and PII before persisting, matching the guardrails already applied to LLM input.
+
+Plan-Execute's composite steps now recite the titles of other pending/in-progress plan steps to their sub-kernel as `remainingGoals`, closing a gap where the `goal_state` event had a full rendering path (`volatileTailStage`'s "Remaining steps: ..." recitation) but no producer anywhere in the codebase. Opt-in by construction: absent or empty, behavior is byte-identical to before.
+
+Preserve tool return contracts through runtime schema preparation and expose them to the code-action strategy so generated code can use retrieved values in subsequent tool calls.
+
+Add `.withToolIntent()` for agent-level tool-routing overrides in `chat()`, a `verifyCitations` option on `ChatOptions`, and an `onOverflow` history-overflow-summarize hook on `AgentSession`, so a long-running chat session can summarize older turns instead of silently dropping them.
+
+Add a lightweight tool index (opt-in, off by default): a compact, listed-only view of available tools for large tool catalogs, controlled via `ContextProfile.toolDisclosureMode` and `RA_TOOL_INDEX_MAX_ENTRIES`. Fix two bugs found while building it: tool-index-listed tools are now promoted into the real function-calling callable set (they were previously listed but not actually callable), and the discover-tools catalog dump no longer gets silently truncated and re-paraphrased by the model.
+
+## [Unreleased]
+
+### Fixed
+- Memory's default SQLite location no longer depends on which API enabled it
+  or which directory the process ran from. `defaultMemoryConfig()` (used by
+  `createMemoryLayer()` and the `rax skills` CLI) and `defaultUserMemoryPath()`
+  (used by the builder's auto-enabled memory) previously resolved to two
+  different paths — one cwd-relative, one `$HOME`-anchored — so a second
+  process reading the same agent's memory from a different directory would
+  silently find nothing. Both now resolve to the same
+  `~/.reactive-agents/memory/<agentId>/memory.db`. See `packages/memory/README.md#storage-location`.
+- The `memory.md` human-readable projection was written to a hardcoded
+  cwd-relative path regardless of where the actual SQLite `dbPath` lived —
+  splitting the source of truth and its projection across two unrelated
+  directories whenever auto-enabled memory (the default-on path) was in
+  play. `memory.md` now always co-locates with `memory.db`.
+- `MemoryConsolidatorService`'s `consolidation_state` table used a single
+  hardcoded row (`id='singleton'`) instead of one row per agent. Any two
+  agents sharing one `memory.db` (a supported configuration — every
+  consolidation query is agent-scoped) would stomp each other's
+  `last_run` timestamp, silently undercounting or skipping the other
+  agent's next `replay()`. Now keyed `PRIMARY KEY(agent_id)`, with an
+  in-place migration for existing databases.
+- Embeddings read back from SQLite in Tier 2 (vector) mode were silently
+  corrupted: `bun:sqlite` returns BLOB columns as `Uint8Array`, not
+  `ArrayBuffer`, and `new Float32Array(uint8array)` doesn't reinterpret the
+  bytes — it coerces each byte into its own float, producing 4x too many
+  garbage values. Affected every entry's `embedding` field returned from
+  `SemanticMemoryService` and `MemorySearchService`.
+- Episodic memory logged via the reasoning-strategy path
+  (`task-completed` / `strategy-outcome` events) recorded `content` as
+  literal `"Task: [object Object] → ..."` whenever the task input or model
+  output was a structured object rather than a string — `String(obj)`
+  instead of the existing `extractTaskText()` helper. Corrupted content
+  fed directly into the FTS5 index, so episodic recall/search returned
+  `[object Object]` noise for any structured-input or structured-output
+  run.
+- `semantic_memory`, `episodic_log`, `session_snapshots`,
+  `procedural_memory`, and `zettel_links` had no indexes beyond their
+  primary key — every `agent_id`-scoped lookup (bootstrap, flush, recall,
+  consolidation decay/prune) full-table-scanned, growing linearly with an
+  agent's history. Added 6 indexes; verified with `EXPLAIN QUERY PLAN`
+  that all affected queries now use them.
+- `LLMRequestCompleted` was declared and consumed in nine places but published
+  by nothing, leaving the per-call LLM token/cost stream dead across the
+  benchmark runner, both observability collectors, the trace tracer and the
+  Cortex live readouts. It is now published from the kernel's single
+  LLM-exchange emission site.
+- `LLMRequestStarted` had zero producers anywhere in the codebase, and
+  `packages/observe/src/tracer.ts` only populates its span map on that
+  event's handler arm — so every LLM call's OTel span tree was silently
+  empty (RA emitted tool spans but never LLM spans, the primary reason to
+  trace an agent at all). It is now emitted at the three LLM pre-call sites
+  in `packages/reasoning/src/kernel/observable-llm.ts`. This is the other
+  half of spec finding F-1 (2026-08-24), whose `LLMRequestCompleted` half is
+  the entry above.
+
+### Added
+- `.withHarness({...})` — typed, per-agent configuration for all 14 harness
+  mechanisms (tool disclosure, discovery, tool index, verbose rules, stable
+  tool surface, context budgets, thought continuity, observe symmetry,
+  rationale audit, ToT explore budget). Precedence: config > `RA_*` env var >
+  default. Inherited by sub-agents. Previously these were reachable only
+  through process-global environment variables, so two agents in one process
+  could not differ and no sub-agent inherited anything.
+- `ContextProfile.toolDisclosureMode` is now derivable via
+  `fromDisclosureMode()` (`"full" | "discover" | "index" | "hybrid"`), with
+  per-tier defaults set (local=index, mid=hybrid, large=discover,
+  frontier=discover) — pending a live consumer in a follow-up. Those tier
+  defaults are declarations of intent, not measured verdicts.
+- `BudgetExhausted` now has a producer — a token or cost budget killswitch
+  abort publishes it (`packages/compose/src/killswitches/budget-limit.ts`,
+  `packages/reasoning/src/kernel/loop/iterate-pass.ts`). `PhaseHookFn`'s
+  abort return type (`packages/core/src/services/harness-types.ts`) gained
+  an additive, optional `meta?: { budgetType, limit, used }` field to carry
+  the structured budget figures through.
+- Prompt-cache accounting reaches the benchmark gate. Both benchmark
+  measurement paths — the bench runner (`runTask`) and the gate/ablation
+  session path (`runInternal`) — now subscribe to `LLMRequestCompleted` and
+  accumulate `billedTokens` / `cacheReadTokens` per call, which roll up to
+  `meanBilledTokens` / `meanCacheReadTokens` on benchmark reports. The event
+  stream is the source; `AgentResult.metadata` does NOT yet carry these fields
+  (that wiring, in `packages/runtime/src/execution-engine.ts`, is a deferred
+  fast-follow) and is read only as a fallback for when no event fired.
+- `promptPrefixHash` and `toolSurfaceHash` on every LLM exchange, so a
+  prompt-cache miss is attributable to a named prefix segment.
+
+### Changed
+- The lift gate's cost leg now scores **billed** input tokens
+  (`input − cacheRead`) rather than raw tokens, configurable via
+  `LiftPolicy.tokenLeg`. Raw overhead is still computed and printed on every
+  receipt. The leg remains denominated in tokens, not USD.
+- **Breaking type change:** `LLMRequestStarted`'s `contextSize` field
+  narrowed from a required `number` to an optional `number`
+  (`packages/core/src/services/event-bus.ts`), because no honest
+  measurement exists at every call site — no call site fabricates a
+  char/4 estimate just to satisfy the field. Any consumer that read
+  `event.contextSize` as a guaranteed `number` (e.g. calling `.toFixed()`
+  on it, or passing it to a `number` parameter without a null check) will
+  now fail to typecheck, or see `undefined` at runtime, until it adds a
+  null check. This is a bigger public-API break than the tag deletions
+  below.
+
+### Removed
+- Nine never-emitted `AgentEvent` tags: `EventsMerged`, `GatewayStopped`,
+  `MemorySnapshotSaved`, `MessageSent`, `PolicyDecisionMade`, `SessionCreated`,
+  `SessionEnded`, `TextDeltaReceived`, `CompressionApplied`. None had a
+  producer. Streaming text has always arrived on the `StreamEvent` channel as
+  `TextDelta`, which is unchanged. `CompressionApplied` was removed rather
+  than wired up because the apply-side curator that would produce it — the
+  other half of the recommendation→application compaction flow — does not
+  exist in the codebase yet; building it is a missing feature, not a wiring
+  fix. Two candidates from the original sweep, `ExecutionLoopIteration` and
+  `GatewayStarted`, were retained: each has a non-declaration hit (a test
+  file that publishes/subscribes to it as a fixture), so the safety gate
+  says leave them alone.
+
 ## [0.15.0] — 2026-08-16
+
+Behavior change — the path-healing pipeline no longer silently rescues an out-of-root absolute path (F9)
+
+`resolvePaths` used to rewrite an out-of-root absolute path argument to
+`<root>/<basename>` BEFORE `file-write`/`file-read` ran, so the tool always
+succeeded at the rewritten path while terminal verification — checking the
+path the model originally referenced — reported the run FAILED next to a
+file that had actually been written correctly. Live-confirmed on gpt-4o-mini
+and qwen3:14b: both produced `outcome=REMAPPED, run.success=false`.
+`file-operations.ts`'s own `Path traversal detected:` throw was the intended
+single confinement authority, but the healer's silent rewrite ran first and
+made that throw effectively dead for any caller going through the normal
+healing path. The remap branch is now deleted (tilde expansion and
+relative→root resolution are unaffected — those are genuine healing, not
+the bug); an out-of-root absolute path now passes through unchanged and the
+tool's existing throw fires. This is a deliberate behavior change, not a
+silent bugfix: any caller that relied on a model's hallucinated absolute
+path being silently saved to a plausible in-root location will now see an
+honest, recoverable error instead.
 
 Fixed — repetition guard no longer blocks legitimate multi-file work
 

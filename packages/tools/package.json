@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/tools",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/runtime-shim": "workspace:*"
+    "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/llm-provider": "0.16.0",
+    "@reactive-agents/runtime-shim": "0.16.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

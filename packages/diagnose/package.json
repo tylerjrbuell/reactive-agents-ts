@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/diagnose",
-  "version": "0.10.6",
+  "version": "0.16.0",
   "description": "Forensic CLI for recorded Reactive Agents traces — replay, grep, diff, and debrief agent runs",
   "keywords": [
     "ai",
@@ -28,8 +28,8 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/trace": "workspace:*",
-    "@reactive-agents/replay": "workspace:*"
+    "@reactive-agents/trace": "0.16.0",
+    "@reactive-agents/replay": "0.16.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
