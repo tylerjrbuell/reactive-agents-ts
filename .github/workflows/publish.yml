@@ -73,6 +73,24 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing $VERSION"
 
+      # The post-publish sync step below resets to `origin/main` and reapplies
+      # only VERSION/CHANGELOG/package.json on top of it — it does not carry
+      # the tagged commit's own ancestry. If `origin/main` is behind the
+      # tagged commit (main pushed after the tag, or not at all), that sync
+      # discards every commit main is missing and lands its own commit on
+      # stale history, corrupting main's ancestry (2026-09-05 incident,
+      # v0.16.0). Fail fast here instead of silently degrading.
+      - name: Guard — origin/main must already contain this release
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            echo "::error::origin/main is NOT an ancestor of the tagged commit ($GITHUB_SHA)."
+            echo "::error::Push main first: git push origin main — THEN tag and push."
+            exit 1
+          fi
+          echo "OK: origin/main is caught up with the release commit."
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
