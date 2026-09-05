@@ -7,7 +7,7 @@ import { siteVerification } from "../site-verification";
 // Read the canonical release line from the repo-root VERSION file at build
 // time so the SoftwareApplication schema never drifts (it previously hardcoded
 // 0.12.0 while the site shipped v0.15). Falls back gracefully if unreadable.
-let frameworkVersion = "0.15.0";
+let frameworkVersion = "0.16.0";
 try {
   frameworkVersion = readFileSync(
     fileURLToPath(new URL("../../../../VERSION", import.meta.url)),

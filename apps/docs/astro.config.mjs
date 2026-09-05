@@ -406,7 +406,7 @@ export default defineConfig({
                         {
                             label: "What's New",
                             link: 'guides/whats-new/',
-                            badge: { text: 'v0.15', variant: 'success' },
+                            badge: { text: 'v0.16', variant: 'success' },
                         },
                         { label: 'Contributing', link: 'guides/contributing/' },
                     ],
