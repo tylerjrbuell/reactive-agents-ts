@@ -11,10 +11,8 @@ import { buildRunEnvelopeFromConfig } from "./run-envelope-config.js";
 import { defaultReactiveAgentsConfig } from "../types.js";
 import type { ReactiveAgentsConfig } from "../types.js";
 
-const withProfile = (patch: Partial<ReactiveAgentsConfig>): ReactiveAgentsConfig => ({
-  ...defaultReactiveAgentsConfig,
-  ...patch,
-});
+const withProfile = (patch: Partial<ReactiveAgentsConfig>): ReactiveAgentsConfig =>
+  defaultReactiveAgentsConfig("test-agent", patch);
 
 describe("buildRunEnvelopeFromConfig — disclosure-mode floor (F-4)", () => {
   it("no explicit profile, no ollama provider ⇒ mid tier's hybrid mode resolves", () => {
