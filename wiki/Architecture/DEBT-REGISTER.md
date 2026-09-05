@@ -392,6 +392,35 @@ values on this exact run, before attempting a fix. Do not patch the
 heuristic's word-matching based on the isolated-probe result above — it
 already showed that surface isn't where the gap is.
 
+**Attempted reproduction, 2026-09-05 — does NOT reproduce.** Instrumented
+`resolveToolSurface`'s call site in `think.ts` with a temporary
+`RA_DEBUG_TOOL_SURFACE=1` probe (dumping `lazyMode`, `hasClassification`,
+`taskText`, and every tool's visibility reason), then ran 3 live in-repo
+probes over `ollama`, never `/tmp` (D-2026-07-30-J discipline observed):
+(1) the committed `scratch.ts` task as-is (`gemma4:e4b`, crypto-price +
+file-write, mid tier); (2) a more abstract paraphrase of the same intent on
+the same model; (3) an intentionally vague, near-zero-domain-keyword task
+("check on that thing... keep a note of it") on `llama3.2:3b` (genuinely
+`local` tier, the tier the original hypothesis (a) implicated). All 3: the
+free keyword heuristic (`filterToolsByRelevance`) correctly kept every
+domain tool visible — worst case (probe 3) it degraded to a broad
+over-inclusive set (`web-search`/`http-get`/`file-read`/`file-write`/`grep`/
+`code-execute`/`gh-cli`) rather than empty. `lazyMode`/`hasClassification`/
+`taskText` all resolved correctly on every run, ruling out candidates (b) and
+(c) directly; candidate (a) doesn't hold structurally either — `toolSchemaDetail`
+stripping (`context-profile.ts` `local.toolSchemaDetail = "names-and-types"`)
+is applied downstream of `resolveToolSurface` in `think.ts` (~L820), not
+before it, so `augmentedToolSchemas` still carries full descriptions when the
+heuristic runs, on every tier. Probe code reverted, no repo diff.
+**Verdict:** downgrading — the empty-surface failure this entry was filed
+against was real (evidence-based, not guessed) but has not recurred across 3
+varied live probes on 2 tiers since 2026-07-29; whatever fixed it was
+incidental to other work in that window (candidate: the F-4 discover-tools
+tier-aware gating fix, or a heuristic broadening — not confirmed which).
+Leave filed rather than delete (absence of reproduction on 3 probes is not
+proof of absence), but this is no longer the highest-priority open item in
+this file.
+
 ---
 
 ### D-2026-07-30-F — `renderValue("bullets")` explodes nested user-objects into ~20 URL noise fields — ✅ RESOLVED (compact preview, 2026-07-30)
