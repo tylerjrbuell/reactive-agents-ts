@@ -51,11 +51,22 @@ const pkgFiles = [
   ...new Glob("apps/*/package.json").scanSync(),
 ];
 
+// Private packages (benchmarks, judge-server) are never published, but their
+// version is still stamped in lockstep — check-version-sync.sh requires every
+// packages/*/package.json to match VERSION byte-for-byte, with no exemption
+// for private ones (found 2026-09-05: benchmarks/judge-server left at 0.15.0
+// while VERSION read 0.16.0). They're tracked separately from `targets` so
+// they're stamped but never enter the publish topo-sort or publish loop.
 const targets: Pkg[] = [];
+const privateTargets: Pkg[] = [];
 for (const file of pkgFiles) {
   const json = JSON.parse(await Bun.file(file).text()) as Record<string, unknown>;
-  if (json.private === true) continue;
-  targets.push({ dir: file.replace(/\/package\.json$/, ""), file, name: json.name as string, json });
+  const pkg = { dir: file.replace(/\/package\.json$/, ""), file, name: json.name as string, json };
+  if (json.private === true) {
+    privateTargets.push(pkg);
+    continue;
+  }
+  targets.push(pkg);
 }
 if (targets.length === 0) fail("no public packages discovered");
 
@@ -199,7 +210,7 @@ function pinWorkspaceDeps(json: Record<string, unknown>): number {
 }
 
 let pinned = 0;
-for (const t of targets) {
+for (const t of [...targets, ...privateTargets]) {
   t.json.version = version;
   pinned += pinWorkspaceDeps(t.json as Record<string, unknown>);
   await Bun.write(t.file, JSON.stringify(t.json, null, 2) + "\n");

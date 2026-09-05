@@ -197,9 +197,13 @@ REACTIVE_AGENTS_TELEMETRY=0
 
 When telemetry is on, a one-time "Reactive Intelligence" notice prints at the start of the first run in a process. Three independent ways to silence just the notice (telemetry keeps running):
 
-<!-- docs-skip-typecheck -->
 ```typescript
-.withReactiveIntelligence({ notice: false })
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReactiveIntelligence({ notice: false })
+    .build()
 ```
 
 ```sh
