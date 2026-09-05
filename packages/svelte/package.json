@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/svelte",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Svelte stores for Reactive Agents — agentStream, agentRun",
   "keywords": [
     "ai",
@@ -37,7 +37,7 @@
     "dist"
   ],
   "dependencies": {
-    "@reactive-agents/ui-core": "workspace:*"
+    "@reactive-agents/ui-core": "0.16.0"
   },
   "peerDependencies": {
     "svelte": ">=4.0.0"

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/ui-core",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Headless core for Reactive Agents UI bindings — wire protocol, resumable stream client, run state machines, fixture testing",
   "keywords": [
     "ai",

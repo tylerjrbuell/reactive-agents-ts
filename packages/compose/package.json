@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/compose",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Prebuilt killswitch compositions for reactive agents",
   "keywords": [
     "ai",
@@ -23,7 +23,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "workspace:*"
+    "@reactive-agents/core": "0.16.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

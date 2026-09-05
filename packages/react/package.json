@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/react",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "React hooks + components for Reactive Agents agentic UI — runs, durable interactions, inbox, dynamic render",
   "keywords": [
     "ai",
@@ -40,7 +40,7 @@
     "dist"
   ],
   "dependencies": {
-    "@reactive-agents/ui-core": "workspace:*"
+    "@reactive-agents/ui-core": "0.16.0"
   },
   "peerDependencies": {
     "react": ">=18.0.0"

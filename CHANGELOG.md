@@ -1,3 +1,39 @@
+## [0.16.0] — 2026-09-05
+
+Fix a set of answer-quality regressions found in live-model QA: the fabrication guard now catches invented named entities, not just fabricated numbers; a raw tool-scaffolded dump no longer ships as the answer when output-gate synthesis fails; a no-tool-needed conversational reply is now auto-promoted instead of being forced through tool-output framing; and the output gate no longer forces file-shaped formatting onto plain chat replies. Behavioral-contract enforcement (`.withContract()`), previously silently dead on the kernel execution path, is now wired.
+
+Fix three lifecycle-hook gaps found in a hook-firing audit: the kernel's `bootstrap`-`after` hook was never fired, `think` hooks incorrectly fired on tool-execution passes (not just reasoning passes), and the kernel's own `observe` hook was missing entirely. Fix a post-condition steer that could re-loop a tool-free chat turn. Move harness guidance text (required-tool reminders, nudges, hints) out of the system prompt and into the message tail, restoring the Anthropic prompt-cache breakpoint that guidance text was invalidating on every iteration.
+
+Fix a skill-evolution crash in Cortex, and sync skill activation state with the fabrication guard so the two no longer disagree about a skill's status.
+
+Wire the Thompson Sampling bandit into the strategy-selector seam (opt-in, off by default) and fix the calibration-drift and calibration feedback loops, both previously fully dead. Add `NoticesManager` with a notice-suppression mechanism (`REACTIVE_AGENTS_SUPPRESS_NOTICES`) for quieting repeated one-time warnings.
+
+Remove the `alternatives-considered` trace event end to end (emitter, `AgentEvent` union member, debrief rendering): it had zero live emitters and was dead weight in every consumer. Fix plan-execute's ledger to record the healed (post-repair) tool-call arguments instead of the pre-heal ones, so the ledger matches the trace it's compared against during replay. Fix `isTraceEvent` to validate required fields per event kind instead of a single shared shape, and fix `rax diagnose` to search both known trace directories instead of only one.
+
+Emit detailed code-action progress events for planning, sandbox execution, tool results, retries, and verification so verbose users can follow the strategy live.
+
+Add a `grep` builtin tool and named toolset alias shortcuts (`defineToolset`), both opt-in. Add a `relate` tool for the memory graph, give `find` real memory-entry ids, and fix a second FTS5 crash site plus four dead field-name branches in tool-result compression.
+
+Add a small tool-authoring toolkit for custom tools: `fetchJsonTool` (standard HTTP adapter with retry and empty-result handling), `boundedMap` (concurrency-capped fan-out), `searchThenFetch`/`resolveThenRetrieve` (research orchestration primitives), `withToolObservability`/`withToolRetry` (envelope helpers), and `testTool`/`mockFetchOnce` (turnkey test helpers). `defineTool` now accepts an output schema, validated at runtime. Fix MCP client connection state being isolated per-process instead of per-instance, which could cross-contaminate state across multiple MCP clients in the same process. Fix `codeExecuteHandler` to accept `config.sandbox` like its sibling handlers, and factory-shape the config surface for the `http-get` tool and A2A egress guards for consistency with the rest of the tool config API.
+
+Remove nine `AgentEvent` tags that were exported on the EventBus but had no producer anywhere in the codebase (a "dead signal" audit; a new gate now asserts every consumed tag has a real producer). Fix `BudgetExhausted` specifically: it does have real consumers, and is now actually published when a budget killswitch aborts a run, instead of the abort happening silently.
+
+Dedupe each binding's `AgentStreamEvent` type onto `ui-core`'s canonical `UiStreamEvent`, removing three divergent copies of the same wire-event shape.
+
+Fix `LLMRequestCompleted` never having a producer, which silently starved nine downstream consumers (OTel LLM spans, cost accounting, cache-hit reporting). Surface `cacheReadInputTokens` in Gemini, OpenAI, and LiteLLM usage (previously Anthropic-only), switch Anthropic to automatic prompt caching, and correct Haiku's documented prompt-cache minimum (2048 → 4096). Billed tokens and cache reads now carry through to `result` and the benchmark cost/ablation gate, instead of silently reporting 0 when the event never fired.
+
+Add `.withHarness({...})`, a typed, per-agent control surface for the harness's internal mechanisms (tool disclosure, tool discovery, tool index, verbose rules, context budgets, and more). Config passed to `.withHarness()` now takes precedence over `RA_*` environment variables, which take precedence over the default, and the resolved config is inherited by sub-agents. `ContextProfile.toolDisclosureMode` is wired through to the resolved harness, so a tier's disclosure preset actually changes tool-visibility behavior instead of being computed and discarded.
+
+Fix a default `dbPath` mismatch between memory and runtime that left core memory tables unindexed, and fix embedding/content/consolidation corruption caused by it. Screen memory writes for injection and PII before persisting, matching the guardrails already applied to LLM input.
+
+Plan-Execute's composite steps now recite the titles of other pending/in-progress plan steps to their sub-kernel as `remainingGoals`, closing a gap where the `goal_state` event had a full rendering path (`volatileTailStage`'s "Remaining steps: ..." recitation) but no producer anywhere in the codebase. Opt-in by construction: absent or empty, behavior is byte-identical to before.
+
+Preserve tool return contracts through runtime schema preparation and expose them to the code-action strategy so generated code can use retrieved values in subsequent tool calls.
+
+Add `.withToolIntent()` for agent-level tool-routing overrides in `chat()`, a `verifyCitations` option on `ChatOptions`, and an `onOverflow` history-overflow-summarize hook on `AgentSession`, so a long-running chat session can summarize older turns instead of silently dropping them.
+
+Add a lightweight tool index (opt-in, off by default): a compact, listed-only view of available tools for large tool catalogs, controlled via `ContextProfile.toolDisclosureMode` and `RA_TOOL_INDEX_MAX_ENTRIES`. Fix two bugs found while building it: tool-index-listed tools are now promoted into the real function-calling callable set (they were previously listed but not actually callable), and the discover-tools catalog dump no longer gets silently truncated and re-paraphrased by the model.
+
 ## [Unreleased]
 
 ### Fixed
