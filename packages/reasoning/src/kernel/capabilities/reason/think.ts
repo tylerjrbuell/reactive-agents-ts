@@ -306,13 +306,18 @@ export function buildThinkProviderRequest(
   dialect: "native-fc" | "text-parse" | "none" = "text-parse",
   /** Resolved harness config for this pass (`KernelInput.harness`, Task 3). */
   harness?: ResolvedHarness,
+  /**
+   * D-2026-07-28-C: KernelInput.remainingGoals — rendered by
+   * volatileTailStage's `goal_state` read as "Remaining steps: …".
+   */
+  remainingGoals?: readonly string[],
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
   return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness),
+    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals),
   );
 }
 
@@ -603,6 +608,7 @@ export function handleThinking(
       // `tools` array); text-parse/weak-FC still get the in-prompt copy.
       context.toolCallingDriver.mode,
       h,
+      input.remainingGoals,
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);

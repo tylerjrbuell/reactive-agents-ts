@@ -456,6 +456,15 @@ export function executeStep(
         )
       : undefined;
 
+  // D-2026-07-28-C: the plan is the one typed sub-goal ledger in the codebase
+  // (07-08 audit). Titles of every OTHER step not yet done — pending or
+  // in_progress, excluding the one this call is dispatching — recited to the
+  // sub-kernel as `remainingGoals` so it can see the shape of the whole plan,
+  // not just its own step.
+  const remainingGoals = plan.steps
+    .filter((s) => s.id !== step.id && (s.status === "pending" || s.status === "in_progress"))
+    .map((s) => s.title);
+
   return executeReActKernel({
     task: taskText,
     systemPrompt:
@@ -467,6 +476,7 @@ export function executeStep(
     taskId: input.taskId,
     parentStrategy: "plan-execute",
     kernelPass: `plan-execute:step-${stepIndex + 1}`,
+    ...(remainingGoals.length > 0 ? { remainingGoals } : {}),
     resultCompression: input.resultCompression,
     agentId: input.agentId,
     sessionId: input.sessionId,

@@ -171,6 +171,7 @@ export const executeReActKernel = (
           availableToolSchemas: capabilitySnapshot.availableToolSchemas,
           allToolSchemas: capabilitySnapshot.allToolSchemas,
           priorContext: input.priorContext,
+          remainingGoals: input.remainingGoals,
           contextProfile: input.contextProfile,
           temperature: input.temperature,
         },

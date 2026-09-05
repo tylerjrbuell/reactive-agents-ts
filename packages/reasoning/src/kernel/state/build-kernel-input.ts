@@ -96,6 +96,7 @@ export type PerPassInput = Pick<
   | "availableToolSchemas"
   | "allToolSchemas"
   | "priorContext"
+  | "remainingGoals"
   | "contextProfile"
   | "temperature"
   | "initialMessages"

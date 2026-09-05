@@ -74,6 +74,14 @@ export function fromKernelState(
    * byte-identical to pre-Task-3 behavior.
    */
   harness?: ResolvedHarness,
+  /**
+   * D-2026-07-28-C: KernelInput.remainingGoals — named sub-goals not yet
+   * complete, e.g. plan-execute's pending/in_progress `Plan.steps` titles.
+   * Seeds the `goal_state` event `volatileTailStage` renders as
+   * "Remaining steps: …". Absent/empty ⇒ no event appended, byte-identical
+   * to pre-wiring behavior.
+   */
+  remainingGoals?: readonly string[],
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -127,6 +135,9 @@ export function fromKernelState(
     firstUser && firstUser.role === "user" ? firstUser.content : task;
   if (goalText) {
     log = log.append({ kind: "goal", text: goalText });
+  }
+  if (remainingGoals && remainingGoals.length > 0) {
+    log = log.append({ kind: "goal_state", remaining: remainingGoals });
   }
 
   for (const msg of state.messages) {

@@ -689,6 +689,16 @@ export interface KernelInput {
   /** Full unfiltered tool schemas — used by completion guard to detect all MCP namespaces */
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly priorContext?: string;
+  /**
+   * Named sub-goals not yet complete, recited each iteration alongside the
+   * task goal (D-2026-07-28-C). The only typed producer today is
+   * plan-execute's `Plan.steps` (pending + in_progress titles) — reactive/ToT/
+   * reflexion track progress as tool-name coverage, not named sub-goals, so
+   * they have nothing to populate this from. Rendered by `volatileTailStage`
+   * into the message tail (`Remaining steps: …`), same recitation pattern as
+   * `priorContext`, so it carries no F10 cache-churn risk.
+   */
+  readonly remainingGoals?: readonly string[];
   readonly contextProfile?: Partial<ContextProfile>;
   readonly resultCompression?: ResultCompressionConfig;
   readonly temperature?: number;
