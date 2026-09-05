@@ -1,0 +1,30 @@
+{
+  "rules": [
+    {
+      "id": "capabilities-manifest",
+      "description": "Reactive Intervention handlers / meta-tools must stay listed in CAPABILITIES.md (see also scripts/check-capabilities.ts for the handler-registry side of this check).",
+      "codePaths": [
+        "packages/reactive-intelligence/src/controller/handlers/",
+        "packages/reasoning/src/kernel/capabilities/act/act.ts",
+        "packages/tools/src/skills/activate-skill.ts"
+      ],
+      "docPaths": ["CAPABILITIES.md"],
+      "lastSha": "4075fc2e10ed1466ca95f202e707843fe609ffb4"
+    },
+    {
+      "id": "changelog-whats-new",
+      "description": "A new dated CHANGELOG.md version header needs a matching section in the Starlight What's New page. Only fires on an actual `## [X.Y.Z]` header, not on routine commits landing under `## [Unreleased]`.",
+      "codePaths": ["CHANGELOG.md"],
+      "docPaths": ["apps/docs/src/content/docs/guides/whats-new.mdx"],
+      "versionHeaderTrigger": "CHANGELOG.md",
+      "lastSha": "4075fc2e10ed1466ca95f202e707843fe609ffb4"
+    },
+    {
+      "id": "builder-api-docs",
+      "description": "Builder surface changes need README.md and the Starlight builder-api reference kept truthful.",
+      "codePaths": ["packages/runtime/src/builder.ts", "packages/runtime/src/types.ts"],
+      "docPaths": ["README.md", "apps/docs/src/content/docs/reference/builder-api.md"],
+      "lastSha": "4075fc2e10ed1466ca95f202e707843fe609ffb4"
+    }
+  ]
+}

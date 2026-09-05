@@ -131,6 +131,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check-docs-sync.ts walks `git log <ledgerSha>..HEAD` per rule —
+          # needs full history, not the default shallow clone.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -145,6 +149,8 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Check generated config/builder-method reference tables are current
+        run: bun run docs:gen:api -- --check
       - name: Typecheck doc code examples (README + docs site)
         run: bun run docs:examples:check
       - name: Generate metrics from the real tree
@@ -153,6 +159,8 @@ jobs:
       - name: Check README metric claims against generated metrics
         working-directory: apps/docs
         run: bun run metrics:check
+      - name: Check deterministic docs-vs-code sync ledger
+        run: bun run docs:sync:check
 
   docs-links:
     name: Docs Link Check

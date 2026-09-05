@@ -1,6 +1,6 @@
 ---
 name: update-docs
-description: Synchronize all documentation (Starlight docs, README, AGENTS, skills, memory) after code changes. Use after completing a feature, fixing bugs, or changing public APIs.
+description: Full docs lint, validate, and update pass — Starlight docs (incl. What's New release banners), README, AGENTS, CAPABILITIES manifest, CHANGELOG, skills, memory. Use after completing a feature, fixing bugs, changing public APIs, or cutting a release, and whenever docs need a truthfulness/drift audit across the board.
 disable-model-invocation: true
 argument-hint: package-name or "release X.Y.Z"
 ---
@@ -9,7 +9,7 @@ argument-hint: package-name or "release X.Y.Z"
 
 ## Overview
 
-This skill ensures all documentation stays truthful after code changes. Run it after completing any feature work.
+This skill is the full-repo docs lint + validate + update pass: it doesn't just patch the one doc a change obviously touches, it re-checks every canonical doc surface (AGENTS.md, README, CAPABILITIES.md, CHANGELOG, Starlight site incl. What's New banners, agent skills, memory, wiki) for drift and fixes what it finds. Run it after completing any feature work, and run the full Step 10 lint pass even when a change seems doc-irrelevant.
 
 Canonical source of truth for agent guidance is `AGENTS.md`. `CLAUDE.md` is a compatibility pointer only.
 
@@ -104,7 +104,24 @@ If this is a release (`$ARGUMENTS` starts with "release"):
 -   N tests across M files (was P/Q)
 ```
 
-## Step 5: Update Starlight Docs Site
+## Step 5: Update CAPABILITIES.md (Manifest)
+
+`CAPABILITIES.md` is the source of truth for what the framework claims to do — CI (`scripts/check-capabilities.ts`) fails if a listed capability has no runtime handler, or a registered handler is missing from the list.
+
+Update when a change adds/removes/renames:
+
+- a Reactive Intervention handler (`packages/reactive-intelligence/src/controller/handlers/*`) — dispatched section needs `` `type` — file/path `` entry
+- an advisory-only intervention (visible via `pulse`, no dispatch)
+- a meta-tool (`brief`, `pulse`, `activate-skill`, or new)
+- an entropy sensor source, or an execution phase
+
+Verify sync:
+
+```bash
+bun run scripts/check-capabilities.ts
+```
+
+## Step 6: Update Starlight Docs Site
 
 ### Check if pages need updating
 
@@ -118,20 +135,20 @@ grep -r "oldMethodName\|oldPackageName" apps/docs/src/content/docs/
 
 | Changed      | Check These Pages                                                                |
 | ------------ | -------------------------------------------------------------------------------- |
-| Builder API  | `reference/builder-api.md`, `guides/quickstart.md`, `guides/your-first-agent.md` |
+| Builder API  | `reference/builder-api.md`, `guides/quickstart.mdx`, `guides/your-first-agent.mdx` |
 | CLI          | `reference/cli.md`                                                               |
-| Reasoning    | `guides/reasoning.md`, `features/llm-providers.md`                               |
+| Reasoning    | `guides/reasoning.mdx`, `features/llm-providers.md`                               |
 | Tools        | `guides/tools.md`                                                                |
-| Memory       | `guides/memory.md`                                                               |
+| Memory       | `guides/memory.mdx`                                                              |
 | Providers    | `features/llm-providers.md`                                                      |
-| Architecture | `concepts/architecture.md`, `concepts/layer-system.md`                           |
+| Architecture | `concepts/architecture.mdx`, `concepts/layer-system.md`                          |
 | New feature  | Create new page in `features/` or `guides/`                                      |
 
 Required audit pages for framework-level changes:
 
 -   `apps/docs/src/content/docs/reference/builder-api.md`
 -   `apps/docs/src/content/docs/reference/configuration.md`
--   `apps/docs/src/content/docs/guides/reasoning.md`
+-   `apps/docs/src/content/docs/guides/reasoning.mdx`
 -   `apps/docs/src/content/docs/guides/tools.md`
 -   `apps/docs/src/content/docs/guides/contributing.md`
 -   `apps/docs/src/content/docs/features/llm-providers.md`
@@ -151,7 +168,27 @@ Content here...
 
 Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` in frontmatter to control ordering.
 
-## Step 6: Sync Canonical Documents (Critical)
+### What's New release banners
+
+`apps/docs/src/content/docs/guides/whats-new.mdx` is the quick-scan changelog readers hit first. **On every release** (`$ARGUMENTS` starts with "release", or `CHANGELOG.md` gains a new version header), add a matching section here — don't let CHANGELOG.md and What's New drift apart.
+
+Pattern (newest release goes directly under the intro, above older `---`-separated sections):
+
+```markdown
+## vX.Y.Z — <one-line theme> (Month Year)
+
+<Aside type="note" title="Breaking changes">   <!-- omit Aside if none -->
+...
+</Aside>
+
+One-paragraph summary of the release's character (hardening pass / feature release / security fix).
+
+**Added:** / **Changed:** / **Fixed:** — bullet groups, each bullet a plain-English claim a user would search for, linking to the relevant guide/reference page where one exists.
+```
+
+Keep entries evidence-based: only claim what actually shipped (cross-check `CHANGELOG.md` and `git log --oneline vPREV..HEAD`), same truthfulness bar as every other doc this skill touches.
+
+## Step 7: Sync Canonical Documents (Critical)
 
 **After ANY code change, verify the canonical documents stay synchronized.**
 
@@ -164,6 +201,8 @@ Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` 
 ### Canonical Document Sync Rules
 
 Numbered specs live in `wiki/Architecture/Specs/` (`NN-NAME.md`); current authority is `09-UNIFIED-PROGRAM.md` > `08-AGENTIC-OS-NORTH-STAR.md`. See `AGENTS.md` §Documentation Workflow for the fuller trigger table (also covers README/Starlight/CHANGELOG).
+
+The code↔doc pairs below are judgment calls (this skill decides what needs updating). A subset with a clean git-history signal — a rule's code paths changed but its doc paths didn't — is instead tracked mechanically by `scripts/docs-sync-ledger.json` + `scripts/check-docs-sync.ts` (Step 10): no LLM judgment needed for the two easy cases (nothing changed / docs already moved with the code), only genuine drift surfaces. Extend the ledger by adding a rule (new code paths + doc paths + current HEAD sha as baseline) whenever you notice a pairing this table covers by judgment alone that could instead be caught by git history.
 
 | Change Type | Update These Documents | How to Verify |
 |---|---|---|
@@ -194,7 +233,7 @@ After completing ANY feature, bug fix, or validation:
 
 ---
 
-## Step 6b: Update Agent Skills (`.agents/skills/`)
+## Step 7b: Update Agent Skills (`.agents/skills/`)
 
 The `.agents/skills/` directory contains skills used by agents to build with this framework. These must stay accurate — stale code examples or wrong API signatures directly cause agent errors.
 
@@ -241,7 +280,7 @@ The `.agents/skills/` directory contains skills used by agents to build with thi
 4. Bump `version` in the frontmatter if the change is significant
 5. Do NOT change prose that is still accurate — minimal diffs only
 
-## Step 7: Update Project Memory
+## Step 8: Update Project Memory
 
 When docs or workflow guidance changes, update memory artifacts so future agents inherit the same context:
 
@@ -257,7 +296,7 @@ After any significant feature or architecture change:
 -   Update Claude project memory at `~/.claude/projects/*/memory/` if session-level context has changed
 -   These two files keep future agents oriented without re-discovering project state
 
-## Step 7b: Sync to the Obsidian Vault (External Oracle)
+## Step 8b: Sync to the Obsidian Vault (External Oracle)
 
 The `reactive-agents-ts` Obsidian vault at `<repo>/wiki/` is the project's external long-running oracle — compounding knowledge across sessions. Any doc update that reflects real project evolution should also land here so future agents discover it on query.
 
@@ -272,7 +311,7 @@ Delegate the write-back to `obsidian-vault-sync`. Rough protocol:
 
 Keep writes minimal and frontmatter-disciplined. See `obsidian-vault-sync/SKILL.md` for the full protocol and `Playbooks/Agent Query API.md` inside the vault for the schema.
 
-## Step 8: Update ROADMAP.md
+## Step 9: Update ROADMAP.md
 
 If a milestone shipped:
 
@@ -280,35 +319,58 @@ If a milestone shipped:
 -   Update the "Current State" section
 -   Update the Competitive Positioning table
 
-## Step 9: Verify Links Don't Break CI
+## Step 10: Full Lint & Validate Pass
 
-**Critical**: Starlight/Astro converts relative paths in links, which can cause broken links in CI:
-
-```bash
-# Build docs locally to verify no link errors
-cd apps/docs && rm -rf dist && bunx astro build
-
-# For internal links within guides/:
-# ❌ WRONG: ](./sibling-page) — rendered as /guides/whats-new/sibling-page
-# ❌ WRONG: ](../guides/sibling-page) — in docs at /guides/file, becomes /guides/guides/sibling-page
-# ✅ RIGHT: ](/guides/sibling-page) — absolute path works everywhere
-# ✅ RIGHT: ](../features/page) — relative across directories OK (goes up then down)
-
-# When editing files in guides/, use:
-# - Sibling files in guides/: ](/guides/filename)
-# - Files in features/: ](/features/filename)
-# - Files in concepts/: ](/concepts/filename)
-# - Files in reference/: ](/reference/filename)
-```
-
-Link checker will report: `Cannot find file: file:///path/guides/guides/filename`
-
-## Step 10: Verify
+**Run this pass every time this skill runs — not only when a change looks doc-relevant.** It's the mechanical half of "full docs lint": drift here is auto-detectable, so let the tools catch it rather than eyeballing.
 
 ```bash
-# Check for stale references
-grep -r "CLAUDE.md.*package map\|CLAUDE.md.*build commands\|withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md apps/docs .agents/skills
+# 1. Deterministic docs-vs-code sync ledger — the mechanical gate this Step
+#    exists to run. Rule-based: pairs code paths with the docs that must move
+#    with them, walks git history since each rule's baseline commit. Fails
+#    ONLY on real drift (code changed, paired docs didn't); "nothing changed"
+#    and "docs already moved with the code" both pass with zero judgment.
+bun run docs:sync:check
+#   → DRIFT for a rule: fix the named docs, then re-run; or if genuinely no
+#     doc change is needed: bun run scripts/check-docs-sync.ts --ack <rule-id>
+#   → New code↔doc pairing worth tracking mechanically: add a rule to
+#     scripts/docs-sync-ledger.json (codePaths, docPaths, lastSha: current HEAD)
+
+# 2. Capability manifest drift (handler ↔ CAPABILITIES.md)
+bun run scripts/check-capabilities.ts
+
+# 2b. Config-field / builder-method reference tables (configuration.md,
+#     builder-api.md) — these are GENERATED from AgentConfigSchema + the
+#     builder prototype, not hand-maintained. --check fails if a schema or
+#     wither change wasn't followed by regenerating the tables.
+bun run docs:gen:api -- --check
+#   drift found → bun run docs:gen:api   (regenerates in place, commit the diff)
+
+# 3. Cross-cutting architecture gates (envelope cascade, sub-agent inheritance, etc.)
+bash scripts/check-cross-cutting.sh
+
+# 4. Starlight/Astro build — catches broken links and MDX errors
+cd apps/docs && rm -rf dist && bunx astro build; cd -
+
+# 5. Stale numeric/reference claims across all doc surfaces
+grep -rn "CLAUDE.md.*package map\|CLAUDE.md.*build commands\|withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md CAPABILITIES.md apps/docs .agents/skills
+
+# 6. Test/package counts actually match what docs claim
+bun test 2>&1 | tail -3
+ls packages | wc -l
 ```
+
+**Link-path rules (Starlight/Astro rewrites relative paths):**
+
+```
+❌ ](./sibling-page)        — rendered as /guides/whats-new/sibling-page
+❌ ](../guides/sibling-page) — from /guides/file becomes /guides/guides/sibling-page
+✅ ](/guides/sibling-page)   — absolute path works everywhere
+✅ ](../features/page)       — relative across directories OK (up then down)
+```
+
+Astro build failure looks like: `Cannot find file: file:///path/guides/guides/filename`. Fix by converting to an absolute `/section/page` link.
+
+Treat every failure from steps 1–5 as a doc bug to fix now, not a follow-up — this is the validate half of the pass, not merely advisory.
 
 ## Step 11: CLAUDE.md Compatibility Check
 
@@ -321,3 +383,6 @@ Update these numbers when they change:
 -   Test count: check with `bun test 2>&1 | tail -3`
 -   Package count: `ls packages/ | wc -l`
 -   Doc pages: `ls apps/docs/src/content/docs/**/*.md | wc -l`
+-   Capability manifest sync: `bun run scripts/check-capabilities.ts`
+-   Docs-vs-code drift: `bun run docs:sync:check` (ledger: `scripts/docs-sync-ledger.json`)
+-   What's New latest section: top of `apps/docs/src/content/docs/guides/whats-new.mdx`, should match `CHANGELOG.md`'s newest `## [X.Y.Z]` header

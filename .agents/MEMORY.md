@@ -28,6 +28,31 @@
 
 Entries in this section are dated evidence and historical context. They are not current status unless the entry is explicitly marked as verified above or corroborated by source/tests and the canonical wiki debt register.
 
+**2026-09-05: full docs/architecture audit — README `judge-server` gap fixed, `docs:gen:api --check` wired into CI, stale dual-agent-loop defect note purged from Claude memory.**
+Ran a real (non-ledger) audit per user request: (1) all 80 builder methods confirmed present in
+`builder-api.md`; (2) config-field reference (`configuration.md`) is machine-generated from
+`AgentConfigSchema` via `bun run docs:gen:api` — verified in sync (158/158 schema leaves, 0
+orphans) but **was not gated in CI**, now added as a step in `docs-gates`; (3) README's packages
+table was missing `judge-server` (private, added `1f509c2b`) — fixed; (4) architecture check for
+"the loop removed this release" — `e36cd897` (2026-08-23) deleted the dead inline agent-loop arm
+in `execution-engine.ts` (Move 1's single-kernel-loop follow-through). README/`architecture.mdx`/
+`composable-kernel.md`/`09-UNIFIED-PROGRAM.md` already correctly describe single-loop only — no
+repo-doc fix needed there. But Claude's own auto-memory `MEMORY.md` still listed the dual-loop as
+a "known live defect (confirmed 2026-08-11)" — stale, corrected. Lesson: doc audits must include
+the agent's own memory, not just repo files — it's a doc surface too and drifts the same way.
+
+**2026-09-05: `update-docs` skill widened to full lint/validate/update + deterministic docs-sync ledger shipped.**
+`.agents/skills/update-docs/SKILL.md` now covers CAPABILITIES.md manifest sync (Step 5), Starlight
+What's New release banners (Step 6), and a mandatory Step 10 "Full Lint & Validate Pass" run every
+invocation, not just when a change looks doc-relevant. New mechanical gate:
+`scripts/check-docs-sync.ts` + `scripts/docs-sync-ledger.json` — rule-based, walks
+`git log <ledgerSha>..HEAD` per rule (code paths ↔ doc paths); passes with zero judgment when
+nothing changed or docs moved with the code, fails only on real drift. Seeded with 3 rules
+(capabilities-manifest, changelog-whats-new, builder-api-docs), baseline = commit
+`4075fc2e`. Wired: `bun run docs:sync:check`, CI `docs-gates` job (needs `fetch-depth: 0` for full
+git history). `--ack <id>`/`--ack-all` force-advance a reviewed rule; extend by adding a rule to the
+ledger JSON, no code change needed.
+
 **2026-08-24→09-03: External-research convergence — 09 amendment RATIFIED, W1-W3 SHIPPED.**
 `wiki/Decisions/2026-08-24-external-research-convergence-amendment.md` status is RATIFIED, W1-W3
 shipped 2026-09-03 (re-verified against code 2026-09-03). Plan
