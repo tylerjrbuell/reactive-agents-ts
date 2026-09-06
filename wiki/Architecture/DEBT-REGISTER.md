@@ -264,18 +264,24 @@ Until then, no document may cite a pre-`2f97ca1e` token overhead.
 **Gate:** `packages/llm-provider/tests/cached-input-tokens-are-counted.test.ts`
 (4 cells, red-on-cut) prevents recurrence.
 
-### D-2026-07-28-B — the request prefix churns, so the cache never hits
+### D-2026-07-28-B — the request prefix churns, so the cache never hits — ✅ RESOLVED (F10, `4f7c4bc0`)
 
-See [[../Failure-Modes/RUNNING-CATALOGUE#F10]]. Per-iteration mutation of the
-`tools` array sits at position zero of Anthropic's cache prefix and invalidates
-all three `cache_control` breakpoints every turn; the system prompt compounds it
-by carrying the standing frame and `Remaining steps:` inside the cached block.
+See [[../Failure-Modes/RUNNING-CATALOGUE#F10]] (marked RESOLVED 2026-08-26).
+Per-iteration mutation of the `tools` array sat at position zero of
+Anthropic's cache prefix and invalidated all three `cache_control`
+breakpoints every turn; the system prompt compounded it by carrying the
+standing frame and `Remaining steps:` inside the cached block.
 
-**Measured:** cacheRead=0 on the default kernel path; the non-pruning arm costs
-17% LESS money despite 1.7× the tokens.
+**Was measured:** cacheRead=0 on the default kernel path; the non-pruning arm
+cost 17% LESS money despite 1.7× the tokens.
 
-**Discharge:** gap-closure plan Phase 2, promoted to default only if it clears
-the §6 lift rule on rungs 2 and 3 of the ladder.
+**Fix (`4f7c4bc0`):** harness guidance text (required-tool reminders, nudges,
+hints, the standing frame, `Remaining steps:`) moved out of the system prompt
+and into the message tail (`volatileTailStage`), restoring the cache
+breakpoint. This entry's stale "not yet promoted" wording was a doc drift —
+the actual fix landed and was already tracked as resolved in the
+RUNNING-CATALOGUE/`wiki/Hot.md`, just not synced back here (caught by the
+2026-09-05 prune-memory pass).
 
 **Gate:** `scripts/check-volatile-placement.sh` (Task 10).
 
