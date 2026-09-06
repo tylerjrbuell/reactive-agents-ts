@@ -137,3 +137,4 @@ approves or denies — from any process — to resume from the exact checkpoint.
 - [Durable Human-in-the-Loop](/guides/durable-hitl/) — approval gates that survive process death.
 - [Reasoning](/guides/reasoning) — the kernel loop that produces the state being checkpointed.
 - [Snapshot & Replay](/features/snapshot-replay) — `@reactive-agents/replay` for deterministic run capture and inspection.
+- [Interaction Modes](/features/interaction/) — the `approvalGate`/`resolveApproval` mechanism behind approval gates.
