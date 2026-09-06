@@ -10,6 +10,7 @@
  *   linkcard_click      Starlight <LinkCard> click (catalog navigation)
  *   tab_switch          Starlight <Tabs> tab click
  *   search_query        Pagefind search submitted (debounced)
+ *   search_no_results   Pagefind rendered "No results for ..." (content-gap signal)
  *   feedback            "Was this helpful?" widget (yes/no)
  *   anchor_click        In-page heading-link click (deep-share intent)
  *   scroll_depth        Reached 25% / 50% / 75% / 100% of long pages
@@ -159,6 +160,17 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         track("search_query", { q: q.slice(0, 80), len: q.length });
+        // Pagefind renders its own result set asynchronously after the query
+        // settles; give it a beat past our own debounce, then check whether
+        // it rendered a "No results for ..." message. This is the direct
+        // content-gap signal: a search with zero hits means the docs don't
+        // cover something a real visitor was looking for.
+        setTimeout(() => {
+          const msg = document.querySelector(".pagefind-ui__message");
+          if (msg && /^no results/i.test(msg.textContent || "")) {
+            track("search_no_results", { q: q.slice(0, 80) });
+          }
+        }, 400);
       }, SEARCH_DEBOUNCE_MS);
     },
     { capture: true, passive: true },

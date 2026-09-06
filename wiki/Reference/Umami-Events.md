@@ -2,7 +2,7 @@
 type: reference
 tags: [analytics, umami, docs-site]
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-09-06
 ---
 
 # Umami Events — Docs Site Tracking Catalog
@@ -96,6 +96,18 @@ Fires 800 ms after a user types in the Pagefind search dialog (debounced, min 3 
 
 ---
 
+### `search_no_results`
+
+Fires ~1.2s after `search_query` when Pagefind renders a "No results for ..." message for that query (added 2026-09-06 — found via a real docs-site engagement audit that the previous `search_query` event alone couldn't distinguish a successful search from a dead end).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `q` | string | The query that returned zero results (truncated to 80 chars) |
+
+**Use it for:** the single most direct content-gap signal on the site — a real visitor searched for something and the docs don't cover it. Prioritize new pages/sections off this list before anything read off `search_query` alone.
+
+---
+
 ### `anchor_click`
 
 Fires when a user clicks an in-page heading anchor (Starlight's `#`-prefix copy-link or any in-page `#hash` link).
@@ -178,7 +190,18 @@ ORDER BY copies DESC
 LIMIT 25
 ```
 
-Search gap (queries that landed on no helpful page → users left after the search):
+Search gap — queries that returned zero results (real content gaps, not just popular searches):
+```
+SELECT event_data->>'q' AS query,
+       count(*) AS searches
+FROM event_data
+WHERE event_name = 'search_no_results'
+GROUP BY query
+ORDER BY searches DESC
+LIMIT 50
+```
+
+All search queries (popularity, including ones that did find something — use `search_no_results` above for the actual gap list):
 ```
 SELECT event_data->>'q' AS query,
        count(*) AS searches
