@@ -1,0 +1,120 @@
+---
+title: Interaction Modes
+description: >-
+  Five human-in-the-loop interaction modes, checkpoints, approval gates, and
+  preference learning as a standalone Effect layer.
+sidebar:
+  order: 24
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@reactive-agents/interaction` is a standalone package for building human-in-the-loop control around an agent: named interaction modes, milestone checkpoints, an approval-gate primitive, real-time collaboration sessions, and a learner that adapts to a user's approval patterns over time.
+
+<Aside type="caution" title="Not wired into the builder">
+There is no `.withInteraction()` builder method — an earlier one was removed because it merged a service layer nothing resolved (a "provide-and-forget" no-op found in this framework's own honesty audit). Use this package directly via its Effect `Layer`, the same way you'd use any other standalone Effect service. It composes with an agent's `EventBus` but isn't part of the builder chain.
+</Aside>
+
+## Install
+
+```bash
+npm install @reactive-agents/interaction
+# or
+bun add @reactive-agents/interaction
+```
+
+## The five modes
+
+```typescript
+type InteractionModeType =
+  | "autonomous"    // Fire-and-forget: agent runs independently
+  | "supervised"    // Checkpoints: agent pauses at milestones for approval
+  | "collaborative" // Real-time: agent and user work together
+  | "consultative"  // Advisory: agent observes and suggests
+  | "interrogative" // Drill-down: user explores agent state/reasoning
+```
+
+`ModeSwitcher` tracks the active mode per agent and evaluates transition rules (e.g. escalate from `autonomous` to `supervised` after N consecutive errors) via `InteractionConfig`'s `modeTransitionRules` / `escalationConditions`.
+
+## Provide the layer
+
+`createInteractionLayer(config?)` wires all five services (`InteractionManager`, `ModeSwitcher`, `NotificationService`, `CheckpointService`, `CollaborationService`, `PreferenceLearner`) into one `Layer`. It requires `EventBus` from `@reactive-agents/core`.
+
+```typescript
+import { Effect } from "effect"
+import { createInteractionLayer, InteractionManager } from "@reactive-agents/interaction"
+import { EventBusLive } from "@reactive-agents/core"
+
+const program = Effect.gen(function* () {
+  const interaction = yield* InteractionManager
+  yield* interaction.switchMode("agent-1", "supervised")
+})
+
+await Effect.runPromise(
+  program.pipe(
+    Effect.provide(createInteractionLayer()),
+    Effect.provide(EventBusLive),
+  ),
+)
+```
+
+## `InteractionManager` — the unified facade
+
+Reach for `InteractionManager` first; it delegates to the other four services so you rarely need to depend on them individually.
+
+| Method | Backed by | Does |
+|---|---|---|
+| `getMode(agentId)` / `switchMode(agentId, mode)` | `ModeSwitcher` | Read/set the active interaction mode |
+| `evaluateTransition(agentId, context)` | `ModeSwitcher` | Check the configured transition/escalation rules against run context |
+| `notify(params)` / `listUnread()` / `markRead(id)` | `NotificationService` | Send and track notifications across channels |
+| `createCheckpoint(params)` / `resolveCheckpoint(id, status, comment?)` / `listPendingCheckpoints(agentId)` | `CheckpointService` | Pause at a milestone, resolve it with a human decision |
+| `startCollaboration(params)` / `endCollaboration(id)` / `sendCollaborationMessage(params)` | `CollaborationService` | Real-time back-and-forth session between agent and user |
+| `getPreference(userId)` / `shouldAutoApprove(params)` | `PreferenceLearner` | Read a learned approval pattern; decide whether to skip a prompt |
+| `approvalGate(action, timeoutMs?)` | `InteractionManager` | Suspends the calling fiber, publishes an `approval-requested` event carrying a generated gate id, and resolves to an `ApprovalResult` once something calls `resolveApproval` with that id (or the timeout elapses) |
+| `resolveApproval(gateId, approved, reason?)` | `InteractionManager` | Called from elsewhere (a UI, a CLI prompt, a webhook) with the gate id read off the `approval-requested` event, to unblock the waiting `approvalGate` call |
+
+```typescript
+import { Effect } from "effect"
+import { InteractionManager } from "@reactive-agents/interaction"
+
+// The agent-side fiber: suspends until resolved or timed out.
+const requestDeletion = Effect.gen(function* () {
+  const interaction = yield* InteractionManager
+  const result = yield* interaction.approvalGate("delete-production-file", 30_000)
+  return result.approved // false on denial or timeout; check result.timedOut / result.reason
+})
+
+// Elsewhere — a handler subscribed to the "approval-requested" EventBus event,
+// reading { gateId, action } off its payload:
+const respondToApproval = (gateId: string) =>
+  Effect.gen(function* () {
+    const interaction = yield* InteractionManager
+    yield* interaction.resolveApproval(gateId, true, "confirmed by reviewer")
+  })
+```
+
+## Preference learning
+
+`PreferenceLearner` observes approval/denial history per user (`ApprovalPattern`) and `shouldAutoApprove` uses it to skip a prompt once a pattern is confident enough, tuned by `InterruptionTolerance`. This is a local, in-process heuristic — not the same mechanism as the reactive-intelligence calibration store.
+
+## What's Next
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <LinkCard
+    title="Durable Human-in-the-Loop"
+    description="The builder-integrated approval rail — .withApprovalPolicy() + .withDurableRuns(), the wired alternative when you don't need this package's full mode/collaboration surface."
+    href="/guides/durable-execution/"
+  />
+  <LinkCard
+    title="Compose API"
+    description="Intercept lifecycle chokepoints (prompt.system, nudge.loop-detected) directly, another way to add human-facing control points."
+    href="/reference/compose-api/"
+  />
+  <LinkCard
+    title="Reactive Intelligence"
+    description="The separate calibration/learning system this page's preference learner is sometimes confused with."
+    href="/features/reactive-intelligence/"
+  />
+</CardGrid>

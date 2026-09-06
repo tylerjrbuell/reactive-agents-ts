@@ -272,6 +272,10 @@ export default defineConfig({
                             badge: { text: 'New', variant: 'success' },
                         },
                         {
+                            label: 'Interaction Modes',
+                            link: 'features/interaction/',
+                        },
+                        {
                             label: 'Cost Optimization',
                             link: 'guides/cost-optimization/',
                         },
