@@ -9,7 +9,7 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-Reactive Agents ships seven reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
+Reactive Agents ships eight reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
 
 <Aside type="tip" title="If you don't want to think about it">
 Use **Adaptive** — it auto-selects per task: `.withReasoning({ defaultStrategy: "adaptive" })`. Or use the default **ReAct** — it works for ~80% of agent workloads. Only switch to one of the others when you have a specific reason from the decision tree below.
@@ -64,6 +64,8 @@ What kind of task are you running?
 | Reflexion | Medium | Medium | 3–8 | Factual Q&A, accuracy-critical | 8B+ |
 | Tree-of-Thought | High | Slow | 5–20 | Creative writing, ambiguous problems | 14B+ |
 | Adaptive | Varies | Varies | Varies | Mixed workloads, changing task types | 8B+ |
+| Direct | **Lowest** | **Fastest** | 1 (no loop) | Simple questions, minimal latency, no tool use | 4B+ |
+| Code-Action `@exp` | Low–Med | Fast | 1–3 sandbox runs | Multi-tool orchestration, pure computation | 8B+ |
 
 > **Blueprint vs Plan-Execute-Reflect:** both decompose, but blueprint plans the
 > whole tool-DAG once and executes it with **no LLM in the loop** (≈2 calls total,
@@ -160,6 +162,30 @@ Selects the most appropriate strategy per-iteration based on observed task chara
 **Routing by task characteristics:** trivial/short → ReAct; static local artifact generation → **Blueprint**; observation-driven or network/fetch tasks → Plan-Execute-Reflect; compare/explore → Tree-of-Thought; critique/refine → Reflexion. On the local tier it defaults to ReAct (heavy strategies show no quality lift there); Blueprint auto-routes on mid/large/frontier and is available opt-in on local.
 
 **Requirements:** Must explicitly set `adaptive: { enabled: true }` in the reasoning options. An 8B+ model is recommended.
+
+---
+
+### Direct
+
+A single LLM call with no reasoning loop — no think/act/observe cycle, no tool calls. The model answers from its own knowledge.
+
+**Strengths:**
+- Lowest latency and token cost of any strategy — one call, no iterations
+- The right default for questions that don't need a tool or multi-step reasoning
+
+**Requirements:** None beyond a base model. Not suitable for tasks that need current information, file access, or any tool.
+
+---
+
+### Code-Action `@experimental`
+
+The LLM generates a TypeScript IIFE that runs inside a Worker-thread sandbox. Tools are exposed as normal async functions and called directly in generated code — no JSON tool-call schema round-trip per call.
+
+**Strengths:**
+- Multi-tool orchestration expressed as control flow (loops, conditionals) instead of N sequential tool-call turns
+- Handles pure computation tasks with no tools at all
+
+**Requirements:** A model capable of generating syntactically valid TypeScript. Experimental — API surface and sandboxing behavior may still change. See [Code-Action](/features/code-action/) for the full sandbox model.
 
 ---
 

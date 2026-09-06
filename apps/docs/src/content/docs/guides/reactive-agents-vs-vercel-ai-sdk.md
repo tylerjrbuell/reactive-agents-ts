@@ -11,7 +11,7 @@ If you're choosing between **Reactive Agents** and the **Vercel AI SDK**, the mo
 
 They are frequently **complementary, not strictly either/or**. Plenty of teams use the AI SDK for its UI hooks and provider abstraction, and reach for a harness when their agent loop grows beyond a simple tool-calling loop. This page tries to be fair about where each shines.
 
-> The Vercel AI SDK is excellent and extremely popular for exactly what it's designed to do — a unified provider API and the best UI streaming primitives in the TypeScript ecosystem (`useChat`, `streamText`, `generateObject`, `tool`, and now agent/loop primitives like `ToolLoopAgent` and `stopWhen`). Nothing here is "RA beats the AI SDK." It's about which layer you need.
+> The Vercel AI SDK is excellent and extremely popular for exactly what it's designed to do — a unified provider API and the best UI streaming primitives in the TypeScript ecosystem (`useChat`, `streamText`, `generateObject`, `tool`, and now agent/loop primitives like `ToolLoopAgent` and `stopWhen`). Nothing here is "Reactive Agents beats the AI SDK." It's about which layer you need.
 
 ## At a glance
 

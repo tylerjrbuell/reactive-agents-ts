@@ -10,13 +10,13 @@ faq:
     a: >-
       Reactive Agents is a composable TypeScript AI agent framework built on
       Effect-TS. It gives you a type-safe, observable agent harness with a
-      12-phase deterministic execution engine, seven reasoning strategies, and
+      12-phase deterministic execution engine, eight reasoning strategies, and
       opt-in layers for memory, tools, guardrails, and cost control. The same
       code runs on local Ollama models (4B and up) and on frontier APIs like
       Claude, GPT, and Gemini.
   - q: Is Reactive Agents production-ready?
     a: >-
-      It is in early access (v0.13.0) with 6,500+ tests across 800+ files run on
+      It is in early access (v0.16.0) with 9,000+ tests across 1,200+ files run on
       every PR, durable crash-resume, and human-in-the-loop approvals. The core
       execution engine, providers, tools, and memory are stable. APIs can still
       change between minor versions, so pin a version for production.
@@ -32,7 +32,7 @@ faq:
       Reactive Agents is end-to-end type-safe via Effect-TS, with
       schema-validated boundaries and tagged errors instead of thrown
       exceptions. It ships a deterministic 12-phase execution engine with hooks,
-      seven reasoning strategies, built-in guardrails and cost routing, durable
+      eight reasoning strategies, built-in guardrails and cost routing, durable
       execution, and local-model parity. The Vercel AI SDK is a lower-level
       toolkit (provider abstraction plus UI streaming); Reactive Agents is a
       higher-level agent harness and can sit on top of an SDK.
@@ -44,7 +44,7 @@ faq:
   - q: Is Reactive Agents open source and free?
     a: >-
       Yes. Reactive Agents is MIT licensed and free to use. It is published as
-      33 packages on npm, install everything with the single "reactive-agents"
+      32 packages on npm, install everything with the single "reactive-agents"
       package.
 ---
 
@@ -61,7 +61,7 @@ The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.test
 
 **Honest caveats:**
 - **Bun ≥ 1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js 22.5+ is also fully supported** via `@reactive-agents/runtime-shim`; Node 20+ runs too, with an in-memory SQLite fallback where `node:sqlite` isn't available.
-- We're at **v0.13.0** (released 2026-07-02) — the API has been stable since 0.9.0 (no breaking changes through 0.13; the v0.12 memory-default change has a one-line migration), but we haven't tagged 1.0 yet.
+- We're at **v0.16.0** (released 2026-09-05) — the API has been stable since 0.9.0 (no breaking changes since v0.14; the v0.12 memory-default change and the v0.14 lying-wither removals both have one-line migrations), but we haven't tagged 1.0 yet.
 - Some advanced features (full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
 
 If you need an HTTP-API-as-a-service or a hosted control plane, we don't ship that. The framework is a TypeScript SDK.

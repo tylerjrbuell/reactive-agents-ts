@@ -118,6 +118,6 @@ If you're evaluating TypeScript agent frameworks, see the honest, sourced breakd
 
 ## Why Reactive Agents
 
-Most agent frameworks are dynamically typed, monolithic, and opaque — they assume a frontier model and hide every decision. Reactive Agents is the opposite: **end-to-end type-safe**, **composable** (enable only what you need), **observable** (a 12-phase execution engine with hooks on every phase), and **model-agnostic** (the same code from local Ollama to frontier APIs). It's MIT-licensed and published as 33 packages on npm.
+Most agent frameworks are dynamically typed, monolithic, and opaque — they assume a frontier model and hide every decision. Reactive Agents is the opposite: **end-to-end type-safe**, **composable** (enable only what you need), **observable** (a 12-phase execution engine with hooks on every phase), and **model-agnostic** (the same code from local Ollama to frontier APIs). It's MIT-licensed and published as 32 packages on npm.
 
 Ready to build? Start with the [Quickstart](/guides/quickstart/) or [Your First Agent](/guides/your-first-agent/).

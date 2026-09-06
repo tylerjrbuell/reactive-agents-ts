@@ -61,6 +61,6 @@ In short: use the SDK for a loop on one vendor; use Reactive Agents when you nee
 
 These aren't mutually exclusive. A vendor SDK is a fine way to talk to one provider; Reactive Agents is how you make an agent out of it that's portable, observable, and safe to run unattended. Many teams start on an SDK and adopt a harness when the production requirements arrive.
 
-Honest note: Reactive Agents is early access (v0.13.0, MIT). The vendor SDKs are backed by their providers and move fast. The bet here is the architecture — typed runtime, local-to-frontier portability, observable-by-construction — and it's real and testable today.
+Honest note: Reactive Agents is early access (v0.16.0, MIT). The vendor SDKs are backed by their providers and move fast. The bet here is the architecture — typed runtime, local-to-frontier portability, observable-by-construction — and it's real and testable today.
 
 Ready to try it? Start with the [Quickstart](/guides/quickstart/), or see [Build AI Agents in TypeScript](/guides/build-ai-agents-typescript/) for the full picture.

@@ -327,6 +327,11 @@ export default defineConfig({
                             link: 'features/reactive-intelligence/',
                         },
                         {
+                            label: 'Harness Control Surface',
+                            link: 'features/harness-control/',
+                            badge: { text: 'v0.16', variant: 'success' },
+                        },
+                        {
                             label: 'Harness Control Flow',
                             link: 'features/harness-control-flow/',
                         },

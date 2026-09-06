@@ -60,7 +60,7 @@ Mastra reaches local models through its model router (including Ollama-class pro
 
 Both frameworks can pause and resume long-running work. Reactive Agents provides **durable execution with crash-resume** and **human-in-the-loop approvals** as agent-level primitives: `.withApprovalPolicy()`, then `approveRun` / `denyRun` / `listPendingApprovals`, with the run state persisted so it survives a process restart.
 
-Mastra implements durability and HITL primarily through its **workflow engine**: a workflow can `suspend` awaiting user input or approval and `resume` later. Same outcome, different home — RA puts these on the agent; Mastra puts them on the workflow.
+Mastra implements durability and HITL primarily through its **workflow engine**: a workflow can `suspend` awaiting user input or approval and `resume` later. Same outcome, different home — Reactive Agents puts these on the agent; Mastra puts them on the workflow.
 
 ### Observability
 
