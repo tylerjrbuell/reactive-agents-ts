@@ -207,7 +207,6 @@ export default defineConfig({
                         {
                             label: 'Typed Structured Output',
                             link: 'guides/structured-output/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Streaming Responses',
@@ -216,7 +215,6 @@ export default defineConfig({
                         {
                             label: 'The Process Model',
                             link: 'features/process-model/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Chat & Sessions',
@@ -250,7 +248,6 @@ export default defineConfig({
                         {
                             label: 'Agentic UI Core',
                             link: 'features/agentic-ui-core/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                     ],
                 },
@@ -264,12 +261,10 @@ export default defineConfig({
                         {
                             label: 'Durable Execution',
                             link: 'guides/durable-execution/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Durable Human-in-the-Loop',
                             link: 'guides/durable-hitl/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Interaction Modes',
