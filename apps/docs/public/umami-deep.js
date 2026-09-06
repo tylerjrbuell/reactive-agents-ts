@@ -74,13 +74,23 @@
   document.addEventListener(
     "click",
     (ev) => {
-      // expressive-code renders a button with class "copy" inside <figure class="expressive-code">
+      // expressive-code wraps the copy button in <div class="copy">, but the
+      // "copy" class lives on that wrapper div, not the <button> itself — the
+      // button carries the real payload on a `data-code` attribute instead of
+      // the `data-copy` this selector originally looked for. That mismatch
+      // meant code_copy never fired since this file was written (verified
+      // 2026-09-06: 0 events recorded all-time; live DOM has button[data-code]
+      // with no matching class). Match the real element.
       const btn = ev.target?.closest?.(
-        "button.copy, .expressive-code button[data-copy], .copy-code-button",
+        ".expressive-code button[data-code], .copy-code-button",
       );
       if (!btn) return;
       const figure = btn.closest("figure, pre, .expressive-code");
+      // expressive-code puts the language on <pre data-language="...">, not a
+      // code.language-* class (verified 2026-09-06 against live DOM) — the
+      // old className regex always fell through to "unknown".
       const lang =
+        figure?.querySelector("pre")?.getAttribute("data-language") ||
         figure?.querySelector("code")?.className?.match(/language-(\w+)/)?.[1] ||
         "unknown";
       track("code_copy", {
