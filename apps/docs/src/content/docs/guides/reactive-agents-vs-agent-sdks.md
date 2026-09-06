@@ -57,6 +57,67 @@ The harness pays for itself when you need things the SDK leaves to you:
 
 In short: use the SDK for a loop on one vendor; use Reactive Agents when you need a portable, typed, governed agent across vendors and local hardware.
 
+## Side-by-side: a minimal agent
+
+**Reactive Agents**
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withTools({
+    tools: [
+      {
+        definition: {
+          name: "weather",
+          description: "Get weather in a location (Fahrenheit)",
+          timeoutMs: 5000,
+          riskLevel: "low",
+          requiresApproval: false,
+          source: "function",
+          parameters: [
+            { name: "location", type: "string", description: "City name", required: true },
+          ],
+        },
+        handler: (args) =>
+          Effect.succeed({ location: args.location, tempF: 68 }),
+      },
+    ],
+  })
+  .build();
+
+const result = await agent.run("What is the weather in San Francisco?");
+console.log(result.output);
+```
+
+**OpenAI Agents SDK**
+
+```typescript
+import { Agent, run, tool } from "@openai/agents";
+import { z } from "zod";
+
+const weatherAgent = new Agent({
+  name: "Weather Agent",
+  instructions: "Answer weather questions using the weather tool.",
+  tools: [
+    tool({
+      name: "weather",
+      description: "Get weather in a location (Fahrenheit)",
+      parameters: z.object({ location: z.string() }),
+      execute: async ({ location }) => ({ location, tempF: 68 }),
+    }),
+  ],
+});
+
+const result = await run(weatherAgent, "What is the weather in San Francisco?");
+console.log(result.finalOutput);
+```
+
+Both are one model, one tool, one loop. The vendor SDK example is complete for that shape and tied to that provider. The Reactive Agents example runs unmodified against 8 providers (swap `.withProvider(...)`), and adding memory, a different reasoning strategy, budgets, or durability is another builder method rather than new plumbing or a provider migration.
+
 ## You can use both
 
 These aren't mutually exclusive. A vendor SDK is a fine way to talk to one provider; Reactive Agents is how you make an agent out of it that's portable, observable, and safe to run unattended. Many teams start on an SDK and adopt a harness when the production requirements arrive.
