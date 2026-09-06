@@ -66,7 +66,7 @@ export default defineConfig({
                 starlightLlmsTxt({
                     projectName: 'Reactive Agents',
                     description:
-                        'TypeScript AI agent framework — Effect-TS type-safe, 12-phase observable execution engine, 30 packages, runs on local Ollama through frontier APIs.',
+                        'TypeScript AI agent framework — Effect-TS type-safe, 12-phase observable execution engine, 32 packages, runs on local Ollama through frontier APIs.',
                     optionalLinks: [
                         {
                             label: 'GitHub repo',
