@@ -153,3 +153,9 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   },
 })
 ```
+
+## What's Next
+
+- [Context Engineering](/guides/context-engineering/) — the per-iteration scoring hooks tap into
+- [Observability](/features/observability/) — the higher-level dashboard built on the same EventBus
+- [Composition Recipes](/cookbook/composition-recipes/) — nine production patterns for the Compose API, hooks' typed sibling

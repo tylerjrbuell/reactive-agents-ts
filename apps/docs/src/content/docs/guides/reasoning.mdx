@@ -7,7 +7,7 @@ sidebar:
   order: 8
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 The reasoning layer provides structured thinking strategies that go beyond simple LLM completions. Each strategy shapes how the agent breaks down and approaches a task. With 7 built-in strategies and support for custom ones, you can match the reasoning approach to the problem.
 
@@ -606,3 +606,23 @@ Native provider `toolCalls` are always preferred. If a model emits JSON tool cal
 - Normalizes underscore-style names to hyphenated tool names
 
 This fallback path improves reliability for local or mid-tier models that occasionally emit tool calls as plain text rather than structured provider events.
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Choosing a Reasoning Strategy"
+    description="Decision tree and performance characteristics for all eight strategies."
+    href="../choosing-strategies/"
+  />
+  <LinkCard
+    title="Code-Action Strategy"
+    description="Generate executable code that composes tools as function calls."
+    href="/features/code-action/"
+  />
+  <LinkCard
+    title="Custom Reasoning Strategies"
+    description="Build and register your own strategy."
+    href="/cookbook/custom-strategies/"
+  />
+</CardGrid>

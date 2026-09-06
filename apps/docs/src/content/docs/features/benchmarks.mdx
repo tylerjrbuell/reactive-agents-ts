@@ -7,6 +7,8 @@ sidebar:
   order: 17
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 The `@reactive-agents/benchmarks` package is an **internal evaluation harness**: 20 tasks spanning 5 complexity tiers that you run against a real LLM to measure correctness, latency, token usage, and cost for *your* provider and model choices — not just framework overhead.
 
 We use it as development tooling to catch regressions; we don't publish its scores as marketing claims. Run it yourself against your own stack — the numbers that matter are the ones from your provider, your model, and your tasks.
@@ -84,4 +86,19 @@ bun run src/run.ts --provider gemini --model gemini-2.5-flash --output report.js
 ## Reading the Report
 
 Pass `--output report.json` to persist a full JSON report (per-task pass/fail, latency, token usage, and cost) for your own analysis. Without `--output`, results print to the console and nothing is persisted.
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Evaluation Framework"
+    description="LLM-as-judge scoring and regression detection for your own eval suites."
+    href="/features/eval/"
+  />
+  <LinkCard
+    title="Reactive Agents vs LangGraph"
+    description="An honest, sourced comparison — not a benchmark leaderboard."
+    href="/guides/reactive-agents-vs-langgraph/"
+  />
+</CardGrid>
 

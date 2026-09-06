@@ -149,3 +149,9 @@ const agent = await ReactiveAgents.create()
 ```
 
 Use `"tokens"` for the most responsive UI; `"sentences"` for lower overhead.
+
+## What's Next
+
+- [Streaming](/features/streaming/) — density modes, cancellation, and adapters in full depth
+- [Web Integration](/guides/web-integration/) — React, Vue, and Svelte hooks that consume these streams in a UI
+- [Add an AI Agent to a Next.js App](/cookbook/nextjs-ai-agent/) — a complete streaming UI example

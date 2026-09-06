@@ -228,3 +228,9 @@ const result = await agent.run("Complex multi-step task");
 console.log(`Tokens used: ${result.metadata.tokensUsed}`);
 console.log(`Cost: $${result.metadata.cost}`);
 ```
+
+## What's Next
+
+- [Cost Optimization](/guides/cost-optimization/) — a practical guide to keeping spend down beyond this feature reference
+- [Evaluation Framework](/features/eval/) — measure whether a cheaper model still meets quality bar
+- [Resilience & Caching](/features/resilience/) — budget persistence and other production-reliability mechanisms

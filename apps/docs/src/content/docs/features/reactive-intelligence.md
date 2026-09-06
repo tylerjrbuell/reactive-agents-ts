@@ -282,3 +282,9 @@ interface ReactiveIntelligenceConfig {
   notice?: boolean;              // default: true — show the one-time telemetry banner
 }
 ```
+
+## What's Next
+
+- [Choosing a Reasoning Strategy](/guides/choosing-strategies/) — how automatic strategy switching (one of the controller's interventions) chooses a target
+- [Harness Control Flow](/features/harness-control-flow/) — the mechanics feeding the entropy sensor
+- [Local Model Performance](/features/local-model-performance/) — where entropy-driven interventions matter most

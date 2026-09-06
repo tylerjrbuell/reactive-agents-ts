@@ -192,3 +192,9 @@ const result = await agent.run("Research TypeScript testing frameworks and write
 console.log(result.output);
 console.log(result.metadata); // { duration, cost: 0, tokensUsed, stepsCount }
 ```
+
+## What's Next
+
+- [Local Model Performance](/features/local-model-performance/) — benchmark data behind the model recommendations above
+- [Context Engineering](/guides/context-engineering/) — how context tiers adapt to a model's size
+- [Choosing a Reasoning Strategy](/guides/choosing-strategies/) — which strategies actually help on small models

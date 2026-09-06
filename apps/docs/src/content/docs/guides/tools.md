@@ -760,3 +760,9 @@ When tools are executed during reasoning, the results are automatically logged a
 ```
 
 This means the agent can recall past tool results in future sessions.
+
+## What's Next
+
+- [Building Custom Tools](/cookbook/building-tools/) — the ToolBuilder API and typed tool patterns in depth
+- [Build an Agent with Tool Calling and MCP](/cookbook/agent-tool-calling-mcp/) — a hands-on walkthrough connecting an MCP server
+- [Guardrails](/guides/guardrails/) — risk levels and approval gates from a safety-first angle

@@ -224,3 +224,9 @@ Verified with cogito:14b (Ollama) across 9 scenarios:
 | **Overall (9 scenarios)** | **6.4** | **2,093** | **4.4s** |
 
 All well within targets: <= 8 steps, <= 5,000 tokens, <= 15s.
+
+## What's Next
+
+- [Local Models](/guides/local-models/) — how context tiers change model-adaptive behavior in practice
+- [Memory](/guides/memory/) — the retrieval layer that feeds working context
+- [Choosing a Stack](/guides/choosing-a-stack/) — pick provider, model tier, and strategy together

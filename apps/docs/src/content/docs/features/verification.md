@@ -202,3 +202,9 @@ const agent = await ReactiveAgents.create()
 - **Compliance** — When you need an audit trail showing output was checked
 
 Verification adds latency (one extra analysis pass) but catches hallucinations and vague responses before they reach users.
+
+## What's Next
+
+- [Guardrails](/guides/guardrails/) — safety checks before generation; verification checks after
+- [The Process Model](/features/process-model/) — how a verification verdict surfaces in the trust receipt
+- [Production Checklist](/guides/production-checklist/) — when to enable verification in a production deployment

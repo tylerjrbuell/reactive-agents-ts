@@ -321,3 +321,9 @@ Key production practices for autonomous agents:
 - **Use `"adaptive"` heartbeats** — skip ticks when idle, saving ~50%+ of LLM calls
 - **Subscribe to `BudgetExhausted`** — get alerts when limits are hit
 - **Use `.withGuardrails()`** — webhook payloads are checked for injection before reaching the LLM
+
+## What's Next
+
+- [Production Checklist](/guides/production-checklist/) — the full pre-deployment checklist this recipe is one worked example of
+- [Security Hardening](/guides/security-hardening/) — a deeper hardening pass beyond the safety checklist above
+- [Error Handling & Resilience](/cookbook/error-handling/) — typed errors and retry policies for production robustness

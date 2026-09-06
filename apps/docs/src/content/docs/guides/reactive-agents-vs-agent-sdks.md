@@ -64,3 +64,9 @@ These aren't mutually exclusive. A vendor SDK is a fine way to talk to one provi
 Honest note: Reactive Agents is early access (v0.16.0, MIT). The vendor SDKs are backed by their providers and move fast. The bet here is the architecture — typed runtime, local-to-frontier portability, observable-by-construction — and it's real and testable today.
 
 Ready to try it? Start with the [Quickstart](/guides/quickstart/), or see [Build AI Agents in TypeScript](/guides/build-ai-agents-typescript/) for the full picture.
+
+## See Also
+
+- [Reactive Agents vs LangGraph](/guides/reactive-agents-vs-langgraph/)
+- [Reactive Agents vs Mastra](/guides/reactive-agents-vs-mastra/)
+- [Reactive Agents vs Vercel AI SDK](/guides/reactive-agents-vs-vercel-ai-sdk/)

@@ -363,3 +363,9 @@ test("max iterations terminates cleanly", async () => {
 - **Test each feature independently** — guardrails, reasoning, tools, memory each have independent test surfaces
 - **Use lifecycle hooks** for test assertions about execution flow
 - **Don't test LLM output quality** in unit tests — use the eval framework for that
+
+## What's Next
+
+- [Evaluation Framework](/features/eval/) — LLM-as-judge scoring for the output-quality question unit tests intentionally skip
+- [Snapshot & Replay](/features/snapshot-replay/) — deterministic replay of a real recorded run, complementary to the test provider here
+- [Building Custom Tools](/cookbook/building-tools/) — build the tools this guide shows you how to mock

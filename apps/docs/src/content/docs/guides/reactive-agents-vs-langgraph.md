@@ -111,3 +111,9 @@ Both are concise for the prebuilt path. The contrast shows up when you go beyond
 ---
 
 Both frameworks are MIT-licensed and actively developed; the right choice depends on whether you want to draw the machine (LangGraph) or compose a typed harness (Reactive Agents). To try Reactive Agents, start with the [Quickstart](https://docs.reactiveagents.dev/guides/quickstart/). If you are moving from the LangChain ecosystem, the [Migrating from LangChain.js guide](/guides/migrating-from-langchain/) maps concepts and shows side-by-side code.
+
+## See Also
+
+- [Reactive Agents vs Mastra](/guides/reactive-agents-vs-mastra/)
+- [Reactive Agents vs Vercel AI SDK](/guides/reactive-agents-vs-vercel-ai-sdk/)
+- [Reactive Agents vs Agent SDKs](/guides/reactive-agents-vs-agent-sdks/)

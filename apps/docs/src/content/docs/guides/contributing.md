@@ -39,9 +39,9 @@ bun run docs:dev           # Docs site dev server
 
 ## Release Workflow
 
-This project uses **[Changesets](https://github.com/changesets/changesets)** for versioning and publishing. **Never manually bump `package.json` versions or edit `CHANGELOG.md` for a new release.**
+Releases are **tag-driven lockstep**: one version number stamps every public package at once. `.changeset/*.md` files are notes, not the driver — there is no auto-generated "Version Packages" PR. **Never manually bump `package.json` versions or edit `CHANGELOG.md`.**
 
-### 1. Add a changeset with your PR
+### What a contributor does: add a changeset
 
 Every PR that changes user-facing behaviour needs a changeset:
 
@@ -50,35 +50,25 @@ bun run changeset
 ```
 
 The interactive prompt asks:
-- **Which packages changed?** — Select any package (all 22 publishable packages are in a fixed group, so all move together)
-- **Bump type?** — `patch` for fixes, `minor` for new features, `major` for breaking changes
-- **Summary?** — One line description that becomes the CHANGELOG entry
+- **Which packages changed?** — select the package(s) your change touches
+- **Bump type?** — `patch` for fixes, `minor` for new features, `major` for breaking changes (this bump type informs the release note; every package still ships at the same lockstep version regardless)
+- **Summary?** — this text becomes the public CHANGELOG entry verbatim, so write it for a reader of the changelog, not as a commit message
 
-This creates `.changeset/<random-name>.md`. Commit it alongside your code.
+This creates `.changeset/<random-name>.md`. Commit it alongside your code and open the PR as usual.
 
-### 2. Merge to main
+### What a maintainer does: cut the release
 
-The `changesets/action` workflow detects pending changesets and automatically opens a **"chore: version packages"** PR that:
-- Bumps all package versions consistently
-- Generates `CHANGELOG.md` entries from your changeset summaries
-- Stays open and accumulates more changesets until you're ready to release
-
-### 3. Merge the Version Packages PR to publish
-
-When you're ready to ship, merge the "chore: version packages" PR. The workflow then:
-1. Builds all packages
-2. Runs `changeset publish` — correctly resolves `workspace:*` deps and publishes to npm
-3. Creates a GitHub Release with the generated notes
+At release time, a maintainer aggregates all pending changesets into `CHANGELOG.md`, picks an explicit version number, and pushes a `vX.Y.Z` git tag. That tag push is the entire trigger — `scripts/release.ts`, run by CI, stamps every package to that version, builds, and publishes to npm in dependency order, then consumes (deletes) the changeset files it aggregated. See `.claude/skills/prepare-release/SKILL.md` for the full maintainer flow.
 
 ### Bump types
 
-| Type | When | Example |
-|---|---|---|
-| `patch` | Bug fixes, test fixes, internal refactors | `0.7.6 → 0.7.7` |
-| `minor` | New features, new builder methods, new exports | `0.7.6 → 0.8.0` |
-| `major` | Breaking API changes | `0.7.6 → 1.0.0` |
+| Type | When |
+|---|---|
+| `patch` | Bug fixes, test fixes, internal refactors |
+| `minor` | New features, new builder methods, new exports |
+| `major` | Breaking API changes, removed exports |
 
-All 22 publishable packages move together in a fixed group — bumping any one bumps all of them to the same version.
+All public packages ship at the same lockstep version — the bump type shapes the changelog note, it does not produce independent per-package versions.
 
 ---
 
@@ -149,3 +139,9 @@ import { Effect } from "effect";
 - No `any` — use precise types, generics, and tagged unions
 - All public APIs need JSDoc comments
 - New services need tests in `tests/`
+
+## What's Next
+
+- [FAQ](/guides/faq/) — production readiness, honest caveats, what's not done yet
+- [Architecture](/concepts/architecture/) — layer system and package boundaries before you dig into a package
+- [Troubleshooting](/guides/troubleshooting/) — symptom-to-fix reference for common failures

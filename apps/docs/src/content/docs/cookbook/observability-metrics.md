@@ -273,3 +273,9 @@ await agent.run("Draft a short blog post about Effect-TS");
 ```
 
 Each trace span carries the `traceId` for correlation — you can join spans with logs using `traceId` when both are emitted from the same run.
+
+## What's Next
+
+- [Observability](/features/observability/) — the full dashboard and distributed tracing reference this recipe draws on
+- [OpenTelemetry Tracing](/features/observe/) — zero-config OTel export to Jaeger, Grafana Tempo, or Langfuse
+- [Cortex Studio](/features/cortex/) — a live visual UI over the same EventBus telemetry

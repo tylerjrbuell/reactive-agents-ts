@@ -316,3 +316,9 @@ When streaming is active, two events are published to the EventBus:
 - **Call `dispose()`** — After you're done streaming, call `agent.dispose()` to release the ManagedRuntime and any MCP subprocesses. Or use `await using` for automatic cleanup.
 - **Streams are single-use** — Each `runStream()` call creates a new stream. You cannot replay or fork a stream — call `runStream()` again for a new execution.
 - **SSE adapter runs in Effect context** — `AgentStream.toSSE()` calls `Effect.runFork` internally. If you need the stream within an existing Effect program, use `executeStream()` directly on the engine instead of the `agent.runStream()` facade.
+
+## What's Next
+
+- [Streaming Responses](/cookbook/streaming-responses/) — a worked example covering cancellation, SSE, and ReadableStream
+- [Web Integration](/guides/web-integration/) — React, Vue, and Svelte hooks that consume these streams
+- [Agentic UI Core](/features/agentic-ui-core/) — the headless engine the framework bindings share

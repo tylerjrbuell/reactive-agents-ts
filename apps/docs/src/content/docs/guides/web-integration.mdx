@@ -7,7 +7,7 @@ sidebar:
   order: 15
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Reactive Agents includes first-class support for streaming agent output into React, Vue, and Svelte applications. The pattern is consistent across frameworks:
 
@@ -380,3 +380,23 @@ function handleEvent(event: AgentStreamEvent) {
   if (event._tag === "StreamError") console.error(event.cause);
 }
 ```
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Agentic UI Core"
+    description="The headless engine behind these React, Vue, and Svelte bindings."
+    href="/features/agentic-ui-core/"
+  />
+  <LinkCard
+    title="Streaming"
+    description="Density modes, cancellation, and the SSE/ReadableStream adapters underneath."
+    href="/features/streaming/"
+  />
+  <LinkCard
+    title="Add an AI Agent to a Next.js App"
+    description="A complete streaming UI example."
+    href="/cookbook/nextjs-ai-agent/"
+  />
+</CardGrid>

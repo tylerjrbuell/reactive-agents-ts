@@ -256,3 +256,9 @@ await session.end();
 
 await agent.dispose();
 ```
+
+## What's Next
+
+- [The Process Model](/features/process-model/) — the trust receipt and evidence ledger that AgentDebrief draws on
+- [Memory](/guides/memory/) — persistent session storage behind `agent.session()`
+- [Chat & Sessions](/cookbook/chat-and-sessions/) — a full runnable multi-turn session example

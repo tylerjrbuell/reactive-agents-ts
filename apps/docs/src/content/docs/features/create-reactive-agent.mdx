@@ -7,7 +7,7 @@ sidebar:
   order: 19
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 `create-reactive-agent` scaffolds a ready-to-run Reactive Agents project. One command — you get a typed TypeScript starter with the right provider wired up, an `.env.example`, a `README`, and a working `start` script.
 
@@ -164,3 +164,18 @@ my-agent/
 ## Stability
 
 `create-reactive-agent` is `@stable` as of v0.11. Template output is considered stable; the scaffold structure may gain new optional files in minor releases. See [API Stability](/reference/stability/).
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart"
+    description="Build your first agent in 60 seconds, scaffolded or from scratch."
+    href="/guides/quickstart/"
+  />
+  <LinkCard
+    title="Choosing a Stack"
+    description="Pick provider, model tier, memory, and reasoning strategy for your new project."
+    href="/guides/choosing-a-stack/"
+  />
+</CardGrid>

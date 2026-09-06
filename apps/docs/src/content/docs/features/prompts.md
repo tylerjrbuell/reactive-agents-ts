@@ -247,3 +247,9 @@ Each variable has a type and can be required or optional:
 | `object` | Key-value map |
 
 Optional variables can have a `defaultValue` that's used when the variable isn't provided during compilation.
+
+## What's Next
+
+- [Composition Recipes](/cookbook/composition-recipes/) — nine production patterns for shaping prompts and other harness signals via `.compose()`
+- [Context Engineering](/guides/context-engineering/) — how the harness renders context around your compiled prompt
+- [Reasoning](/guides/reasoning/) — where per-strategy prompts get assembled and sent

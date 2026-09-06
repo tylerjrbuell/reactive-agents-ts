@@ -278,3 +278,9 @@ This event fires only when a violation actually blocks execution. Safe inputs th
 - **Production deployments** — Defense in depth against prompt injection
 - **Compliance** — PII detection for GDPR/CCPA compliance
 - **Content moderation** — Toxicity filtering for public-facing applications
+
+## What's Next
+
+- [Security Hardening](/guides/security-hardening/) — the full production hardening checklist guardrails are one part of
+- [Verification](/features/verification/) — catch hallucinated output after generation, not just unsafe input before it
+- [Production Checklist](/guides/production-checklist/) — everything to enable before shipping

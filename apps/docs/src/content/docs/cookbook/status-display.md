@@ -225,3 +225,9 @@ interface StatusRenderer {
   readonly pushThinkChunk: (text: string) => void;
 }
 ```
+
+## What's Next
+
+- [Command Reference](/reference/cli/) — the `rax` CLI this status display is built into
+- [Streaming](/features/streaming/) — the token stream this TUI renders
+- [Observability](/features/observability/) — the non-terminal dashboard equivalent for programmatic use

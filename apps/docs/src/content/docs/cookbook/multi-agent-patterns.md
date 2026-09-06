@@ -188,3 +188,9 @@ rax serve --name my-agent --provider anthropic --port 3000
 ```
 
 See the [A2A Protocol](/features/a2a-protocol/) docs for complete server/client API details.
+
+## What's Next
+
+- [Sub-Agents](/guides/sub-agents/) — persona control, lifecycle, and context forwarding for the delegation patterns above
+- [Agent Gateway](/features/gateway/) — host a multi-agent system as a persistent, always-on service
+- [Testing Agents](/cookbook/testing-agents/) — deterministic testing for multi-agent coordination

@@ -8,7 +8,7 @@ sidebar:
   order: 21
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 `@reactive-agents/observe` bridges the agent event bus to [OpenInference](https://github.com/Arize-ai/openinference)-compliant [OpenTelemetry](https://opentelemetry.io/) spans. Every agent run automatically emits a span hierarchy — workflow → LLM calls → tool calls — that any OTLP-compatible backend can ingest.
 
@@ -149,4 +149,19 @@ const handle = setupOpenInferenceExporter({
 
 ## Stability
 
-`@reactive-agents/observe` is `@stable` as of v0.11. The `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, and `autoConfigureExporter` exports are stable. Additional exporters (Langfuse, Braintrust) and sampling support are planned for v0.11.1.
+`@reactive-agents/observe` is `@stable` as of v0.11. The `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, and `autoConfigureExporter` exports are stable. Dedicated Langfuse/Braintrust exporters and sampling support are not yet built — any OTLP-compatible backend (including both) works today via the standard OTLP endpoint config below.
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Observability"
+    description="The broader tracing, metrics, and logging surface this package's OTel export is one part of."
+    href="/features/observability/"
+  />
+  <LinkCard
+    title="Observability & Metrics"
+    description="A worked example wiring external monitoring."
+    href="/cookbook/observability-metrics/"
+  />
+</CardGrid>

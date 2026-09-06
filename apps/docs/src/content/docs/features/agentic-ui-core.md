@@ -145,3 +145,9 @@ for await (const e of connectRunStream({ endpoint: "/api/agent", body: { prompt:
 ## Architecture
 
 Dependency direction: `ui-core` depends on **nothing**; the framework bindings depend on `ui-core`; never the reverse. See the [Web Integration guide](/guides/web-integration/) to wire it into a Next.js / SvelteKit / Nuxt app, and [Durable Human-in-the-Loop](/guides/durable-hitl/) for the server-side pause/resume rails.
+
+## What's Next
+
+- [Web Integration](/guides/web-integration/) — React, Vue, and Svelte bindings built on this engine
+- [Streaming](/features/streaming/) — the token-delivery layer `ui-core`'s stream client consumes
+- [Durable Human-in-the-Loop](/guides/durable-hitl/) — the server-side approval rails this package's client half drives

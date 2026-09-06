@@ -315,3 +315,9 @@ When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents su
 | `TaskCanceledError` | Task was already canceled |
 | `InvalidTaskStateError` | Invalid state transition |
 | `AuthenticationError` | Auth credentials invalid |
+
+## What's Next
+
+- [Sub-Agents](/guides/sub-agents/) — in-process delegation, the same-machine sibling of A2A
+- [Multi-Agent Patterns](/cookbook/multi-agent-patterns/) — coordination and delegation patterns that use A2A
+- [Agent Gateway](/features/gateway/) — expose an A2A-reachable agent as a persistent, always-on service

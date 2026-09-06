@@ -7,7 +7,7 @@ sidebar:
   order: 7
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Reactive Agents ships eight reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
 
@@ -363,3 +363,23 @@ console.log(result.answer);
 ```
 
 `agent.chat()` routes directly to the LLM without invoking any reasoning strategy, making it significantly faster and cheaper for simple Q&A.
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Reasoning"
+    description="The full strategy interface, tools integration, and rationale auditing."
+    href="../reasoning/"
+  />
+  <LinkCard
+    title="Custom Reasoning Strategies"
+    description="Build and register your own strategy for specialized agent behavior."
+    href="/cookbook/custom-strategies/"
+  />
+  <LinkCard
+    title="Local Models"
+    description="Which strategies actually work well on 4B-14B models."
+    href="../local-models/"
+  />
+</CardGrid>

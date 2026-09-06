@@ -219,3 +219,9 @@ const agent = await ReactiveAgents.create()
 ```
 
 The agent discovers and uses all tools advertised by the MCP server.
+
+## What's Next
+
+- [Tools](/guides/tools/) — the built-in tool registry, sandboxing, and reasoning integration this ToolBuilder API plugs into
+- [Build an Agent with Tool Calling and MCP](/cookbook/agent-tool-calling-mcp/) — a full walkthrough including MCP servers
+- [Testing Agents](/cookbook/testing-agents/) — mock and test the custom tools built here

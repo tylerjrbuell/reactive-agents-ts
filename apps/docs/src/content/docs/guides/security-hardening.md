@@ -71,3 +71,9 @@ const agent = await ReactiveAgents.create()
 - [ ] Audit logging enabled
 - [ ] Budget limits configured
 - [ ] On-call alerts wired
+
+## What's Next
+
+- [Guardrails](/guides/guardrails/) — the injection/PII/toxicity detection layer this checklist builds on
+- [Production Checklist](/guides/production-checklist/) — the full deployment checklist, security is one section of
+- [Production Deployment](/cookbook/production-deployment/) — a worked example applying this hardening

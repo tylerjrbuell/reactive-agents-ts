@@ -214,14 +214,27 @@ type PolicyDecision =
   | { action: "escalate"; reason: string }           // Flag for human review
 ```
 
-### Four Built-in Policies
+### Five Built-in Policies
 
 | Policy | Priority | What It Does |
 |--------|----------|-------------|
+| **Access Control** | 5 | Allowlist/blocklist channel senders by identity; unknown senders skip or escalate |
 | **Adaptive Heartbeat** | 10 | Skips heartbeat ticks when agent state is unchanged |
 | **Cost Budget** | 20 | Blocks execution when daily token budget is exhausted |
 | **Rate Limit** | 30 | Caps actions per hour to prevent runaway execution |
 | **Event Merging** | 50 | Batches events with the same merge key (e.g., 5 PRs = 1 review) |
+
+Access Control only evaluates events with `source: "channel"` (webhooks, chat) — it's a no-op on cron/heartbeat-originated events. Create one with `createAccessControlPolicy`:
+
+```typescript
+import { createAccessControlPolicy } from "@reactive-agents/gateway";
+
+const accessPolicy = createAccessControlPolicy({
+  policy: "allowlist",
+  allowedSenders: ["alice@example.com", "bob@example.com"],
+  unknownSenderAction: "escalate", // or "skip" (default)
+});
+```
 
 **Critical priority events bypass** cost budget and rate limit policies.
 
@@ -518,3 +531,9 @@ const agent = await ReactiveAgents.create()
 | `ChannelConnectionError` | Channel adapter connection failure |
 
 All errors are `Data.TaggedError` instances — pattern-matchable in Effect error handlers.
+
+## What's Next
+
+- [Messaging Channels](/guides/messaging-channels/) — wire Signal or Telegram as an input source
+- [A2A Protocol](/features/a2a-protocol/) — expose a gateway-hosted agent to other agents
+- [Production Checklist](/guides/production-checklist/) — everything else to enable before a gateway runs unattended in production

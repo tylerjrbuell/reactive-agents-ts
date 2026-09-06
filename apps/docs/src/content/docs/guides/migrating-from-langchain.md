@@ -226,3 +226,9 @@ The `semantic` layer supports vector similarity search via SQLite + embeddings (
 - **EventBus observability auto-wired** — adding `.withObservability()` subscribes `MetricsCollector` to all lifecycle events automatically. A formatted dashboard is printed on completion without manual instrumentation.
 
 - **TypeScript-first with typed errors** — `AgentResult` carries `output`, `debrief`, `format`, and `terminatedBy` fields. Hook handlers and strategy functions have explicit Effect-TS error channels rather than thrown exceptions.
+
+## What's Next
+
+- [Quickstart](/guides/quickstart/) — build your first agent the Reactive Agents way, from scratch
+- [Choosing a Stack](/guides/choosing-a-stack/) — pick provider, model tier, memory, and strategy in 2 minutes
+- [Tools](/guides/tools/) — the built-in and custom tool system that replaces LangChain's tool interface

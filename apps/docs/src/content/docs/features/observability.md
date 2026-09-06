@@ -454,3 +454,9 @@ Setting `live: true` additionally streams phase events to the console in real-ti
 | `"normal"` | Full dashboard |
 | `"verbose"` | Full dashboard + detailed per-phase logs |
 | `"debug"` | Full dashboard + full prompt/tool I/O (no truncation) |
+
+## What's Next
+
+- [Observability & Metrics](/cookbook/observability-metrics/) — a worked example reading the dashboard and wiring external monitoring
+- [OpenTelemetry Tracing](/features/observe/) — export spans to Jaeger, Grafana Tempo, or Langfuse
+- [Cortex Studio](/features/cortex/) — a live visual UI over the same telemetry

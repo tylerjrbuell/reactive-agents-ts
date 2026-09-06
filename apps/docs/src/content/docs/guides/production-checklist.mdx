@@ -5,7 +5,7 @@ sidebar:
   order: 21
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 This checklist covers the builder methods and configuration options you should evaluate before deploying a Reactive Agents application to production. Each section is independent — enable the layers that match your threat model and reliability requirements.
 
@@ -344,3 +344,23 @@ const agent = await ReactiveAgents.create()
 | Observability | `.withObservability()` | off | Enable with `verbosity: "normal"` |
 | Error handler | `.withErrorHandler()` | none | Set for logging/alerting |
 | Kill switch | `.withKillSwitch()` | off | Enable for long-running agents |
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Security Hardening"
+    description="A deeper hardening pass beyond this checklist's security section."
+    href="../security-hardening/"
+  />
+  <LinkCard
+    title="Production Deployment"
+    description="A worked example applying this checklist end to end."
+    href="/cookbook/production-deployment/"
+  />
+  <LinkCard
+    title="Observability"
+    description="The full dashboard, tracing, and logging reference."
+    href="/features/observability/"
+  />
+</CardGrid>

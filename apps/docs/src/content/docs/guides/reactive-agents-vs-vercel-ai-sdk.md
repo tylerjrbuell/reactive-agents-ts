@@ -153,3 +153,9 @@ And remember: choosing Reactive Agents for the loop doesn't mean dropping the AI
 ---
 
 Ready to try it? Start with the [Quickstart](https://docs.reactiveagents.dev/guides/quickstart/), or see how the SSE + framework adapters plug into a UI in the [Web Integration guide](https://docs.reactiveagents.dev/guides/web-integration/).
+
+## See Also
+
+- [Reactive Agents vs LangGraph](/guides/reactive-agents-vs-langgraph/)
+- [Reactive Agents vs Mastra](/guides/reactive-agents-vs-mastra/)
+- [Reactive Agents vs Agent SDKs](/guides/reactive-agents-vs-agent-sdks/)

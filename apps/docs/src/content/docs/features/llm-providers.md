@@ -341,3 +341,9 @@ const agent = await ReactiveAgents.create()
   ])
   .build();
 ```
+
+## What's Next
+
+- [Local Models](/guides/local-models/) — running the Ollama provider well on small models
+- [Cost Tracking](/features/cost-tracking/) — model routing and budget enforcement across providers
+- [Testing Agents](/cookbook/testing-agents/) — the deterministic test provider shown above, in depth

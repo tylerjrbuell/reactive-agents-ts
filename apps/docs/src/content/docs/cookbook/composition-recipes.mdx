@@ -7,6 +7,8 @@ sidebar:
   order: 2
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 Each recipe is a complete, runnable `.compose()` block. Copy-paste and adapt.
 
 ## 1. Compliance / PII Redaction
@@ -197,3 +199,18 @@ const agent = await ReactiveAgents.create()
   .compose(watchdog({ noProgressFor: '60s' }))
   .build();
 ```
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Lifecycle Hooks"
+    description="The lower-level hook primitives .compose() desugars through."
+    href="/guides/hooks/"
+  />
+  <LinkCard
+    title="Prompt Templates"
+    description="Version-controlled templates for the prompt.system chokepoint above."
+    href="/features/prompts/"
+  />
+</CardGrid>

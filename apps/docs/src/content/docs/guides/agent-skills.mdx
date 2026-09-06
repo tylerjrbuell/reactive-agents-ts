@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import SkillsMarkdownLinks from "../../../components/SkillsMarkdownLinks.astro";
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Reactive Agents has **two distinct skill systems** that serve different audiences:
 
@@ -224,3 +225,18 @@ await agent.refineSkills();
 |------|---------------|---------|
 | `activate_skill` | Always (when skills enabled) | Inject skill instructions into context |
 | `get_skill_section` | Local/mid tiers only | Fetch a specific section without expanding base context |
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Sub-Agents"
+    description="Persona control and context forwarding, which composes with skill activation."
+    href="../sub-agents/"
+  />
+  <LinkCard
+    title="Context Engineering"
+    description="How injected skill content interacts with context budgets and compaction."
+    href="../context-engineering/"
+  />
+</CardGrid>

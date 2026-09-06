@@ -206,3 +206,9 @@ const program = Effect.gen(function* () {
   // ["reactive", "reflexion", "plan-execute-reflect", "tree-of-thought", "adaptive", "chain-of-verification"]
 });
 ```
+
+## What's Next
+
+- [Choosing a Reasoning Strategy](/guides/choosing-strategies/) — decision tree for the eight built-in strategies before you build a custom one
+- [Reasoning](/guides/reasoning/) — the strategy interface and kernel this custom strategy plugs into
+- [Composition Recipes](/cookbook/composition-recipes/) — Custom Termination Logic, a related extension point

@@ -187,3 +187,9 @@ const agent = await ReactiveAgents.create()
   .withLogging({ level: "warn", format: "json", filePath: "./logs/agent.log" })
   .build();
 ```
+
+## What's Next
+
+- [Resilience & Caching](/features/resilience/) — the circuit breaker and caching layers behind these fallback patterns
+- [Production Checklist](/guides/production-checklist/) — error handling in the context of a full production deployment
+- [Production Deployment](/cookbook/production-deployment/) — a worked deployment applying these patterns end to end

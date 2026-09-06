@@ -177,3 +177,9 @@ const agent = ReactiveAgents.create()
   untouched.** They gate deployment/sandbox concerns in packages that cannot
   import `harness-flags.ts` without a dependency cycle — a different problem
   from the one this surface solves.
+
+## What's Next
+
+- [Harness Control Flow](/features/harness-control-flow/) — the entropy sensor and reactive controller mechanics this config surface tunes
+- [Reasoning](/guides/reasoning/) — how tool disclosure mode changes what a strategy sees each turn
+- [Local Models](/guides/local-models/) — where the tightest disclosure postures matter most

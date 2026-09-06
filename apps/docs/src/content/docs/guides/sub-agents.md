@@ -190,3 +190,9 @@ Sub-agent delegation adds overhead. Understand the costs before adopting this pa
   - Tasks where the parent already has all required context
   - Cost-sensitive scenarios where the 4x overhead is not justified
   - Simple transformations or calculations that a tool handles directly
+
+## What's Next
+
+- [Multi-Agent Patterns](/cookbook/multi-agent-patterns/) — specialization, coordination, and dynamic spawning patterns built on sub-agents
+- [A2A Protocol](/features/a2a-protocol/) — cross-machine agent delegation, for when sub-agents outgrow a single process
+- [Agent Skills](/guides/agent-skills/) — persona and instruction injection, complementary to persona control here

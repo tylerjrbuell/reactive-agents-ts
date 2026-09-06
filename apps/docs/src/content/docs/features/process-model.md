@@ -245,3 +245,9 @@ The 90-second arc, from the demo script:
 ```bash
 bun apps/examples/src/advanced/process-model-demo.ts
 ```
+
+## What's Next
+
+- [Snapshot & Replay](/features/snapshot-replay/) — the zero-token exact-replay mechanism behind `rax diagnose replay`
+- [Debrief & Chat](/features/debrief-chat/) — the richer post-run explanation layered on top of the receipt
+- [Durable Human-in-the-Loop](/guides/durable-hitl/) — approval gates built on the same durable checkpoint rail

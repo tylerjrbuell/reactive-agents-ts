@@ -164,3 +164,9 @@ Use both a static baseline and adaptive inference:
 3. After the kernel produces a final answer, the runner checks if all required tools were called
 4. If any are missing, a nudge message is injected and the kernel re-enters the loop
 5. This repeats up to `maxRetries` times before accepting the answer as-is
+
+## What's Next
+
+- [Cost Tracking](/features/cost-tracking/) — budget persistence and the semantic cache mentioned above, in depth
+- [Error Handling & Resilience](/cookbook/error-handling/) — typed errors, retries, and fallbacks that pair with these mechanisms
+- [Guardrails](/guides/guardrails/) — the kill switch this page's circuit breaker complements

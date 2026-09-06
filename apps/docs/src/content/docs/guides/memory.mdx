@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Reactive Agents provides a four-layer memory architecture inspired by cognitive science.
 
@@ -245,3 +245,56 @@ import { Effect } from "effect";
 // Trigger a consolidation cycle for a specific agent
 yield* MemoryConsolidatorService.consolidate("my-agent-id");
 ```
+
+## DebriefStoreService — Persisted Run Debriefs
+
+Every completed run's `AgentDebrief` (outcome, key findings, lessons learned, tool-use rationale) is persisted to SQLite when a memory layer is active — the same store `agent.debriefRich()` reads from, now queryable independently of the run that produced it.
+
+```typescript
+import { DebriefStoreService } from "@reactive-agents/memory";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const store = yield* DebriefStoreService;
+  const debrief = yield* store.findByTaskId("task-123");
+  const recent = yield* store.listByAgent("my-agent-id", 10); // newest first
+});
+```
+
+`save` is called automatically by the runtime's finalize phase whenever `DebriefStoreService` is provided — you don't call it yourself in normal use.
+
+## Skill Portability — Export and Import as Markdown
+
+A learned `SkillRecord` (from `@reactive-agents/reactive-intelligence`) can be serialized to a portable Markdown file via `exportSkillToMarkdown(skill)` — metadata as a fenced JSON block, instructions as prose — so a skill learned in one process, or one team's deployment, can be shared and re-imported elsewhere without a shared database. `importSkillFromMarkdown` reads it back:
+
+```typescript
+import { readFileSync } from "node:fs";
+import { importSkillFromMarkdown } from "@reactive-agents/memory";
+
+const markdownFromFile = readFileSync("./shared-skill.md", "utf8");
+const restored = importSkillFromMarkdown(markdownFromFile, {
+  agentId: "a-different-agent", // optional overrides applied on import
+});
+```
+
+See the [Living Skills guide](/guides/agent-skills/) for the full skill lifecycle this feeds into.
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Context Engineering"
+    description="How working memory feeds per-iteration context scoring."
+    href="../context-engineering/"
+  />
+  <LinkCard
+    title="Sub-Agents"
+    description="What memory context is forwarded to a delegated sub-agent."
+    href="../sub-agents/"
+  />
+  <LinkCard
+    title="Debrief & Chat"
+    description="Persistent chat sessions built on SessionStoreService."
+    href="/features/debrief-chat/"
+  />
+</CardGrid>

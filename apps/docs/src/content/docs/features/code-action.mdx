@@ -7,7 +7,7 @@ sidebar:
   order: 16
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 `code-action` is the sixth reasoning strategy. Instead of calling tools one at a time in a ReAct loop, the LLM writes a single code block that orchestrates multiple tools as ordinary async function calls. The block runs in an isolated Worker-thread sandbox.
 
@@ -49,3 +49,18 @@ Tool calls made from generated code go through the same tool-policy gate as ever
 ## Stability
 
 `@experimental` — v0.11.1
+
+## What's Next
+
+<CardGrid>
+  <LinkCard
+    title="Choosing a Reasoning Strategy"
+    description="How Code-Action compares to the other seven strategies."
+    href="/guides/choosing-strategies/"
+  />
+  <LinkCard
+    title="Reasoning"
+    description="The strategy interface and kernel Code-Action implements."
+    href="/guides/reasoning/"
+  />
+</CardGrid>

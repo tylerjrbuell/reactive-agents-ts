@@ -381,3 +381,9 @@ const layer = createEvalLayer();
 // Persistent SQLite (recommended for CI)
 const persistentLayer = makeEvalServicePersistentLive("./eval-history.db");
 ```
+
+## What's Next
+
+- [Benchmarks](/features/benchmarks/) — the internal benchmark harness this scoring engine backs
+- [Cost Tracking](/features/cost-tracking/) — pair quality scores with cost data for a full picture
+- [Testing Agents](/cookbook/testing-agents/) — deterministic test patterns that complement LLM-as-judge scoring

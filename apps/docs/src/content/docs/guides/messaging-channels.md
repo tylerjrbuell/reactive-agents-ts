@@ -222,3 +222,8 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 - Check `ProactiveActionSuppressed` events for policy blocks
 - Ensure the Signal container (if used) is running: `docker ps`
 - For Telegram, confirm `uvx` resolves chigwell’s package and that `TELEGRAM_*` env vars are set for the MCP subprocess
+
+## What's Next
+
+- [Agent Gateway](/features/gateway/) — the persistent harness these channels plug into
+- [A2A Protocol](/features/a2a-protocol/) — agent-to-agent communication for cross-machine setups
