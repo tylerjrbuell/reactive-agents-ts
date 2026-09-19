@@ -5,6 +5,7 @@ import { streamingTemplate } from "./streaming.js";
 import { withStructuredOutputTemplate } from "./with-structured-output.js";
 import { withApprovalGatesTemplate } from "./with-approval-gates.js";
 import { withMemoryTemplate } from "./with-memory.js";
+import { cloudflareWorkerTemplate } from "./cloudflare-worker.js";
 import { renderSharedFiles } from "./shared.js";
 
 const TEMPLATES: Record<TemplateName, Template> = {
@@ -14,6 +15,7 @@ const TEMPLATES: Record<TemplateName, Template> = {
   "with-structured-output": withStructuredOutputTemplate,
   "with-approval-gates": withApprovalGatesTemplate,
   "with-memory": withMemoryTemplate,
+  "cloudflare-worker": cloudflareWorkerTemplate,
 };
 
 export function getTemplate(name: TemplateName): Template {
@@ -26,7 +28,16 @@ export function listTemplates(): readonly Template[] {
 
 export function renderTemplate(opts: ScaffoldOptions): readonly TemplateFile[] {
   const tpl = getTemplate(opts.template);
-  const shared = renderSharedFiles(opts, tpl.extraDependencies);
+  const shared = renderSharedFiles(opts, tpl);
   const specific = tpl.render(opts);
-  return [...shared, ...specific];
+  // Template-specific files override shared ones at the same path (last wins),
+  // keeping the shared slot's position. Lets a template replace e.g. README.md
+  // or .env.example without re-deriving the shared package.json logic.
+  return dedupeByPath([...shared, ...specific]);
+}
+
+function dedupeByPath(files: readonly TemplateFile[]): readonly TemplateFile[] {
+  const byPath = new Map<string, TemplateFile>();
+  for (const file of files) byPath.set(file.path, file);
+  return [...byPath.values()];
 }

@@ -7,7 +7,7 @@
 //   npm create reactive-agent my-app -- --template=minimal --provider=anthropic
 //
 // Flags:
-//   --template=<minimal|with-tools|streaming>
+//   --template=<minimal|with-tools|streaming|with-structured-output|with-approval-gates|with-memory|cloudflare-worker>
 //   --provider=<anthropic|openai|google|groq|xai|ollama>
 //   --pm=<bun|npm|pnpm|yarn>
 //   --yes               Skip prompts, use defaults
@@ -89,7 +89,7 @@ Usage:
   npm create reactive-agent [dir] -- [options]
 
 Options:
-  --template=<name>     minimal | with-tools | streaming | with-structured-output | with-approval-gates | with-memory
+  --template=<name>     minimal | with-tools | streaming | with-structured-output | with-approval-gates | with-memory | cloudflare-worker
   --provider=<name>     anthropic | openai | google | groq | xai | ollama
   --pm=<manager>        bun | npm | pnpm | yarn
   --yes                 Accept all defaults, skip prompts
@@ -162,27 +162,38 @@ async function main(): Promise<void> {
             { value: "with-structured-output", label: "with-structured-output — typed result.object via a schema" },
             { value: "with-approval-gates", label: "with-approval-gates — human-in-the-loop tool approval" },
             { value: "with-memory", label: "with-memory — cross-session memory (SQLite)" },
+            { value: "cloudflare-worker", label: "cloudflare-worker — deployable edge Worker (OpenAI)" },
           ],
           "minimal",
         );
 
   const providerFlag = getStr(flags, "provider");
-  const provider: Provider = providerFlag && isValidProvider(providerFlag)
-    ? providerFlag
-    : skipPrompts
-      ? "anthropic"
-      : await promptSelect<Provider>(
-          "Which LLM provider?",
-          [
-            { value: "anthropic", label: "Anthropic (Claude)" },
-            { value: "openai", label: "OpenAI (GPT)" },
-            { value: "google", label: "Google (Gemini)" },
-            { value: "groq", label: "Groq (fast LPU inference)" },
-            { value: "xai", label: "xAI (Grok)" },
-            { value: "ollama", label: "Ollama (local, no key)" },
-          ],
-          "anthropic",
-        );
+  let provider: Provider;
+  if (template === "cloudflare-worker") {
+    // The edge runtime pins to OpenAI (fetch-based, workerd-safe). Other
+    // providers are not verified on the edge, so skip the prompt entirely.
+    provider = "openai";
+    if (providerFlag && providerFlag !== "openai") {
+      logInfo("cloudflare-worker pins the provider to OpenAI (edge-compatible).");
+    }
+  } else {
+    provider = providerFlag && isValidProvider(providerFlag)
+      ? providerFlag
+      : skipPrompts
+        ? "anthropic"
+        : await promptSelect<Provider>(
+            "Which LLM provider?",
+            [
+              { value: "anthropic", label: "Anthropic (Claude)" },
+              { value: "openai", label: "OpenAI (GPT)" },
+              { value: "google", label: "Google (Gemini)" },
+              { value: "groq", label: "Groq (fast LPU inference)" },
+              { value: "xai", label: "xAI (Grok)" },
+              { value: "ollama", label: "Ollama (local, no key)" },
+            ],
+            "anthropic",
+          );
+  }
 
   const pmFlag = getStr(flags, "pm");
   const packageManager: PackageManager = pmFlag && isValidPM(pmFlag)

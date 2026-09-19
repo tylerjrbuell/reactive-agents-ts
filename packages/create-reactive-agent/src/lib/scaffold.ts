@@ -39,6 +39,14 @@ function buildNextSteps(opts: ScaffoldOptions): readonly string[] {
   steps.push(`cd ${opts.projectName}`);
   steps.push(`${opts.packageManager} install`);
 
+  // Cloudflare Workers use .dev.vars (already stubbed) + wrangler, not .env/start.
+  if (opts.template === "cloudflare-worker") {
+    steps.push("# Add your OPENAI_API_KEY to .dev.vars");
+    const devCmd = opts.packageManager === "npm" ? "npm run dev" : `${opts.packageManager} dev`;
+    steps.push(devCmd);
+    return steps;
+  }
+
   const envVar = providerEnvVar(opts.provider);
   if (envVar) {
     steps.push(`echo "${envVar}=your-key-here" > .env`);

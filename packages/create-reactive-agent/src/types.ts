@@ -8,7 +8,8 @@ export type TemplateName =
   | "streaming"
   | "with-structured-output"
   | "with-approval-gates"
-  | "with-memory";
+  | "with-memory"
+  | "cloudflare-worker";
 
 export interface ScaffoldOptions {
   readonly dir: string;
@@ -30,6 +31,12 @@ export interface Template {
   readonly render: (opts: ScaffoldOptions) => readonly TemplateFile[];
   /** Extra npm dependencies this template needs beyond `reactive-agents`, merged into the generated package.json. */
   readonly extraDependencies?: Readonly<Record<string, string>>;
+  /** Extra devDependencies (e.g. `wrangler`), merged into the generated package.json. */
+  readonly extraDevDependencies?: Readonly<Record<string, string>>;
+  /** Extra package.json scripts (e.g. `dev`, `deploy`), merged over the shared defaults. */
+  readonly extraScripts?: Readonly<Record<string, string>>;
+  /** Extra lines appended to the generated .gitignore (e.g. `.dev.vars`). */
+  readonly gitignoreLines?: readonly string[];
 }
 
 export interface ScaffoldResult {

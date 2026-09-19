@@ -66,9 +66,10 @@ describe("provider-config", () => {
 describe("templates registry", () => {
   test("lists all templates", () => {
     const list = listTemplates();
-    expect(list.length).toBe(6);
+    expect(list.length).toBe(7);
     const names = list.map((t) => t.name).sort();
     expect(names).toEqual([
+      "cloudflare-worker",
       "minimal",
       "streaming",
       "with-approval-gates",
@@ -241,6 +242,72 @@ describe("template-specific output", () => {
     expect(idx.content).toContain(".withAgentId(");
   });
 
+  // cloudflare-worker is excluded from the provider matrix above because it pins
+  // the provider to OpenAI regardless of the selected provider (edge runtime).
+  describe("cloudflare-worker template", () => {
+    test("index.ts is a Worker fetch handler on OpenAI, keyed from the env binding", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker" }));
+      const idx = files.find((f) => f.path === "src/index.ts")!;
+      expect(idx.content).toContain('import { ReactiveAgents } from "reactive-agents"');
+      expect(idx.content).toContain("export default {");
+      expect(idx.content).toContain("async fetch(request: Request, env: Env)");
+      expect(idx.content).toContain('.withProvider("openai", { apiKey: env.OPENAI_API_KEY })');
+      // Key comes from the env binding, not a process.env read, and there is no
+      // run-once script shape (no process.exit guard).
+      expect(idx.content).not.toContain("process.env.");
+      expect(idx.content).not.toContain("process.exit");
+    });
+
+    test("pins OpenAI even when a different provider is requested", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker", provider: "anthropic" }));
+      const idx = files.find((f) => f.path === "src/index.ts")!;
+      expect(idx.content).toContain('.withProvider("openai"');
+      expect(idx.content).not.toContain("anthropic");
+      expect(idx.content).not.toContain("ANTHROPIC_API_KEY");
+    });
+
+    test("wrangler.toml sets project name + nodejs_compat", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker", projectName: "edge-app" }));
+      const toml = files.find((f) => f.path === "wrangler.toml")!;
+      expect(toml.content).toContain('name = "edge-app"');
+      expect(toml.content).toContain('main = "src/index.ts"');
+      expect(toml.content).toContain('compatibility_flags = ["nodejs_compat"]');
+    });
+
+    test("ships a .dev.vars secret stub for OPENAI_API_KEY", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker" }));
+      const devVars = files.find((f) => f.path === ".dev.vars")!;
+      expect(devVars.content).toContain("OPENAI_API_KEY=");
+    });
+
+    test("package.json adds dev + deploy scripts and the wrangler devDependency", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker" }));
+      const pkg = JSON.parse(files.find((f) => f.path === "package.json")!.content) as {
+        scripts: Record<string, string>;
+        devDependencies: Record<string, string>;
+      };
+      expect(pkg.scripts.dev).toBe("wrangler dev");
+      expect(pkg.scripts.deploy).toBe("wrangler deploy");
+      expect(pkg.devDependencies.wrangler).toBeDefined();
+    });
+
+    test(".gitignore excludes .dev.vars", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker" }));
+      const gitignore = files.find((f) => f.path === ".gitignore")!;
+      expect(gitignore.content).toContain(".dev.vars");
+    });
+
+    test("README overrides the shared one with deploy steps", () => {
+      const files = renderTemplate(baseOpts({ template: "cloudflare-worker" }));
+      const readmes = files.filter((f) => f.path === "README.md");
+      // dedupe keeps a single README (template overrides shared)
+      expect(readmes.length).toBe(1);
+      expect(readmes[0]!.content).toContain("## Deploy");
+      expect(readmes[0]!.content).toContain("wrangler");
+      expect(readmes[0]!.content).toContain("nodejs_compat");
+    });
+  });
+
   test("cloud-provider template includes env-var check", () => {
     const files = renderTemplate(baseOpts({ provider: "anthropic" }));
     const idx = files.find((f) => f.path === "src/index.ts")!;
@@ -285,6 +352,15 @@ describe("scaffold (filesystem)", () => {
     const result = await scaffold(baseOpts({ provider: "ollama" }));
     const joined = result.nextSteps.join(" ");
     expect(joined).not.toContain("API_KEY");
+  });
+
+  test("cloudflare-worker nextSteps use .dev.vars + dev, not .env/start", async () => {
+    const result = await scaffold(baseOpts({ template: "cloudflare-worker", provider: "openai" }));
+    const joined = result.nextSteps.join(" ");
+    expect(joined).toContain(".dev.vars");
+    expect(joined).toContain("dev");
+    expect(joined).not.toContain("> .env");
+    expect(joined).not.toContain("start");
   });
 
   test("refuses to scaffold into a non-empty directory", async () => {

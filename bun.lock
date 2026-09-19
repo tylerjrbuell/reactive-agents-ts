@@ -195,7 +195,7 @@
     },
     "packages/benchmarks": {
       "name": "@reactive-agents/benchmarks",
-      "version": "0.15.0",
+      "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -411,7 +411,7 @@
     },
     "packages/judge-server": {
       "name": "@reactive-agents/judge-server",
-      "version": "0.15.0",
+      "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/eval": "workspace:*",

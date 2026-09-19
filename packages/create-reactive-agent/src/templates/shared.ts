@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../types.js";
+import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 
 // MUST track the current release major/minor. Templates rely on APIs that need
@@ -11,7 +11,7 @@ const RA_VERSION_FALLBACK = "^0.14.0";
 
 export function renderSharedFiles(
   opts: ScaffoldOptions,
-  extraDependencies: Readonly<Record<string, string>> = {},
+  tpl: Pick<Template, "extraDependencies" | "extraDevDependencies" | "extraScripts" | "gitignoreLines">,
 ): readonly TemplateFile[] {
   const raVersion = opts.version ?? RA_VERSION_FALLBACK;
 
@@ -26,16 +26,18 @@ export function renderSharedFiles(
       scripts: {
         start: opts.packageManager === "bun" ? "bun run src/index.ts" : "tsx src/index.ts",
         typecheck: "tsc --noEmit",
+        ...(tpl.extraScripts ?? {}),
       },
       dependencies: {
         "reactive-agents": raVersion,
-        ...extraDependencies,
+        ...(tpl.extraDependencies ?? {}),
       },
       devDependencies: {
         typescript: "^5.7.0",
         ...(opts.packageManager === "bun"
           ? { "bun-types": "latest" }
           : { "@types/node": "^22.0.0", tsx: "^4.19.0" }),
+        ...(tpl.extraDevDependencies ?? {}),
       },
     },
     null,
@@ -65,14 +67,17 @@ export function renderSharedFiles(
     ? `# ${providerDisplayName(opts.provider)} credentials\n${envVar}=your-key-here\n`
     : `# Ollama runs locally — no API key needed.\n# Make sure Ollama is running: https://ollama.com\n`;
 
-  const gitignore = `node_modules
-dist
-.env
-.env.*
-!.env.example
-*.log
-.DS_Store
-`;
+  const gitignore =
+    [
+      "node_modules",
+      "dist",
+      ".env",
+      ".env.*",
+      "!.env.example",
+      "*.log",
+      ".DS_Store",
+      ...(tpl.gitignoreLines ?? []),
+    ].join("\n") + "\n";
 
   return [
     { path: "package.json", content: packageJson + "\n" },
