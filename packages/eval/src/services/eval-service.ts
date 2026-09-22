@@ -1,7 +1,10 @@
-import { Context, Effect, Layer, Ref } from "effect";
+import { Context, Effect, Layer, Option, Ref } from "effect";
 import type { CompletionRequest, CompletionResponse, LLMErrors } from "@reactive-agents/llm-provider";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { JudgmentService } from "@reactive-agents/judgment";
 import { JudgeLLMService } from "./judge-llm-service.js";
+import { scoreDimensionsViaJudgment } from "./judgment-dimensions.js";
+import { minimumDetectableEffect, pooledStats, summarizeRepeats, type RepeatStats } from "../stats/variance.js";
 
 type LLMCompleter = {
   readonly complete: (request: CompletionRequest) => Effect.Effect<CompletionResponse, LLMErrors>;
@@ -146,7 +149,69 @@ Respond with ONLY a decimal number between 0.0 and 1.0. No explanation.`,
   }
 };
 
-const buildSummary = (results: EvalResult[], passThreshold: number): EvalRunSummary => {
+/**
+ * Scores `dims` with the configured judge engine. When a `JudgmentService`
+ * is wired AND `judgeEngine` resolves to `"jev"` (the default — see
+ * `DEFAULT_EVAL_CONFIG.judgeEngine`), jev-capable dimensions are answered in
+ * ONE batched request (`scoreDimensionsViaJudgment`); any dimension that
+ * request didn't cover — because it isn't jev-capable, or the batch/that
+ * one field failed — falls back to the existing per-dimension `llm` path
+ * unchanged. With no `JudgmentService` wired or `judgeEngine:"llm"`, this
+ * is byte-for-byte the original all-`llm` behavior (Task 3 Step 2's
+ * regression lock).
+ */
+/**
+ * Result of one scoring pass, WITH provenance. Code review (2026-09-22)
+ * flagged that without this, a case's repeat passes could silently mix
+ * calibrated `jev` samples with uncalibrated `llm` self-report samples when
+ * jev flakes on only some of a case's repeats — corrupting the variance
+ * this whole task exists to measure. Callers that pool repeats must group
+ * by `jevDims`, never blend a dimension's jev and llm samples together.
+ */
+interface EngineScoredDimensions {
+  readonly scores: DimensionScore[];
+  /** Which requested dims this pass actually answered via `jev` (the rest, including any not requested, came from `llm`). */
+  readonly jevDims: ReadonlySet<string>;
+}
+
+const scoreDimensionsWithEngine = (
+  llm: LLMCompleter,
+  judgment: Option.Option<JudgmentService["Type"]>,
+  judgeEngine: "jev" | "llm",
+  dims: readonly string[],
+  params: {
+    input: string;
+    actualOutput: string;
+    expectedOutput?: string;
+    caseId: string;
+    costUsd: number;
+    overallQualityScore?: number;
+  },
+  concurrency: number,
+): Effect.Effect<EngineScoredDimensions, EvalError> =>
+  Effect.gen(function* () {
+    const useJev = judgeEngine === "jev" && Option.isSome(judgment);
+    const jevScores = useJev
+      ? yield* scoreDimensionsViaJudgment(judgment.value, dims, params)
+      : new Map<string, DimensionScore>();
+
+    const scores = yield* Effect.all(
+      dims.map((dim) => {
+        const jevScore = jevScores.get(dim);
+        return jevScore !== undefined ? Effect.succeed(jevScore) : scoreDimension(llm, dim, params);
+      }),
+      { concurrency },
+    );
+
+    return { scores, jevDims: new Set(jevScores.keys()) };
+  });
+
+const buildSummary = (
+  results: EvalResult[],
+  passThreshold: number,
+  perCaseRepeatStats?: Record<string, RepeatStats[]>,
+  repeats?: number,
+): EvalRunSummary => {
   const allDimensions = new Set(results.flatMap((r) => r.scores.map((s) => s.dimension)));
   const dimensionAverages: Record<string, number> = {};
 
@@ -158,6 +223,22 @@ const buildSummary = (results: EvalResult[], passThreshold: number): EvalRunSumm
       ? dimScores.reduce((a, b) => a + b, 0) / dimScores.length
       : 0;
   }
+
+  // Task 6: only present when the run actually took >1 scoring pass per
+  // case — `repeats: 1` (the default) reports no variance data, and
+  // `checkRegression`/`compare` fall back to the flat threshold. Pools each
+  // case's OWN within-case repeat stats (never a flat concatenation across
+  // cases — see `pooledStats`'s doc comment for why that would conflate
+  // judge noise with real case-to-case quality spread).
+  const dimensionVariance =
+    perCaseRepeatStats && repeats && repeats > 1
+      ? Object.fromEntries(
+          Object.entries(perCaseRepeatStats).map(([dim, groups]) => {
+            const stats = pooledStats(groups);
+            return [dim, { mean: stats.mean, stddev: stats.stddev, n: stats.n, ci95Low: stats.ci95[0], ci95High: stats.ci95[1] }];
+          }),
+        )
+      : undefined;
 
   return {
     totalCases: results.length,
@@ -171,6 +252,8 @@ const buildSummary = (results: EvalResult[], passThreshold: number): EvalRunSumm
       : 0,
     totalCostUsd: results.reduce((s, r) => s + r.costUsd, 0),
     dimensionAverages,
+    ...(dimensionVariance ? { dimensionVariance } : {}),
+    ...(repeats ? { repeats } : {}),
   };
 };
 
@@ -187,6 +270,13 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
       // The SUT's LLMService is invoked separately when running the agent;
       // the judge is invoked here when scoring. No code-path overlap.
       const llm = yield* JudgeLLMService;
+      // Task 3: optional — a run with no `.withJudgment()` layer wired (no
+      // TYPESAFE_API_KEY, or the caller simply didn't opt in) resolves
+      // `Option.none()` here and every dimension takes the unchanged `llm`
+      // path below. `Effect.serviceOption` does NOT add JudgmentService to
+      // this layer's requirements (see effect-ts-patterns "Optional
+      // Dependencies").
+      const judgment = yield* Effect.serviceOption(JudgmentService);
       const historyRef = yield* Ref.make<EvalRun[]>([]);
 
       return {
@@ -208,6 +298,15 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
             }
 
             const results: EvalResult[] = [];
+            /**
+             * Each case's own within-case repeat stats per dimension (Task 6,
+             * corrected post-code-review 2026-09-22). Kept per-case — NOT
+             * flattened together — so `buildSummary` can pool the WITHIN-case
+             * (judge-noise) variance via `pooledStats` without contaminating
+             * it with real case-to-case quality spread (BETWEEN-case
+             * variance, a different quantity).
+             */
+            const perCaseRepeatStats: Record<string, RepeatStats[]> = {};
 
             for (const evalCase of suite.cases) {
               const start = Date.now();
@@ -230,17 +329,31 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               );
 
               const sutCostUsd = sutRun.metrics?.costUsd ?? 0;
+              const repeatCount = Math.max(1, config.repeats ?? DEFAULT_EVAL_CONFIG.repeats);
 
-              const scores = yield* Effect.all(
-                suite.dimensions.map((dim) =>
-                  scoreDimension(llm, dim, {
+              // Task 6: re-scores the SAME `sutRun.actualOutput` `repeatCount`
+              // times when `config.repeats > 1` — this measures JUDGE
+              // variance, not SUT variance (the SUT ran exactly once above,
+              // unchanged). `repeats: 1` (the default) takes exactly one
+              // scoring pass, byte-identical to pre-Task-6 behavior.
+              const scoreOnce = () =>
+                scoreDimensionsWithEngine(
+                  llm,
+                  judgment,
+                  config.judgeEngine ?? DEFAULT_EVAL_CONFIG.judgeEngine,
+                  suite.dimensions,
+                  {
                     input: evalCase.input,
                     actualOutput: sutRun.actualOutput,
                     expectedOutput: evalCase.expectedOutput,
                     caseId: evalCase.id,
                     costUsd: sutCostUsd,
-                  }),
-                ),
+                  },
+                  config.parallelism,
+                );
+
+              const repeatPasses = yield* Effect.all(
+                Array.from({ length: repeatCount }, scoreOnce),
                 { concurrency: config.parallelism },
               ).pipe(
                 Effect.mapError(
@@ -251,6 +364,40 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
                     }),
                 ),
               );
+
+              // This case's recorded score per dimension is the mean across
+              // repeats (repeats:1 -> exactly the single pass, unchanged).
+              // Per-dimension, homogeneous-engine only: if ANY repeat pass
+              // answered a dim via jev, use ONLY that dim's jev-sourced
+              // samples for this case (drop any llm stragglers from a
+              // transient jev flake) — never blend calibrated jev samples
+              // with uncalibrated llm samples for the same case+dimension
+              // (code review, 2026-09-22). A dim jev never answered on any
+              // pass uses all its (llm) samples as before.
+              const scores: DimensionScore[] = suite.dimensions.map((dim) => {
+                const anyJev = repeatPasses.some((pass) => pass.jevDims.has(dim));
+                const homogeneousSamples = repeatPasses
+                  .filter((pass) => (anyJev ? pass.jevDims.has(dim) : true))
+                  .flatMap((pass) => pass.scores.filter((s) => s.dimension === dim));
+
+                const values = homogeneousSamples.map((s) => s.score);
+                const confidences = homogeneousSamples
+                  .map((s) => s.confidence)
+                  .filter((c): c is number => c !== undefined);
+
+                // This case's within-case repeat spread for this dimension —
+                // pooled with every other case's at the run level below,
+                // never flattened together with them here.
+                (perCaseRepeatStats[dim] ??= []).push(summarizeRepeats(values));
+
+                return {
+                  dimension: dim,
+                  score: values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0,
+                  ...(confidences.length > 0
+                    ? { confidence: confidences.reduce((a, b) => a + b, 0) / confidences.length }
+                    : {}),
+                };
+              });
 
               const overallScore =
                 scores.length > 0 ? scores.reduce((s, d) => s + d.score, 0) / scores.length : 0;
@@ -276,7 +423,7 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               timestamp: new Date(),
               agentConfig,
               results,
-              summary: buildSummary(results, config.passThreshold),
+              summary: buildSummary(results, config.passThreshold, perCaseRepeatStats, config.repeats ?? DEFAULT_EVAL_CONFIG.repeats),
             };
 
             yield* Ref.update(historyRef, (h) => [...h, run]);
@@ -294,17 +441,19 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
           const start = Date.now();
           const costUsd = metrics?.costUsd ?? 0;
 
-          const scores = yield* Effect.all(
-            dimensions.map((dim) =>
-              scoreDimension(llm, dim, {
-                input: evalCase.input,
-                actualOutput,
-                expectedOutput: evalCase.expectedOutput,
-                caseId: evalCase.id,
-                costUsd,
-              }),
-            ),
-            { concurrency: 3 },
+          const { scores } = yield* scoreDimensionsWithEngine(
+            llm,
+            judgment,
+            DEFAULT_EVAL_CONFIG.judgeEngine,
+            dimensions,
+            {
+              input: evalCase.input,
+              actualOutput,
+              expectedOutput: evalCase.expectedOutput,
+              caseId: evalCase.id,
+              costUsd,
+            },
+            3,
           );
 
           const qualityScores = scores.filter((s) => s.dimension !== "cost-efficiency");
@@ -353,8 +502,12 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
             const a = dimsA[dim] ?? 0;
             const b = dimsB[dim] ?? 0;
             const delta = b - a;
-            if (delta > 0.02) improved.push(dim);
-            else if (delta < -0.02) regressed.push(dim);
+            const varA = runA.summary.dimensionVariance?.[dim];
+            const varB = runB.summary.dimensionVariance?.[dim];
+            const threshold =
+              varA && varB ? minimumDetectableEffect(varA.stddev, varA.n, varB.stddev, varB.n) : 0.02;
+            if (delta > threshold) improved.push(dim);
+            else if (delta < -threshold) regressed.push(dim);
             else unchanged.push(dim);
           }
 
@@ -367,6 +520,13 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
         }),
 
       checkRegression: (current, baseline, threshold) => {
+        // Task 6: when BOTH runs carry repeat-scoring variance data
+        // (`dimensionVariance`, from `EvalConfig.repeats > 1`), the trigger
+        // for that dimension is the statistically-derived minimum
+        // detectable effect at their actual sample sizes, not the flat
+        // `regressionThreshold`. A run with `repeats: 1` (the default) has
+        // no variance data on either side, so every dimension falls back to
+        // the flat threshold below — unchanged from pre-Task-6 behavior.
         const t = threshold ?? DEFAULT_EVAL_CONFIG.regressionThreshold;
         return Effect.sync(() => {
           const details: string[] = [];
@@ -378,9 +538,17 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
           for (const dim of allDims) {
             const curr = current.summary.dimensionAverages[dim] ?? 0;
             const base = baseline.summary.dimensionAverages[dim] ?? 0;
-            if (curr < base - t) {
+            const currVar = current.summary.dimensionVariance?.[dim];
+            const baseVar = baseline.summary.dimensionVariance?.[dim];
+            const mde =
+              currVar && baseVar
+                ? minimumDetectableEffect(currVar.stddev, currVar.n, baseVar.stddev, baseVar.n)
+                : undefined;
+            const effectiveThreshold = mde ?? t;
+            if (curr < base - effectiveThreshold) {
+              const mdeNote = mde !== undefined ? `, MDE=${mde.toFixed(3)} at n=${Math.min(currVar!.n, baseVar!.n)}` : ` (flat threshold, repeats:1 — no variance data)`;
               details.push(
-                `${dim}: ${curr.toFixed(3)} < baseline ${base.toFixed(3)} (delta ${(curr - base).toFixed(3)})`,
+                `${dim}: ${curr.toFixed(3)} < baseline ${base.toFixed(3)} (delta ${(curr - base).toFixed(3)}${mdeNote})`,
               );
             }
           }

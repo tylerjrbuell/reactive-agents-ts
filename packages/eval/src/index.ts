@@ -1,7 +1,7 @@
 // Types
 export type { EvalCase, EvalSuite } from "./types/eval-case.js";
 export { EvalCaseSchema, EvalSuiteSchema } from "./types/eval-case.js";
-export type { DimensionScore, EvalResult, EvalRun, EvalRunSummary } from "./types/eval-result.js";
+export type { DimensionScore, DimensionVarianceStats, EvalResult, EvalRun, EvalRunSummary } from "./types/eval-result.js";
 export {
   DimensionScoreSchema,
   EvalResultSchema,
@@ -28,6 +28,20 @@ export type { SuiteAgentRunner } from "./services/eval-service.js";
 export { DatasetService, DatasetServiceLive } from "./services/dataset-service.js";
 export { JudgeLLMService, JudgeFromLLMServiceLive } from "./services/judge-llm-service.js";
 export type { JudgeLLMServiceShape } from "./services/judge-llm-service.js";
+
+export { scoreDimensionsViaJudgment, JEV_JUDGED_DIMENSIONS } from "./services/judgment-dimensions.js";
+
+export {
+  mean,
+  sampleStddev,
+  standardError,
+  confidenceInterval95,
+  minimumDetectableEffect,
+  summarizeRepeats,
+  pooledStats,
+  checkCalibration,
+} from "./stats/variance.js";
+export type { RepeatStats, CalibrationBucket } from "./stats/variance.js";
 
 // Persistent store
 export { createEvalStore } from "./services/eval-store.js";

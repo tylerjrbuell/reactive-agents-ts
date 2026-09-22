@@ -30,6 +30,30 @@ export const EvalConfigSchema = Schema.Struct({
    * may make this field required.
    */
   judge: Schema.optional(JudgeConfigSchema),
+  /**
+   * Which engine scores the judged dimensions (accuracy/relevance/
+   * completeness/safety). Default `"jev"` — calibrated, ~10x cheaper,
+   * ~5x lower variance than the LLM-judge path (see
+   * wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md
+   * POC validation). `"llm"` is the original `JudgeLLMService` +
+   * `parseFloat` path, kept as the secondary/keyless-fallback engine — never
+   * deleted. Resolution at the eval-service boundary: `"jev"` requested but
+   * no `JudgmentService` layer wired (no `TYPESAFE_API_KEY`, or the caller
+   * simply didn't call `.withJudgment()`) silently degrades to `"llm"` —
+   * this field never fails a run.
+   */
+  judgeEngine: Schema.optional(Schema.Literal("jev", "llm")),
+  /**
+   * How many times to re-score each case's SUT output (Task 6). Re-scores
+   * the SAME `actualOutput` — this measures JUDGE variance, not the SUT's
+   * own run-to-run variance (a different, already-documented concern — see
+   * MEMORY: "bench cells are Bernoulli"). Default `1` (no variance data,
+   * `checkRegression`/`compare` use the flat `regressionThreshold`
+   * fallback). The `jev` engine's cost/latency (~$0.042/MTok in, ~150ms)
+   * is what makes `repeats: 10-30` affordable where it wasn't for an
+   * LLM judge (see the plan's POC validation).
+   */
+  repeats: Schema.optional(Schema.Number),
 });
 export type EvalConfig = typeof EvalConfigSchema.Type;
 
@@ -40,4 +64,6 @@ export const DEFAULT_EVAL_CONFIG: Required<Omit<EvalConfig, "judge">> = {
   parallelism: 3,
   timeoutMs: 30_000,
   retries: 1,
+  judgeEngine: "jev",
+  repeats: 1,
 };
