@@ -19,7 +19,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
 │
 ├── @reactive-agents/reasoning     — 8 registered strategy implementations (core: reactive, direct; router: adaptive; promote-candidate: code-action; maintained: plan-execute-reflect, reflexion, tree-of-thought, blueprint; aliases react→reactive, rewoo→blueprint — labels per north-star spec §7, see docs reference/stability.md) + ThoughtKernel, KernelRunner, Structured Plan Engine
-│   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
+│   └── depends on: core, judgment, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
 ├── @reactive-agents/tools         — ToolService, ToolRegistry, built-in tools (9 capability + 9 meta; shell-execute gated), MCP client, sandbox
 │   └── depends on: core, llm-provider
@@ -31,7 +31,7 @@ Foundation (no reactive-agents deps)
 │   └── depends on: core, llm-provider
 │
 ├── @reactive-agents/cost          — Complexity router, budget enforcer, semantic cache
-│   └── depends on: core, llm-provider, memory
+│   └── depends on: core, judgment, llm-provider, memory
 │
 ├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
 │   └── depends on: core

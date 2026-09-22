@@ -772,6 +772,50 @@ created: 2026-05-23
     confirmed unrelated via git stash on the unmodified tree. Parent ran
     `bun run docs:gen:api` post-dispatch (outside warden's authority-bounds)
     to clear builder-api.md drift the new method introduced.
+
+- task: typesafe-judgment-task9-strategy-selection-shadow
+  date: 2026-09-22
+  warden: kernel-warden
+  routed: main
+  bypass-reason: >
+    kernel-warden correctly returned denied-by-authority — its manifest is
+    hard-limited to packages/reasoning/src/kernel/** (edit) with strategies/**
+    as read-only context, and this task's entire scope (adaptive.ts,
+    adaptive-jev-questions.ts, adaptive tests) is under strategies/**, which
+    has no dedicated warden in the routing table. Refused rather than widen
+    its own scope, per the standing anti-pattern list. Parent implemented
+    directly.
+  commits: 0  # pending parent commit
+  agent-spawns: 1  # the denied kernel-warden dispatch
+  tokens-est: ~44K
+  regression-prevented: none (net-new shadow instrumentation, zero behavior change)
+  notes: >
+    Task 9 (Phase C) of the judgment-layer plan. jevClassifyShadow() fires a
+    batched Jev Choice+Nouls speculatively at adaptive.ts's strategy-selection
+    site via Effect.forkDaemon, never altering selectedStrategy. New
+    JudgmentShadow AgentEvent (core). 4 new tests (agree/disagree/timeout/
+    absent-service), full reasoning suite 2854/0 (4 pre-existing todo).
+    Recommend: add a strategies-scoped warden or fold strategies/** into
+    kernel-warden's manifest before the next dispatch targeting this path.
+
+- task: typesafe-judgment-task9b-complexity-router-shadow
+  date: 2026-09-22
+  warden: main
+  routed: main
+  bypass-reason: >
+    packages/cost/** has no dedicated warden in the routing table (per the
+    plan's own "Warden: parent" assignment for this task).
+  commits: 0  # pending parent commit
+  agent-spawns: 0
+  tokens-est: ~0K  # done inline, no sub-dispatch
+  regression-prevented: none (net-new shadow instrumentation, zero behavior change)
+  notes: >
+    Task 9b (Phase C), same shape as Task 9. jevComplexityShadow() fires at
+    complexity-router.ts's heuristicClassify site; current reflects the
+    POST-escalation tier (FIX-32 tool-reliability walk), not the raw
+    heuristic pick, so shadow agreement data isn't skewed by escalation.
+    5 new tests (4 shared with Task 9's shape + 1 proving the escalation
+    gate is unaffected in shadow mode). Full cost suite 103/0.
 ```
 
 (written on evaluation day)
