@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-19
+updated: 2026-09-22
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,16 @@ updated: 2026-09-19
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-09-22 — TypeSafe/Jev judgment primitive, Phase A+B shipped (uncommitted on `dev`)
+
+New `@reactive-agents/judgment` package (36→... packages) + `eval`/`judge-server` overhaul. Full plan:
+[[Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer]]; debrief:
+[[Research/Debriefs/2026-09-22-jev-judge-eval-overhaul-debrief]]. `eval` now scores 4 LLM-judged
+dimensions via ONE batched Jev Score request per case by default (was 4x `parseFloat(...)||0.5` LLM
+calls) — no behavior change without `.withJudgment()`/`TYPESAFE_API_KEY` wired. 280/280 tests pass
+across 4 touched packages. **Not yet committed, no PR.** Next: Phase C (runtime `.withJudgment()` tier)
+or Task 6 Step 5's methodology gate (real frozen-dataset study, not yet run).
 
 ## 2026-09-19 — surface-high-leverage-work skill + kernel-termination-regression bundle (PR #209)
 

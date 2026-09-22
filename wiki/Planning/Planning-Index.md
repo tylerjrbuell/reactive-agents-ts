@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-09-20 | [[Implementation-Plans/2026-09-20-typesafe-judgment-layer|TypeSafe Judgment Layer — multi-backend judgment primitive + judge/eval overhaul (Phase A+B shipped, Phase C pending)]] | 🟡 ACTIVE (Phase A+B implemented+tested, uncommitted; Phase C runtime tier not started; Task 6 Step 5 methodology gate not run) | Tyler |
 | 2026-07-11 | [[Implementation-Plans/2026-07-11-subagents-and-logging|Subagents + Unified Logging]] | ⬜ RATIFIED (RE-SCOPED) 2026-07-20 — folded into debt-burndown Wave 2 B8 (see DEBT-REGISTER §3); index badge was stale | Claude Code |
 | 2026-07-10 | [[Implementation-Plans/2026-07-10-harness-root-cause-closure-program|Harness Root-Cause Closure Program]] | ⚠️ SUPERSEDED (2026-07-19, per the file's own frontmatter + `DEBT-REGISTER.md`) — open items absorbed into DEBT-REGISTER §3b; kept in place (still linked from `wiki/Hot.md` + `2026-07-08-meta-loop-execution-plan.md`) | Claude Code |
 | ~~2026-07-10~~ | ~~Goal-Reliability + Feedback-Loop Program~~ | 🗄️ ARCHIVED 2026-07-31 — file's own frontmatter already read `status: SUPERSEDED (2026-07-19)`; moved to [[Implementation-Plans/_archive/2026-07-10-goal-reliability-and-feedback-loop-program|_archive/2026-07-10-goal-reliability-and-feedback-loop-program]] | Claude Code |

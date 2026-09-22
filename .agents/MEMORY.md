@@ -16,8 +16,23 @@
 
 ## Projects — Sep 2026
 
-**2026-09-22: TypeSafe/Jev judgment primitive (plan, POC-validated, NOT implemented).**
-Plan `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`. RA owns the System One
+**2026-09-22: TypeSafe/Jev judgment primitive — Phase A + Phase B BOTH COMPLETE, uncommitted on `dev`, no PR.**
+Plan `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`. Debrief
+`wiki/Research/Debriefs/2026-09-22-jev-judge-eval-overhaul-debrief.md`. New `packages/judgment/**`
+(`JudgmentService`, jev backend via `@typesafe-ai/sdk`, `llm` emulation backend via real
+`LLMService.completeStructured()` — not duplicated). `eval`'s `judgeEngine` seam (default `jev`): 4
+dimensions now ONE batched Score request/case (was 4x `parseFloat||0.5`); `repeats` config + MDE-based
+`checkRegression`/`compare` (flat-epsilon fallback for `repeats:1`); `checkCalibration` utility.
+`judge-server`'s `/judge` gains `judgeEngine:"jev"` (default stays `"llm"`, standalone/keyless-safe).
+Deps refined `core`→`core+llm-provider` for `judgment` (documented). `packages/core/src/types/
+judgment-events.ts` wired into `event-bus.ts` `AgentEvent` union. Real bug caught by TDD: `throw` inside
+`Effect.gen` (defect, not typed failure) in judgment-handler.ts, fixed to `Effect.fail`. Full regression:
+`bun test packages/{core,eval,judgment,judge-server}` 280/280 pass, 616 assertions; `check-version-sync.sh`
+35/35; `reactive-agents` facade typechecks clean. `AGENTS.md`/README/Hot.md/Planning-Index/changeset all
+updated. Genuinely open (flagged, not skipped): Task 6 Step 5's methodology gate (real frozen-dataset
+study, needs live execution), `cost-efficiency` normalization, new docs pages, `/review-patterns`, full
+monorepo sweep. **Phase C not started at all** (runtime `.withJudgment()` tier + 2 folded-in sites:
+`cost` complexity-router, `interaction` autonomy-confidence — plan Tasks 9b/11b). RA owns the System One
 judgment paradigm as a first-class multi-backend primitive: new leaf `@reactive-agents/judgment`
 (`JudgmentService` over a `JudgmentBackend` interface). Backends: `jev` (`@typesafe-ai/sdk@0.6.0`,
 calibrated) + `llm` (structured-output emulation over user's LLMService, uncalibrated, keyless default);

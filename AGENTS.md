@@ -36,6 +36,9 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
 │   └── depends on: core
 │
+├── @reactive-agents/judgment      — Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation)
+│   └── depends on: core, llm-provider
+│
 ├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
 │   └── depends on: core
 │
@@ -45,8 +48,8 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
 │   └── depends on: core, llm-provider
 │
-├── @reactive-agents/eval          — LLM-as-judge, EvalStore (SQLite), 5 scoring dimensions, regression checks
-│   └── depends on: core, llm-provider
+├── @reactive-agents/eval          — Jev-judge (default) + LLM-as-judge (secondary), EvalStore (SQLite), 5 scoring dimensions, regression checks
+│   └── depends on: core, llm-provider, judgment
 │
 ├── @reactive-agents/a2a           — Agent Cards, JSON-RPC 2.0, SSE streaming, A2A server/client
 │   └── depends on: core

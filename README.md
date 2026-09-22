@@ -156,7 +156,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **9,250 tests** across 1204 files, verified with `bun test` on every PR
+- **9,250 tests** across 1244 files, verified with `bun test` on every PR
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -594,7 +594,8 @@ Provider applicability: honored by providers that expose a context-window knob (
 | [`@reactive-agents/trace`](packages/trace)                                 | Structured execution traces: `TraceEvent` schema, recorders, span helpers, backing replay and diagnose                                                                                    |
 | [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning                                                                                                                  |
 | [`@reactive-agents/prompts`](packages/prompts)                             | Version-controlled template engine with variable interpolation and a prompt library                                                                                                       |
-| [`@reactive-agents/eval`](packages/eval)                                   | Evaluation framework: LLM-as-judge scoring, EvalStore persistence, comparison reports                                                                                                     |
+| [`@reactive-agents/eval`](packages/eval)                                   | Evaluation framework: Jev-judge (default) + LLM-as-judge scoring, EvalStore persistence, comparison reports, repeat-run variance                                                          |
+| [`@reactive-agents/judgment`](packages/judgment)                           | Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted backend: TypeSafe/Jev, or an LLM-emulation fallback needing no TypeSafe key                            |
 | [`@reactive-agents/judge-server`](packages/judge-server)                   | LLM-as-judge HTTP server backing `@reactive-agents/eval` (private, never published)                                                                                                        |
 | [`@reactive-agents/a2a`](packages/a2a)                                     | A2A protocol: Agent Cards, JSON-RPC 2.0 server/client, SSE streaming                                                                                                                       |
 | [`@reactive-agents/gateway`](packages/gateway)                             | Persistent autonomous harness: adaptive heartbeats, cron scheduling, webhook ingestion, composable policy engine                                                                          |
@@ -894,7 +895,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (9,250 tests / 1204 files, ~110s)
+bun test                 # Run full test suite (9,250 tests / 1244 files, ~110s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
