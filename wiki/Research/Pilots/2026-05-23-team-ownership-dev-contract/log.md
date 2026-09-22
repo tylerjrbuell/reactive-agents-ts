@@ -816,6 +816,32 @@ created: 2026-05-23
     heuristic pick, so shadow agreement data isn't skewed by escalation.
     5 new tests (4 shared with Task 9's shape + 1 proving the escalation
     gate is unaffected in shadow mode). Full cost suite 103/0.
+
+- task: typesafe-judgment-task10-comprehend-shadow
+  date: 2026-09-22
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # pending parent commit
+  agent-spawns: 1
+  tokens-est: ~138K
+  regression-prevented: pooled-events-test-isolation-gap (Task 9's adaptive-jev-shadow.test.ts had no `site` filter, over-counted once Task 10's shadow landed on the same bus — fixed)
+  notes: >
+    Task 10 (Phase C). jevComprehendShadow() fires a chunked (CHUNK_CAP=30)
+    batched Choice+Score+Nouls at runKernel()'s unconditional
+    nominateRequiredTools() call site — the true per-run comprehend entry
+    inside kernel-warden's own manifest (rejected packages/runtime's
+    reasoning-think.ts as the OTHER candidate site since it's out of
+    manifest, and rejected runner.ts's OWN adaptiveHarness-gated classifyTask
+    call since it's opt-in, not unconditional). 12 new tests across 2 files.
+    Self-reported one collateral regression (3 pre-existing Task-9 tests
+    broken by the new shared-bus event volume) and escalated rather than
+    silently fixing outside its test-file authority; parent applied the
+    1-line site-filter fix directly. `/code-review medium` then found 2 real
+    issues (chunk-cap dual-source-of-truth constant; shadow input computed
+    unconditionally before the JudgmentService presence check, breaking the
+    documented zero-cost-when-absent guarantee) — both fixed with a new
+    lazy-thunk regression test. Full reasoning suite 2866/0 (4 pre-existing
+    todo), up from 2854 pre-Task-10.
 ```
 
 (written on evaluation day)
