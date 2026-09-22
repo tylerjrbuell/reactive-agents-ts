@@ -1,0 +1,65 @@
+{
+  "name": "@reactive-agents/judgment",
+  "version": "0.16.0",
+  "description": "Calibrated typed judgment primitive (Choice/Score/Noul) for Reactive Agents, provider-abstracted over TypeSafe/Jev and an LLM-emulation fallback",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "judgment",
+    "classification",
+    "typesafe",
+    "jev"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots --timeout 15000"
+  },
+  "dependencies": {
+    "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/llm-provider": "0.16.0",
+    "@typesafe-ai/sdk": "^0.6.0",
+    "effect": "^3.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "bun-types": "latest",
+    "tsup": "*"
+  },
+  "exports": {
+    ".": {
+      "bun": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/judgment"
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
+  }
+}
