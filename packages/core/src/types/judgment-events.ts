@@ -40,3 +40,25 @@ export type JudgmentFailed = {
   readonly message: string;
   readonly latencyMs: number;
 };
+
+/**
+ * Fired by a runtime site running Jev in SHADOW mode (Phase C: strategy-
+ * selection, complexity-router, etc) — Jev's answer is computed but never
+ * consumes the decision actually made. Distinct from `JudgmentEvaluated`
+ * (which reports on every `JudgmentService.ask()` call at whatever site name
+ * the layer was constructed with) because shadow analysis needs the current
+ * heuristic/LLM decision and an agreement verdict alongside Jev's answer,
+ * correlated per real production call — not reconstructable from
+ * `JudgmentEvaluated` alone.
+ */
+export type JudgmentShadow = {
+  readonly _tag: "JudgmentShadow";
+  /** Which shadow site fired, e.g. "strategy-selection", "complexity-router". */
+  readonly site: string;
+  /** Jev's answer, or `null` if the call failed/timed out. */
+  readonly jev: string | null;
+  /** The decision actually used (from the existing heuristic/LLM path), unaffected by `jev`. */
+  readonly current: string;
+  /** `jev === current`, or `null` when `jev` is null (no answer to compare). */
+  readonly agreement: boolean | null;
+};
