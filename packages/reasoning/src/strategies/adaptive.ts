@@ -8,7 +8,7 @@
  * - Complex multi-step tasks → plan-execute-reflect
  * - Exploratory/creative tasks → tree-of-thought
  */
-import { Effect } from "effect";
+import { Effect, Option, Either } from "effect";
 import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
@@ -36,6 +36,9 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
+import { JudgmentService } from "@reactive-agents/judgment";
+import type { EventBusInstance } from "../kernel/state/kernel-state.js";
+import { buildAdaptiveJevQuestions, buildAdaptiveJevState, jevAnswerToStrategy } from "./adaptive-jev-questions.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -261,6 +264,16 @@ export const executeAdaptive = (
     } // end else (LLM classification path)
 
     yield* emitPhaseEnd({ emitLog, phase: "adaptive:select", startedAt: start });
+
+    // ── Task 9 (shadow-only): Jev strategy-selection classifier ──
+    // Fires the batched Choice+Nouls speculatively via Effect.forkDaemon (same
+    // fire-and-forget pattern as iterate-pass.ts:1722's checkpoint write and
+    // execute-stream.ts:791's debrief finalization) so it never blocks or
+    // alters `selectedStrategy`. Absent JudgmentService (no `.withJudgment()`
+    // on the builder) is a clean no-op — Effect.serviceOption resolves `None`
+    // without widening this function's R (Effect<..., never, T> per Effect's
+    // own signature, not a project convention).
+    yield* jevClassifyShadow(input, selectedStrategy, ebOpt);
 
     // ── HS-111 / M5 cost-aware downgrade ──
     //
@@ -732,4 +745,54 @@ export function heuristicClassify(
 
   // Ambiguous — defer to LLM classifier
   return null;
+}
+
+/**
+ * Task 9 (shadow-only). Fires the batched Jev strategy-classification
+ * question via `Effect.forkDaemon` — never awaited by the caller, never
+ * altering `current` (the strategy actually selected by the existing
+ * heuristic/LLM path). Emits `JudgmentShadow` on the event bus with an
+ * agreement verdict for later analysis (Task 9 Step 4's exit gate).
+ *
+ * Absent `JudgmentService` (no `.withJudgment()` on the builder) is a clean,
+ * zero-cost no-op — `Effect.serviceOption` resolves `None` without adding
+ * `JudgmentService` to this function's (or `executeAdaptive`'s) requirements.
+ */
+function jevClassifyShadow(
+  input: AdaptiveInput,
+  current: SubStrategy,
+  eventBus: Option.Option<EventBusInstance>,
+): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const maybeJudgment = yield* Effect.serviceOption(JudgmentService);
+    if (Option.isNone(maybeJudgment)) return;
+    const judgment = maybeJudgment.value;
+
+    yield* Effect.forkDaemon(
+      Effect.gen(function* () {
+        const result = yield* judgment
+          .ask({
+            state: buildAdaptiveJevState({
+              taskDescription: input.taskDescription,
+              taskType: input.taskType,
+              availableTools: input.availableTools,
+            }),
+            questions: buildAdaptiveJevQuestions(),
+          })
+          .pipe(Effect.either);
+
+        const jevStrategy = Either.isRight(result)
+          ? jevAnswerToStrategy(result.right.strategy)
+          : null;
+
+        yield* publishReasoningStep(eventBus, {
+          _tag: "JudgmentShadow",
+          site: "strategy-selection",
+          jev: jevStrategy,
+          current,
+          agreement: jevStrategy === null ? null : jevStrategy === current,
+        });
+      }),
+    );
+  });
 }
