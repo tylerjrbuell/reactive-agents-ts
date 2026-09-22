@@ -48,7 +48,12 @@ const runWithShadowCapture = async (judgmentLayer?: Layer.Layer<JudgmentService>
   const result = await Effect.runPromise(provideTestEnvelope(
     Effect.gen(function* () {
       const eb = yield* EventBus;
-      yield* eb.on("JudgmentShadow", (event) => Effect.sync(() => { captured.push(event); }));
+      // Filter by site: runKernel() (invoked by the dispatched "reactive" sub-strategy)
+    // also fires its own task-comprehension shadow (Task 10) onto the same bus —
+    // this test only asserts on the strategy-selection shadow (Task 9).
+    yield* eb.on("JudgmentShadow", (event) =>
+      Effect.sync(() => { if (event.site === "strategy-selection") captured.push(event); }),
+    );
 
       const adaptiveResult = yield* executeAdaptive({
         taskDescription: SIMPLE_TASK,
