@@ -403,6 +403,15 @@ export interface RuntimeOptions {
   verificationOnReject?: "block" | "annotate" | "proceed";
 
   /**
+   * Enable the optional `JudgmentService` (calibrated Choice/Score/Noul via
+   * `@reactive-agents/judgment`). Set via `.withJudgment()`.
+   *
+   * Default: `false` — when absent, `JudgmentService` is genuinely not in
+   * the runtime's Layer graph (no dummy/no-op stand-in).
+   */
+  enableJudgment?: boolean;
+
+  /**
    * Enable cost tracking (token counting, USD estimation).
    *
    * Default: `false`
@@ -628,6 +637,14 @@ export interface RuntimeOptions {
    * Default: undefined (uses framework defaults)
    */
   verificationOptions?: import("./builder.js").VerificationOptions;
+
+  /**
+   * Judgment backend/config/site toggles. Passed through to the
+   * `.withJudgment()`-constructed `JudgmentService` layer.
+   *
+   * Default: undefined (backend resolves from `TYPESAFE_API_KEY` presence; all sites off)
+   */
+  judgmentOptions?: import("./builder/types.js").JudgmentBuilderOptions;
 
   /**
    * Cost tracking budget limits (USD).

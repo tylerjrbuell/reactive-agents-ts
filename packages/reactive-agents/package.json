@@ -66,6 +66,7 @@
     "@reactive-agents/identity": "0.16.0",
     "@reactive-agents/observability": "0.16.0",
     "@reactive-agents/interaction": "0.16.0",
+    "@reactive-agents/judgment": "0.16.0",
     "@reactive-agents/prompts": "0.16.0",
     "@reactive-agents/eval": "0.16.0",
     "@reactive-agents/a2a": "0.16.0",

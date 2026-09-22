@@ -607,6 +607,58 @@ export interface VerificationOptions {
 }
 
 /**
+ * Internal harness sites `.withJudgment()` may drive with calibrated typed
+ * judgments instead of their existing regex/heuristic/LLM-classifier path.
+ * All default OFF — `.withJudgment()` alone only makes `JudgmentService`
+ * resolvable (for `agent.judge()`); it does not change any existing site's
+ * behavior until the corresponding Phase C task (see
+ * `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`
+ * Tasks 9/9b/10/11/11b/12) reads its flag here. Nothing reads this record
+ * yet — plumbing only.
+ */
+export interface JudgmentSites {
+    /** Task 9 — `packages/reasoning/src/strategies/adaptive.ts` sub-strategy routing. */
+    readonly "strategy-selection"?: boolean
+    /** Task 10 — `packages/reasoning/src/kernel/capabilities/comprehend/` fan-out. */
+    readonly "task-comprehension"?: boolean
+    /** Task 11 — `packages/guardrails/src/services/guardrail-service.ts` battery. */
+    readonly "guardrail-battery"?: boolean
+    /** Task 12 — `packages/tools/src/healing/healing-pipeline.ts` stage 3. */
+    readonly "tool-name-healing"?: boolean
+}
+
+/**
+ * Options for `.withJudgment()` — wires an optional `JudgmentService` into
+ * the runtime for internal harness sites (opted in per-site via `sites`,
+ * all default off) and for the public `agent.judge()` primitive.
+ *
+ * Backend selection: `"jev"` (calls the TypeSafe API — needs `apiKey` here
+ * or `TYPESAFE_API_KEY` in the environment) when a key is present, otherwise
+ * `"llm"` (emulates Choice/Score/Noul over the agent's own configured
+ * `LLMService` — uncalibrated, `calibrated: false` on every answer). Set
+ * `backend` explicitly to override the presence-based default.
+ */
+export interface JudgmentBuilderOptions {
+    /** TypeSafe API key. Falls back to `TYPESAFE_API_KEY` when absent. */
+    readonly apiKey?: string
+    /** TypeSafe API base URL override. */
+    readonly baseUrl?: string
+    /** Model identifier passed to the backend on each `ask()` call. */
+    readonly model?: string
+    /** Per-request timeout in ms. Default: 3000 (jev-backend `DEFAULT_TIMEOUT_MS`). */
+    readonly timeoutMs?: number
+    /** Floor applied when a consumer doesn't specify its own `minConfidence`/`minProbability`. */
+    readonly defaultConfidenceFloor?: number
+    /**
+     * Force a backend instead of the default presence-based selection
+     * (`jev` when a TypeSafe key resolves, else `llm`).
+     */
+    readonly backend?: "jev" | "llm"
+    /** Per-site opt-ins for internal harness consumers. All default off. */
+    readonly sites?: JudgmentSites
+}
+
+/**
  * Options for `.withObservability()` — configure observability verbosity, live streaming, and exporters.
  *
  * Controls how much output is displayed during agent execution and whether logs are streamed in real-time

@@ -77,6 +77,7 @@ export const WITHER_PROOF: Readonly<Record<string, Proof>> = {
   withLazyValidation: { status: "PROVEN", test: "build-validation.test.ts" },
   withLeanHarness: { status: "PROVEN", test: "builder-memory-default-off.test.ts" },
   withLearning: { status: "PROVEN", test: "builder-memory-default-off.test.ts" },
+  withJudgment: { status: "PROVEN", test: "builder-judgment.test.ts" },
   withLlmTimeout: { status: "PROVEN", test: "llm-timeout-builder.test.ts" },
   withMemory: { status: "PROVEN", test: "memory-off-no-ambient-stack.test.ts" },
   withMetaTools: { status: "PROVEN", test: "meta-tools-default-surface.test.ts" },

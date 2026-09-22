@@ -99,6 +99,8 @@ export type {
   CostTrackingOptions,
   GuardrailsOptions,
   VerificationOptions,
+  JudgmentBuilderOptions,
+  JudgmentSites,
   ProviderName,
   StrategySynthesisFields,
   ToolsOptions,

@@ -18,6 +18,7 @@
     "@reactive-agents/gateway": "0.16.0",
     "@reactive-agents/guardrails": "0.16.0",
     "@reactive-agents/health": "0.16.0",
+    "@reactive-agents/judgment": "0.16.0",
     "@reactive-agents/llm-provider": "0.16.0",
     "@reactive-agents/memory": "0.16.0",
     "@reactive-agents/observability": "0.16.0",

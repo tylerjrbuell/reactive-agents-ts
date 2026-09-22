@@ -23,6 +23,13 @@ import { withMemoryGuardrails } from "./memory-guardrails.js";
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
 import {
+  JudgmentService,
+  makeJudgmentServiceLive,
+  makeJevBackend,
+  makeLlmBackend,
+  withEvents as withJudgmentEvents,
+} from "@reactive-agents/judgment";
+import {
   createVerificationLayer,
   createVerificationLayerWithRuntimeLlm,
 } from "@reactive-agents/verification";
@@ -706,6 +713,44 @@ export const createRuntime = (options: RuntimeOptions) => {
       })()
     : Layer.empty;
 
+  // ── Judgment ──
+  // Calibrated typed judgments (Choice/Score/Noul) via `@reactive-agents/judgment`.
+  // `jev` backend when a TypeSafe key resolves (explicit `judgmentOptions.apiKey`
+  // or `TYPESAFE_API_KEY`), else the `llm` emulation backend over this runtime's
+  // own `LLMService`. Absent (`Layer.empty`) when `.withJudgment()` was never
+  // called — `JudgmentService` is genuinely not in the runtime's Layer graph in
+  // that case, not a dummy/no-op stand-in (Task 8, judgment-layer plan).
+  const judgmentOptLayer = options.enableJudgment
+    ? (() => {
+        const jc = options.judgmentOptions;
+        const backendName: "jev" | "llm" =
+          jc?.backend ?? (jc?.apiKey ?? process.env.TYPESAFE_API_KEY ? "jev" : "llm");
+        const site = "agent.judge";
+        const serviceLayer: Layer.Layer<JudgmentService, never, never> =
+          backendName === "jev"
+            ? makeJudgmentServiceLive(
+                makeJevBackend({
+                  apiKey: jc?.apiKey,
+                  baseUrl: jc?.baseUrl,
+                  model: jc?.model,
+                  timeoutMs: jc?.timeoutMs,
+                  defaultConfidenceFloor: jc?.defaultConfidenceFloor,
+                }),
+              )
+            : (Layer.unwrapEffect(
+                Effect.gen(function* () {
+                  const llm = yield* LLMService;
+                  return makeJudgmentServiceLive(makeLlmBackend(llm));
+                }),
+              ).pipe(
+                Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
+              ) as Layer.Layer<JudgmentService, never, never>);
+        return withJudgmentEvents(site, backendName).pipe(
+          Layer.provide(Layer.merge(serviceLayer, eventBusLayer)),
+        );
+      })()
+    : Layer.empty;
+
   // ── Cost tracking ──
   const costTrackingOptLayer = options.enableCostTracking
     ? createCostLayer(options.costTrackingOptions)
@@ -1095,6 +1140,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       killSwitchOptLayer,
       behavioralContractsOptLayer,
       verificationOptLayer,
+      judgmentOptLayer,
       costTrackingOptLayer,
       toolsLayer ?? Layer.empty,
       toolResultCacheOptLayer,

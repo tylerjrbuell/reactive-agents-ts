@@ -111,6 +111,8 @@ import type {
     CostTrackingOptions,
     GuardrailsOptions,
     VerificationOptions,
+    JudgmentBuilderOptions,
+    JudgmentSites,
     ObservabilityOptions,
     A2AOptions,
     GatewayOptions,
@@ -131,6 +133,8 @@ export type {
     CostTrackingOptions,
     GuardrailsOptions,
     VerificationOptions,
+    JudgmentBuilderOptions,
+    JudgmentSites,
     ObservabilityOptions,
     A2AOptions,
     GatewayOptions,
@@ -362,6 +366,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _maxIterations: number | undefined = undefined
     private _enableGuardrails: boolean = false
     private _enableVerification: boolean = false
+    /** `.withJudgment()` — opts the runtime into a resolvable `JudgmentService`. Off by default. */
+    private _enableJudgment: boolean = false
     private _enableCostTracking: boolean = false
     private _enableAudit: boolean = false
     private _enableReasoning: boolean = false
@@ -453,6 +459,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _costTrackingOptions?: CostTrackingOptions
     private _guardrailsOptions?: GuardrailsOptions
     private _verificationOptions?: VerificationOptions
+    private _judgmentOptions?: JudgmentBuilderOptions
     private _circuitBreakerConfig?:
         | Partial<import('@reactive-agents/llm-provider').CircuitBreakerConfig>
         | false
@@ -1075,6 +1082,37 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             if (strictValidation !== undefined) this._strictValidation = strictValidation
             if (lazyValidation !== undefined) this._lazyValidation = lazyValidation
         }
+        return this
+    }
+
+    /**
+     * Enable the optional `JudgmentService` (calibrated Choice/Score/Noul
+     * typed judgments via `@reactive-agents/judgment`). Off by default —
+     * without this call, `JudgmentService` is genuinely absent from the
+     * runtime's Layer graph and every existing harness site takes its
+     * existing regex/heuristic/LLM-classifier path unchanged.
+     *
+     * With it, two things become available:
+     * - `agent.judge({ state, questions })` — the public composable
+     *   primitive for calibrated Choice/Score/Noul questions.
+     * - Per-site opt-ins via `options.sites` (all default off) for later
+     *   internal harness consumers (strategy-selection, task-comprehension,
+     *   guardrail-battery, tool-name-healing) — see
+     *   `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`.
+     *   Nothing reads `sites` yet; setting them today has no effect until
+     *   the corresponding site is wired.
+     *
+     * Backend selection: `"jev"` (calls the TypeSafe API) when `options.apiKey`
+     * or the `TYPESAFE_API_KEY` env var resolves, else `"llm"` (emulates the
+     * primitive over this agent's own configured `LLMService` — uncalibrated,
+     * `calibrated: false` on every answer). Override with `options.backend`.
+     *
+     * @param options - Optional judgment configuration (backend, credentials, sites)
+     * @returns `this` for chaining
+     */
+    withJudgment(options?: JudgmentBuilderOptions): this {
+        this._enableJudgment = true
+        if (options) this._judgmentOptions = options
         return this
     }
 
@@ -2974,6 +3012,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _enableExperienceLearning: self._enableExperienceLearning,
         _enableGuardrails: self._enableGuardrails,
         _enableHealthCheck: self._enableHealthCheck,
+        _enableJudgment: self._enableJudgment,
         _enableKillSwitch: self._enableKillSwitch,
         _enableMemory: self._enableMemory,
         _enableMemoryConsolidation: self._enableMemoryConsolidation,
@@ -2993,6 +3032,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _groundingConfig: self._groundingConfig,
         _guardrailsOptions: self._guardrailsOptions,
         _harnessRegistrations: self._harnessRegistrations,
+        _judgmentOptions: self._judgmentOptions,
         _leanHarness: self._leanHarness,
         _llmOverrideLayer: self._llmOverrideLayer,
         _loggingConfig: self._loggingConfig,

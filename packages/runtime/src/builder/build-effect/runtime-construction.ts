@@ -43,6 +43,7 @@ import type {
   ObservabilityOptions,
   GatewayOptions,
   ModelRoutingOptions,
+  JudgmentBuilderOptions,
 } from "../types.js";
 
 /**
@@ -135,6 +136,8 @@ export interface BuilderRuntimeStateView {
   readonly _maxIterations: number | undefined;
   readonly _enableGuardrails: boolean;
   readonly _enableVerification: boolean;
+  /** `.withJudgment()` — opts the runtime into a resolvable `JudgmentService`. */
+  readonly _enableJudgment: boolean;
   readonly _enableCostTracking: boolean;
   readonly _enableAudit: boolean;
   readonly _enableReasoning: boolean;
@@ -159,6 +162,8 @@ export interface BuilderRuntimeStateView {
   readonly _memoryOptions?: MemoryOptions;
   readonly _guardrailsOptions?: GuardrailsOptions;
   readonly _verificationOptions?: VerificationOptions;
+  /** `.withJudgment()` backend/site config. Absent when `.withJudgment()` was never called. */
+  readonly _judgmentOptions?: JudgmentBuilderOptions;
   readonly _costTrackingOptions?: CostTrackingOptions;
   readonly _circuitBreakerConfig?:
     | Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>
@@ -502,6 +507,8 @@ export const buildBaseRuntimeAndEngine = (
           : state._memoryOptions,
       guardrailsOptions: state._guardrailsOptions,
       verificationOptions: state._verificationOptions,
+      enableJudgment: state._enableJudgment,
+      judgmentOptions: state._judgmentOptions,
       costTrackingOptions: state._costTrackingOptions,
       circuitBreakerConfig: state._circuitBreakerConfig,
       rateLimiterConfig: state._rateLimiterConfig,

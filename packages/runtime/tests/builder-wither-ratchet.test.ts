@@ -30,7 +30,16 @@ import { ReactiveAgents } from "../src/index.js";
 // any object/object[] means "connect this literal config," exactly as
 // before. No new top-level method; `.withMcpToolkit()` removed. CEILING back
 // at 85.
-const WITHER_CEILING = 85;
+//
+// 2026-09-22: `.withJudgment()` added (Task 8,
+// wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md —
+// explicitly directed by that ratified plan, not a fold-candidate). Unlike
+// `.withMCP()`'s existing-object-parameter overload, there was no existing
+// wither whose domain covers "opt an entirely new optional service
+// (`JudgmentService`) into the runtime + a public `agent.judge()`
+// primitive" — this is a new capability, not a variant of one already
+// exposed. CEILING raised to 86.
+const WITHER_CEILING = 86;
 
 function witherNames(): string[] {
   const proto = Object.getPrototypeOf(ReactiveAgents.create());

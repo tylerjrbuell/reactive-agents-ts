@@ -113,7 +113,33 @@ export type {
   // Structured output
   OutputSchemaOptions,
   DeepPartial,
+
+  // Judgment (`.withJudgment()` / `agent.judge()`)
+  JudgmentBuilderOptions,
+  JudgmentSites,
 } from "@reactive-agents/runtime";
+
+// ─── Judgment (calibrated Choice/Score/Noul typed judgments) ───
+
+export { JudgmentService } from "@reactive-agents/judgment";
+
+export type {
+  ChoiceAnswer,
+  ChoiceCriteria,
+  ChoiceSpec,
+  JudgmentAnswer,
+  JudgmentAnswers,
+  JudgmentBackend,
+  JudgmentEntry,
+  JudgmentError,
+  NoulAnswer,
+  NoulSpec,
+  QuestionSpec,
+  QuestionSpecs,
+  ScoreAnswer,
+  ScoreCriteria,
+  ScoreSpec,
+} from "@reactive-agents/judgment";
 
 // ─── Core Services ───
 

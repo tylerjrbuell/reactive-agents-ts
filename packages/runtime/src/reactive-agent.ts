@@ -61,6 +61,12 @@ import type {
 } from '@reactive-agents/core'
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
+import { JudgmentService } from '@reactive-agents/judgment'
+import type {
+    JudgmentAnswers,
+    JudgmentEntry,
+    QuestionSpecs,
+} from '@reactive-agents/judgment'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController, installDurableCheckpointing } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
@@ -488,6 +494,53 @@ export class ReactiveAgent<TOut = unknown> {
                     Effect.succeed({ status: 'healthy' as const, checks: [] })
                 )
             )
+        )
+    }
+
+    /**
+     * Ask a calibrated typed judgment question (Choice/Score/Noul, with
+     * probabilities) via the `JudgmentService` configured by
+     * `.withJudgment()`.
+     *
+     * This is the public composable judgment primitive — the same
+     * `JudgmentService.ask()` internal harness sites will opt into per-site
+     * (`.withJudgment({ sites: {...} })`), exposed directly for user code
+     * to compose calibrated decisions without going through a run.
+     *
+     * @param input - `state` (the JSON-compatible context to judge) and
+     *   `questions` (named Choice/Score/Noul specs, answered in one batch)
+     * @throws Error if `.withJudgment()` was not called during build —
+     *   `JudgmentService` is genuinely absent from the runtime's Layer
+     *   graph in that case, not silently stubbed.
+     *
+     * @example
+     * ```typescript
+     * const { risky } = await agent.judge({
+     *   state: { action: "delete all files in /tmp" },
+     *   questions: {
+     *     risky: { type: "noul", instructions: "Is this action destructive?" },
+     *   },
+     * });
+     * if (risky.probability > 0.7) { ... }
+     * ```
+     */
+    async judge<Q extends QuestionSpecs>(input: {
+        readonly state: JudgmentEntry
+        readonly questions: Q
+        readonly model?: string
+    }): Promise<JudgmentAnswers<Q>> {
+        return this.runtime.runPromise(
+            Effect.gen(function* () {
+                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+                if (judgmentOpt._tag !== 'Some') {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.judge() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                        )
+                    )
+                }
+                return yield* judgmentOpt.value.ask(input)
+            })
         )
     }
 
