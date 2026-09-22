@@ -96,6 +96,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withHarness` | _overlay — compose-power-tier harness injection (not data)_ | overlay | Inject a composed harness. |
 | `withHealthCheck` | `features.healthCheck` | config | Enable agent.health() probes. |
 | `withHook` | _overlay — carries a lifecycle callback function (not JSON)_ | overlay | Lifecycle hook. |
+| `withJudgment` | _overlay — code-only_ | overlay | Configure judgment. |
 | `withKillSwitch` | `features.killSwitch` | config | Emergency stop / terminate control. |
 | `withLayers` | _overlay — Effect Layer DI escape hatch (not data)_ | overlay | Provide custom Effect layers. |
 | `withLazyValidation` | _overlay — no schema field (folds into withVerification timing)_ | overlay | Lazy output validation. |

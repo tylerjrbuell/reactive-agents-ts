@@ -750,4 +750,28 @@ created: 2026-05-23
 
 ## Summary (2026-06-15)
 
+## Post-canonicalization entries (convention now standing, not pilot — log kept for continuity)
+
+```yaml
+- task: typesafe-judgment-task8-builder-wiring
+  date: 2026-09-22
+  warden: runtime-warden
+  routed: warden
+  commits: 0  # pending parent commit
+  agent-spawns: 1
+  tokens-est: ~216K
+  regression-prevented: none (net-new plumbing, no existing behavior touched)
+  notes: >
+    Task 8 of wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md
+    (Phase C, first of 6 remaining tasks). `.withJudgment()` builder method +
+    public `agent.judge()` primitive, mirroring `.withGuardrails()`/
+    `.withVerification()` exactly. JudgmentSites config threaded but unread
+    (Tasks 9/9b/10/11/12 will consume it). 4 new tests green; full runtime
+    (1616/0, 3 skip) + reactive-agents (20/0) suites re-verified by parent;
+    2 fails are the pre-existing repo-wide `as unknown as` ceiling gate,
+    confirmed unrelated via git stash on the unmodified tree. Parent ran
+    `bun run docs:gen:api` post-dispatch (outside warden's authority-bounds)
+    to clear builder-api.md drift the new method introduced.
+```
+
 (written on evaluation day)
