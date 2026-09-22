@@ -1,6 +1,9 @@
-import { Effect } from "effect";
+import { Effect, Option, Either } from "effect";
 import type { ModelTier, ModelCostConfig, ComplexityAnalysis, Provider } from "../types.js";
 import { RoutingError } from "../errors.js";
+import { EventBus } from "@reactive-agents/core";
+import { JudgmentService } from "@reactive-agents/judgment";
+import { buildComplexityJevQuestions, buildComplexityJevState, jevAnswerToTier } from "./jev-complexity-questions.js";
 
 // ─── Model cost configurations per provider ───
 // Each provider maps haiku/sonnet/opus to its light/mid/heavy model.
@@ -291,46 +294,99 @@ export const analyzeComplexity = (
   provider?: Provider,
   routingContext?: RoutingContext,
 ): Effect.Effect<ComplexityAnalysis, RoutingError> =>
-  Effect.try({
-    try: () => {
-      const heuristic = heuristicClassify(task);
-      let tier = heuristic ?? "sonnet";
-      const factors: string[] = ["heuristic-classification"];
+  Effect.gen(function* () {
+    const analysis = yield* Effect.try({
+      try: () => {
+        const heuristic = heuristicClassify(task);
+        let tier = heuristic ?? "sonnet";
+        const factors: string[] = ["heuristic-classification"];
 
-      // FIX-32: when caller supplies calibration + requiresTools, escalate
-      // away from tiers with poor tool-call reliability. Pure tier-ladder
-      // walk; no LLM calls, no service lookup. Caller translates calibration
-      // store data into the narrow shape declared in RoutingContext.
-      if (routingContext?.requiresTools && routingContext?.calibration) {
-        const escalated = escalateForToolReliability(tier, routingContext);
-        if (escalated.escalatedFrom !== undefined) {
-          factors.push(`tool-reliability-escalation:${escalated.escalatedFrom}->${escalated.tier}`);
-          tier = escalated.tier;
-        } else {
-          factors.push("tool-reliability-confirmed");
+        // FIX-32: when caller supplies calibration + requiresTools, escalate
+        // away from tiers with poor tool-call reliability. Pure tier-ladder
+        // walk; no LLM calls, no service lookup. Caller translates calibration
+        // store data into the narrow shape declared in RoutingContext.
+        if (routingContext?.requiresTools && routingContext?.calibration) {
+          const escalated = escalateForToolReliability(tier, routingContext);
+          if (escalated.escalatedFrom !== undefined) {
+            factors.push(`tool-reliability-escalation:${escalated.escalatedFrom}->${escalated.tier}`);
+            tier = escalated.tier;
+          } else {
+            factors.push("tool-reliability-confirmed");
+          }
         }
-      }
 
-      const config = getModelCostConfig(tier, provider);
+        const config = getModelCostConfig(tier, provider);
 
-      const score =
-        tier === "haiku" ? 0.2 :
-        tier === "sonnet" ? 0.5 : 0.9;
+        const score =
+          tier === "haiku" ? 0.2 :
+          tier === "sonnet" ? 0.5 : 0.9;
 
-      if (/```/.test(task)) factors.push("contains-code");
-      if (/\b(step|then|next|finally)\b/i.test(task)) factors.push("multi-step");
-      if (/\b(analyze|compare|evaluate)\b/i.test(task)) factors.push("analysis-required");
+        if (/```/.test(task)) factors.push("contains-code");
+        if (/\b(step|then|next|finally)\b/i.test(task)) factors.push("multi-step");
+        if (/\b(analyze|compare|evaluate)\b/i.test(task)) factors.push("analysis-required");
 
-      return {
-        score,
-        factors,
-        recommendedTier: tier,
-        estimatedTokens: estimateTokens(task),
-        estimatedCost: estimateCost(task, config),
-      };
-    },
-    catch: (e) => new RoutingError({ message: "Complexity analysis failed", taskComplexity: undefined }),
+        return {
+          score,
+          factors,
+          recommendedTier: tier,
+          estimatedTokens: estimateTokens(task),
+          estimatedCost: estimateCost(task, config),
+        };
+      },
+      catch: (e) => new RoutingError({ message: "Complexity analysis failed", taskComplexity: undefined }),
+    });
+
+    // Task 9b (shadow-only): fire the batched Jev tier-classification question
+    // via Effect.forkDaemon — never awaited, never altering `analysis`. See
+    // adaptive.ts's jevClassifyShadow (Task 9) for the identical pattern.
+    yield* jevComplexityShadow(task, analysis.recommendedTier);
+
+    return analysis;
   });
+
+/**
+ * Task 9b (shadow-only). Fires the batched Jev tier-classification question
+ * via `Effect.forkDaemon` — never awaited, never altering `current` (the tier
+ * actually recommended by the existing heuristic path above). Emits
+ * `JudgmentShadow` on the event bus with an agreement verdict for later
+ * analysis (Task 9b Step 4's exit gate).
+ *
+ * Absent `JudgmentService` or `EventBus` (no `.withJudgment()` on the
+ * builder, or no observability layer) is a clean, zero-cost no-op —
+ * `Effect.serviceOption` resolves `None` without adding either to this
+ * function's (or `analyzeComplexity`'s) requirements.
+ */
+function jevComplexityShadow(task: string, current: ModelTier): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const maybeJudgment = yield* Effect.serviceOption(JudgmentService);
+    if (Option.isNone(maybeJudgment)) return;
+    const maybeEventBus = yield* Effect.serviceOption(EventBus);
+    if (Option.isNone(maybeEventBus)) return;
+    const judgment = maybeJudgment.value;
+    const eventBus = maybeEventBus.value;
+
+    yield* Effect.forkDaemon(
+      Effect.gen(function* () {
+        const result = yield* judgment
+          .ask({
+            state: buildComplexityJevState({ task }),
+            questions: buildComplexityJevQuestions(),
+          })
+          .pipe(Effect.either);
+
+        const jevTier = Either.isRight(result) ? jevAnswerToTier(result.right.tier) : null;
+
+        yield* eventBus.publish({
+          _tag: "JudgmentShadow",
+          site: "complexity-router",
+          jev: jevTier,
+          current,
+          agreement: jevTier === null ? null : jevTier === current,
+        });
+      }),
+    );
+  });
+}
 
 // ─── Route to Model ───
 
