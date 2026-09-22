@@ -33,6 +33,27 @@ describe("live judge layer construction", () => {
     expect(server.activeLayer).toBe("live");
   }, 15000);
 
+  it("judgeEngine:'jev' + judgeLayer:'live' constructs (and starts) without a TYPESAFE_API_KEY — Layer.suspend laziness holds after the withEvents decoration", async () => {
+    // No TYPESAFE_API_KEY set anywhere in this test. If buildJudgmentLayer's
+    // Layer.suspend wrapper (or the withEvents/EventBusLive composition
+    // added around it, code review 2026-09-22) accidentally eagerly
+    // constructed the TypeSafeClient at layer-BUILD time instead of
+    // request time, this would throw here.
+    delete process.env.TYPESAFE_API_KEY;
+    const { startServer } = await import("../src/index.js");
+    const jevServer = await startServer({
+      port: 0,
+      judgeModelSha: "jev-live-layer-test",
+      judgeCodeSha: "jev-live-layer-test",
+      judgeLayer: "live",
+      judgeEngine: "jev",
+    });
+    expect(jevServer.port).toBeGreaterThan(0);
+    expect(jevServer.activeLayer).toBe("live");
+    expect(jevServer.activeEngine).toBe("jev");
+    await jevServer.stop(true);
+  }, 15000);
+
   it("/version endpoint returns the configured SHAs even with live layer", async () => {
     if (!server) throw new Error("server not started");
     const res = await fetch(`http://127.0.0.1:${server.port}/version`);

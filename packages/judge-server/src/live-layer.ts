@@ -20,6 +20,8 @@ import { Layer, Effect } from "effect";
 import { JudgeLLMService } from "@reactive-agents/eval";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { createLLMProviderLayer } from "@reactive-agents/llm-provider";
+import { JudgmentService, makeJevBackend, makeJudgmentServiceLive, withEvents } from "@reactive-agents/judgment";
+import { EventBusLive } from "@reactive-agents/core";
 
 export type JudgeProvider = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai";
 
@@ -77,3 +79,31 @@ export const buildJudgeLayer = (config: LiveLayerConfig): Layer.Layer<JudgeLLMSe
   );
   return adapter.pipe(Layer.provide(providerLayer));
 };
+
+/**
+ * Build the live `JudgmentService` Layer for `judgeEngine: "jev"` — reads
+ * `TYPESAFE_API_KEY` (and optional `JEV_MODEL`/`TYPESAFE_BASE_URL`) from the
+ * environment via the SDK's own resolution (see `makeJevBackend`).
+ * `makeJevBackend` constructs the SDK client synchronously (and throws if
+ * `TYPESAFE_API_KEY` is missing), so this is wrapped in `Layer.suspend` to
+ * defer that construction until the layer is actually built — same
+ * laziness guarantee as `buildJudgeLayer` above, and load-bearing: a server
+ * started with `judgeEngine !== "jev"` must not crash on a missing
+ * TypeSafe key it never needed.
+ *
+ * Decorated with `withEvents` so `JudgmentEvaluated`/`JudgmentFailed`
+ * actually fire in production (code review, 2026-09-22 — the undecorated
+ * version left those events documented but dead outside unit tests, since
+ * no other composition root in the codebase wires `.withJudgment()` yet).
+ * judge-server is a standalone process, so it gets its own self-contained
+ * `EventBusLive` instance here — the returned Layer requires nothing
+ * external, matching `buildJudgeLayer`'s `Layer.Layer<JudgeLLMService>`
+ * (no leaked requirements) above.
+ */
+export const buildJudgmentLayer = (): Layer.Layer<JudgmentService> =>
+  Layer.suspend(() =>
+    withEvents("judge-server", "jev").pipe(
+      Layer.provide(makeJudgmentServiceLive(makeJevBackend({ model: process.env.JEV_MODEL }))),
+      Layer.provide(EventBusLive),
+    ),
+  );

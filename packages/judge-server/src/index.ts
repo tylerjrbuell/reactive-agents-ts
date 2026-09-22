@@ -1,9 +1,11 @@
 import { Effect, Layer, Schema } from "effect";
 import { JudgeLLMService } from "@reactive-agents/eval";
+import { JudgmentService, type JudgmentAnswers } from "@reactive-agents/judgment";
 import { secureServe, isMain } from "@reactive-agents/runtime-shim";
 import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
-import { buildJudgeLayer, resolveLiveLayerConfig } from "./live-layer.js";
+import { handleJudgeRequestViaJudgment } from "./judgment-handler.js";
+import { buildJudgeLayer, buildJudgmentLayer, resolveLiveLayerConfig } from "./live-layer.js";
 
 export type {
   JudgeRequest,
@@ -43,22 +45,54 @@ const StubJudgeLayer: Layer.Layer<JudgeLLMService> = Layer.succeed(
   }),
 );
 
+/**
+ * Task 5: stub `JudgmentService` for the `judgeEngine: "jev"` path — same
+ * "structured passing judgment for HTTP-shape tests" role as `StubJudgeLayer`
+ * above, without booting the real TypeSafe SDK.
+ */
+const StubJudgmentLayer: Layer.Layer<JudgmentService> = Layer.succeed(JudgmentService, {
+  ask: (input) => {
+    const answers: Record<string, unknown> = {};
+    for (const id of Object.keys(input.questions)) {
+      const spec = input.questions[id]!;
+      answers[id] =
+        spec.type === "noul"
+          ? { kind: "noul", probability: 0.95 }
+          : spec.type === "choice"
+            ? { kind: "choice", value: "accept", probabilities: { accept: 0.95 }, confidence: 0.95, calibrated: true }
+            : { kind: "score", value: (spec.criteria.length - 1), probabilities: {}, confidence: 0.95, calibrated: true };
+    }
+    return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+  },
+});
+
 export interface ServerConfig {
   port: number;
   judgeModelSha: string;
   judgeCodeSha: string;
   judgeLayer: "stub" | "live";
+  /**
+   * Which engine scores `/judge` requests. `"llm"` (default) is the original
+   * text-prompt + `parseJudgmentText` path over `JudgeLLMService`, gated by
+   * `judgeLayer` as before. `"jev"` routes through `JudgmentService` (batched
+   * Noul+Score+Choice, no text parsing) — `judgeLayer` then selects
+   * `StubJudgmentLayer` vs `buildJudgmentLayer()` (reads TYPESAFE_API_KEY)
+   * instead of the LLM provider stack.
+   */
+  judgeEngine?: "llm" | "jev";
 }
 
 export interface ServerHandle {
   port: number;
   stop: (force?: boolean) => void;
   /**
-   * Which JudgeLLMService Layer the server was wired with.
-   * `"live"` selects `buildJudgeLayer(resolveLiveLayerConfig())` from
-   * `live-layer.ts`; `"stub"` selects the in-process `StubJudgeLayer` above.
+   * Which Layer the server was wired with, for the active `judgeEngine`.
+   * `"live"` selects the real provider/SDK Layer from `live-layer.ts`;
+   * `"stub"` selects the in-process stub above.
    */
   activeLayer: "stub" | "live";
+  /** Which engine is scoring requests — see `ServerConfig.judgeEngine`. */
+  activeEngine: "llm" | "jev";
 }
 
 export const startServer = async (config: ServerConfig): Promise<ServerHandle> => {
@@ -67,10 +101,12 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
     judgeCodeSha: config.judgeCodeSha,
   };
 
-  const layer: Layer.Layer<JudgeLLMService> =
-    config.judgeLayer === "live"
-      ? buildJudgeLayer(resolveLiveLayerConfig())
-      : StubJudgeLayer;
+  const judgeEngine = config.judgeEngine ?? "llm";
+
+  const llmLayer: Layer.Layer<JudgeLLMService> =
+    config.judgeLayer === "live" ? buildJudgeLayer(resolveLiveLayerConfig()) : StubJudgeLayer;
+  const judgmentLayer: Layer.Layer<JudgmentService> =
+    config.judgeLayer === "live" ? buildJudgmentLayer() : StubJudgmentLayer;
 
   // Secure-by-default ingress (F4): loopback unless RA_JUDGE_HOST is set;
   // a non-loopback bind requires RA_JUDGE_TOKEN. Prevents anonymous peers from
@@ -106,9 +142,10 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
             { status: 400 },
           );
         }
-        const provided = handleJudgeRequest(decoded.right, reproducibility).pipe(
-          Effect.provide(layer),
-        );
+        const provided =
+          judgeEngine === "jev"
+            ? handleJudgeRequestViaJudgment(decoded.right, reproducibility).pipe(Effect.provide(judgmentLayer))
+            : handleJudgeRequest(decoded.right, reproducibility).pipe(Effect.provide(llmLayer));
         const result = await Effect.runPromise(provided);
         return Response.json(result);
       }
@@ -126,6 +163,7 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
     port: boundPort,
     stop: (force?: boolean) => server.stop(force),
     activeLayer: config.judgeLayer,
+    activeEngine: judgeEngine,
   };
 };
 
@@ -134,9 +172,10 @@ if (isMain(import.meta.url)) {
   const judgeModelSha = process.env.JUDGE_MODEL_SHA ?? "unknown";
   const judgeCodeSha = process.env.JUDGE_CODE_SHA ?? "unknown";
   const judgeLayer = (process.env.JUDGE_LAYER as "stub" | "live") ?? "stub";
-  const handle = await startServer({ port, judgeModelSha, judgeCodeSha, judgeLayer });
+  const judgeEngine = (process.env.JUDGE_ENGINE as "llm" | "jev") ?? "llm";
+  const handle = await startServer({ port, judgeModelSha, judgeCodeSha, judgeLayer, judgeEngine });
   // eslint-disable-next-line no-console
   console.log(
-    `judge-server listening on :${handle.port} (model=${judgeModelSha} code=${judgeCodeSha} layer=${handle.activeLayer})`,
+    `judge-server listening on :${handle.port} (model=${judgeModelSha} code=${judgeCodeSha} layer=${handle.activeLayer} engine=${handle.activeEngine})`,
   );
 }
