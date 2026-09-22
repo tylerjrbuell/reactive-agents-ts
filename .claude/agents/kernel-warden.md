@@ -29,7 +29,7 @@ Bounded specialist for `packages/reasoning/src/kernel/**`. Decentralized-command
 - Edits outside `packages/reasoning/src/kernel/**`
 - Commits, pushes, tags (release-warden territory)
 - `npm publish`, `bun run release:*`
-- Changes to `AGENTS.md`, `CLAUDE.md`, or any `wiki/*` file (scribe territory)
+- Changes to `AGENTS.md` or any `wiki/*` file (scribe territory)
 
 On hard refuse → return `UpwardReport` with `status: denied-by-authority` and `escalation-required: true`.
 

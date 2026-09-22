@@ -2,10 +2,11 @@
 
 **For any AI coding agent (Claude/Cursor/Codex/Aider/etc.).** This file is a repository-local operational cache, not an authority above current source, tests, or canonical wiki specs. Historical detail belongs in [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md). ▶ = active/open, ✅ = shipped, ⚠️ = caution, 📍 = audit/reference.
 
-## Current Status (2026-09-15)
+## Current Status (2026-09-22, re-verified against git/tests)
 
-**`VERSION=0.16.0`** (VERSION file, live on npm), **34 packages** in `packages/` (32 published, 2 private: benchmarks, judge-server). Local `main` == `origin/main` as of the last v0.16.0 release; a separate branch `wave/wire-or-delete-2026-09` (HEAD `84d43fcf`) carries 9 unreleased tasks (doc truth pass, keyless-refusal security fix, run/trace outcome-truth fixes, strategy-switch ledger fix, 3 experimental flags deleted, wither-proof census) — gate-clean, NOT yet merged/tagged. Suite on that branch: 9,294 tests (9,264 pass/25 skip/4 todo/**1 fail**) across 1,211 files — grew from the 9,250 pre-wave baseline as expected; the 1 fail is the known, pre-existing `as-unknown-as` cast-site ceiling gap (79 vs 78, confirmed pre-existing via `git stash`, not this wave's fault). build 72/72 (turbo build+typecheck); all 21 `check-*.sh` gates green; `docs:examples:check` clean; `release:dry 0.16.1` clean. See [[project_wire_or_delete_wave_2026_09_15]] (Claude memory) for full detail.
-**Last commit (main):** `1a995a2d` (revert of a README/hero intro wording change). v0.16.0 released same day, along with PR #202 (path-traversal corrective-rejection guard) merged. Current open work is recorded in `wiki/Architecture/DEBT-REGISTER.md` and the active plans index. Do not re-derive current debt from the historical entries below.
+**`VERSION=0.16.0`** (VERSION file; no newer tag exists), **34 packages** in `packages/` (confirmed via `ls packages | wc -l`). `wave/wire-or-delete-2026-09`'s 9 tasks (doc truth pass, keyless-refusal security fix, run/trace outcome-truth fixes, strategy-switch ledger fix, 3 experimental flags deleted, wither-proof census) are **MERGED to `main`** (`e921fbc9`) — the prior "NOT yet merged/tagged" status here was stale as of this prune pass; branch deleted locally, still not tagged into a release. Suite (`bun test`, 2026-09-22): **9,454 pass / 25 skip / 4 todo / 2 fail across 1,235 files** (9,485 total) — grew from the wave-era 9,294/1,211-file count; 1 fail presumably the pre-existing `as-unknown-as` ceiling gap, the 2nd is unidentified — re-run with full (non-tail) output before trusting a suite-green claim. build 72/72 last verified 2026-09-15; not re-run this pass.
+**Last commit (main):** `30c0617b` (2026-09-18, Windows-timestamp fixes), 37 commits past the v0.16.0 tag — corrected from a stale `1a995a2d` entry. Current open work is recorded in `wiki/Architecture/DEBT-REGISTER.md` and the active plans index. Do not re-derive current debt from the historical entries below.
+**Doc consolidation (2026-09-22):** root `CLAUDE.md` deleted — `AGENTS.md` was already the sole canonical source and CLAUDE.md's content was a redundant pointer. 4 active references fixed: `kernel-warden.md`/`provider-warden.md`/`runtime-warden.md` hard-refuse clauses, and `.agents/skills/update-docs/SKILL.md` (dropped its CLAUDE.md compatibility-check step and grep).
 **Release-flow correction (2026-09-05):** always `git push origin main` before tagging, even though this repo's convention is normally "push at release time" — `publish.yml`'s post-publish sync resets to `origin/main` and can't carry a tag's own ancestry if main lags behind. CI now has a preflight guard (`publish.yml` "Guard — origin/main must already contain this release"); see `.claude/skills/prepare-release/SKILL.md` Step 7.
 **Canonical docs, priority order:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (sequencing) > `08-AGENTIC-OS-NORTH-STAR.md` v6.0 (arc content) > `Design-Specs/2026-07-11-harness-north-star-architecture.md` (ratified). **Canonical debt ledger = `wiki/Architecture/DEBT-REGISTER.md`** — verdict taxonomy (PROVEN/SILENT/ORPHAN/INERT/FALSE), §1 ratchet counts only go down. Do not write a new north-star doc — amend 09.
 **Stale references confirmed dead:** `AUDIT-overhaul-2026.md` no longer exists anywhere in the repo — superseded by DEBT-REGISTER.md. `wiki/Architecture/Specs/04-PROJECT-STATE.md` and `05-DESIGN-NORTH-STAR.md` (verified 2026-09-05: **no longer exist at that path** — `04-PROJECT-STATE.md` moved to `_archive/`; a public docs FAQ page linking the old path 404'd and was fixed to point at `ROADMAP.md` instead).
@@ -14,6 +15,20 @@
 **2026-08-19 → 2026-09-05: Halopedia-prototype DX gaps — RESOLVED (verified 2026-09-05).** Every item the 2026-08-19 Halopedia prototype flagged has shipped: `defineTool` output schema (`b2f10ec8`), `defineToolset` (`8c00756b`), `searchThenFetch`/`resolveThenRetrieve`/`boundedMap` research primitives (`c00b80c0`,`23d3a205`), `testTool`/`mockFetchOnce` test helpers (`89925778`), `withToolObservability`/`withToolRetry` envelope helpers (`9809cae2`), a `verifyCitations` chat option (`ChatOptions`), and canonical Bun + Node-portable chat-session examples (`496b0bb6`, `e58aea55`). Not covered: a dedicated `compare` orchestration tool (only research-fetch primitives shipped, not a comparison helper specifically) — low priority, no open tracking item.
 
 ## Projects — Sep 2026
+
+**2026-09-22: TypeSafe/Jev judgment primitive (plan, POC-validated, NOT implemented).**
+Plan `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`. RA owns the System One
+judgment paradigm as a first-class multi-backend primitive: new leaf `@reactive-agents/judgment`
+(`JudgmentService` over a `JudgmentBackend` interface). Backends: `jev` (`@typesafe-ai/sdk@0.6.0`,
+calibrated) + `llm` (structured-output emulation over user's LLMService, uncalibrated, keyless default);
+OSS System One model = future 3rd backend. **Phase B FRONT-LOADED = judge/eval overhaul** — Jev-backed
+judge default (`JudgeLLMService` secondary); kills `parseFloat||0.5` in `packages/eval/src/dimensions/*`
++ `parseJudgmentText` degrade-to-0.5 in `packages/judge-server/src/handler.ts`; adds variance/CI/MDE/
+calibration (today `compare`/`checkRegression` flat ±0.02, no variance). Then Phase C runtime
+`.withJudgment()` (strategy-selection replace first; comprehend/guardrails/healing add, shadow-first).
+Judge-first because it's the ruler that ablates Phase C. **POC (live API):** Jev vs haiku-4.5 judge, 10
+labeled relevance pairs ×5 — calibration parity (r=0.988/0.985), ~5× lower variance, 2.8× faster (185ms),
+~10.7× cheaper ($0.0008/$0.0086). Jev $0.042/MTok in, free out. `TYPESAFE_API_KEY` in `.env`. GO.
 
 **2026-09-19/20: MCP toolkit scaffolding (`.withMCP()` string-form, uncommitted on `dev`).**
 `.withMCP()` gains overloads: bare `string`/`string[]` (or `(name, options)`) resolves a public catalog
@@ -40,7 +55,7 @@ ready for it). Design spec: `wiki/Architecture/Design-Specs/2026-09-19-mcp-toolk
 `apps/docs/.../cookbook/agent-tool-calling-mcp.md`. All gates green except the known pre-existing
 `as-unknown-as` ceiling gap (79 vs 78, unrelated, confirmed via repeated full-suite runs this session).
 
-**2026-09-15: Wire-or-delete hardening wave (`96f10a22..84d43fcf`, 9 tasks, branch `wave/wire-or-delete-2026-09`, not yet merged/tagged).**
+**2026-09-15: Wire-or-delete hardening wave (`96f10a22..84d43fcf`, 9 tasks, branch `wave/wire-or-delete-2026-09`) — MERGED to `main` (`e921fbc9`, re-verified 2026-09-22), not yet tagged into a release.**
 Doc truth pass (Task 0); provider env config made lazy + a real
 **keyless-refusal security fix** — compat LLM clients previously could
 silently borrow another provider's API key when their own env var was

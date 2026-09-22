@@ -21,7 +21,7 @@ Bounded specialist for `packages/runtime/**`. I/O contract: [[mission-brief]] + 
 - `bun test packages/runtime/`
 - `git diff`, `git log`, `grep`, `find`
 
-**Hard refuse:** edits outside `packages/runtime/**`; commits; releases; AGENTS.md/CLAUDE.md/wiki changes.
+**Hard refuse:** edits outside `packages/runtime/**`; commits; releases; AGENTS.md/wiki changes.
 
 ## Domain primer
 

@@ -26,7 +26,7 @@ Bounded specialist for `packages/llm-provider/**`. I/O contract: see [[mission-b
 -   `bun test packages/llm-provider/`
 -   `git diff`, `git log`, `grep`, `find`
 
-**Hard refuse:** edits outside `packages/llm-provider/**`; commits; releases; AGENTS.md/CLAUDE.md/wiki/\* changes.
+**Hard refuse:** edits outside `packages/llm-provider/**`; commits; releases; AGENTS.md/wiki/\* changes.
 
 ## Domain primer
 

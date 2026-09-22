@@ -11,7 +11,7 @@ argument-hint: package-name or "release X.Y.Z"
 
 This skill is the full-repo docs lint + validate + update pass: it doesn't just patch the one doc a change obviously touches, it re-checks every canonical doc surface (AGENTS.md, README, CAPABILITIES.md, CHANGELOG, Starlight site incl. What's New banners, agent skills, memory, wiki) for drift and fixes what it finds. Run it after completing any feature work, and run the full Step 10 lint pass even when a change seems doc-irrelevant.
 
-Canonical source of truth for agent guidance is `AGENTS.md`. `CLAUDE.md` is a compatibility pointer only.
+Canonical source of truth for agent guidance is `AGENTS.md` (consolidated from the now-removed `CLAUDE.md`, per Claude Code's native `AGENTS.md` support).
 
 ## Integration with the Wiki Workflow
 
@@ -352,7 +352,7 @@ bash scripts/check-cross-cutting.sh
 cd apps/docs && rm -rf dist && bunx astro build; cd -
 
 # 5. Stale numeric/reference claims across all doc surfaces
-grep -rn "CLAUDE.md.*package map\|CLAUDE.md.*build commands\|withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md CAPABILITIES.md apps/docs .agents/skills
+grep -rn "withTestResponses\|15 packages\|17 packages\|2194 tests" AGENTS.md README.md CAPABILITIES.md apps/docs .agents/skills
 
 # 6. Test/package counts actually match what docs claim
 bun test 2>&1 | tail -3
@@ -371,10 +371,6 @@ ls packages | wc -l
 Astro build failure looks like: `Cannot find file: file:///path/guides/guides/filename`. Fix by converting to an absolute `/section/page` link.
 
 Treat every failure from steps 1–5 as a doc bug to fix now, not a follow-up — this is the validate half of the pass, not merely advisory.
-
-## Step 11: CLAUDE.md Compatibility Check
-
-Ensure `CLAUDE.md` remains a short compatibility pointer to `AGENTS.md` and does not become a second source of truth.
 
 ## Quick Reference: Current Stats
 
