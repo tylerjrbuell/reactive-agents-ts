@@ -24,6 +24,7 @@ import type {
   AgentConnected,
   AgentDisconnected,
 } from "../types/cortex-events.js";
+import type { JudgmentEvaluated, JudgmentFailed } from "../types/judgment-events.js";
 
 // ─── Event Types ───
 
@@ -1257,7 +1258,10 @@ export type AgentEvent =
   | ProviderFallbackActivated
   | DebriefCompleted
   | AgentConnected
-  | AgentDisconnected;
+  | AgentDisconnected
+  // ─── Judgment primitive events (@reactive-agents/judgment) ───
+  | JudgmentEvaluated
+  | JudgmentFailed;
 
 /**
  * A batch of RunLedger entries was appended at the kernel runner's iteration

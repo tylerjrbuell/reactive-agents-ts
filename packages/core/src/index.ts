@@ -298,3 +298,5 @@ export type {
   AgentConnected,
   AgentDisconnected,
 } from "./types/cortex-events.js";
+
+export type { JudgmentEvaluated, JudgmentFailed } from "./types/judgment-events.js";
