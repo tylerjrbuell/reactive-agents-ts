@@ -13,6 +13,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@reactive-agents/core": "0.16.0",
+    "@reactive-agents/judgment": "0.16.0",
     "@reactive-agents/llm-provider": "0.16.0",
     "@reactive-agents/runtime-shim": "0.16.0"
   },

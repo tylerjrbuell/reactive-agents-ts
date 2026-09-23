@@ -272,6 +272,7 @@
       "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
         "@reactive-agents/memory": "0.16.0",
         "@reactive-agents/runtime-shim": "0.16.0",
@@ -351,6 +352,7 @@
       "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
       },
       "devDependencies": {
@@ -397,6 +399,7 @@
       "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/observability": "0.16.0",
         "@reactive-agents/reasoning": "0.16.0",
         "ulid": "^2.3.0",
@@ -576,6 +579,7 @@
         "@reactive-agents/guardrails": "0.16.0",
         "@reactive-agents/identity": "0.16.0",
         "@reactive-agents/interaction": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
         "@reactive-agents/memory": "0.16.0",
         "@reactive-agents/observability": "0.16.0",
@@ -618,6 +622,7 @@
       "version": "0.16.0",
       "dependencies": {
         "@reactive-agents/core": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
         "@reactive-agents/memory": "0.16.0",
         "@reactive-agents/observability": "0.16.0",
@@ -666,6 +671,7 @@
         "@reactive-agents/gateway": "0.16.0",
         "@reactive-agents/guardrails": "0.16.0",
         "@reactive-agents/health": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
         "@reactive-agents/memory": "0.16.0",
         "@reactive-agents/observability": "0.16.0",
@@ -737,6 +743,7 @@
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.28.0",
         "@reactive-agents/core": "0.16.0",
+        "@reactive-agents/judgment": "0.16.0",
         "@reactive-agents/llm-provider": "0.16.0",
         "@reactive-agents/runtime-shim": "0.16.0",
       },

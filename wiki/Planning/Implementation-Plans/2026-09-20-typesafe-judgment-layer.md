@@ -304,9 +304,9 @@ Full sweep after the rename: `core`+`reasoning`+`cost`+`eval`+`judgment`+`judge-
 
 **Files:** Modify `packages/tools/src/healing/healing-pipeline.ts`. Tests: healing suite (fake transport). Warden: `tools-warden`.
 
-- [ ] **Step 1:** On `ToolNameHealer`/`ParamNameHealer` miss (edit distance > 2 or ambiguous): one batched **Choice** over candidate tool names (descriptions as criteria) + per-parameter `arg_present::<name>` **Nouls**. Heal only when `passes({ minProbability: 0.8 })`; else return the original call unchanged.
-- [ ] **Step 2:** Record healed-vs-original as an event field for `ExperienceStore`/calibration. Do NOT touch `resolveToolName` in `native-fc-strategy.ts` or the blueprint mirror this pass (ladder dedupe is a follow-up).
-- [ ] **Step 3:** Tests: exact match → transport call count 0; distance-miss + fake-jev `web-search:0.93` heals; `0.6` does not; timeout leaves call untouched.
+- [x] **Step 1:** New `packages/tools/src/healing/judgment-healing.ts` (`runJudgmentHealing`) — ADDITIVE escalation, fires only when the sync `healToolName()` misses. One batched Choice (candidate tool descriptions as criteria, capped at 5 closest-by-edit-distance) + one `arg_present::<name>` Noul per top-candidate parameter. Gated on `passes({ minProbability: 0.8 })`; a low-confidence, malformed, or unresolvable-schema answer, or any backend failure, degrades to the original call unchanged (`succeeded: false`). Existing sync `runHealingPipeline()` is unmodified — this is a new, separate export, not a rewrite.
+- [x] **Step 2:** Judgment-driven heals are recorded as a distinguishable `HealingAction` (`stage: "judgment"`) — a real, structured field, not silently dropped. **Not yet wired into a live EventBus event or ExperienceStore/calibration** — that requires wiring `runJudgmentHealing` into the kernel's act-phase call sites (`packages/reasoning`), explicitly out of scope for this tools-scoped dispatch; tracked as a kernel-warden follow-up. Did not touch `resolveToolName` in `native-fc-strategy.ts` or its blueprint mirror.
+- [x] **Step 3:** `packages/tools/tests/healing/judgment-healing.test.ts` (6 tests): exact match → `ask()` call count 0; distance-miss + high-confidence Choice/Noul → heals (including param-name alias healing against the resolved schema); low-confidence answer → unchanged passthrough; backend failure (timeout) → unchanged passthrough; a resolved name with no matching schema → unchanged passthrough (never trusts unverified backend output as a successful heal).
 
 ### Task 13: Phase C closeout
 

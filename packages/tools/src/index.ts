@@ -271,6 +271,13 @@ export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, Pa
 // ─── Healing Pipeline ───
 export { runHealingPipeline } from "./healing/healing-pipeline.js"
 
+// ─── Judgment Healing Escalation (Task 12 — opt-in, ADD only) ───
+export {
+  runJudgmentHealing,
+  buildJudgmentHealingState,
+  buildJudgmentHealingQuestions,
+} from "./healing/judgment-healing.js"
+
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
 
