@@ -2,12 +2,13 @@ import { Effect, Context, Layer, Option } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import { JudgmentService } from "@reactive-agents/judgment";
 import type { GuardrailResult, GuardrailConfig, ViolationType, Severity } from "./types.js";
+import { maxSeverity } from "./types.js";
 import { GuardrailError } from "./errors.js";
 import { detectInjection } from "./detectors/injection-detector.js";
 import { detectPii } from "./detectors/pii-detector.js";
 import { detectToxicity } from "./detectors/toxicity-detector.js";
 import { checkContract } from "./contracts/agent-contract.js";
-import { runJudgmentBattery, maxSeverity } from "./detectors/judgment-battery.js";
+import { runJudgmentBattery } from "./detectors/judgment-battery.js";
 
 type Violation = { readonly type: ViolationType; readonly severity: Severity; readonly message: string; readonly details?: string };
 

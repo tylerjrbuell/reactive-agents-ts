@@ -14,6 +14,7 @@ export {
   AgentContractSchema,
   GuardrailConfigSchema,
   defaultGuardrailConfig,
+  maxSeverity,
 } from "./types.js";
 
 // ─── Errors ───
@@ -28,7 +29,6 @@ export {
   runJudgmentBattery,
   buildJudgmentBatteryQuestions,
   buildJudgmentBatteryState,
-  maxSeverity,
 } from "./detectors/judgment-battery.js";
 export type { JudgmentBatteryResult } from "./detectors/judgment-battery.js";
 

@@ -1030,6 +1030,15 @@ export interface LightRuntimeOptions {
   modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' };
   observabilityOptions?: ObservabilityOptions;
   guardrailsOptions?: import("./builder.js").GuardrailsOptions;
+  /**
+   * Opt-in `JudgmentService` (Choice/Score/Noul via `@reactive-agents/judgment`).
+   * Required for `guardrailsOptions.enableJudgmentBattery` to do anything in a
+   * light/sub-agent runtime — `GuardrailService`'s battery resolves
+   * `JudgmentService` via `Effect.serviceOption` and silently no-ops when it
+   * isn't in this runtime's Layer graph, exactly like the root runtime.
+   */
+  enableJudgment?: boolean;
+  judgmentOptions?: import("./builder/types.js").JudgmentBuilderOptions;
 
   // ── Cross-cutting inheritance (2026-07-23) — a sub-agent operates under the
   //    parent's judgment + safety constraints, not rubber-stamped. These four

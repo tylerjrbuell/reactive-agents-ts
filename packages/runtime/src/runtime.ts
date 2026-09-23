@@ -1473,6 +1473,37 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       })()
     : Layer.empty;
 
+  // ── Judgment (mirrors the root runtime's judgmentOptLayer above, minus
+  // observability wrapping — a light runtime has no `observableLlmLayer`) ──
+  const lightJudgmentOptLayer = options.enableJudgment
+    ? (() => {
+        const jc = options.judgmentOptions;
+        const backendName: "jev" | "llm" =
+          jc?.backend ?? (jc?.apiKey ?? process.env.TYPESAFE_API_KEY ? "jev" : "llm");
+        const site = "agent.judge";
+        const serviceLayer: Layer.Layer<JudgmentService, never, never> =
+          backendName === "jev"
+            ? makeJudgmentServiceLive(
+                makeJevBackend({
+                  apiKey: jc?.apiKey,
+                  baseUrl: jc?.baseUrl,
+                  model: jc?.model,
+                  timeoutMs: jc?.timeoutMs,
+                  defaultConfidenceFloor: jc?.defaultConfidenceFloor,
+                }),
+              )
+            : (Layer.unwrapEffect(
+                Effect.gen(function* () {
+                  const llm = yield* LLMService;
+                  return makeJudgmentServiceLive(makeLlmBackend(llm));
+                }),
+              ).pipe(Layer.provide(llmLayer)) as Layer.Layer<JudgmentService, never, never>);
+        return withJudgmentEvents(site, backendName).pipe(
+          Layer.provide(Layer.merge(serviceLayer, eventBusLayer)),
+        );
+      })()
+    : Layer.empty;
+
   const lightCostTrackingOptLayer = options.enableCostTracking
     ? createCostLayer()
     : Layer.empty;
@@ -1509,6 +1540,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       lightToolResultCacheOptLayer,
       lightReasoningOptLayer,
       lightGuardrailsOptLayer,
+      lightJudgmentOptLayer,
       lightCostTrackingOptLayer,
       lightObservabilityOptLayer,
     ),

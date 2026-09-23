@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { JudgmentService, type JudgmentEntry } from "@reactive-agents/judgment";
-import type { Severity } from "../types.js";
+import { maxSeverity, type Severity } from "../types.js";
 
 /**
  * Judgment-battery detector (Task 11) — one batched request scoring the same
@@ -62,11 +62,6 @@ export const buildJudgmentBatteryQuestions = () => ({
     criteria: SEVERITY_LEVELS,
   },
 });
-
-/** Ranks severity for comparison; higher index = more severe. */
-const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 };
-
-export const maxSeverity = (a: Severity, b: Severity): Severity => (SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b);
 
 /**
  * Runs the battery once. Degrades to `null` on any backend failure or

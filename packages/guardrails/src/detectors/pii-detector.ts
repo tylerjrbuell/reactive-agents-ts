@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { ViolationType, Severity } from "../types.js";
+import { maxSeverity as severityMax, type ViolationType, type Severity } from "../types.js";
 import type { DetectionResult } from "./injection-detector.js";
 
 // PII patterns
@@ -18,15 +18,12 @@ const PII_PATTERNS: Array<{ pattern: RegExp; label: string; severity: Severity }
 export const detectPii = (text: string): Effect.Effect<DetectionResult, never> =>
   Effect.sync(() => {
     const found: string[] = [];
-    let maxSeverity: Severity = "low";
-    const severityOrder: Severity[] = ["low", "medium", "high", "critical"];
+    let severity: Severity = "low";
 
-    for (const { pattern, label, severity } of PII_PATTERNS) {
-      if (pattern.test(text)) {
-        found.push(label);
-        if (severityOrder.indexOf(severity) > severityOrder.indexOf(maxSeverity)) {
-          maxSeverity = severity;
-        }
+    for (const p of PII_PATTERNS) {
+      if (p.pattern.test(text)) {
+        found.push(p.label);
+        severity = severityMax(severity, p.severity);
       }
     }
 
@@ -34,7 +31,7 @@ export const detectPii = (text: string): Effect.Effect<DetectionResult, never> =
       return {
         detected: true,
         type: "pii-detected" as ViolationType,
-        severity: maxSeverity,
+        severity,
         message: `PII detected: ${found.join(", ")}`,
         details: `Found ${found.length} PII pattern(s)`,
       };

@@ -16,6 +16,12 @@ export type ViolationType = typeof ViolationType.Type;
 export const Severity = Schema.Literal("low", "medium", "high", "critical");
 export type Severity = typeof Severity.Type;
 
+/** Ranks severity for comparison; higher index = more severe. Single source of truth for every detector's severity-max logic. */
+const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+
+/** Returns the more severe of `a`/`b`. */
+export const maxSeverity = (a: Severity, b: Severity): Severity => (SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b);
+
 // ─── Guardrail Result ───
 
 export const GuardrailResultSchema = Schema.Struct({
