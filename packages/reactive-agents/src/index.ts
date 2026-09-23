@@ -117,11 +117,20 @@ export type {
   // Judgment (`.withJudgment()` / `agent.judge()`)
   JudgmentBuilderOptions,
   JudgmentSites,
+
+  // Judgment (`agent.judge()` / `agent.judgeRank()`)
+  JudgeInput,
+  JudgeRankCandidate,
+  JudgeRankOptions,
+  JudgeRankQuestion,
+  JudgeRankResult,
 } from "@reactive-agents/runtime";
+
+export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "@reactive-agents/runtime";
 
 // ─── Judgment (calibrated Choice/Score/Noul typed judgments) ───
 
-export { JudgmentService } from "@reactive-agents/judgment";
+export { JudgmentService, JudgmentUnsupported } from "@reactive-agents/judgment";
 
 export type {
   ChoiceAnswer,
@@ -132,6 +141,7 @@ export type {
   JudgmentBackend,
   JudgmentEntry,
   JudgmentError,
+  JudgmentModel,
   NoulAnswer,
   NoulSpec,
   QuestionSpec,
