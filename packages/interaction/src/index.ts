@@ -105,6 +105,8 @@ export {
   buildAutonomyConfidenceQuestions,
   buildAutonomyConfidenceState,
   answerToSafeToAutoApprove,
+  answerToPreferenceMatchLabel,
+  confidenceToPreferenceMatchLabel,
 } from "./services/autonomy-confidence-questions.js";
 export type { AutonomyConfidenceQuestionsInput } from "./services/autonomy-confidence-questions.js";
 

@@ -80,16 +80,20 @@ describe("Task 11b: autonomy-confidence shadow", () => {
         yield* eventBus.on("JudgmentShadow", (event) => Effect.sync(() => captured.push(event)));
         yield* withEstablishedPattern("user-1", "deploy");
         const svc = yield* PreferenceLearner;
-        return yield* svc.shouldAutoApprove({ userId: "user-1", taskType: "deploy" });
+        const d = yield* svc.shouldAutoApprove({ userId: "user-1", taskType: "deploy" });
+        yield* Effect.sleep(10);
+        return d;
       }).pipe(Effect.provide(layer)),
     );
 
     expect(decision).toBe(true);
-    expect(captured).toHaveLength(1);
-    expect(captured[0]!.site).toBe("autonomy-confidence");
-    expect(captured[0]!.current).toBe("true");
-    expect(captured[0]!.judged).toBe("true");
-    expect(captured[0]!.agreement).toBe(true);
+    expect(captured).toHaveLength(2);
+    const safeEvent = captured.find((e) => e.site === "autonomy-confidence")!;
+    expect(safeEvent.current).toBe("true");
+    expect(safeEvent.judged).toBe("true");
+    expect(safeEvent.agreement).toBe(true);
+    const matchEvent = captured.find((e) => e.site === "autonomy-confidence-match")!;
+    expect(matchEvent.judged).toBe("strong");
   });
 
   it("does not fire a shadow when no pattern exists yet (nothing to judge)", async () => {

@@ -61,3 +61,22 @@ export const buildAutonomyConfidenceQuestions = (): QuestionSpecs => ({
 /** Maps the `safeToAutoApprove` Noul to a boolean verdict — `null` if the answer isn't Noul-shaped. */
 export const answerToSafeToAutoApprove = (answer: JudgmentAnswer): boolean | null =>
   answer.kind === "noul" ? answer.probability >= 0.5 : null;
+
+/** `preferenceMatch`'s three Score levels, indexed 0/1/2 — matches `PREFERENCE_MATCH_LEVELS` above. */
+const PREFERENCE_MATCH_LABELS: readonly [string, string, string] = ["sparse", "plausible", "strong"];
+
+/** Maps the `preferenceMatch` Score to one of the three level labels — `null` if the answer isn't Score-shaped. */
+export const answerToPreferenceMatchLabel = (answer: JudgmentAnswer): string | null => {
+  if (answer.kind !== "score") return null;
+  const idx = Math.max(0, Math.min(2, Math.round(answer.value)));
+  return PREFERENCE_MATCH_LABELS[idx] ?? null;
+};
+
+/**
+ * Buckets the existing heuristic `pattern.confidence` (0-1) into the same
+ * three labels, so the shadow has a comparable "current" value — the
+ * heuristic constant `preferenceMatch` is designed to eventually replace
+ * (see the plan's Task 11b Step 1 note).
+ */
+export const confidenceToPreferenceMatchLabel = (confidence: number): string =>
+  confidence >= 0.8 ? "strong" : confidence >= 0.5 ? "plausible" : "sparse";

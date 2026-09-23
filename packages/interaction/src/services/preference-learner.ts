@@ -6,6 +6,8 @@ import {
   buildAutonomyConfidenceQuestions,
   buildAutonomyConfidenceState,
   answerToSafeToAutoApprove,
+  answerToPreferenceMatchLabel,
+  confidenceToPreferenceMatchLabel,
 } from "./autonomy-confidence-questions.js";
 
 /**
@@ -61,6 +63,19 @@ function autonomyConfidenceShadow(
           judged,
           current: currentStr,
           agreement: judged === null ? null : judged === currentStr,
+        });
+
+        // `preferenceMatch` is otherwise computed and discarded — surface it
+        // too (a distinct site, so it never mixes into the boolean-agreement
+        // stats above) rather than paying for an unread judgment answer.
+        const matchLabel = Either.isRight(result) ? answerToPreferenceMatchLabel(result.right.preferenceMatch) : null;
+        const currentMatchLabel = confidenceToPreferenceMatchLabel(pattern.confidence);
+        yield* eventBus.publish({
+          _tag: "JudgmentShadow",
+          site: "autonomy-confidence-match",
+          judged: matchLabel,
+          current: currentMatchLabel,
+          agreement: matchLabel === null ? null : matchLabel === currentMatchLabel,
         });
       }),
     );
