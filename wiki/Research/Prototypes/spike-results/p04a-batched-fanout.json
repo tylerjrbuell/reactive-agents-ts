@@ -1,0 +1,1342 @@
+[
+  {
+    "task": "What is the capital of France?",
+    "unbatchedLatencyMs": 305,
+    "batchedLatencyMs": 193,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.03,
+        "batched": 0.02,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.02,
+        "batched": 0.01,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.82,
+        "batched": 0.8,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0,
+        "batched": 0,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.05,
+        "batched": 0.03,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Convert 250 degrees Fahrenheit to Celsius.",
+    "unbatchedLatencyMs": 261,
+    "batchedLatencyMs": 240,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.1,
+        "batched": 0.06,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.09,
+        "batched": 0.1,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.06,
+        "batched": 0.05,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.04,
+        "batched": 0.04,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.76,
+        "batched": 0.82,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.53,
+        "batched": 0.47,
+        "agree": false
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Write a haiku about autumn leaves.",
+    "unbatchedLatencyMs": 246,
+    "batchedLatencyMs": 275,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.09,
+        "batched": 0.09,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.04,
+        "batched": 0.05,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.04,
+        "batched": 0.04,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.85,
+        "batched": 0.9,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.1,
+        "batched": 0.11,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.02,
+        "batched": 0.01,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "List the first 5 prime numbers.",
+    "unbatchedLatencyMs": 266,
+    "batchedLatencyMs": 178,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.06,
+        "batched": 0.04,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.15,
+        "batched": 0.12,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.11,
+        "batched": 0.08,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.03,
+        "batched": 0.04,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.87,
+        "batched": 0.83,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.2,
+        "batched": 0.2,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "list",
+        "batched": "list",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.03,
+        "batched": 0.02,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "What year did the Berlin Wall fall?",
+    "unbatchedLatencyMs": 197,
+    "batchedLatencyMs": 194,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.01,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.71,
+        "batched": 0.77,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0,
+        "batched": 0,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.01,
+        "batched": 0.01,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.02,
+        "batched": 0.03,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.09,
+        "batched": 0.05,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Summarize the plot of Romeo and Juliet in two sentences.",
+    "unbatchedLatencyMs": 199,
+    "batchedLatencyMs": 189,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.01,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.21,
+        "batched": 0.18,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.1,
+        "batched": 0.09,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.04,
+        "batched": 0.04,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.9,
+        "batched": 0.93,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.21,
+        "batched": 0.16,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.2,
+        "batched": 0.16,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.03,
+        "batched": 0.02,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "First, fetch the current weather for Tokyo, then convert the temperature to Fahrenheit.",
+    "unbatchedLatencyMs": 220,
+    "batchedLatencyMs": 169,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.6,
+        "batched": 0.35,
+        "agree": false
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.73,
+        "batched": 0.8,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "plan-execute-reflect",
+        "agree": false
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.97,
+        "batched": 0.98,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.4,
+        "batched": 0.46,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.29,
+        "batched": 0.37,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.99,
+        "batched": 0.99,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.05,
+        "batched": 0.06,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.97,
+        "batched": 0.97,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.53,
+        "batched": 0.44,
+        "agree": false
+      }
+    }
+  },
+  {
+    "task": "Write a Python function that reverses a linked list, then explain its time complexity.",
+    "unbatchedLatencyMs": 282,
+    "batchedLatencyMs": 216,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.97,
+        "batched": 0.97,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.46,
+        "batched": 0.46,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.45,
+        "batched": 0.6,
+        "agree": false
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.11,
+        "batched": 0.11,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.81,
+        "batched": 0.81,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.99,
+        "batched": 0.99,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.83,
+        "batched": 0.82,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "code",
+        "batched": "code",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Debug this script: it throws a KeyError on line 12, find the root cause and fix it.",
+    "unbatchedLatencyMs": 227,
+    "batchedLatencyMs": 188,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.86,
+        "batched": 0.81,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.75,
+        "batched": 0.77,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "plan-execute-reflect",
+        "batched": "plan-execute-reflect",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.39,
+        "batched": 0.37,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.81,
+        "batched": 0.81,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.25,
+        "batched": 0.25,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.65,
+        "batched": 0.79,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.04,
+        "batched": 0.04,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.85,
+        "batched": 0.86,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "code",
+        "batched": "prose",
+        "agree": false
+      },
+      "citation-needed": {
+        "unbatched": 0.07,
+        "batched": 0.04,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Plan a 3-day itinerary for visiting Kyoto, including transportation between sites.",
+    "unbatchedLatencyMs": 172,
+    "batchedLatencyMs": 207,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.89,
+        "batched": 0.9,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "blueprint",
+        "batched": "blueprint",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.08,
+        "batched": 0.08,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.07,
+        "batched": 0.08,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.63,
+        "batched": 0.56,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1,
+        "batched": 1.01,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.66,
+        "batched": 0.61,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.95,
+        "batched": 0.94,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.08,
+        "batched": 0.05,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Refactor this authentication module to use JWT instead of session cookies, step by step.",
+    "unbatchedLatencyMs": 236,
+    "batchedLatencyMs": 169,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.91,
+        "batched": 0.89,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.96,
+        "batched": 0.96,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "blueprint",
+        "batched": "blueprint",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.09,
+        "batched": 0.08,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.67,
+        "batched": 0.58,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.15,
+        "batched": 0.18,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.09,
+        "batched": 1.1,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.67,
+        "batched": 0.76,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.97,
+        "batched": 0.98,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "list",
+        "batched": "list",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.08,
+        "batched": 0.06,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Investigate why the checkout API is returning 500 errors intermittently and propose a fix.",
+    "unbatchedLatencyMs": 202,
+    "batchedLatencyMs": 193,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.4,
+        "batched": 0.23,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.94,
+        "batched": 0.94,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.05,
+        "batched": 0.08,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.89,
+        "batched": 0.88,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.09,
+        "batched": 0.07,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.59,
+        "batched": 1.67,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.27,
+        "batched": 0.25,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.94,
+        "batched": 0.94,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.19,
+        "batched": 0.08,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Compare and critique three different database indexing strategies for a high-write workload.",
+    "unbatchedLatencyMs": 202,
+    "batchedLatencyMs": 198,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.1,
+        "batched": 0.06,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.98,
+        "batched": 0.98,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.1,
+        "batched": 0.09,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.09,
+        "batched": 0.1,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.64,
+        "batched": 0.63,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.99,
+        "batched": 2,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.11,
+        "batched": 0.1,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.6,
+        "batched": 0.57,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.11,
+        "batched": 0.07,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Evaluate the trade-offs between microservices and a monolith for a 5-person startup, and justify a recommendation.",
+    "unbatchedLatencyMs": 223,
+    "batchedLatencyMs": 192,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.04,
+        "batched": 0.03,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.97,
+        "batched": 0.98,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.11,
+        "batched": 0.15,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.06,
+        "batched": 0.06,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.83,
+        "batched": 0.86,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.99,
+        "batched": 1.99,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.07,
+        "batched": 0.06,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.57,
+        "batched": 0.56,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.08,
+        "batched": 0.05,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Analyze this quarterly earnings report and identify the three biggest risks to next year's revenue.",
+    "unbatchedLatencyMs": 186,
+    "batchedLatencyMs": 209,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.06,
+        "batched": 0.04,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.97,
+        "batched": 0.97,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.15,
+        "batched": 0.14,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.11,
+        "batched": 0.13,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.24,
+        "batched": 0.24,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.93,
+        "batched": 1.91,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.1,
+        "batched": 0.09,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.78,
+        "batched": 0.77,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.2,
+        "batched": 0.11,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Design a caching architecture for a read-heavy API, weighing Redis vs a CDN vs in-process caching.",
+    "unbatchedLatencyMs": 330,
+    "batchedLatencyMs": 166,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "sonnet",
+        "batched": "sonnet",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.08,
+        "batched": 0.06,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.97,
+        "batched": 0.98,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.04,
+        "batched": 0.05,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.13,
+        "batched": 0.14,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.71,
+        "batched": 0.75,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.99,
+        "batched": 1.99,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.14,
+        "batched": 0.11,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.9,
+        "batched": 0.87,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.07,
+        "batched": 0.05,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Give me a JSON object with the top 5 programming languages by 2025 popularity, with a `rank` and `name` field.",
+    "unbatchedLatencyMs": 254,
+    "batchedLatencyMs": 195,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.13,
+        "batched": 0.17,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.56,
+        "batched": 0.41,
+        "agree": false
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.07,
+        "batched": 0.07,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.07,
+        "batched": 0.07,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.63,
+        "batched": 0.54,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.13,
+        "batched": 0.09,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.02,
+        "batched": 0.02,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.18,
+        "batched": 0.15,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "json",
+        "batched": "json",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.1,
+        "batched": 0.08,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Produce a CSV of the last 12 months with columns date,revenue,expenses using this data as input.",
+    "unbatchedLatencyMs": 221,
+    "batchedLatencyMs": 198,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.65,
+        "batched": 0.43,
+        "agree": false
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.37,
+        "batched": 0.39,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "blueprint",
+        "batched": "blueprint",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.19,
+        "batched": 0.12,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.2,
+        "batched": 0.21,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.34,
+        "batched": 0.35,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.78,
+        "batched": 0.73,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.05,
+        "batched": 0.04,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.76,
+        "batched": 0.64,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "csv",
+        "batched": "csv",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.05,
+        "batched": 0.03,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Cite the primary sources for the claim that coffee consumption reduces Parkinson's risk.",
+    "unbatchedLatencyMs": 218,
+    "batchedLatencyMs": 197,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.03,
+        "batched": 0.03,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.24,
+        "batched": 0.24,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "reactive",
+        "batched": "reactive",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.06,
+        "batched": 0.04,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.14,
+        "batched": 0.14,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.31,
+        "batched": 0.35,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 0.23,
+        "batched": 0.17,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.05,
+        "batched": 0.04,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.28,
+        "batched": 0.22,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "prose",
+        "batched": "prose",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.96,
+        "batched": 0.95,
+        "agree": true
+      }
+    }
+  },
+  {
+    "task": "Write a bulleted list of pros and cons for adopting TypeScript in an existing JavaScript codebase.",
+    "unbatchedLatencyMs": 233,
+    "batchedLatencyMs": 207,
+    "perQuestionAgreement": {
+      "tier": {
+        "unbatched": "haiku",
+        "batched": "haiku",
+        "agree": true
+      },
+      "requires-code-execution": {
+        "unbatched": 0.1,
+        "batched": 0.09,
+        "agree": true
+      },
+      "multi-step-analysis": {
+        "unbatched": 0.83,
+        "batched": 0.79,
+        "agree": true
+      },
+      "strategy": {
+        "unbatched": "tree-of-thought",
+        "batched": "tree-of-thought",
+        "agree": true
+      },
+      "explicit-steps-given": {
+        "unbatched": 0.06,
+        "batched": 0.07,
+        "agree": true
+      },
+      "requires-retries-or-debugging": {
+        "unbatched": 0.05,
+        "batched": 0.05,
+        "agree": true
+      },
+      "single-hop-answerable": {
+        "unbatched": 0.92,
+        "batched": 0.93,
+        "agree": true
+      },
+      "complexity": {
+        "unbatched": 1.71,
+        "batched": 1.67,
+        "agree": true
+      },
+      "long-horizon": {
+        "unbatched": 0.04,
+        "batched": 0.03,
+        "agree": true
+      },
+      "multi-step": {
+        "unbatched": 0.13,
+        "batched": 0.11,
+        "agree": true
+      },
+      "output-format": {
+        "unbatched": "list",
+        "batched": "list",
+        "agree": true
+      },
+      "citation-needed": {
+        "unbatched": 0.04,
+        "batched": 0.03,
+        "agree": true
+      }
+    }
+  }
+]

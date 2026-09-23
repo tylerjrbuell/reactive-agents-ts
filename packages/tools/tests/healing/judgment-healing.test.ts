@@ -38,10 +38,12 @@ const countingLayer = (
       askCallCount++
       return Effect.succeed(makeAnswers(input) as unknown as JudgmentAnswers<typeof input.questions>)
     },
+    listModels: () => Effect.succeed([]),
   })
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
   ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  listModels: () => Effect.succeed([]),
 })
 
 function runWith(layer: Layer.Layer<JudgmentService>, call: ToolCallSpec) {

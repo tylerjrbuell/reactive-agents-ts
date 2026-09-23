@@ -18,7 +18,7 @@ import {
   type JudgmentConfig,
   type JudgmentError,
 } from "../types.js";
-import { fromSdkResult, toSdkEntry, toSdkQuestions } from "../translate.js";
+import { fromSdkModelCards, fromSdkResult, toSdkEntry, toSdkQuestions } from "../translate.js";
 
 const toJudgmentError = (cause: unknown): JudgmentError => {
   if (cause instanceof AuthenticationError) {
@@ -85,5 +85,10 @@ export const makeJevBackend = (
         ),
       );
     },
+    listModels: () =>
+      Effect.tryPromise({
+        try: () => client.models.list(),
+        catch: toJudgmentError,
+      }).pipe(Effect.map(fromSdkModelCards)),
   };
 };

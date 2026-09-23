@@ -39,12 +39,14 @@ const fakeJudgmentAnswering = (probability: number) =>
       Effect.succeed({
         "grounding-fabrication": { kind: "noul", probability },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
       Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 /** Runs the given shadow effect, capturing any grounding-fabrication JudgmentShadow event. */

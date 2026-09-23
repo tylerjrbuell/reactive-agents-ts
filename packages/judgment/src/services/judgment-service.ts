@@ -1,12 +1,14 @@
 import { Context, Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
-import type {
-  JudgmentAnswer,
-  JudgmentAnswers,
-  JudgmentBackend,
-  JudgmentEntry,
-  JudgmentError,
-  QuestionSpecs,
+import {
+  JudgmentUnsupported,
+  type JudgmentAnswer,
+  type JudgmentAnswers,
+  type JudgmentBackend,
+  type JudgmentEntry,
+  type JudgmentError,
+  type JudgmentModel,
+  type QuestionSpecs,
 } from "../types.js";
 
 /**
@@ -22,6 +24,8 @@ export class JudgmentService extends Context.Tag("JudgmentService")<
       readonly questions: Q;
       readonly model?: string;
     }) => Effect.Effect<JudgmentAnswers<Q>, JudgmentError>;
+    /** List the models/aliases the backend's account can send in `ask`'s `model` field. Fails `JudgmentUnsupported` if the backend has no catalog endpoint. */
+    readonly listModels: () => Effect.Effect<ReadonlyArray<JudgmentModel>, JudgmentError>;
   }
 >() {}
 
@@ -36,6 +40,9 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
         // "never partial-trust a missing answer" guarantee this relies on.
         Effect.map((answers) => answers as JudgmentAnswers<typeof input.questions>),
       ),
+    listModels: () =>
+      backend.listModels?.() ??
+      Effect.fail(new JudgmentUnsupported({ message: `Backend "${backend.name}" has no model catalog` })),
   });
 
 const summarizeAnswer = (
@@ -92,6 +99,7 @@ export const withEvents = (
             });
             return result;
           }),
+        listModels: () => inner.listModels(),
       };
     }),
   );

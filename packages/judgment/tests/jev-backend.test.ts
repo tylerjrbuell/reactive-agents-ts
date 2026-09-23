@@ -131,4 +131,34 @@ describe("makeJevBackend", () => {
 
     expect(JSON.stringify(answers)).not.toContain("super-secret-key");
   });
+
+  it("listModels() calls GET /v1/models and translates snake_case ModelCards", async () => {
+    const { fetch, calls } = fakeFetch((input) => {
+      expect(input).toContain("/v1/models");
+      return jsonResponse(200, {
+        models: [
+          { name: "jev-latest", description: "Most recent stable release.", release_date: "2026-01-01" },
+          { name: "jev-preview", description: "Most recent release, preview or not.", release_date: "2026-01-01" },
+        ],
+      });
+    });
+    const backend = makeJevBackend({ apiKey: "test-key", fetch, retry: { maxRetries: 0 } });
+
+    const models = await Effect.runPromise(backend.listModels!());
+
+    expect(calls).toHaveLength(1);
+    expect(models).toEqual([
+      { name: "jev-latest", description: "Most recent stable release.", releaseDate: "2026-01-01" },
+      { name: "jev-preview", description: "Most recent release, preview or not.", releaseDate: "2026-01-01" },
+    ]);
+  });
+
+  it("listModels() maps a 401 to JudgmentUnauthorized like evaluate() does", async () => {
+    const { fetch } = fakeFetch(() => jsonResponse(401, { message: "bad key" }));
+    const backend = makeJevBackend({ apiKey: "bad", fetch, retry: { maxRetries: 0 } });
+
+    const error = await Effect.runPromise(backend.listModels!().pipe(Effect.flip));
+
+    expect(error).toBeInstanceOf(JudgmentUnauthorized);
+  });
 });

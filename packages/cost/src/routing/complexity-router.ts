@@ -378,6 +378,9 @@ function judgmentComplexityShadow(task: string, current: ModelTier): Effect.Effe
           .pipe(Effect.either);
 
         const judged = Either.isRight(result) ? answerToTier(result.right.tier) : null;
+        const confidence = Either.isRight(result)
+          ? (result.right.tier.kind === "noul" ? null : result.right.tier.confidence)
+          : null;
 
         yield* eventBus.publish({
           _tag: "JudgmentShadow",
@@ -385,6 +388,7 @@ function judgmentComplexityShadow(task: string, current: ModelTier): Effect.Effe
           judged,
           current,
           agreement: judged === null ? null : judged === current,
+          confidence: judged === null ? null : confidence,
         });
       }),
     );

@@ -37,11 +37,13 @@ const makeFakeJudgmentLayer = (callLog: { count: number }) =>
       }
       return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
     },
+    listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
   ask: () =>
     Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  listModels: () => Effect.succeed([]),
 });
 
 const stubAgentRunner: SuiteAgentRunner = (input) =>

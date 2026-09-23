@@ -28,12 +28,14 @@ const fakeJudgmentAnswering = (tierValue: string) =>
         "requires-code-execution": { kind: "noul", probability: 0.05 },
         "multi-step-analysis": { kind: "noul", probability: 0.05 },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
       Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const runWithShadowCapture = async (judgmentLayer?: Layer.Layer<JudgmentService>, routingContext?: RoutingContext) => {

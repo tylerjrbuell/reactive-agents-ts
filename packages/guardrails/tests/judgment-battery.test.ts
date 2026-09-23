@@ -30,10 +30,12 @@ const makeFakeJudgmentLayer = (answers: FakeAnswers) =>
         jailbreak_roleplay: { kind: "noul", probability: answers.jailbreak },
         severity: { kind: "score", value: answers.severity, probabilities: {}, confidence: 0.9, calibrated: true },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
   ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  listModels: () => Effect.succeed([]),
 });
 
 const NONE: FakeAnswers = { injection: 0.02, pii: 0.02, toxicity: 0.02, jailbreak: 0.02, severity: 0 };

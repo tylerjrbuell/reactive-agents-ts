@@ -120,6 +120,12 @@ export function judgmentGroundingFabricationShadow(
             judged: judgedStr,
             current,
             agreement: judgedStr === null ? null : judgedStr === current,
+            // `GROUNDING_FABRICATION_QUESTION_ID` is a Noul question — Nouls
+            // carry a probability only, no confidence value
+            // (docs.typesafe.ai/confidence, see `NoulAnswerSchema` in
+            // `@reactive-agents/judgment`'s types.ts). `null` here is the
+            // correct value, not a missing wire-up.
+            confidence: null,
           })
           .pipe(Effect.catchAll(() => Effect.void));
       }),

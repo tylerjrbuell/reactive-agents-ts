@@ -50,6 +50,7 @@ function fakeJudgmentLayer(build: (questionIds: readonly string[]) => Record<str
       const answers = build(Object.keys(input.questions));
       return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
     },
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 }
 
@@ -60,6 +61,7 @@ function fakeJudgmentFailing() {
       askCallCount++;
       return Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError);
     },
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 }
 

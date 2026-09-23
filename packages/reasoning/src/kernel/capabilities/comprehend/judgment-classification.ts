@@ -95,6 +95,17 @@ function judgedValueFor(id: string, answer: JudgmentAnswer): string | null {
   return bool === null ? null : String(bool);
 }
 
+/**
+ * The answer's own `confidence`, or `null` for Noul answers (Nouls carry a
+ * probability only, no confidence — docs.typesafe.ai/confidence,
+ * `NoulAnswerSchema` in `@reactive-agents/judgment`'s types.ts). Only
+ * "complexity" (Score) and "output-format" (Choice) among this file's
+ * questions carry a real confidence; every other id here is a Noul.
+ */
+function answerConfidenceFor(answer: JudgmentAnswer): number | null {
+  return answer.kind === "noul" ? null : answer.confidence;
+}
+
 /** Emits one `JudgmentShadow` event per question id, given either a resolved answer map or `null` (chunk failed/timed out). */
 function publishChunkShadow(
   eventBus: Option.Option<EventBusInstance>,
@@ -115,6 +126,7 @@ function publishChunkShadow(
         judged,
         current,
         agreement: judged === null ? null : judged === current,
+        confidence: answer ? answerConfidenceFor(answer) : null,
       });
     },
     { discard: true },

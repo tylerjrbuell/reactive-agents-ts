@@ -41,6 +41,10 @@ Every spike gets:
 | p01b | 2026-04-29 | bare + verification (cogito-only) | (deepens p01 evidence) | [[RESULTS-p01]] |
 | p02 | 2026-04-30 | bare + verify + retry × 3 | NEGATIVE — 0/5 recovery | [[RESULTS-p02]] |
 | p03 | 2026-05-01 | qwen3:14b thinking bug repro | (in progress) | — |
+| p04a | 2026-09-23 | jev direct-call × batched fan-out (3 shadow sites) | NOT-WORTH-IT | [[RESULTS-p04a]] |
+| p04b | 2026-09-23 | jev direct-call × memory rerank vs TF-cosine baseline | WORTH-IT (conditional) | [[RESULTS-p04b]] |
+| p04c | 2026-09-23 | jev direct-call × hierarchical strategy-router | NOT-WORTH-IT | [[RESULTS-p04c]] |
+| p04d | 2026-09-23 | jev direct-call × state-presentation enrichment | NOT-WORTH-IT | [[RESULTS-p04d]] |
 
 See [[RESEARCH_LOG]] for the canonical narrative.
 

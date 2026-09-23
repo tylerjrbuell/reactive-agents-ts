@@ -237,3 +237,68 @@ quick-check: `grep -c "<NEW-IDENTIFIER>" packages/<pkg>/dist/index.js`.
 - [`p03-harness-qwen3-thinking-bug.ts`](./p03-harness-qwen3-thinking-bug.ts)
 - `harness-reports/spike-results/p03-harness-qwen3-PRE-FIX.json` (pre-edit baseline; 3/3 leak harness internals)
 - `harness-reports/spike-results/p03-harness-qwen3-POST-FIX.json` (post-edit, post-rebuild; 3/3 clean empty output + structured failure)
+
+---
+
+## p04a-p04d (2026-09-23) — judgment-primitive leverage expansion probes
+
+Four spikes probing candidate next uses of `@reactive-agents/judgment`
+(direct real `jev`-backend calls, no LLM/SUT in the loop), commissioned
+after 6 shadow sites shipped default-off/additive with zero inversions
+(strategy-selection, complexity-router, task-comprehension, autonomy-
+confidence, completion-judgment, grounding-fabrication). Goal: prove
+leverage with real measurement before scoping any build plan. All 4 scripts
+live in this directory (`p04a`/`p04b`/`p04c`/`p04d-*.ts`); raw per-case JSON
+in `spike-results/`. Zero `packages/**/src` diffs — measurement only, per
+mission scope.
+
+**p04a (batched fan-out):** the 3 run-start shadow sites (strategy-
+selection, complexity-router, task-comprehension) DO co-occur in the same
+run-start window (confirmed by code trace). Merging their state+questions
+into 1 `ask()` call vs 3 separate calls: only ~15% latency win (ratio
+0.849), far short of the 50%+ bar — because production already fires these
+3 sites concurrently via `Effect.forkDaemon`, so there's no serial-call tax
+to eliminate. Answer quality held (96.7% bucketed agreement). **NOT-WORTH-IT.**
+→ [[RESULTS-p04a]]
+
+**p04b (memory rerank):** `packages/memory` has zero judgment coverage
+today. jev Score-rerank vs a TF-cosine lexical baseline on 18 labeled
+(query, 5 candidates, correct-id) cases (7 adversarial/paraphrase): jev hit
+100% top-1 (18/18) vs baseline 38.9% (7/18), mean rank 1.00 vs 2.11. Large,
+decisive lift — but the baseline is an honestly-disclosed TF-cosine proxy,
+not real embedding-cosine (packages/memory/src was read-only scope; no real
+vector-search baseline was run). **WORTH-IT, conditionally** — recommended
+next step before scoping a build: re-run against the REAL vector-similarity
+baseline + add a latency/cost measurement (both out of this probe's scope).
+→ [[RESULTS-p04b]]
+
+**p04c (hierarchical strategy-router):** 2-stage coarse-then-fine Choice vs
+the shipped single-shot 5-way Choice (strategy-selection is 5-way, not
+8-way as the mission assumed — corrected before running; complexity-router's
+3-way Choice doesn't decompose meaningfully). 85.0% agreement (exactly at
+the promotion threshold) but 2-stage costs 29% MORE latency (ratio 1.294) —
+2 sequential real API round trips, even smaller ones, cost more wall-clock
+than 1 larger one; a genuinely dependent decision can't be parallelized like
+p04a's independent-sites case. **NOT-WORTH-IT.** → [[RESULTS-p04c]]
+
+**p04d (state-presentation bias):** does enriching complexity-router's
+`{task}` state payload with descriptively-named derived facts (per
+docs.typesafe.ai/concepts/state's live-fetched guidance) change agreement
+with the heuristic? Tested complexity-router only (strategy-selection's
+heuristic isn't exported/reusable without duplicating undocumented
+internals — scope correction made before running). Result: **exactly 0.0pp
+delta** on the identical 20-case set (13/20 agreement both conditions, same
+cases). Disagreement here is a genuine reasoning-shape gap between the
+regex heuristic and jev, not a state-labeling artifact. **NOT-WORTH-IT**
+(for this enrichment style). → [[RESULTS-p04d]]
+
+**Cross-probe pattern:** p04a and p04c both point at the same underlying
+lesson from different angles — splitting one judgment call into multiple
+real network round trips only pays off when the calls are genuinely
+independent AND weren't already running concurrently in production. p04d
+independently rules out presentation as the fix for the disagreement rate
+the 2026-09-23 shadow-site report flagged, narrowing that open question to
+a real routing-shape gap. Net: 1 of 4 probes (p04b) clears its bar outright,
+conditional on a follow-up measurement against a real baseline; 3 of 4
+(p04a, p04c, p04d) are clean, decisive NOT-WORTH-IT verdicts that save
+future effort from being spent building any of those three mechanisms.

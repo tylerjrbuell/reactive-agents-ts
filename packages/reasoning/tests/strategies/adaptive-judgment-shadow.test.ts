@@ -31,12 +31,14 @@ const fakeJudgmentAnswering = (strategyValue: string) =>
         "requires-retries-or-debugging": { kind: "noul", probability: 0.1 },
         "single-hop-answerable": { kind: "noul", probability: 0.9 },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
       Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 /** Runs executeAdaptive, capturing any JudgmentShadow event(s) published. Waits one scheduler tick for the forkDaemon shadow fiber to settle before returning. */

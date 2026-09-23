@@ -21,10 +21,12 @@ const makeFakeJudgmentLayer = (safeToAutoApprove: number) =>
         preferenceMatch: { kind: "score", value: 2, probabilities: {}, confidence: 0.9, calibrated: true },
         safeToAutoApprove: { kind: "noul", probability: safeToAutoApprove },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
   ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  listModels: () => Effect.succeed([]),
 });
 
 /**

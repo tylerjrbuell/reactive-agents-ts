@@ -64,6 +64,7 @@ const StubJudgmentLayer: Layer.Layer<JudgmentService> = Layer.succeed(JudgmentSe
     }
     return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
   },
+  listModels: () => Effect.succeed([]),
 });
 
 export interface ServerConfig {

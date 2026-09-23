@@ -786,6 +786,9 @@ function judgmentClassifyShadow(
         const judged = Either.isRight(result)
           ? answerToStrategy(result.right.strategy)
           : null;
+        const confidence = Either.isRight(result)
+          ? (result.right.strategy.kind === "noul" ? null : result.right.strategy.confidence)
+          : null;
 
         yield* publishReasoningStep(eventBus, {
           _tag: "JudgmentShadow",
@@ -793,6 +796,7 @@ function judgmentClassifyShadow(
           judged,
           current,
           agreement: judged === null ? null : judged === current,
+          confidence: judged === null ? null : confidence,
         });
       }),
     );

@@ -34,12 +34,14 @@ const fakeJudgmentAnswering = (probability: number) =>
       Effect.succeed({
         "completion-satisfied": { kind: "noul", probability },
       } as unknown as JudgmentAnswers<typeof input.questions>),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
       Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 /** Runs verifyAndEmit against `context`, capturing any completion-satisfied JudgmentShadow event. */

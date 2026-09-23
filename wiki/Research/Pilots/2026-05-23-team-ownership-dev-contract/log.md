@@ -925,3 +925,19 @@ created: 2026-05-23
     fabrication the heuristic's substring match missed). Task review:
     Approved, 0 findings (2 cosmetic minors noted, not actioned). bun run
     build run separately by parent — clean.
+
+```yaml
+date: 2026-09-23
+warden: harness-warden
+task: "4 leverage-proof spikes (batched fan-out, memory rerank, hierarchical strategy-router, state-presentation bias) for judgment primitive Phase E scoping"
+result: denied-by-authority
+reason: "MissionBrief target wiki/Research/Prototypes/** and packages/judgment/** research domain outside harness-warden's Edit authority (scoped to wiki/Research/Harness-Reports/** + harness-improvement-loop skill) and domain primer (cross-strategy-matrix/ri-ablation/harness-probe, not judgment-backend spikes)."
+action: "re-dispatched to general-purpose agent per harness-warden's own recommendation — no warden in AGENTS.md routing table owns wiki/Research/Prototypes/** spike work"
+
+```yaml
+date: 2026-09-23
+warden: kernel-warden
+task: "thread confidence field into 3 kernel JudgmentShadow sites (completion, grounding-fabrication, task-comprehension) + fix 5 kernel test fixtures for new required listModels + state-handling audit against docs.typesafe.ai/concepts/state.md"
+result: completed, confidence 0.9
+outcome: "accepted — targeted kernel tests 176/176 pass, kernel package typecheck contributes zero new errors, state audit found no gap in kernel sites' buildState shapes"
+escalation: "flagged 1 pre-existing-style type error in adaptive.ts (packages/reasoning/src/strategies/**, outside kernel-warden authority) — parent fixed directly (kind-narrowing on JudgmentAnswer before reading .confidence), same root cause also existed in complexity-router.ts and preference-learner.ts (parent's own files), all fixed, all packages now typecheck green"

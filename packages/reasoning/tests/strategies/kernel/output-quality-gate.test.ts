@@ -910,6 +910,7 @@ describe("Task 3 wiring — grounding-fabrication shadow fires through runner.ts
         Effect.succeed({
           "grounding-fabrication": { kind: "noul", probability },
         } as unknown as JudgmentAnswers<typeof input.questions>),
+      listModels: () => Effect.succeed([]),
     } satisfies JudgmentService["Type"]);
 
   it("status=done, empty output, deliverable candidates present: fires a grounding-fabrication JudgmentShadow event", async () => {

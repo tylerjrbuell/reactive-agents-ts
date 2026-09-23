@@ -6,12 +6,13 @@
  * `JudgmentAnswers`.
  */
 import { choice, noul, score } from "@typesafe-ai/sdk";
-import type { EntryType, Question, Questions, SystemOneResult } from "@typesafe-ai/sdk";
+import type { EntryType, ModelCard, Question, Questions, SystemOneResult } from "@typesafe-ai/sdk";
 import type {
   ChoiceAnswer,
   JudgmentAnswer,
   JudgmentAnswers,
   JudgmentEntry,
+  JudgmentModel,
   NoulAnswer,
   QuestionSpec,
   QuestionSpecs,
@@ -87,3 +88,11 @@ export const fromSdkResult = (result: SystemOneResult<Questions>, questionIds: r
   }
   return out;
 };
+
+/** SDK `ModelCard` -> backend-agnostic `JudgmentModel` (same-shape rename, snake_case -> camelCase). */
+export const fromSdkModelCards = (cards: readonly ModelCard[]): ReadonlyArray<JudgmentModel> =>
+  cards.map((card) => ({
+    name: card.name,
+    description: card.description,
+    releaseDate: card.release_date,
+  }));

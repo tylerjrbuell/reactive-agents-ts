@@ -65,4 +65,12 @@ export type JudgmentShadow = {
   readonly current: string;
   /** `judged === current`, or `null` when `judged` is null (no answer to compare). */
   readonly agreement: boolean | null;
+  /**
+   * The judgment answer's own confidence (0-1), or `null` when `judged` is
+   * null. Enables confidence-gated analysis of shadow disagreements (see
+   * docs.typesafe.ai/patterns/confidence-routing) — bucket high-confidence
+   * disagreement (real routing gap) from low-confidence disagreement (noise)
+   * from existing event data instead of re-running a spike each time.
+   */
+  readonly confidence: number | null;
 };

@@ -45,6 +45,7 @@ const fakeJudgmentAnswering = () => {
       }
       return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
     },
+    listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 };
 
@@ -94,7 +95,7 @@ describe("runKernel judgment comprehend shadow wiring (Task 10, shadow-only)", (
     expect(result.output).toBe("Paris");
   }, 15000);
 
-  it("small tool roster (3 tools): single ask() call, one shadow event per question", async () => {
+  it("small tool roster (3 tools): single comprehend ask() call, one shadow event per question", async () => {
     const tools = [
       { name: "tool-a", description: "a", parameters: [] as const },
       { name: "tool-b", description: "b", parameters: [] as const },
@@ -102,11 +103,17 @@ describe("runKernel judgment comprehend shadow wiring (Task 10, shadow-only)", (
     ];
     const { captured } = await runWithShadowCapture(tools, true);
 
-    expect(askCallCount).toBe(1);
-    expect(captured.length).toBe(8); // 5 base + 3 tool nouls
-    for (const e of captured) {
-      expect(e.site).toBe("task-comprehension");
-    }
+    // doneKernel finishes in one iteration, so the terminal verification pass
+    // also fires Task 2's completion-judgment shadow (verifier.ts's
+    // `verifyAndEmit`) alongside this Task 10 comprehend shadow — +1 ask()
+    // call and +1 "completion-satisfied" event, on top of the 8 comprehend
+    // events (5 base + 3 tool nouls).
+    expect(askCallCount).toBe(2);
+    const comprehendEvents = captured.filter((e) => e.site === "task-comprehension");
+    const completionEvents = captured.filter((e) => e.site === "completion-satisfied");
+    expect(comprehendEvents.length).toBe(8);
+    expect(completionEvents.length).toBe(1);
+    expect(captured.length).toBe(9);
   }, 15000);
 
   it("large tool roster (40 tools) above CHUNK_CAP=30: chunks into 2 ask() calls", async () => {
@@ -117,8 +124,10 @@ describe("runKernel judgment comprehend shadow wiring (Task 10, shadow-only)", (
     }));
     const { captured } = await runWithShadowCapture(tools, true);
 
-    expect(askCallCount).toBe(2);
-    expect(captured.length).toBe(45); // 5 base + 40 tool nouls
+    // 2 chunked comprehend ask() calls + 1 completion-judgment shadow ask()
+    // call from the terminal verification pass (see comment above).
+    expect(askCallCount).toBe(3);
+    expect(captured.length).toBe(46); // 5 base + 40 tool nouls + 1 completion-satisfied
   }, 15000);
 
   it("JudgmentService entirely absent: no shadow events, no crash", async () => {

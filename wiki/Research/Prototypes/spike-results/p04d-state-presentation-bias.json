@@ -1,0 +1,162 @@
+[
+  {
+    "task": "What is the capital of France?",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Convert 250 degrees Fahrenheit to Celsius.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Write a haiku about autumn leaves.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "List the first 5 prime numbers.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "What year did the Berlin Wall fall?",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Summarize the plot of Romeo and Juliet in two sentences.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "First, fetch the current weather for Tokyo, then convert the temperature to Fahrenheit.",
+    "heuristicTier": null,
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Write a Python function that reverses a linked list, then explain its time complexity.",
+    "heuristicTier": null,
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Debug this script: it throws a KeyError on line 12, find the root cause and fix it.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Plan a 3-day itinerary for visiting Kyoto, including transportation between sites.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Refactor this authentication module to use JWT instead of session cookies, step by step.",
+    "heuristicTier": null,
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Investigate why the checkout API is returning 500 errors intermittently and propose a fix.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Compare and critique three different database indexing strategies for a high-write workload.",
+    "heuristicTier": "sonnet",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Evaluate the trade-offs between microservices and a monolith for a 5-person startup, and justify a recommendation.",
+    "heuristicTier": "sonnet",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Analyze this quarterly earnings report and identify the three biggest risks to next year's revenue.",
+    "heuristicTier": "sonnet",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Design a caching architecture for a read-heavy API, weighing Redis vs a CDN vs in-process caching.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "sonnet",
+    "enrichedJevTier": "sonnet",
+    "currentAgrees": false,
+    "enrichedAgrees": false
+  },
+  {
+    "task": "Give me a JSON object with the top 5 programming languages by 2025 popularity, with a `rank` and `name` field.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Produce a CSV of the last 12 months with columns date,revenue,expenses using this data as input.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Cite the primary sources for the claim that coffee consumption reduces Parkinson's risk.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  },
+  {
+    "task": "Write a bulleted list of pros and cons for adopting TypeScript in an existing JavaScript codebase.",
+    "heuristicTier": "haiku",
+    "currentJevTier": "haiku",
+    "enrichedJevTier": "haiku",
+    "currentAgrees": true,
+    "enrichedAgrees": true
+  }
+]

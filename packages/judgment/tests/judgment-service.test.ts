@@ -2,7 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { JudgmentService, makeJudgmentServiceLive, withEvents } from "../src/services/judgment-service.js";
-import { JudgmentTimeout, type JudgmentAnswers, type JudgmentBackend, type QuestionSpecs } from "../src/types.js";
+import {
+  JudgmentTimeout,
+  JudgmentUnsupported,
+  type JudgmentAnswers,
+  type JudgmentBackend,
+  type JudgmentModel,
+  type QuestionSpecs,
+} from "../src/types.js";
 
 const QUESTIONS: QuestionSpecs = {
   onTopic: { type: "noul", instructions: "on topic?" },
@@ -95,5 +102,40 @@ describe("JudgmentService", () => {
     if (captured[0]?._tag === "JudgmentFailed") {
       expect(captured[0].errorTag).toBe("JudgmentTimeout");
     }
+  });
+
+  it("listModels() delegates to a backend that implements it", async () => {
+    const models: readonly JudgmentModel[] = [
+      { name: "jev-latest", description: "Most recent stable release.", releaseDate: "2026-01-01" },
+    ];
+    const backend: JudgmentBackend = {
+      name: "fake",
+      evaluate: () => Effect.succeed({}),
+      listModels: () => Effect.succeed(models),
+    };
+    const layer = makeJudgmentServiceLive(backend);
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* JudgmentService;
+        return yield* svc.listModels();
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(result).toEqual(models);
+  });
+
+  it("listModels() fails JudgmentUnsupported when the backend has no catalog endpoint", async () => {
+    const backend = fakeBackend(() => Effect.succeed({}));
+    const layer = makeJudgmentServiceLive(backend);
+
+    const error = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* JudgmentService;
+        return yield* svc.listModels().pipe(Effect.flip);
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(error).toBeInstanceOf(JudgmentUnsupported);
   });
 });

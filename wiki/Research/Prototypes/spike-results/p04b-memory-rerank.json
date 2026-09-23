@@ -1,0 +1,380 @@
+[
+  {
+    "id": "c1",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "d",
+      "c",
+      "e",
+      "b"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "c",
+      "b",
+      "d"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c2",
+    "adversarial": true,
+    "correctId": "a",
+    "baselineRank": [
+      "c",
+      "b",
+      "d",
+      "a",
+      "e"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "b",
+      "c",
+      "d"
+    ],
+    "baselineRankOfCorrect": 4,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c3",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "c",
+      "a",
+      "b",
+      "d",
+      "e"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "b",
+      "c",
+      "d"
+    ],
+    "baselineRankOfCorrect": 2,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c4",
+    "adversarial": true,
+    "correctId": "b",
+    "baselineRank": [
+      "a",
+      "d",
+      "b",
+      "c",
+      "e"
+    ],
+    "jevRank": [
+      "b",
+      "a",
+      "c",
+      "e",
+      "d"
+    ],
+    "baselineRankOfCorrect": 3,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c5",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "b",
+      "a",
+      "e",
+      "c",
+      "d"
+    ],
+    "jevRank": [
+      "a",
+      "b",
+      "d",
+      "e",
+      "c"
+    ],
+    "baselineRankOfCorrect": 2,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c6",
+    "adversarial": true,
+    "correctId": "b",
+    "baselineRank": [
+      "e",
+      "d",
+      "b",
+      "a",
+      "c"
+    ],
+    "jevRank": [
+      "b",
+      "a",
+      "d",
+      "e",
+      "c"
+    ],
+    "baselineRankOfCorrect": 3,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c7",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "b",
+      "e",
+      "c",
+      "d"
+    ],
+    "jevRank": [
+      "a",
+      "d",
+      "e",
+      "c",
+      "b"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c8",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "d",
+      "a",
+      "b",
+      "e",
+      "c"
+    ],
+    "jevRank": [
+      "a",
+      "b",
+      "d",
+      "e",
+      "c"
+    ],
+    "baselineRankOfCorrect": 2,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c9",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "d",
+      "b",
+      "e",
+      "c"
+    ],
+    "jevRank": [
+      "a",
+      "c",
+      "b",
+      "e",
+      "d"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c10",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "e",
+      "a",
+      "d",
+      "b",
+      "c"
+    ],
+    "jevRank": [
+      "a",
+      "b",
+      "c",
+      "e",
+      "d"
+    ],
+    "baselineRankOfCorrect": 2,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c11",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "b",
+      "d",
+      "a",
+      "c",
+      "e"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "b",
+      "c",
+      "d"
+    ],
+    "baselineRankOfCorrect": 3,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c12",
+    "adversarial": true,
+    "correctId": "b",
+    "baselineRank": [
+      "a",
+      "d",
+      "b",
+      "e",
+      "c"
+    ],
+    "jevRank": [
+      "b",
+      "a",
+      "d",
+      "c",
+      "e"
+    ],
+    "baselineRankOfCorrect": 3,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c13",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "e",
+      "c",
+      "b",
+      "d",
+      "a"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "c",
+      "b",
+      "d"
+    ],
+    "baselineRankOfCorrect": 5,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c14",
+    "adversarial": true,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "c",
+      "d",
+      "e",
+      "b"
+    ],
+    "jevRank": [
+      "a",
+      "b",
+      "d",
+      "c",
+      "e"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c15",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "b",
+      "d",
+      "e",
+      "c"
+    ],
+    "jevRank": [
+      "a",
+      "d",
+      "b",
+      "e",
+      "c"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c16",
+    "adversarial": true,
+    "correctId": "b",
+    "baselineRank": [
+      "b",
+      "a",
+      "c",
+      "d",
+      "e"
+    ],
+    "jevRank": [
+      "b",
+      "a",
+      "c",
+      "d",
+      "e"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c17",
+    "adversarial": false,
+    "correctId": "a",
+    "baselineRank": [
+      "c",
+      "a",
+      "b",
+      "d",
+      "e"
+    ],
+    "jevRank": [
+      "a",
+      "e",
+      "c",
+      "b",
+      "d"
+    ],
+    "baselineRankOfCorrect": 2,
+    "jevRankOfCorrect": 1
+  },
+  {
+    "id": "c18",
+    "adversarial": true,
+    "correctId": "a",
+    "baselineRank": [
+      "a",
+      "c",
+      "e",
+      "b",
+      "d"
+    ],
+    "jevRank": [
+      "a",
+      "b",
+      "c",
+      "e",
+      "d"
+    ],
+    "baselineRankOfCorrect": 1,
+    "jevRankOfCorrect": 1
+  }
+]

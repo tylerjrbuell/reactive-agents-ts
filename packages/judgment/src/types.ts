@@ -133,13 +133,18 @@ export class JudgmentBadResponse extends Data.TaggedError("JudgmentBadResponse")
 export class JudgmentConnectionError extends Data.TaggedError("JudgmentConnectionError")<{
   readonly message: string;
 }> {}
+/** A backend was asked to do something it doesn't implement (e.g. `listModels` on the llm-emulation backend). */
+export class JudgmentUnsupported extends Data.TaggedError("JudgmentUnsupported")<{
+  readonly message: string;
+}> {}
 
 export type JudgmentError =
   | JudgmentUnauthorized
   | JudgmentRateLimited
   | JudgmentTimeout
   | JudgmentBadResponse
-  | JudgmentConnectionError;
+  | JudgmentConnectionError
+  | JudgmentUnsupported;
 
 /** Explicit config — no hidden globals. `apiKey` falls back to `TYPESAFE_API_KEY` only inside the `jev` backend. */
 export const JudgmentConfig = Schema.Struct({
@@ -159,6 +164,13 @@ export const DEFAULT_TIMEOUT_MS = 3000;
  * backend is the sole module allowed to touch that provider's own SDK/wire
  * types (Global Constraints: `packages/judgment` deps are `core` + SDK only).
  */
+/** One entry from a backend's model catalog (docs.typesafe.ai/models#listing-models). */
+export type JudgmentModel = {
+  readonly name: string;
+  readonly description: string;
+  readonly releaseDate: string;
+};
+
 export interface JudgmentBackend {
   readonly name: string;
   readonly evaluate: (input: {
@@ -166,6 +178,12 @@ export interface JudgmentBackend {
     readonly questions: QuestionSpecs;
     readonly model?: string;
   }) => Effect.Effect<JudgmentAnswers, JudgmentError>;
+  /**
+   * List the models/aliases this backend's account can send in `model`.
+   * Optional — not every backend has a catalog endpoint (e.g. llm-emulation).
+   * `JudgmentService.listModels` fails `JudgmentUnsupported` when absent.
+   */
+  readonly listModels?: () => Effect.Effect<ReadonlyArray<JudgmentModel>, JudgmentError>;
 }
 
 /** Gate a Choice/Score answer on both probability and confidence; Noul has probability only. */

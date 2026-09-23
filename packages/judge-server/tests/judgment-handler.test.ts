@@ -27,6 +27,7 @@ const makeStubLayer = (
       if (callLog) callLog.count += 1;
       return Effect.succeed(respond(Object.keys(input.questions)) as unknown as JudgmentAnswers<typeof input.questions>);
     },
+    listModels: () => Effect.succeed([]),
   });
 
 describe("judgment-handler — handleJudgeRequestViaJudgment", () => {
@@ -84,6 +85,7 @@ describe("judgment-handler — handleJudgeRequestViaJudgment", () => {
   it("propagates a JudgmentService failure (e.g. timeout) rather than degrading silently — parity with the llm engine's failure behavior", async () => {
     const layer = Layer.succeed(JudgmentService, {
       ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as never),
+      listModels: () => Effect.succeed([]),
     });
 
     const outcome = await Effect.runPromise(

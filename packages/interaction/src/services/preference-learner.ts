@@ -54,6 +54,9 @@ function autonomyConfidenceShadow(
           .pipe(Effect.either);
 
         const safe = Either.isRight(result) ? answerToSafeToAutoApprove(result.right.safeToAutoApprove) : null;
+        const safeConfidence = Either.isRight(result)
+          ? (result.right.safeToAutoApprove.kind === "noul" ? null : result.right.safeToAutoApprove.confidence)
+          : null;
         const judged = safe === null ? null : String(safe);
         const currentStr = String(current);
 
@@ -63,12 +66,16 @@ function autonomyConfidenceShadow(
           judged,
           current: currentStr,
           agreement: judged === null ? null : judged === currentStr,
+          confidence: judged === null ? null : safeConfidence,
         });
 
         // `preferenceMatch` is otherwise computed and discarded — surface it
         // too (a distinct site, so it never mixes into the boolean-agreement
         // stats above) rather than paying for an unread judgment answer.
         const matchLabel = Either.isRight(result) ? answerToPreferenceMatchLabel(result.right.preferenceMatch) : null;
+        const matchConfidence = Either.isRight(result)
+          ? (result.right.preferenceMatch.kind === "noul" ? null : result.right.preferenceMatch.confidence)
+          : null;
         const currentMatchLabel = confidenceToPreferenceMatchLabel(pattern.confidence);
         yield* eventBus.publish({
           _tag: "JudgmentShadow",
@@ -76,6 +83,7 @@ function autonomyConfidenceShadow(
           judged: matchLabel,
           current: currentMatchLabel,
           agreement: matchLabel === null ? null : matchLabel === currentMatchLabel,
+          confidence: matchLabel === null ? null : matchConfidence,
         });
       }),
     );

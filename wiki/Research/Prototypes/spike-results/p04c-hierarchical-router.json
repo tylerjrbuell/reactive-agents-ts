@@ -1,0 +1,202 @@
+[
+  {
+    "task": "What is the capital of France?",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 361,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 155,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Convert 250 degrees Fahrenheit to Celsius.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 186,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 136,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Write a haiku about autumn leaves.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 219,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 138,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "List the first 5 prime numbers.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 169,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 176,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "What year did the Berlin Wall fall?",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 213,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 178,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Summarize the plot of Romeo and Juliet in two sentences.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 233,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 161,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "First, fetch the current weather for Tokyo, then convert the temperature to Fahrenheit.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 180,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 161,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Write a Python function that reverses a linked list, then explain its time complexity.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 187,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 190,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Debug this script: it throws a KeyError on line 12, find the root cause and fix it.",
+    "oneStagePick": "plan-execute-reflect",
+    "oneStageLatencyMs": 202,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 155,
+    "twoStageCallCount": 1,
+    "agree": false
+  },
+  {
+    "task": "Plan a 3-day itinerary for visiting Kyoto, including transportation between sites.",
+    "oneStagePick": "blueprint",
+    "oneStageLatencyMs": 187,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "blueprint",
+    "twoStageLatencyMs": 402,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Refactor this authentication module to use JWT instead of session cookies, step by step.",
+    "oneStagePick": "blueprint",
+    "oneStageLatencyMs": 223,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "blueprint",
+    "twoStageLatencyMs": 438,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Investigate why the checkout API is returning 500 errors intermittently and propose a fix.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 164,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "tree-of-thought",
+    "twoStageLatencyMs": 518,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Compare and critique three different database indexing strategies for a high-write workload.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 153,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "tree-of-thought",
+    "twoStageLatencyMs": 450,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Evaluate the trade-offs between microservices and a monolith for a 5-person startup, and justify a recommendation.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 180,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "tree-of-thought",
+    "twoStageLatencyMs": 362,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Analyze this quarterly earnings report and identify the three biggest risks to next year's revenue.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 176,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "tree-of-thought",
+    "twoStageLatencyMs": 402,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Design a caching architecture for a read-heavy API, weighing Redis vs a CDN vs in-process caching.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 172,
+    "twoStageGroup": "exploratory",
+    "twoStagePick": "tree-of-thought",
+    "twoStageLatencyMs": 330,
+    "twoStageCallCount": 2,
+    "agree": true
+  },
+  {
+    "task": "Give me a JSON object with the top 5 programming languages by 2025 popularity, with a `rank` and `name` field.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 213,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 202,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Produce a CSV of the last 12 months with columns date,revenue,expenses using this data as input.",
+    "oneStagePick": "blueprint",
+    "oneStageLatencyMs": 174,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 203,
+    "twoStageCallCount": 1,
+    "agree": false
+  },
+  {
+    "task": "Cite the primary sources for the claim that coffee consumption reduces Parkinson's risk.",
+    "oneStagePick": "reactive",
+    "oneStageLatencyMs": 235,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 219,
+    "twoStageCallCount": 1,
+    "agree": true
+  },
+  {
+    "task": "Write a bulleted list of pros and cons for adopting TypeScript in an existing JavaScript codebase.",
+    "oneStagePick": "tree-of-thought",
+    "oneStageLatencyMs": 140,
+    "twoStageGroup": "direct",
+    "twoStagePick": "reactive",
+    "twoStageLatencyMs": 159,
+    "twoStageCallCount": 1,
+    "agree": false
+  }
+]

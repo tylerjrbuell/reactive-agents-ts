@@ -130,6 +130,7 @@ describe("Task 6: repeats + variance-aware checkRegression", () => {
         }
         return Effect.succeed(answers as never);
       },
+      listModels: () => Effect.succeed([]),
     });
     const lowLlmLayer = Layer.succeed(JudgeLLMService, {
       complete: () =>
