@@ -157,7 +157,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **9,250 tests** across 1252 files, verified with `bun test` on every PR
+- **9,250 tests** across 1257 files, verified with `bun test` on every PR
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -896,7 +896,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (9,250 tests / 1252 files, ~110s)
+bun test                 # Run full test suite (9,250 tests / 1257 files, ~110s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

@@ -94,6 +94,8 @@ Beyond the public `agent.judge()` primitive, several internal decision points ca
 | Guardrails battery           | `guardrails`         | additive (default) / opt-in `jev-primary`               | `.withGuardrails({ enableJudgmentBattery: true })`                              |
 | Autonomy/approval confidence | `interaction`        | shadow only (no invert path yet — highest blast radius) | `.withJudgment()` alone                                                         |
 | Tool-call healing            | `tools`              | additive escalation                                     | not yet wired into the kernel's tool-execution path — library-level export only |
+| Completion/termination check | `reasoning` (kernel) | shadow                                                  | `.withJudgment()` alone — fires on every terminal verification pass             |
+| Grounding/fabrication check  | `reasoning` (kernel) | shadow (1 of 6 deliverable-assembly call sites wired)   | `.withJudgment()` alone                                                         |
 
 Every site degrades cleanly to its existing behavior when `JudgmentService` is absent, when the backend errors or times out, or when an answer doesn't clear its confidence floor. An agent that never calls `.withJudgment()` behaves byte-for-byte as it did before this feature existed.
 
@@ -117,9 +119,27 @@ const agent = await ReactiveAgents.create()
 
 With the default `"additive"` strictness, enabling the battery can never cause an input that passes today to start being blocked — it can only catch things the regex table misses (a paraphrased injection attempt, for example) or escalate a regex hit's severity when the battery agrees.
 
+## Listing available models
+
+`JudgmentService.listModels()` (library-level — not yet exposed on the `agent` facade, same status as tool-call healing above) calls the backend's real model-catalog endpoint — for `jev`, `GET /v1/models` — and returns the names/aliases your account can send in a call's `model` field, each with a description and release date:
+
+```typescript
+import { JudgmentService } from '@reactive-agents/judgment'
+
+const models = await Effect.runPromise(
+    Effect.gen(function* () {
+        const judgment = yield* JudgmentService
+        return yield* judgment.listModels()
+    }).pipe(Effect.provide(judgmentLayer)),
+)
+// [{ name: "jev-latest", description: "...", releaseDate: "2026-..." }, ...]
+```
+
+Useful for validating a configured model string at startup rather than discovering a typo at the first failed call. Backends without a catalog endpoint (the `llm` backend) fail this call with `JudgmentUnsupported` — expect it, don't assume every backend has one.
+
 ## Observability
 
-Every judgment call emits `JudgmentEvaluated` (success) or `JudgmentFailed` (error) on the `EventBus`, tagged with a `site` name and the backend that answered. Shadow sites additionally emit `JudgmentShadow` events carrying the judgment's answer, the existing decision, and an agreement verdict — the data an ablation study needs to decide whether a shadow site is ready to graduate from "observed" to "decides."
+Every judgment call emits `JudgmentEvaluated` (success) or `JudgmentFailed` (error) on the `EventBus`, tagged with a `site` name and the backend that answered. Shadow sites additionally emit `JudgmentShadow` events carrying the judgment's answer, the existing decision, an agreement verdict, and the answer's own `confidence` (`null` for Noul questions, which have no separate confidence value) — enough to bucket "high-confidence disagreement" (a real gap worth investigating) from "low-confidence disagreement" (noise) directly from event data, without re-running a fresh measurement each time.
 
 ## Design notes
 

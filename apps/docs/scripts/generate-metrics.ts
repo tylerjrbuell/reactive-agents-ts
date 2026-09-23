@@ -168,8 +168,11 @@ const main = () => {
       !name.includes("prompts") &&
       !name.includes("registry") &&
       !name.includes("kernel") &&
+      // Helper modules colocated in this directory, not registered strategies.
+      !name.includes("adaptive-judgment-questions") &&
+      !name.includes("memory-fence") &&
       // `direct` is a no-op passthrough (no reasoning loop), not a reasoning
-      // strategy — excluding it keeps the count honest at the marketed 6.
+      // strategy — excluding it keeps the count honest at the registered 8.
       !name.includes("direct"),
   );
   // Provider count = keys of the declared provider registry

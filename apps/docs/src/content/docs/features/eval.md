@@ -8,7 +8,7 @@ sidebar:
   order: 15
 ---
 
-The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It uses an LLM-as-judge approach to score agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions.
+The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It uses an LLM-as-judge approach to score agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions. Judge calls route through `@reactive-agents/judge-server`, a private internal HTTP server (not published to npm) — you configure the judge model via `EvalService`, not by talking to that server directly.
 
 ## Quick Start
 
