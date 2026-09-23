@@ -10,6 +10,26 @@ updated: 2026-09-23
 
 ---
 
+## 2026-09-23 — Judgment Phase D shipped: includeContext DX + 2 new shadow sites (completion, grounding)
+
+Follow-up plan (`wiki/Planning/Implementation-Plans/2026-09-23-judgment-primitive-phase-d-leverage.md`)
+executed via `superpowers:subagent-driven-development` in a worktree (`worktree-judgment-phase-d`,
+branch not yet merged to `dev`). **Task 1:** `agent.judge({includeContext: true})` auto-folds recent
+message history + tool observations into judgment state — additive, zero-cost when omitted (1 fix
+round: untested observability signal, a `compressToolResult` reuse leaking kernel-only `recall(...)`
+text into judgment prompts — both fixed). **Task 2:** new `completion-satisfied` shadow site wired
+into `verifyAndEmit` (the shared terminal-verification funnel), keeping `arbitrate()`/`terminate.ts`
+provably untouched — review clean, 0 fix rounds. **Task 3:** new `grounding-fabrication` shadow site,
+extracted the inline containment check into a pure regression-pinned function, wired into 1 of 6
+`assembleDeliverable` call sites (widening to the rest is a disclosed follow-up) — review clean, 0 fix
+rounds. **Real exit-gate data for both new sites** (direct-call methodology against the real jev
+backend, n=32 each, since Task 3's trigger condition is too rare to force reliably via live prompts):
+completion 87.5% agreement (all disagreements ran the safe/stricter direction), grounding 90.6%
+agreement (all disagreements were over-cautious false-positives-on-fabrication, zero real fabrications
+missed). **No site inverted** — both stay shadow-only. Full data:
+[[Research/Harness-Reports/2026-09-23-phase-d-completion-grounding-exit-gates]]. **Not yet merged to
+`dev`** — final whole-branch review pending.
+
 ## 2026-09-23 — Judgment layer put to the test: methodology gate + all 4 shadow-site exit gates run
 
 Real live-API measurement session (not fabricated). **Methodology gate** (`wiki/Research/Harness-Reports/2026-09-23-judgment-methodology-gate.md`):

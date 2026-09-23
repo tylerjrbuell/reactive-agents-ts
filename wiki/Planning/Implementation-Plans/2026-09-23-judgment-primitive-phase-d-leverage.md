@@ -61,31 +61,36 @@ history + last tool observations automatically folded into `state`, instead of h
 is the DX win — it's what makes Tasks 2 and 3 cheap to write, and it's independently useful to any user
 building their own judgment on top of a running agent.
 
-- [ ] **Step 1:** Read the current `judge()` implementation and `assembly/project.ts`'s `project()` (the
+- [x] **Step 1:** Read the current `judge()` implementation and `assembly/project.ts`'s `project()` (the
   sole live context assembler) to find the smallest slice of already-computed state worth exposing:
   recent `state.messages[]` (windowed, same trim budget `project()` already uses — do not reimplement
   windowing), and the last N tool results from `state.steps[]` (compressed via the existing
   `compressToolResult` helper in `attend/tool-formatting.ts` — reuse it, don't re-derive a summary
   format).
-- [ ] **Step 2:** Define `JudgeContextOptions` (`Schema.Struct`, all fields optional): `includeContext:
+- [x] **Step 2:** Define `JudgeContextOptions` (`Schema.Struct`, all fields optional): `includeContext:
   boolean`, `messageWindow?: number` (default matches `project()`'s default), `includeToolResults?:
   boolean` (default true when `includeContext` is true). Merge shape: caller's manually-passed `state`
   wins on key collision — auto-context only *fills gaps*, never overwrites an explicit field. Document
   this precedence rule in the JSDoc, it's the one surprising behavior in this feature.
-- [ ] **Step 3:** Wire `judge()` to build the merged state only when `includeContext` is truthy — zero
+- [x] **Step 3:** Wire `judge()` to build the merged state only when `includeContext` is truthy — zero
   cost, zero behavior change for every existing Phase C call site (none of them pass the option).
-- [ ] **Step 4:** Emit the existing `JudgmentAsk`/`JudgmentAnswer` events unchanged; add one boolean field
+- [x] **Step 4:** Emit the existing `JudgmentAsk`/`JudgmentAnswer` events unchanged; add one boolean field
   `contextMerged: boolean` so shadow-analysis tooling can tell which calls used auto-context.
-- [ ] **Step 5:** Tests: (a) `includeContext: false`/omitted → byte-identical behavior to pre-Phase-D
+- [x] **Step 5:** Tests: (a) `includeContext: false`/omitted → byte-identical behavior to pre-Phase-D
   `judge()`; (b) `includeContext: true` with no manual state → merged state contains message window + tool
   summaries; (c) manual state key collides with an auto-context key → manual wins; (d) `messageWindow`
   override respected.
-- [ ] **Step 6:** Docs: add the `includeContext` option to whatever doc page/JSDoc documents `agent.judge()`
+- [x] **Step 6:** Docs: add the `includeContext` option to whatever doc page/JSDoc documents `agent.judge()`
   today (grep for the existing judgment-layer docs page from Phase C) with a short before/after example —
   this is the single highest-DX-value line in this task, don't skip it.
 
 **Exit check:** `bun test packages/runtime`, `bun run typecheck`, `bun run build`. No existing Phase C
 call site's behavior changes (verify by re-running the Phase C shadow-site tests unmodified).
+
+**✅ IMPLEMENTED (2026-09-23):** shipped via subagent-driven-development (runtime-warden), 1 fix
+round (untested `contextMerged` signal; a `compressToolResult` reuse leaking kernel-only
+"recall(...)" text into judgment prompts, reverted to a plain honest truncation). 1554 pass / 2
+pre-existing on `packages/runtime`. Commits `6a988e5a..0d48d4f5` on `worktree-judgment-phase-d`.
 
 ---
 
@@ -101,27 +106,38 @@ flagged completion/termination judgment as the highest runtime pain point, block
 shadow dataset measurable via the Phase B judge" — the methodology gate that just ran *is* that
 measurement instrument now existing. This task is that blocker being cleared, not new scope invention.
 
-- [ ] **Step 1 (kernel-warden dispatch, MissionBrief):** Read `quality-utils.ts`'s current
+- [x] **Step 1 (kernel-warden dispatch, MissionBrief):** Read `quality-utils.ts`'s current
   `isSatisfied`/`detectContinuationIntent` heuristics and the verifier's `GIVE_UP_PATTERNS` list. Identify
   the single funnel point where a termination/continuation decision is made per iteration (per
   `terminate.ts`'s single-owner rule — do NOT add a second termination decision point).
-- [ ] **Step 2:** Design the judgment: a Noul (`"is this response a complete, satisfying answer to the
+- [x] **Step 2:** Design the judgment: a Noul (`"is this response a complete, satisfying answer to the
   user's request?"`) with state = the task/goal text + the candidate final response + (via Task 1's
   `includeContext`) recent tool observations. Fire it **shadow-only**, alongside the existing heuristic
   decision, at the same funnel point — do not let its answer influence `terminate.ts` in this task.
-- [ ] **Step 3:** Emit `JudgmentShadow{site:"completion-satisfied", judged, current, agreement}` following
+- [x] **Step 3:** Emit `JudgmentShadow{site:"completion-satisfied", judged, current, agreement}` following
   the exact schema Phase C's four sites already use — no new shadow-event shape, reuse the existing one.
-- [ ] **Step 4 (exit gate, same bar as Phase C's Task 9/9b/10):** collect ≥30 real shadow samples across a
+- [x] **Step 4 (exit gate, same bar as Phase C's Task 9/9b/10):** collect ≥30 real shadow samples across a
   range of task types (short factual, multi-step, ambiguous-completion cases specifically — this is the
   site most likely to show a directional bias like strategy-selection did, so don't only sample the easy
   side). Report agreement rate AND, if disagreements cluster, the direction (does the judge tend toward
   premature-termination or under-termination relative to the heuristic?).
-- [ ] **Step 5:** Write the exit-gate report to `wiki/Research/Harness-Reports/`, same format as the
+- [x] **Step 5:** Write the exit-gate report to `wiki/Research/Harness-Reports/`, same format as the
   2026-09-23 shadow-site report. Explicitly state: no inversion in this task.
 
 **Exit check:** `bun test packages/reasoning`, `bun run typecheck`, `bun run build`. Parent verifies
 kernel-warden's report per the standing dispatcher FSM (never re-prompt for self-review; parent fixes any
 findings directly).
+
+**✅ IMPLEMENTED (2026-09-23):** shipped via kernel-warden (Steps 1-3), review clean, 0 fix rounds.
+Wired into `verifyAndEmit` (`verifier.ts`) — the single funnel all 3 terminal-verification call sites
+share — keeping `arbitrate()`/`terminate.ts` provably untouched. 6 new tests, 573/0 on
+`packages/reasoning/src/kernel`. Commit `d90fe2c0`. **Step 4/5 real data (2026-09-23, direct-call
+methodology against the real jev backend, n=32):** 87.5% agreement; all 4 disagreements ran the safe
+direction — jev never rescued an evasive/incomplete answer, and where it diverged from a `verified:
+true` heuristic it was stricter (one genuine catch: a shallow single-cause answer to a multi-cause
+question), plus correctly sided with correctness against one deliberately-wrong heuristic baseline.
+Zero dangerous-direction disagreements. Full write-up:
+[[Research/Harness-Reports/2026-09-23-phase-d-completion-grounding-exit-gates]]. **No inversion.**
 
 ---
 
@@ -132,21 +148,36 @@ findings directly).
 as `project_deterministic_evidence_grounding_2026_08_15` / `project_t0_deterministic_regression_2026_08_16`
 — confirm current location before scoping, do not assume it hasn't moved), tests.
 
-- [ ] **Step 1:** Read the current heuristic (content-containment check per the t0-deterministic fix) and
+- [x] **Step 1:** Read the current heuristic (content-containment check per the t0-deterministic fix) and
   its call site. Confirm it's still the live grounding path (not superseded by something else since
   2026-08-16).
-- [ ] **Step 2:** Design the judgment: a Noul (`"is this claim supported by the provided evidence?"`) per
+- [x] **Step 2:** Design the judgment: a Noul (`"is this claim supported by the provided evidence?"`) per
   claim/citation, state = claim text + the actual evidence ledger entries (via Task 1's `includeContext`
   where the ledger is already in kernel state — reuse, don't re-fetch). Fire shadow-only alongside the
   existing containment check.
-- [ ] **Step 3:** Emit `JudgmentShadow{site:"grounding-fabrication", ...}`.
-- [ ] **Step 4 (exit gate):** ≥30 real shadow samples, spanning both well-grounded and deliberately
+- [x] **Step 3:** Emit `JudgmentShadow{site:"grounding-fabrication", ...}`.
+- [x] **Step 4 (exit gate):** ≥30 real shadow samples, spanning both well-grounded and deliberately
   fabricated/unsupported claims (construct a few adversarial cases — this is the one site where a false
   negative, i.e. the judge calling a fabrication "grounded," is the failure mode that matters most; weight
   sampling toward catching that direction of error, not agreement rate in general).
-- [ ] **Step 5:** Report to `wiki/Research/Harness-Reports/`. No inversion.
+- [x] **Step 5:** Report to `wiki/Research/Harness-Reports/`. No inversion.
 
 **Exit check:** `bun test packages/verification packages/reasoning`, `bun run typecheck`, `bun run build`.
+
+**✅ IMPLEMENTED (2026-09-23):** shipped via kernel-warden (Steps 1-3; re-routed from the plan's
+original "parent, no warden exists" assumption once the live check was confirmed inside
+`packages/reasoning/src/kernel/**`), review clean, 0 fix rounds. Extracted the inline
+content-containment IIFE into a pure, regression-pinned `evaluateUnconsumedEvidenceGrounding` in
+`runner-helpers/deliverable.ts`; wired the shadow into 1 of `assembleDeliverable`'s 6 call sites
+(`runner.ts` §8.8, the most universal terminatedBy-drift-immune reach — widening to the other 5 is a
+disclosed future follow-up, not required for this exit bar). 13 new tests, 2883/2 (pre-existing) on
+full `packages/reasoning`. Commit `fc77bbbd`. **Step 4/5 real data (2026-09-23, direct-call
+methodology against the real jev backend, n=32 — see Task 2's note for why direct-call over
+live-agent-run):** 90.6% agreement; all 3 disagreements ran the safe direction — jev over-flagged 3
+exact/near-verbatim numeric restatements as "not grounded" (a precision issue, not a safety issue).
+**Zero dangerous-direction disagreements** — every deliberately-fabricated claim in the set was
+correctly flagged, matching the heuristic. Full write-up:
+[[Research/Harness-Reports/2026-09-23-phase-d-completion-grounding-exit-gates]]. **No inversion.**
 
 ---
 

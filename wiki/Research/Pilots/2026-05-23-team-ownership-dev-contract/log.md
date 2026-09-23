@@ -845,3 +845,83 @@ created: 2026-05-23
 ```
 
 (written on evaluation day)
+
+- task: judgment-phase-d-task1-includecontext
+  date: 2026-09-23
+  warden: runtime-warden
+  routed: warden
+  commits: 4  # 6a988e5a, 40cfa680 (parent), 0d48d4f5; on worktree-judgment-phase-d, not yet merged to dev
+  agent-spawns: 3  # implementer (resumed once after rate-limit interruption), task reviewer, scoped re-reviewer
+  tokens-est: ~825K
+  regression-prevented: >
+    misleading compressToolResult reuse would have folded kernel-only
+    "[STORED...] use recall(...)" instructions into one-shot judgment-backend
+    prompts with nothing actually stored and no recall tool available to act
+    on it — caught by task review, fixed by reverting to a plain honest
+    truncation.
+  notes: >
+    Task 1 of the Phase D judgment-leverage follow-up plan (includeContext
+    auto-merge on agent.judge()). Self-flagged 3 concerns outside
+    packages/runtime/** authority; parent fixed 2 directly (export
+    compressToolResult from @reactive-agents/reasoning's public surface,
+    add docs subsection) rather than re-dispatching a warden for a
+    sub-package-boundary crossing (Task 12 precedent). Task review found
+    2 Important findings (untested contextMerged observability signal;
+    the STORED/recall leak above); 1 fix round, scoped re-review clean.
+    Also caught+fixed a worktree-isolation gap (fresh worktree had no
+    node_modules, typecheck was resolving @reactive-agents/reasoning
+    through the MAIN checkout via directory walk-up) and a stale-dist
+    issue on packages/reactive-agents (cleared by an earlier cascading
+    turbo run that died on the pre-existing observability OTel build
+    failure). Full runtime suite: 1554 pass / 2 pre-existing ratchet fail,
+    confirmed unrelated via stash-and-rerun baseline comparison.
+
+- task: judgment-phase-d-task2-completion-shadow
+  date: 2026-09-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # d90fe2c0; on worktree-judgment-phase-d, not yet merged to dev
+  agent-spawns: 2  # implementer, task reviewer
+  tokens-est: ~290K
+  regression-prevented: none — clean first pass
+  notes: >
+    Task 2 of the Phase D judgment-leverage follow-up plan (completion/
+    termination shadow judgment), Steps 1-3 only (live exit-gate data
+    collection deferred to parent). Chose verifyAndEmit in verifier.ts as
+    the funnel point over arbitrate()/terminate.ts to keep the sole-decider
+    and single-termination-owner invariants provably untouched (reviewer
+    independently confirmed zero diff to both files and that verdict is
+    never mutated by the shadow path). New completion-judgment-shadow.ts
+    mirrors the two existing Phase C shadow-site patterns
+    (judgmentClassifyShadow, judgmentComprehendShadow). 6 new tests incl. a
+    harder case than precedent (disagreement against a REJECTED verdict,
+    not just an accepted one). Task review: Approved, 0 findings (1 cosmetic
+    minor noted, not actioned). bun run build run separately by parent
+    (outside warden's authorized command surface) — clean.
+
+- task: judgment-phase-d-task3-grounding-shadow
+  date: 2026-09-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # fc77bbbd; on worktree-judgment-phase-d, not yet merged to dev
+  agent-spawns: 2  # implementer, task reviewer
+  tokens-est: ~440K
+  regression-prevented: none — clean first pass, 1 scope ruling (see below)
+  notes: >
+    Task 3 of the Phase D judgment-leverage follow-up plan (grounding/
+    fabrication shadow judgment), Steps 1-3 only. Plan document originally
+    assumed this had no dedicated warden owner ("parent, no warden exists");
+    grepped first per the brief's own Step 1 and found the live check
+    inside packages/reasoning/src/kernel/**, re-routed to kernel-warden —
+    correcting a plan-authoring assumption, not a warden authority
+    violation. Implementer found assembleDeliverable has 6 call sites with
+    no shared choke point (unlike Task 2's single verifyAndEmit funnel);
+    wired only 1 of 6 (runner.ts §8.8 general fallback) and flagged for
+    sign-off. Controller ruled: accept narrow wiring, document the coverage
+    limitation in the Step 4 Harness Report rather than widening scope
+    mid-task. Extracted the inline containment IIFE into a pure,
+    regression-pinned function (evaluateUnconsumedEvidenceGrounding).
+    13 new tests incl. the required adversarial case (judge flags a
+    fabrication the heuristic's substring match missed). Task review:
+    Approved, 0 findings (2 cosmetic minors noted, not actioned). bun run
+    build run separately by parent — clean.
