@@ -698,7 +698,12 @@ export class ReactiveAgent<TOut = unknown> {
      *   against: `instructions` plus an ordered `criteria` rubric.
      * @param opts - Optional `chunkCap` (candidates per `ask()` call) and `model`.
      * @returns Candidates sorted best-first (highest score first); ties keep
-     *   the candidates' original relative order (stable sort).
+     *   the candidates' original relative order (stable sort). **May be
+     *   SHORTER than `candidates`** — a candidate the backend answers with
+     *   something other than a Score answer (non-conforming custom backend)
+     *   is silently dropped rather than surfaced as a partial-failure
+     *   marker; diff the returned ids against `candidates` if you need to
+     *   detect drops.
      * @throws Error if `.withJudgment()` was not called during build —
      *   `JudgmentService` is genuinely absent from the runtime's Layer
      *   graph in that case, not silently stubbed.

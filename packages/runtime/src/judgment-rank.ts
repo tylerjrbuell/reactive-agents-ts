@@ -29,6 +29,7 @@
 import { Effect } from "effect";
 import type {
   JudgmentEntry,
+  JudgmentError,
   JudgmentService,
   QuestionSpecs,
   ScoreCriteria,
@@ -124,13 +125,25 @@ function buildChunkQuestions(
  * throwing — every OTHER candidate in the same batch still gets ranked. This
  * function's own contract (one Score `QuestionSpec` per candidate) makes that
  * case backend-misbehavior, not a caller error to surface as a hard failure.
+ *
+ * @returns Best-first sorted results. **The returned array may be SHORTER
+ *   than `candidates`** — any candidate the backend answered with something
+ *   other than a Score answer (`kind !== "score"`, or the id missing
+ *   entirely from the batch response) is silently excluded rather than
+ *   surfaced as a partial-failure marker. A caller that needs to distinguish
+ *   "ranked low" from "dropped by backend misbehavior" must diff the
+ *   returned ids against its own `candidates` list — `judgeRank()` does not
+ *   report drops itself. This is the framework's own conforming
+ *   `JudgmentBackend`s' expected behavior (they always answer every
+ *   requested id), so in practice this only fires against a non-conforming
+ *   custom backend.
  */
 export function judgeRank(
   judgment: JudgmentService["Type"],
   candidates: readonly JudgeRankCandidate[],
   question: JudgeRankQuestion,
   opts: JudgeRankOptions = {},
-): Effect.Effect<ReadonlyArray<JudgeRankResult>, import("@reactive-agents/judgment").JudgmentError> {
+): Effect.Effect<ReadonlyArray<JudgeRankResult>, JudgmentError> {
   const chunkCap = opts.chunkCap ?? DEFAULT_JUDGE_RANK_CHUNK_CAP;
   const chunks = chunkArray(candidates, chunkCap);
 
