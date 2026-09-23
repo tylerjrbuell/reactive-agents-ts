@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, JSONSchema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -661,7 +661,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const jsonSchema = Schema.encodedSchema(request.outputSchema);
+          const jsonSchema = JSONSchema.make(request.outputSchema);
           const schemaObj = deepClone<Record<string, unknown>>(jsonSchema);
           const schemaStr = JSON.stringify(schemaObj, null, 2);
           const model = typeof request.model === 'string'

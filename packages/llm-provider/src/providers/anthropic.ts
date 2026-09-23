@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, JSONSchema } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -482,7 +482,7 @@ export const AnthropicProviderLive = Layer.effect(
 
       completeStructured: (request) =>
         Effect.gen(function* () {
-          const jsonSchema = Schema.encodedSchema(request.outputSchema);
+          const jsonSchema = JSONSchema.make(request.outputSchema);
           const schemaStr = JSON.stringify(jsonSchema, null, 2);
 
           const messagesWithFormat: LLMMessage[] = [

@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from 'effect'
+import { Effect, Layer, Stream, Schema, JSONSchema } from 'effect'
 import { LLMService } from '../llm-service.js'
 import { LLMConfig } from '../llm-config.js'
 import type { ProviderCapabilities } from '../capabilities.js'
@@ -955,10 +955,10 @@ export const LocalProviderLive = Layer.effect(
 
             completeStructured: (request) =>
                 Effect.gen(function* () {
-                    const encodedSchema = Schema.encodedSchema(
+                    const jsonSchema = JSONSchema.make(
                         request.outputSchema
                     )
-                    const schemaObj = deepClone<Record<string, unknown>>(encodedSchema)
+                    const schemaObj = deepClone<Record<string, unknown>>(jsonSchema)
                     const schemaStr = JSON.stringify(schemaObj, null, 2)
 
                     // Build Ollama-native format constraint.
