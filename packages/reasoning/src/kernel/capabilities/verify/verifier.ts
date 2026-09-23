@@ -42,6 +42,7 @@ import {
 } from "./evidence-grounding.js";
 import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
+import { judgmentCompletionShadow } from "./completion-judgment-shadow.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -786,6 +787,26 @@ export function verifyAndEmit(args: {
       summary: verdict.summary,
       checks: verdict.checks,
     });
+
+    // Task 2 (Phase D leverage plan, shadow-only): fire the
+    // completion-judgment shadow alongside this SAME terminal verification
+    // call — the single funnel point where "is this a complete, satisfying
+    // answer?" is decided today (isSatisfied/detectContinuationIntent/
+    // GIVE_UP_PATTERNS feeding defaultVerifier's terminal-only checks into
+    // `verdict.verified`). Fire-and-forget; `verdict` above is already final
+    // and is returned unchanged below — this never alters it.
+    if (context.terminal === true) {
+      yield* judgmentCompletionShadow({
+        task: context.task,
+        candidateOutput: context.content,
+        recentObservations: context.priorSteps
+          .filter((s) => s.type === "observation")
+          .slice(-5)
+          .map((s) => s.content),
+        heuristicVerified: verdict.verified,
+      });
+    }
+
     return verdict;
   });
 }
