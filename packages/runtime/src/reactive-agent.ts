@@ -67,6 +67,7 @@ import type {
     JudgmentEntry,
     QuestionSpecs,
 } from '@reactive-agents/judgment'
+import { buildAutoContext, mergeJudgmentState, type JudgeContextOptions } from './judgment-context.js'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController, installDurableCheckpointing } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
@@ -403,6 +404,13 @@ export class ReactiveAgent<TOut = unknown> {
     >()
     /** @internal Tool observations from the last run — gives chat access to actual data. */
     private _lastRunObservations: string[] = []
+    /**
+     * @internal Raw reasoning steps from the last run() — feeds `agent.judge()`'s
+     * `includeContext` auto-merge (Phase D, `judgment-context.ts`). Populated
+     * alongside `_lastRunObservations`, same source, kept unformatted so
+     * `buildAutoContext` can select/compress observation steps itself.
+     */
+    private _lastReasoningSteps: ReasoningStep[] = []
     /** @internal Conversation history for the agent-level chat context. */
     private _chatHistory: ChatMessage[] = []
 
@@ -507,8 +515,11 @@ export class ReactiveAgent<TOut = unknown> {
      * (`.withJudgment({ sites: {...} })`), exposed directly for user code
      * to compose calibrated decisions without going through a run.
      *
-     * @param input - `state` (the JSON-compatible context to judge) and
-     *   `questions` (named Choice/Score/Noul specs, answered in one batch)
+     * @param input - `state` (the JSON-compatible context to judge, optional
+     *   when `includeContext: true` supplies it automatically), `questions`
+     *   (named Choice/Score/Noul specs, answered in one batch), and the
+     *   optional `includeContext`/`messageWindow`/`includeToolResults`
+     *   auto-context options (Phase D).
      * @throws Error if `.withJudgment()` was not called during build —
      *   `JudgmentService` is genuinely absent from the runtime's Layer
      *   graph in that case, not silently stubbed.
@@ -523,12 +534,45 @@ export class ReactiveAgent<TOut = unknown> {
      * });
      * if (risky.probability > 0.7) { ... }
      * ```
+     *
+     * @example Auto-context (Phase D) — fold recent history + tool
+     * observations into `state` instead of hand-assembling it:
+     * ```typescript
+     * // Before: hand-assembled state
+     * const { onTrack } = await agent.judge({
+     *   state: { history: agent.chatHistory, lastToolResult: someObservation },
+     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
+     * });
+     *
+     * // After: includeContext does it for you
+     * const { onTrack } = await agent.judge({
+     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
+     *   includeContext: true,
+     * });
+     * ```
+     * Precedence: an explicit `state` field always wins on key collision —
+     * `includeContext` only fills gaps a manual `state` doesn't cover.
      */
     async judge<Q extends QuestionSpecs>(input: {
-        readonly state: JudgmentEntry
+        readonly state?: JudgmentEntry
         readonly questions: Q
         readonly model?: string
-    }): Promise<JudgmentAnswers<Q>> {
+    } & JudgeContextOptions): Promise<JudgmentAnswers<Q>> {
+        const { state, questions, model, ...contextOptions } = input
+        const mergedState = contextOptions.includeContext
+            ? (mergeJudgmentState(
+                  state,
+                  buildAutoContext(
+                      {
+                          chatHistory: this._chatHistory,
+                          reasoningSteps: this._lastReasoningSteps,
+                      },
+                      contextOptions
+                  )
+              ) as JudgmentEntry)
+            : (state as JudgmentEntry)
+        const contextMerged = Boolean(contextOptions.includeContext)
+        const agentId = this.agentId
         return this.runtime.runPromise(
             Effect.gen(function* () {
                 const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
@@ -539,7 +583,26 @@ export class ReactiveAgent<TOut = unknown> {
                         )
                     )
                 }
-                return yield* judgmentOpt.value.ask(input)
+                // Phase D: surface which judge() calls used includeContext auto-merge
+                // via the framework's own "Custom" event variant — the JudgmentService's
+                // JudgmentEvaluated/JudgmentFailed events live in @reactive-agents/judgment,
+                // outside this task's packages/runtime/** authority, so this rides the
+                // existing extension-event channel rather than that package's schema.
+                if (contextMerged) {
+                    yield* EventBus.pipe(
+                        Effect.flatMap((eb) =>
+                            eb.publish({
+                                _tag: 'Custom' as const,
+                                type: 'judgment:context-merged',
+                                payload: { agentId, contextMerged },
+                            } as AgentEvent)
+                        ),
+                        Effect.catchAll((err) =>
+                            emitErrorSwallowed({ site: 'runtime/src/reactive-agent.ts:judge', tag: errorTag(err) })
+                        )
+                    ) as Effect.Effect<void>
+                }
+                return yield* judgmentOpt.value.ask({ state: mergedState, questions, model })
             })
         )
     }
@@ -1935,6 +1998,12 @@ export class ReactiveAgent<TOut = unknown> {
                     }
                 }
                 this._lastRunObservations = contextParts
+                // Reuses the SAME `reasoningSteps` variable (and its existing
+                // single-assertion cast pattern, see buildEvidenceCorpusFromSteps
+                // below) rather than the narrower inline-typed `steps` local
+                // above — avoids introducing a new `as unknown as` double-cast
+                // site (WS-5b ceiling, packages/runtime/test/as-unknown-as-ceiling.test.ts).
+                this._lastReasoningSteps = (reasoningSteps ?? []) as readonly ReasoningStep[] as ReasoningStep[]
 
                 // ── Structured output extraction (Task 1.4 / 1.5) ───────────
                 const outputSchemaConfig = this._outputSchemaConfig

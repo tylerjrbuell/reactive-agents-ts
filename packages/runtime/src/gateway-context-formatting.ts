@@ -9,14 +9,25 @@ const MAX_EPISODE_CONTENT = 300;
 // ─── Pure Utilities ───────────────────────────────────────────────────────────
 
 /**
- * Window conversation history to at most MAX_TURNS turns and MAX_CHARS total.
- * Drops oldest turns first. The full history is preserved for persistence —
- * this only affects what gets injected into the LLM instruction.
+ * Window conversation history to at most `maxTurns` turns and `maxChars`
+ * total. Drops oldest turns first. The full history is preserved for
+ * persistence — this only affects what gets injected into the LLM
+ * instruction.
+ *
+ * `maxTurns`/`maxChars` default to the module's MAX_TURNS/MAX_CHARS
+ * constants, so every pre-existing call site (gateway chat context) is
+ * byte-identical. Judgment Phase D's `includeContext` option is the first
+ * caller to override `maxTurns` (via `messageWindow`) — it reuses this exact
+ * trimming algorithm rather than re-deriving a second windowing scheme.
  */
-export function applyHistoryWindow(history: readonly ChatMessage[]): ChatMessage[] {
-  let windowed = history.slice(-MAX_TURNS);
+export function applyHistoryWindow(
+  history: readonly ChatMessage[],
+  maxTurns: number = MAX_TURNS,
+  maxChars: number = MAX_CHARS,
+): ChatMessage[] {
+  let windowed = history.slice(-maxTurns);
   let totalChars = windowed.reduce((sum, m) => sum + m.content.length, 0);
-  while (windowed.length > 0 && totalChars > MAX_CHARS) {
+  while (windowed.length > 0 && totalChars > maxChars) {
     totalChars -= windowed[0]!.content.length;
     windowed = windowed.slice(1);
   }
