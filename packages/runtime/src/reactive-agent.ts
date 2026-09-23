@@ -69,6 +69,13 @@ import type {
     QuestionSpecs,
 } from '@reactive-agents/judgment'
 import { buildAutoContext, mergeJudgmentState, type JudgeContextOptions } from './judgment-context.js'
+import {
+    judgeRank,
+    type JudgeRankCandidate,
+    type JudgeRankOptions,
+    type JudgeRankQuestion,
+    type JudgeRankResult,
+} from './judgment-rank.js'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController, installDurableCheckpointing } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
@@ -669,6 +676,61 @@ export class ReactiveAgent<TOut = unknown> {
                     )
                 }
                 return yield* judgmentOpt.value.listModels()
+            })
+        )
+    }
+
+    /**
+     * Score-rank candidates against one question via the `JudgmentService`
+     * configured by `.withJudgment()` — the batched primitive behind the
+     * judgment cookbook's re-ranking recipe.
+     *
+     * Batches every candidate into a single `ask()` call when they fit
+     * `opts.chunkCap` (default 30, see `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
+     * `judgment-rank.ts`), chunking into multiple `ask()` calls otherwise —
+     * real leverage over hand-rolling `Promise.all(candidates.map(c =>
+     * agent.judge(...)))`, which fires one round trip PER candidate
+     * regardless of count.
+     *
+     * @param candidates - Candidates to rank, each with a caller-chosen `id`
+     *   (returned unchanged in the result) and a `state` judged against `question`.
+     * @param question - The single Score question every candidate is judged
+     *   against: `instructions` plus an ordered `criteria` rubric.
+     * @param opts - Optional `chunkCap` (candidates per `ask()` call) and `model`.
+     * @returns Candidates sorted best-first (highest score first); ties keep
+     *   the candidates' original relative order (stable sort).
+     * @throws Error if `.withJudgment()` was not called during build —
+     *   `JudgmentService` is genuinely absent from the runtime's Layer
+     *   graph in that case, not silently stubbed.
+     *
+     * @example
+     * ```typescript
+     * const ranked = await agent.judgeRank(
+     *   drafts.map((text, i) => ({ id: String(i), state: { text } })),
+     *   {
+     *     instructions: "How well does this draft answer the user's question?",
+     *     criteria: ["poor", "weak", "adequate", "strong", "excellent"],
+     *   }
+     * );
+     * const best = drafts[Number(ranked[0].id)];
+     * ```
+     */
+    async judgeRank(
+        candidates: readonly JudgeRankCandidate[],
+        question: JudgeRankQuestion,
+        opts: JudgeRankOptions = {}
+    ): Promise<ReadonlyArray<JudgeRankResult>> {
+        return this.runtime.runPromise(
+            Effect.gen(function* () {
+                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+                if (judgmentOpt._tag !== 'Some') {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                        )
+                    )
+                }
+                return yield* judgeRank(judgmentOpt.value, candidates, question, opts)
             })
         )
     }

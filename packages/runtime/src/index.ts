@@ -20,6 +20,13 @@ export type {
 
 export type { JudgeInput } from "./reactive-agent.js";
 export type { JudgmentModel } from "@reactive-agents/judgment";
+export type {
+  JudgeRankCandidate,
+  JudgeRankOptions,
+  JudgeRankQuestion,
+  JudgeRankResult,
+} from "./judgment-rank.js";
+export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "./judgment-rank.js";
 
 // ─── Schemas ───
 export {
