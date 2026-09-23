@@ -543,6 +543,35 @@ export type AgentEvent =
       /** True if violations were severe enough to block execution */
       readonly blocked: boolean;
     }
+  | {
+      /**
+       * The judgment battery (Task 11) saw a probability in the review band
+       * (above `judgmentReviewThreshold`, below `judgmentActionThreshold`) —
+       * flagged for human/downstream review without blocking. Fired by
+       * `GuardrailService.check()` when `enableJudgmentBattery` is set.
+       */
+      readonly _tag: "GuardrailReviewFlagged";
+      readonly side: "input" | "output";
+      /** Which battery question triggered the review band, e.g. "injection", "pii_exposure", "toxicity", "jailbreak_roleplay". */
+      readonly dimension: string;
+      /** That dimension's Noul probability. */
+      readonly probability: number;
+      readonly severity: "low" | "medium" | "high" | "critical";
+    }
+  | {
+      /**
+       * Observability-only output-side judgment screening (Task 11 Step 3) —
+       * fired by `GuardrailService.checkOutput()` when `screenOutputs` is
+       * set. Never blocks or alters the returned `GuardrailResult`;
+       * enforcement is a follow-up task.
+       */
+      readonly _tag: "GuardrailOutputFlagged";
+      readonly injection: number;
+      readonly piiExposure: number;
+      readonly toxicity: number;
+      readonly jailbreakRoleplay: number;
+      readonly severity: "low" | "medium" | "high" | "critical";
+    }
   // ─── Gateway events (from @reactive-agents/gateway) ───
   | {
       /**

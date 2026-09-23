@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@reactive-agents/core": "0.16.0",
-    "@reactive-agents/llm-provider": "0.16.0"
+    "@reactive-agents/llm-provider": "0.16.0",
+    "@reactive-agents/judgment": "0.16.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

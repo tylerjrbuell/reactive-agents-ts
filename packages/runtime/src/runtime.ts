@@ -653,6 +653,17 @@ export const createRuntime = (options: RuntimeOptions) => {
               ...(gc.customBlocklist
                 ? { customBlocklist: [...gc.customBlocklist] }
                 : {}),
+              ...(gc.enableJudgmentBattery !== undefined
+                ? { enableJudgmentBattery: gc.enableJudgmentBattery }
+                : {}),
+              ...(gc.judgmentStrictness ? { judgmentStrictness: gc.judgmentStrictness } : {}),
+              ...(gc.judgmentActionThreshold !== undefined
+                ? { judgmentActionThreshold: gc.judgmentActionThreshold }
+                : {}),
+              ...(gc.judgmentReviewThreshold !== undefined
+                ? { judgmentReviewThreshold: gc.judgmentReviewThreshold }
+                : {}),
+              ...(gc.screenOutputs !== undefined ? { screenOutputs: gc.screenOutputs } : {}),
             }
           : undefined;
         return createGuardrailsLayer(guardrailConfig);
@@ -1442,6 +1453,20 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
               enableInjectionDetection: gc.injection ?? true,
               enablePiiDetection: gc.pii ?? true,
               enableToxicityDetection: gc.toxicity ?? true,
+              ...(gc.customBlocklist
+                ? { customBlocklist: [...gc.customBlocklist] }
+                : {}),
+              ...(gc.enableJudgmentBattery !== undefined
+                ? { enableJudgmentBattery: gc.enableJudgmentBattery }
+                : {}),
+              ...(gc.judgmentStrictness ? { judgmentStrictness: gc.judgmentStrictness } : {}),
+              ...(gc.judgmentActionThreshold !== undefined
+                ? { judgmentActionThreshold: gc.judgmentActionThreshold }
+                : {}),
+              ...(gc.judgmentReviewThreshold !== undefined
+                ? { judgmentReviewThreshold: gc.judgmentReviewThreshold }
+                : {}),
+              ...(gc.screenOutputs !== undefined ? { screenOutputs: gc.screenOutputs } : {}),
             }
           : undefined;
         return createGuardrailsLayer(guardrailConfig);

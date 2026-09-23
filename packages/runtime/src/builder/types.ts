@@ -388,6 +388,28 @@ export interface GuardrailsOptions {
      * Checked as case-insensitive substring matches.
      */
     readonly customBlocklist?: readonly string[]
+    /**
+     * Opt-in judgment battery (`@reactive-agents/judgment`) — runs parallel to
+     * the regex detectors above, requires `.withJudgment()` to also be
+     * enabled. Default: false.
+     */
+    readonly enableJudgmentBattery?: boolean
+    /**
+     * "additive" (default): the judgment battery can only add a violation or
+     * escalate severity — nothing that passes today can start blocking.
+     * "jev-primary": the battery's verdict is authoritative per violation
+     * type and can also unblock a regex hit it disagrees with.
+     */
+    readonly judgmentStrictness?: "additive" | "jev-primary"
+    /** Noul probability at/above which the judgment battery counts a type as a hit. Default: 0.7 */
+    readonly judgmentActionThreshold?: number
+    /** Noul probability at/above which (but below the action threshold) a review event fires without blocking. Default: 0.4 */
+    readonly judgmentReviewThreshold?: number
+    /**
+     * Opt-in output-side judgment screening — observability only, fires
+     * `GuardrailOutputFlagged` without altering the check result. Default: false.
+     */
+    readonly screenOutputs?: boolean
 }
 
 /**

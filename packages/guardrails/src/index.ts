@@ -24,6 +24,13 @@ export { detectInjection } from "./detectors/injection-detector.js";
 export type { DetectionResult } from "./detectors/injection-detector.js";
 export { detectPii } from "./detectors/pii-detector.js";
 export { detectToxicity } from "./detectors/toxicity-detector.js";
+export {
+  runJudgmentBattery,
+  buildJudgmentBatteryQuestions,
+  buildJudgmentBatteryState,
+  maxSeverity,
+} from "./detectors/judgment-battery.js";
+export type { JudgmentBatteryResult } from "./detectors/judgment-battery.js";
 
 // ─── Contracts ───
 export { checkContract } from "./contracts/agent-contract.js";
