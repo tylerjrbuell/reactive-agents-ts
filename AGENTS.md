@@ -537,6 +537,19 @@ grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
 
 ---
 
+## Git Hooks
+
+`bun install` runs `postinstall` → `scripts/setup-git-hooks.sh` → `git config core.hooksPath .githooks`, so every clone gets these automatically (no manual step, no husky/lefthook dependency). If hooks aren't firing, re-run `bash scripts/setup-git-hooks.sh`.
+
+| Hook | Enforces |
+|---|---|
+| `.githooks/commit-msg` | Hard-rejects any `Co-Authored-By:` trailer mentioning Claude/Anthropic (exit 1) — the deterministic backstop for the "no AI co-author trailers" rule (Common Pitfalls #11), since some agent harnesses auto-append this trailer via a system reminder regardless of project instructions. |
+| `.githooks/pre-commit` | Blocks staging the real `.env` (only `.env.example` should be committed); greps staged additions for common API-key prefixes (Anthropic, OpenAI, AWS, GitHub, Slack) as a fast secrets backstop — not a substitute for a real secret scanner. |
+
+Both hooks are fast, local, every-commit gates by design — slower repo-wide checks (`check-version-sync.sh`, `check-cross-cutting.sh`, `doc-drift`) belong in CI / the release workflow (below), not here. Add new local gates to `.githooks/pre-commit`; keep it non-interactive and sub-second.
+
+---
+
 ## Release Workflow (Tag-Driven)
 
 **`dev` is the staging branch (added 2026-09-19).** Land work on `dev`, not directly on `main`. `main` only moves via merging `dev` in at release time, immediately followed by the tag. This exists because `main` had silently diverged from `origin/main` (local-only commits never reaching origin) — `dev` gives in-progress work a durable, pushed home before it's release-ready. Feature branches still merge into `dev`, not `main`.
@@ -627,6 +640,7 @@ The row-by-row historical table (Apr–May 2026 findings, nearly all "Fixed") th
 8. **Never manually bump versions or `npm publish`** — the tag-driven flow (`bun run release:dry` → `git tag vX.Y.Z` → publish.yml) stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design.
 9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 10. **One entropy scorer per thought** — kernel-runner strategies are scored inline by `runReactiveObserver`; the engine/RI event collectors must skip them (`scoresEntropyInline` from `@reactive-agents/core`). Scoring both paths into the shared per-task trajectory with mismatched iteration labels fabricates "diverging" shapes (FM-C3). All entropy sources are disorder-oriented (higher = more uncertain); never feed a quality metric into the composite uninverted.
+11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See §Git Hooks below.
 
 ---
 
