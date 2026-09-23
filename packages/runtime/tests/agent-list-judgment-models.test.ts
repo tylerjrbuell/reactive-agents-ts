@@ -1,12 +1,12 @@
-// Run: bun test packages/runtime/tests/agent-list-models.test.ts --timeout 15000
+// Run: bun test packages/runtime/tests/agent-list-judgment-models.test.ts --timeout 15000
 //
-// Phase E Task 5 - agent.listModels() public facade method tests.
+// Phase E Task 5 - agent.listJudgmentModels() public facade method tests.
 // Tests three scenarios:
-//   (a) listModels() with a JudgmentService wired returns models from the catalog
+//   (a) listJudgmentModels() with a JudgmentService wired returns models from the catalog
 //       (a fake service, not a live `jev` network call — see fakeJudgmentService below)
-//   (b) listModels() without .withJudgment() throws "JudgmentService is not configured"
-//   (c) listModels() with llm backend (no catalog) rejects — the rejection's message
-//       names the missing catalog (see reactive-agent.ts's listModels() JSDoc for the
+//   (b) listJudgmentModels() without .withJudgment() throws "JudgmentService is not configured"
+//   (c) listJudgmentModels() with llm backend (no catalog) rejects — the rejection's message
+//       names the missing catalog (see reactive-agent.ts's listJudgmentModels() JSDoc for the
 //       real, non-`instanceof` rejection contract)
 
 import { describe, it, expect, afterEach } from "bun:test";
@@ -17,7 +17,7 @@ import { JudgmentService, JudgmentUnsupported } from "@reactive-agents/judgment"
 /**
  * Fake `JudgmentService["Type"]` with a stubbed `listModels()` — mirrors the
  * mock-backend pattern in `judgment-rank.test.ts`. Test (a) only needs to
- * verify `agent.listModels()`'s plumbing (facade -> service -> array), not a
+ * verify `agent.listJudgmentModels()`'s plumbing (facade -> service -> array), not a
  * real `jev` backend network round trip: a real `.withJudgment({ backend:
  * "jev" })` call resolves `TYPESAFE_API_KEY` from `.env` and hits TypeSafe's
  * live API, which passes locally (key present) but fails in CI (no key
@@ -33,7 +33,7 @@ const fakeJudgmentService: JudgmentService["Type"] = {
     ]),
 };
 
-describe("agent.listModels() - Phase E Task 5", () => {
+describe("agent.listJudgmentModels() - Phase E Task 5", () => {
   const agentsToDispose: Array<{ dispose: () => Promise<void> }> = [];
   afterEach(async () => {
     while (agentsToDispose.length > 0) {
@@ -41,7 +41,7 @@ describe("agent.listModels() - Phase E Task 5", () => {
     }
   });
 
-  it("(a) listModels() with a JudgmentService wired returns model list from the catalog", async () => {
+  it("(a) listJudgmentModels() with a JudgmentService wired returns model list from the catalog", async () => {
     const agent = await ReactiveAgents.create()
       .withName("list-models-agent")
       .withProvider("test")
@@ -55,15 +55,15 @@ describe("agent.listModels() - Phase E Task 5", () => {
       // override ever takes effect. Instead, `.withLayers()` alone supplies
       // a fake `JudgmentService` directly (mirrors the mock-backend pattern
       // in `judgment-rank.test.ts`) — this test only verifies
-      // `agent.listModels()`'s plumbing (facade -> service -> array), not a
+      // `agent.listJudgmentModels()`'s plumbing (facade -> service -> array), not a
       // live TypeSafe network round trip.
       .withLayers(Layer.succeed(JudgmentService, fakeJudgmentService))
       .build();
     agentsToDispose.push(agent);
 
-    const models = await agent.listModels();
+    const models = await agent.listJudgmentModels();
 
-    // Verify that listModels() returns an array of models with expected structure
+    // Verify that listJudgmentModels() returns an array of models with expected structure
     expect(Array.isArray(models)).toBe(true);
     expect(models.length).toBeGreaterThan(0);
 
@@ -76,7 +76,7 @@ describe("agent.listModels() - Phase E Task 5", () => {
     }
   });
 
-  it("(b) listModels() without .withJudgment() throws immediately", async () => {
+  it("(b) listJudgmentModels() without .withJudgment() throws immediately", async () => {
     const agent = await ReactiveAgents.create()
       .withName("list-models-no-judgment-agent")
       .withProvider("test")
@@ -87,17 +87,17 @@ describe("agent.listModels() - Phase E Task 5", () => {
 
     let error: Error | null = null;
     try {
-      await agent.listModels();
+      await agent.listJudgmentModels();
     } catch (e) {
       error = e instanceof Error ? e : new Error(String(e));
     }
 
     expect(error).not.toBeNull();
-    expect(error?.message).toContain("agent.listModels() requires .withJudgment()");
+    expect(error?.message).toContain("agent.listJudgmentModels() requires .withJudgment()");
     expect(error?.message).toContain("JudgmentService is not configured");
   });
 
-  it("(c) listModels() with llm backend (no catalog) rejects naming the missing catalog", async () => {
+  it("(c) listJudgmentModels() with llm backend (no catalog) rejects naming the missing catalog", async () => {
     const agent = await ReactiveAgents.create()
       .withName("list-models-unsupported-agent")
       .withProvider("test")
@@ -109,7 +109,7 @@ describe("agent.listModels() - Phase E Task 5", () => {
 
     let error: Error | null = null;
     try {
-      await agent.listModels();
+      await agent.listJudgmentModels();
     } catch (e) {
       error = e instanceof Error ? e : new Error(String(e));
     }

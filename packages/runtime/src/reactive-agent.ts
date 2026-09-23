@@ -68,7 +68,7 @@ import type {
     JudgmentModel,
     QuestionSpecs,
 } from '@reactive-agents/judgment'
-import { buildAutoContext, mergeJudgmentState, type JudgeContextOptions } from './judgment-context.js'
+import { buildAutoContext, mergeJudgmentState, type JudgeContextConfig } from './judgment-context.js'
 import {
     judgeRank,
     type JudgeRankCandidate,
@@ -143,22 +143,31 @@ import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
  * `agent.judge()`'s options — a discriminated union on `includeContext` so
- * `state` is only optional when `includeContext: true` supplies it
- * automatically (fix round, final review #4). Before this, `state` was
- * unconditionally optional: `agent.judge({questions})` (no `state`, no
- * `includeContext`) typechecked but passed `undefined` through to
- * `JudgmentService.ask()`, which requires a real `JudgmentEntry` (itself
- * `string | object | array | null` — `null` is a legitimate explicit value,
- * `undefined` never is) and eventually reaches `JSON.stringify(entry)` in
- * `@reactive-agents/judgment`'s `llm-backend.ts`.
+ * `state` is only optional when `includeContext` supplies it automatically
+ * (fix round, final review #4). Before this, `state` was unconditionally
+ * optional: `agent.judge({questions})` (no `state`, no `includeContext`)
+ * typechecked but passed `undefined` through to `JudgmentService.ask()`,
+ * which requires a real `JudgmentEntry` (itself `string | object | array |
+ * null` — `null` is a legitimate explicit value, `undefined` never is) and
+ * eventually reaches `JSON.stringify(entry)` in `@reactive-agents/judgment`'s
+ * `llm-backend.ts`.
+ *
+ * You must pass one of `state` or `includeContext` (or both — a manual
+ * `state` always wins on key collision with the auto-folded context, see
+ * `mergeJudgmentState`). `agent.judge({questions})` alone is a compile error
+ * — this is intentional, not a bug — and because the union's second member
+ * is keyed on `includeContext`, TS reports that error as "`includeContext`
+ * is missing" even when the fix you want is to add `state` instead. Read
+ * that error as "supply state or includeContext", not "includeContext is
+ * mandatory".
  */
 export type JudgeInput<Q extends QuestionSpecs> = (
     | { readonly state: JudgmentEntry; readonly includeContext?: false }
-    | { readonly includeContext: true; readonly state?: JudgmentEntry }
+    | { readonly includeContext: true | JudgeContextConfig; readonly state?: JudgmentEntry }
 ) & {
     readonly questions: Q
     readonly model?: string
-} & Omit<JudgeContextOptions, 'includeContext'>
+}
 
 /**
  * Narrow widening for the dynamically-imported `ToolService` tag.
@@ -543,10 +552,17 @@ export class ReactiveAgent<TOut = unknown> {
      * to compose calibrated decisions without going through a run.
      *
      * @param input - `state` (the JSON-compatible context to judge, optional
-     *   when `includeContext: true` supplies it automatically), `questions`
-     *   (named Choice/Score/Noul specs, answered in one batch), and the
-     *   optional `includeContext`/`messageWindow`/`includeToolResults`
-     *   auto-context options (Phase D).
+     *   when `includeContext` supplies it automatically), `questions` (named
+     *   Choice/Score/Noul specs, answered in one batch), and the optional
+     *   `includeContext` auto-context option (Phase D). `includeContext`
+     *   accepts either `true` (every context layer on - recent chat
+     *   history, recent tool observations, and the full last-run
+     *   reasoning-step trace - each with its own default) or a
+     *   `JudgeContextConfig` object (`{ messages?, toolResults?,
+     *   reasoningSteps? }`) to opt into only the named layers, each itself
+     *   `boolean | { window?, ... }` for per-layer tuning. A layer absent
+     *   from the object form is OFF, unlike bare `true` where every layer
+     *   defaults on.
      * @throws Error if `.withJudgment()` was not called during build —
      *   `JudgmentService` is genuinely absent from the runtime's Layer
      *   graph in that case, not silently stubbed.
@@ -576,22 +592,29 @@ export class ReactiveAgent<TOut = unknown> {
      *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
      *   includeContext: true,
      * });
+     *
+     * // Or opt into just the reasoning trace, nothing else:
+     * const { onTrack } = await agent.judge({
+     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
+     *   includeContext: { reasoningSteps: true },
+     * });
      * ```
      * Precedence: an explicit `state` field always wins on key collision —
      * `includeContext` only fills gaps a manual `state` doesn't cover.
      *
-     * `state` is only optional when `includeContext: true` — `judge()` has no
-     * honest value to send the backend otherwise, so omitting BOTH `state`
-     * and `includeContext` is a compile-time type error, not a silent
-     * `undefined` reaching `JudgmentService.ask()` (fix round, final review
-     * #4). `state: null` remains valid (a real `JudgmentEntry` value) — this
-     * only closes the gap where `state` was missing entirely.
+     * `state` is only optional when `includeContext` is truthy (`true` or a
+     * `JudgeContextConfig` object) — `judge()` has no honest value to send
+     * the backend otherwise, so omitting BOTH `state` and `includeContext`
+     * is a compile-time type error, not a silent `undefined` reaching
+     * `JudgmentService.ask()` (fix round, final review #4). `state: null`
+     * remains valid (a real `JudgmentEntry` value) — this only closes the
+     * gap where `state` was missing entirely.
      */
     async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
         const { questions, model } = input
         let mergedState: JudgmentEntry
         let contextMerged: boolean
-        if (input.includeContext === true) {
+        if (input.includeContext) {
             contextMerged = true
             mergedState = mergeJudgmentState(
                 input.state,
@@ -600,7 +623,7 @@ export class ReactiveAgent<TOut = unknown> {
                         chatHistory: this._chatHistory,
                         reasoningSteps: this._lastReasoningSteps,
                     },
-                    input
+                    input.includeContext
                 )
             ) as JudgmentEntry
         } else {
@@ -667,18 +690,18 @@ export class ReactiveAgent<TOut = unknown> {
      *   .withJudgment({ backend: "jev" })
      *   .build();
      *
-     * const models = await agent.listModels();
+     * const models = await agent.listJudgmentModels();
      * models.forEach(m => console.log(`${m.name}: ${m.description}`));
      * ```
      */
-    async listModels(): Promise<ReadonlyArray<JudgmentModel>> {
+    async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
         return this.runtime.runPromise(
             Effect.gen(function* () {
                 const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
                 if (judgmentOpt._tag !== 'Some') {
                     return yield* Effect.fail(
                         new Error(
-                            'agent.listModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
                         )
                     )
                 }

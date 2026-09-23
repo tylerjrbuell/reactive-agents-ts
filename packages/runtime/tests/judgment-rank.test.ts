@@ -13,7 +13,7 @@
 //   (d) DETERMINISTIC TIES — equal scores keep the candidates' original
 //       relative (input) order, not answer/object-key order.
 //   (e) ABSENCE — `agent.judgeRank()` without `.withJudgment()` rejects with
-//       a clear error, same precedent as `agent.judge()`/`agent.listModels()`.
+//       a clear error, same precedent as `agent.judge()`/`agent.listJudgmentModels()`.
 
 import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";

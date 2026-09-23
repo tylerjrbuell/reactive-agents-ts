@@ -36,34 +36,44 @@ const reasoningSteps: ReasoningStep[] = [
 
 describe("buildAutoContext", () => {
   it("is a strict no-op when includeContext is omitted or false", () => {
-    expect(buildAutoContext({ chatHistory, reasoningSteps }, {})).toEqual({});
-    expect(
-      buildAutoContext({ chatHistory, reasoningSteps }, { includeContext: false })
-    ).toEqual({});
+    expect(buildAutoContext({ chatHistory, reasoningSteps }, undefined)).toEqual({});
+    expect(buildAutoContext({ chatHistory, reasoningSteps }, false)).toEqual({});
   });
 
-  it("folds windowed history + recent tool observations when includeContext is true", () => {
-    const context = buildAutoContext(
-      { chatHistory, reasoningSteps },
-      { includeContext: true }
-    );
+  it("bare true folds messages + toolResults + reasoningSteps, all on with defaults", () => {
+    const context = buildAutoContext({ chatHistory, reasoningSteps }, true);
     expect(typeof context.recentMessages).toBe("string");
     expect(context.recentMessages as string).toContain("hello");
     expect(context.recentMessages as string).toContain("hi there");
     expect(Array.isArray(context.toolResults)).toBe(true);
     expect((context.toolResults as string[])[0]).toContain("tool returned 42");
+    expect(typeof context.reasoningSteps).toBe("string");
+    const parsed = JSON.parse(context.reasoningSteps as string) as Array<{
+      type: string;
+      content: string;
+    }>;
+    expect(parsed.some((s) => s.type === "thought" && s.content.includes("thinking about it"))).toBe(
+      true
+    );
+    expect(
+      parsed.some((s) => s.type === "observation" && s.content.includes("tool returned 42"))
+    ).toBe(true);
   });
 
-  it("omits toolResults when includeToolResults is false", () => {
-    const context = buildAutoContext(
-      { chatHistory, reasoningSteps },
-      { includeContext: true, includeToolResults: false }
-    );
+  it("object form: a named layer alone means every other layer is absent, not defaulted-on", () => {
+    const context = buildAutoContext({ chatHistory, reasoningSteps }, { reasoningSteps: true });
+    expect(context.recentMessages).toBeUndefined();
+    expect(context.toolResults).toBeUndefined();
+    expect(typeof context.reasoningSteps).toBe("string");
+  });
+
+  it("omits toolResults when the object form doesn't name it", () => {
+    const context = buildAutoContext({ chatHistory, reasoningSteps }, { messages: true });
     expect(context.toolResults).toBeUndefined();
     expect(context.recentMessages).toBeDefined();
   });
 
-  it("respects a messageWindow override", () => {
+  it("respects a messages.window override", () => {
     const manyTurns: ChatMessage[] = Array.from({ length: 10 }, (_, i) => ({
       role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
       content: "turn-" + i,
@@ -71,12 +81,87 @@ describe("buildAutoContext", () => {
     }));
     const context = buildAutoContext(
       { chatHistory: manyTurns, reasoningSteps: [] },
-      { includeContext: true, messageWindow: 2 }
+      { messages: { window: 2 } }
     );
     const rendered = context.recentMessages as string;
     expect(rendered).toContain("turn-9");
     expect(rendered).toContain("turn-8");
     expect(rendered).not.toContain("turn-0");
+  });
+});
+
+describe("buildAutoContext reasoningSteps layer", () => {
+  it("is absent when reasoningSteps is omitted or false from the object form", () => {
+    const withoutFlag = buildAutoContext(
+      { chatHistory, reasoningSteps },
+      { messages: true, toolResults: true }
+    );
+    expect(withoutFlag.reasoningSteps).toBeUndefined();
+    const withFalse = buildAutoContext(
+      { chatHistory, reasoningSteps },
+      { messages: true, toolResults: true, reasoningSteps: false }
+    );
+    expect(withFalse.reasoningSteps).toBeUndefined();
+  });
+
+  it("folds thought/action-type steps that plain toolResults extraction drops", () => {
+    const context = buildAutoContext({ chatHistory, reasoningSteps }, { reasoningSteps: true });
+    expect(typeof context.reasoningSteps).toBe("string");
+    const parsed = JSON.parse(context.reasoningSteps as string) as Array<{
+      type: string;
+      content: string;
+    }>;
+    expect(parsed.some((s) => s.type === "thought" && s.content.includes("thinking about it"))).toBe(
+      true
+    );
+    expect(
+      parsed.some((s) => s.type === "observation" && s.content.includes("tool returned 42"))
+    ).toBe(true);
+  });
+
+  it("reasoningSteps.window trims to the N most recent steps", () => {
+    const manySteps: ReasoningStep[] = Array.from({ length: 25 }, (_, i) => ({
+      id: `s${i}` as ReasoningStep["id"],
+      type: "thought" as const,
+      content: `step-${i}`,
+      timestamp: new Date(i),
+    }));
+    const context = buildAutoContext(
+      { chatHistory: [], reasoningSteps: manySteps },
+      { reasoningSteps: { window: 3 } }
+    );
+    const parsed = JSON.parse(context.reasoningSteps as string) as Array<{ content: string }>;
+    expect(parsed).toHaveLength(3);
+    expect(parsed.map((s) => s.content)).toEqual(["step-22", "step-23", "step-24"]);
+  });
+
+  it("reasoningSteps.types filters to only the named types", () => {
+    const mixedSteps: ReasoningStep[] = [
+      { id: "s1" as ReasoningStep["id"], type: "thought", content: "t1", timestamp: new Date(0) },
+      { id: "s2" as ReasoningStep["id"], type: "action", content: "a1", timestamp: new Date(1) },
+      {
+        id: "s3" as ReasoningStep["id"],
+        type: "observation",
+        content: "o1",
+        timestamp: new Date(2),
+      },
+      { id: "s4" as ReasoningStep["id"], type: "reflection", content: "r1", timestamp: new Date(3) },
+    ];
+    const context = buildAutoContext(
+      { chatHistory: [], reasoningSteps: mixedSteps },
+      { reasoningSteps: { types: ["thought", "action"] } }
+    );
+    const parsed = JSON.parse(context.reasoningSteps as string) as Array<{ type: string }>;
+    expect(parsed.map((s) => s.type)).toEqual(["thought", "action"]);
+  });
+
+  it("can coexist with toolResults - both keys present, not collapsed", () => {
+    const context = buildAutoContext(
+      { chatHistory, reasoningSteps },
+      { reasoningSteps: true, toolResults: true }
+    );
+    expect(context.toolResults).toBeDefined();
+    expect(context.reasoningSteps).toBeDefined();
   });
 });
 
@@ -93,7 +178,7 @@ describe("buildAutoContext tool-result truncation", () => {
     ];
     const context = buildAutoContext(
       { chatHistory: [], reasoningSteps: longSteps },
-      { includeContext: true },
+      true,
     );
     const results = context.toolResults as string[];
     expect(results).toHaveLength(1);

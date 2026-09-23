@@ -132,9 +132,12 @@ describe("agent.judge({ includeContext }) - Phase D Task 1", () => {
     agentsToDispose.push(agent);
 
     await agent.run("Echo the marker and confirm.");
+    // Scoped to just the toolResults layer (not bare `true`, which would also
+    // fold in reasoningSteps - a separate key the manual toolResults override
+    // below has no reason to collide with or suppress).
     await agent.judge({
       questions: noulQuestion,
-      includeContext: true,
+      includeContext: { toolResults: true },
       state: { toolResults: ["explicit override, not the auto-marker"] },
     });
 
@@ -143,6 +146,72 @@ describe("agent.judge({ includeContext }) - Phase D Task 1", () => {
     const lastPrompt = capturedPrompts[capturedPrompts.length - 1]!;
     expect(lastPrompt).toContain("explicit override, not the auto-marker");
     expect(lastPrompt).not.toContain("tool-observation-marker-xyz");
+  });
+
+  it("includeContext: { reasoningSteps: true } - merged state contains the full reasoning-step trace, not just tool observations", async () => {
+    const capturedPrompts: string[] = [];
+    const scenario: TestTurn[] = [
+      { toolCall: { name: "shell-execute", args: { command: "echo tool-observation-marker-xyz" } } },
+      { text: "FINAL ANSWER: done" },
+    ];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-context-reasoning-steps-agent")
+      .withProvider("test")
+      .withTestScenario(scenario)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTools({ terminal: true })
+      .withMaxIterations(3)
+      .withReplayLLM(makeCapturingLLM(scenario, capturedPrompts))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    await agent.run("Echo the marker and confirm.");
+    await agent.judge({ questions: noulQuestion, includeContext: { reasoningSteps: true } });
+
+    // See earlier comment: run() may also fire a shadow judgment; assert on
+    // this test's own (last) captured prompt.
+    const lastPrompt = capturedPrompts[capturedPrompts.length - 1]!;
+    expect(lastPrompt).toContain("reasoningSteps");
+    // The JSON-stringified reasoningSteps blob must include a non-observation
+    // step type (e.g. "action" or "thought") that plain toolResults
+    // (observation-only) never surfaces.
+    expect(lastPrompt).toMatch(/type\\?":\\?"(thought|action)/);
+    // Object form is exclusive: naming only reasoningSteps means
+    // recentMessages/toolResults are absent, unlike bare `includeContext: true`.
+    expect(lastPrompt).not.toContain("recentMessages");
+  });
+
+  it("bare includeContext: true - reasoningSteps IS included by default (true means every layer on)", async () => {
+    const capturedPrompts: string[] = [];
+    const scenario: TestTurn[] = [
+      { toolCall: { name: "shell-execute", args: { command: "echo tool-observation-marker-xyz" } } },
+      { text: "FINAL ANSWER: done" },
+    ];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-context-bare-true-agent")
+      .withProvider("test")
+      .withTestScenario(scenario)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withTools({ terminal: true })
+      .withMaxIterations(3)
+      .withReplayLLM(makeCapturingLLM(scenario, capturedPrompts))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    await agent.run("Echo the marker and confirm.");
+    await agent.judge({ questions: noulQuestion, includeContext: true });
+
+    // Note: `recentMessages` is omitted here not because the messages layer
+    // is off, but because this agent's chat history is empty (judge() is
+    // called directly after run(), not via chat()) - buildAutoContext only
+    // sets a key when its layer produces non-empty content (see
+    // judgment-context.ts's `if (recentMessages) context.recentMessages = ...`).
+    // The messages layer IS on under bare `true`; it just has nothing to say.
+    const lastPrompt = capturedPrompts[capturedPrompts.length - 1]!;
+    expect(lastPrompt).toContain("reasoningSteps");
+    expect(lastPrompt).toContain("toolResults");
   });
 });
 

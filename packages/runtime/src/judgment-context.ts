@@ -32,33 +32,106 @@
  * and nothing can ask). truncateToolResult below is a plain byte-budget
  * truncation with an honest "(truncated, N chars)" marker instead - it never
  * claims a capability the judgment backend doesn't have.
+ *
+ * Nested `includeContext` shape (fix-round-2, 2026-09-23): the first cut of
+ * this feature added `includeReasoningSteps` as a flat sibling of
+ * `includeContext`, alongside `messageWindow` / `includeToolResults` /
+ * `reasoningStepsWindow` / `reasoningStepTypes` - five loose top-level
+ * options that don't namespace and don't read well at call sites
+ * (`agent.judge({ includeContext: true, includeReasoningSteps: true,
+ * reasoningStepsWindow: 10 })`). This was reshaped before it ever shipped:
+ * `includeContext` now accepts `boolean | JudgeContextConfig`, where
+ * `JudgeContextConfig` is `{ messages?, toolResults?, reasoningSteps? }` -
+ * each key itself `boolean | { window?, ... }`. The five flat sibling
+ * fields are gone; there is no back-compat burden because they were never
+ * released.
+ *
+ * The two `includeContext` forms are deliberately asymmetric:
+ *   - `includeContext: true` -> every layer on, every layer's own default
+ *     (messages: DEFAULT_MESSAGE_WINDOW turns, toolResults: on,
+ *     reasoningSteps: on with DEFAULT_REASONING_STEPS_WINDOW). "true means
+ *     true" - the whole point of a bare boolean shorthand is "give me
+ *     everything", so reasoningSteps is NOT held back to an opt-in-only
+ *     status under bare `true` the way the flat-field design did.
+ *   - `includeContext: { ... }` (object form) -> exclusive/opt-in per
+ *     layer. A key absent from the object means that layer is OFF, not
+ *     defaulted-on. `includeContext: { reasoningSteps: true }` folds in
+ *     ONLY `context.reasoningSteps` - `recentMessages` and `context.toolResults`
+ *     are both absent from the result, even though they're on by default
+ *     under bare `true`. This is what "granularly opt into layers" means:
+ *     naming the object form is exclusive, not additive-with-defaults.
  */
 import { Schema } from "effect";
-import type { ReasoningStep } from "@reactive-agents/reasoning";
+import type { ReasoningStep, StepType } from "@reactive-agents/reasoning";
 import type { ChatMessage } from "./chat.js";
 import { applyHistoryWindow, formatHistoryBlock } from "./gateway-context-formatting.js";
 
 // --- Options ---
 
-/**
- * Options controlling agent.judge()'s opt-in auto-context merge.
- *
- * All fields optional; includeContext is the gate - every other field is
- * inert unless it's true.
- */
-export const JudgeContextOptionsSchema = Schema.Struct({
-  /** Fold recent message history + tool observations into state. Default: off. */
-  includeContext: Schema.optional(Schema.Boolean),
+/** Per-layer message-window override for the object form of `includeContext.messages`. */
+const MessagesConfigSchema = Schema.Struct({
   /**
    * Max turns of chat history to include. Defaults to the same window
    * applyHistoryWindow already uses for gateway chat context (40 turns /
    * 8,000 chars, oldest-first trim).
    */
-  messageWindow: Schema.optional(Schema.Number),
-  /** Include recent tool observations. Defaults to true when includeContext is true. */
-  includeToolResults: Schema.optional(Schema.Boolean),
+  window: Schema.optional(Schema.Number),
 });
-export type JudgeContextOptions = typeof JudgeContextOptionsSchema.Type;
+
+/** Per-layer window/type-filter override for the object form of `includeContext.reasoningSteps`. */
+const ReasoningStepsConfigSchema = Schema.Struct({
+  /**
+   * Max number of most-recent reasoning steps to include. Defaults to
+   * DEFAULT_REASONING_STEPS_WINDOW (20).
+   */
+  window: Schema.optional(Schema.Number),
+  /**
+   * Restrict which step types are folded in. Defaults to undefined (no
+   * filtering - every step type present in the trace is included).
+   */
+  types: Schema.optional(Schema.Array(Schema.String)),
+});
+
+/**
+ * Nested, per-layer shape for `agent.judge()`'s `includeContext` object
+ * form. Each layer is independently `boolean | { ...tuning }` - a key
+ * absent from this object means that layer is OFF (see file header for the
+ * true-vs-object asymmetry).
+ */
+export const JudgeContextConfigSchema = Schema.Struct({
+  /** Fold recent chat history into `context.recentMessages`. */
+  messages: Schema.optional(Schema.Union(Schema.Boolean, MessagesConfigSchema)),
+  /** Fold recent tool observations into `context.toolResults`. */
+  toolResults: Schema.optional(Schema.Boolean),
+  /**
+   * Fold the agent's full last-run reasoning-step trace (thought/action/
+   * observation/plan/reflection/critique - not just observation-type steps)
+   * into `context.reasoningSteps` as a JSON string.
+   */
+  reasoningSteps: Schema.optional(Schema.Union(Schema.Boolean, ReasoningStepsConfigSchema)),
+});
+export type JudgeContextConfig = Omit<typeof JudgeContextConfigSchema.Type, "reasoningSteps"> & {
+  readonly reasoningSteps?:
+    | boolean
+    | {
+        readonly window?: number;
+        readonly types?: readonly StepType[];
+      };
+};
+
+/**
+ * Options controlling agent.judge()'s opt-in auto-context merge.
+ *
+ * `includeContext: true` folds in every layer with its own default; passing
+ * a `JudgeContextConfig` object instead opts into only the named layers
+ * (see file header for the full contract).
+ */
+export const JudgeContextOptionsSchema = Schema.Struct({
+  includeContext: Schema.optional(Schema.Union(Schema.Boolean, JudgeContextConfigSchema)),
+});
+export type JudgeContextOptions = Omit<typeof JudgeContextOptionsSchema.Type, "includeContext"> & {
+  readonly includeContext?: boolean | JudgeContextConfig;
+};
 
 // --- Constants ---
 
@@ -72,18 +145,27 @@ export type JudgeContextOptions = typeof JudgeContextOptionsSchema.Type;
  * value) but worth a second look if that constant moves.
  */
 const DEFAULT_MESSAGE_WINDOW = 40;
-/** Most-recent N tool observations folded in when includeToolResults is on. */
+/** Most-recent N tool observations folded in when the toolResults layer is on. */
 const DEFAULT_TOOL_RESULT_COUNT = 5;
 /**
  * Per-observation char budget for truncateToolResult. Deliberately smaller
  * than the kernel's own tier-dependent tool-result budget
  * (`toolResultMaxChars`, packages/reasoning/src/context/context-profile.ts -
- * 600 to 4000 depending on tier, 800 for "large"): includeContext folds up
- * to DEFAULT_TOOL_RESULT_COUNT (5) observations into ONE judgment prompt
- * alongside recentMessages, not a single tool result into a full reasoning
- * context window, so each one gets a tighter slice.
+ * 600 to 4000 depending on tier, 800 for "large"): the toolResults layer
+ * folds up to DEFAULT_TOOL_RESULT_COUNT (5) observations into ONE judgment
+ * prompt alongside recentMessages, not a single tool result into a full
+ * reasoning context window, so each one gets a tighter slice.
  */
 const DEFAULT_TOOL_RESULT_BUDGET = 400;
+/**
+ * Most-recent N reasoning steps folded into `context.reasoningSteps` when
+ * the reasoningSteps layer is on. Windowed by step COUNT rather than the
+ * per-item char truncation the toolResults layer uses - reasoningSteps is
+ * folded as one JSON blob covering multiple step types, not one truncated
+ * string per observation, so a count window keeps the blob's overall size
+ * predictable without mangling any individual step's content.
+ */
+const DEFAULT_REASONING_STEPS_WINDOW = 20;
 
 // --- Tool-result truncation ---
 
@@ -117,29 +199,60 @@ export type AutoContext = Readonly<Record<string, unknown>>;
 
 /**
  * Assemble the auto-context bag from already-computed ReactiveAgent state.
- * Returns {} (no-op) when options.includeContext is falsy - callers should
- * skip calling this entirely on the hot path when the option is absent,
- * since even {} construction has a small allocation cost.
+ * Returns {} (no-op) when includeContext is falsy - callers should skip
+ * calling this entirely on the hot path when the option is absent, since
+ * even {} construction has a small allocation cost.
+ *
+ * `includeContext === true` resolves to every layer on with its own
+ * default. `includeContext` as a `JudgeContextConfig` object resolves each
+ * named layer only - an absent key is OFF, not defaulted-on (see file
+ * header for the full true-vs-object contract).
  */
 export function buildAutoContext(
   sources: JudgeContextSources,
-  options: JudgeContextOptions,
+  includeContext: boolean | JudgeContextConfig | undefined,
 ): AutoContext {
-  if (!options.includeContext) return {};
+  if (!includeContext) return {};
+
+  const cfg: JudgeContextConfig =
+    includeContext === true
+      ? { messages: true, toolResults: true, reasoningSteps: true }
+      : includeContext;
 
   const context: Record<string, unknown> = {};
 
-  const messageWindow = options.messageWindow ?? DEFAULT_MESSAGE_WINDOW;
-  const windowedHistory = applyHistoryWindow(sources.chatHistory, messageWindow);
-  const recentMessages = formatHistoryBlock(windowedHistory);
-  if (recentMessages) context.recentMessages = recentMessages;
+  if (cfg.messages) {
+    const messagesCfg = cfg.messages === true ? {} : cfg.messages;
+    const messageWindow = messagesCfg.window ?? DEFAULT_MESSAGE_WINDOW;
+    const windowedHistory = applyHistoryWindow(sources.chatHistory, messageWindow);
+    const recentMessages = formatHistoryBlock(windowedHistory);
+    if (recentMessages) context.recentMessages = recentMessages;
+  }
 
-  const includeToolResults = options.includeToolResults ?? true;
-  if (includeToolResults) {
+  if (cfg.toolResults) {
     const observations = sources.reasoningSteps.filter((s) => s.type === "observation");
     const recent = observations.slice(-DEFAULT_TOOL_RESULT_COUNT);
     if (recent.length > 0) {
       context.toolResults = recent.map((s) => truncateToolResult(s.content));
+    }
+  }
+
+  if (cfg.reasoningSteps) {
+    const reasoningStepsCfg = cfg.reasoningSteps === true ? {} : cfg.reasoningSteps;
+    const typeFilter = reasoningStepsCfg.types;
+    const filtered = typeFilter
+      ? sources.reasoningSteps.filter((s) => (typeFilter as readonly string[]).includes(s.type))
+      : sources.reasoningSteps;
+    const window = reasoningStepsCfg.window ?? DEFAULT_REASONING_STEPS_WINDOW;
+    const windowed = filtered.slice(-window);
+    if (windowed.length > 0) {
+      context.reasoningSteps = JSON.stringify(
+        windowed.map((s) => ({
+          type: s.type,
+          content: s.content,
+          ...(s.metadata?.toolUsed ? { toolUsed: s.metadata.toolUsed } : {}),
+        }))
+      );
     }
   }
 
