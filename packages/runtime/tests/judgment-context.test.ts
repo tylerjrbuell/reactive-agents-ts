@@ -9,6 +9,7 @@ import { describe, it, expect } from "bun:test";
 import {
   buildAutoContext,
   mergeJudgmentState,
+  truncateToolResult,
 } from "../src/judgment-context.js";
 import type { ChatMessage } from "../src/chat.js";
 import type { ReasoningStep } from "@reactive-agents/reasoning";
@@ -79,8 +80,8 @@ describe("buildAutoContext", () => {
   });
 });
 
-describe("buildAutoContext tool-result compression", () => {
-  it("compresses an over-budget observation via the shared compressToolResult helper", () => {
+describe("buildAutoContext tool-result truncation", () => {
+  it("truncates an over-budget observation honestly - no STORED/recall(...) leak", () => {
     const longSteps: ReasoningStep[] = [
       {
         id: "s1" as ReasoningStep["id"],
@@ -97,6 +98,29 @@ describe("buildAutoContext tool-result compression", () => {
     const results = context.toolResults as string[];
     expect(results).toHaveLength(1);
     expect(results[0]!.length).toBeLessThan(2000);
+    // Fix round 1, Important #2: the judgment backend has no scratchpad and
+    // no recall tool, so the truncated content must never claim otherwise -
+    // compressToolResult's "[STORED: ...] ... recall(...)" phrasing would be
+    // a false capability claim here.
+    expect(results[0]).not.toContain("recall(");
+    expect(results[0]).not.toContain("STORED");
+    expect(results[0]).toContain("truncated");
+  });
+});
+
+describe("truncateToolResult", () => {
+  it("passes short content through unchanged", () => {
+    expect(truncateToolResult("short")).toBe("short");
+  });
+
+  it("truncates over-budget content with an honest marker, no STORED/recall(...) claim", () => {
+    const long = "x".repeat(500);
+    const result = truncateToolResult(long, 100);
+    expect(result.length).toBeLessThan(long.length);
+    expect(result).toContain("truncated");
+    expect(result).toContain("500");
+    expect(result).not.toContain("recall(");
+    expect(result).not.toContain("STORED");
   });
 });
 

@@ -145,3 +145,86 @@ describe("agent.judge({ includeContext }) - Phase D Task 1", () => {
     expect(lastPrompt).not.toContain("tool-observation-marker-xyz");
   });
 });
+
+// Fix round 1, Important #1: the `contextMerged` observability signal
+// (reactive-agent.ts's judge() publishing the AgentEvent "Custom" variant,
+// type "judgment:context-merged") was previously unasserted. Both directions
+// pinned here via a live agent's own event subscription (agent.on(...)),
+// the same mechanism convenience-api.test.ts already uses for other events.
+describe("agent.judge() contextMerged observability signal - Fix round 1, Important #1", () => {
+  const agentsToDispose: Array<{ dispose: () => Promise<void> }> = [];
+  afterEach(async () => {
+    while (agentsToDispose.length > 0) {
+      await agentsToDispose.pop()!.dispose();
+    }
+  });
+
+  it("does NOT emit judgment:context-merged when includeContext is omitted", async () => {
+    const scenario: TestTurn[] = [{ text: "FINAL ANSWER: done" }];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-context-signal-omitted-agent")
+      .withProvider("test")
+      .withTestScenario(scenario)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReplayLLM(makeCapturingLLM(scenario, []))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    const seen: unknown[] = [];
+    await agent.on("Custom", (event) => {
+      if (event.type === "judgment:context-merged") seen.push(event.payload);
+    });
+
+    await agent.judge({ state: { action: "deploy" }, questions: noulQuestion });
+
+    expect(seen.length).toBe(0);
+  });
+
+  it("does NOT emit judgment:context-merged when includeContext: false is passed explicitly", async () => {
+    const scenario: TestTurn[] = [{ text: "FINAL ANSWER: done" }];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-context-signal-false-agent")
+      .withProvider("test")
+      .withTestScenario(scenario)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReplayLLM(makeCapturingLLM(scenario, []))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    const seen: unknown[] = [];
+    await agent.on("Custom", (event) => {
+      if (event.type === "judgment:context-merged") seen.push(event.payload);
+    });
+
+    await agent.judge({ state: { action: "deploy" }, questions: noulQuestion, includeContext: false });
+
+    expect(seen.length).toBe(0);
+  });
+
+  it("emits judgment:context-merged with contextMerged: true when includeContext: true", async () => {
+    const scenario: TestTurn[] = [{ text: "FINAL ANSWER: done" }];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-context-signal-true-agent")
+      .withProvider("test")
+      .withTestScenario(scenario)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReplayLLM(makeCapturingLLM(scenario, []))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    const seen: Array<{ agentId?: string; contextMerged?: boolean }> = [];
+    await agent.on("Custom", (event) => {
+      if (event.type === "judgment:context-merged") {
+        seen.push(event.payload as { agentId?: string; contextMerged?: boolean });
+      }
+    });
+
+    await agent.judge({ questions: noulQuestion, includeContext: true });
+
+    expect(seen.length).toBe(1);
+    expect(seen[0]?.contextMerged).toBe(true);
+  });
+});

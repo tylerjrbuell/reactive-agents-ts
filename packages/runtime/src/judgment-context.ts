@@ -18,13 +18,23 @@
  *   - Tool-observation content comes from ReactiveAgent's own
  *     _lastReasoningSteps cache (raw ReasoningStep[] from the last run()),
  *     the same source _lastRunObservations derives from for chat() context.
- *   - Tool-result truncation reuses compressToolResult
- *     (@reactive-agents/reasoning), the same structured preview +
- *     scratchpad-storage compressor the kernel's own act/attend phases use
- *     for tool output - not a second, weaker truncation implementation.
+ *
+ * Fix-round-1 correction (2026-09-23): tool-result truncation does NOT reuse
+ * compressToolResult (@reactive-agents/reasoning), even though that helper is
+ * now exported and reachable. compressToolResult's over-budget output embeds
+ * a "[STORED: <key> | <tool>] ... use recall(\"<key>\", ...)" instruction
+ * (tool-formatting.ts) that is only true at its native call site
+ * (kernel/capabilities/act/tool-execution.ts), which also calls
+ * setScratchpadBounded so a later recall() by the SAME agent's own reasoning
+ * loop can act on it. The judgment backend has no scratchpad and no recall
+ * tool - folding that instruction into a judgment prompt would be a false
+ * capability claim ("this is stored, ask for more" when nothing is stored
+ * and nothing can ask). truncateToolResult below is a plain byte-budget
+ * truncation with an honest "(truncated, N chars)" marker instead - it never
+ * claims a capability the judgment backend doesn't have.
  */
 import { Schema } from "effect";
-import { compressToolResult, type ReasoningStep } from "@reactive-agents/reasoning";
+import type { ReasoningStep } from "@reactive-agents/reasoning";
 import type { ChatMessage } from "./chat.js";
 import { applyHistoryWindow, formatHistoryBlock } from "./gateway-context-formatting.js";
 
@@ -52,14 +62,47 @@ export type JudgeContextOptions = typeof JudgeContextOptionsSchema.Type;
 
 // --- Constants ---
 
-/** Matches gateway-context-formatting.ts's MAX_TURNS default - not exported there, mirrored here. */
+/**
+ * Matches gateway-context-formatting.ts's MAX_TURNS default. Not imported
+ * from there because that constant isn't exported (module-private); mirrored
+ * here rather than exporting a single constant across a package boundary for
+ * one call site. If gateway-context-formatting.ts's MAX_TURNS ever changes,
+ * this default silently drifts from it - low risk (both are "40 turns of
+ * chat history", a documented default rather than a correctness-critical
+ * value) but worth a second look if that constant moves.
+ */
 const DEFAULT_MESSAGE_WINDOW = 40;
 /** Most-recent N tool observations folded in when includeToolResults is on. */
 const DEFAULT_TOOL_RESULT_COUNT = 5;
-/** Per-observation char budget passed to compressToolResult. */
+/**
+ * Per-observation char budget for truncateToolResult. Deliberately smaller
+ * than the kernel's own tier-dependent tool-result budget
+ * (`toolResultMaxChars`, packages/reasoning/src/context/context-profile.ts -
+ * 600 to 4000 depending on tier, 800 for "large"): includeContext folds up
+ * to DEFAULT_TOOL_RESULT_COUNT (5) observations into ONE judgment prompt
+ * alongside recentMessages, not a single tool result into a full reasoning
+ * context window, so each one gets a tighter slice.
+ */
 const DEFAULT_TOOL_RESULT_BUDGET = 400;
-/** Array-preview item count passed to compressToolResult. */
-const DEFAULT_TOOL_RESULT_PREVIEW_ITEMS = 3;
+
+// --- Tool-result truncation ---
+
+/**
+ * Minimal, honest byte-budget truncation for a tool observation's content.
+ * Deliberately does NOT delegate to compressToolResult (see file header for
+ * why: that helper's over-budget output claims the full result is "stored"
+ * and tells the reader to "recall(...)" it, which is only true at its native
+ * kernel call site with a live scratchpad + recall tool - neither of which
+ * exists on the judgment-backend side of includeContext).
+ */
+export function truncateToolResult(
+  content: string,
+  budget: number = DEFAULT_TOOL_RESULT_BUDGET,
+): string {
+  if (content.length <= budget) return content;
+  const suffix = ` (truncated, ${content.length} chars total)`;
+  return content.slice(0, budget) + suffix;
+}
 
 // --- Context sources ---
 
@@ -96,15 +139,7 @@ export function buildAutoContext(
     const observations = sources.reasoningSteps.filter((s) => s.type === "observation");
     const recent = observations.slice(-DEFAULT_TOOL_RESULT_COUNT);
     if (recent.length > 0) {
-      context.toolResults = recent.map(
-        (s) =>
-          compressToolResult(
-            s.content,
-            s.metadata?.toolUsed ?? "unknown",
-            DEFAULT_TOOL_RESULT_BUDGET,
-            DEFAULT_TOOL_RESULT_PREVIEW_ITEMS,
-          ).content,
-      );
+      context.toolResults = recent.map((s) => truncateToolResult(s.content));
     }
   }
 
