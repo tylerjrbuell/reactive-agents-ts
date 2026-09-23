@@ -112,7 +112,8 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - **Cost-aware routing**: `.withModelRouting()` (opt-in) routes each run to the cheapest capable model by task complexity, falling back to the configured model on any error
 
 ### 🛡️ Production Safety
-- **Guardrails**: pre-LLM injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
+- **Judgment layer** *(opt-in)*: `.withJudgment()` + `agent.judge()` — calibrated typed Choice/Score/Noul judgments over TypeSafe/Jev or an LLM-emulation fallback; the guardrails battery, autonomy-confidence, and tool-healing sites can opt into the same primitive
+- **Guardrails**: pre-LLM injection detection, PII filtering, toxicity blocking, an opt-in judgment battery (`enableJudgmentBattery`) running parallel to the regex detectors, kill switch, behavioral contracts
 - **Ed25519 identity**: cryptographic agent certificates, RBAC, delegation chains, audit trails
 - **Verification**: semantic entropy, fact decomposition, NLI hallucination detection
 - **Fabrication guard**: on by default; rejects invented empirical measurements (benchmark timings, speedups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
@@ -156,7 +157,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **9,250 tests** across 1244 files, verified with `bun test` on every PR
+- **9,250 tests** across 1252 files, verified with `bun test` on every PR
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -895,7 +896,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (9,250 tests / 1244 files, ~110s)
+bun test                 # Run full test suite (9,250 tests / 1252 files, ~110s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

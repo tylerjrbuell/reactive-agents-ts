@@ -22,10 +22,10 @@ Foundation (no reactive-agents deps)
 │   └── depends on: core, judgment, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
 ├── @reactive-agents/tools         — ToolService, ToolRegistry, built-in tools (9 capability + 9 meta; shell-execute gated), MCP client, sandbox
-│   └── depends on: core, llm-provider
+│   └── depends on: core, judgment, llm-provider
 │
-├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, KillSwitch, BehavioralContracts
-│   └── depends on: core, llm-provider
+├── @reactive-agents/guardrails    — Injection/PII/toxicity detection, judgment battery, KillSwitch, BehavioralContracts
+│   └── depends on: core, judgment, llm-provider
 │
 ├── @reactive-agents/verification  — Semantic entropy, fact decomposition, NLI, hallucination detection
 │   └── depends on: core, llm-provider
@@ -43,7 +43,7 @@ Foundation (no reactive-agents deps)
 │   └── depends on: core
 │
 ├── @reactive-agents/interaction   — 5 autonomy modes, checkpoints, preference learning, approval gates
-│   └── depends on: core
+│   └── depends on: core, judgment, observability, reasoning
 │
 ├── @reactive-agents/prompts       — Template engine, version control, tier-adaptive prompt variants
 │   └── depends on: core, llm-provider

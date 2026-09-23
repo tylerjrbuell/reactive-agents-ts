@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,19 @@ updated: 2026-09-22
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-09-23 — TypeSafe/Jev judgment primitive, Phase C (runtime tier) shipped, committed on `dev`
+
+`.withJudgment()` builder method + `agent.judge()` public primitive, plus per-site opt-ins: strategy
+selection/complexity routing/task comprehension (shadow-only), guardrails judgment battery (additive,
+opt-in), autonomy/approval confidence (shadow-only, highest blast radius, no invert path), tool-call
+healing escalation (additive). Full plan: [[Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer]];
+debrief: [[Research/Debriefs/2026-09-22-judgment-layer-phase-c-debrief]]. All committed on `dev`
+(`d60ee70f`…latest, no co-author trailers). End-to-end smoke test (real builder→runtime→execution-
+engine chain, not just unit mocks) confirms `agent.judge()` and the guardrails battery both wire
+correctly through a real `run()`. Full-repo gate green (38/38 builds, 12/12 cross-cutting, 35/35
+version-sync, docs build+sync+examples all clean). **Not yet released** — no PR, no tag. Every Step-4
+exit gate (inverting a shadow into a real decision) remains open — needs real production shadow data.
 
 ## 2026-09-22 — TypeSafe/Jev judgment primitive, Phase A+B shipped (uncommitted on `dev`)
 

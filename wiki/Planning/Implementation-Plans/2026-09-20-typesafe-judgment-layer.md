@@ -310,10 +310,10 @@ Full sweep after the rename: `core`+`reasoning`+`cost`+`eval`+`judgment`+`judge-
 
 ### Task 13: Phase C closeout
 
-- [ ] `bun run changeset` — minor: `.withJudgment()` builder method + per-site opt-ins.
-- [ ] Docs: `features/judgment-layer.md` (runtime tier, shadow→invert, confidence vs probability); builder-api sidebar; `apps/docs` metrics.
-- [ ] Debrief with shadow/agreement/ablation numbers; `wiki/Hot.md`; Planning-Index line.
-- [ ] Full gate: `bun test` + `bun run build` + `/review-patterns`.
+- [x] Changeset written: `.changeset/typesafe-judgment-primitive-phase-c.md` — minor bumps on `runtime`/`reactive-agents`/`reasoning`/`cost`/`guardrails`/`interaction`/`tools`, patch on `core`.
+- [x] Docs: `apps/docs/src/content/docs/features/judgment-layer.md` (new, order 25 — runtime tier, per-site opt-ins, shadow-vs-invert, calibration ≠ truth; both code examples are real, typechecked, not skip-marked). `builder-api.md` gained a `withJudgment` row + an expanded `withGuardrails` row (5 new fields) + a Safety & Resilience index entry. `AGENTS.md` dependency tree corrected (`tools`/`guardrails`/`interaction` → `judgment`; `interaction`'s pre-existing `reasoning`/`observability` drift fixed opportunistically). `README.md` gained a judgment-layer bullet. `apps/docs` metrics regenerated + README synced. `feature-matrix.ts` ratchet bumped 36→37 (new `withJudgment` wither, dated justification comment).
+- [x] Debrief written: `wiki/Research/Debriefs/2026-09-22-judgment-layer-phase-c-debrief.md`. `wiki/Hot.md` updated. Planning-Index line updated to 🟢 SHIPPED (not yet released).
+- [x] Full gate: full-repo `bun test` (9,546 pass / 25 skip / 4 todo / 2 fail — both pre-existing, unrelated `as unknown as` ceiling gate), `bunx turbo run build` (38/38), `check-cross-cutting.sh` (12/12), `check-version-sync.sh` (35/35), `docs:sync:check`, `docs:examples:check` (382 checked, 0 failed, skip ceiling unchanged), `docs:build` (94 pages, links valid), `/review-patterns` (9/9 categories pass/N/A — no findings). Plus a genuine end-to-end smoke test through the real builder→runtime→execution-engine chain (not just unit mocks): `agent.judge()` returns the expected answer, fails loudly without `.withJudgment()`, and a real `run()` is blocked by the judgment battery catching a paraphrased injection the regex table misses.
 
 ---
 

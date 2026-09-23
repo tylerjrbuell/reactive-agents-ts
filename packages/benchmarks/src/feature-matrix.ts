@@ -77,6 +77,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withExperienceLearning: { featureClass: "capability", gapReason: "cross-run learning; needs a repeated-task arm" },
   withHarness: { featureClass: "capability", gapReason: "compose-API harness injection" },
   withHook: { featureClass: "capability", gapReason: "user hooks alter control flow; unmeasured" },
+  withJudgment: { featureClass: "capability", gapReason: "opt-in JudgmentService (Choice/Score/Noul); shadow sites need real production traffic before an ablation arm makes sense" },
   withKillSwitch: { featureClass: "capability", gapReason: "abort path; unmeasured" },
   withLearning: { featureClass: "capability", gapReason: "learning loop; needs a repeated-task arm" },
   withMCP: { featureClass: "capability", gapReason: "MCP tool servers; needs a docker fixture" },
@@ -164,7 +165,11 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
 // 2026-09-04: 35 → 36. New builder wither `withToolIntent` (chat()-level
 // classifier override) added; bench runner drives run(), not chat(), so no
 // wiring path exists — genuinely uncovered, not a regression to fix.
-export const UNCOVERED_CAPABILITY_CEILING = 36;
+// 2026-09-22: 36 → 37. New builder wither `withJudgment` (typesafe-judgment-
+// layer plan, Task 8) added; its shadow sites need real production shadow
+// traffic before an ablation arm is meaningful — genuinely uncovered, not a
+// regression to fix.
+export const UNCOVERED_CAPABILITY_CEILING = 37;
 
 /** Capability features that must have a `builder.<name>(` call in runner.ts. */
 export function coveredCapabilityFeatures(): readonly string[] {
