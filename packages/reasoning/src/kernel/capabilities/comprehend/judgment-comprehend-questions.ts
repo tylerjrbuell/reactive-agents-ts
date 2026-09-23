@@ -1,7 +1,9 @@
 /**
- * jev-comprehend-questions.ts — Task 10 (shadow-only): batched Jev questions
- * mirroring `classifyTask()`'s aggregate regex verdict (task-complexity.ts +
- * task-horizon.ts + task-shape.ts + task-intent.ts).
+ * judgment-comprehend-questions.ts — Task 10 (shadow-only): batched judgment
+ * questions mirroring `classifyTask()`'s aggregate regex verdict
+ * (task-complexity.ts + task-horizon.ts + task-shape.ts + task-intent.ts).
+ * Backend-agnostic — works against whichever `JudgmentBackend` (jev, llm, or
+ * a future third) the caller's `JudgmentService` was constructed with.
  *
  * One request reproduces the union of all four files' signals:
  *  - `complexity` — Score over trivial/moderate/complex (task-complexity.ts).
@@ -14,11 +16,12 @@
  *    surface (task-intent.ts's `nominateRequiredTools`).
  *
  * SHADOW ONLY — nothing here consumes an answer to change `TaskClassification`
- * or `nominatedTools`. See `jevComprehendShadow` in `jev-classification.ts`
- * and Task 10 Step 3 (not in scope for this dispatch) for the (not-yet-written)
- * inversion path. Pattern mirrors `adaptive-jev-questions.ts` (Task 9) /
- * `jev-complexity-questions.ts` (Task 9b) — same Choice/Noul/Score shape,
- * same "answer maps back to `null` on anything unrecognized" discipline.
+ * or `nominatedTools`. See `judgmentComprehendShadow` in
+ * `judgment-classification.ts` and Task 10 Step 3 (not in scope for this
+ * dispatch) for the (not-yet-written) inversion path. Pattern mirrors
+ * `adaptive-judgment-questions.ts` (Task 9) / `judgment-complexity-questions.ts`
+ * (Task 9b) — same Choice/Noul/Score shape, same "answer maps back to `null`
+ * on anything unrecognized" discipline.
  */
 import type {
   ChoiceSpec,
@@ -51,16 +54,16 @@ const OUTPUT_FORMAT_CRITERIA: Record<OutputFormat, string> = {
   prose: "No explicit structured format is requested — free-form prose/explanation is expected.",
 };
 
-export interface ComprehendJevQuestionsInput {
+export interface ComprehendJudgmentQuestionsInput {
   readonly task: string;
 }
 
-export const buildComprehendJevState = (input: ComprehendJevQuestionsInput): JudgmentEntry => ({
+export const buildComprehendJudgmentState = (input: ComprehendJudgmentQuestionsInput): JudgmentEntry => ({
   task: input.task,
 });
 
 /** The five base (non-tool) comprehend questions — always present in chunk 0. */
-export const buildComprehendJevBaseQuestions = (): QuestionSpecs => ({
+export const buildComprehendJudgmentBaseQuestions = (): QuestionSpecs => ({
   complexity: {
     type: "score",
     instructions:
@@ -104,18 +107,18 @@ export const buildToolRequirementQuestions = (
 };
 
 /** Maps a Score answer back to the nearest `PreTaskComplexity` level — `null` if the answer isn't Score-shaped. */
-export const jevAnswerToComplexity = (answer: JudgmentAnswer): PreTaskComplexity | null => {
+export const answerToComplexity = (answer: JudgmentAnswer): PreTaskComplexity | null => {
   if (answer.kind !== "score") return null;
   const idx = Math.min(COMPLEXITY_LEVELS.length - 1, Math.max(0, Math.round(answer.value)));
   return COMPLEXITY_LEVELS[idx] ?? null;
 };
 
 /** Maps a Noul answer to a boolean verdict (probability ≥ 0.5) — `null` if the answer isn't Noul-shaped. */
-export const jevAnswerToBoolean = (answer: JudgmentAnswer): boolean | null =>
+export const answerToBoolean = (answer: JudgmentAnswer): boolean | null =>
   answer.kind === "noul" ? answer.probability >= 0.5 : null;
 
 /** Maps a Choice answer back to an `OutputFormat` — `null` if the answer isn't Choice-shaped or unrecognized. */
-export const jevAnswerToOutputFormat = (answer: JudgmentAnswer): OutputFormat | null =>
+export const answerToOutputFormat = (answer: JudgmentAnswer): OutputFormat | null =>
   answer.kind === "choice" && Object.hasOwn(OUTPUT_FORMAT_CRITERIA, answer.value)
     ? (answer.value as OutputFormat)
     : null;

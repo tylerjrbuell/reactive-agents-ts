@@ -1,13 +1,15 @@
 /**
- * Task 9b (shadow-only): batched Jev questions mirroring
+ * Task 9b (shadow-only): batched judgment questions mirroring
  * `complexity-router.ts`'s `heuristicClassify` decision. One Choice over the
  * registered `ModelTier` values (criteria = the cost/latency/capability
  * tradeoff each tier is FOR, not its name) plus speculative Nouls that are
- * independently useful signals for later inversion analysis.
+ * independently useful signals for later inversion analysis. Backend-agnostic
+ * — works against whichever `JudgmentBackend` (jev, llm, or a future third)
+ * the caller's `JudgmentService` was constructed with.
  *
  * SHADOW ONLY — nothing here consumes an answer to change routing. See
- * `jevComplexityShadow` in `complexity-router.ts` and Task 9b Step 4 in the
- * judgment-layer plan for the (not-yet-written) inversion path.
+ * `judgmentComplexityShadow` in `complexity-router.ts` and Task 9b Step 4 in
+ * the judgment-layer plan for the (not-yet-written) inversion path.
  */
 import type { ChoiceSpec, NoulSpec, QuestionSpecs, JudgmentEntry, JudgmentAnswer } from "@reactive-agents/judgment";
 import type { ModelTier } from "../types.js";
@@ -22,15 +24,15 @@ const TIER_CRITERIA: Record<ModelTier, string> = {
     "Highest-quality, slowest, most expensive tier. Use for tasks combining code generation, multi-step planning, AND deep analysis/synthesis together — genuinely hard tasks.",
 };
 
-export interface ComplexityJevQuestionsInput {
+export interface ComplexityJudgmentQuestionsInput {
   readonly task: string;
 }
 
-export const buildComplexityJevState = (input: ComplexityJevQuestionsInput): JudgmentEntry => ({
+export const buildComplexityJudgmentState = (input: ComplexityJudgmentQuestionsInput): JudgmentEntry => ({
   task: input.task,
 });
 
-export const buildComplexityJevQuestions = (): QuestionSpecs => ({
+export const buildComplexityJudgmentQuestions = (): QuestionSpecs => ({
   tier: {
     type: "choice",
     instructions: "Which model tier is the best cost/quality/latency fit for completing `task`?",
@@ -46,6 +48,6 @@ export const buildComplexityJevQuestions = (): QuestionSpecs => ({
   } satisfies NoulSpec,
 });
 
-/** Maps a Jev answer's Choice `value` (a `TIER_CRITERIA` key) back to `ModelTier` — `null` if the answer isn't Choice-shaped or the value is unrecognized (never partial-trusted). */
-export const jevAnswerToTier = (answer: JudgmentAnswer): ModelTier | null =>
+/** Maps a judgment answer's Choice `value` (a `TIER_CRITERIA` key) back to `ModelTier` — `null` if the answer isn't Choice-shaped or the value is unrecognized (never partial-trusted). */
+export const answerToTier = (answer: JudgmentAnswer): ModelTier | null =>
   answer.kind === "choice" && Object.hasOwn(TIER_CRITERIA, answer.value) ? (answer.value as ModelTier) : null;

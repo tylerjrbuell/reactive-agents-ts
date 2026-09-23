@@ -1,12 +1,14 @@
 /**
- * Task 9 (shadow-only): batched Jev questions mirroring `adaptive.ts`'s
+ * Task 9 (shadow-only): batched judgment questions mirroring `adaptive.ts`'s
  * strategy-selection decision. One Choice over the registered sub-strategies
  * (criteria = what each strategy is FOR, not its name) plus three speculative
  * Nouls that are independently useful signals for later inversion analysis.
+ * Backend-agnostic — works against whichever `JudgmentBackend` (jev, llm, or
+ * a future third) the caller's `JudgmentService` was constructed with.
  *
  * SHADOW ONLY — nothing here consumes an answer to change behavior. See
- * `jevClassify` in `adaptive.ts` and Task 9 Step 4 in the judgment-layer plan
- * for the (not-yet-written) inversion path.
+ * `judgmentClassifyShadow` in `adaptive.ts` and Task 9 Step 4 in the
+ * judgment-layer plan for the (not-yet-written) inversion path.
  */
 import type { ChoiceSpec, NoulSpec, QuestionSpecs, JudgmentEntry, JudgmentAnswer } from "@reactive-agents/judgment";
 
@@ -31,20 +33,20 @@ const STRATEGY_CRITERIA: Record<SubStrategy, string> = {
     "Decomposable, tool-heavy task whose full plan is knowable up front and does NOT depend on observing intermediate results — static multi-file/artifact generation.",
 };
 
-export interface AdaptiveJevQuestionsInput {
+export interface AdaptiveJudgmentQuestionsInput {
   readonly taskDescription: string;
   readonly taskType: string;
   readonly availableTools: readonly string[];
 }
 
-export const buildAdaptiveJevState = (input: AdaptiveJevQuestionsInput): JudgmentEntry => ({
+export const buildAdaptiveJudgmentState = (input: AdaptiveJudgmentQuestionsInput): JudgmentEntry => ({
   taskDescription: input.taskDescription,
   taskType: input.taskType,
   toolsAvailable: input.availableTools.length > 0,
   toolCount: input.availableTools.length,
 });
 
-export const buildAdaptiveJevQuestions = (): QuestionSpecs => ({
+export const buildAdaptiveJudgmentQuestions = (): QuestionSpecs => ({
   strategy: {
     type: "choice",
     instructions: "Which reasoning strategy best fits `taskDescription`, given `taskType` and whether tools are available?",
@@ -64,6 +66,6 @@ export const buildAdaptiveJevQuestions = (): QuestionSpecs => ({
   } satisfies NoulSpec,
 });
 
-/** Maps a Jev answer's Choice `value` (a `STRATEGY_CRITERIA` key) back to `SubStrategy` — `null` if the answer isn't Choice-shaped or the value is unrecognized (never partial-trusted). */
-export const jevAnswerToStrategy = (answer: JudgmentAnswer): SubStrategy | null =>
+/** Maps a judgment answer's Choice `value` (a `STRATEGY_CRITERIA` key) back to `SubStrategy` — `null` if the answer isn't Choice-shaped or the value is unrecognized (never partial-trusted). */
+export const answerToStrategy = (answer: JudgmentAnswer): SubStrategy | null =>
   answer.kind === "choice" && Object.hasOwn(STRATEGY_CRITERIA, answer.value) ? (answer.value as SubStrategy) : null;

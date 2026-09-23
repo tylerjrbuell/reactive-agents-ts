@@ -42,23 +42,27 @@ export type JudgmentFailed = {
 };
 
 /**
- * Fired by a runtime site running Jev in SHADOW mode (Phase C: strategy-
- * selection, complexity-router, etc) — Jev's answer is computed but never
- * consumes the decision actually made. Distinct from `JudgmentEvaluated`
- * (which reports on every `JudgmentService.ask()` call at whatever site name
- * the layer was constructed with) because shadow analysis needs the current
- * heuristic/LLM decision and an agreement verdict alongside Jev's answer,
+ * Fired by a runtime site running a `JudgmentBackend` in SHADOW mode (Phase C:
+ * strategy-selection, complexity-router, task-comprehension, etc) — the
+ * judgment answer is computed but never consumes the decision actually made.
+ * Distinct from `JudgmentEvaluated` (which reports on every
+ * `JudgmentService.ask()` call at whatever site name the layer was
+ * constructed with) because shadow analysis needs the current heuristic/LLM
+ * decision and an agreement verdict alongside the judgment's answer,
  * correlated per real production call — not reconstructable from
- * `JudgmentEvaluated` alone.
+ * `JudgmentEvaluated` alone. Backend-agnostic by design: `judged` holds
+ * whichever `JudgmentBackend` the site's `JudgmentService` was constructed
+ * with (jev, llm, or a future third provider) — never hardcode a vendor name
+ * onto this field or its consumers.
  */
 export type JudgmentShadow = {
   readonly _tag: "JudgmentShadow";
   /** Which shadow site fired, e.g. "strategy-selection", "complexity-router". */
   readonly site: string;
-  /** Jev's answer, or `null` if the call failed/timed out. */
-  readonly jev: string | null;
-  /** The decision actually used (from the existing heuristic/LLM path), unaffected by `jev`. */
+  /** The judgment backend's answer, or `null` if the call failed/timed out. */
+  readonly judged: string | null;
+  /** The decision actually used (from the existing heuristic/LLM path), unaffected by `judged`. */
   readonly current: string;
-  /** `jev === current`, or `null` when `jev` is null (no answer to compare). */
+  /** `judged === current`, or `null` when `judged` is null (no answer to compare). */
   readonly agreement: boolean | null;
 };

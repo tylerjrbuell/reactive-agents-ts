@@ -1,6 +1,6 @@
-// Run: bun test packages/reasoning/tests/kernel/loop/jev-comprehend-shadow-wiring.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/kernel/loop/judgment-comprehend-shadow-wiring.test.ts --timeout 15000
 //
-// Task 10 (shadow-only) wiring test — `runKernel` fires the batched Jev
+// Task 10 (shadow-only) wiring test — `runKernel` fires the batched judgment
 // comprehend-classification shadow unconditionally, every run, via
 // `Effect.forkDaemon`. This must NEVER alter the kernel's real output/status
 // (zero behavior change), must fire exactly once per `ask()` for a small tool
@@ -81,7 +81,7 @@ const runWithShadowCapture = async (
   return { result, captured };
 };
 
-describe("runKernel Jev comprehend shadow wiring (Task 10, shadow-only)", () => {
+describe("runKernel judgment comprehend shadow wiring (Task 10, shadow-only)", () => {
   it("zero behavior change: real kernel output/status identical with JudgmentService present", async () => {
     const { result } = await runWithShadowCapture([], true);
     expect(result.status).toBe("done");

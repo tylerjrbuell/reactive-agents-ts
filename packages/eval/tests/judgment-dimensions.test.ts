@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import type { JudgmentAnswers, JudgmentService } from "@reactive-agents/judgment";
-import { scoreDimensionsViaJudgment, JEV_JUDGED_DIMENSIONS } from "../src/services/judgment-dimensions.js";
+import { scoreDimensionsViaJudgment, JUDGMENT_SCORED_DIMENSIONS } from "../src/services/judgment-dimensions.js";
 
 const PARAMS = { input: "What is 2+2?", actualOutput: "4", expectedOutput: "4" };
 
@@ -100,7 +100,7 @@ describe("scoreDimensionsViaJudgment", () => {
     expect(result.size).toBe(0);
   });
 
-  it("JEV_JUDGED_DIMENSIONS is exactly the four LLM-judged dimensions", () => {
-    expect([...JEV_JUDGED_DIMENSIONS].sort()).toEqual(["accuracy", "completeness", "relevance", "safety"]);
+  it("JUDGMENT_SCORED_DIMENSIONS is exactly the four LLM-judged dimensions", () => {
+    expect([...JUDGMENT_SCORED_DIMENSIONS].sort()).toEqual(["accuracy", "completeness", "relevance", "safety"]);
   });
 });

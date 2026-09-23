@@ -48,7 +48,7 @@ import { deriveConditions } from "../../kernel/capabilities/verify/derive-condit
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
-import { jevComprehendShadow } from "../../kernel/capabilities/comprehend/jev-classification.js";
+import { judgmentComprehendShadow } from "../../kernel/capabilities/comprehend/judgment-classification.js";
 import {
   applyExplicitOverrides,
   compileHarnessPlan,
@@ -295,14 +295,15 @@ export function runKernel(
       effectiveInput.availableToolSchemas ?? [],
     );
 
-    // ── 5c. Task 10 (shadow-only): Jev comprehend classifier ────────────────
+    // ── 5c. Task 10 (shadow-only): judgment comprehend classifier ───────────
     // Fires the batched (possibly chunked) Choice+Score+Nouls speculatively
     // via `Effect.forkDaemon` (same fire-and-forget pattern as adaptive.ts's
-    // Task 9 `jevClassifyShadow` / complexity-router.ts's Task 9b
-    // `jevComplexityShadow`) so it never blocks or alters `classifyTask()`'s
-    // regex-derived verdict or `nominatedTools` above. Absent JudgmentService
-    // (no `.withJudgment()` on the builder) is a clean no-op.
-    yield* jevComprehendShadow(
+    // Task 9 `judgmentClassifyShadow` / complexity-router.ts's Task 9b
+    // `judgmentComplexityShadow`) so it never blocks or alters
+    // `classifyTask()`'s regex-derived verdict or `nominatedTools` above.
+    // Absent JudgmentService (no `.withJudgment()` on the builder) is a clean
+    // no-op.
+    yield* judgmentComprehendShadow(
       () => ({
         task: effectiveInput.task,
         classification: classifyTask(effectiveInput.task),

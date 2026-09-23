@@ -1,9 +1,9 @@
-// Run: bun test packages/cost/tests/complexity-router-jev-shadow.test.ts --timeout 15000
+// Run: bun test packages/cost/tests/complexity-router-judgment-shadow.test.ts --timeout 15000
 //
-// Task 9b (shadow-only): the Jev tier classifier fires speculatively at
+// Task 9b (shadow-only): the judgment tier classifier fires speculatively at
 // complexity-router.ts's heuristicClassify call site but must NEVER alter
 // the tier `analyzeComplexity` actually recommends. Covers: agreeing answer,
-// disagreeing answer, Jev failure/timeout, and JudgmentService entirely
+// disagreeing answer, backend failure/timeout, and JudgmentService entirely
 // absent — all four must leave `recommendedTier` identical to the
 // heuristic-only baseline. Also confirms the `toolReliabilityThreshold` gate
 // (FIX-32) is unaffected by shadow mode.
@@ -58,34 +58,34 @@ const runWithShadowCapture = async (judgmentLayer?: Layer.Layer<JudgmentService>
   return { analysis, captured };
 };
 
-describe("complexity-router Jev tier-classification shadow (Task 9b, shadow-only)", () => {
-  it("agreeing Jev answer: shadow reports agreement:true, routing unchanged", async () => {
+describe("complexity-router judgment tier-classification shadow (Task 9b, shadow-only)", () => {
+  it("agreeing judgment answer: shadow reports agreement:true, routing unchanged", async () => {
     const { analysis, captured } = await runWithShadowCapture(fakeJudgmentAnswering("haiku"));
 
     expect(analysis.recommendedTier).toBe("haiku");
     expect(captured).toHaveLength(1);
     expect(captured[0]?.site).toBe("complexity-router");
-    expect(captured[0]?.jev).toBe("haiku");
+    expect(captured[0]?.judged).toBe("haiku");
     expect(captured[0]?.current).toBe("haiku");
     expect(captured[0]?.agreement).toBe(true);
   }, 15000);
 
-  it("disagreeing Jev answer: shadow reports agreement:false, routing STILL unchanged", async () => {
+  it("disagreeing judgment answer: shadow reports agreement:false, routing STILL unchanged", async () => {
     const { analysis, captured } = await runWithShadowCapture(fakeJudgmentAnswering("opus"));
 
-    expect(analysis.recommendedTier).toBe("haiku"); // heuristic's pick, not Jev's
+    expect(analysis.recommendedTier).toBe("haiku"); // heuristic's pick, not the judgment's
     expect(captured).toHaveLength(1);
-    expect(captured[0]?.jev).toBe("opus");
+    expect(captured[0]?.judged).toBe("opus");
     expect(captured[0]?.current).toBe("haiku");
     expect(captured[0]?.agreement).toBe(false);
   }, 15000);
 
-  it("Jev failure/timeout: shadow reports jev:null, agreement:null, routing untouched", async () => {
+  it("judgment backend failure/timeout: shadow reports judged:null, agreement:null, routing untouched", async () => {
     const { analysis, captured } = await runWithShadowCapture(fakeJudgmentFailing());
 
     expect(analysis.recommendedTier).toBe("haiku");
     expect(captured).toHaveLength(1);
-    expect(captured[0]?.jev).toBeNull();
+    expect(captured[0]?.judged).toBeNull();
     expect(captured[0]?.agreement).toBeNull();
   }, 15000);
 

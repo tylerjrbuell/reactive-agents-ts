@@ -1,19 +1,22 @@
 /**
- * jev-classification.ts — Task 10 (shadow-only): fires ONE batched Jev
- * request (chunked when the tool roster is large) reproducing the union of
- * `classifyTask()`'s four regex signals plus per-tool `requires::<toolName>`
- * nominations, via `Effect.forkDaemon` — never awaited, never altering the
- * regex-derived `TaskClassification` or `nominatedTools` returned to the rest
- * of the kernel.
+ * judgment-classification.ts — Task 10 (shadow-only): fires ONE batched
+ * judgment request (chunked when the tool roster is large) reproducing the
+ * union of `classifyTask()`'s four regex signals plus per-tool
+ * `requires::<toolName>` nominations, via `Effect.forkDaemon` — never
+ * awaited, never altering the regex-derived `TaskClassification` or
+ * `nominatedTools` returned to the rest of the kernel. Backend-agnostic —
+ * works against whichever `JudgmentBackend` the resolved `JudgmentService`
+ * was constructed with.
  *
- * Pattern mirrors `jevClassifyShadow` in `strategies/adaptive.ts` (Task 9) and
- * `jevComplexityShadow` in `@reactive-agents/cost`'s `complexity-router.ts`
- * (Task 9b): `Effect.serviceOption(JudgmentService)` resolution (does not
- * widen this function's `R`), fire-and-forget via `Effect.forkDaemon`,
- * `JudgmentShadow` events for later agreement analysis (Task 10 Step 4's exit
- * gate). Emits ONE `JudgmentShadow` event per sub-question — `site:
- * "task-comprehension"` — rather than one aggregate event, since this shadow
- * spans several independent signals instead of a single classification.
+ * Pattern mirrors `judgmentClassifyShadow` in `strategies/adaptive.ts`
+ * (Task 9) and `judgmentComplexityShadow` in `@reactive-agents/cost`'s
+ * `complexity-router.ts` (Task 9b): `Effect.serviceOption(JudgmentService)`
+ * resolution (does not widen this function's `R`), fire-and-forget via
+ * `Effect.forkDaemon`, `JudgmentShadow` events for later agreement analysis
+ * (Task 10 Step 4's exit gate). Emits ONE `JudgmentShadow` event per
+ * sub-question — `site: "task-comprehension"` — rather than one aggregate
+ * event, since this shadow spans several independent signals instead of a
+ * single classification.
  *
  * Absent `JudgmentService` (no `.withJudgment()` on the builder) is a clean,
  * zero-cost no-op.
@@ -25,13 +28,13 @@ import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { EventBusInstance } from "../../state/kernel-state.js";
 import type { TaskClassification } from "./task-classification.js";
 import {
-  buildComprehendJevBaseQuestions,
-  buildComprehendJevState,
+  buildComprehendJudgmentBaseQuestions,
+  buildComprehendJudgmentState,
   buildToolRequirementQuestions,
-  jevAnswerToBoolean,
-  jevAnswerToComplexity,
-  jevAnswerToOutputFormat,
-} from "./jev-comprehend-questions.js";
+  answerToBoolean,
+  answerToComplexity,
+  answerToOutputFormat,
+} from "./judgment-comprehend-questions.js";
 
 /**
  * Per-`ask()` question ceiling. No documented hard cap from TypeSafe on
@@ -44,7 +47,7 @@ const CHUNK_CAP = 30;
 
 /** Splits the base questions + per-tool Nouls into `ask()`-sized chunks (≤ CHUNK_CAP each). */
 function chunkQuestions(toolNames: readonly string[]): readonly QuestionSpecs[] {
-  const base = buildComprehendJevBaseQuestions();
+  const base = buildComprehendJudgmentBaseQuestions();
   const firstChunkToolCap = Math.max(0, CHUNK_CAP - Object.keys(base).length);
   const firstChunkTools = toolNames.slice(0, firstChunkToolCap);
   const remainingTools = toolNames.slice(firstChunkToolCap);
@@ -83,12 +86,12 @@ function currentValueFor(
   }
 }
 
-/** Maps a Jev answer back to a comparable string for a given question id — `null` on any unrecognized/failed answer. */
-function jevValueFor(id: string, answer: JudgmentAnswer): string | null {
-  if (id === "complexity") return jevAnswerToComplexity(answer);
-  if (id === "output-format") return jevAnswerToOutputFormat(answer);
+/** Maps a judgment answer back to a comparable string for a given question id — `null` on any unrecognized/failed answer. */
+function judgedValueFor(id: string, answer: JudgmentAnswer): string | null {
+  if (id === "complexity") return answerToComplexity(answer);
+  if (id === "output-format") return answerToOutputFormat(answer);
   // "long-horizon" / "multi-step" / "citation-needed" / "requires::<toolName>" are all Nouls.
-  const bool = jevAnswerToBoolean(answer);
+  const bool = answerToBoolean(answer);
   return bool === null ? null : String(bool);
 }
 
@@ -105,20 +108,20 @@ function publishChunkShadow(
     (id) => {
       const current = currentValueFor(id, classification, nominatedToolNames);
       const answer = answers?.[id];
-      const jev = answer ? jevValueFor(id, answer) : null;
+      const judged = answer ? judgedValueFor(id, answer) : null;
       return publishReasoningStep(eventBus, {
         _tag: "JudgmentShadow",
         site: "task-comprehension",
-        jev,
+        judged,
         current,
-        agreement: jev === null ? null : jev === current,
+        agreement: judged === null ? null : judged === current,
       });
     },
     { discard: true },
   );
 }
 
-export interface JevComprehendShadowInput {
+export interface JudgmentComprehendShadowInput {
   readonly task: string;
   readonly classification: TaskClassification;
   /** Names of every tool actually nominated (any confidence) by `nominateRequiredTools` for this run. */
@@ -128,7 +131,7 @@ export interface JevComprehendShadowInput {
 }
 
 /**
- * Task 10 (shadow-only). Fires the batched (possibly chunked) Jev
+ * Task 10 (shadow-only). Fires the batched (possibly chunked) judgment
  * comprehend-classification questions via `Effect.forkDaemon` — never
  * awaited, never altering `classification`/`nominatedToolNames` (the values
  * actually used by the rest of the kernel, produced by the existing
@@ -140,8 +143,8 @@ export interface JevComprehendShadowInput {
  * actually enabled, keeping the documented "absent = zero-cost no-op"
  * guarantee true rather than aspirational.
  */
-export function jevComprehendShadow(
-  buildInput: () => JevComprehendShadowInput,
+export function judgmentComprehendShadow(
+  buildInput: () => JudgmentComprehendShadowInput,
   eventBus: Option.Option<EventBusInstance>,
 ): Effect.Effect<void, never> {
   return Effect.gen(function* () {
@@ -153,7 +156,7 @@ export function jevComprehendShadow(
     yield* Effect.forkDaemon(
       Effect.gen(function* () {
         const chunks = chunkQuestions(input.availableToolNames);
-        const state = buildComprehendJevState({ task: input.task });
+        const state = buildComprehendJudgmentState({ task: input.task });
 
         for (const chunk of chunks) {
           const questionIds = Object.keys(chunk);

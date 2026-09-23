@@ -152,26 +152,27 @@ Respond with ONLY a decimal number between 0.0 and 1.0. No explanation.`,
 /**
  * Scores `dims` with the configured judge engine. When a `JudgmentService`
  * is wired AND `judgeEngine` resolves to `"jev"` (the default — see
- * `DEFAULT_EVAL_CONFIG.judgeEngine`), jev-capable dimensions are answered in
- * ONE batched request (`scoreDimensionsViaJudgment`); any dimension that
- * request didn't cover — because it isn't jev-capable, or the batch/that
- * one field failed — falls back to the existing per-dimension `llm` path
- * unchanged. With no `JudgmentService` wired or `judgeEngine:"llm"`, this
- * is byte-for-byte the original all-`llm` behavior (Task 3 Step 2's
- * regression lock).
+ * `DEFAULT_EVAL_CONFIG.judgeEngine`), judgment-capable dimensions are
+ * answered in ONE batched request (`scoreDimensionsViaJudgment`); any
+ * dimension that request didn't cover — because it isn't judgment-capable,
+ * or the batch/that one field failed — falls back to the existing
+ * per-dimension `llm` path unchanged. With no `JudgmentService` wired or
+ * `judgeEngine:"llm"`, this is byte-for-byte the original all-`llm` behavior
+ * (Task 3 Step 2's regression lock).
  */
 /**
  * Result of one scoring pass, WITH provenance. Code review (2026-09-22)
  * flagged that without this, a case's repeat passes could silently mix
- * calibrated `jev` samples with uncalibrated `llm` self-report samples when
- * jev flakes on only some of a case's repeats — corrupting the variance
- * this whole task exists to measure. Callers that pool repeats must group
- * by `jevDims`, never blend a dimension's jev and llm samples together.
+ * calibrated judgment samples with uncalibrated `llm` self-report samples
+ * when the judgment backend flakes on only some of a case's repeats —
+ * corrupting the variance this whole task exists to measure. Callers that
+ * pool repeats must group by `judgmentDims`, never blend a dimension's
+ * judgment and llm samples together.
  */
 interface EngineScoredDimensions {
   readonly scores: DimensionScore[];
-  /** Which requested dims this pass actually answered via `jev` (the rest, including any not requested, came from `llm`). */
-  readonly jevDims: ReadonlySet<string>;
+  /** Which requested dims this pass actually answered via the judgment engine (the rest, including any not requested, came from `llm`). */
+  readonly judgmentDims: ReadonlySet<string>;
 }
 
 const scoreDimensionsWithEngine = (
@@ -190,20 +191,20 @@ const scoreDimensionsWithEngine = (
   concurrency: number,
 ): Effect.Effect<EngineScoredDimensions, EvalError> =>
   Effect.gen(function* () {
-    const useJev = judgeEngine === "jev" && Option.isSome(judgment);
-    const jevScores = useJev
+    const useJudgmentEngine = judgeEngine === "jev" && Option.isSome(judgment);
+    const judgmentScores = useJudgmentEngine
       ? yield* scoreDimensionsViaJudgment(judgment.value, dims, params)
       : new Map<string, DimensionScore>();
 
     const scores = yield* Effect.all(
       dims.map((dim) => {
-        const jevScore = jevScores.get(dim);
-        return jevScore !== undefined ? Effect.succeed(jevScore) : scoreDimension(llm, dim, params);
+        const judgmentScore = judgmentScores.get(dim);
+        return judgmentScore !== undefined ? Effect.succeed(judgmentScore) : scoreDimension(llm, dim, params);
       }),
       { concurrency },
     );
 
-    return { scores, jevDims: new Set(jevScores.keys()) };
+    return { scores, judgmentDims: new Set(judgmentScores.keys()) };
   });
 
 const buildSummary = (
@@ -368,16 +369,17 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               // This case's recorded score per dimension is the mean across
               // repeats (repeats:1 -> exactly the single pass, unchanged).
               // Per-dimension, homogeneous-engine only: if ANY repeat pass
-              // answered a dim via jev, use ONLY that dim's jev-sourced
-              // samples for this case (drop any llm stragglers from a
-              // transient jev flake) — never blend calibrated jev samples
-              // with uncalibrated llm samples for the same case+dimension
-              // (code review, 2026-09-22). A dim jev never answered on any
-              // pass uses all its (llm) samples as before.
+              // answered a dim via the judgment engine, use ONLY that dim's
+              // judgment-sourced samples for this case (drop any llm
+              // stragglers from a transient judgment-backend flake) — never
+              // blend calibrated judgment samples with uncalibrated llm
+              // samples for the same case+dimension (code review, 2026-09-22).
+              // A dim the judgment engine never answered on any pass uses all
+              // its (llm) samples as before.
               const scores: DimensionScore[] = suite.dimensions.map((dim) => {
-                const anyJev = repeatPasses.some((pass) => pass.jevDims.has(dim));
+                const anyViaJudgment = repeatPasses.some((pass) => pass.judgmentDims.has(dim));
                 const homogeneousSamples = repeatPasses
-                  .filter((pass) => (anyJev ? pass.jevDims.has(dim) : true))
+                  .filter((pass) => (anyViaJudgment ? pass.judgmentDims.has(dim) : true))
                   .flatMap((pass) => pass.scores.filter((s) => s.dimension === dim));
 
                 const values = homogeneousSamples.map((s) => s.score);

@@ -3,7 +3,7 @@ import type { ModelTier, ModelCostConfig, ComplexityAnalysis, Provider } from ".
 import { RoutingError } from "../errors.js";
 import { EventBus } from "@reactive-agents/core";
 import { JudgmentService } from "@reactive-agents/judgment";
-import { buildComplexityJevQuestions, buildComplexityJevState, jevAnswerToTier } from "./jev-complexity-questions.js";
+import { buildComplexityJudgmentQuestions, buildComplexityJudgmentState, answerToTier } from "./judgment-complexity-questions.js";
 
 // ─── Model cost configurations per provider ───
 // Each provider maps haiku/sonnet/opus to its light/mid/heavy model.
@@ -336,27 +336,30 @@ export const analyzeComplexity = (
       catch: (e) => new RoutingError({ message: "Complexity analysis failed", taskComplexity: undefined }),
     });
 
-    // Task 9b (shadow-only): fire the batched Jev tier-classification question
-    // via Effect.forkDaemon — never awaited, never altering `analysis`. See
-    // adaptive.ts's jevClassifyShadow (Task 9) for the identical pattern.
-    yield* jevComplexityShadow(task, analysis.recommendedTier);
+    // Task 9b (shadow-only): fire the batched judgment tier-classification
+    // question via Effect.forkDaemon — never awaited, never altering
+    // `analysis`. See adaptive.ts's judgmentClassifyShadow (Task 9) for the
+    // identical pattern.
+    yield* judgmentComplexityShadow(task, analysis.recommendedTier);
 
     return analysis;
   });
 
 /**
- * Task 9b (shadow-only). Fires the batched Jev tier-classification question
- * via `Effect.forkDaemon` — never awaited, never altering `current` (the tier
- * actually recommended by the existing heuristic path above). Emits
- * `JudgmentShadow` on the event bus with an agreement verdict for later
- * analysis (Task 9b Step 4's exit gate).
+ * Task 9b (shadow-only). Fires the batched judgment tier-classification
+ * question via `Effect.forkDaemon` — never awaited, never altering `current`
+ * (the tier actually recommended by the existing heuristic path above).
+ * Emits `JudgmentShadow` on the event bus with an agreement verdict for later
+ * analysis (Task 9b Step 4's exit gate). Backend-agnostic — works against
+ * whichever `JudgmentBackend` the resolved `JudgmentService` was constructed
+ * with.
  *
  * Absent `JudgmentService` or `EventBus` (no `.withJudgment()` on the
  * builder, or no observability layer) is a clean, zero-cost no-op —
  * `Effect.serviceOption` resolves `None` without adding either to this
  * function's (or `analyzeComplexity`'s) requirements.
  */
-function jevComplexityShadow(task: string, current: ModelTier): Effect.Effect<void, never> {
+function judgmentComplexityShadow(task: string, current: ModelTier): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const maybeJudgment = yield* Effect.serviceOption(JudgmentService);
     if (Option.isNone(maybeJudgment)) return;
@@ -369,19 +372,19 @@ function jevComplexityShadow(task: string, current: ModelTier): Effect.Effect<vo
       Effect.gen(function* () {
         const result = yield* judgment
           .ask({
-            state: buildComplexityJevState({ task }),
-            questions: buildComplexityJevQuestions(),
+            state: buildComplexityJudgmentState({ task }),
+            questions: buildComplexityJudgmentQuestions(),
           })
           .pipe(Effect.either);
 
-        const jevTier = Either.isRight(result) ? jevAnswerToTier(result.right.tier) : null;
+        const judged = Either.isRight(result) ? answerToTier(result.right.tier) : null;
 
         yield* eventBus.publish({
           _tag: "JudgmentShadow",
           site: "complexity-router",
-          jev: jevTier,
+          judged,
           current,
-          agreement: jevTier === null ? null : jevTier === current,
+          agreement: judged === null ? null : judged === current,
         });
       }),
     );

@@ -1,22 +1,23 @@
-// Run: bun test packages/reasoning/tests/kernel/capabilities/comprehend/jev-classification.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/kernel/capabilities/comprehend/judgment-classification.test.ts --timeout 15000
 //
-// Task 10 (shadow-only): jevComprehendShadow fires speculatively but must
-// NEVER be awaited by the caller and NEVER alter the regex-derived
+// Task 10 (shadow-only): judgmentComprehendShadow fires speculatively but
+// must NEVER be awaited by the caller and NEVER alter the regex-derived
 // TaskClassification/nominatedTools it shadows. Covers: agreeing answers,
-// disagreeing answers, Jev failure/timeout, JudgmentService entirely absent,
-// call-count===1 for a small tool roster, and chunking above the per-ask cap.
+// disagreeing answers, backend failure/timeout, JudgmentService entirely
+// absent, call-count===1 for a small tool roster, and chunking above the
+// per-ask cap.
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { JudgmentService } from "@reactive-agents/judgment";
 import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
 import { classifyTask } from "../../../../src/kernel/capabilities/comprehend/task-classification.js";
-import { jevComprehendShadow } from "../../../../src/kernel/capabilities/comprehend/jev-classification.js";
+import { judgmentComprehendShadow } from "../../../../src/kernel/capabilities/comprehend/judgment-classification.js";
 import type { EventBusInstance } from "../../../../src/kernel/state/kernel-state.js";
 
 type ShadowEvent = {
   readonly _tag: "JudgmentShadow";
   readonly site: string;
-  readonly jev: string | null;
+  readonly judged: string | null;
   readonly current: string;
   readonly agreement: boolean | null;
 };
@@ -98,7 +99,7 @@ const runShadow = async (
 ) => {
   const { events, eb } = makeMockEventBus();
   const classification = classifyTask(TASK);
-  const effect = jevComprehendShadow(
+  const effect = judgmentComprehendShadow(
     () => ({
       task: TASK,
       classification,
@@ -118,7 +119,7 @@ const runShadow = async (
   return events;
 };
 
-describe("jevComprehendShadow (Task 10, shadow-only)", () => {
+describe("judgmentComprehendShadow (Task 10, shadow-only)", () => {
   it("agreeing answers: every sub-question reports agreement:true", async () => {
     const events = await runShadow(fakeJudgmentLayer(agreeingAnswers));
 
@@ -126,7 +127,7 @@ describe("jevComprehendShadow (Task 10, shadow-only)", () => {
     expect(askCallCount).toBe(1);
     for (const e of events) {
       expect(e.site).toBe("task-comprehension");
-      expect(e.jev).not.toBeNull();
+      expect(e.judged).not.toBeNull();
       expect(e.agreement).toBe(true);
     }
   }, 15000);
@@ -140,12 +141,12 @@ describe("jevComprehendShadow (Task 10, shadow-only)", () => {
     }
   }, 15000);
 
-  it("Jev failure/timeout: every sub-question reports jev:null, agreement:null", async () => {
+  it("backend failure/timeout: every sub-question reports judged:null, agreement:null", async () => {
     const events = await runShadow(fakeJudgmentFailing());
 
     expect(events.length).toBe(5);
     for (const e of events) {
-      expect(e.jev).toBeNull();
+      expect(e.judged).toBeNull();
       expect(e.agreement).toBeNull();
     }
   }, 15000);
@@ -158,7 +159,7 @@ describe("jevComprehendShadow (Task 10, shadow-only)", () => {
   it("JudgmentService absent: the input thunk (classifyTask re-run + tool-roster Set/.map) is never invoked — real zero-cost, not just zero-events", async () => {
     const { eb } = makeMockEventBus();
     let buildInputCalls = 0;
-    const effect = jevComprehendShadow(() => {
+    const effect = judgmentComprehendShadow(() => {
       buildInputCalls++;
       return {
         task: TASK,

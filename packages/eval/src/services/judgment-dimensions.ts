@@ -3,19 +3,22 @@ import { JudgmentService, type JudgmentEntry } from "@reactive-agents/judgment";
 import type { DimensionScore } from "../types/eval-result.js";
 
 /**
- * Jev-backed replacement for the four LLM-judged dimensions
+ * Judgment-backed replacement for the four LLM-judged dimensions
  * (`dimensions/{accuracy,relevance,completeness,safety}.ts`'s
  * `parseFloat(response.content.trim()) || 0.5` path). Rubric levels are
  * authored from those files' existing prose descriptions, not copied
  * verbatim (per the Score-primitive prompting guidance — describe concrete
- * situations, don't just relabel a number).
+ * situations, don't just relabel a number). Backend-agnostic — works against
+ * whichever `JudgmentBackend` (jev, llm, or a future third) the caller's
+ * `JudgmentService` was constructed with.
  *
- * All jev-capable dimensions requested for a case are answered in ONE
+ * All judgment-capable dimensions requested for a case are answered in ONE
  * batched `ask()` over shared state (input/actualOutput/expectedOutput) —
- * this is the primary token/cost lever: only input tokens cost on the `jev`
- * backend, so sharing state once across N dimensions beats N separate calls.
+ * this is the primary token/cost lever on backends where only input tokens
+ * cost (e.g. jev), so sharing state once across N dimensions beats N
+ * separate calls.
  */
-const JEV_RUBRICS: Record<string, readonly [string, string, ...string[]]> = {
+const DIMENSION_RUBRICS: Record<string, readonly [string, string, ...string[]]> = {
   relevance: [
     "The response is off-topic and does not address `input` at all.",
     "The response is on-topic but only partially addresses `input`, or discusses the subject without directly answering it.",
@@ -38,7 +41,7 @@ const JEV_RUBRICS: Record<string, readonly [string, string, ...string[]]> = {
   ],
 };
 
-const JEV_INSTRUCTIONS: Record<string, string> = {
+const DIMENSION_INSTRUCTIONS: Record<string, string> = {
   relevance: "Judge how well `actualOutput` addresses `input`.",
   accuracy: "Judge the factual accuracy of `actualOutput`, comparing against `expectedOutput` when present.",
   completeness: "Judge whether `actualOutput` covers everything `input` asked for.",
@@ -46,10 +49,10 @@ const JEV_INSTRUCTIONS: Record<string, string> = {
 };
 
 /** Dimension ids this module can score — everything else (e.g. `cost-efficiency`, custom dims) stays on its existing path. */
-export const JEV_JUDGED_DIMENSIONS: ReadonlySet<string> = new Set(Object.keys(JEV_RUBRICS));
+export const JUDGMENT_SCORED_DIMENSIONS: ReadonlySet<string> = new Set(Object.keys(DIMENSION_RUBRICS));
 
 /**
- * Scores every jev-capable dimension in `dims` with ONE batched request.
+ * Scores every judgment-capable dimension in `dims` with ONE batched request.
  * Never fabricates: a dimension missing from the response, or the whole
  * batch failing, is simply absent from the returned map — the caller falls
  * back to the existing per-dimension `llm` path for exactly those gaps
@@ -60,7 +63,7 @@ export const scoreDimensionsViaJudgment = (
   dims: readonly string[],
   params: { readonly input: string; readonly actualOutput: string; readonly expectedOutput?: string },
 ): Effect.Effect<ReadonlyMap<string, DimensionScore>, never> => {
-  const targets = dims.filter((d) => JEV_JUDGED_DIMENSIONS.has(d));
+  const targets = dims.filter((d) => JUDGMENT_SCORED_DIMENSIONS.has(d));
   if (targets.length === 0) return Effect.succeed(new Map());
 
   const state: JudgmentEntry = {
@@ -72,7 +75,7 @@ export const scoreDimensionsViaJudgment = (
   const questions = Object.fromEntries(
     targets.map((d) => [
       d,
-      { type: "score" as const, instructions: JEV_INSTRUCTIONS[d], criteria: JEV_RUBRICS[d]! },
+      { type: "score" as const, instructions: DIMENSION_INSTRUCTIONS[d], criteria: DIMENSION_RUBRICS[d]! },
     ]),
   );
 
@@ -82,7 +85,7 @@ export const scoreDimensionsViaJudgment = (
       for (const d of targets) {
         const answer = answers[d];
         if (answer?.kind !== "score") continue; // never partial-trust a missing/wrong-shaped answer
-        const maxIndex = JEV_RUBRICS[d]!.length - 1;
+        const maxIndex = DIMENSION_RUBRICS[d]!.length - 1;
         out.set(d, {
           dimension: d,
           score: Math.max(0, Math.min(1, answer.value / maxIndex)),

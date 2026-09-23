@@ -1,10 +1,10 @@
-// Run: bun test packages/reasoning/tests/strategies/adaptive-jev-shadow.test.ts --timeout 15000
+// Run: bun test packages/reasoning/tests/strategies/adaptive-judgment-shadow.test.ts --timeout 15000
 //
-// Task 9 (shadow-only): the Jev strategy classifier fires speculatively at
-// adaptive.ts's selection site but must NEVER alter the strategy the existing
-// heuristic/LLM path picked. Covers: agreeing answer, disagreeing answer,
-// Jev failure/timeout, and JudgmentService entirely absent — all four must
-// leave `selectedStrategy` identical to the heuristic-only baseline.
+// Task 9 (shadow-only): the judgment strategy classifier fires speculatively
+// at adaptive.ts's selection site but must NEVER alter the strategy the
+// existing heuristic/LLM path picked. Covers: agreeing answer, disagreeing
+// answer, backend failure/timeout, and JudgmentService entirely absent — all
+// four must leave `selectedStrategy` identical to the heuristic-only baseline.
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
@@ -48,12 +48,13 @@ const runWithShadowCapture = async (judgmentLayer?: Layer.Layer<JudgmentService>
   const result = await Effect.runPromise(provideTestEnvelope(
     Effect.gen(function* () {
       const eb = yield* EventBus;
-      // Filter by site: runKernel() (invoked by the dispatched "reactive" sub-strategy)
-    // also fires its own task-comprehension shadow (Task 10) onto the same bus —
-    // this test only asserts on the strategy-selection shadow (Task 9).
-    yield* eb.on("JudgmentShadow", (event) =>
-      Effect.sync(() => { if (event.site === "strategy-selection") captured.push(event); }),
-    );
+      // Filter by site: runKernel() (invoked by the dispatched "reactive"
+      // sub-strategy) also fires its own task-comprehension shadow (Task 10)
+      // onto the same bus — this test only asserts on the strategy-selection
+      // shadow (Task 9).
+      yield* eb.on("JudgmentShadow", (event) =>
+        Effect.sync(() => { if (event.site === "strategy-selection") captured.push(event); }),
+      );
 
       const adaptiveResult = yield* executeAdaptive({
         taskDescription: SIMPLE_TASK,
@@ -75,34 +76,34 @@ const runWithShadowCapture = async (judgmentLayer?: Layer.Layer<JudgmentService>
   return { result, captured };
 };
 
-describe("adaptive Jev strategy-selection shadow (Task 9, shadow-only)", () => {
-  it("agreeing Jev answer: shadow reports agreement:true, selection unchanged", async () => {
+describe("adaptive judgment strategy-selection shadow (Task 9, shadow-only)", () => {
+  it("agreeing judgment answer: shadow reports agreement:true, selection unchanged", async () => {
     const { result, captured } = await runWithShadowCapture(fakeJudgmentAnswering("reactive"));
 
     expect(result.metadata.selectedStrategy).toBe("reactive");
     expect(captured).toHaveLength(1);
     expect(captured[0]?.site).toBe("strategy-selection");
-    expect(captured[0]?.jev).toBe("reactive");
+    expect(captured[0]?.judged).toBe("reactive");
     expect(captured[0]?.current).toBe("reactive");
     expect(captured[0]?.agreement).toBe(true);
   }, 15000);
 
-  it("disagreeing Jev answer: shadow reports agreement:false, selection STILL unchanged", async () => {
+  it("disagreeing judgment answer: shadow reports agreement:false, selection STILL unchanged", async () => {
     const { result, captured } = await runWithShadowCapture(fakeJudgmentAnswering("tree-of-thought"));
 
-    expect(result.metadata.selectedStrategy).toBe("reactive"); // heuristic's pick, not Jev's
+    expect(result.metadata.selectedStrategy).toBe("reactive"); // heuristic's pick, not the judgment's
     expect(captured).toHaveLength(1);
-    expect(captured[0]?.jev).toBe("tree-of-thought");
+    expect(captured[0]?.judged).toBe("tree-of-thought");
     expect(captured[0]?.current).toBe("reactive");
     expect(captured[0]?.agreement).toBe(false);
   }, 15000);
 
-  it("Jev failure/timeout: shadow reports jev:null, agreement:null, selection untouched", async () => {
+  it("judgment backend failure/timeout: shadow reports judged:null, agreement:null, selection untouched", async () => {
     const { result, captured } = await runWithShadowCapture(fakeJudgmentFailing());
 
     expect(result.metadata.selectedStrategy).toBe("reactive");
     expect(captured).toHaveLength(1);
-    expect(captured[0]?.jev).toBeNull();
+    expect(captured[0]?.judged).toBeNull();
     expect(captured[0]?.agreement).toBeNull();
   }, 15000);
 

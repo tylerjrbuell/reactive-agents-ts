@@ -29,7 +29,7 @@ export { DatasetService, DatasetServiceLive } from "./services/dataset-service.j
 export { JudgeLLMService, JudgeFromLLMServiceLive } from "./services/judge-llm-service.js";
 export type { JudgeLLMServiceShape } from "./services/judge-llm-service.js";
 
-export { scoreDimensionsViaJudgment, JEV_JUDGED_DIMENSIONS } from "./services/judgment-dimensions.js";
+export { scoreDimensionsViaJudgment, JUDGMENT_SCORED_DIMENSIONS } from "./services/judgment-dimensions.js";
 
 export {
   mean,
