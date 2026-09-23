@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# pre-commit hook — deterministic local safety checks before a commit is built.
+#
+# Installed via `git config core.hooksPath .githooks` (scripts/setup-git-hooks.sh,
+# run automatically by the root `postinstall` script). Keep this fast (local,
+# every-commit gate) — slower repo-wide checks (version-sync, cross-cutting,
+# doc-drift) belong in CI / the release workflow, not here.
+
+set -euo pipefail
+
+fail=0
+
+# ── 1. Never commit the real .env (secrets), only .env.example ─────────────
+if git diff --cached --name-only --diff-filter=ACM | grep -qE '(^|/)\.env$'; then
+  echo "❌ .env is staged. Only .env.example should ever be committed." >&2
+  echo "   Run: git restore --staged .env" >&2
+  fail=1
+fi
+
+# ── 2. Block obvious secret-key patterns in staged ADDITIONS ────────────────
+# Prefix-based, low-false-positive patterns for the providers/services this
+# repo integrates with. Not a substitute for a real secret scanner — a fast,
+# deterministic backstop for the common accidental-paste case.
+secret_patterns='sk-ant-api[0-9]{2}-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]{10,}'
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM || true)
+if [[ -n "$staged_files" ]]; then
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    # Skip binary files and this hook's own pattern definition.
+    [[ "$f" == .githooks/pre-commit ]] && continue
+    if git diff --cached -- "$f" | grep -E '^\+' | grep -qE "$secret_patterns"; then
+      echo "❌ Possible API key/secret detected in staged changes to: $f" >&2
+      echo "   If this is a false positive, adjust .githooks/pre-commit's secret_patterns." >&2
+      fail=1
+    fi
+  done <<< "$staged_files"
+fi
+
+exit $fail

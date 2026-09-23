@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# commit-msg hook — rejects AI co-author trailers.
+#
+# This repo forbids "Co-Authored-By: Claude ..." / "Co-Authored-By: ... @anthropic.com"
+# trailers (see .agents/MEMORY.md: feedback_no_coauthor.md) — they show up publicly
+# on GitHub's contributors graph and misattribute authorship. Some agent harnesses
+# auto-append this trailer via a system reminder; this hook is the deterministic
+# backstop so it never lands in history regardless of which tool made the commit.
+#
+# Installed via `git config core.hooksPath .githooks` (scripts/setup-git-hooks.sh,
+# run automatically by the root `postinstall` script).
+
+set -euo pipefail
+
+msg_file="$1"
+
+if grep -qiE '^co-authored-by:.*(claude|anthropic)' "$msg_file"; then
+  echo "❌ Commit rejected: Co-Authored-By trailer referencing Claude/Anthropic found." >&2
+  echo "   This repo forbids AI co-author trailers (see .agents/MEMORY.md)." >&2
+  echo "   Remove the trailer line and commit again." >&2
+  exit 1
+fi
+
+exit 0
