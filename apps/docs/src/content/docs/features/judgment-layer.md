@@ -45,6 +45,30 @@ Calling `agent.judge()` without `.withJudgment()` throws immediately — an unco
 
 Backend selection is automatic (`jev` when a key resolves, `llm` otherwise) unless you set `.withJudgment({ backend: "jev" | "llm" })` explicitly.
 
+### Auto-context: `includeContext`
+
+By default, `judge()` only sees the `state` you pass it. Pass `includeContext: true` to fold the agent's
+own recent conversation and tool observations in automatically — useful for judgments like "did this
+response actually answer the question" that need the surrounding turn, not just a hand-picked field:
+
+```typescript
+// Before: manually re-thread the last tool result yourself
+const { grounded } = await agent.judge({
+    state: { claim: answer, evidence: lastToolResult },
+    questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
+})
+
+// After: let judge() pull it from the agent's own recent context
+const { grounded } = await agent.judge({
+    questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
+    includeContext: true, // folds recent chat history + tool observations into state
+})
+```
+
+Manually-passed `state` fields always win on collision — `includeContext` only fills gaps, it never
+overwrites a field you set explicitly. `messageWindow` (default: same window the gateway chat path uses)
+and `includeToolResults` (default: `true` when `includeContext` is `true`) tune what gets folded in.
+
 ## The three primitives
 
 | Primitive  | Shape                                                                      | Use when                                                          |

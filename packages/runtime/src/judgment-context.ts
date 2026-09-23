@@ -18,21 +18,13 @@
  *   - Tool-observation content comes from ReactiveAgent's own
  *     _lastReasoningSteps cache (raw ReasoningStep[] from the last run()),
  *     the same source _lastRunObservations derives from for chat() context.
- *
- * One deliberate deviation from the brief: compressToolResult
- * (@reactive-agents/reasoning's kernel/capabilities/attend/
- * tool-formatting.ts) is NOT re-used here because it is not part of the
- * @reactive-agents/reasoning package's public export surface (only
- * re-exported from an internal strategy module, strategies/reactive.ts,
- * which is unreachable from packages/runtime under the package's exports
- * map). Reaching it would require editing packages/reasoning/src/index.ts,
- * which is outside this task's packages/runtime/** authority - flagged
- * upward as a follow-up rather than patched here. truncateToolResult below
- * is a minimal, honestly simpler byte-budget truncation (no JSON-aware
- * array preview/recall-hint behavior) as a stand-in until that export lands.
+ *   - Tool-result truncation reuses compressToolResult
+ *     (@reactive-agents/reasoning), the same structured preview +
+ *     scratchpad-storage compressor the kernel's own act/attend phases use
+ *     for tool output - not a second, weaker truncation implementation.
  */
 import { Schema } from "effect";
-import type { ReasoningStep } from "@reactive-agents/reasoning";
+import { compressToolResult, type ReasoningStep } from "@reactive-agents/reasoning";
 import type { ChatMessage } from "./chat.js";
 import { applyHistoryWindow, formatHistoryBlock } from "./gateway-context-formatting.js";
 
@@ -64,24 +56,10 @@ export type JudgeContextOptions = typeof JudgeContextOptionsSchema.Type;
 const DEFAULT_MESSAGE_WINDOW = 40;
 /** Most-recent N tool observations folded in when includeToolResults is on. */
 const DEFAULT_TOOL_RESULT_COUNT = 5;
-/** Per-observation char budget for truncateToolResult. */
+/** Per-observation char budget passed to compressToolResult. */
 const DEFAULT_TOOL_RESULT_BUDGET = 400;
-
-// --- Tool-result truncation (stand-in for compressToolResult - see file header) ---
-
-/**
- * Minimal byte-budget truncation for a tool observation's content. Not a
- * replacement for compressToolResult's JSON-aware array preview/recall-hint
- * behavior - see file header for why that helper isn't reachable here.
- */
-export function truncateToolResult(
-  content: string,
-  budget: number = DEFAULT_TOOL_RESULT_BUDGET,
-): string {
-  if (content.length <= budget) return content;
-  const suffix = ` (truncated, ${content.length} chars total)`;
-  return content.slice(0, budget) + suffix;
-}
+/** Array-preview item count passed to compressToolResult. */
+const DEFAULT_TOOL_RESULT_PREVIEW_ITEMS = 3;
 
 // --- Context sources ---
 
@@ -118,7 +96,15 @@ export function buildAutoContext(
     const observations = sources.reasoningSteps.filter((s) => s.type === "observation");
     const recent = observations.slice(-DEFAULT_TOOL_RESULT_COUNT);
     if (recent.length > 0) {
-      context.toolResults = recent.map((s) => truncateToolResult(s.content));
+      context.toolResults = recent.map(
+        (s) =>
+          compressToolResult(
+            s.content,
+            s.metadata?.toolUsed ?? "unknown",
+            DEFAULT_TOOL_RESULT_BUDGET,
+            DEFAULT_TOOL_RESULT_PREVIEW_ITEMS,
+          ).content,
+      );
     }
   }
 

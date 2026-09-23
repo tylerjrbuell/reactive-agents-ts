@@ -9,7 +9,6 @@ import { describe, it, expect } from "bun:test";
 import {
   buildAutoContext,
   mergeJudgmentState,
-  truncateToolResult,
 } from "../src/judgment-context.js";
 import type { ChatMessage } from "../src/chat.js";
 import type { ReasoningStep } from "@reactive-agents/reasoning";
@@ -80,17 +79,24 @@ describe("buildAutoContext", () => {
   });
 });
 
-describe("truncateToolResult", () => {
-  it("passes short content through unchanged", () => {
-    expect(truncateToolResult("short")).toBe("short");
-  });
-
-  it("truncates content over budget and notes the original length", () => {
-    const long = "x".repeat(500);
-    const result = truncateToolResult(long, 100);
-    expect(result.length).toBeLessThan(long.length);
-    expect(result).toContain("truncated");
-    expect(result).toContain("500");
+describe("buildAutoContext tool-result compression", () => {
+  it("compresses an over-budget observation via the shared compressToolResult helper", () => {
+    const longSteps: ReasoningStep[] = [
+      {
+        id: "s1" as ReasoningStep["id"],
+        type: "observation",
+        content: "y".repeat(2000),
+        timestamp: new Date(0),
+        metadata: { toolUsed: "http-get" },
+      },
+    ];
+    const context = buildAutoContext(
+      { chatHistory: [], reasoningSteps: longSteps },
+      { includeContext: true },
+    );
+    const results = context.toolResults as string[];
+    expect(results).toHaveLength(1);
+    expect(results[0]!.length).toBeLessThan(2000);
   });
 });
 

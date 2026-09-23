@@ -467,6 +467,14 @@ export {
   type ModelRoutingPool,
 } from "./kernel/policy/purpose-routing.js";
 
+// Tool-result compression — shared budget-aware summarizer, reused outside
+// the kernel by anything that needs the same tool-observation shape (e.g.
+// packages/runtime's judgment includeContext auto-merge).
+export {
+  compressToolResult,
+  type CompressResult,
+} from "./kernel/capabilities/attend/tool-formatting.js";
+
 // Harness killswitch resolution — one place decides what each env flag means.
 export {
   lazyDisclosureEnabled,
