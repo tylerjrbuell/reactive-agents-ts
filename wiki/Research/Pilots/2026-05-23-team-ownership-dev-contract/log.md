@@ -967,3 +967,11 @@ task: "Phase E Task 6 — agent.judgeRank() batched candidate re-ranking primiti
 result: completed, confidence 0.9
 outcome: "accepted — 1 Important finding (undocumented silent answer-drop) fixed in round 1, scoped re-review ADDRESSED, 1 minor deferred, commits 4a27cad8..c37fcfb3"
 ```
+
+```yaml
+date: 2026-09-23
+warden: runtime-warden
+task: "Phase E final whole-branch review fix wave — 7 findings (CI-breaking network test, missing facade re-exports, chunkCap hang, missing changeset, listModels error-contract docs, duplicate/__proto__ candidate id safety, doc import fix) + 1 unrelated pilot-log fence fix"
+result: completed
+outcome: "accepted — scoped re-review verdict ALL findings ADDRESSED, no new Critical/Important breakage, 6 commits"
+```
