@@ -19,6 +19,7 @@ export type {
 } from "./types.js";
 
 export type { JudgeInput } from "./reactive-agent.js";
+export type { JudgmentModel } from "@reactive-agents/judgment";
 
 // ─── Schemas ───
 export {

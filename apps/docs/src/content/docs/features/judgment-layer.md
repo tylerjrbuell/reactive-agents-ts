@@ -69,6 +69,34 @@ Manually-passed `state` fields always win on collision — `includeContext` only
 overwrites a field you set explicitly. `messageWindow` (default: same window the gateway chat path uses)
 and `includeToolResults` (default: `true` when `includeContext` is `true`) tune what gets folded in.
 
+### Listing available models
+
+Query the backend's available model list via `agent.listModels()`:
+
+```typescript
+const models = await agent.listModels();
+models.forEach(m => {
+    console.log(`${m.name}: ${m.description} (released ${m.releaseDate})`);
+});
+```
+
+This returns an array of `JudgmentModel` objects (name, description, releaseDate). Calling `agent.listModels()` without `.withJudgment()` throws immediately — the same contract as `agent.judge()`.
+
+**Backends:**
+- **`jev`** backend: returns the live model catalog from TypeSafe's API
+- **`llm`** backend: throws `JudgmentUnsupported` (no catalog endpoint available)
+
+If you're holding a `JudgmentService` directly (not via the agent facade), you can also call its method:
+
+```typescript
+const models = await Effect.runPromise(
+    Effect.gen(function* () {
+        const service = yield* JudgmentService;
+        return yield* service.listModels();
+    }).pipe(Effect.provide(layer))
+);
+```
+
 ## The three primitives
 
 | Primitive  | Shape                                                                      | Use when                                                          |

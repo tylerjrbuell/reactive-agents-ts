@@ -65,6 +65,7 @@ import { JudgmentService } from '@reactive-agents/judgment'
 import type {
     JudgmentAnswers,
     JudgmentEntry,
+    JudgmentModel,
     QuestionSpecs,
 } from '@reactive-agents/judgment'
 import { buildAutoContext, mergeJudgmentState, type JudgeContextOptions } from './judgment-context.js'
@@ -630,6 +631,44 @@ export class ReactiveAgent<TOut = unknown> {
                     ) as Effect.Effect<void>
                 }
                 return yield* judgmentOpt.value.ask({ state: mergedState, questions, model })
+            })
+        )
+    }
+
+    /**
+     * List the models/aliases available to `judge()` on this agent's JudgmentService backend.
+     *
+     * Delegates to the wired `JudgmentService.listModels()` — surfaces the catalog
+     * for backends like `jev` that maintain one. Backends without a catalog (e.g. `llm`)
+     * surface `JudgmentUnsupported` error.
+     *
+     * @returns Promise resolving to an array of available judgment models
+     * @throws Error if `.withJudgment()` was not called during build
+     * @throws JudgmentUnsupported if the backend has no model catalog
+     *
+     * @example
+     * ```typescript
+     * const agent = ReactiveAgents.create()
+     *   .withProvider("anthropic")
+     *   .withJudgment({ backend: "jev" })
+     *   .build();
+     *
+     * const models = await agent.listModels();
+     * models.forEach(m => console.log(`${m.name}: ${m.description}`));
+     * ```
+     */
+    async listModels(): Promise<ReadonlyArray<JudgmentModel>> {
+        return this.runtime.runPromise(
+            Effect.gen(function* () {
+                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+                if (judgmentOpt._tag !== 'Some') {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.listModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                        )
+                    )
+                }
+                return yield* judgmentOpt.value.listModels()
             })
         )
     }
