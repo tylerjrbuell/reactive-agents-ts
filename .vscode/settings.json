@@ -2,10 +2,12 @@
     "cSpell.words": [
         "Agentic",
         "cloudrun",
+        "GROQ",
         "litellm",
         "ollama",
         "Reflexion",
-        "tylerjrbuell"
+        "tylerjrbuell",
+        "TYPESAFE"
     ],
     "chat.tools.terminal.autoApprove": {
         "bun": true,
