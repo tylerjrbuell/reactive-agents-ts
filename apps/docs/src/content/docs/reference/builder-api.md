@@ -48,7 +48,7 @@ const agent = await ReactiveAgents.create()
 | [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
 | [Advanced](#advanced) | `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withUserInteraction`, `withLazyValidation`, `withDocuments`, `withTaskContext`, `withLayers` |
 | [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
-| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose` |
+| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose`, `judge`, `listModels`, `judgeRank` |
 | [Result Reference](#agentresult) | `AgentResult`, `AgentDebrief`, stream event types |
 
 ## Method ↔ config correspondence
@@ -850,6 +850,18 @@ Deny a paused run's action and resume to completion — the agent observes the d
 | `registerTool(definition, handler)`         | Register a tool after build; `handler` returns `Effect`   |
 | `unregisterTool(name)`                      | Remove a previously registered custom tool                |
 | `ingest(content, { source, format?, ... })` | Ingest text into RAG when tools / `withDocuments` enabled |
+
+### Judgment (runtime)
+
+Require `.withJudgment()` on the builder — each method below throws immediately if it wasn't
+called (`JudgmentService` genuinely absent from the runtime's Layer graph, not silently stubbed).
+See [Judgment Layer](/features/judgment-layer/) and the [judgment cookbook](/guides/judgment-cookbook/).
+
+| Method                                       | Description                                                                                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `judge(input: JudgeInput<Q>)`                 | Ask one or more typed Choice/Score/Noul questions over `state` (or `includeContext: true` to fold in recent chat + tool observations)        |
+| `listModels()`                                | List the configured backend's available judgment models (`jev`: live TypeSafe catalog; `llm`: throws `JudgmentUnsupported`, no catalog endpoint) |
+| `judgeRank(candidates, question, opts?)`      | Batch-Score-rank candidates against one shared question; returns best-first results, **may be shorter than `candidates`** on backend-answer drops |
 
 ### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`
 

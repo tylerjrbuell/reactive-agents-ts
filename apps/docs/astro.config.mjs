@@ -286,6 +286,10 @@ export default defineConfig({
                             badge: { text: 'New', variant: 'success' },
                         },
                         {
+                            label: 'Judgment Cookbook',
+                            link: 'guides/judgment-cookbook/',
+                        },
+                        {
                             label: 'Security Hardening',
                             link: 'guides/security-hardening/',
                         },

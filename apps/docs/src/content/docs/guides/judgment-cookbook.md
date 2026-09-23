@@ -80,31 +80,34 @@ Code decides what's relevant; the model never sees your branching logic, only th
 
 `Score` each candidate against the same rubric, then let code pick the winner — better fit
 than asking a single open-ended "which is best" `Choice` when the candidate set is dynamic
-(search results, retrieved passages, generated alternatives) rather than a small fixed enum:
+(search results, retrieved passages, generated alternatives) rather than a small fixed enum.
+
+Use `agent.judgeRank()` — it batches every candidate's Score question into as few `ask()`
+calls as possible (one call when the whole set fits under `chunkCap`, chunked calls
+otherwise), instead of firing one round trip per candidate:
 
 ```typescript
-const scored = await Promise.all(
-    candidates.map(async (candidate) => {
-        const { relevance } = await agent.judge({
-            state: { query, candidate: candidate.text },
-            questions: {
-                relevance: {
-                    type: 'score',
-                    instructions: 'How relevant is `candidate` to `query`?',
-                    criteria: ['irrelevant', 'tangential', 'partially relevant', 'directly relevant'],
-                },
-            },
-        })
-        return { candidate, score: relevance.kind === 'score' ? relevance.value : -1 }
-    }),
+const ranked = await agent.judgeRank(
+    candidates.map((c) => ({ id: c.id, state: { query, candidate: c.text } })),
+    {
+        instructions: 'How relevant is `candidate` to `query`?',
+        criteria: ['irrelevant', 'tangential', 'partially relevant', 'directly relevant'],
+    },
 )
 
-const best = scored.sort((a, b) => b.score - a.score)[0]
+const best = candidates.find((c) => c.id === ranked[0]?.id)
 ```
 
-For a large candidate set, batch several candidates as named fields in one `state` object and
-ask one `relevance-<id>` question per candidate instead of one call per candidate — same
-speculative-fan-out tradeoff as above, worth measuring against your own candidate count.
+`ranked` is sorted best-first. It **may come back shorter than `candidates`** — a candidate the
+backend answers with something other than a Score answer is silently dropped rather than
+surfaced as a partial-failure marker, so diff `ranked.map(r => r.id)` against your candidate
+list if you need to detect drops.
+
+For a large candidate set, tune `opts.chunkCap` (default `30` candidates per `ask()` call)
+against your own candidate count — a lower cap means more calls but a smaller prompt per call;
+a higher cap means fewer calls at the cost of one larger request. See
+[Judgment Layer → `judgeRank()`](/features/judgment-layer/#re-ranking-candidates-judgerank) for
+the full option reference.
 
 ## Citation / grounding check
 

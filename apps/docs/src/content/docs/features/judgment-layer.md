@@ -36,6 +36,17 @@ if (risky.kind === 'noul' && risky.probability > 0.7) {
 
 Calling `agent.judge()` without `.withJudgment()` throws immediately — an unconfigured judgment call is a caller mistake, not a silent no-op.
 
+`agent.judge()`'s input type is exported as `JudgeInput<Q>` (from `reactive-agents` / `@reactive-agents/runtime`) if you want to name the shape of the argument object yourself — a discriminated union on `includeContext` so `state` is only optional when `includeContext: true` supplies it automatically:
+
+```typescript
+import type { JudgeInput } from 'reactive-agents'
+import type { QuestionSpecs } from '@reactive-agents/judgment'
+
+function buildJudgeCall<Q extends QuestionSpecs>(questions: Q): JudgeInput<Q> {
+    return { state: { checked: true }, questions }
+}
+```
+
 ### Backends
 
 | Backend | Requires                                                                        | Calibration                                                                                                                           |
@@ -96,6 +107,44 @@ const models = await Effect.runPromise(
     }).pipe(Effect.provide(layer))
 );
 ```
+
+### Re-ranking candidates: `judgeRank()`
+
+Hand-rolling a re-rank loop (`Promise.all(candidates.map(c => agent.judge(...)))`) fires one
+round trip **per candidate**. `agent.judgeRank()` batches every candidate's Score question into
+as few `ask()` calls as possible instead:
+
+```typescript
+const ranked = await agent.judgeRank(
+    drafts.map((text, i) => ({ id: String(i), state: { text } })),
+    {
+        instructions: "How well does this draft answer the user's question?",
+        criteria: ['poor', 'weak', 'adequate', 'strong', 'excellent'],
+    },
+)
+
+const best = drafts[Number(ranked[0].id)]
+```
+
+`agent.judgeRank(candidates, question, opts?)`:
+
+-   **`candidates`** — `{ id: string; state: JudgmentEntry }[]`. `id` is your own identifier, returned unchanged.
+-   **`question`** — one shared `{ instructions, criteria }` Score question every candidate is judged against.
+-   **`opts.chunkCap`** — max candidates per `ask()` call (default `30`). Candidate sets larger than `chunkCap`
+    are split into multiple `ask()` calls, in candidate order, never re-shuffled.
+-   **`opts.model`** — override the backend model for this call.
+-   **Returns** `Promise<ReadonlyArray<{ id: string; score: number; confidence: number }>>`, sorted
+    best-first (highest `score` first; ties keep original relative order).
+
+**The returned array may be shorter than `candidates`.** A candidate whose answer doesn't come back
+as a Score answer (backend misbehavior — a non-conforming custom `JudgmentBackend`) is silently
+dropped rather than surfaced as a partial-failure marker, so every other candidate in the batch can
+still be ranked. If you need to detect drops, diff the returned `id`s against your own candidate
+list. Like `judge()` and `listModels()`, calling `judgeRank()` without `.withJudgment()` throws
+immediately.
+
+See the [judgment cookbook's re-ranking recipe](/guides/judgment-cookbook/#re-ranking-candidates)
+for the full worked example.
 
 ## The three primitives
 
