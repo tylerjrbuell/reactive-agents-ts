@@ -116,6 +116,67 @@ describe("judgeRank() — Task 6 core primitive", () => {
     expect(calls.count).toBeLessThan(candidates(7).length);
   });
 
+  it("(f) chunkCap <= 0 rejects instead of hanging in an infinite loop", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const judgment = makeMockJudgment({}, calls);
+
+    await expect(
+      Effect.runPromise(
+        judgeRank(judgment, candidates(3), question, { chunkCap: 0 }) as Effect.Effect<
+          ReadonlyArray<{ id: string; score: number; confidence: number }>,
+          JudgmentError
+        >
+      )
+    ).rejects.toThrow(/chunkCap must be a positive finite number/);
+
+    await expect(
+      Effect.runPromise(
+        judgeRank(judgment, candidates(3), question, { chunkCap: -5 }) as Effect.Effect<
+          ReadonlyArray<{ id: string; score: number; confidence: number }>,
+          JudgmentError
+        >
+      )
+    ).rejects.toThrow(/chunkCap must be a positive finite number/);
+
+    // Never called ask() — the guard fires before any chunk is built.
+    expect(calls.count).toBe(0);
+  });
+
+  it("(g) DUPLICATE IDS: rejects up front instead of silently overwriting a candidate", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const judgment = makeMockJudgment({}, calls);
+    const dupes: readonly JudgeRankCandidate[] = [
+      { id: "c0", state: { text: "first" } },
+      { id: "c0", state: { text: "second" } },
+    ];
+
+    await expect(
+      Effect.runPromise(
+        judgeRank(judgment, dupes, question) as Effect.Effect<
+          ReadonlyArray<{ id: string; score: number; confidence: number }>,
+          JudgmentError
+        >
+      )
+    ).rejects.toThrow(/duplicate candidate id "c0"/);
+
+    expect(calls.count).toBe(0);
+  });
+
+  it("(h) __proto__ CANDIDATE ID: a candidate id of exactly \"__proto__\" is judged, not dropped", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const judgment = makeMockJudgment({ ["__proto__"]: 0.7 }, calls);
+
+    const result = await Effect.runPromise(
+      judgeRank(judgment, [{ id: "__proto__", state: { text: "candidate" } }], question) as Effect.Effect<
+        ReadonlyArray<{ id: string; score: number; confidence: number }>,
+        JudgmentError
+      >
+    );
+
+    expect(result.map((r) => r.id)).toEqual(["__proto__"]);
+    expect(calls.questionIdsPerCall[0]).toEqual(["__proto__"]);
+  });
+
   it("(d) DETERMINISTIC TIES: equal scores keep the candidates' original relative order", async () => {
     const calls = { count: 0, questionIdsPerCall: [] as string[][] };
     // c0 and c2 tie at 0.5; c1 is highest. Input order is c0, c1, c2.

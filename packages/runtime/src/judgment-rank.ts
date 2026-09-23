@@ -91,12 +91,20 @@ function chunkArray<T>(items: readonly T[], chunkCap: number): ReadonlyArray<rea
   return chunks;
 }
 
-/** Builds one Score `QuestionSpec` per candidate in `chunk`, keyed by candidate id. */
+/**
+ * Builds one Score `QuestionSpec` per candidate in `chunk`, keyed by candidate id.
+ *
+ * Uses `Object.create(null)` rather than a plain `{}`/assignment target: a
+ * candidate id of exactly `"__proto__"` assigned onto a plain object
+ * pollutes the object's prototype instead of being stored as an own key,
+ * silently dropping that candidate's question rather than surfacing it in
+ * `ask()`'s batch.
+ */
 function buildChunkQuestions(
   chunk: readonly JudgeRankCandidate[],
   question: JudgeRankQuestion,
 ): QuestionSpecs {
-  const specs: Record<string, ScoreSpec> = {};
+  const specs: Record<string, ScoreSpec> = Object.create(null);
   for (const candidate of chunk) {
     specs[candidate.id] = {
       type: "score",
@@ -105,6 +113,22 @@ function buildChunkQuestions(
     };
   }
   return specs;
+}
+
+/**
+ * Rejects duplicate candidate ids up front. Without this, two candidates
+ * sharing an id would silently overwrite each other in `buildChunkQuestions`'s
+ * per-chunk `specs` map — only the last duplicate's state gets judged, but
+ * the result could be (mis)read as representing both.
+ */
+function assertUniqueCandidateIds(candidates: readonly JudgeRankCandidate[]): void {
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.id)) {
+      throw new Error(`judgeRank(): duplicate candidate id "${candidate.id}" — every candidate.id must be unique.`);
+    }
+    seen.add(candidate.id);
+  }
 }
 
 /**
@@ -144,10 +168,24 @@ export function judgeRank(
   question: JudgeRankQuestion,
   opts: JudgeRankOptions = {},
 ): Effect.Effect<ReadonlyArray<JudgeRankResult>, JudgmentError> {
-  const chunkCap = opts.chunkCap ?? DEFAULT_JUDGE_RANK_CHUNK_CAP;
-  const chunks = chunkArray(candidates, chunkCap);
-
   return Effect.gen(function* () {
+    const chunkCap = opts.chunkCap ?? DEFAULT_JUDGE_RANK_CHUNK_CAP;
+    // `chunkArray`'s loop advances by `chunkCap` each iteration
+    // (`i += chunkCap`) — a non-positive or non-finite cap never advances
+    // `i`, producing an infinite synchronous loop that pushes empty slices
+    // until the process hangs/OOMs. Reject up front instead, same style as
+    // the existing `.withJudgment()`-absent throw: a caller mistake
+    // surfaced loudly, not silently clamped into a different (and
+    // surprising) chunking behavior.
+    if (!Number.isFinite(chunkCap) || chunkCap <= 0) {
+      return yield* Effect.die(
+        new Error(
+          `judgeRank(): opts.chunkCap must be a positive finite number, got ${chunkCap}.`,
+        ),
+      );
+    }
+    assertUniqueCandidateIds(candidates);
+    const chunks = chunkArray(candidates, chunkCap);
     const results: JudgeRankResult[] = [];
     for (const chunk of chunks) {
       const questions = buildChunkQuestions(chunk, question);
