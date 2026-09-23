@@ -860,7 +860,7 @@ See [Judgment Layer](/features/judgment-layer/) and the [judgment cookbook](/gui
 | Method                                       | Description                                                                                                                                 |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `judge(input: JudgeInput<Q>)`                 | Ask one or more typed Choice/Score/Noul questions over `state` (or `includeContext: true` to fold in recent chat + tool observations)        |
-| `listModels()`                                | List the configured backend's available judgment models (`jev`: live TypeSafe catalog; `llm`: throws `JudgmentUnsupported`, no catalog endpoint) |
+| `listModels()`                                | List the configured backend's available judgment models (`jev`: live TypeSafe catalog; `llm`: rejects, message names the missing catalog — the rejection is a `FiberFailure` wrapper, not a bare `JudgmentUnsupported` you can `instanceof`-check) |
 | `judgeRank(candidates, question, opts?)`      | Batch-Score-rank candidates against one shared question; returns best-first results, **may be shorter than `candidates`** on backend-answer drops |
 
 ### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`

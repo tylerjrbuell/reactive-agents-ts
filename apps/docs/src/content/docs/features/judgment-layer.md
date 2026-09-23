@@ -95,11 +95,26 @@ This returns an array of `JudgmentModel` objects (name, description, releaseDate
 
 **Backends:**
 - **`jev`** backend: returns the live model catalog from TypeSafe's API
-- **`llm`** backend: throws `JudgmentUnsupported` (no catalog endpoint available)
+- **`llm`** backend: rejects with a `JudgmentUnsupported` failure (no catalog endpoint available) —
+  **not** a bare `JudgmentUnsupported` instance you can `instanceof`-check. `agent.listModels()`'s
+  Promise is backed by `ManagedRuntime.runPromise()`, which rejects with a `FiberFailure` wrapper
+  around the tagged error, so `error instanceof JudgmentUnsupported` is `false` on the real
+  rejection. Match on the rejection's `message` instead — it names the missing catalog
+  (`Backend "llm" has no model catalog`).
 
-If you're holding a `JudgmentService` directly (not via the agent facade), you can also call its method:
+If you're holding a `JudgmentService` directly (not via the agent facade) and run the Effect
+yourself, the same `FiberFailure`-wrapping applies — `Effect.runPromise()` (not just
+`ManagedRuntime.runPromise()`) rejects with a `FiberFailure` around any tagged failure, so
+`instanceof JudgmentUnsupported` is still `false` on the rejection. Use `Effect.runPromiseExit()`
+(or catch the failure inside the Effect with `Effect.catchTag`/`Effect.catchAll` before running it)
+if you need the real, un-wrapped `JudgmentUnsupported` instance:
 
 ```typescript
+import { Effect } from "effect";
+import { JudgmentService } from "@reactive-agents/judgment";
+// `layer` is your own `JudgmentService` layer, however you constructed it
+// (e.g. `makeJudgmentServiceLive(makeJevBackend({ apiKey }))`).
+
 const models = await Effect.runPromise(
     Effect.gen(function* () {
         const service = yield* JudgmentService;

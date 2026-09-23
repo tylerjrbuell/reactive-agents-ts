@@ -647,11 +647,18 @@ export class ReactiveAgent<TOut = unknown> {
      *
      * Delegates to the wired `JudgmentService.listModels()` — surfaces the catalog
      * for backends like `jev` that maintain one. Backends without a catalog (e.g. `llm`)
-     * surface `JudgmentUnsupported` error.
+     * reject with a `JudgmentUnsupported` failure.
      *
      * @returns Promise resolving to an array of available judgment models
      * @throws Error if `.withJudgment()` was not called during build
-     * @throws JudgmentUnsupported if the backend has no model catalog
+     * @throws Rejects (does NOT throw a bare `JudgmentUnsupported` you can
+     *   `instanceof`-check) when the backend has no model catalog. This
+     *   Promise is backed by `ManagedRuntime.runPromise()`, which rejects
+     *   with a `FiberFailure` wrapper around the underlying tagged error, not
+     *   the tagged error itself — `error instanceof JudgmentUnsupported` is
+     *   `false` on the real rejection. The rejection's `message` names the
+     *   missing catalog (e.g. `Backend "llm" has no model catalog`); match on
+     *   that if you need to distinguish this case from other failures.
      *
      * @example
      * ```typescript
