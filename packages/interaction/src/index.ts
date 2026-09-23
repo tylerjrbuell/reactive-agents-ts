@@ -101,6 +101,12 @@ export {
   PreferenceLearner,
   PreferenceLearnerLive,
 } from "./services/preference-learner.js";
+export {
+  buildAutonomyConfidenceQuestions,
+  buildAutonomyConfidenceState,
+  answerToSafeToAutoApprove,
+} from "./services/autonomy-confidence-questions.js";
+export type { AutonomyConfidenceQuestionsInput } from "./services/autonomy-confidence-questions.js";
 
 // ─── Runtime ───
 export { createInteractionLayer } from "./runtime.js";

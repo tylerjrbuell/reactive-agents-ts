@@ -14,6 +14,7 @@
     "@reactive-agents/core": "0.16.0",
     "@reactive-agents/reasoning": "0.16.0",
     "@reactive-agents/observability": "0.16.0",
+    "@reactive-agents/judgment": "0.16.0",
     "ulid": "^2.3.0"
   },
   "devDependencies": {

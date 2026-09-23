@@ -1,5 +1,71 @@
-import { Context, Effect, Layer, Ref } from "effect";
+import { Context, Effect, Either, Layer, Option, Ref } from "effect";
+import { EventBus } from "@reactive-agents/core";
+import { JudgmentService } from "@reactive-agents/judgment";
 import type { UserPreference, ApprovalPattern } from "../types/preference.js";
+import {
+  buildAutonomyConfidenceQuestions,
+  buildAutonomyConfidenceState,
+  answerToSafeToAutoApprove,
+} from "./autonomy-confidence-questions.js";
+
+/**
+ * Task 11b (shadow-only — see plan's "highest blast radius" note; no
+ * inversion step is written in this task). Fires the batched
+ * `preferenceMatch`/`safeToAutoApprove` judgment questions via
+ * `Effect.forkDaemon` — never awaited, never altering `current` (the boolean
+ * `shouldAutoApprove` actually returns, decided by the existing
+ * confidence/occurrences/action/cost-threshold gate above). Emits
+ * `JudgmentShadow` tagged `site: "autonomy-confidence"` — distinct from
+ * every other shadow site, so its agreement data is never averaged into a
+ * less-sensitive site's ablation numbers. `Effect.serviceOption` resolution
+ * of `JudgmentService`/`EventBus` means an unconfigured judgment layer is a
+ * clean, zero-cost no-op — this function's (and `shouldAutoApprove`'s)
+ * requirements stay unwidened.
+ */
+function autonomyConfidenceShadow(
+  pattern: ApprovalPattern,
+  cost: number | undefined,
+  current: boolean,
+): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const maybeJudgment = yield* Effect.serviceOption(JudgmentService);
+    if (Option.isNone(maybeJudgment)) return;
+    const maybeEventBus = yield* Effect.serviceOption(EventBus);
+    if (Option.isNone(maybeEventBus)) return;
+    const judgment = maybeJudgment.value;
+    const eventBus = maybeEventBus.value;
+
+    yield* Effect.forkDaemon(
+      Effect.gen(function* () {
+        const result = yield* judgment
+          .ask({
+            state: buildAutonomyConfidenceState({
+              taskType: pattern.taskType,
+              occurrences: pattern.occurrences,
+              heuristicConfidence: pattern.confidence,
+              recordedAction: pattern.action,
+              costThreshold: pattern.costThreshold,
+              cost,
+            }),
+            questions: buildAutonomyConfidenceQuestions(),
+          })
+          .pipe(Effect.either);
+
+        const safe = Either.isRight(result) ? answerToSafeToAutoApprove(result.right.safeToAutoApprove) : null;
+        const judged = safe === null ? null : String(safe);
+        const currentStr = String(current);
+
+        yield* eventBus.publish({
+          _tag: "JudgmentShadow",
+          site: "autonomy-confidence",
+          judged,
+          current: currentStr,
+          agreement: judged === null ? null : judged === currentStr,
+        });
+      }),
+    );
+  });
+}
 
 export class PreferenceLearner extends Context.Tag("PreferenceLearner")<
   PreferenceLearner,
@@ -104,16 +170,20 @@ export const PreferenceLearnerLive = Layer.effect(
           );
           if (!pattern) return false;
 
-          // Need enough confidence and occurrences
-          if (pattern.confidence < 0.7 || pattern.occurrences < 3) return false;
-          if (pattern.action !== "auto-approve") return false;
+          // Existing heuristic gate — needs enough confidence and occurrences,
+          // an "auto-approve" action, and no cost-threshold breach. Unchanged
+          // by Task 11b: the judgment shadow below never feeds back into this.
+          const decision =
+            pattern.confidence >= 0.7 &&
+            pattern.occurrences >= 3 &&
+            pattern.action === "auto-approve" &&
+            // Preserves the original truthy check's semantics: a falsy
+            // `costThreshold` (including 0, "no limit set") skips the check.
+            !(params.cost && pattern.costThreshold && params.cost > pattern.costThreshold);
 
-          // Check cost threshold
-          if (params.cost && pattern.costThreshold && params.cost > pattern.costThreshold) {
-            return false;
-          }
+          yield* autonomyConfidenceShadow(pattern, params.cost, decision);
 
-          return true;
+          return decision;
         }),
 
       updateTolerance: (userId, tolerance) =>
