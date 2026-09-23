@@ -112,7 +112,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - **Cost-aware routing**: `.withModelRouting()` (opt-in) routes each run to the cheapest capable model by task complexity, falling back to the configured model on any error
 
 ### 🛡️ Production Safety
-- **Judgment layer** *(opt-in)*: `.withJudgment()` + `agent.judge()` — calibrated typed Choice/Score/Noul judgments over TypeSafe/Jev or an LLM-emulation fallback; `agent.listModels()` lists the backend's available models, `agent.judgeRank()` batch-ranks candidates by Score without a call per candidate; the guardrails battery, autonomy-confidence, and tool-healing sites can opt into the same primitive
+- **Judgment layer** *(opt-in)*: `.withJudgment()` + `agent.judge()` — calibrated typed Choice/Score/Noul judgments over TypeSafe/Jev or an LLM-emulation fallback; `agent.listJudgmentModels()` lists the judgment backend's available models, `agent.judgeRank()` batch-ranks candidates by Score without a call per candidate; the guardrails battery, autonomy-confidence, and tool-healing sites can opt into the same primitive
 - **Guardrails**: pre-LLM injection detection, PII filtering, toxicity blocking, an opt-in judgment battery (`enableJudgmentBattery`) running parallel to the regex detectors, kill switch, behavioral contracts
 - **Ed25519 identity**: cryptographic agent certificates, RBAC, delegation chains, audit trails
 - **Verification**: semantic entropy, fact decomposition, NLI hallucination detection

@@ -58,9 +58,23 @@ Backend selection is automatic (`jev` when a key resolves, `llm` otherwise) unle
 
 ### Auto-context: `includeContext`
 
-By default, `judge()` only sees the `state` you pass it. Pass `includeContext: true` to fold the agent's
-own recent conversation and tool observations in automatically — useful for judgments like "did this
-response actually answer the question" that need the surrounding turn, not just a hand-picked field:
+By default, `judge()` only sees the `state` you pass it. `includeContext` folds the agent's own
+recent context in automatically — useful for judgments like "did this response actually answer
+the question" that need the surrounding turn, not just a hand-picked field. It has two forms:
+
+-   **`includeContext: true`** — every layer, with its defaults: recent chat history (40-turn
+    window), recent tool observations, and the full reasoning-step trace (thoughts, actions,
+    observations — not just tool results) from the agent's last `run()`.
+-   **`includeContext: { ... }`** — an object naming only the layers you want. A layer absent from
+    the object stays **off** — the object form is exclusive opt-in, not additive defaults:
+
+```typescript
+export interface JudgeContextConfig {
+    readonly messages?: boolean | { readonly window?: number }
+    readonly toolResults?: boolean
+    readonly reasoningSteps?: boolean | { readonly window?: number; readonly types?: readonly StepType[] }
+}
+```
 
 ```typescript
 // Before: manually re-thread the last tool result yourself
@@ -69,34 +83,53 @@ const { grounded } = await agent.judge({
     questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
 })
 
-// After: let judge() pull it from the agent's own recent context
+// After: let judge() pull the whole recent context automatically
 const { grounded } = await agent.judge({
     questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
-    includeContext: true, // folds recent chat history + tool observations into state
+    includeContext: true, // messages + toolResults + reasoningSteps, each with its default window
+})
+
+// Or opt into just the reasoning trace — thoughts/actions included, not only tool observations
+const { grounded } = await agent.judge({
+    questions: { grounded: { type: 'noul', instructions: 'Did the agent ground its answer with a valid tool call?' } },
+    includeContext: { reasoningSteps: true },
+})
+
+// Tune the window and step types on any layer that takes one — a small
+// window keeps the prompt cheap; a narrower type list drops noise (e.g.
+// "action" without matching "observation" pairs) when only one kind of
+// step matters to the question
+const { onTrack } = await agent.judge({
+    questions: { onTrack: { type: 'noul', instructions: 'Is the agent making progress toward the task?' } },
+    includeContext: {
+        messages: { window: 10 },
+        reasoningSteps: { window: 8, types: ['thought', 'observation'] },
+    },
 })
 ```
 
-Manually-passed `state` fields always win on collision — `includeContext` only fills gaps, it never
-overwrites a field you set explicitly. `messageWindow` (default: same window the gateway chat path uses)
-and `includeToolResults` (default: `true` when `includeContext` is `true`) tune what gets folded in.
+`window` caps how many turns/steps are folded in (most-recent-first); `reasoningSteps.types` restricts
+which `StepType`s (`thought` | `action` | `observation` | `plan` | `reflection` | `critique`) are
+included — omit it and every type present is folded in. Manually-passed `state` fields always win on
+collision — `includeContext` only fills gaps, it never overwrites a field you set explicitly.
 
 ### Listing available models
 
-Query the backend's available model list via `agent.listModels()`:
+Query the backend's available model list via `agent.listJudgmentModels()`:
 
 ```typescript
-const models = await agent.listModels();
+const models = await agent.listJudgmentModels();
 models.forEach(m => {
     console.log(`${m.name}: ${m.description} (released ${m.releaseDate})`);
 });
 ```
 
-This returns an array of `JudgmentModel` objects (name, description, releaseDate). Calling `agent.listModels()` without `.withJudgment()` throws immediately — the same contract as `agent.judge()`.
+This returns an array of `JudgmentModel` objects (name, description, releaseDate). Calling `agent.listJudgmentModels()` without `.withJudgment()` throws immediately — the same contract as `agent.judge()`. The name is deliberately scoped — this lists the *judgment backend's* models (TypeSafe/Jev), not the LLM provider models `.withModel()` selects from.
 
 **Backends:**
 - **`jev`** backend: returns the live model catalog from TypeSafe's API
 - **`llm`** backend: rejects with a `JudgmentUnsupported` failure (no catalog endpoint available) —
-  **not** a bare `JudgmentUnsupported` instance you can `instanceof`-check. `agent.listModels()`'s
+  **not** a bare `JudgmentUnsupported` instance you can `instanceof`-check. `agent.listJudgmentModels()`'s
   Promise is backed by `ManagedRuntime.runPromise()`, which rejects with a `FiberFailure` wrapper
   around the tagged error, so `error instanceof JudgmentUnsupported` is `false` on the real
   rejection. Match on the rejection's `message` instead — it names the missing catalog
@@ -155,7 +188,7 @@ const best = drafts[Number(ranked[0].id)]
 as a Score answer (backend misbehavior — a non-conforming custom `JudgmentBackend`) is silently
 dropped rather than surfaced as a partial-failure marker, so every other candidate in the batch can
 still be ranked. If you need to detect drops, diff the returned `id`s against your own candidate
-list. Like `judge()` and `listModels()`, calling `judgeRank()` without `.withJudgment()` throws
+list. Like `judge()` and `listJudgmentModels()`, calling `judgeRank()` without `.withJudgment()` throws
 immediately.
 
 See the [judgment cookbook's re-ranking recipe](/cookbook/judgment-recipes/#re-ranking-candidates)
@@ -210,24 +243,6 @@ const agent = await ReactiveAgents.create()
 ```
 
 With the default `"additive"` strictness, enabling the battery can never cause an input that passes today to start being blocked — it can only catch things the regex table misses (a paraphrased injection attempt, for example) or escalate a regex hit's severity when the battery agrees.
-
-## Listing available models
-
-`JudgmentService.listModels()` (library-level — not yet exposed on the `agent` facade, same status as tool-call healing above) calls the backend's real model-catalog endpoint — for `jev`, `GET /v1/models` — and returns the names/aliases your account can send in a call's `model` field, each with a description and release date:
-
-```typescript
-import { JudgmentService } from '@reactive-agents/judgment'
-
-const models = await Effect.runPromise(
-    Effect.gen(function* () {
-        const judgment = yield* JudgmentService
-        return yield* judgment.listModels()
-    }).pipe(Effect.provide(judgmentLayer)),
-)
-// [{ name: "jev-latest", description: "...", releaseDate: "2026-..." }, ...]
-```
-
-Useful for validating a configured model string at startup rather than discovering a typo at the first failed call. Backends without a catalog endpoint (the `llm` backend) fail this call with `JudgmentUnsupported` — expect it, don't assume every backend has one.
 
 ## Observability
 

@@ -1,5 +1,5 @@
 ---
-title: Judgment Cookbook
+title: Judgment Recipes
 description: >-
   Worked recipes for the judgment layer (@reactive-agents/judgment) — confidence-gated
   escalation, speculative fan-out, re-ranking, and citation checking with agent.judge().

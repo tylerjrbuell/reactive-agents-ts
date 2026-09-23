@@ -48,7 +48,7 @@ const agent = await ReactiveAgents.create()
 | [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
 | [Advanced](#advanced) | `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withUserInteraction`, `withLazyValidation`, `withDocuments`, `withTaskContext`, `withLayers` |
 | [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
-| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose`, `judge`, `listModels`, `judgeRank` |
+| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose`, `judge`, `listJudgmentModels`, `judgeRank` |
 | [Result Reference](#agentresult) | `AgentResult`, `AgentDebrief`, stream event types |
 
 ## Method ↔ config correspondence
@@ -859,8 +859,8 @@ See [Judgment Layer](/features/judgment-layer/) and the [judgment cookbook](/coo
 
 | Method                                       | Description                                                                                                                                 |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `judge(input: JudgeInput<Q>)`                 | Ask one or more typed Choice/Score/Noul questions over `state` (or `includeContext: true` to fold in recent chat + tool observations)        |
-| `listModels()`                                | List the configured backend's available judgment models (`jev`: live TypeSafe catalog; `llm`: rejects, message names the missing catalog — the rejection is a `FiberFailure` wrapper, not a bare `JudgmentUnsupported` you can `instanceof`-check) |
+| `judge(input: JudgeInput<Q>)`                 | Ask one or more typed Choice/Score/Noul questions over `state` (or `includeContext: true \| JudgeContextConfig` to fold in recent messages / tool results / reasoning steps)        |
+| `listJudgmentModels()`                        | List the configured judgment backend's available models (`jev`: live TypeSafe catalog; `llm`: rejects, message names the missing catalog — the rejection is a `FiberFailure` wrapper, not a bare `JudgmentUnsupported` you can `instanceof`-check) — scoped to the judgment backend, not the LLM provider models `.withModel()` selects from |
 | `judgeRank(candidates, question, opts?)`      | Batch-Score-rank candidates against one shared question; returns best-first results, **may be shorter than `candidates`** on backend-answer drops |
 
 ### `chat(message: string, options?: ChatOptions): Promise<ChatReply>`
