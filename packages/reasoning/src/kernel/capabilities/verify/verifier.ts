@@ -43,6 +43,7 @@ import {
 import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 import { judgmentCompletionShadow } from "./completion-judgment-shadow.js";
+import { sanitizeForJudgment } from "./judgment-text-budget.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -799,10 +800,18 @@ export function verifyAndEmit(args: {
       yield* judgmentCompletionShadow({
         task: context.task,
         candidateOutput: context.content,
+        // Fix round (final review #1/#2): observation `content` can be
+        // compressToolResult's over-budget output, which embeds a
+        // "[STORED: ... ] ... recall(...)" instruction that is only a real
+        // capability for the agent's OWN reasoning loop (scratchpad + recall
+        // tool) — the judgment backend has neither. sanitizeForJudgment
+        // strips that false capability claim and bounds each item's size (not
+        // just the 5-item count), so five uncapped 400-4000 char tool results
+        // can no longer blow past a reasonable per-prompt size.
         recentObservations: context.priorSteps
           .filter((s) => s.type === "observation")
           .slice(-5)
-          .map((s) => s.content),
+          .map((s) => sanitizeForJudgment(s.content)),
         heuristicVerified: verdict.verified,
       });
     }

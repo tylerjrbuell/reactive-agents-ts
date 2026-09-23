@@ -134,6 +134,25 @@ import { chooseStructuredEngine } from './engine/finalize/structured-route.js'
 import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
+ * `agent.judge()`'s options — a discriminated union on `includeContext` so
+ * `state` is only optional when `includeContext: true` supplies it
+ * automatically (fix round, final review #4). Before this, `state` was
+ * unconditionally optional: `agent.judge({questions})` (no `state`, no
+ * `includeContext`) typechecked but passed `undefined` through to
+ * `JudgmentService.ask()`, which requires a real `JudgmentEntry` (itself
+ * `string | object | array | null` — `null` is a legitimate explicit value,
+ * `undefined` never is) and eventually reaches `JSON.stringify(entry)` in
+ * `@reactive-agents/judgment`'s `llm-backend.ts`.
+ */
+export type JudgeInput<Q extends QuestionSpecs> = (
+    | { readonly state: JudgmentEntry; readonly includeContext?: false }
+    | { readonly includeContext: true; readonly state?: JudgmentEntry }
+) & {
+    readonly questions: Q
+    readonly model?: string
+} & Omit<JudgeContextOptions, 'includeContext'>
+
+/**
  * Narrow widening for the dynamically-imported `ToolService` tag.
  *
  * `@reactive-agents/tools` is loaded via `Effect.promise(() => import(...))`
@@ -552,26 +571,34 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      * Precedence: an explicit `state` field always wins on key collision —
      * `includeContext` only fills gaps a manual `state` doesn't cover.
+     *
+     * `state` is only optional when `includeContext: true` — `judge()` has no
+     * honest value to send the backend otherwise, so omitting BOTH `state`
+     * and `includeContext` is a compile-time type error, not a silent
+     * `undefined` reaching `JudgmentService.ask()` (fix round, final review
+     * #4). `state: null` remains valid (a real `JudgmentEntry` value) — this
+     * only closes the gap where `state` was missing entirely.
      */
-    async judge<Q extends QuestionSpecs>(input: {
-        readonly state?: JudgmentEntry
-        readonly questions: Q
-        readonly model?: string
-    } & JudgeContextOptions): Promise<JudgmentAnswers<Q>> {
-        const { state, questions, model, ...contextOptions } = input
-        const mergedState = contextOptions.includeContext
-            ? (mergeJudgmentState(
-                  state,
-                  buildAutoContext(
-                      {
-                          chatHistory: this._chatHistory,
-                          reasoningSteps: this._lastReasoningSteps,
-                      },
-                      contextOptions
-                  )
-              ) as JudgmentEntry)
-            : (state as JudgmentEntry)
-        const contextMerged = Boolean(contextOptions.includeContext)
+    async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
+        const { questions, model } = input
+        let mergedState: JudgmentEntry
+        let contextMerged: boolean
+        if (input.includeContext === true) {
+            contextMerged = true
+            mergedState = mergeJudgmentState(
+                input.state,
+                buildAutoContext(
+                    {
+                        chatHistory: this._chatHistory,
+                        reasoningSteps: this._lastReasoningSteps,
+                    },
+                    input
+                )
+            ) as JudgmentEntry
+        } else {
+            contextMerged = false
+            mergedState = input.state
+        }
         const agentId = this.agentId
         return this.runtime.runPromise(
             Effect.gen(function* () {

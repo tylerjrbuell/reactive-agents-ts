@@ -147,6 +147,35 @@ describe(".withJudgment() — Task 8 builder wiring", () => {
     expect(answers.risky.kind).toBe("noul");
   });
 
+  it("TYPE: state is only optional when includeContext:true (final review #4) — omitting both is a compile error, `state: null` stays valid", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-type-hole-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReplayLLM(makeFakeLLM({ count: 0 }))
+      .withJudgment({ backend: "llm" })
+      .build();
+    agentsToDispose.push(agent);
+
+    // @ts-expect-error — neither `state` nor `includeContext` is present;
+    // before the fix this typechecked and passed `undefined` through to
+    // JudgmentService.ask() (which requires a real JudgmentEntry, and
+    // eventually JSON.stringify()s it in the llm backend).
+    agent.judge({ questions: noulQuestion });
+
+    // `state: null` is still a legitimate explicit JudgmentEntry (distinct
+    // from omitting `state` entirely) and must remain valid without
+    // `includeContext`.
+    const answers = await agent.judge({ state: null, questions: noulQuestion });
+    expect(answers.risky.kind).toBe("noul");
+
+    // `includeContext: true` with `state` omitted is still valid (Task 1's
+    // whole point).
+    const withContext = await agent.judge({ questions: noulQuestion, includeContext: true });
+    expect(withContext.risky.kind).toBe("noul");
+  });
+
   it("BACKEND SELECTION: apiKey/env absence selects llm; presence selects jev (not the llm stub)", async () => {
     const priorKey = process.env.TYPESAFE_API_KEY;
     delete process.env.TYPESAFE_API_KEY;

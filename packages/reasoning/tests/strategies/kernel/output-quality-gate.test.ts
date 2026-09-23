@@ -2,6 +2,10 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
+import type { AgentEvent } from "@reactive-agents/core";
+import { JudgmentService } from "@reactive-agents/judgment";
+import type { JudgmentAnswers } from "@reactive-agents/judgment";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
 import { deliverableTerminationReason } from "../../../src/kernel/loop/runner-helpers/deliverable.js";
 import {
@@ -885,4 +889,72 @@ describe("output-ownership invariant (cross-tier sweep regression)", () => {
     // final output MUST NOT be empty.
     expect((state.output ?? "").trim().length).toBeGreaterThan(0);
   });
+});
+
+// Final whole-branch review, fix round, finding #3: Task 3's actual
+// production wiring — `yield* judgmentGroundingFabricationShadowFromState(state)`
+// inside runner.ts's §8.8 output-ownership-invariant branch — had zero test
+// coverage. Every existing Task 3 test (completion-judgment-shadow.test.ts's
+// sibling, grounding-fabrication-judgment-shadow.test.ts) drives the shadow
+// function or the `...FromState` wrapper directly, never the runner.ts call
+// site itself; deleting that one line left every existing test green. This
+// drives the actual §8.8 branch (status=done, empty output, deliverable
+// candidates present via `makeUnconsumedEvidenceThenBareDoneKernel`) and
+// asserts a real `grounding-fabrication` `JudgmentShadow` event fires.
+describe("Task 3 wiring — grounding-fabrication shadow fires through runner.ts's real §8.8 call site (final review #3)", () => {
+  type ShadowEvent = Extract<AgentEvent, { _tag: "JudgmentShadow" }>;
+
+  const fakeJudgmentAnswering = (probability: number) =>
+    Layer.succeed(JudgmentService, {
+      ask: (input) =>
+        Effect.succeed({
+          "grounding-fabrication": { kind: "noul", probability },
+        } as unknown as JudgmentAnswers<typeof input.questions>),
+    } satisfies JudgmentService["Type"]);
+
+  it("status=done, empty output, deliverable candidates present: fires a grounding-fabrication JudgmentShadow event", async () => {
+    const key = "_tool_result_x";
+    const fullText = "Bitcoin: 70836.96\nEthereum: 3850.00";
+    const preview = "[web-search result — compressed preview]\n  — full object is stored.";
+    const thought =
+      "Synthesizing the findings: BTC is at $71,000 and ETH is at $3,900, " +
+      "reflecting current market snapshots across major exchanges.";
+    const kernel = makeUnconsumedEvidenceThenBareDoneKernel(key, fullText, preview, thought);
+
+    const captured: ShadowEvent[] = [];
+    const layers = Layer.mergeAll(testLayer, EventBusLive, fakeJudgmentAnswering(0.2));
+
+    const state = await Effect.runPromise(
+      Effect.gen(function* () {
+        const eb = yield* EventBus;
+        yield* eb.on("JudgmentShadow", (event) =>
+          Effect.sync(() => {
+            if (event.site === "grounding-fabrication") captured.push(event);
+          }),
+        );
+
+        const result = yield* runKernel(
+          kernel,
+          { task: "what are the crypto prices?" },
+          { ...defaultOptions, maxIterations: 5 },
+        );
+
+        // Cooperatively yield so the forkDaemon shadow fiber (fake backend is
+        // synchronous) settles before this Effect completes and the fake
+        // EventBus subscription goes out of scope.
+        yield* Effect.sleep("50 millis");
+
+        return result;
+      }).pipe(Effect.provide(layers)),
+    );
+
+    // §8.8 branch itself is unaffected by the shadow (same assertion the
+    // existing 5th-funnel test above makes) — the shadow is observation-only.
+    expect(state.status).toBe("done");
+    expect(state.output).toContain("Bitcoin: 70836.96");
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.site).toBe("grounding-fabrication");
+    expect(captured[0]?.judged).toBe("false");
+  }, 15000);
 });

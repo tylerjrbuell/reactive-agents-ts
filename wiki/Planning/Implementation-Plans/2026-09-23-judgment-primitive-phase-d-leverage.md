@@ -24,7 +24,7 @@ three leverage points, ranked by value/risk.
 
 | # | Item | Value | Risk | Blast radius |
 |---|---|---|---|---|
-| 1 | `includeContext` auto-merge on `agent.judge()` | High — unlocks #2/#3 and any user judgment | Low | Additive, opt-in param |
+| 1 | `includeContext` auto-merge on `agent.judge()` | High — standalone `packages/runtime` DX win for any user judgment (see Sequencing note: NOT a prerequisite for #2/#3, which use direct kernel-state access) | Low | Additive, opt-in param |
 | 2 | Completion/termination judgment (shadow) | High — plan's own "highest runtime pain" flag | Medium | Reads `verify/quality-utils.ts`, no gate change yet |
 | 3 | Grounding/fabrication judgment (shadow) | Medium — narrower blast radius than #2 | Medium | Reasoning package, additive shadow only |
 
@@ -111,9 +111,12 @@ measurement instrument now existing. This task is that blocker being cleared, no
   the single funnel point where a termination/continuation decision is made per iteration (per
   `terminate.ts`'s single-owner rule — do NOT add a second termination decision point).
 - [x] **Step 2:** Design the judgment: a Noul (`"is this response a complete, satisfying answer to the
-  user's request?"`) with state = the task/goal text + the candidate final response + (via Task 1's
-  `includeContext`) recent tool observations. Fire it **shadow-only**, alongside the existing heuristic
-  decision, at the same funnel point — do not let its answer influence `terminate.ts` in this task.
+  user's request?"`) with state = the task/goal text + the candidate final response + recent tool
+  observations read directly from `VerificationContext.priorSteps` (kernel-side direct access — NOT
+  Task 1's `includeContext`, which is a `packages/runtime` public-API convenience over `ReactiveAgent`
+  state that `packages/reasoning` cannot depend on; see the Sequencing note below). Fire it
+  **shadow-only**, alongside the existing heuristic decision, at the same funnel point — do not let its
+  answer influence `terminate.ts` in this task.
 - [x] **Step 3:** Emit `JudgmentShadow{site:"completion-satisfied", judged, current, agreement}` following
   the exact schema Phase C's four sites already use — no new shadow-event shape, reuse the existing one.
 - [x] **Step 4 (exit gate, same bar as Phase C's Task 9/9b/10):** collect ≥30 real shadow samples across a
@@ -152,9 +155,10 @@ as `project_deterministic_evidence_grounding_2026_08_15` / `project_t0_determini
   its call site. Confirm it's still the live grounding path (not superseded by something else since
   2026-08-16).
 - [x] **Step 2:** Design the judgment: a Noul (`"is this claim supported by the provided evidence?"`) per
-  claim/citation, state = claim text + the actual evidence ledger entries (via Task 1's `includeContext`
-  where the ledger is already in kernel state — reuse, don't re-fetch). Fire shadow-only alongside the
-  existing containment check.
+  claim/citation, state = claim text + the actual evidence ledger entries read directly from `KernelState`
+  via `evaluateUnconsumedEvidenceGrounding` (kernel-side direct access — NOT Task 1's `includeContext`,
+  which lives in `packages/runtime` and cannot be depended on from `packages/reasoning`; see the
+  Sequencing note below). Fire shadow-only alongside the existing containment check.
 - [x] **Step 3:** Emit `JudgmentShadow{site:"grounding-fabrication", ...}`.
 - [x] **Step 4 (exit gate):** ≥30 real shadow samples, spanning both well-grounded and deliberately
   fabricated/unsupported claims (construct a few adversarial cases — this is the one site where a false
@@ -183,9 +187,19 @@ correctly flagged, matching the heuristic. Full write-up:
 
 ## Sequencing note
 
-Task 1 is a prerequisite for Tasks 2/3 (both lean on `includeContext` to avoid re-deriving context-window
-logic). Ship Task 1 alone first, get it merged, then dispatch Tasks 2/3 — they can run in parallel
-afterward (different packages, no shared files) if warden availability allows.
+**Corrected 2026-09-23 (final whole-branch review, fix round, finding #6):** this note originally said
+Tasks 2/3 would use/reuse Task 1's `includeContext`. That never happened and could not have happened —
+`packages/reasoning` cannot depend on `packages/runtime` (dependency runs the other way, per `AGENTS.md`'s
+package tree), and Task 1's `includeContext` is a `packages/runtime`-only convenience over
+`ReactiveAgent`'s own chat-history/reasoning-step caches. Tasks 2/3 live entirely in
+`packages/reasoning/src/kernel/**` and correctly used direct `KernelState`/`VerificationContext` access
+instead (`VerificationContext.priorSteps` for Task 2, `evaluateUnconsumedEvidenceGrounding(state)` for
+Task 3) — this was the right call from the start, not a shortcut or a deviation from plan.
+
+Task 1 shipped as a standalone `packages/runtime` DX feature (the public `agent.judge({includeContext})`
+API), independently useful and independently shippable — not a blocking prerequisite for Tasks 2/3. All
+three tasks could have shipped in parallel; they happened to ship sequentially because Task 1 was
+dispatched first, not because 2/3 depended on it.
 
 ## Explicitly out of scope (this plan)
 

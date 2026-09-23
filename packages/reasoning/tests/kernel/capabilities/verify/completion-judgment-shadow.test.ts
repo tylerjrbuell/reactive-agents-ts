@@ -124,6 +124,48 @@ describe("completion-judgment shadow (Task 2, shadow-only)", () => {
     expect(captured).toHaveLength(0);
   }, 15000);
 
+  it("final review #1/#2: over-budget compressed observation content never leaks recall()/STORED claims or an unbounded size into the shadow prompt", async () => {
+    // Mirrors compressToolResult's real over-budget shape
+    // (tool-formatting.ts): a "[STORED: <key> | <tool>]" header plus a
+    // trailing "recall(\"<key>\", ...)" instruction — only a real capability
+    // for the agent's OWN reasoning loop (scratchpad + recall tool), never
+    // true for the judgment backend this shadow calls.
+    const overBudgetObservation =
+      `[STORED: _tool_result_x | web-search]\n` +
+      `Type: Object(3 keys)\n` +
+      `  price: 70836.96\n` +
+      `  volume: ${"9".repeat(2000)}\n` +
+      `  — full object is stored. Use recall("_tool_result_x", start: 0, maxChars: 1200), ` +
+      `recall("_tool_result_x", query: "keyword"), or | transform: for focused extraction.`;
+
+    const captured: { state: unknown }[] = [];
+    const capturingJudgment = Layer.succeed(JudgmentService, {
+      ask: (input) => {
+        captured.push({ state: input.state });
+        return Effect.succeed({
+          "completion-satisfied": { kind: "noul", probability: 0.9 },
+        } as unknown as JudgmentAnswers<typeof input.questions>);
+      },
+    } satisfies JudgmentService["Type"]);
+
+    const context: VerificationContext = {
+      ...baseTerminalContext,
+      priorSteps: [makeStep("observation", overBudgetObservation)],
+    };
+
+    await runWithShadowCapture(context, capturingJudgment);
+
+    expect(captured).toHaveLength(1);
+    const entry = captured[0]?.state as { recentObservations?: readonly string[] };
+    expect(entry.recentObservations).toHaveLength(1);
+    const sanitized = entry.recentObservations?.[0] ?? "";
+    expect(sanitized).not.toContain("recall(");
+    expect(sanitized).not.toContain("STORED");
+    // Bounded per-item size, not just item count — the raw observation above
+    // is well over 2000 chars.
+    expect(sanitized.length).toBeLessThan(1000);
+  }, 15000);
+
   it("disagreeing shadow on a REJECTED heuristic verdict: agreement:false, verdict.verified stays false", async () => {
     // Force the heuristic to reject: empty content fails non-empty-content.
     const rejectingContext: VerificationContext = { ...baseTerminalContext, content: "" };

@@ -47,6 +47,7 @@ import { JudgmentService } from "@reactive-agents/judgment";
 import type { JudgmentAnswer, JudgmentEntry, NoulSpec, QuestionSpecs } from "@reactive-agents/judgment";
 import type { KernelState } from "../../state/kernel-state.js";
 import { evaluateUnconsumedEvidenceGrounding } from "../../loop/runner-helpers/deliverable.js";
+import { sanitizeForJudgment } from "./judgment-text-budget.js";
 
 /** The single Noul question id this shadow asks — also the emitted event's `site` discriminator context. */
 const GROUNDING_FABRICATION_QUESTION_ID = "grounding-fabrication";
@@ -135,6 +136,15 @@ export function judgmentGroundingFabricationShadow(
  * resolution at all) when there is nothing to compare — mirrors Task 2's
  * `terminal !== true` early-return.
  */
+/**
+ * Per-field char budget for this shadow's judgment prompt. `evidence` here
+ * comes from `resolveUnconsumedEvidence`, which joins full, uncompressed
+ * scratchpad payloads with NO cap of its own (fix round, final review #2) —
+ * larger than `completion-judgment-shadow`'s per-observation budget since
+ * this is a single field, not one of five list items sharing a prompt.
+ */
+const GROUNDING_FABRICATION_TEXT_BUDGET = 1200;
+
 export function judgmentGroundingFabricationShadowFromState(
   state: KernelState,
 ): Effect.Effect<void, never> {
@@ -142,9 +152,14 @@ export function judgmentGroundingFabricationShadowFromState(
   if (check.evidence === undefined || check.lastThoughtContent === undefined) {
     return Effect.void;
   }
+  // Fix round (final review #1/#2): sanitize AFTER the deterministic
+  // containment check has already run against the raw, unsanitized
+  // claim/evidence (`evaluateUnconsumedEvidenceGrounding` above) — this never
+  // alters that heuristic's own `grounded` verdict, only what's handed to the
+  // judgment backend.
   return judgmentGroundingFabricationShadow({
-    claim: check.lastThoughtContent,
-    evidence: check.evidence,
+    claim: sanitizeForJudgment(check.lastThoughtContent, GROUNDING_FABRICATION_TEXT_BUDGET),
+    evidence: sanitizeForJudgment(check.evidence, GROUNDING_FABRICATION_TEXT_BUDGET),
     heuristicGrounded: check.grounded,
   });
 }

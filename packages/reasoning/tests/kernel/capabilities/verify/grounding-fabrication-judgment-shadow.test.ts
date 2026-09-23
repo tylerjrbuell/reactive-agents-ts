@@ -163,6 +163,42 @@ describe("judgmentGroundingFabricationShadowFromState (wiring wrapper)", () => {
     expect(captured[0]?.agreement).toBe(false);
   }, 15000);
 
+  it("final review #2: unbounded scratchpad evidence is truncated before reaching the judgment prompt", async () => {
+    // resolveUnconsumedEvidence joins full, uncompressed scratchpad payloads
+    // with no cap of its own — a single stored payload well over the shared
+    // judgment-text budget must not reach the backend unbounded.
+    const hugeEvidence = "measured value: 42 units. ".repeat(200); // > 5000 chars
+    const obs = makeStep("observation", "result body", {
+      storedKey: "k1",
+      observationResult: makeObservationResult("web-search", true, "result body"),
+    });
+    const thought = makeStep("thought", longThought("A totally unrelated synthesis"));
+    let s = transitionState(base(), { steps: [obs, thought] });
+    s = { ...s, scratchpad: new Map([["k1", hugeEvidence]]) };
+
+    const captured: { state: unknown }[] = [];
+    const capturingJudgment = Layer.succeed(JudgmentService, {
+      ask: (input) => {
+        captured.push({ state: input.state });
+        return Effect.succeed({
+          "grounding-fabrication": { kind: "noul", probability: 0.5 },
+        } as unknown as JudgmentAnswers<typeof input.questions>);
+      },
+    } satisfies JudgmentService["Type"]);
+
+    await Effect.runPromise(
+      judgmentGroundingFabricationShadowFromState(s).pipe(
+        Effect.provide(Layer.merge(EventBusLive, capturingJudgment)),
+        Effect.flatMap(() => Effect.sleep("50 millis")),
+      ),
+    );
+
+    expect(captured).toHaveLength(1);
+    const entry = captured[0]?.state as { evidence?: string };
+    expect(entry.evidence?.length ?? 0).toBeLessThan(hugeEvidence.length);
+    expect(entry.evidence).toContain("truncated");
+  }, 15000);
+
   it("unconsumed evidence + thought verbatim-contains it: fires with current:true, adversarial disagreement possible", async () => {
     const evidenceText = "exact measured value: 123.45 kg";
     const obs = makeStep("observation", "result body", {
