@@ -498,7 +498,7 @@ Filed, not built: with no `.withRequiredTools()`/`TaskContract`, the framework h
 
 ## Working rules (cross-cutting, keep applying)
 
-- No Co-Authored-By trailers in commits (shows publicly on GitHub contributors page).
+- No Co-Authored-By trailers in commits (shows publicly on GitHub contributors page). **Enforced mechanically since 2026-09-22** via `.githooks/commit-msg` (hard-rejects any Claude/Anthropic co-author trailer), wired through `core.hooksPath` and auto-installed by root `postinstall` (`scripts/setup-git-hooks.sh`). `.githooks/pre-commit` also blocks staging real `.env` and greps staged additions for common API-key prefixes.
 - Commit before branching — always commit/stash exploratory changes first.
 - Keep this repository file aligned with current source, tests, `wiki/Hot.md`, and canonical specs. Personal agent memory is optional context and must never be treated as repository authority.
 - Use native `git`/`grep`/`find`, bound output yourself (`| head`, `| wc -l`, `-c`). **Do not use `rtk`** — revised 2026-07-27, it silently truncated output with no marker (measured: `git log` 50 vs 145 real, `find` 5 vs 1510 real) and was costing correctness, not saving tokens. Do not restore it.
