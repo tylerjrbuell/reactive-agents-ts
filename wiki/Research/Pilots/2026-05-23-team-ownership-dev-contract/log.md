@@ -933,6 +933,7 @@ task: "4 leverage-proof spikes (batched fan-out, memory rerank, hierarchical str
 result: denied-by-authority
 reason: "MissionBrief target wiki/Research/Prototypes/** and packages/judgment/** research domain outside harness-warden's Edit authority (scoped to wiki/Research/Harness-Reports/** + harness-improvement-loop skill) and domain primer (cross-strategy-matrix/ri-ablation/harness-probe, not judgment-backend spikes)."
 action: "re-dispatched to general-purpose agent per harness-warden's own recommendation — no warden in AGENTS.md routing table owns wiki/Research/Prototypes/** spike work"
+```
 
 ```yaml
 date: 2026-09-23
@@ -941,6 +942,7 @@ task: "thread confidence field into 3 kernel JudgmentShadow sites (completion, g
 result: completed, confidence 0.9
 outcome: "accepted — targeted kernel tests 176/176 pass, kernel package typecheck contributes zero new errors, state audit found no gap in kernel sites' buildState shapes"
 escalation: "flagged 1 pre-existing-style type error in adaptive.ts (packages/reasoning/src/strategies/**, outside kernel-warden authority) — parent fixed directly (kind-narrowing on JudgmentAnswer before reading .confidence), same root cause also existed in complexity-router.ts and preference-learner.ts (parent's own files), all fixed, all packages now typecheck green"
+```
 
 ```yaml
 date: 2026-09-23
@@ -948,6 +950,7 @@ warden: runtime-warden
 task: "Phase E Task 4 — re-export JudgeInput<Q> from packages/runtime/src/index.ts"
 result: completed, confidence high
 outcome: "accepted — task review clean (spec ✅, quality excellent), commit 7dbc8144"
+```
 
 ```yaml
 date: 2026-09-23
