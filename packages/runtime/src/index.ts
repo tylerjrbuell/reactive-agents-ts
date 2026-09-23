@@ -18,6 +18,8 @@ export type {
   CalibrationMode,
 } from "./types.js";
 
+export type { JudgeInput } from "./reactive-agent.js";
+
 // ─── Schemas ───
 export {
   LifecyclePhase as LifecyclePhaseSchema,
