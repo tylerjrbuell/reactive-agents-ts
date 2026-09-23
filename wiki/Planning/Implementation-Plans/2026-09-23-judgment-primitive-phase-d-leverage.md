@@ -2,7 +2,7 @@
 type: implementation-plan
 status: active
 created: 2026-09-23
-tags: [type-safe, jev, judgment, context, completion, grounding, dx]
+tags: [type-safe, jev, judgment, context, completion, grounding, dx, cookbook, phase-e]
 ---
 
 # Judgment Primitive Phase D — Leverage Expansion
@@ -200,6 +200,128 @@ Task 1 shipped as a standalone `packages/runtime` DX feature (the public `agent.
 API), independently useful and independently shippable — not a blocking prerequisite for Tasks 2/3. All
 three tasks could have shipped in parallel; they happened to ship sequentially because Task 1 was
 dispatched first, not because 2/3 depended on it.
+
+---
+
+## Phase E: Consumer Leverage Expansion (added 2026-09-23, post-merge)
+
+**Depends on:** Phase D above (merged `a53f0333`) — confidence-gated `JudgmentShadow` events and
+`JudgmentBackend.listModels()` already ship. 4 real-data spike probes
+([[Research/Prototypes/RESULTS-p04a|p04a]] batched fan-out, [[Research/Prototypes/RESULTS-p04b|p04b]]
+memory rerank, [[Research/Prototypes/RESULTS-p04c|p04c]] hierarchical router,
+[[Research/Prototypes/RESULTS-p04d|p04d]] state-presentation bias) proved out candidate leverage before
+this phase was scoped — spot-verified accurate (real jev calls, disclosed limitations, self-corrected
+scope assumptions) before folding results in here.
+
+**Gap this closes:** Phase D made `agent.judge()` context-aware but the *public* surface around it is
+still thin — no typed input re-export for wrapper functions, no facade access to the model catalog, and
+every consumer hand-rolls the batched-rerank pattern from
+[[../../Research/Harness-Reports/2026-09-23-phase-d-completion-grounding-exit-gates|the cookbook]] from
+scratch. This phase closes those three gaps — all additive, all consumer-facing, zero shadow-site
+inversion, same boundary discipline as Phases C/D.
+
+### Ranked scope
+
+| # | Item | Value | Risk | Blast radius |
+|---|---|---|---|---|
+| 4 | Re-export `JudgeInput<Q>` from `packages/runtime/src/index.ts` | Closes a real typed-wrapper DX gap (found while writing Phase D docs) | Trivial | Export-only, no behavior change |
+| 5 | `listModels()` on the `agent` facade | Startup-time model-string validation without reaching into `@reactive-agents/judgment` directly | Low | Thin delegation to existing `JudgmentService.listModels()` |
+| 6 | `agent.judgeRank(candidates, {...})` — batched candidate re-ranking primitive | Highest leverage: codifies the cookbook's rerank recipe (currently N hand-rolled `judge()` calls + manual sort) into one reusable, tested primitive — the actual "build awesome things" ask | Medium — new public method, new tests, a real batching-vs-candidate-count tradeoff to document, not just sugar |
+
+Memory rerank ([[Research/Prototypes/RESULTS-p04b|p04b]], WORTH-IT conditional) stays excluded — still
+pending a rerun against `packages/memory`'s real vector-similarity baseline (p04b used a synthetic
+lexical proxy), not ready to scope into a build.
+
+## Task 4: Re-export `JudgeInput<Q>`
+
+**Files:** `packages/runtime/src/index.ts`, a type-only test asserting the export exists and is usable.
+
+- [ ] **Step 1 (TDD):** Write a failing test in `packages/runtime/tests/` that imports `JudgeInput` from
+  `reactive-agents`/`@reactive-agents/runtime`'s public index and uses it to type a wrapper function
+  signature — confirm it currently fails to compile/import.
+- [ ] **Step 2:** Add `export type { JudgeInput } from "./agent/...";` (confirm exact current file/module
+  path — `JudgeInput` was last seen defined in `reactive-agent.ts`, may have moved during Phase D's fix
+  round) to `packages/runtime/src/index.ts`.
+- [ ] **Step 3:** Test passes. `bun run typecheck`, `bun run build` — confirm the new export doesn't widen
+  any existing public type unexpectedly (diff `dist/index.d.ts` before/after).
+
+**Exit check:** `bun test packages/runtime`, `bun run typecheck`, `bun run build`.
+
+## Task 5: `listModels()` on the `agent` facade
+
+**Files:** `packages/runtime/src/reactive-agent.ts` (new method alongside `judge()`), tests.
+
+- [ ] **Step 1 (TDD):** Write failing tests: (a) `agent.listModels()` with `.withJudgment()` configured and
+  a `jev`-shaped fake backend returns the model list; (b) without `.withJudgment()`, throws immediately
+  (same "caller mistake, not silent no-op" precedent `judge()` already sets — do not degrade silently
+  here, this is a direct user call, not an internal shadow site); (c) backend without a catalog
+  (`llm`/`JudgmentUnsupported`) surfaces that error, not a swallowed empty list.
+- [ ] **Step 2:** Implement `listModels()` as a thin delegation to the wired `JudgmentService.listModels()`,
+  mirroring `judge()`'s own `Effect.serviceOption(JudgmentService)` guard pattern and error-throwing
+  precedent exactly — no new error-handling philosophy invented for this one method.
+- [ ] **Step 3:** Tests green. Update `features/judgment-layer.md`'s "Listing available models" section
+  (written against the library-level-only state in Phase D's doc pass) to show the facade method instead,
+  keep the library-level example as a secondary "or, holding `JudgmentService` directly" note.
+
+**Exit check:** `bun test packages/runtime`, `bun run typecheck`, `bun run build`.
+
+## Task 6: `agent.judgeRank(candidates, {...})`
+
+**Files:** `packages/runtime/src/reactive-agent.ts` or a new `packages/runtime/src/judgment-rank.ts`
+(kernel-warden/runtime-warden's call at dispatch time — likely a new file, mirroring `judgment-context.ts`'s
+Task 1 precedent of keeping `reactive-agent.ts` thin), tests.
+
+- [ ] **Step 1 (TDD):** Write failing tests first: (a) ranks N candidates by a single Score question,
+  returns them sorted best-first with each candidate's score attached; (b) a small candidate count (below
+  some documented threshold) batches all candidates as named fields in ONE `ask()` call; (c) a candidate
+  count above that threshold chunks into multiple `ask()` calls (mirror the existing `CHUNK_CAP` pattern
+  from `judgment-classification.ts` — reuse the concept, don't invent a second chunking scheme); (d) ties
+  broken deterministically (stable sort, not answer order); (e) `.withJudgment()` absent → throws, same
+  precedent as Task 5.
+- [ ] **Step 2:** Design the signature: `agent.judgeRank(candidates: readonly {id: string; state:
+  JudgmentEntry}[], question: {instructions: JudgmentEntry; criteria: ScoreCriteria}, opts?: {chunkCap?:
+  number}) => Promise<ReadonlyArray<{id: string; score: number; confidence: number}>>` — confirm this
+  shape against real usage patterns from the cookbook's rerank recipe before finalizing; adjust if the
+  cookbook's hand-rolled version reveals a more ergonomic shape.
+- [ ] **Step 3:** Implement using the existing chunking helper's pattern (batch candidates as named
+  `state`+`questions` fields, one Score question per candidate id, single `ask()` per chunk) — real
+  leverage over the cookbook's naive one-`judge()`-call-per-candidate loop specifically when candidate
+  count is small enough to fit one chunk.
+- [ ] **Step 4:** Tests green. Add a real usage example to `guides/judgment-cookbook.md`'s "Re-ranking
+  candidates" section replacing the hand-rolled `Promise.all` version with `agent.judgeRank(...)`, and
+  note the batching-vs-candidate-count tradeoff the cookbook currently only mentions as a caveat.
+
+**Exit check:** `bun test packages/runtime`, `bun run typecheck`, `bun run build`.
+
+## Task 7: Documentation pass — navigation + feature completeness
+
+**Files:** `apps/docs/astro.config.mjs` (sidebar structure — confirm `guides/judgment-cookbook.md` and
+`features/judgment-layer.md` are actually reachable in the built sidebar, not just present as files),
+`apps/docs/src/content/docs/features/judgment-layer.md`, `apps/docs/src/content/docs/guides/judgment-cookbook.md`,
+`README.md` (if judgment layer isn't already in the packages/features table — grep first).
+
+- [ ] **Step 1:** Confirm sidebar reachability: `apps/docs` autogenerates its sidebar from directory
+  structure per `AGENTS.md`'s Docs Site section — verify `judgment-cookbook.md`'s `sidebar.order: 28`
+  doesn't collide with an existing guide and that it actually renders in the built nav (re-run
+  `bun run docs:build`, inspect the generated sidebar, not just "no build error").
+  Removed from Phase D closeout: sidebar collision/reachability was never explicitly re-checked after the
+  cookbook page was added — confirm it now, don't assume the earlier clean build proves nav placement.
+- [ ] **Step 2:** Update `features/judgment-layer.md` for Tasks 4-6: `JudgeInput` re-export mention where
+  the `judge()` signature is documented, `listModels()` facade method (supersedes the library-level-only
+  note from Phase D), and a new `judgeRank()` subsection under "The three primitives" or its own heading.
+- [ ] **Step 3:** Update `guides/judgment-cookbook.md`'s re-ranking recipe to show `judgeRank()` as the
+  primary example (Task 6, Step 4 — cross-reference, don't duplicate work).
+- [ ] **Step 4:** Grep `README.md` and `apps/docs/src/content/docs/reference/builder-api.md` for
+  `withJudgment`/`agent.judge` — if either doc's method table is missing `listModels`/`judgeRank`, add
+  them (Documentation Cross-Reference Rules in `AGENTS.md` — don't let API truth drift between these and
+  the Starlight pages).
+- [ ] **Step 5:** `bun run docs:build` clean, internal link validator passes (`starlight` link check —
+  already proven green once for the cookbook page in Phase D's own doc pass, re-verify after these edits).
+
+**Exit check:** docs build clean, sidebar nav includes both pages at a sensible position, no stale
+capability tables anywhere Documentation Cross-Reference Rules says to check.
+
+---
 
 ## Explicitly out of scope (this plan)
 
