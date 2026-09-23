@@ -1,7 +1,8 @@
 ---
 type: implementation-plan
-status: active
+status: completed
 created: 2026-09-23
+completed: 2026-09-23
 tags: [type-safe, jev, judgment, context, completion, grounding, dx, cookbook, phase-e]
 ---
 
