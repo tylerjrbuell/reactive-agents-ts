@@ -281,6 +281,11 @@ export default defineConfig({
                         { label: 'Evaluation', link: 'features/eval/' },
                         { label: 'Guardrails', link: 'guides/guardrails/' },
                         {
+                            label: 'Judgment Layer',
+                            link: 'features/judgment-layer/',
+                            badge: { text: 'New', variant: 'success' },
+                        },
+                        {
                             label: 'Security Hardening',
                             link: 'guides/security-hardening/',
                         },
