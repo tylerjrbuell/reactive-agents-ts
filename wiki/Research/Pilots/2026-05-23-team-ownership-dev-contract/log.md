@@ -956,3 +956,11 @@ task: "Phase E Task 5 — agent.listModels() facade method"
 result: completed, confidence 0.95
 outcome: "accepted — task review clean (spec pass, quality approved), 1 minor deferred (test assertion robustness), commit 9339c604"
 ```
+
+```yaml
+date: 2026-09-23
+warden: runtime-warden
+task: "Phase E Task 6 — agent.judgeRank() batched candidate re-ranking primitive"
+result: completed, confidence 0.9
+outcome: "accepted — 1 Important finding (undocumented silent answer-drop) fixed in round 1, scoped re-review ADDRESSED, 1 minor deferred, commits 4a27cad8..c37fcfb3"
+```
