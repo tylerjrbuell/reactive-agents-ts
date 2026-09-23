@@ -948,3 +948,11 @@ warden: runtime-warden
 task: "Phase E Task 4 — re-export JudgeInput<Q> from packages/runtime/src/index.ts"
 result: completed, confidence high
 outcome: "accepted — task review clean (spec ✅, quality excellent), commit 7dbc8144"
+
+```yaml
+date: 2026-09-23
+warden: runtime-warden
+task: "Phase E Task 5 — agent.listModels() facade method"
+result: completed, confidence 0.95
+outcome: "accepted — task review clean (spec pass, quality approved), 1 minor deferred (test assertion robustness), commit 9339c604"
+```
