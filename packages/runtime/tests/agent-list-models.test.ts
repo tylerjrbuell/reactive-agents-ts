@@ -2,13 +2,36 @@
 //
 // Phase E Task 5 - agent.listModels() public facade method tests.
 // Tests three scenarios:
-//   (a) listModels() with .withJudgment() configured returns models from jev backend
+//   (a) listModels() with a JudgmentService wired returns models from the catalog
+//       (a fake service, not a live `jev` network call — see fakeJudgmentService below)
 //   (b) listModels() without .withJudgment() throws "JudgmentService is not configured"
-//   (c) listModels() with llm backend (no catalog) surfaces JudgmentUnsupported error
+//   (c) listModels() with llm backend (no catalog) rejects — the rejection's message
+//       names the missing catalog (see reactive-agent.ts's listModels() JSDoc for the
+//       real, non-`instanceof` rejection contract)
 
 import { describe, it, expect, afterEach } from "bun:test";
+import { Effect, Layer } from "effect";
 import { ReactiveAgents } from "../src/index.js";
-import { JudgmentUnsupported, type JudgmentModel } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentUnsupported } from "@reactive-agents/judgment";
+
+/**
+ * Fake `JudgmentService["Type"]` with a stubbed `listModels()` — mirrors the
+ * mock-backend pattern in `judgment-rank.test.ts`. Test (a) only needs to
+ * verify `agent.listModels()`'s plumbing (facade -> service -> array), not a
+ * real `jev` backend network round trip: a real `.withJudgment({ backend:
+ * "jev" })` call resolves `TYPESAFE_API_KEY` from `.env` and hits TypeSafe's
+ * live API, which passes locally (key present) but fails in CI (no key
+ * configured) — exactly the kind of environment-dependent flake this test
+ * must not have.
+ */
+const fakeJudgmentService: JudgmentService["Type"] = {
+  ask: () => Effect.die(new Error("unused in this test")),
+  listModels: () =>
+    Effect.succeed([
+      { name: "fake-model-1", description: "A fake calibrated model.", releaseDate: "2026-01-01" },
+      { name: "fake-model-2", description: "Another fake calibrated model.", releaseDate: "2026-02-01" },
+    ]),
+};
 
 describe("agent.listModels() - Phase E Task 5", () => {
   const agentsToDispose: Array<{ dispose: () => Promise<void> }> = [];
@@ -18,13 +41,23 @@ describe("agent.listModels() - Phase E Task 5", () => {
     }
   });
 
-  it("(a) listModels() with .withJudgment() configured returns model list from jev backend", async () => {
+  it("(a) listModels() with a JudgmentService wired returns model list from the catalog", async () => {
     const agent = await ReactiveAgents.create()
       .withName("list-models-agent")
       .withProvider("test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withReasoning({ defaultStrategy: "reactive" })
-      .withJudgment({ backend: "jev" })
+      // No `.withJudgment({ backend: "jev" })` here: `makeJevBackend()`
+      // constructs a `TypeSafeClient` eagerly at layer-build time and throws
+      // if no API key resolves (from `options.apiKey` or `TYPESAFE_API_KEY`)
+      // — so wiring the real `jev` layer and then overriding it via
+      // `.withLayers()` still fails in a keyless CI environment before the
+      // override ever takes effect. Instead, `.withLayers()` alone supplies
+      // a fake `JudgmentService` directly (mirrors the mock-backend pattern
+      // in `judgment-rank.test.ts`) — this test only verifies
+      // `agent.listModels()`'s plumbing (facade -> service -> array), not a
+      // live TypeSafe network round trip.
+      .withLayers(Layer.succeed(JudgmentService, fakeJudgmentService))
       .build();
     agentsToDispose.push(agent);
 
@@ -64,7 +97,7 @@ describe("agent.listModels() - Phase E Task 5", () => {
     expect(error?.message).toContain("JudgmentService is not configured");
   });
 
-  it("(c) listModels() with llm backend (no catalog) surfaces JudgmentUnsupported error", async () => {
+  it("(c) listModels() with llm backend (no catalog) rejects naming the missing catalog", async () => {
     const agent = await ReactiveAgents.create()
       .withName("list-models-unsupported-agent")
       .withProvider("test")
@@ -81,11 +114,14 @@ describe("agent.listModels() - Phase E Task 5", () => {
       error = e instanceof Error ? e : new Error(String(e));
     }
 
+    // The rejection is a `FiberFailure` wrapper around the underlying
+    // `JudgmentUnsupported`, NOT a bare `JudgmentUnsupported` instance —
+    // `error instanceof JudgmentUnsupported` is false here (confirmed
+    // empirically; `ManagedRuntime.runPromise()` does not unwrap tagged
+    // errors before rejecting). Assert the one true, documented contract:
+    // the rejection's message names the missing catalog.
     expect(error).not.toBeNull();
-    expect(
-      error instanceof JudgmentUnsupported ||
-        error?.message.includes("JudgmentUnsupported") ||
-        error?.message.includes("no model catalog")
-    ).toBe(true);
+    expect(error).not.toBeInstanceOf(JudgmentUnsupported);
+    expect(error?.message).toContain('Backend "llm" has no model catalog');
   });
 });
