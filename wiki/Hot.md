@@ -10,6 +10,19 @@ updated: 2026-09-23
 
 ---
 
+## 2026-09-23 — Judgment layer put to the test: methodology gate + all 4 shadow-site exit gates run
+
+Real live-API measurement session (not fabricated). **Methodology gate** (`wiki/Research/Harness-Reports/2026-09-23-judgment-methodology-gate.md`):
+jev beats the frozen-haiku LLM judge on a 16-case ground-truth set (100% vs 87.5% classification
+accuracy, 2.3x faster) — confirms the `judgeEngine:"jev"` default. Caught + fixed a real measurement-
+harness bug (input-keyed canned-SUT map collision) before trusting any result. **Shadow-site exit
+gates** (`wiki/Research/Harness-Reports/2026-09-23-shadow-site-exit-gates.md`): task-comprehension
+98.5% agreement (135 samples), complexity-routing 93.5% (31), strategy-selection 74.2% (31, jev
+consistently picks MORE exploratory strategies — a real directional bias worth outcome-testing before
+any inversion), autonomy-confidence 96% agreement / **6.7% false-auto-approval risk** (2/30
+escalate-worthy scenarios) — confirms that site should stay shadow-only. **No site was inverted** —
+all four still shadow/additive-only; the plan's exit gates now have real numbers instead of "NOT RUN."
+
 ## 2026-09-23 — TypeSafe/Jev judgment primitive, Phase C (runtime tier) shipped, committed on `dev`
 
 `.withJudgment()` builder method + `agent.judge()` public primitive, plus per-site opt-ins: strategy
