@@ -267,6 +267,19 @@ Re-verified after fixes: 2866/0 (up from 2865 pre-review), typecheck clean, buil
 
 **Collateral fix (same session):** Task 9's `adaptive-jev-shadow.test.ts` started failing 3/4 tests once Task 10 landed — `runKernel()` (invoked internally when adaptive dispatches to the `reactive` sub-strategy) now also fires its own `task-comprehension` shadow onto the same event bus, and that test's capture predicate had no `site` filter, over-counting events. Fixed by filtering to `site === "strategy-selection"` — a real test-isolation gap, not a behavior regression (verified: `selectedStrategy`/`TaskClassification`/`nominatedTools` were never altered).
 
+## Naming correction: removed vendor-coupled naming from the shadow mechanism (2026-09-22)
+
+User flagged, correctly, that Tasks 9/9b/10's shadow infrastructure had drifted from this plan's own stated architecture principle ("own the primitive, not the vendor" — see the intro above) by hardcoding "Jev" into names that represent the **generic**, backend-agnostic shadow mechanism, not the concrete `jev` backend:
+
+- **`JudgmentShadow.jev` → `.judged`** (`packages/core/src/types/judgment-events.ts`) — the most important fix, since this is a public `AgentEvent` schema field. A shadow site running the `llm` `JudgmentBackend` (or a future third provider) would have populated a field literally named `jev` with a non-jev answer.
+- File renames (drop the `jev-`/`Jev` prefix, keep `judgment-`): `adaptive-jev-questions.ts`→`adaptive-judgment-questions.ts`, `jev-classification.ts`→`judgment-classification.ts`, `jev-comprehend-questions.ts`→`judgment-comprehend-questions.ts` (reasoning); `jev-complexity-questions.ts`→`judgment-complexity-questions.ts` (cost); matching test files renamed the same way.
+- Function/type renames: `jevClassifyShadow`→`judgmentClassifyShadow`, `jevComplexityShadow`→`judgmentComplexityShadow`, `jevComprehendShadow`→`judgmentComprehendShadow`, `jevAnswerToStrategy`/`jevAnswerToTier`/`jevAnswerToComplexity`/`jevAnswerToBoolean`/`jevAnswerToOutputFormat`→`answerToStrategy`/`answerToTier`/`answerToComplexity`/`answerToBoolean`/`answerToOutputFormat`, `JevComprehendShadowInput`→`JudgmentComprehendShadowInput`, `buildAdaptiveJev*`/`buildComplexityJev*`/`buildComprehendJev*`→`buildAdaptiveJudgment*`/`buildComplexityJudgment*`/`buildComprehendJudgment*`.
+- **`@reactive-agents/eval`'s exported `JEV_JUDGED_DIMENSIONS`→`JUDGMENT_SCORED_DIMENSIONS`**, plus internal `JEV_RUBRICS`/`JEV_INSTRUCTIONS`→`DIMENSION_RUBRICS`/`DIMENSION_INSTRUCTIONS` and `eval-service.ts`'s internal `jevDims`/`useJev`/`jevScores`→`judgmentDims`/`useJudgmentEngine`/`judgmentScores` — `scoreDimensionsViaJudgment` already took any `JudgmentService`, so these names were misleadingly narrower than the code they described.
+
+**What did NOT change (correctly vendor-named):** `packages/judgment/src/backends/jev-backend.ts`, `makeJevBackend()`, the `JEV_MODEL` env var (`judge-server`), and the `judgeEngine: "jev" | "llm"` / `backend?: "jev" | "llm"` config literals. These name the *concrete backend selector*, exactly like choosing `"anthropic"` vs `"openai"` for an LLM provider — that's correct, not a smell.
+
+Full sweep after the rename: `core`+`reasoning`+`cost`+`eval`+`judgment`+`judge-server` = 3255 pass / 0 fail / 4 pre-existing todo; `runtime`+`reactive-agents` unaffected (1616/0, 2 pre-existing unrelated `as unknown as` ceiling fails). Typecheck/build clean across all touched packages. `check-version-sync.sh` 35/35, `check-cross-cutting.sh` 12/12, `doc-drift` 2/2.
+
 ### Task 11: Guardrails battery (ADD — opt-in, parallel to regex)
 
 **Files:** Modify `packages/guardrails/src/services/guardrail-service.ts`; Create `packages/guardrails/src/detectors/judgment-battery.ts`. Tests: guardrails suite (fake transport). Warden: parent.
