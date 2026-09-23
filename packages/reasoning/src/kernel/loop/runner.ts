@@ -49,6 +49,7 @@ import { compileRunContract } from "../../kernel/contract/run-contract.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
 import { judgmentComprehendShadow } from "../../kernel/capabilities/comprehend/judgment-classification.js";
+import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
 import {
   applyExplicitOverrides,
   compileHarnessPlan,
@@ -1187,6 +1188,14 @@ export function runKernel(
       !state.output &&
       countDeliverableCandidates(state) > 0
     ) {
+      // Task 3 (Phase D leverage plan, shadow-only): fire the
+      // grounding-fabrication judgment shadow alongside the SAME
+      // deterministic content-containment check `assembleDeliverable`
+      // consults (`evaluateUnconsumedEvidenceGrounding`) — this is the most
+      // general, terminatedBy-drift-immune reach of that check across
+      // done-run terminations. Fire-and-forget; never alters `state` or the
+      // deliverable this branch commits.
+      yield* judgmentGroundingFabricationShadowFromState(state);
       state = commitDeliverable(state, assembleDeliverable(state));
     }
 

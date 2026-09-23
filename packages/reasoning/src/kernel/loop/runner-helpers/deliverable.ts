@@ -53,6 +53,59 @@ function normalizeForContainment(s: string): string {
 export const MIN_MODEL_SYNTHESIS_LENGTH = 100;
 
 /**
+ * Result of {@link evaluateUnconsumedEvidenceGrounding} — the deterministic
+ * content-containment heuristic `assembleDeliverable` gates on (2026-08-16
+ * t0-deterministic fix), lifted into a reusable, exported pure function so a
+ * second consumer (the grounding-fabrication judgment shadow, Phase D Task 3)
+ * can read the SAME claim/evidence/verdict the heuristic itself computed,
+ * rather than re-deriving the extraction logic. Pure — no fs, no LLM.
+ *
+ * `hasUnconsumedEvidence` and `lastThoughtContent` are reported independently
+ * of whether the containment comparison itself ran (mirrors the original
+ * inline computation in `assembleDeliverable`, where `hasUnconsumedEvidence`
+ * feeds a SEPARATE outer condition beyond the containment check).
+ */
+export interface UnconsumedEvidenceGroundingCheck {
+  /** Whether any tool observation's `storedKey` was never followed by `recall()`. */
+  readonly hasUnconsumedEvidence: boolean;
+  /** The model's most recent synthesizing thought, if one qualifies (>= MIN_MODEL_SYNTHESIS_LENGTH). */
+  readonly lastThoughtContent?: string;
+  /**
+   * The containment verdict: does `lastThoughtContent` (whitespace-normalized)
+   * already include the unconsumed evidence (whitespace-normalized)? `false`
+   * when the comparison did not run at all (no unconsumed evidence, no
+   * qualifying thought, or nothing resolvable in the scratchpad) — matching
+   * the original inline IIFE's vacuous-`false` short-circuits.
+   */
+  readonly grounded: boolean;
+  /** The resolved unconsumed-evidence text, present ONLY when the containment comparison actually ran. */
+  readonly evidence?: string;
+}
+
+export function evaluateUnconsumedEvidenceGrounding(state: KernelState): UnconsumedEvidenceGroundingCheck {
+  const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
+  const lastThought = [...state.steps]
+    .reverse()
+    .find(
+      (s) =>
+        s.type === "thought" &&
+        (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
+    );
+  const lastThoughtContent = lastThought?.content;
+  if (!hasUnconsumedEvidence || !lastThoughtContent) {
+    return { hasUnconsumedEvidence, lastThoughtContent, grounded: false };
+  }
+  const evidence = resolveUnconsumedEvidence(state.steps, state.scratchpad);
+  if (!evidence) {
+    return { hasUnconsumedEvidence, lastThoughtContent, grounded: false };
+  }
+  const grounded = normalizeForContainment(lastThoughtContent).includes(
+    normalizeForContainment(evidence),
+  );
+  return { hasUnconsumedEvidence, lastThoughtContent, grounded, evidence };
+}
+
+/**
  * Build a {@link ValidatedObservation} from a resolved artifact body.
  *
  * Eligibility was already enforced by {@link getDeliverableObservationContent}
@@ -111,27 +164,12 @@ export function assembleDeliverable(state: KernelState): Deliverable {
   // does NOT already contain the unconsumed evidence's content; a thought
   // that demonstrably reproduces the evidence is grounded regardless of
   // whether `recall()` was called.
-  const hasUnconsumedEvidence = findUnconsumedStoredKeys(state.steps).length > 0;
-
-  const lastThought = [...state.steps]
-    .reverse()
-    .find(
-      (s) =>
-        s.type === "thought" &&
-        (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
-    );
-
-  const thoughtGroundsUnconsumedEvidence = (() => {
-    if (!hasUnconsumedEvidence || !lastThought?.content) return false;
-    const evidence = resolveUnconsumedEvidence(state.steps, state.scratchpad);
-    if (!evidence) return false;
-    return normalizeForContainment(lastThought.content).includes(
-      normalizeForContainment(evidence),
-    );
-  })();
+  const groundingCheck = evaluateUnconsumedEvidenceGrounding(state);
+  const { hasUnconsumedEvidence, lastThoughtContent, grounded: thoughtGroundsUnconsumedEvidence } =
+    groundingCheck;
 
   if (
-    lastThought?.content &&
+    lastThoughtContent &&
     !(
       hasUnconsumedEvidence &&
       countDeliverableCandidates(state) > 0 &&
@@ -140,7 +178,7 @@ export function assembleDeliverable(state: KernelState): Deliverable {
   ) {
     return modelSynthesisDeliverable({
       type: "thought",
-      content: lastThought.content,
+      content: lastThoughtContent,
       iteration: state.iteration,
     });
   }
