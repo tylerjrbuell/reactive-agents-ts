@@ -855,7 +855,7 @@ Deny a paused run's action and resume to completion — the agent observes the d
 
 Require `.withJudgment()` on the builder — each method below throws immediately if it wasn't
 called (`JudgmentService` genuinely absent from the runtime's Layer graph, not silently stubbed).
-See [Judgment Layer](/features/judgment-layer/) and the [judgment cookbook](/guides/judgment-cookbook/).
+See [Judgment Layer](/features/judgment-layer/) and the [judgment cookbook](/cookbook/judgment-recipes/).
 
 | Method                                       | Description                                                                                                                                 |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

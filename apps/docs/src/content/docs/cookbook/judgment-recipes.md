@@ -1,10 +1,10 @@
 ---
 title: Judgment Cookbook
 description: >-
-    Worked recipes for the judgment layer (@reactive-agents/judgment) — confidence-gated
-    escalation, speculative fan-out, re-ranking, and citation checking with agent.judge().
+  Worked recipes for the judgment layer (@reactive-agents/judgment) — confidence-gated
+  escalation, speculative fan-out, re-ranking, and citation checking with agent.judge().
 sidebar:
-    order: 28
+  order: 13
 ---
 
 Four worked recipes for `agent.judge()`. Each assumes `.withJudgment()` is already on the

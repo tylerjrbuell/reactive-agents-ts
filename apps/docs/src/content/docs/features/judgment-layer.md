@@ -158,7 +158,7 @@ still be ranked. If you need to detect drops, diff the returned `id`s against yo
 list. Like `judge()` and `listModels()`, calling `judgeRank()` without `.withJudgment()` throws
 immediately.
 
-See the [judgment cookbook's re-ranking recipe](/guides/judgment-cookbook/#re-ranking-candidates)
+See the [judgment cookbook's re-ranking recipe](/cookbook/judgment-recipes/#re-ranking-candidates)
 for the full worked example.
 
 ## The three primitives
