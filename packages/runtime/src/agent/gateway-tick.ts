@@ -17,6 +17,7 @@
  */
 
 import { Effect, type Context, type ManagedRuntime } from 'effect'
+import { emitErrorSwallowed, errorTag } from '@reactive-agents/core'
 import type {
     GatewayService as GatewayServiceTag,
     SchedulerService as SchedulerServiceTag,
@@ -150,7 +151,6 @@ export const makeGatewayTick = (
 
             // 4. Daily housekeeping: memory compaction + episodic prune
             if (Date.now() - getLastCompactionAt() > 86_400_000) {
-                setLastCompactionAt(Date.now())
                 await runtime.runPromise(
                     Effect.gen(function* () {
                         const memMod = yield* Effect.promise(
@@ -174,7 +174,15 @@ export const makeGatewayTick = (
                             gAgentId,
                             sessionTtlDays
                         )
-                    }).pipe(Effect.catchAll(() => Effect.void))
+                        // Only consume the 24h cooldown on success — otherwise a
+                        // failed compaction silently defers retry a full day
+                        // (HS-243: cooldown was previously set before this ran).
+                        setLastCompactionAt(Date.now())
+                    }).pipe(
+                        Effect.catchAll((err) =>
+                            emitErrorSwallowed({ site: 'runtime/src/agent/gateway-tick.ts:compaction', tag: errorTag(err) })
+                        )
+                    )
                 )
             }
         } catch (err) {

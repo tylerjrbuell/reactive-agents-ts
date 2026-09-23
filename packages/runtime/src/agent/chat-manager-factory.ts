@@ -10,6 +10,7 @@
  */
 
 import { Effect, type ManagedRuntime } from 'effect'
+import { emitErrorSwallowed, errorTag } from '@reactive-agents/core'
 import {
     GatewayChatManager,
     type GatewayChatManagerDeps,
@@ -52,7 +53,11 @@ export const createChatManager = (
                     )
                     if (svcOpt._tag !== 'Some') return
                     yield* svcOpt.value.log(entry as Parameters<typeof svcOpt.value.log>[0])
-                }).pipe(Effect.catchAll(() => Effect.void))
+                }).pipe(
+                    Effect.catchAll((err) =>
+                        emitErrorSwallowed({ site: 'runtime/src/agent/chat-manager-factory.ts:logEpisode', tag: errorTag(err) })
+                    )
+                )
             )
         },
         saveSession: async (input) => {
@@ -66,7 +71,11 @@ export const createChatManager = (
                     )
                     if (storeOpt._tag !== 'Some') return
                     yield* storeOpt.value.save(input as Parameters<typeof storeOpt.value.save>[0])
-                }).pipe(Effect.catchAll(() => Effect.void))
+                }).pipe(
+                    Effect.catchAll((err) =>
+                        emitErrorSwallowed({ site: 'runtime/src/agent/chat-manager-factory.ts:saveSession', tag: errorTag(err) })
+                    )
+                )
             )
         },
         findById: async (sessionId) => {
