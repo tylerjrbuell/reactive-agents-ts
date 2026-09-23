@@ -128,6 +128,21 @@ export function createMockLLM(rules: MockLLMRule[]) {
         contextWindow: 8000,
         id: "mock",
       }),
+
+    getStructuredOutputCapabilities: () =>
+      Effect.succeed({
+        supportsNativeJson: false,
+        supportsJsonMode: false,
+        supportsToolForcing: false,
+      }),
+
+    capabilities: () =>
+      Effect.succeed({
+        supportsToolCalling: true,
+        supportsStreaming: true,
+        supportsStructuredOutput: false,
+        supportsLogprobs: false,
+      }),
   };
 
   const layer = Layer.succeed(LLMService, service as any);
