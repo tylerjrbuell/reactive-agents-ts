@@ -5,3 +5,8 @@ export {
   type OpenInferenceExporterConfig,
   type ExporterHandle,
 } from "./otlp.js";
+export {
+  setupLangfuseExporter,
+  buildLangfuseConfig,
+  type LangfuseExporterConfig,
+} from "./langfuse.js";
