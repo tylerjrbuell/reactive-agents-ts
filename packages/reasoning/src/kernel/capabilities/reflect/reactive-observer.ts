@@ -8,6 +8,7 @@
  * Extracted from kernel-runner.ts to keep the main loop focused on iteration logic.
  */
 import { Effect, Option } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
@@ -132,7 +133,7 @@ export function runReactiveObserver(
                 Effect.serviceOption(ObservableLogger).pipe(
                   Effect.flatMap((opt) =>
                     opt._tag === "Some"
-                      ? opt.value.emit(event).pipe(Effect.catchAll(() => Effect.void))
+                      ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:136", tag: errorTag(err) })))
                       : Effect.void
                   )
                 );
@@ -166,7 +167,7 @@ export function runReactiveObserver(
               }
               return logEntropy;
             }),
-            Effect.catchAll(() => Effect.void),
+            Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:170", tag: errorTag(err) })),
           );
       }
     }
@@ -211,7 +212,7 @@ export function runReactiveObserver(
               expectedMean: calWithDrift.expectedMean ?? 0,
               observedMean: calWithDrift.observedMean ?? 0,
               deviationSigma: calWithDrift.deviationSigma ?? 0,
-            }).pipe(Effect.catchAll(() => Effect.void));
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:215", tag: errorTag(err) })));
           }
         }
 
@@ -325,7 +326,7 @@ export function runReactiveObserver(
               ...((decision as Record<string, unknown>).confidence !== undefined
                 ? { confidence: (decision as Record<string, unknown>).confidence }
                 : {}),
-            }).pipe(Effect.catchAll(() => Effect.void));
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:329", tag: errorTag(err) })));
           }
         }
 
@@ -431,7 +432,7 @@ export function runReactiveObserver(
                     latencyMsEstimated: dispatchResult.totalCost.latencyMs,
                   },
                   telemetry: {},
-                }).pipe(Effect.catchAll(() => Effect.void));
+                }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:435", tag: errorTag(err) })));
               }
 
               switch (patch.kind) {
@@ -482,7 +483,7 @@ export function runReactiveObserver(
                       source: "dispatcher",
                       targetTokens: p.targetTokens,
                       reason,
-                    }).pipe(Effect.catchAll(() => Effect.void));
+                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:486", tag: errorTag(err) })));
                   }
                   break
                 }
@@ -559,7 +560,7 @@ export function runReactiveObserver(
                     | "mode-advisory"
                     | "mode-off"
                     | "no-handler",
-                }).pipe(Effect.catchAll(() => Effect.void));
+                }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:563", tag: errorTag(err) })));
               }
             }
           }
@@ -612,7 +613,7 @@ export function runReactiveObserver(
             source: "verbosity-detector",
             targetTokens: verbosityRec.targetTokens,
             reason: verbosityRec.reason,
-          }).pipe(Effect.catchAll(() => Effect.void));
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:616", tag: errorTag(err) })));
         }
       }
     }
