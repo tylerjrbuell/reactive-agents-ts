@@ -185,6 +185,8 @@ Picking the wrong default = scope creep (render-bound bundle pulled into the tes
 
 When in doubt, write one case at the framework-agnostic tier and see if it runs under bare `bun:test`. If yes, proceed behavioral. If "Invalid hook call" / setup errors → drop to smoke + name the follow-up bundle.
 
+**Cast-ceiling impact of new test files (added 2026-09-25 v17).** Before designing any new test file under `packages/*/tests/`, check whether it will introduce `as unknown as` casts. This repo enforces TWO separate ratchets in `packages/runtime/test/as-unknown-as-ceiling.test.ts`: a `packages/*/src` ceiling (`CEILING = 78`, includes colocated `__tests__`) and a `packages/*/tests` ceiling (`TESTS_CEILING = 237`). **Neither is seen by a package suite or typecheck** — they are separate gates, and both may already be red from unrelated drift. Require the new test to contribute **zero** `as unknown as` sites. Build fixtures with typed constructors (e.g. `initialKernelState` + `transitionState`, a fully-typed service double) rather than `as unknown as`. `{} as never` is the existing sanctioned placeholder for unavoidable structural gaps and is NOT counted, but prefer a real typed stub. Add `bun test packages/runtime/test/as-unknown-as-ceiling.test.ts` to the bundle's verification protocol and record the pre/post site counts. Do not bump either ceiling to accommodate the bundle. (Reason: 2026-09-25 reasoning-silent-failure #223 — warden pass 1 added 3 test-fixture casts, taking the tests-scope count 266 → 269 on an already-red gate; caught only by the parent running the ceiling test, corrected to 0 net with typed fixtures.)
+
 Read the `superpowers:writing-plans` skill conventions (location override: `wiki/Planning/Implementation-Plans/`).
 
 **Fire-site reachability check (added 2026-05-21 v4):** before designing integration-style tests for any unit, grep the call graph to verify the test scenario will actually exercise the code under fix. A hook/handler/wrapper can be **registered** without being **fired** if the test scenario routes through an alternate code path (e.g., `withTestScenario` short-circuits the reactive loop and bypasses `runner.ts:683` `runPhaseHooks`). Quick check:
@@ -270,6 +272,8 @@ COMMIT → conventional commit, citing GH issue numbers
 2. **TaggedError / structural-type leniency.** Effect's `Data.TaggedError` stores any field passed to its constructor, even if the payload type doesn't declare it. `expect(err.newField).toBeDefined()` will pass against pre-fix state if the test constructs the error with `newField`. Same for plain TS structural types — passing extra properties to a struct constructor is accepted at runtime.
 
 When either holds, the RED is post-hoc regression coverage only — it doesn't prove the pre-fix state was broken. Acceptable; just note in the plan's risk register and don't claim "test failed before fix, passes after" in the retro unless you confirmed it. To strengthen RED authority for type fields: write a temporary `src/.test-types.ts` smoke file that imports and destructures the new field, run `tsc --noEmit` on src/, then delete the smoke file before commit. Overkill for most fixes; flag only when the pre-fix RED must be authoritative.
+
+**File-swap RED technique (added 2026-09-25 v17).** For a behavior-additive fix (diagnostics, event emission, logging — where the new test asserts an artifact the pre-fix code cannot produce), prove RED without `git stash`: `cp <wired-file> /tmp/opencode/<file>.wired.ts` → `git checkout -- <file>` → run the new test (expect fail) → `cp /tmp/opencode/<file>.wired.ts <file>` → confirm `git diff --stat` is restored. `git stash` risks a conflicting pop if the tree moved; the `/tmp` copy is unconditionally reversible. This is the cheapest authoritative RED for "the event/return value did not exist before". (Reason: 2026-09-25 reasoning-silent-failure #223 — file-swap gave a clean 2-fail/0-events pre-fix proof with zero stash risk.)
 
 **Fiber-interruption regression test construction (added 2026-08-16 v14).** When a regression test forks a fiber specifically to interrupt it later (proving fiber-supervised cancellation — e.g. "does interrupting this Effect actually stop the underlying work"), keep the fork, the wait-for-condition, and the `Fiber.interrupt` call inside ONE `Effect.gen` / single `Effect.runPromise` call. A bare `Effect.runPromise(Effect.fork(effect))` returns a `Fiber` handle, but the ephemeral scope created for that one `runPromise` call closes immediately after `fork` returns — which can interrupt the child fiber before the test ever gets to observe or deliberately interrupt it. This reads as "the fix doesn't work" (the condition you're polling for never becomes true) when it's actually a test-authoring bug, not a fix bug — verify with a quick throwaway debug script logging fiber state before concluding the production fix is wrong. (Reason: 2026-08-16 #35 spawn — a code-action Worker-interruption regression test's first draft forked outside the observing `Effect.gen`, silently self-interrupting before the sandboxed code reached its first tool call; cost several minutes chasing an unrelated red herring (`effect` version dual-package hazard in a `/tmp` debug script) before finding the real cause.)
 
@@ -408,6 +412,13 @@ If a verified-by check fails to come down → the fix didn't actually address th
 Document the flake in the PR body (test name + isolation evidence). Do NOT block the bundle. CI may surface the same flake; if so, rerun the failed job. (Reason: 2026-05-22 #82 spawn — workspace `bun test` showed 2 fails in `packages/diagnose/`; `bun test packages/diagnose/` → 35/0. Pre-existing test-order issue, unrelated to the react smoke bundle. CI on #100 will rerun cleanly. Same pattern surfaced on #99 — `httpbin.org` external-network flake resolved on rerun.)
 
 Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., "test-order flake in packages/diagnose under workspace `bun test`") — separately from any active bundle.
+
+**Turbo-cache masking + cwd-relative-fixture triage (added 2026-09-25 v17).** Before attributing a full-workspace red to the bundle, run this two-step triage:
+
+1. **Re-run the failing package from repo-root cwd** (`bun test packages/<failing>/`). If it passes there but fails under `bun run test`, the failure is invocation-dependent, not a code regression.
+2. **grep the failing test for cwd-relative paths**: `grep -n "process.cwd()\|join(\"wiki\|REPORTS_DIR\|import.meta" <test>`. A test that resolves fixtures/baselines relative to `process.cwd()` reads DIFFERENT files under turbo (cwd = package dir) than under root-cwd `bun test` — and turbo CACHES the task, so a pre-existing red can stay hidden until some other change invalidates the cache. A uniform divergence across many cases (same field, identical expected→actual delta) is a stale-baseline signature, not a behavior change.
+
+Do not block the bundle on such a red; file it as its own issue with the cwd evidence and note it in the PR/retro. (Reason: 2026-09-25 reasoning-silent-failure #223 — `@reactive-agents/testing`'s North Star gate resolves `REPORTS_DIR = "wiki/Research/Harness-Reports"` relative to cwd, so turbo read a stale gitignored `packages/testing/wiki/...` baseline (2026-06-16) instead of the committed root one (2026-09-19), producing 14 phantom regressions; turbo cache had masked it until the reasoning change invalidated the testing task. Filed #230.)
 
 ---
 
@@ -556,7 +567,7 @@ BUNDLE   greedy cohesion grow, cap at max_bundle_size
 PLAN     wiki/Planning/Implementation-Plans/YYYY-MM-DD-<bundle>.md
 BRANCH   git checkout -B bundle/<bundle-name> origin/main (clean tree only)
 EXECUTE  TDD per unit, conventional commits cite #N
-VERIFY   build + test + typecheck + re-run each verified-by
+VERIFY   build + test + typecheck + cast-ceiling + re-run each verified-by
 UPDATE   gh pr create with Closes #N (auto-close on merge), board → In Review, Hot.md note
 RETRO    wiki/Research/Debriefs/, AMEND THIS SKILL.md
 ```

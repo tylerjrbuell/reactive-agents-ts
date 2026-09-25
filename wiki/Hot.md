@@ -10,6 +10,29 @@ updated: 2026-09-25
 
 ---
 
+## 2026-09-25 — P1 backlog bundle `reasoning-silent-failure` (#223) closed locally
+
+Executed `execute-backlog` on filter `priority:p1 area:reasoning` → singleton bundle
+#223 (only-remaining grounded P1; siblings #216/#214 deferred for premise drift —
+#216's cited `synthesizeAndEmitToolCalls` no longer exists in openai.ts and lines
+shifted +60; #214's title/body/actual counts contradict: 80 vs 79 vs 86 src, and
+`265 tests` vs actual ~266). Routed through **kernel-warden** (kernel-scope contract).
+Wired all 8 bare `Effect.catchAll(() => Effect.void)` sites in
+`packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts` through
+`emitErrorSwallowed` + `errorTag` (anchors 136/170/215/329/435/486/563/616) and added
+a typed regression test (`reactive-observer-error-swallowed.test.ts`, 2 tests).
+Authoritative RED via file-swap (2 fail / 0 events pre-fix). Commit `ad8427f6`, merged
+locally to `dev`. Reasoning 2890/0, typecheck 9/9, workspace typecheck 68/68, build
+38/38, error-swallowed-wiring 4/0; test contributes 0 `as unknown as` sites (tests-scope
+ratchet stays at pristine 266). **Two verifier catches:** warden pass 1 added 3
+test-fixture casts to the already-red tests-scope ceiling (fixed to 0 net with typed
+fixtures); and a full-workspace `bun run test` red turned out to be a **pre-existing
+cwd-relative baseline bug** in the North Star gate (`REPORTS_DIR` is relative, so turbo
+read a stale gitignored `packages/testing/wiki/` snapshot) — filed as **#230**, not
+caused by this bundle. Retro + 3 SKILL.md amendments:
+[[Research/Debriefs/2026-09-25-reasoning-silent-failure-execution-debrief]]. Next
+eligible grounded P1: #216 (needs re-scope) or #214 (needs evidence reconciliation).
+
 ## 2026-09-25 — P1 backlog bundle #225 closed locally
 
 Executed `cli-example-builder-casts` (#225), commit `5ec4dd63`, locally merged to
