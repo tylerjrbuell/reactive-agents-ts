@@ -1,7 +1,7 @@
 ---
 aliases: [High-Leverage Backlog, Recommended Enhancements]
 tags: [planning, backlog, prioritization]
-updated: 2026-09-19
+updated: 2026-09-23b
 ---
 
 # Recommended Enhancements
@@ -16,6 +16,136 @@ have (or get) a GH issue number.
 **Convention:** Add items here only after a code-level spot-check confirms
 the gap is still real. Remove/strike items once shipped, with the closing
 commit/PR noted.
+
+---
+
+## 2026-09-23 sweep (second pass, same day) — fresh DISCOVER + sprint batching
+
+**Trigger:** re-invoked with no args, immediately after the morning's backlog overhaul
+(section below). This pass runs the DISCOVER step the morning pass time-boxed —
+`bun test` full suite (not just `bun run build`) — and produces capped sprint batches
+per the skill's BATCH step, which the morning pass didn't do explicitly.
+
+**Sources read this pass:** `bun test` (full run, 9619 tests/1257 files — new signal,
+not read this morning), `wiki/Architecture/DEBT-REGISTER.md` §3 (OPEN cross-cutting
+gaps + §3b absorbed-open-work table, ~120 lines not read this morning),
+`wiki/Failure-Modes/00 FM Catalog.md` (grepped for open 🔄 markers — all point to the
+same pre-09 "Phase 1.5 M-series" framework already parked this morning, no new
+candidates). `gh issue list --state all --search` dedupe checks for every new
+candidate below.
+
+### DISCOVER finding — dev branch test suite is red (2 of 4 failures root-caused this pass)
+
+`bun test` on `dev` HEAD (`45d84d91`): **9586 pass / 4 fail** (up from the 2026-09-22
+memory snapshot's 9454/2-fail — file count also grew 1235→1257, consistent with
+in-progress judgment-layer work). Two failures isolated to
+`judgment-comprehend-shadow-wiring.test.ts`: `askCallCount` off by exactly +1 in both
+the small- and large-tool-roster cases. Read `judgment-classification.ts` end to end —
+production chunking math is correct for the test's inputs; only one production call
+site. Working hypothesis (UNVERIFIED, explicitly flagged as such in the filed issue):
+a shared module-level `askCallCount` plus an un-scoped `Effect.forkDaemon` fiber
+leaking a stray `ask()` call across sequential tests in the same file — a test-hygiene
+bug, not a confirmed production double-fire. Filed as
+[#215](https://github.com/tylerjrbuell/reactive-agents-ts/issues/215), P1, with the
+production-double-fire alternative explicitly named as the P0 case to rule out first.
+Other 2 failures (a live-model benchmark scenario inside `packages/trace/__tests__/layer.test.ts`)
+time-boxed out — flagged in the issue for separate triage, not conflated with the
+judgment-shadow finding.
+
+### SCORE
+
+| Item | Blast | Freq | Cost(inv) | Score | Status |
+|---|---|---|---|---|---|
+| #215 dev-red test regression | 2 (blocks clean merge of active WIP judgment-layer branch) | 3 (every `dev` test run hits it right now) | 2 (isolated to one test file + one shadow module) | **12** | VERIFIED (symptom); root cause is a stated hypothesis, not fully confirmed |
+| #213 wither batch 2 | 2 | 2 | 2 | 8 | carried from morning sweep |
+| #206 abstention synthesis | 2 | 3 | 2 | 12 | carried, previously filed, re-scored this pass — high freq (any budget-exhausted run) |
+| #214 as-unknown-as ceiling | 1 | 1 | 3 | 3 | carried from morning sweep |
+
+### DEDUPE note
+
+`DEBT-REGISTER.md` §3b's "#39 per-entity requirements" (generic `cardinality:"per-entity"`
+tool-coverage, still OPEN per the register) was considered for filing this pass but
+**not filed** — it's already recorded in `wiki/Hot.md` "What's Next" #5 as a known,
+disclosed, untouched backlog item with no owner decision to defer, but also no fresh
+grounding done this pass beyond re-reading the existing register entry (no new
+file:line evidence gathered). Left as a "needs go/no-go" flag rather than filed
+speculatively — same disposition as the morning pass gave HS-236.
+
+### Sprint batches (capped, score-sorted, mixed bug/capability)
+
+**Sprint 1 — unblock `dev`, ship this week**
+1. **#215** (score 12) — root-cause + fix the dev-branch test regression. Do this FIRST — it's blocking clean CI on active WIP.
+2. **#206** (score 12) — abstention synthesis on budget exhaustion. Already scoped, needs the design pass called out in its own thread.
+3. **#213** (score 8) — wither batch 2, pattern fully established, can run in parallel with #215/#206 (different files).
+
+**Sprint 2 — contributor-facing backlog (good first issue / help wanted)**
+1. **#54** Mistral adapter — re-verified real this morning, `good first issue`.
+2. **#55** Cohere adapter — same.
+3. **#38** README Named Users section — trivial, newly labeled `good first issue`.
+4. **#214** (score 3) — as-unknown-as ceiling gap, mechanical, `good first issue`.
+
+**Needs go/no-go (not filed, flagged for owner decision):**
+- `DEBT-REGISTER.md` §3b "#39 per-entity requirements" — real, disclosed, untouched; no explicit defer decision recorded, but also not re-grounded this pass.
+
+---
+
+## 2026-09-23 sweep — full backlog overhaul, contributor-onboarding pass
+
+**Trigger:** first "beginning to get contributions" sweep — full re-triage of all 22
+open GH issues (not just new-candidate scoring), stale-issue closure, and a fresh
+DISCOVER pass (build/test baseline, provider/exporter/template dir checks, TODO/FIXME
+density).
+
+**Sources read:** `gh issue list --state open --limit 200` (22 open, full titles +
+labels, sorted by staleness), `gh label list` (full taxonomy), `wiki/Issues/Running
+Issues Log.md` (full), `wiki/Hot.md` (full), `wiki/Planning/Recommended-Enhancements.md`
+(this file, full), `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (§1-3, §7-9 —
+sampled, ~180 of ~370 lines), `wiki/Architecture/DEBT-REGISTER.md` (grepped for
+"wither"/"as-unknown-as", not read in full). Fresh discovery: `bun run build` (38/38
+green), `ls packages/llm-provider/src/providers/` (6 files: anthropic, gemini, litellm,
+local, local-probe, openai — groq/xai route through litellm per
+`runtime.ts:64`), `ls packages/observability/src/exporters/` (3: console, file, otlp),
+`grep TODO|FIXME packages/*/src` (33 hits, mostly regex-literal false positives or
+already-tracked/deliberate stubs — no new candidates surfaced).
+
+### GROUND — every open issue re-verified against current code/docs
+
+| # | Title | Result |
+|---|---|---|
+| #62 | Roadmap Phase C→G tracker | **STALE — CLOSED.** `09-UNIFIED-PROGRAM.md` was rewritten in place 2026-08-12, replacing the Phase C-G letter sequencing entirely with a K/P/T strand model + Steps 0-6 ordered path (§7). The tracker followed a framework that no longer exists in the canonical doc. |
+| #37 | multi-agent template (`create-reactive-agent`) | **STALE — CLOSED.** Body specs the template around `@reactive-agents/orchestration`, which AGENTS.md confirms was removed entirely in v0.14. Unbuildable as specced. |
+| #124 | harness-convergence 3.2 composite confidence signal | **STALE — CLOSED.** Filed 2026-05-23, before the meta-loop overhaul (v0.14) and TypeSafe/Jev judgment layer (Sept 2026) shipped a per-iteration `assessment` trace event + `agent.judge()` shadow sites — the surface this issue targeted no longer matches the architecture. |
+| #125 | harness-convergence 3.3 capability composition routing | **STALE — CLOSED.** Same disposition as #124. |
+| #34, #45 | code-action bench vs reactive (qwen3:14b) | VERIFIED still open/real — code-action is still `promote-candidate` tier per AGENTS.md's live strategy registry, not GA. Not scheduled in 09's current Steps 0-6, so flagged parked (comment added), not closed. |
+| #36 | Promote code-action → GA | VERIFIED, blocked on #34/#45. Comment added noting parked status. |
+| #42, #43, #44 | M8/M10/M14 mechanism benches | **UNVERIFIED (sampled out)** — not re-grounded against current code this pass; flagged via comment for owner triage given they predate 09's WIP=1 path. |
+| #48, #49, #51 | τ-bench gates | VERIFIED still real — `wiki/Hot.md` "What's Next" confirms the τ-bench environment bridge is deliberately tabled (2026-09-14 owner decision), not abandoned. Comments added clarifying tabled ≠ stale. |
+| #50, #52, #38 | README/reproducibility doc chores | VERIFIED still real, independent of roadmap framing. #38 (Add Named Users section) labeled `good first issue` + `help wanted` — trivial, self-contained doc edit. |
+| #54, #55 | Mistral / Cohere provider adapters | VERIFIED — `ls packages/llm-provider/src/providers/` confirms neither exists. Already correctly labeled `good first issue`/`help wanted`. |
+| #31, #32, #33 | Langfuse/Braintrust exporters, OTel sampling | VERIFIED still open (re-confirmed exporters dir unchanged since 09-19 sweep). |
+| #206 | Abstention synthesis on budget exhaustion | VERIFIED still open, still needs its own design pass per prior sweep note. |
+
+### FILE — 2 new issues from fresh DISCOVER, both grounded and dedupe-checked
+
+| Item | GH | Score | Why |
+|---|---|---|---|
+| Wither batch 2 — behavioral proof for 9 SILENT builder withers (withA2A, withAgentTool, withCircuitBreaker, withGrounding, withHarness, withMinIterations, withStallPolicy, withVerification, withVerificationStep) | [#213](https://github.com/tylerjrbuell/reactive-agents-ts/issues/213) | Blast 2 (public API surface) × Freq 2 (every builder user of these withers is currently unprotected against silent breakage) × Cost(inv) 2 (pattern fully established by batch 1, ~1-2hr/wither) = **8** | Fully specced in `DEBT-REGISTER.md` §B3 census with an existing 6-test precedent (batch 1, 2026-09-15) to follow — low-ambiguity, contributor-ready. |
+| `as-unknown-as` cast ceiling gap (79 actual vs 78 declared ceiling) | [#214](https://github.com/tylerjrbuell/reactive-agents-ts/issues/214) | Blast 1 (single type-safety ratchet) × Freq 1 (CI-only surface) × Cost(inv) 3 (small, mechanical) = **3** | Carried in `wiki/Hot.md` "What's Next" since 2026-09-15, never filed as a GH issue — pure tracking gap, not a new finding. Labeled `good first issue`. |
+
+### Contributor-onboarding labeling pass
+
+Reviewed all 20 remaining open issues for `good first issue`/`help wanted` fit. Confirmed
+correct on #54, #55 (already labeled) and #213/#214 (labeled at filing). Added to #38
+(trivial README section addition — was missing both labels despite being genuinely
+beginner-suited). No other open issue is small/self-contained enough to qualify — the
+rest are either research-track (bench gates, M-series spikes) or require deep kernel/
+harness context.
+
+### Net result
+
+22 open → **4 closed** (stale, superseded by architecture rewrites) → **2 filed**
+(grounded, contributor-ready) → **20 open**, all re-verified or explicitly marked
+unverified-sampled-out this pass. No item was silently re-ranked without a ground check.
 
 ---
 
