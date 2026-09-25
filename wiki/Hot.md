@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,21 @@ updated: 2026-09-23
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-09-25 — P1 backlog bundle #225 closed locally
+
+Executed `cli-example-builder-casts` (#225), commit `5ec4dd63`, locally merged to
+`dev` as `6bf54034`. Grounding found 9 matching builder casts (issue said 8):
+removed 3 from supported chains, deleted a stale `.withA2A()` capability probe,
+and corrected the CLI's invalid Gemini provider value (`"google"` → `"gemini"`).
+Five remaining casts probe APIs that are still absent. Build 38/38 and workspace
+typecheck 68/68 pass. Full suite after local merge: 9,592 pass / 21 fail; one
+extra workspace-order logger failure in untouched observability passed alone and
+as a package; baseline reds are the 2 cast-ceiling checks and 18 Docker timeouts.
+No PR/push: local `dev` is ahead 75 and behind 6 vs `origin/dev`; the remote
+would include unrelated local history. #225 and tracker #229 are closed. Next
+eligible P1 grounded candidate: #223 (kernel reasoning; route through the
+kernel-warden contract before edits).
 
 ## 2026-09-23 — Judgment Phase D shipped: includeContext DX + 2 new shadow sites (completion, grounding)
 

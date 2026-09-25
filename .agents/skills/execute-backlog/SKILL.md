@@ -83,6 +83,8 @@ For each candidate, parse:
 
 If the **sum** of equivalence-class matches reproduces the claimed count, proceed (no drift — issue author counted across both forms). If the sum still falls short, mark drift and re-read the cited spans. (Reason: 2026-05-21 #71 spawn — issue claimed 7 sites; primary grep `(state as any)` returned 3; the other 4 lived under `as unknown as { … }` narrowings. Including both forms recovered the exact 7.)
 
+**Exact-location parity (added 2026-09-25).** When an issue enumerates both a site count and file:line locations, rerun the pattern against every cited file and compare the complete emitted location set with the issue list. A count can be close while the location list omits a real site (e.g. #225 listed 8 but the four cited files contained 9, including an unlisted HITL builder chain). Record the actual paths/lines and mark the issue `🟡 drift detected` before bundling.
+
 Output: candidate set, sorted by `priority:p0` > `p1` > `p2` > `p3`, then by `verified` label (verified issues rank higher), then drift-clean before drift-detected.
 
 **Cross-package consistency probe (added 2026-05-22 v9).** When the issue touches per-framework / per-platform packages providing equivalent APIs (e.g., `@reactive-agents/react` + `@reactive-agents/svelte` + `@reactive-agents/vue` all exporting `useAgentStream`-style hooks/factories), briefly diff the impl shape across siblings:
@@ -346,6 +348,8 @@ When in doubt, write the direct-invocation test first; expand to integration cov
 | `TODO` on live code path | does the followup issue exist OR is the work obsolete? → wire or remove per HS-23 pattern |
 
 When deletion is the right action, also confirm the issue's verified-by points at a stable external artifact (phase-1 evidence, MEMORY.md verdict, audit report) — that's what makes "delete" safe vs "replace with TBD". (Reason: 2026-05-22 #80 spawn — `m1-dispatcher-validation.test.ts:65` `test.skip("RED phase…")` was 110 LOC of placeholder. M1 had already shipped ✅ KEEP per `harness-reports/phase-1-mechanism-validation-2026-05-04.md`. Pure deletion was correct; replacement would have invented coverage that doesn't exist.)
+
+**Cast-removal follow-through (added 2026-09-25).** If deleting a cast exposes a compiler error downstream, trace the diagnostic to the value producer and correct its source type or invalid literal; do not restore the cast or label the error generic-inference friction without evidence. In #225, removing the builder cast exposed `ProviderInfo.provider: string` and the unsupported `"google"` value; the root fix used `ProviderName` and `"gemini"`.
 
 **Pure-deletion verified-by (added 2026-05-22 v6).** When the bundle is purely deletion (no new helper, no migration, no replacement), the standard "grep target → 0" recheck is structurally weaker than for typing/refactor bundles. Strengthen by also asserting:
 

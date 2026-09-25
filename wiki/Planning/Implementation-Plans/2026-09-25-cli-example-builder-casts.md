@@ -1,8 +1,8 @@
 ---
 type: implementation-plan
-status: active
+status: completed
 created: 2026-09-25
-completed: null
+completed: 2026-09-25
 authored-by: opencode
 related: [[Planning/Planning-Index]]
 tags: [backlog, priority-p1, builder, type-safety]
@@ -104,13 +104,26 @@ also passes the direct single-file compiler command above.
 - Direct TypeScript check of `a2a-cassette-replay.ts`: pass.
 - Direct offline execution of the A2A cassette example returns its expected
   `passed: false` while reporting that cassette support is absent.
-- `bun test --timeout 15000`: **9,593 pass / 20 fail / 25 skip / 4 todo**,
-  identical to baseline. Failures remain the two cast-site ceiling tests plus
-  18 Docker-dependent timeouts.
+- `bun test --timeout 15000` before local integration: **9,593 pass / 20 fail /
+  25 skip / 4 todo**, identical to baseline. After local integration, one
+  additional workspace-order failure appeared in the untouched
+  `packages/observability/tests/logging/effect-logger-bridge.test.ts` (9,592
+  pass / 21 fail / 25 skip / 4 todo). The file passes alone (4/0), and the full
+  observability package passes (234/0); the other 20 baseline failures are the
+  two cast-ceiling checks and 18 Docker-dependent timeouts.
 - Issue-location recheck: exact `ReactiveAgents.create() as any` search now
   returns **5** sites (was 9), all in the deliberate missing-capability probes.
 - No change to the public builder API; the CLI demo now uses a valid Gemini
   provider value and precise `ProviderName` typing.
+
+## Integration
+
+Fix commit `5ec4dd63` was merged locally to `dev` as `6bf54034`. No PR was opened
+and no remote push was made: `origin/dev` has six commits absent locally while
+local `dev` contains 75 commits absent from `origin/dev`, so publishing this
+branch would include unrelated local history. #225 and tracker #229 were closed
+with verification comments. Neither issue had a project-board item, and the
+GitHub token lacks `read:project` scope to inspect or move board cards.
 
 ## Baseline
 
