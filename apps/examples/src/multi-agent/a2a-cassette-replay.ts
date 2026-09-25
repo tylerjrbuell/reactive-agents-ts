@@ -77,23 +77,17 @@ export async function run(_opts?: { provider?: string; model?: string }): Promis
     gaps.push(`could not import @reactive-agents/a2a: ${(err as Error).message}`);
   }
 
-  // ── Surface gap 3: builder has no .withA2A({ cassette }) hook ───────────────
-  const probe = ReactiveAgents.create() as any;
-  if (typeof probe.withA2A !== "function") {
-    gaps.push(".withA2A({ cassette }) builder hook missing.");
-  }
-
   // Build two test-provider agents anyway, to exercise whatever A2A primitives
   // exist today and prove the example shape is correct.
   let buildOk = false;
   try {
-    const a = await (ReactiveAgents.create() as any)
+    const a = await ReactiveAgents.create()
       .withName("xfail-a2a-a")
       .withProvider("test")
       .withTestScenario([{ text: "hello from A" }])
       .withMaxIterations(2)
       .build();
-    const b = await (ReactiveAgents.create() as any)
+    const b = await ReactiveAgents.create()
       .withName("xfail-a2a-b")
       .withProvider("test")
       .withTestScenario([{ text: "hello from B" }])

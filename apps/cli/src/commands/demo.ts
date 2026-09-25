@@ -1,7 +1,7 @@
 import * as readline from 'node:readline'
 import chalk from 'chalk'
 import { Effect, Schema } from 'effect'
-import { ReactiveAgents } from '@reactive-agents/runtime'
+import { ReactiveAgents, type ProviderName } from '@reactive-agents/runtime'
 import { defineTool } from '@reactive-agents/tools'
 import {
     banner,
@@ -70,7 +70,7 @@ const getHnPostsTool = defineTool({
 const VIOLET = '#8b5cf6'
 const CYAN = '#06b6d4'
 
-type ProviderInfo = { provider: string; model: string; label: string }
+type ProviderInfo = { provider: ProviderName; model: string; label: string }
 
 function renderModelColumns(models: string[]): void {
     const termWidth = process.stdout.columns ?? 80
@@ -215,7 +215,7 @@ async function detectProvider(): Promise<ProviderInfo | null> {
     }
     if (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY) {
         return {
-            provider: 'google',
+            provider: 'gemini',
             model: 'gemini-2.0-flash',
             label: 'Google · gemini-2.0-flash',
         }
@@ -230,8 +230,7 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
     console.log(kv('Mode', chalk.green('live agent run')))
     console.log()
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const agent = await (ReactiveAgents.create() as any)
+    const agent = await ReactiveAgents.create()
         .withName('demo-agent')
         .withProvider(detected.provider)
         .withModel(detected.model)
@@ -315,7 +314,8 @@ async function runReplayDemo(): Promise<void> {
             ) +
             ' ' +
             chalk.hex(CYAN)(
-                'Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) and re-run for a live agent.'
+                'Configure Ollama or set ANTHROPIC_API_KEY, OPENAI_API_KEY, ' +
+                    'or GOOGLE_API_KEY and re-run for a live agent.'
             )
     )
     console.log()

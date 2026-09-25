@@ -90,6 +90,17 @@ rax run <prompt> [--provider anthropic|openai|gemini|groq|xai|ollama|litellm|tes
 rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-6
 ```
 
+### `rax demo`
+
+Run the live demo with the first detected provider: local Ollama, then an
+Anthropic, OpenAI, or Google API key. Google Gemini is selected as the `gemini`
+provider. If no provider is configured, Rax displays the recorded example
+output instead.
+
+```bash
+rax demo
+```
+
 ### Cortex (companion studio)
 
 Cortex is available as a public npm package and from source. 

@@ -37,6 +37,10 @@ Add a lightweight tool index (opt-in, off by default): a compact, listed-only vi
 ## [Unreleased]
 
 ### Fixed
+- `rax demo` now passes the supported `gemini` provider name when it detects a
+  Google API key, and its no-key guidance includes Gemini and Ollama. The demo's
+  provider value is typed against the builder's `ProviderName` union, removing
+  the cast that had hidden the invalid `"google"` value.
 - Memory's default SQLite location no longer depends on which API enabled it
   or which directory the process ran from. `defaultMemoryConfig()` (used by
   `createMemoryLayer()` and the `rax skills` CLI) and `defaultUserMemoryPath()`
