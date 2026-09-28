@@ -133,13 +133,54 @@ const handle = setupOpenInferenceExporter({
 })
 ```
 
+## Langfuse
+
+Langfuse ingests OpenTelemetry traces natively over OTLP HTTP. `setupLangfuseExporter` is a thin preset over `setupOpenInferenceExporter` — it computes the `/api/public/otel` endpoint and the HTTP Basic auth header from your project keys, so spans arrive with OpenInference attributes and render as agent/LLM/tool traces in the Langfuse UI.
+
+```typescript
+import { setupLangfuseExporter } from "@reactive-agents/observe"
+
+// Reads LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_HOST from env.
+const handle = setupLangfuseExporter()
+
+// ... run agents (with OpenInferenceTracerLayer wired in) ...
+
+await handle.shutdown()
+```
+
+Or pass credentials explicitly:
+
+```typescript
+const handle = setupLangfuseExporter({
+  publicKey: "pk-lf-...",
+  secretKey: "sk-lf-...",
+  host: "https://us.cloud.langfuse.com", // regional or self-hosted; defaults to https://cloud.langfuse.com
+  serviceName: "production-agent",
+})
+```
+
+`host` must match the region your Langfuse project lives in — pick the base URL and set it via `host` or `LANGFUSE_HOST`:
+
+- **EU** (default) — `https://cloud.langfuse.com`
+- **US** — `https://us.cloud.langfuse.com`
+- **Japan** — `https://jp.cloud.langfuse.com`
+- **Self-hosted** — your own base URL (e.g. `http://localhost:3000`)
+
+A region mismatch surfaces as `401 Invalid credentials. Confirm that you've configured the correct host.` — the keys are fine, the host is wrong.
+
+The preset base64-encodes `publicKey:secretKey` into `Authorization: Basic ...` and sets `x-langfuse-ingestion-version: 4` (Langfuse v4 real-time ingestion — without it, directly-ingested OTel data can be delayed up to 10 minutes). Both are overridable via `headers`.
+
+<Aside type="tip">
+A runnable end-to-end check — ships a span to Langfuse and confirms it landed via the API — lives at `apps/examples/src/observe/langfuse-export.ts`. Run it with your `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` (and `LANGFUSE_HOST` for non-EU regions) set.
+</Aside>
+
 ## Backends
 
 `@reactive-agents/observe` emits standard OTLP HTTP spans with OpenInference semantic attributes. Works out of the box with:
 
 - **Jaeger** — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
 - **Grafana Tempo** — `OTEL_EXPORTER_OTLP_ENDPOINT=https://tempo.example.com`
-- **Langfuse** — set endpoint + `Authorization` header
+- **Langfuse** — use the `setupLangfuseExporter` preset above
 - **Arize Phoenix** — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:6006`
 - Any OTLP HTTP-compatible collector
 
@@ -149,7 +190,7 @@ const handle = setupOpenInferenceExporter({
 
 ## Stability
 
-`@reactive-agents/observe` is `@stable` as of v0.11. The `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, and `autoConfigureExporter` exports are stable. Dedicated Langfuse/Braintrust exporters and sampling support are not yet built — any OTLP-compatible backend (including both) works today via the standard OTLP endpoint config below.
+`@reactive-agents/observe` is `@stable` as of v0.11. The `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, `setupLangfuseExporter`, and `autoConfigureExporter` exports are stable. A dedicated Braintrust preset and sampling support are not yet built — any OTLP-compatible backend works today via the standard OTLP endpoint config above.
 
 ## What's Next
 
