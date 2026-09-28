@@ -189,6 +189,8 @@ When in doubt, write one case at the framework-agnostic tier and see if it runs 
 
 Read the `superpowers:writing-plans` skill conventions (location override: `wiki/Planning/Implementation-Plans/`).
 
+**Extraction/dedup bundles must cover every call site (added 2026-09-28 v18).** When a bundle extracts duplicated logic into a shared helper, the bundle's test net must exercise **every former owner** of that logic. If an existing parity test covers only one of N call sites, add tests for the uncovered sites in the same bundle (a test+refactor combo). Otherwise a behavior divergence at the uncovered site ships silently — the extraction "succeeds" while one provider regresses. Acceptance check: grep the duplicated symbol to **0** in every former owner (not merely "the helper exists", which can coexist with leftover duplicates). (Reason: 2026-09-28 providers-stream-accum #216 — the shared accumulator extraction was pinned for litellm by `litellm-stream-tool-calls.test.ts`, but openai's stream path had no tool-call coverage at all; the bundle added `openai-stream-tool-calls.test.ts` (2 parity cases), which is what actually proves the openai rewrite preserved behavior.)
+
 **Fire-site reachability check (added 2026-05-21 v4):** before designing integration-style tests for any unit, grep the call graph to verify the test scenario will actually exercise the code under fix. A hook/handler/wrapper can be **registered** without being **fired** if the test scenario routes through an alternate code path (e.g., `withTestScenario` short-circuits the reactive loop and bypasses `runner.ts:683` `runPhaseHooks`). Quick check:
 
 ```bash
@@ -265,6 +267,8 @@ GREEN → minimum fix that turns the test
 REVIEW → run review-patterns; address findings
 COMMIT → conventional commit, citing GH issue numbers
 ```
+
+**Warden-brief test-seam rule (added 2026-09-28 v18).** When a MissionBrief asks a warden to add a provider/adapter streaming test, specify the package's **established mock seam** — never "drive the real SDK through `globalThis.fetch`/`Response`". Module mocks in Bun (`mock.module`) are process-global and leak across test files in the same package: a preceding suite's SDK mock shadows the real one, making real-SDK streaming non-deterministic in-suite. Point the warden at an existing test that already uses the correct seam (e.g. `openai-nonok-guard.test.ts` / `openai-cache-usage.test.ts` for the openai SDK), and name the caveat in the brief. (Reason: 2026-09-28 providers-stream-accum #216 — the brief mandated a real-`Response` fetch mock; it passed in isolation but failed in the full suite due to `mock.module` leakage documented at `provider-adapter-wiring.test.ts:102`; the warden correctly fell back to the module-mock seam after one round-trip.)
 
 **RED authority check (added 2026-05-25 v10).** Before relying on a RED test to pin a missing type or field, check **two harness conditions** that can silently mask the RED:
 
@@ -402,6 +406,8 @@ new check:                  `grep -c "as any" packages/X/Y.ts` → 0
 ```
 
 If a verified-by check fails to come down → the fix didn't actually address the claim. Reopen the issue with the new count + commit ref.
+
+**Duplication-elimination check for extraction bundles (added 2026-09-28 v18).** For a dedup/extraction bundle, the verified-by must be "the duplicated symbol/inline block now appears **0** times in every former owner" — not "a helper exists". Grep each former owner for the old symbol/pattern and assert 0; then confirm the shared helper is the sole owner. A helper can be added while the old duplicated code remains beside it (dead or still-live), which would make the bundle a no-op. Also confirm the extraction's parity tests for **every** call site pass unchanged or are newly added. (Reason: 2026-09-28 #216 — `grep -c toolCallAccum` → 0/0 across both providers was the crisp acceptance check; "helper file exists" would not have caught a half-done rewire.)
 
 **Workspace-test-flake protocol (added 2026-05-22 v7).** When `bun test` (workspace, run from repo root) shows failures but per-package isolation runs clean, treat as test-order / fixture-state flake. Verification is acceptable when:
 

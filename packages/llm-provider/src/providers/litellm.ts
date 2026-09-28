@@ -19,7 +19,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
-import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
+import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { resolveCapability } from "../capability-resolver.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { buildTokenField } from "./openai.js";
@@ -404,11 +404,17 @@ export const LiteLLMProviderLive = Layer.effect(
                 const decoder = new TextDecoder();
                 let buffer = "";
                 let fullContent = "";
-                // Per-index tool-call accumulator (OpenAI-compat dialect).
-                const toolCallAccum: Map<
-                  number,
-                  { id: string; name: string; arguments: string }
-                > = new Map();
+                // Shared streamed tool-call accumulator (per-index map +
+                // adapter-normalized finish synthesis, single-shot guard
+                // included). See stream-tool-call-accumulator.ts.
+                const streamToolCalls = createStreamToolCallAccumulator({
+                  emit,
+                  useAdapterNormalization,
+                  parseToolCalls: streamAdapter.parseToolCalls,
+                  model,
+                  providerShortId: "litellm",
+                  getTextContent: () => fullContent,
+                });
                 let finalUsage:
                   | {
                       prompt_tokens: number;
@@ -416,66 +422,6 @@ export const LiteLLMProviderLive = Layer.effect(
                       prompt_tokens_details?: { cached_tokens?: number };
                     }
                   | undefined;
-                // Synthesis is single-shot: finish_reason fires first, then
-                // [DONE] arrives. Without the guard both paths would emit
-                // tool_use_start + delta pairs and downstream accumulators
-                // would see duplicates.
-                let synthesized = false;
-
-                const synthesizeAndEmitToolCalls = (
-                  finishReason: string,
-                ): void => {
-                  if (synthesized) return;
-                  if (toolCallAccum.size === 0) {
-                    synthesized = true;
-                    return;
-                  }
-                  synthesized = true;
-                  const rawCalls = [...toolCallAccum.entries()]
-                    .sort(([a], [b]) => a - b)
-                    .map(([, v]) => ({
-                      id: v.id,
-                      type: "function" as const,
-                      function: {
-                        name: v.name,
-                        arguments: v.arguments,
-                      },
-                    }));
-
-                  if (useAdapterNormalization) {
-                    const syntheticResponse = {
-                      choices: [
-                        {
-                          message: {
-                            content: fullContent,
-                            role: "assistant",
-                            tool_calls: rawCalls,
-                          },
-                          finish_reason: finishReason,
-                        },
-                      ],
-                    };
-                    const normalized = streamAdapter.parseToolCalls?.(
-                      syntheticResponse,
-                      model,
-                    );
-                    if (normalized && normalized.length > 0) {
-                      for (let i = 0; i < normalized.length; i++) {
-                        const tc = normalized[i]!;
-                        const id = rawCalls[i]?.id || `litellm-tc-${i}`;
-                        emitToolUseStart(emit, id, tc.name);
-                        emitToolUseDelta(
-                          emit,
-                          JSON.stringify(tc.arguments),
-                        );
-                      }
-                      return;
-                    }
-                  }
-                  // No normalization (or it returned undefined / empty).
-                  // Per-chunk emissions already fired tool_use_start +
-                  // tool_use_delta for each call, so nothing left to emit.
-                };
 
                 while (true) {
                   const { done, value } = await reader.read();
@@ -492,8 +438,8 @@ export const LiteLLMProviderLive = Layer.effect(
                     if (data === "[DONE]") {
                       // Some proxies emit [DONE] without first sending a
                       // chunk with finish_reason. Synthesize tool calls
-                      // defensively before closing.
-                      synthesizeAndEmitToolCalls("stop");
+                      // defensively before closing (idempotent).
+                      streamToolCalls.synthesize("stop");
                       emit.single({
                         type: "content_complete",
                         content: fullContent,
@@ -553,50 +499,18 @@ export const LiteLLMProviderLive = Layer.effect(
 
                       // Accumulate tool call deltas. When adapter
                       // normalization is active we still accumulate (so we
-                      // can synthesize at finish_reason) but suppress
-                      // per-chunk emissions.
-                      const toolDeltas =
-                        chunk.choices[0]?.delta?.tool_calls;
-                      if (toolDeltas) {
-                        for (const tc of toolDeltas) {
-                          const existing = toolCallAccum.get(tc.index);
-                          if (existing) {
-                            if (tc.function?.arguments) {
-                              existing.arguments += tc.function.arguments;
-                            }
-                          } else {
-                            toolCallAccum.set(tc.index, {
-                              id: tc.id ?? "",
-                              name: tc.function?.name ?? "",
-                              arguments: tc.function?.arguments ?? "",
-                            });
-                            if (
-                              !useAdapterNormalization &&
-                              tc.id &&
-                              tc.function?.name
-                            ) {
-                              emitToolUseStart(
-                                emit,
-                                tc.id,
-                                tc.function.name,
-                              );
-                            }
-                          }
-                          if (
-                            !useAdapterNormalization &&
-                            tc.function?.arguments
-                          ) {
-                            emitToolUseDelta(emit, tc.function.arguments);
-                          }
-                        }
-                      }
+                      // can synthesize at finish_reason) but the accumulator
+                      // suppresses per-chunk emissions.
+                      streamToolCalls.accumulate(
+                        chunk.choices[0]?.delta?.tool_calls,
+                      );
 
                       if (chunk.usage) {
                         finalUsage = chunk.usage;
                       }
 
                       if (chunk.choices[0]?.finish_reason) {
-                        synthesizeAndEmitToolCalls(
+                        streamToolCalls.synthesize(
                           chunk.choices[0].finish_reason,
                         );
                       }

@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-25
+updated: 2026-09-28
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,28 @@ updated: 2026-09-25
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-09-28 — P1 backlog bundle `providers-stream-accum` (#216) closed locally
+
+Executed `execute-backlog` on filter `priority:p1 area:providers` → singleton bundle
+#216 (next grounded P1; siblings #219/#217/#218 are 2-3k-LOC decompositions, over the
+90-min budget). Routed through **provider-warden**. Extracted the ~90-line duplicated
+streamed tool-call accumulator + adapter-normalized finish synthesis from
+`openai.ts` + `litellm.ts` into new `packages/llm-provider/src/stream-tool-call-accumulator.ts`
+(litellm's single-shot `synthesized` guard retained in the helper; openai's
+provider-local Cluster-B finish guard left in place). Added `openai-stream-tool-calls.test.ts`
+(2 parity cases) since the openai stream path had no tool-call coverage. SCAN drift:
+issue claimed litellm 8 `toolCallAccum` / openai 6 and a shared `synthesizeAndEmitToolCalls`
+in both — actual litellm 5, openai 6, named symbol only in litellm; premise held, re-scoped
+on the issue before edits. Commit `59233139`, merged locally to `dev`. llm-provider
+461/0 (baseline 459), typecheck 4/4, workspace typecheck 68/68, build 38/38; both new
+files add 0 `as unknown as` sites (tests-scope ratchet stays 266); `grep -c toolCallAccum`
+→ 0/0 in the two providers. Workspace `bun run test` red is the pre-existing #230 North
+Star cwd-relative baseline artifact (testing passes 53/0 from root cwd). Retro + 3
+SKILL.md amendments (warden test-seam rule, extraction call-site coverage, duplication→0
+acceptance check): [[Research/Debriefs/2026-09-28-providers-stream-accum-execution-debrief]].
+Next eligible grounded candidates: #214 (cast-ceiling sweep, large mechanical) or the P2
+silent-failure continuation #224 (runtime `agent.subscribe()` no-op fallback).
 
 ## 2026-09-25 — P1 backlog bundle `reasoning-silent-failure` (#223) closed locally
 

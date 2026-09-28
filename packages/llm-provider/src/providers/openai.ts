@@ -21,7 +21,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
-import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
+import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
@@ -489,8 +489,17 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                 })) as AsyncIterable<unknown>;
 
                 let fullContent = "";
-                // Accumulate streamed tool calls by index
-                const toolCallAccum: Map<number, { id: string; name: string; arguments: string }> = new Map();
+                // Shared streamed tool-call accumulator (per-index map +
+                // adapter-normalized finish synthesis). See
+                // stream-tool-call-accumulator.ts.
+                const streamToolCalls = createStreamToolCallAccumulator({
+                  emit,
+                  useAdapterNormalization,
+                  parseToolCalls: streamAdapter.parseToolCalls,
+                  model,
+                  providerShortId: "openai",
+                  getTextContent: () => fullContent,
+                });
                 let finalUsage: {
                   prompt_tokens: number;
                   completion_tokens: number;
@@ -521,36 +530,11 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                     emit.single({ type: "text_delta", text: delta });
                   }
 
-                  // Accumulate tool call deltas. When adapter normalization
+                  // Accumulate tool-call deltas. When adapter normalization
                   // is active we still accumulate (so we can synthesize at
-                  // finish_reason) but suppress per-chunk emissions.
-                  const toolDeltas = chunk.choices[0]?.delta?.tool_calls;
-                  if (toolDeltas) {
-                    for (const tc of toolDeltas) {
-                      const existing = toolCallAccum.get(tc.index);
-                      if (existing) {
-                        if (tc.function?.arguments) existing.arguments += tc.function.arguments;
-                      } else {
-                        toolCallAccum.set(tc.index, {
-                          id: tc.id ?? "",
-                          name: tc.function?.name ?? "",
-                          arguments: tc.function?.arguments ?? "",
-                        });
-                        // Emit tool_use_start on first chunk for this tool
-                        if (
-                          !useAdapterNormalization &&
-                          tc.id &&
-                          tc.function?.name
-                        ) {
-                          emitToolUseStart(emit, tc.id, tc.function.name);
-                        }
-                      }
-                      // Emit argument deltas for progressive parsing
-                      if (!useAdapterNormalization && tc.function?.arguments) {
-                        emitToolUseDelta(emit, tc.function.arguments);
-                      }
-                    }
-                  }
+                  // finish_reason) but the accumulator suppresses per-chunk
+                  // emissions.
+                  streamToolCalls.accumulate(chunk.choices[0]?.delta?.tool_calls);
 
                   // Capture final usage (reported after all content chunks when stream_options.include_usage is true)
                   if (chunk.usage) {
@@ -558,46 +542,10 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   }
 
                   if (chunk.choices[0]?.finish_reason) {
-                    // Adapter-normalized end-of-stream tool-call synthesis.
-                    // Build a synthetic OpenAI-shaped response so the adapter
-                    // sees the same shape it sees in complete(), then emit
-                    // start+delta pairs per normalized call.
-                    if (useAdapterNormalization && toolCallAccum.size > 0) {
-                      const rawCalls = [...toolCallAccum.entries()]
-                        .sort(([a], [b]) => a - b)
-                        .map(([, v]) => ({
-                          id: v.id,
-                          type: "function" as const,
-                          function: {
-                            name: v.name,
-                            arguments: v.arguments,
-                          },
-                        }));
-                      const syntheticResponse = {
-                        choices: [
-                          {
-                            message: {
-                              content: fullContent,
-                              role: "assistant",
-                              tool_calls: rawCalls,
-                            },
-                            finish_reason: chunk.choices[0].finish_reason,
-                          },
-                        ],
-                      };
-                      const normalized = streamAdapter.parseToolCalls?.(
-                        syntheticResponse,
-                        model,
-                      );
-                      if (normalized && normalized.length > 0) {
-                        for (let i = 0; i < normalized.length; i++) {
-                          const tc = normalized[i]!;
-                          const id = rawCalls[i]?.id || `openai-tc-${i}`;
-                          emitToolUseStart(emit, id, tc.name);
-                          emitToolUseDelta(emit, JSON.stringify(tc.arguments));
-                        }
-                      }
-                    }
+                    // Adapter-normalized end-of-stream tool-call synthesis
+                    // (shared helper: builds the OpenAI-shaped response and
+                    // emits start+delta per normalized call).
+                    streamToolCalls.synthesize(chunk.choices[0].finish_reason);
                     // Cluster B parity (mirrors gemini.ts stream guard): a
                     // non-OK finish with no content must fail, not emit an
                     // empty content_complete the kernel reads as a clean finish.
@@ -605,7 +553,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                     if (
                       (fr === "length" || fr === "content_filter") &&
                       fullContent.length === 0 &&
-                      toolCallAccum.size === 0
+                      streamToolCalls.size === 0
                     ) {
                       emit.fail(
                         new LLMError({
