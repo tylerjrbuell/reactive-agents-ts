@@ -3139,6 +3139,12 @@ export class ReactiveAgent<TOut = unknown> {
         tagOrHandler: T | ((event: AgentEvent) => void),
         handler?: (event: Extract<AgentEvent, { _tag: T }>) => void
     ): Promise<() => void> {
+        // Invariant (GH #224): EventBus is a MANDATORY runtime layer —
+        // createRuntime/createLightRuntime always merge EventBusLive — and
+        // EventBus.subscribe/on are typed Effect<() => void, never>, so there
+        // is no error channel to recover from here. A missing EventBus is a
+        // Context DEFECT, which catchAll cannot catch; it must surface loudly
+        // rather than resolve to a silent no-op. Do not add a fallback branch.
         if (typeof tagOrHandler === 'function') {
             // Catch-all overload
             return this.runtime.runPromise(
@@ -3151,9 +3157,8 @@ export class ReactiveAgent<TOut = unknown> {
                                 )
                             )
                         )
-                    ),
-                    Effect.catchAll(() => Effect.succeed(() => {}))
-                ) as Effect.Effect<() => void>
+                    )
+                )
             )
         }
         // Tag-filtered overload — delegates to the typed eb.on()
@@ -3163,9 +3168,8 @@ export class ReactiveAgent<TOut = unknown> {
                     eb.on(tagOrHandler, (event) =>
                         Effect.sync(() => handler!(event))
                     )
-                ),
-                Effect.catchAll(() => Effect.succeed(() => {}))
-            ) as Effect.Effect<() => void>
+                )
+            )
         )
     }
 
