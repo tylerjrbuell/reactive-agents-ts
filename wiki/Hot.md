@@ -10,6 +10,28 @@ updated: 2026-09-28
 
 ---
 
+## 2026-09-28 — #224 `agent.subscribe()` dead no-op fallback removed (premise falsified)
+
+Follow-up to the silent-failure theme. **Root fix, not the issue's suggested fix.** #224
+claimed `ReactiveAgent.subscribe()` "silently falls back to a no-op on EventBus resolution
+failure". A 6-line bun probe of the exact `catchAll(() => Effect.succeed(() => {}))` pattern
+with no EventBus supplied **rejected** with `(FiberFailure) Error: Service not found: EventBus`
+— it never resolved to the no-op. Type facts: `EventBus.subscribe/on` are `Effect<() => void,
+never>` (no error channel to catch), and a missing `Context.Tag` service is a **defect**
+(`catchAll` can't catch it). `EventBus` is a mandatory layer in `createRuntime` +
+`createLightRuntime`. So the two `catchAll` clauses were **unreachable dead code that
+misrepresented the failure mode**. Fix: deleted both + the now-redundant
+`as Effect.Effect<() => void>` casts, added an invariant comment, and pinned real behavior
+with `packages/runtime/tests/subscribe-delivery.test.ts` (4 end-to-end tests: catch-all
+delivery, post-unsubscribe silence, tag-filtered `subscribe`, `agent.on` parity). Routed
+through **runtime-warden**. Commit `31fe0689`, merged locally to `dev`. runtime
+1639 pass / 3 skip / 2 fail (baseline 1635 + 4 new; the 2 fails are pre-existing #214
+cast-ceiling), runtime typecheck 21/21, workspace typecheck 68/68, build 38/38; new test
+0 `as unknown as`. Workspace `bun run test` red remains the pre-existing #230 North Star
+cwd-relative artifact. Retro + 3 SKILL.md amendments (reachability probe for
+swallow/fallback reports, falsified-premise re-scope, dead-branch cast sweep):
+[[Research/Debriefs/2026-09-28-runtime-subscribe-silent-fallback-execution-debrief]].
+
 ## 2026-09-28 — P1 backlog bundle `providers-stream-accum` (#216) closed locally
 
 Executed `execute-backlog` on filter `priority:p1 area:providers` → singleton bundle
