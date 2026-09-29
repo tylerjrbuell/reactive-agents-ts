@@ -13,6 +13,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
+import { REPO_ROOT } from "./repo-root.js";
 import { runScenario } from "../harness/scenario.js";
 import type { ScenarioResult } from "../harness/scenario.js";
 import type {
@@ -27,8 +28,17 @@ import type {
 import { discoverScenarios, summarizeCoverage } from "./registry.js";
 
 // ─── Filesystem layout ────────────────────────────────────────────────────────
+//
+// The reports directory is anchored to the REPOSITORY via `REPO_ROOT`, never to
+// `process.cwd()` — the gate is invoked both from the repo root
+// (`bun test packages/testing`) and from the package directory (turbo runs each
+// test task with cwd = package dir), and a cwd-relative path made those read
+// different baselines (GH #230). See `repo-root.ts` for the walk-up + why the
+// `turbo.json` marker is required.
 
-export const REPORTS_DIR = "wiki/Research/Harness-Reports";
+const REPORTS_SUBPATH = join("wiki", "Research", "Harness-Reports");
+
+export const REPORTS_DIR = join(REPO_ROOT, REPORTS_SUBPATH);
 export const BASELINE_PATH = join(REPORTS_DIR, "integration-control-flow-baseline.json");
 export const HEALTH_PATH = join(REPORTS_DIR, "integration-control-flow-scenario-health.json");
 export const REGRESSIONS_DIR = join(REPORTS_DIR, "regressions");
