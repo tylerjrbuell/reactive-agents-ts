@@ -18,9 +18,19 @@
 // regression detector is "do we still scan the codebase for them?"
 
 import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { REPO_ROOT } from "../repo-root.js";
 import type { ScenarioModule } from "../types.js";
 
-const WIRING_TEST_PATH = "packages/runtime/tests/error-swallowed-wiring.test.ts";
+// Anchored to the workspace root, not cwd: turbo runs this gate with
+// cwd = packages/testing, where a relative path would not resolve (GH #230).
+const WIRING_TEST_PATH = join(
+  REPO_ROOT,
+  "packages",
+  "runtime",
+  "tests",
+  "error-swallowed-wiring.test.ts",
+);
 
 export const scenario: ScenarioModule = {
   id: "cf-10-error-swallowed-event-emitted",
