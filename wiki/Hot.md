@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Hot (Recent Context Cache)
@@ -29,6 +29,20 @@ base) — next candidate. No warden (packages/testing isn't in the warden table;
 refuses src edits). Retro + 4 SKILL.md amendments (cwd-relative path sweep, centralize root
 resolution, dual-cwd verification, turbo-cache second-red attribution):
 [[Research/Debriefs/2026-09-28-testing-gate-cwd-anchor-execution-debrief]].
+
+## 2026-09-29 — #227 generic webhook adapter coverage shipped
+
+Added `packages/gateway/tests/adapters/generic-adapter.test.ts` (14 tests) for
+`createGenericAdapter`: HMAC-SHA256 valid/missing/wrong/length-mismatch signatures,
+custom signature header and algorithm, invalid-algorithm `WebhookValidationError`,
+JSON/non-JSON transform, content-type/source metadata, and classify behavior. Baseline
+gateway 123 pass → 137 pass / 0 fail; typecheck green; 0 new `as unknown as` sites.
+Security red-on-cut: temporarily mutate `crypto.timingSafeEqual(...)` to `return true`;
+wrong-same-length-signature test fails (1 fail / 13 pass), then restore. Commit
+`6d09767f`, merged locally to `dev`. Plan + retro + skill amendment:
+[[Research/Debriefs/2026-09-28-gateway-generic-adapter-coverage-execution-debrief]].
+Workspace typecheck 68/68; full turbo suite's only red is pre-existing #214 cast ceiling
+under `@reactive-agents/runtime#test`.
 
 ## 2026-09-28 — #224 `agent.subscribe()` dead no-op fallback removed (premise falsified)
 
