@@ -10,6 +10,26 @@ updated: 2026-09-28
 
 ---
 
+## 2026-09-28 — #230 North Star gate cwd-relative paths anchored to repo root
+
+Fixed the bug that made `bun run test` (turbo, cwd=package dir) read a stale gitignored
+`packages/testing/wiki/` baseline instead of the committed root one → 14 phantom
+regressions, masked by turbo cache. **Two sites, not one:** (1) `runner.ts`'s
+`REPORTS_DIR = "wiki/Research/Harness-Reports"` (relative) + all derived constants; (2) the
+`cf-10` scenario's `WIRING_TEST_PATH = "packages/runtime/tests/error-swallowed-wiring.test.ts"`
+(relative). New `packages/testing/src/gate/repo-root.ts` exposes `REPO_ROOT` +
+`findRepoRoot` (walk up to a root marker requiring BOTH `turbo.json` and `wiki/`, so a stale
+gitignored nested `wiki/` can't shadow it — a fixed relative depth is wrong since src is 4
+levels under root but bundled dist is 3). Anchored both consumers; added
+`tests/gate/reports-dir-anchor.test.ts` (5 tests). Commit `17e83fe9`, merged locally to `dev`.
+**`bun test packages/testing` now 58/0 from BOTH repo root and package cwd** (was 52/1
+package-cwd), and `@reactive-agents/testing` passes under `bun run test`. Remaining full-suite
+red is the pre-existing #214 cast ceiling in `runtime#test` (reproducible on the untouched
+base) — next candidate. No warden (packages/testing isn't in the warden table; harness-warden
+refuses src edits). Retro + 4 SKILL.md amendments (cwd-relative path sweep, centralize root
+resolution, dual-cwd verification, turbo-cache second-red attribution):
+[[Research/Debriefs/2026-09-28-testing-gate-cwd-anchor-execution-debrief]].
+
 ## 2026-09-28 — #224 `agent.subscribe()` dead no-op fallback removed (premise falsified)
 
 Follow-up to the silent-failure theme. **Root fix, not the issue's suggested fix.** #224

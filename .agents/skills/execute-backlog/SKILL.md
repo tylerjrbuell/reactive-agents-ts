@@ -366,6 +366,13 @@ When deletion is the right action, also confirm the issue's verified-by points a
 
 **Cast-removal follow-through (added 2026-09-25).** If deleting a cast exposes a compiler error downstream, trace the diagnostic to the value producer and correct its source type or invalid literal; do not restore the cast or label the error generic-inference friction without evidence. In #225, removing the builder cast exposed `ProviderInfo.provider: string` and the unsupported `"google"` value; the root fix used `ProviderName` and `"gemini"`. **Dead-branch variant (2026-09-28 v19):** after deleting an unreachable branch, re-check nearby plain `as` casts for redundancy and remove them if typecheck still passes — e.g. #224 removed the now-pointless `as Effect.Effect<() => void>` on both `subscribe()` `runPromise` calls. This is noise reduction, not a ratchet action (`as` ≠ `as unknown as`).
 
+**Cwd-relative path bug sweep (added 2026-09-28 v20).** When the fix is "anchor a path to the repo root instead of `process.cwd()`", do NOT stop at the obvious constant. Grep the **whole package** for every relative-path assumption and fix all of them in the same bundle:
+- bare `"wiki/`, `"packages/`, `"src/`, `"tests/` string literals;
+- `existsSync` / `readFileSync` / `writeFileSync` / `copyFileSync` on paths not derived from `import.meta.url`;
+- `process.cwd()`.
+
+Then centralize the workspace-root resolution in **one** module (e.g. `repo-root.ts` exporting `REPO_ROOT` + `findRepoRoot`) and import it everywhere — never duplicate a walk-up across runner/scenario/script files. Walk **up** to a root marker (require the workspace marker — `turbo.json` — *and* a `wiki/` dir, so a stale gitignored `packages/<pkg>/wiki/` snapshot cannot shadow the real root); a **fixed relative depth is wrong** when the same module resolves from both `src/` and a bundled `dist/`. (Reason: 2026-09-28 #230 — anchoring `REPORTS_DIR` left `cf-10`'s `WIRING_TEST_PATH = "packages/runtime/..."` still cwd-relative, so the package-cwd suite stayed red until the sweep caught the second site.)
+
 **Pure-deletion verified-by (added 2026-05-22 v6).** When the bundle is purely deletion (no new helper, no migration, no replacement), the standard "grep target → 0" recheck is structurally weaker than for typing/refactor bundles. Strengthen by also asserting:
 
 1. **Test count delta matches expectation.** If you deleted `test.skip(...)`, the package test runner's `skip` count should drop by exactly that number. Capture in retro alongside pass/fail.
@@ -432,6 +439,10 @@ Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., 
 2. **grep the failing test for cwd-relative paths**: `grep -n "process.cwd()\|join(\"wiki\|REPORTS_DIR\|import.meta" <test>`. A test that resolves fixtures/baselines relative to `process.cwd()` reads DIFFERENT files under turbo (cwd = package dir) than under root-cwd `bun test` — and turbo CACHES the task, so a pre-existing red can stay hidden until some other change invalidates the cache. A uniform divergence across many cases (same field, identical expected→actual delta) is a stale-baseline signature, not a behavior change.
 
 Do not block the bundle on such a red; file it as its own issue with the cwd evidence and note it in the PR/retro. (Reason: 2026-09-25 reasoning-silent-failure #223 — `@reactive-agents/testing`'s North Star gate resolves `REPORTS_DIR = "wiki/Research/Harness-Reports"` relative to cwd, so turbo read a stale gitignored `packages/testing/wiki/...` baseline (2026-06-16) instead of the committed root one (2026-09-19), producing 14 phantom regressions; turbo cache had masked it until the reasoning change invalidated the testing task. Filed #230.)
+
+**Triage addendum (added 2026-09-28 v20).**
+- **Path fixes must be verified from ≥2 cwds.** "End to end" for a gate/path bug = run the real consumer suite from BOTH the repo root and the package directory (the two cwds turbo visits), not just `bun test packages/X` from root. Only the dual-cwd pair proves cwd-independence.
+- **Fixing a cached red can expose a DIFFERENT pre-existing red.** Turbo may have been caching a *second* failing task green from an older state; once the bundle de-caches it, that task runs and fails for unrelated reasons. Re-run the full workspace and attribute each remaining failure against a fresh baseline (e.g. run that package's suite directly) before claiming green or blaming the bundle. (Reason: 2026-09-28 #230 — after the testing gate was fixed, `bun run test` failed on `@reactive-agents/runtime#test`, which turned out to be the pre-existing #214 `as unknown as` ceiling, reproducible on the untouched base.)
 
 ---
 
