@@ -306,8 +306,13 @@ export function deliverableTerminationReason(
  * step order. Each carries its RESOLVED content (post STORED/recall scratchpad
  * resolution) so `deliverableToContent` reproduces the same body the legacy
  * `collectDeliverableArtifacts` produced — preserving the STORED/recall tests.
+ *
+ * Exported (2026-09-30) for the runner's terminal scaffold-leak repair, which
+ * needs the same DATA source `assembleDeliverable` trusts, raw observations,
+ * scratchpad-resolved, success-gated, to re-synthesize an answer from when the
+ * model's terminal text echoed harness scaffolding instead of these values.
  */
-function collectValidatedObservations(state: KernelState): ValidatedObservation[] {
+export function collectValidatedObservations(state: KernelState): ValidatedObservation[] {
   const out: ValidatedObservation[] = [];
   for (const step of state.steps) {
     if (step.type !== "observation") continue;

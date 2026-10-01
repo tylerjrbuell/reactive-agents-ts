@@ -97,6 +97,7 @@ import {
   countDeliverableCandidates,
   countArtifacts,
   buildEffectiveToolsUsed,
+  collectValidatedObservations,
 } from "./runner-helpers/deliverable.js";
 
 // WS-6 Phase 4 (2026-05-29) — per-iteration body lifted to iterate-pass.ts.
@@ -1359,6 +1360,90 @@ export function runKernel(
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,
         });
+      }
+
+      // ── Phase D2 (2026-09-30), scaffold-leak remediation: synthesize-once ───
+      // The scaffold-leak guard (verifier Check 4b) is always-on and its
+      // `reject` previously meant an instant hard-fail: the model echoed
+      // framework-internal scaffolding as its answer, and the whole run died
+      // even though the DATA needed to produce the real answer sat in the
+      // scratchpad. The repair machinery already exists everywhere EXCEPT the
+      // default path: finalize.ts `decideSynthesisInput` forces DATA→FORMAT
+      // synthesis for leaks on reflexion/plan-execute, and the arbitrator's
+      // `synthesisQualityRetry` retries once for text-protocol final-answers -
+      // but native-FC runs never offer the `final-answer` tool, so the
+      // terminal gate was their only checkpoint, with zero repair attempts.
+      // Live incident (taskId 01M3T04DXBYSYMXTRPSH57AT93): ExecutionError
+      // "Verifier rejected output: final-answer: failed at scaffold-leak".
+      // Mirror the D1 cap-then-degrade precedent: ONE corrective synthesis
+      // pass from the validated observations (falling back to the leaked
+      // draft when there are none), re-verified against the SAME terminal
+      // context. Clean → ship with honest harness_synthesis provenance.
+      // Still leaking → the hard-fail branch below runs unchanged, with the
+      // specific rejection reason preserved on the receipt. The guard is NOT
+      // weakened: a scaffolding dump can still never reach the user.
+      if (
+        groundingDegradeWarning === undefined &&
+        state.status === "done" &&
+        state.output &&
+        !verdict.verified &&
+        verdict.checks.find((c) => !c.passed)?.name === "scaffold-leak"
+      ) {
+        // DATA source: the same success-gated, scratchpad-resolved
+        // observations `assembleDeliverable` trusts, NOT the leaked draft
+        // (re-synthesizing from the echo alone would just echo again).
+        const observations = collectValidatedObservations(state);
+        const rawForSynthesis =
+          observations.length > 0
+            ? observations.map((o) => `[${o.toolName}] ${o.content}`).join("\n\n---\n\n")
+            : state.output;
+        const llmOpt = yield* Effect.serviceOption(LLMService);
+        if (llmOpt._tag === "Some") {
+          // Same abstract wording as the arbitrator's retry feedback, local
+          // models copy literal negative examples verbatim, so never quote
+          // the bad output back into the corrective prompt.
+          const repairGuidance =
+            "Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data, present it.";
+          const repairPrompt =
+            `${buildSynthesisPrompt(rawForSynthesis, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${repairGuidance}`;
+          // H3 rule: this pass renders the deliverable, generous budget.
+          const repaired = yield* gatewayComplete(
+            llmOpt.value,
+            { purpose: "synthesize", budgetClass: "generous" },
+            {
+              messages: [{ role: "user", content: repairPrompt }],
+              temperature: 0.2,
+              traceContext: {
+                taskId: currentOptions.taskId ?? state.taskId,
+                iteration: state.iteration,
+              },
+            },
+          ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
+          const repairedContent = extractThinkingSafeContent(repaired).content;
+          if (repairedContent && repairedContent.trim().length > 0) {
+            // Single-writer: commitDeliverable owns state.output. S11
+            // provenance, the harness ran an LLM synthesis pass to produce
+            // this prose (not model_synthesis).
+            state = commitDeliverable(
+              state,
+              harnessSynthesisDeliverable([], undefined, repairedContent),
+            );
+            verdict = yield* verifyAndEmit({
+              verifier,
+              context: buildTerminalVerifyContext(repairedContent),
+              taskId: currentOptions.taskId ?? state.taskId,
+              iteration: state.iteration,
+            });
+            yield* emitLog({
+              _tag: "warning",
+              message: verdict.verified
+                ? "The answer echoed internal scaffolding, so it was rebuilt from the tool data."
+                : "The answer echoed internal scaffolding; rebuilding it from the tool data did not pass verification either.",
+              context: `[scaffold-leak-repair] re-verified=${verdict.verified} ${verdict.summary}`,
+              timestamp: new Date(),
+            });
+          }
+        }
       }
 
       if (groundingDegradeWarning !== undefined) {

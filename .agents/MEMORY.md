@@ -16,6 +16,29 @@
 
 ## Projects — Sep 2026
 
+**2026-09-30: scaffold-leak terminal hard-fail, FIXED (runner Phase D2 repair pass).**
+Incident (`taskId 01M3T04DXBYSYMXTRPSH57AT93`): a model-authored terminal answer echoing
+harness scaffolding (`_tool_result_N`, `[STORED:]`, "compressed preview") hit the always-on
+scaffold-leak guard and the run HARD-FAILED with `ExecutionError: Verifier rejected output:
+final-answer: failed at scaffold-leak` (thrown via `reactive-agent.ts` BARE_BUILDER_THROWS_ON) -
+zero repair attempts. Root gap: the existing repair machinery (`finalize.enforceQualityGate`
+DATA→FORMAT synthesis, arbitrator `synthesisQualityRetry`) covers reflexion/plan-execute
+terminals and text-protocol `final-answer` intents only; native-FC runs never offer the
+`final-answer` tool, so the terminal gate was their only checkpoint. Fix: runner.ts terminal
+gate now attempts exactly ONE corrective synthesis pass from
+`collectValidatedObservations` (scratchpad-resolved; exported from
+runner-helpers/deliverable.ts for this), re-verifies via the same
+`buildTerminalVerifyContext`, ships with honest `harness_synthesis` provenance if clean;
+still-leaking → unchanged honest hard-fail with the specific reason on the receipt (guard
+NOT weakened; HS-237 rejected-text-survival contract intact). Deterministic coverage:
+`packages/reasoning/src/kernel/loop/scaffold-leak-terminal-repair.test.ts` (3 cases) +
+`packages/runtime/tests/scaffold-leak-repair-e2e.test.ts` (agent.run() boundary, before/after
+verified via baseline stash-revert). Suites: reasoning 2897/0, runtime tests/ 1315/0,
+typecheck+build 68/68. Changeset + `features/verification.md` updated. NOTE: repo-wide
+`as-unknown-as-ceiling` guards were ALREADY red at baseline (tests 266>237, src 80>78);
+Docker-dependent tools tests fail on this box (no daemon). Not routed through kernel-warden
+(direct user request in-session), flag for dispatcher-FSM compliance retroactively.
+
 **2026-09-22: TypeSafe/Jev judgment primitive — Phase A + Phase B BOTH COMPLETE, uncommitted on `dev`, no PR.**
 Plan `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`. Debrief
 `wiki/Research/Debriefs/2026-09-22-jev-judge-eval-overhaul-debrief.md`. New `packages/judgment/**`

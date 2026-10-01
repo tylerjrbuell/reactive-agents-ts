@@ -117,7 +117,7 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-`block` mode does a bounded corrective retry then degrades to a warning — it never hard-fails a correct answer. A scaffold-leak guard (catching `[STORED:]` / `_tool_result_N` placeholders echoed as the answer) is always on, independent of this setting. See [Builder API](/reference/builder-api/) for the full options shape.
+`block` mode does a bounded corrective retry then degrades to a warning, it never hard-fails a correct answer. A scaffold-leak guard (catching `[STORED:]` / `_tool_result_N` placeholders echoed as the answer) is always on, independent of this setting. When the guard fires on a terminal answer, the kernel first attempts **one corrective synthesis pass** from the gathered tool data and ships the repaired answer (with `harness_synthesis` provenance) if it verifies clean; a repair that still leaks fails the run honestly with the scaffold-leak reason on the receipt. See [Builder API](/reference/builder-api/) for the full options shape.
 
 ## Verification Result
 
