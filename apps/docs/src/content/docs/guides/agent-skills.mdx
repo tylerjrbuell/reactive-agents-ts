@@ -126,6 +126,8 @@ Skills are the actionable distillation of agent memory — what an agent has lea
 
 ### Enabling Skills
 
+`.withSkills()` has no declarative config key yet, so skill loading is registered on the builder:
+
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")

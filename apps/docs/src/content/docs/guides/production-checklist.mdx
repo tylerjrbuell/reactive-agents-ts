@@ -5,7 +5,7 @@ sidebar:
   order: 21
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 This checklist covers the builder methods and configuration options you should evaluate before deploying a Reactive Agents application to production. Each section is independent — enable the layers that match your threat model and reliability requirements.
 
@@ -17,8 +17,25 @@ Three settings are non-negotiable for any production agent: a **budget cap** (`.
 
 ### Guardrails
 
-Guardrails screen every prompt and response for prompt injection, PII leakage, and toxic content. Enable with `.withGuardrails()`. Each detector can be toggled independently; pass a `customBlocklist` to reject additional phrases.
+Guardrails screen every prompt and response for prompt injection, PII leakage, and toxic content. Enable with `guardrails: {}` (declarative) or `.withGuardrails()` (builder). Each detector can be toggled independently; pass a `customBlocklist` to reject additional phrases.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  guardrails: {
+    injection: true,
+    pii: true,
+    toxicity: true,
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -29,12 +46,14 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 A `GuardrailViolationDetected` event is emitted on the EventBus whenever a check fires, so violations surface in your observability pipeline automatically.
 
 ### Behavioral Contracts
 
-Behavioral contracts constrain what the agent is allowed to do at runtime. Use a tool deny list to block dangerous tools, cap iterations, and restrict output patterns.
+Behavioral contracts constrain what the agent is allowed to do at runtime. Use a tool deny list to block dangerous tools, cap iterations, and restrict output patterns. This one is builder-only — `withBehavioralContracts` has no declarative `AgentConfig` key:
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -80,12 +99,27 @@ See [Durable Human-in-the-Loop](/guides/durable-hitl/) for the full flow.
 
 Restrict the agent to a fixed set of tools. Any tool not in the list is invisible to the LLM and cannot be called, regardless of what the model requests.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["web-search", "file-read"] },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ allowedTools: ["web-search", "file-read"] })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ---
 
@@ -95,13 +129,31 @@ const agent = await ReactiveAgents.create()
 
 The kill switch enables programmatic lifecycle control. Call `agent.stop()` for a graceful exit that completes the current step, or `agent.terminate()` for an immediate halt.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  features: { killSwitch: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withKillSwitch()
   .build();
+```
+  </TabItem>
+</Tabs>
 
-// Graceful stop from a signal handler or timeout
+Then wire graceful stop from a signal handler or timeout:
+
+```typescript
 process.on("SIGTERM", () => agent.stop());
 ```
 
@@ -109,34 +161,79 @@ process.on("SIGTERM", () => agent.stop());
 
 The default iteration cap is 10. Increase it for complex multi-step tasks, or lower it for latency-sensitive paths.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  execution: { maxIterations: 20 },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withMaxIterations(20)
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Execution Timeout
 
 Set a wall-clock timeout in milliseconds. The agent throws a `TimeoutError` if the run does not complete within the limit.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  execution: { timeoutMs: 60_000 }, // 60 seconds
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTimeout(60_000) // 60 seconds
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Retry Policy
 
 Configure automatic retries on transient failures (network errors, rate limits). Exponential backoff is applied between attempts.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  execution: { retryPolicy: { maxRetries: 3, backoffMs: 1000 } },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ---
 
@@ -146,7 +243,22 @@ const agent = await ReactiveAgents.create()
 
 Set per-request and daily token budgets. The agent performs a pre-flight budget check before each run and a per-iteration check during the ReAct loop. A `BudgetExceededError` is thrown on overspend.
 
-{/* docs-skip-typecheck */}
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  costTracking: {
+    perRequest: 0.10,  // USD
+    daily: 5.00,       // USD
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -155,6 +267,12 @@ const agent = await ReactiveAgents.create()
     daily: 5.00,       // USD
   })
   .build();
+```
+  </TabItem>
+</Tabs>
+
+```typescript
+import { BudgetExceededError } from "@reactive-agents/runtime";
 
 try {
   const result = await agent.run("Analyze the Q4 sales report");
@@ -168,7 +286,7 @@ try {
 
 ### Complexity Routing
 
-With complexity routing enabled, simple queries are automatically routed to a cheaper model tier, reserving your primary model for tasks that need it.
+With complexity routing enabled, simple queries are automatically routed to a cheaper model tier, reserving your primary model for tasks that need it. `.withModelRouting()` is builder-only — routing has no declarative `AgentConfig` key:
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -185,12 +303,27 @@ const agent = await ReactiveAgents.create()
 
 Enable the metrics dashboard to get a structured execution summary after every run: phase timing, tool call counts, token usage, estimated cost, and smart alerts.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  observability: { verbosity: "normal", live: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withObservability({ verbosity: "normal", live: true })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 The dashboard is driven entirely by the EventBus. No manual instrumentation is required — `MetricsCollector` auto-subscribes to `ToolCallCompleted` and phase lifecycle events.
 
@@ -296,17 +429,45 @@ EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 ```
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  memory: { tier: "enhanced" },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withMemory({ tier: "enhanced" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Memory Consolidation
 
 Background consolidation merges and compacts memory entries over time, preventing unbounded growth and keeping retrieval quality high.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  memory: { tier: "enhanced", memoryConsolidation: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -314,11 +475,26 @@ const agent = await ReactiveAgents.create()
   .withMemoryConsolidation()
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Experience Learning
 
 Cross-run experience learning stores task outcomes in the episodic layer and surfaces relevant prior experiences at the start of each new run, improving performance on repeated task types.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "prod-agent",
+  provider: "anthropic",
+  memory: { tier: "enhanced", experienceLearning: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -326,6 +502,8 @@ const agent = await ReactiveAgents.create()
   .withExperienceLearning()
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ---
 

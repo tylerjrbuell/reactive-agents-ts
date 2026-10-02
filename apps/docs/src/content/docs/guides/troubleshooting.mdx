@@ -7,6 +7,8 @@ sidebar:
   order: 23
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.
 
 ## Quick Triage Checklist
@@ -14,7 +16,7 @@ Use this page as a symptom → cause → fix reference when agents fail, hang, o
 1. Reproduce with a minimal script using `runOnce()`.
 2. Enable observability:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withObservability({ verbosity: "debug", live: true })
 .withEvents()
@@ -41,7 +43,7 @@ ollama pull qwen3.5
 
 Use an explicit model in builder config:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withProvider("ollama")
 .withModel("qwen3.5")
@@ -83,7 +85,7 @@ Use an explicit model in builder config:
 - Open MCP stdio subprocesses (or other long-lived transports) still active.
 
 **Fix**
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withMCP({ name: "filesystem", transport: "stdio", command: "bunx", args: ["-y", "@modelcontextprotocol/server-filesystem", "."] })
@@ -158,7 +160,7 @@ ollama pull cogito:14b
 
 Then reference the exact tag in your builder chain:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withProvider("ollama")
 .withModel("cogito:14b")
@@ -177,7 +179,7 @@ If the tag still fails after pulling, run `ollama list` again to confirm the reg
 **Fix**
 Remove the explicit `.withObservability()` call — the default configuration is already active:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // ❌ Causes duplicate output
 const agent = await ReactiveAgents.create()
@@ -233,8 +235,20 @@ rax --version
 pnpm update reactive-agents
 ```
 
-If you are on a current version and still see the cap, verify that `maxIterations` is being set on the sub-agent's own builder chain, not on the parent agent:
+If you are on a current version and still see the cap, verify that `maxIterations` is being set on the sub-agent itself (its own builder chain or config), not on the parent agent:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+// ✅ Correct — maxIterations set on the sub-agent's own config
+const subAgent = await createAgent({
+  name: "sub-agent",
+  provider: "anthropic",
+  execution: { maxIterations: 10 },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 // ✅ Correct — maxIterations set on the sub-agent builder
 const subAgent = await ReactiveAgents.create()
@@ -242,6 +256,8 @@ const subAgent = await ReactiveAgents.create()
   .withMaxIterations(10)
   .build()
 ```
+  </TabItem>
+</Tabs>
 
 ## Diagnostics by Layer
 

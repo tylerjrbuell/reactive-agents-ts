@@ -7,6 +7,8 @@ sidebar:
   order: 11
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 # Local Models Guide
 
 Reactive Agents is designed to work with local models via Ollama. The model-adaptive context system automatically tunes prompts, compaction, and truncation for smaller models — and the [Healing Pipeline](/features/llm-providers/) repairs malformed tool calls before they fail, which is what makes tool-calling viable on small models at all. Same code, frontier-to-local. But choosing the right model for your task still matters.
@@ -33,6 +35,23 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:14b
 ```
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "local-agent",
+  provider: "ollama",
+  model: "qwen3:14b",
+  reasoning: {},
+  tools: { builtins: true },
+  // .withContextProfile({ tier: "local" }) is builder-only — the context
+  // profile is a cross-field overlay with no declarative config key.
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
@@ -42,6 +61,8 @@ const agent = await ReactiveAgents.create()
   .withContextProfile({ tier: "local" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ## Model Recommendations
 
@@ -76,9 +97,10 @@ const agent = await ReactiveAgents.create()
 
 ## Context Profile Tiers
 
-Always set the context profile to match your model:
+Always set the context profile to match your model (`withContextProfile` is a
+builder-side cross-field overlay — it has no declarative `AgentConfig` key):
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Small models (<=8B params)
 .withContextProfile({ tier: "local" })
@@ -106,6 +128,22 @@ the **actual context window** the provider is given. By default the framework
 uses the model's probed/assumed window — override it to the exact value you want
 Ollama to allocate:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "local-agent",
+  provider: "ollama",
+  model: "qwen3:14b",
+  numCtx: 32768, // exact num_ctx sent to Ollama
+  reasoning: {},
+  // .withContextProfile({ tier: "local" }) is builder-only (see above)
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
@@ -114,6 +152,8 @@ const agent = await ReactiveAgents.create()
   .withContextProfile({ tier: "local" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 Raising `numCtx` lets the agent hold more history (at the cost of VRAM);
 lowering it caps allocation on memory-constrained machines. It maps directly to
@@ -126,7 +166,7 @@ agent builder.
 
 Not all reasoning strategies work well on small models:
 
-| Strategy | <=8B | 14B | 70B | Notes |
+| Strategy | `<=8B` | 14B | 70B | Notes |
 |----------|:----:|:---:|:---:|-------|
 | **ReAct** | Good | Best | Best | Most reliable for local models |
 | **Reflexion** | Poor | Fair | Good | Self-critique requires model quality |
@@ -173,6 +213,25 @@ For multi-step local runs, ICS classifies task phase and injects a short synthes
 
 ## Full Example
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "local-researcher",
+  provider: "ollama",
+  model: "qwen3:14b",
+  reasoning: { defaultStrategy: "reactive" },
+  tools: { allowedTools: ["web-search", "file-read", "file-write"] },
+  execution: { maxIterations: 8 },
+  memory: {},
+  observability: { verbosity: "normal" },
+  // .withContextProfile({ tier: "local" }) is builder-only (see above)
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -187,7 +246,13 @@ const agent = await ReactiveAgents.create()
   .withMemory()
   .withObservability({ verbosity: "normal" })
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Then run it the same way either way:
+
+```typescript
 const result = await agent.run("Research TypeScript testing frameworks and write a summary");
 console.log(result.output);
 console.log(result.metadata); // { duration, cost: 0, tokensUsed, stepsCount }

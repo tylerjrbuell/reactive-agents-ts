@@ -22,6 +22,35 @@ The examples below cover token streaming. All three bindings sit on the headless
 
 The server-side is identical regardless of which client framework you use. `AgentStream.toSSE()` returns a standard Web API `Response`, making it compatible with any framework that accepts one.
 
+Every handler below builds the same agent first — here it is in both syntaxes; the per-framework examples inline the builder form for brevity:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "api-agent",
+  provider: "anthropic",
+  reasoning: {},
+  tools: { builtins: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("api-agent")
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools({ builtins: true })
+  .build();
+```
+  </TabItem>
+</Tabs>
+
 <Tabs syncKey="server">
   <TabItem label="Next.js">
   ```typescript
@@ -352,12 +381,36 @@ agent.run("Summarize this", { sessionId: "abc" });
 
 Update your server endpoint to read these:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
 // app/api/agent/route.ts
+import { createAgent, AgentStream } from "reactive-agents";
+
+export async function POST(req: Request) {
+  const { prompt, sessionId, temperature } = await req.json();
+
+  const agent = await createAgent({
+    name: "api-agent",
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
+    temperature: temperature ?? 0.7,
+  });
+
+  return AgentStream.toSSE(agent.runStream(prompt));
+}
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+// app/api/agent/route.ts
+import { ReactiveAgents, AgentStream } from "reactive-agents";
+
 export async function POST(req: Request) {
   const { prompt, sessionId, temperature } = await req.json();
 
   const agent = await ReactiveAgents.create()
+    .withName("api-agent")
     .withProvider("anthropic")
     .withModel({ model: "claude-sonnet-4-6", temperature: temperature ?? 0.7 })
     .build();
@@ -365,6 +418,8 @@ export async function POST(req: Request) {
   return AgentStream.toSSE(agent.runStream(prompt));
 }
 ```
+  </TabItem>
+</Tabs>
 
 ## TypeScript — Event Types
 

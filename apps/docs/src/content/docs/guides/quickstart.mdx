@@ -106,7 +106,7 @@ echo 'XAI_API_KEY=xai-...'          >> .env
 ollama pull qwen3:4b
 ```
 
-Optional keys for built-in tools (web search, etc.) — add them later when you call `.withTools()`:
+Optional keys for built-in tools (web search, etc.) — add them later when you call `.withTools()` (or set `tools: {}` in the config):
 
 ```bash
 echo 'TAVILY_API_KEY=tvly-...' >> .env   # Web search (Tavily backend)
@@ -120,6 +120,21 @@ Create `src/agent.ts`:
 <Tabs>
 <TabItem label="Anthropic">
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript title="src/agent.ts"
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "my-first-agent",   // `name` is required in the declarative config
+  provider: "anthropic",
+});
+
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log(result.output);
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -130,10 +145,28 @@ const agent = await ReactiveAgents.create()
 const result = await agent.run("What are the three laws of thermodynamics?");
 console.log(result.output);
 ```
+  </TabItem>
+</Tabs>
 
 </TabItem>
 <TabItem label="Local (no API key)">
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript title="src/agent.ts"
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "my-first-agent",   // `name` is required in the declarative config
+  provider: "ollama",
+  model: "qwen3:4b",        // any model you've pulled: ollama pull qwen3:4b
+});
+
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log(result.output);
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
@@ -145,14 +178,32 @@ const agent = await ReactiveAgents.create()
 const result = await agent.run("What are the three laws of thermodynamics?");
 console.log(result.output);
 ```
+  </TabItem>
+</Tabs>
 
 </TabItem>
 </Tabs>
 
-That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-6` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running — or use the local tab with [Ollama](https://ollama.com) and no key at all (see the [Local Models guide](../local-models/)).
+That's the minimum. `.withProvider()` (builder) or `provider` (config) picks the default model for the provider automatically (`claude-sonnet-4-6` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running — or use the local tab with [Ollama](https://ollama.com) and no key at all (see the [Local Models guide](../local-models/)).
 
 To pin a specific model or add a name:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript title="src/agent.ts" {2-4}
+const agent = await createAgent({
+  name: "my-first-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+});
+
+const result = await agent.run("What are the three laws of thermodynamics?");
+console.log("Output:", result.output);
+console.log("Duration:", result.metadata.duration, "ms");
+console.log("Steps:", result.metadata.stepsCount);
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript title="src/agent.ts" {2-5}
 const agent = await ReactiveAgents.create()
   .withName("my-first-agent")
@@ -165,6 +216,8 @@ console.log("Output:", result.output);
 console.log("Duration:", result.metadata.duration, "ms");
 console.log("Steps:", result.metadata.stepsCount);
 ```
+  </TabItem>
+</Tabs>
 
 :::tip[Resource cleanup]
 Always dispose agents that use MCP servers or other subprocess-based tools — otherwise the process will hang on open pipes. Use `await using` for automatic cleanup, or [`runOnce()`](../../reference/builder-api/#runonceinput-string-promiseagentresult) for one-shot scripts. See [Resource Management](../../reference/builder-api/#resource-management) for all three patterns.
@@ -179,10 +232,27 @@ bun run src/agent.ts
 ## 5. Add Capabilities
 
 The canonical composition path is a `HarnessProfile` preset — `lean()`,
-`balanced()`, or `intelligent()`. Presets compose the registry's
+`balanced()`, or `intelligent()`. On the builder, pass the preset to
+`.withProfile(...)`; declaratively, the same presets are the `profile` config
+key (`"lean" | "balanced" | "intelligent"`).
+Presets compose the registry's
 default-on capability set so you don't pile up redundant `.withX()`
 calls.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript title="src/agent.ts" {7}
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  profile: "balanced",   // memory + RI + verifier + strategy switching
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript title="src/agent.ts" {2,7}
 import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 
@@ -193,18 +263,22 @@ const agent = await ReactiveAgents.create()
   .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 Pick the preset that matches the workload:
 
-- **`HarnessProfile.lean()`** — model + nothing else. Latency- and
+- **`HarnessProfile.lean()`** (`profile: "lean"`) — model + nothing else. Latency- and
   cost-sensitive paths; benchmark ablations.
-- **`HarnessProfile.balanced()`** — today's production defaults
+- **`HarnessProfile.balanced()`** (`profile: "balanced"`) — today's production defaults
   (memory + reactive intelligence + verifier + strategy switching).
-- **`HarnessProfile.intelligent()`** — balanced + skill persistence
+- **`HarnessProfile.intelligent()`** (`profile: "intelligent"`) — balanced + skill persistence
   for cross-session compounding learning.
 
 Override one capability after the preset — order matters; later calls
-win:
+win (this example is builder-only — `.compose()` takes functions,
+which aren't serializable into a config; the memory override itself
+is available declaratively as `memory: { tier: "enhanced" }`):
 
 ```typescript {6-7}
 const agent = await ReactiveAgents.create()

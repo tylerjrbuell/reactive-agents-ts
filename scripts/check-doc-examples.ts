@@ -41,7 +41,11 @@ const SKIP_MARKER = "docs-skip-typecheck";
 // when you un-skip blocks, lower this number to the new skip count. Never
 // raise it — adding a skip marker to dodge a failure is exactly the drift
 // this gate exists to stop.
-const SKIP_CEILING = 248;
+// → 235 (2026-10-02, dual-syntax tabbed-code rollout across guides/: illustrative
+// fragments rewritten as complete, typechecking examples; net -11 skips. Builder
+// methods lacking declarative config keys are tracked in
+// wiki/Planning/Implementation-Plans/2026-10-02-declarative-config-parity-register.md)
+const SKIP_CEILING = 235;
 
 interface Block {
   sourceFile: string; // repo-relative

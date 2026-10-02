@@ -8,6 +8,15 @@ sidebar:
   order: 21
 ---
 
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` (declarative) and the fluent `ReactiveAgents.create().withX()`
+(builder) are the same API — same names, same nesting. Where this page constructs an
+agent, both forms are shown; flip the tab to your preference. The fluent equivalents
+are covered in the [Builder API reference](/reference/builder-api/).
+</Aside>
+
 [LangGraph](https://langchain-ai.github.io/langgraphjs/) and Reactive Agents both help you build agentic LLM systems, but they start from different premises. LangGraph models an agent as an **explicit graph state machine** — you define nodes, edges, and a shared state object, and the runtime drives transitions between them. It is part of the LangChain ecosystem, is Python-first in depth, and ships a mature TypeScript port (LangGraph.js). Reactive Agents is a **composable, typed harness** that is TypeScript-first end to end (built on [Effect-TS](https://effect.website/)), aims for the same code running on a local 4B Ollama model or a frontier API, and bundles reasoning strategies, memory, guardrails, durable execution, and HITL as opt-in layers. If you want to hand-draw control flow as a graph, LangGraph is purpose-built for that. If you want a strongly typed agent you assemble from layers without wiring a state machine, that is what Reactive Agents optimizes for.
 
 ## At a glance
@@ -55,16 +64,65 @@ This is a genuine LangGraph strength. [LangSmith](https://www.langchain.com/lang
 
 ## Side-by-side: a minimal agent
 
-**Reactive Agents**
+The front door first — same agent, both syntaxes:
 
-<!-- docs-skip-typecheck -->
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "weather-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  reasoning: {}, // ReAct by default
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
+  .withName("weather-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withTools({ tools: [weatherTool] })
+  .withReasoning() // ReAct by default
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+Then the full loop with a custom weather tool. A tool handler is a function, so custom-tool registration is builder-only (the declarative form covers built-in and policy options via the `tools` key):
+
+**Reactive Agents**
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withTools({
+    tools: [
+      {
+        definition: {
+          name: "weather",
+          description: "Get weather in a location (Fahrenheit)",
+          timeoutMs: 5000,
+          riskLevel: "low",
+          requiresApproval: false,
+          source: "function",
+          parameters: [
+            { name: "location", type: "string", description: "City name", required: true },
+          ],
+        },
+        handler: (args) =>
+          Effect.succeed({ location: args.location, tempF: 68 }),
+      },
+    ],
+  })
   .withReasoning() // ReAct by default
   .build();
 
@@ -74,7 +132,7 @@ console.log(result.output);
 
 **LangGraph.js** (prebuilt ReAct agent)
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MemorySaver } from "@langchain/langgraph";

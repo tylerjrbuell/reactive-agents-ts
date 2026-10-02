@@ -7,6 +7,15 @@ sidebar:
   order: 23
 ---
 
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` (declarative) and the fluent `ReactiveAgents.create().withX()`
+(builder) are the same API — same names, same nesting. Where this page constructs an
+agent, both forms are shown; flip the tab to your preference. The fluent equivalents
+are covered in the [Builder API reference](/reference/builder-api/).
+</Aside>
+
 If you're choosing between **Reactive Agents** and the **Vercel AI SDK**, the most useful thing to know up front is that they sit at *different altitudes*. The Vercel AI SDK is a lower-level **TypeScript toolkit** — a unified provider interface plus best-in-class UI streaming primitives. Reactive Agents is a higher-level **agent harness** that runs on top of that kind of foundation: a deterministic execution engine, reasoning strategies, memory, guardrails, durability, and governance.
 
 They are frequently **complementary, not strictly either/or**. Plenty of teams use the AI SDK for its UI hooks and provider abstraction, and reach for a harness when their agent loop grows beyond a simple tool-calling loop. This page tries to be fair about where each shines.
@@ -24,18 +33,18 @@ They are frequently **complementary, not strictly either/or**. Plenty of teams u
 | Text + structured output | ✅ `.withOutputSchema(zod)` → `result.object` | ✅ `generateObject` / `streamObject` |
 | Tool calling | ✅ + MCP-native | ✅ `tool()` + MCP support |
 | Agent loop / multi-step | ✅ 12-phase deterministic engine | ✅ `ToolLoopAgent`, `stopWhen`, `prepareStep` |
-| Reasoning strategies | ✅ 8 (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action) | — [^1] |
-| Memory (multi-layer) | ✅ 4-layer (working/semantic/episodic/procedural) | — [^1] |
-| Guardrails | ✅ built-in | — [^1] |
-| Cost routing + budgets | ✅ | — [^1] |
-| Durable execution + crash-resume | ✅ | — [^1] |
+| Reasoning strategies | ✅ 8 (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action) | — ¹ |
+| Memory (multi-layer) | ✅ 4-layer (working/semantic/episodic/procedural) | — ¹ |
+| Guardrails | ✅ built-in | — ¹ |
+| Cost routing + budgets | ✅ | — ¹ |
+| Durable execution + crash-resume | ✅ | — ¹ |
 | Human-in-the-loop approvals | ✅ `.withApprovalPolicy` | ✅ tool execution approval (AI SDK 6) |
-| Multi-agent (A2A) | ✅ | — [^1] |
+| Multi-agent (A2A) | ✅ | — ¹ |
 | Observability | ✅ OpenTelemetry + Cortex studio | ✅ telemetry / observability |
 | Runtime | Bun + Node 22.5+ | Node, edge, browser, Expo |
 | License | MIT | Apache-2.0 |
 
-[^1]: No first-party equivalent found as of 2026; corrections welcome via PR. The AI SDK evolves quickly — these are app-layer concerns it intentionally leaves to you or to a higher-level framework, not gaps.
+¹ No first-party equivalent found as of 2026; corrections welcome via PR. The AI SDK evolves quickly — these are app-layer concerns it intentionally leaves to you or to a higher-level framework, not gaps.
 
 ## Different altitudes, not rivals
 
@@ -65,14 +74,42 @@ All of this is built on **Effect-TS**, so boundaries are schema-validated, error
 
 ## Side-by-side: a minimal agent
 
+The front door first — `createAgent({ name, provider, model })` is the same shape as the Vercel SDK's agent constructor object:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "weather-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("weather-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+Then the full loop with a custom tool. A tool handler is a function, so custom-tool registration is builder-only (the declarative form covers built-in and policy options via the `tools` key):
+
 **Reactive Agents**
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";
 
-const agent = ReactiveAgents.create()
+const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withTools({
@@ -81,6 +118,10 @@ const agent = ReactiveAgents.create()
         definition: {
           name: "weather",
           description: "Get weather in a location (Fahrenheit)",
+          timeoutMs: 5000,
+          riskLevel: "low",
+          requiresApproval: false,
+          source: "function",
           parameters: [
             { name: "location", type: "string", description: "City name", required: true },
           ],
@@ -98,7 +139,7 @@ console.log(result.output);
 
 **Vercel AI SDK** (agent loop primitive, AI SDK 5/6)
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { ToolLoopAgent, tool } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
@@ -122,7 +163,7 @@ const result = await weatherAgent.generate({
 console.log(result.text);
 ```
 
-Both are clean. The difference is what's implied: the AI SDK example gives you a tool-calling loop and stops there — you add memory, retries, governance, and persistence yourself. The Reactive Agents example is already inside a harness, so reaching for memory, a different reasoning strategy, budgets, or durability is another builder method rather than new plumbing.
+Both are clean. The difference is what's implied: the AI SDK example gives you a tool-calling loop and stops there — you add memory, retries, governance, and persistence yourself. The Reactive Agents example is already inside a harness, so reaching for memory, a different reasoning strategy, budgets, or durability is another config key or builder method rather than new plumbing.
 
 ## When the Vercel AI SDK is enough
 

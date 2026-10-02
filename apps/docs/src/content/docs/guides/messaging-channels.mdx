@@ -7,6 +7,8 @@ sidebar:
   order: 19
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers wired through `.withMCP()` and `.withGateway()`. **Signal** ships as a hardened **Docker image** in this repo because there is no maintained third-party MCP with the same behavior. **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** project — run it with **`uvx`**, a local clone, or your own container; we do **not** publish a Telegram image from this monorepo.
 
 ## How It Works
@@ -49,6 +51,44 @@ The data directory is volume-mounted into Docker on subsequent runs.
 
 ### 3. Configure the Agent
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "signal-agent",
+  provider: "anthropic",
+  reasoning: {},
+  tools: { builtins: true },
+  guardrails: {},
+  features: { killSwitch: true },
+  mcpServers: [{
+    name: "signal",
+    transport: "stdio",
+    command: "docker",
+    args: [
+      "run", "-i", "--rm",
+      "--cap-drop", "ALL",
+      "--security-opt", "no-new-privileges",
+      "--memory", "512m",
+      "-v", "./signal-data:/data:rw",
+      "-e", `SIGNAL_USER_ID=${process.env.SIGNAL_PHONE_NUMBER}`,
+      "signal-mcp:local",
+    ],
+  }],
+  gateway: {
+    heartbeat: {
+      intervalMs: 15_000,
+      policy: "adaptive",
+      instruction: "Check Signal for new messages using signal/receive_message. Respond to any that need attention.",
+    },
+    policies: { dailyTokenBudget: 50_000, maxActionsPerHour: 30 },
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("signal-agent")
@@ -81,6 +121,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Available Signal Tools
 
@@ -115,6 +157,45 @@ export TELEGRAM_SESSION_STRING=1BVtsO...
 
 Pin a **tag or revision** you trust (`v3.0.4` is an example):
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "telegram-agent",
+  provider: "anthropic",
+  reasoning: {},
+  tools: { builtins: true },
+  guardrails: {},
+  features: { killSwitch: true },
+  mcpServers: [{
+    name: "telegram",
+    transport: "stdio",
+    command: "uvx",
+    args: [
+      "--from",
+      "git+https://github.com/chigwell/telegram-mcp.git@v3.0.4",
+      "telegram-mcp",
+    ],
+    env: {
+      TELEGRAM_API_ID: process.env.TELEGRAM_API_ID ?? "",
+      TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH ?? "",
+      TELEGRAM_SESSION_STRING: process.env.TELEGRAM_SESSION_STRING ?? "",
+    },
+  }],
+  gateway: {
+    heartbeat: {
+      intervalMs: 15_000,
+      policy: "adaptive",
+      instruction: "Check Telegram for unread messages using telegram/get_chats. Respond to conversations that need attention.",
+    },
+    policies: { dailyTokenBudget: 50_000, maxActionsPerHour: 30 },
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withName("telegram-agent")
@@ -148,6 +229,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 Alternatives: run `uv run main.py` from a checkout of chigwell/telegram-mcp, or wrap upstream in **your own** Docker image — keep that outside this monorepo unless you want to contribute it as a separate published image.
 

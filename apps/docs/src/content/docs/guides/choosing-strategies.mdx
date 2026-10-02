@@ -7,12 +7,12 @@ sidebar:
   order: 7
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 Reactive Agents ships eight reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
 
 <Aside type="tip" title="If you don't want to think about it">
-Use **Adaptive** — it auto-selects per task: `.withReasoning({ defaultStrategy: "adaptive" })`. Or use the default **ReAct** — it works for ~80% of agent workloads. Only switch to one of the others when you have a specific reason from the decision tree below.
+Use **Adaptive** — it auto-selects per task: `reasoning: { defaultStrategy: "adaptive" }` (declarative) or `.withReasoning({ defaultStrategy: "adaptive" })` (builder). Or use the default **ReAct** — it works for ~80% of agent workloads. Only switch to one of the others when you have a specific reason from the decision tree below.
 </Aside>
 
 ## Decision Tree
@@ -107,7 +107,7 @@ A ReWOO-style strategy for **static, decomposable, tool-heavy tasks** whose full
 
 **Best for:** multi-file/artifact generation, static pipelines, independent parallel subtasks. **Avoid for:** flaky network I/O, debug-until-passing, fetch-then-decide.
 
-**Requirements:** Tools via `.withTools()`. `.withReasoning({ defaultStrategy: "blueprint" })` (alias: `"rewoo"`).
+**Requirements:** Tools via `.withTools()` / `tools: { builtins: true }`. Select with `reasoning: { defaultStrategy: "blueprint" }` (declarative) or `.withReasoning({ defaultStrategy: "blueprint" })` (builder) — alias: `"rewoo"`.
 
 ---
 
@@ -161,7 +161,7 @@ Selects the most appropriate strategy per-iteration based on observed task chara
 
 **Routing by task characteristics:** trivial/short → ReAct; static local artifact generation → **Blueprint**; observation-driven or network/fetch tasks → Plan-Execute-Reflect; compare/explore → Tree-of-Thought; critique/refine → Reflexion. On the local tier it defaults to ReAct (heavy strategies show no quality lift there); Blueprint auto-routes on mid/large/frontier and is available opt-in on local.
 
-**Requirements:** Must explicitly set `adaptive: { enabled: true }` in the reasoning options. An 8B+ model is recommended.
+**Requirements:** Must explicitly set `adaptive: { enabled: true }` in the reasoning options — builder-only (no declarative config key for this sub-option). An 8B+ model is recommended.
 
 ---
 
@@ -193,8 +193,27 @@ The LLM generates a TypeScript IIFE that runs inside a Worker-thread sandbox. To
 
 When you enable strategy switching, the framework monitors execution and can automatically switch to a different strategy mid-run if the current one appears to be stuck.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "switching-agent",
+  provider: "anthropic",
+  reasoning: {
+    enableStrategySwitching: true,  // default: false
+    maxStrategySwitches: 2,         // default: 1
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
+  .withName("switching-agent")
   .withProvider("anthropic")
   .withReasoning({
     enableStrategySwitching: true,  // default: false
@@ -202,6 +221,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### What triggers a switch
 
@@ -219,13 +240,32 @@ By default, an **LLM evaluator** is called with the current task, the last few s
 
 If you want deterministic switching without an extra LLM call, set `fallbackStrategy` directly:
 
-{/* docs-skip-typecheck */}
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
-.withReasoning({
-  enableStrategySwitching: true,
-  fallbackStrategy: "plan-execute-reflect",  // skip LLM evaluator, always switch to this
-})
+const agent = await createAgent({
+  name: "switching-agent",
+  provider: "anthropic",
+  reasoning: {
+    enableStrategySwitching: true,
+    fallbackStrategy: "plan-execute-reflect",  // skip LLM evaluator, always switch to this
+  },
+});
 ```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("switching-agent")
+  .withProvider("anthropic")
+  .withReasoning({
+    enableStrategySwitching: true,
+    fallbackStrategy: "plan-execute-reflect",  // skip LLM evaluator, always switch to this
+  })
+  .build();
+```
+  </TabItem>
+</Tabs>
 
 When `fallbackStrategy` is set, the evaluator is bypassed and the agent switches immediately to the named strategy.
 
@@ -280,12 +320,27 @@ For tasks where you already know the complexity profile, it's more token-efficie
 
 Use **ReAct only**. Keep `maxIterations` at 10 or below. Avoid Plan-Execute-Reflect — these models struggle to produce reliable structured JSON plans and tend to loop.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "local-agent",
+  provider: "ollama",
+  reasoning: {},                        // ReAct (default strategy)
+  execution: { maxIterations: 10 },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("local-agent")
   .withProvider("ollama")
   .withReasoning({ maxIterations: 10 })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### 8B models (e.g., llama-3.1-8b, gemma-3-12b)
 
@@ -303,55 +358,120 @@ All strategies work at their best. Tree-of-Thought and Plan-Execute-Reflect are 
 
 ## Configuration Examples
 
-{/* docs-skip-typecheck */}
+Each strategy selected via the `reasoning` key (declarative) or `.withReasoning()` (builder) — flip the tabs:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
+import { createAgent } from "reactive-agents";
+
 // Default: ReAct
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .build();
+const reactAgent = await createAgent({ name: "a", provider: "anthropic", reasoning: {} });
 
 // Blueprint — static decomposable tasks (plan once → execute → solve)
-const agent = await ReactiveAgents.create()
+const blueprintAgent = await createAgent({
+  name: "b",
+  provider: "anthropic",
+  tools: { builtins: true },
+  reasoning: { defaultStrategy: "blueprint" }, // alias: "rewoo"
+});
+
+// Plan-Execute-Reflect
+const planAgent = await createAgent({
+  name: "c",
+  provider: "anthropic",
+  reasoning: { defaultStrategy: "plan-execute-reflect" },
+});
+
+// Reflexion with episodic memory
+const reflexionAgent = await createAgent({
+  name: "d",
+  provider: "anthropic",
+  reasoning: { defaultStrategy: "reflexion" },
+  memory: { tier: "standard" },
+});
+
+// Tree-of-Thought
+const totAgent = await createAgent({
+  name: "e",
+  provider: "anthropic",
+  reasoning: { defaultStrategy: "tree-of-thought" },
+});
+
+// Dynamic strategy switching (auto-switches when stuck)
+// See "Automatic Strategy Switching" section above for full options and EventBus events
+const switchingAgent = await createAgent({
+  name: "f",
+  provider: "anthropic",
+  reasoning: {
+    enableStrategySwitching: true,
+    maxStrategySwitches: 2,
+    // fallbackStrategy: "plan-execute-reflect",  // optional: skip LLM evaluator
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+// Default: ReAct
+const reactAgent = await ReactiveAgents.create().withName("a").withProvider("anthropic").withReasoning().build();
+
+// Blueprint — static decomposable tasks (plan once → execute → solve)
+const blueprintAgent = await ReactiveAgents.create()
+  .withName("b")
   .withProvider("anthropic")
   .withTools({ builtins: true })
   .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
   .build();
 
 // Plan-Execute-Reflect
-const agent = await ReactiveAgents.create()
+const planAgent = await ReactiveAgents.create()
+  .withName("c")
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect" })
   .build();
 
 // Reflexion with episodic memory
-const agent = await ReactiveAgents.create()
+const reflexionAgent = await ReactiveAgents.create()
+  .withName("d")
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "reflexion" })
   .withMemory({ tier: "standard" })
   .build();
 
 // Tree-of-Thought
-const agent = await ReactiveAgents.create()
+const totAgent = await ReactiveAgents.create()
+  .withName("e")
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "tree-of-thought" })
   .build();
 
-// Adaptive
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "adaptive", adaptive: { enabled: true } })
-  .build();
-
 // Dynamic strategy switching (auto-switches when stuck)
 // See "Automatic Strategy Switching" section above for full options and EventBus events
-const agent = await ReactiveAgents.create()
+const switchingAgent = await ReactiveAgents.create()
+  .withName("f")
   .withProvider("anthropic")
   .withReasoning({
     enableStrategySwitching: true,
     maxStrategySwitches: 2,
     // fallbackStrategy: "plan-execute-reflect",  // optional: skip LLM evaluator
   })
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+Adaptive needs the `adaptive: { enabled: true }` reasoning sub-option, which has no declarative config key — this one is builder-only:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const adaptiveAgent = await ReactiveAgents.create()
+  .withName("g")
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "adaptive", adaptive: { enabled: true } })
   .build();
 ```
 

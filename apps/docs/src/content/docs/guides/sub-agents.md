@@ -16,6 +16,8 @@ Two delegation modes exist:
 - **Static sub-agents** — configured at build time via `.withAgentTool()`. The sub-agent is always available as a named tool.
 - **Dynamic sub-agents** — spawned at runtime via the `spawn-agent` tool. The parent LLM decides when to spawn and what configuration to use.
 
+Sub-agent registration has no declarative `createAgent` config key yet, so every example on this page is builder-only.
+
 Both modes run fully within the parent's execution context: as of v0.14, a child forks into the **parent's fiber tree** rather than running as a detached worker. The child agent executes, produces a result, and that result is returned to the parent as a tool call observation. See [Lifecycle, cancellation, and supervision](#lifecycle-cancellation-and-supervision) for what that buys you.
 
 ---

@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 Reactive Agents provides a four-layer memory architecture inspired by cognitive science.
 
@@ -72,11 +72,26 @@ Passing `.withMemory("1")` or `.withMemory("2")` still works but logs a deprecat
 
 ### Default tier
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  memory: {},  // Same internal tier as legacy "1" — FTS5 search, no embeddings required
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withMemory()  // Same internal tier as legacy "1" — FTS5 search, no embeddings required
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Enhanced tier (vector search)
 
@@ -87,11 +102,24 @@ EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 ```
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  memory: { tier: "enhanced" },  // FTS5 + KNN vector search (legacy: "2")
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withMemory({ tier: "enhanced" })  // FTS5 + KNN vector search (legacy: "2")
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ## Memory Bootstrap
 
@@ -110,7 +138,19 @@ The ExperienceStore records tool usage patterns and error recovery hints across 
 
 ### Enabling
 
-{/* docs-skip-typecheck */}
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  memory: { tier: "standard", dbPath: "./memory-db", experienceLearning: true },  // Enable ExperienceStore
+  reasoning: {},
+  tools: { builtins: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -120,6 +160,8 @@ const agent = await ReactiveAgents.create()
   .withTools({ builtins: true })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### How It Works
 
@@ -166,14 +208,31 @@ console.log(patterns);
 
 ### Enabling
 
-{/* docs-skip-typecheck */}
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  memory: { tier: "standard", dbPath: "./memory-db" },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withMemory({ tier: "standard", dbPath: "./memory-db" })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Then start and resume sessions on the built agent:
+
+```typescript
 // Start a named session — persisted to SQLite
 const session = agent.session({ persist: true, id: "my-project-session" });
 await session.chat("What are the main risks in this architecture?");
@@ -214,6 +273,19 @@ The MemoryConsolidatorService runs background maintenance cycles on episodic mem
 
 ### Enabling
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  // Declarative enables consolidation with the default thresholds;
+  // custom threshold values are builder-only (see Builder tab).
+  memory: { tier: "standard", dbPath: "./memory-db", memoryConsolidation: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 {/* docs-skip-typecheck */}
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -225,6 +297,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 All config fields are optional — defaults are `threshold: 10`, `decayFactor: 0.95`, `pruneThreshold: 0.1`.
 

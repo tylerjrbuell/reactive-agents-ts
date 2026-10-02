@@ -41,7 +41,8 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 ollama pull qwen3:4b
 ```
 
-Going local, swap the provider in step 3: `.withProvider("ollama").withModel("qwen3:4b")` — no key required. See the [Local Models guide](/guides/local-models/).
+Going local, swap the provider in step 3: `.withProvider("ollama").withModel("qwen3:4b")`
+on the builder (or `provider: "ollama", model: "qwen3:4b"` in the config) — no key required. See the [Local Models guide](/guides/local-models/).
 
 </li>
 
@@ -49,11 +50,22 @@ Going local, swap the provider in step 3: `.withProvider("ollama").withModel("qw
 
 **Build your first agent** — three lines is enough.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+const agent = await createAgent({ name: "my-agent", provider: "anthropic" });
+console.log((await agent.run("Hello")).output);
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create().withProvider("anthropic").build();
 console.log((await agent.run("Hello")).output);
 ```
+  </TabItem>
+</Tabs>
 
 </li>
 
@@ -104,7 +116,7 @@ The easiest way to get started is with the `reactive-agents` meta-package, which
 `effect` ships as a dependency of `reactive-agents` and is installed automatically. When you write hooks, tools, or tests, import helpers explicitly — e.g. `import { Effect } from "effect"` — then use **`Effect.succeed`**, **`Effect.fail`**, **`Effect.gen`**, **`Effect.runPromise`**, etc. See the [Effect-TS primer](/concepts/effect-ts/) for a cheat sheet. Add `effect` to your app’s `package.json` only if you import from it outside `reactive-agents`’ bundled usage.
 :::
 
-Then import from a single entry point:
+Then import from a single entry point (`ReactiveAgents` for the builder, `createAgent` for the declarative config):
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";

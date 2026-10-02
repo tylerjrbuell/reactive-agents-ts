@@ -5,15 +5,25 @@ sidebar:
   order: 5
 ---
 
-import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 This guide walks through building a research assistant agent with memory, reasoning, and guardrails.
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` (declarative) and the fluent `ReactiveAgents.create().withX()`
+(builder) are the same API — same names, same nesting. Every example below shows
+both; flip the tab to your preference. Reach for the builder when construction is
+conditional or imperative. The fluent equivalents are covered in the
+[Builder API reference](/reference/builder-api/).
+</Aside>
 
 ## The front door: `createAgent(config)`
 
 Every agent starts from a declarative config object — the shape you know from the
 Vercel AI SDK and OpenAI SDK:
 
+<Tabs>
+  <TabItem label="Declarative">
 ```typescript
 import { createAgent } from "reactive-agents";
 
@@ -23,17 +33,8 @@ const agent = await createAgent({
   model: "claude-sonnet-4-6",
 });
 ```
-
-This creates a minimal agent with:
-- LLM provider (Anthropic, Claude Sonnet 4)
-- Direct LLM loop (no reasoning strategy, no memory, no tools)
-
-<Aside type="note" title="Same API, two syntaxes">
-`createAgent(config)` and the fluent `ReactiveAgents.create().withX()` builder are
-the same API — same names, same nesting. This guide uses the config object; the
-[Builder API reference](/reference/builder-api/) covers the fluent equivalents.
-Reach for the builder when construction is conditional or imperative.
-
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -43,12 +44,19 @@ const agent = await ReactiveAgents.create()
   .withModel("claude-sonnet-4-6")
   .build();
 ```
-</Aside>
+  </TabItem>
+</Tabs>
+
+This creates a minimal agent with:
+- LLM provider (Anthropic, Claude Sonnet 4)
+- Direct LLM loop (no reasoning strategy, no memory, no tools)
 
 ## Adding Memory
 
 Memory persists context across conversations:
 
+<Tabs>
+  <TabItem label="Declarative">
 ```typescript
 import { createAgent } from "reactive-agents";
 
@@ -59,6 +67,20 @@ const agent = await createAgent({
   memory: { tier: "standard" },          // 4-layer memory (default tier)
 });
 ```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("research-assistant")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withMemory({ tier: "standard" })      // 4-layer memory (default tier)
+  .build();
+```
+  </TabItem>
+</Tabs>
 
 The 4-layer memory system has two tiers:
 
@@ -67,10 +89,20 @@ The 4-layer memory system has two tiers:
 | `"standard"` | Working + Episodic + FTS5 keyword search           | Conversational agents, default for most apps |
 | `"enhanced"` | All 4 layers + vector embeddings (semantic recall) | Research agents, long-running tasks needing semantic similarity |
 
+<Tabs>
+  <TabItem label="Declarative">
 {/* docs-skip-typecheck */}
 ```typescript
 memory: { tier: "enhanced", dbPath: "./data/memory.db" }   // Full 4-layer
 ```
+  </TabItem>
+  <TabItem label="Builder">
+{/* docs-skip-typecheck */}
+```typescript
+.withMemory({ tier: "enhanced", dbPath: "./data/memory.db" })   // Full 4-layer
+```
+  </TabItem>
+</Tabs>
 
 `"enhanced"` requires an embedding provider — set `EMBEDDING_PROVIDER=openai` or `EMBEDDING_PROVIDER=ollama` in `.env`.
 
@@ -78,6 +110,8 @@ memory: { tier: "enhanced", dbPath: "./data/memory.db" }   // Full 4-layer
 
 The reasoning layer gives your agent structured thinking:
 
+<Tabs>
+  <TabItem label="Declarative">
 ```typescript
 const agent = await createAgent({
   name: "research-assistant",
@@ -87,18 +121,33 @@ const agent = await createAgent({
   reasoning: {},  // ReAct loop: Think -> Act -> Observe (pass { defaultStrategy } to switch)
 });
 ```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("research-assistant")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withMemory({ tier: "standard" })
+  .withReasoning()  // ReAct loop: Think -> Act -> Observe (pass { defaultStrategy } to switch)
+  .build();
+```
+  </TabItem>
+</Tabs>
 
 With reasoning enabled, the agent uses a ReAct loop instead of a simple LLM call. It can:
 - Break tasks into steps
 - Request tool calls
 - Observe results and adjust
 
-To switch strategy, pass `reasoning: { defaultStrategy: ... }` — valid values are `"reactive"` (the default), `"plan-execute-reflect"`, `"reflexion"`, `"tree-of-thought"`, `"adaptive"`, `"direct"`, `"code-action"`, and `"blueprint"`. See [Choosing a Strategy](../choosing-strategies/).
+To switch strategy, pass `reasoning: { defaultStrategy: ... }` (declarative) or `.withReasoning({ defaultStrategy: ... })` (builder) — valid values are `"reactive"` (the default), `"plan-execute-reflect"`, `"reflexion"`, `"tree-of-thought"`, `"adaptive"`, `"direct"`, `"code-action"`, and `"blueprint"`. See [Choosing a Strategy](../choosing-strategies/).
 
 ## Adding Safety
 
 Guardrails protect against prompt injection, PII leakage, and toxic content:
 
+<Tabs>
+  <TabItem label="Declarative">
 ```typescript
 const agent = await createAgent({
   name: "research-assistant",
@@ -110,8 +159,25 @@ const agent = await createAgent({
   costTracking: {},       // Budget controls
 });
 ```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("research-assistant")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withMemory({ tier: "standard" })
+  .withReasoning()
+  .withGuardrails()       // Input/output safety
+  .withCostTracking()     // Budget controls
+  .build();
+```
+  </TabItem>
+</Tabs>
 
 ## Running the Agent
+
+Once built, the agent is the same object either way — run it identically:
 
 ```typescript
 const result = await agent.run("Explain the difference between TCP and UDP");
@@ -123,7 +189,7 @@ console.log(result.metadata);     // { duration, cost, tokensUsed, stepsCount }
 
 ## Using the Effect API
 
-For advanced use cases, use the Effect-based API:
+For advanced use cases, use the Effect-based API (builder-only):
 
 ```typescript
 import { Effect } from "effect";
@@ -145,7 +211,8 @@ const result = await Effect.runPromise(program);
 
 ## Lifecycle Hooks
 
-Observe and modify agent behavior at any phase:
+Observe and modify agent behavior at any phase. Hooks take functions, so they are
+registered on the builder (no declarative config equivalent):
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -170,7 +237,7 @@ Each phase supports `before`, `after`, and `on-error` timing.
 
 ## Testing
 
-Use `withTestScenario()` for deterministic tests — it automatically sets the provider to `"test"`, so no API key or real LLM call is involved:
+Use `withTestScenario()` for deterministic tests — it automatically sets the provider to `"test"`, so no API key or real LLM call is involved. Test scenarios are builder-only (turns are code, not JSON):
 
 ```typescript title="src/agent.test.ts"
 import { expect, test } from "bun:test";

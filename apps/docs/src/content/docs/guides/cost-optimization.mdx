@@ -7,6 +7,8 @@ sidebar:
   order: 24
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Smart cost management is essential for production agents. This guide covers pricing, budget controls, and zero-cost local model options.
 
 ## Provider Pricing Table
@@ -68,35 +70,82 @@ Choose a provider and model combo aligned with your monthly token budget:
 - **Alternative**: OpenAI GPT-4o-mini for ~1,000–2,000 requests/day
 - **Use case**: Personal projects, internal copilots, low-latency edge inference
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "local-agent",
+  provider: "ollama",
+  model: "qwen3:4b",
+  reasoning: { defaultStrategy: "reactive" },
+  execution: { maxIterations: 5 },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("local-agent")
   .withProvider("ollama")
   .withModel("qwen3:4b")
   .withReasoning({ defaultStrategy: "reactive" })
   .withMaxIterations(5)
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### $25/month Tier
 - **Primary**: OpenAI GPT-4o-mini or Claude Haiku 3.5
 - **Fallback**: Ollama for cost spikes
 - **Use case**: Small teams, MVP products, non-critical automation
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "mvp-agent",
+  provider: "openai",
+  model: "gpt-4o-mini",
+  costTracking: { daily: 1.0 },
+  reasoning: { defaultStrategy: "reactive" },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("mvp-agent")
   .withProvider("openai")
   .withModel("gpt-4o-mini")
   .withCostTracking({ daily: 1.0 })
   .withReasoning({ defaultStrategy: "reactive" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### $100/month Tier
 - **Primary**: Claude Sonnet 4 or GPT-4o
 - **Use case**: Production SaaS, high-reliability automations, complex reasoning
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "production-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  costTracking: { daily: 5.0 },
+  reasoning: { defaultStrategy: "adaptive" },
+  verification: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("production-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withCostTracking({ daily: 5.0 })
@@ -104,14 +153,34 @@ const agent = await ReactiveAgents.create()
   .withVerification()
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### $500+/month Tier
 - **Primary**: Claude Sonnet 4 with extended reasoning, high iteration limits
 - **Observability**: Full event tracing and metrics
 - **Use case**: Enterprise agents, research platforms, autonomous systems
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "enterprise-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  costTracking: { daily: 20.0 },
+  reasoning: { defaultStrategy: "adaptive" },
+  execution: { maxIterations: 20 },   // same cap as withReasoning({ maxIterations })
+  memory: { tier: "enhanced" },
+  verification: {},
+  observability: { verbosity: "verbose" },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("enterprise-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withCostTracking({ daily: 20.0 })
@@ -121,6 +190,8 @@ const agent = await ReactiveAgents.create()
   .withObservability({ verbosity: "verbose" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ## Cost Control Features
 
@@ -128,8 +199,24 @@ Use these builder methods to enforce budgets and reduce token usage:
 
 ### Budget Enforcement
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "budgeted-agent",
+  provider: "anthropic",
+  costTracking: {
+    perRequest: 0.10,    // Max $0.10 per single run
+    daily: 5.0,          // Max $5.00 per day
+    monthly: 100.0       // Max $100.00 per month
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("budgeted-agent")
   .withProvider("anthropic")
   .withCostTracking({
     perRequest: 0.10,    // Max $0.10 per single run
@@ -137,7 +224,11 @@ const agent = await ReactiveAgents.create()
     monthly: 100.0       // Max $100.00 per month
   })
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("Complex task");
 // Throws BudgetExceededError if any threshold is hit
 console.log(result.metadata.cost);  // Estimated USD cost
@@ -145,7 +236,7 @@ console.log(result.metadata.cost);  // Estimated USD cost
 
 ### Iteration Limits
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withReasoning({ maxIterations: 5 })
 // Fewer iterations = fewer LLM calls = lower cost
@@ -156,7 +247,7 @@ console.log(result.metadata.cost);  // Estimated USD cost
 
 ### Tool Result Compression
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withTools({
   resultCompression: {
@@ -175,7 +266,7 @@ For an automatic, builder-level path — fall back to an alternate provider on a
 
 ### Cost-Aware Model Routing (New in v0.13)
 
-`.withModelRouting()` wires complexity-based routing directly into the agent builder. The router scores each task at runtime and picks the cheapest capable tier at or above `minTier`. Use `tierModels` to pin the specific model used for each tier.
+`.withModelRouting()` wires complexity-based routing directly into the agent builder. The router scores each task at runtime and picks the cheapest capable tier at or above `minTier`. Use `tierModels` to pin the specific model used for each tier. `.withModelRouting()` has no declarative `AgentConfig` key, so this example is builder-only.
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
@@ -204,7 +295,7 @@ Simple tasks run against the cheapest capable tier (`claude-haiku-4-5`); anythin
 
 Optimize prompt verbosity for model size:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Small models: lean prompts, early compaction
 .withContextProfile({ tier: "local" })
@@ -253,6 +344,8 @@ curl -fsSL https://ollama.com/install.sh | sh
 | Model control | Change anytime | Pinned to provider's release cycle |
 
 ### Builder Example
+
+`.withContextProfile()` has no declarative `AgentConfig` key, so this example is builder-only:
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";

@@ -7,23 +7,47 @@ sidebar:
   order: 6
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 Use this guide to choose a default stack quickly, then tune for cost and reliability.
 
+<Aside type="note" title="Same API, two syntaxes">
+Stack choices below are shown in both spellings of one API: `createAgent(config)`
+(declarative) and the fluent `ReactiveAgents.create().withX()` (builder) — same
+names, same nesting. Flip the tab to your preference; see
+[Your First Agent](/guides/your-first-agent/) for the full dual-syntax walkthrough.
+</Aside>
+
 ## Start with a profile
 
-The fastest way to compose capabilities is a `HarnessProfile` preset — it sets the default-on capability bundle in one line, and you override individual pieces afterward (later calls win). _(`HarnessProfile` ships in v0.12+; on earlier versions use the explicit `.with*()` chain below.)_
+The fastest way to compose capabilities is a `HarnessProfile` preset — it sets the default-on capability bundle in one line, and you override individual pieces afterward (later calls win). The declarative equivalent is the `profile` config key. _(`HarnessProfile` ships in v0.12+; on earlier versions use the explicit `.with*()` chain below.)_
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "production-agent",
+  provider: "anthropic",
+  profile: "balanced",                   // memory + RI + verifier + strategy switching
+  tools: { builtins: true },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
+  .withName("production-agent")
   .withProvider("anthropic")
   .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
   .withTools({ builtins: true })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 | Preset | Use when |
 |---|---|
@@ -31,14 +55,32 @@ const agent = await ReactiveAgents.create()
 | `HarnessProfile.balanced()` | Most production apps — the full stack (memory + reactive intelligence + verifier + strategy switching). Memory is off in a bare builder as of v0.12; `balanced()` enables it explicitly. |
 | `HarnessProfile.intelligent()` | You want cross-session compounding learning — balanced + skill persistence. |
 
-Override after the preset: `.withProfile(HarnessProfile.lean()).withMemory()` re-enables just memory.
+Override after the preset: `.withProfile(HarnessProfile.lean()).withMemory()` re-enables just memory (declaratively, `profile: "lean"` alongside a `memory: {}` key does the same — explicit keys always win over the preset).
 
 ## Default Recommendation
 
 For most production apps, the equivalent explicit chain:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "production-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  reasoning: { defaultStrategy: "adaptive" },
+  tools: { builtins: true },
+  memory: {},
+  guardrails: {},
+  costTracking: {},
+  observability: { verbosity: "normal" },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
+  .withName("production-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive" })
@@ -49,6 +91,8 @@ const agent = await ReactiveAgents.create()
   .withObservability({ verbosity: "normal" })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ## Decision Matrix
 
@@ -74,26 +118,51 @@ const agent = await ReactiveAgents.create()
 
 ### Cost-first profile
 
-{/* docs-skip-typecheck */}
+The `.withContextProfile()` override is builder-only — it has no declarative config key, so the cost-first tuning knob stays in code:
+
 ```typescript
-.withProvider("ollama")
-.withModel("qwen3:4b")
-.withContextProfile({ tier: "local", toolResultMaxChars: 800 })
-.withReasoning({ defaultStrategy: "reactive" })
-.withMaxIterations(6)
+const agent = await ReactiveAgents.create()
+  .withName("cost-first-agent")
+  .withProvider("ollama")
+  .withModel("qwen3:4b")
+  .withContextProfile({ tier: "local", toolResultMaxChars: 800 })
+  .withReasoning({ defaultStrategy: "reactive" })
+  .withMaxIterations(6)
+  .build();
 ```
 
 ### Quality-first profile
 
-{/* docs-skip-typecheck */}
+Everything else in a quality-first stack is declarative too:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
-.withProvider("anthropic")
-.withModel("claude-sonnet-4-6")
-.withReasoning({ defaultStrategy: "adaptive" })
-.withMemory({ tier: "enhanced" })
-.withVerification()
-.withMaxIterations(20)
+const agent = await createAgent({
+  name: "quality-first-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  reasoning: { defaultStrategy: "adaptive" },
+  memory: { tier: "enhanced" },
+  verification: {},
+  execution: { maxIterations: 20 },
+});
 ```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("quality-first-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withReasoning({ defaultStrategy: "adaptive" })
+  .withMemory({ tier: "enhanced" })
+  .withVerification()
+  .withMaxIterations(20)
+  .build();
+```
+  </TabItem>
+</Tabs>
 
 ## Team-Based Starting Points
 

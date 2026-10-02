@@ -11,6 +11,8 @@ This guide focuses on secure defaults and common mistakes in real deployments.
 
 ## Baseline Security Profile
 
+`.withBehavioralContracts()` has no declarative `AgentConfig` key, so this baseline profile is builder-only:
+
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")

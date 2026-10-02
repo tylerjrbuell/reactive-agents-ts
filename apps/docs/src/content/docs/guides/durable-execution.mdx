@@ -8,6 +8,8 @@ sidebar:
   order: 26
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Long-running agents crash. The machine reboots, the container is rescheduled, a
 deploy rolls the process. **Durable execution** lets an agent survive that: every
 iteration is checkpointed to disk, and a fresh process can reconstruct the run
@@ -19,22 +21,41 @@ from its last checkpoint and finish it — without re-doing completed tool work.
 
 ## Enabling durable runs
 
-Opt in with `.withDurableRuns()`. Absent this call there is zero overhead: no
+Opt in with `durableRuns` (declarative) or `.withDurableRuns()` (builder). Absent this call there is zero overhead: no
 store, no database file, no checkpoint writes.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-bot",
+  provider: "anthropic",
+  systemPrompt: "You are a thorough research assistant.",
+  reasoning: {},
+  tools: { builtins: ["web-search"] },
+  durableRuns: { dir: "./.runs", checkpointEvery: 1 },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("research-bot")
+  .withProvider("anthropic")
   .withSystemPrompt("You are a thorough research assistant.")
   .withReasoning()
   .withTools({ builtins: ["web-search"] })
   .withDurableRuns({ dir: "./.runs", checkpointEvery: 1 })
   .build();
 ```
+  </TabItem>
+</Tabs>
 
-`withDurableRuns` options:
+Declarative `durableRuns` / builder `withDurableRuns` options:
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -113,7 +134,7 @@ An unknown run id (or a run with no checkpoint) fails with
 The guarantee end to end: a run captured in one OS process is reconstructed and
 finished in a **different** process, purely from the on-disk checkpoint.
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Process A — does work, then is hard-killed (SIGKILL, crash, reboot).
 const a = await buildAgent();          // .withDurableRuns({ dir })

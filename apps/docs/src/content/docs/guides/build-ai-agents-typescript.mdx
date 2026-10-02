@@ -9,7 +9,15 @@ sidebar:
   order: 7
 ---
 
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
 If you want to **build AI agents in TypeScript** — agents that reason, call tools, remember context, and stream results into your app — this guide is the map. It explains what an agent actually is, the pieces you need for production, and how to assemble them with [Reactive Agents](https://docs.reactiveagents.dev), a type-safe TypeScript agent framework built on [Effect-TS](https://effect.website).
+
+<Aside type="note" title="Same API, two syntaxes">
+Reactive Agents exposes one API in two spellings: `createAgent(config)` (declarative)
+and the fluent `ReactiveAgents.create().withX()` (builder) — same names, same nesting.
+Every construction example below shows both; flip the tab to your preference.
+</Aside>
 
 ## What is an AI agent?
 
@@ -26,20 +34,40 @@ bun add reactive-agents
 # or: npm install reactive-agents
 ```
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
+  .withName("my-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Once built, run it the same way either way:
+
+```typescript
 const result = await agent.run("Explain quantum entanglement in two sentences.");
 console.log(result.output);
 console.log(result.metadata); // { duration, cost, tokensUsed, stepsCount }
 ```
 
-That's a working agent. Everything below is **opt-in** — you add capabilities one `.with()` call at a time, and only pay for what you enable. See the [Quickstart](/guides/quickstart/) for a guided version.
+That's a working agent. Everything below is **opt-in** — you add capabilities one `.with()` call (or one config key) at a time, and only pay for what you enable. See the [Quickstart](/guides/quickstart/) for a guided version.
 
 ## What you need to build production agents
 
@@ -47,7 +75,7 @@ A toy agent is one LLM call. A production agent needs more, and each piece is a 
 
 ### A reasoning loop
 
-The think → act → observe cycle. Reactive Agents ships seven strategies — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action — and switches between them when a task calls for it. Add it with `.withReasoning()`.
+The think → act → observe cycle. Reactive Agents ships seven strategies — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action — and switches between them when a task calls for it. Add it with `reasoning: {}` (declarative) or `.withReasoning()` (builder).
 → [Reasoning Strategies](/guides/reasoning/) · [Choosing a Strategy](/guides/choosing-strategies/)
 
 ### Tools and tool calling
@@ -57,7 +85,7 @@ Agents act by calling tools. Define your own with a typed builder, or plug in an
 
 ### Memory
 
-Working, episodic, semantic (vector + full-text), and procedural memory let an agent carry context across steps and sessions. Add it with `.withMemory()`.
+Working, episodic, semantic (vector + full-text), and procedural memory let an agent carry context across steps and sessions. Add it with `memory: { tier: "standard" }` (declarative) or `.withMemory()` (builder).
 → [Memory guide](/guides/memory/)
 
 ### Streaming
@@ -67,7 +95,7 @@ Stream tokens into your UI as they generate, with cancellation. Bridge a server 
 
 ### Safety, cost, and observability
 
-Production agents need guardrails (injection/PII/toxicity), budgets and model routing to control spend, and tracing to see every decision. Each is one builder call: `.withGuardrails()`, `.withBudget()`, `.withObservability()`.
+Production agents need guardrails (injection/PII/toxicity), budgets and model routing to control spend, and tracing to see every decision. Each is one call: `.withGuardrails()`, `.withBudget()`, `.withObservability()` — or the matching `guardrails`, `budget`, `observability` config keys.
 → [Guardrails](/guides/guardrails/) · [Cost Optimization](/guides/cost-optimization/) · [Production Checklist](/guides/production-checklist/)
 
 ### Local-to-frontier portability
@@ -79,6 +107,23 @@ The same agent code runs on a 4B-parameter local Ollama model and on Claude, GPT
 
 Composed, this is what a real agent looks like — a research agent with tools, memory, and a budget cap:
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  profile: "balanced",                   // memory + reactive intelligence + verifier
+  tools: { builtins: true },             // opt in to built-in tools + MCP
+  execution: { maxIterations: 15 },
+  budget: { tokenLimit: 100_000 },       // hard spend cap
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 
@@ -91,11 +136,15 @@ const agent = await ReactiveAgents.create()
   .withMaxIterations(15)
   .withBudget({ tokenLimit: 100_000 })    // hard spend cap
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("Research the latest TypeScript 6 features and summarize them.");
 ```
 
-`HarnessProfile.balanced()` turns on the production default set in one line; `lean()` and `intelligent()` are the other presets. See [Choosing a Stack](/guides/choosing-a-stack/).
+`HarnessProfile.balanced()` (or `profile: "balanced"` in a declarative config) turns on the production default set in one line; `lean()` and `intelligent()` — or `profile: "lean"` / `profile: "intelligent"` — are the other presets. See [Choosing a Stack](/guides/choosing-a-stack/).
 
 ## Pick your next step
 

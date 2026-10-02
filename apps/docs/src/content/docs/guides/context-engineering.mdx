@@ -5,6 +5,8 @@ sidebar:
   order: 17
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Context engineering is the practice of **finding the smallest set of high-signal tokens that maximize the likelihood of desired outcomes**. Reactive Agents provides a systematic context engineering system that adapts to your model's capabilities.
 
 ## Model Context Profiles
@@ -22,6 +24,24 @@ Every model has different context capacity, latency characteristics, and instruc
 
 ### Using Context Profiles
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+// Use the tier auto-detection (inferred from model name)
+const agent = await createAgent({
+  name: "local-agent",
+  provider: "ollama",
+  model: "qwen3:4b",
+  reasoning: {},
+  tools: { builtins: true },
+  // .withContextProfile({ tier: "local" }) is builder-only — the profile
+  // is a cross-field overlay with no declarative config key
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 // Use the tier auto-detection (inferred from model name)
 const agent = await ReactiveAgents.create()
@@ -31,7 +51,14 @@ const agent = await ReactiveAgents.create()
   .withTools({ builtins: true })
   .withContextProfile({ tier: "local" })
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Individual threshold overrides go through `.withContextProfile()` on the builder
+— this part is builder-only (no declarative config key):
+
+```typescript
 // Override specific thresholds
 const agent2 = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -154,7 +181,7 @@ import { categorizeToolName, deriveResultKind } from "@reactive-agents/reasoning
 
 ## Real Sub-Agent Delegation
 
-`.withAgentTool()` now creates real sub-agents with clean context windows:
+`.withAgentTool()` now creates real sub-agents with clean context windows. Registering sub-agents is builder-only — the tool takes live agent configs, which have no declarative `AgentConfig` key:
 
 ```typescript
 const coordinator = await ReactiveAgents.create()
@@ -180,7 +207,7 @@ Sub-agents are depth-limited to 3 levels (`MAX_RECURSION_DEPTH`) to prevent infi
 
 ### Dynamic Sub-Agent Spawning
 
-For ad-hoc delegation where you don't know ahead of time what sub-tasks the agent will need to delegate, use `.withDynamicSubAgents()`. This registers the built-in `spawn-agent` tool, which the model can invoke freely at runtime:
+For ad-hoc delegation where you don't know ahead of time what sub-tasks the agent will need to delegate, use `.withDynamicSubAgents()`. This registers the built-in `spawn-agent` tool, which the model can invoke freely at runtime. Like `.withAgentTool()`, this is builder-only (no declarative config key):
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -223,7 +250,7 @@ Verified with cogito:14b (Ollama) across 9 scenarios:
 | Pure reasoning (S8) | 1.0 | 1,017 | 2.5s |
 | **Overall (9 scenarios)** | **6.4** | **2,093** | **4.4s** |
 
-All well within targets: <= 8 steps, <= 5,000 tokens, <= 15s.
+All well within targets: `<= 8` steps, `<= 5,000` tokens, `<= 15s`.
 
 ## What's Next
 

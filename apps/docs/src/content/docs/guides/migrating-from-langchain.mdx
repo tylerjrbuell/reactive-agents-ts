@@ -5,7 +5,16 @@ sidebar:
   order: 20
 ---
 
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
 This guide maps LangChain.js concepts to their Reactive Agents equivalents and shows side-by-side code examples for common patterns.
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` (declarative) and the fluent `ReactiveAgents.create().withX()`
+(builder) are the same API — same names, same nesting. Each Reactive Agents example
+below shows both forms where the configuration is pure data; flip the tab to your
+preference. Examples that pass functions (tool handlers, hooks) are builder-only.
+</Aside>
 
 ## Concept Mapping
 
@@ -25,7 +34,7 @@ This guide maps LangChain.js concepts to their Reactive Agents equivalents and s
 
 **LangChain.js**
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
 import { AgentExecutor, createOpenAIFunctionsAgent } from "langchain/agents";
@@ -42,15 +51,36 @@ console.log(result.output);
 
 **Reactive Agents**
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "weather-agent",
+  provider: "openai",
+  tools: { builtins: true },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
 const agent = await ReactiveAgents.create()
+  .withName("weather-agent")
   .withProvider("openai")
   .withTools({ builtins: true })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Once built, run it identically either way:
+
+```typescript
 const result = await agent.run("What is the weather in NYC?");
 console.log(result.output);
 ```
@@ -79,11 +109,13 @@ const weatherTool = new DynamicStructuredTool({
 
 **Reactive Agents**
 
-<!-- docs-skip-typecheck -->
+A tool handler is a function, so custom-tool registration is builder-only (the declarative `tools` key covers built-ins and tool policy, not code handlers):
+
 ```typescript
 import type { ToolDefinition } from "@reactive-agents/tools";
+import { Effect } from "effect";
 
-const weatherTool: { definition: ToolDefinition; handler: (params: Record<string, unknown>) => Promise<string> } = {
+const weatherTool: { definition: ToolDefinition; handler: (params: Record<string, unknown>) => Effect.Effect<string> } = {
   definition: {
     name: "get_weather",
     description: "Get current weather for a location",
@@ -100,9 +132,9 @@ const weatherTool: { definition: ToolDefinition; handler: (params: Record<string
     requiresApproval: false,
     source: "function",
   },
-  handler: async (params) => {
+  handler: (params) => {
     const { location } = params as { location: string };
-    return `Weather in ${location}: sunny, 72F`;
+    return Effect.succeed(`Weather in ${location}: sunny, 72F`);
   },
 };
 
@@ -122,7 +154,7 @@ The 12 phases in order: `bootstrap`, `guardrail`, `cost-route`, `strategy-select
 
 **LangChain.js**
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { AgentExecutor } from "langchain/agents";
 
@@ -178,7 +210,7 @@ Hooks receive a typed `ExecutionContext` and must return `Effect.succeed(ctx)` (
 
 **LangChain.js**
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { BufferMemory } from "langchain/memory";
 import { ConversationChain } from "langchain/chains";
@@ -192,12 +224,34 @@ await chain.call({ input: "What is my name?" });
 
 **Reactive Agents**
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
 ```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "memory-agent",
+  provider: "openai",
+  memory: { tier: "standard" },
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
+  .withName("memory-agent")
   .withProvider("openai")
   .withMemory({ tier: "standard" })
   .build();
+```
+  </TabItem>
+</Tabs>
 
+Conversation history persists across runs either way:
+
+```typescript
 const result1 = await agent.run("Hi, my name is Alice");
 const result2 = await agent.run("What is my name?");
 ```
@@ -209,7 +263,7 @@ Reactive Agents provides a 4-layer memory architecture with two configurable tie
 | `"standard"` | Working + Episodic + FTS5 keyword search               | Conversational agents, default for most apps      |
 | `"enhanced"` | All 4 layers (+ vector embeddings, semantic recall)    | Research agents, long-running tasks               |
 
-The `semantic` layer supports vector similarity search via SQLite + embeddings (requires `EMBEDDING_PROVIDER` env var). The `procedural` layer stores learned tool-use patterns across runs. Default is `"standard"` when `.withMemory()` is called with no args.
+The `semantic` layer supports vector similarity search via SQLite + embeddings (requires `EMBEDDING_PROVIDER` env var). The `procedural` layer stores learned tool-use patterns across runs. Default is `"standard"` when `.withMemory()` (builder) or `memory: {}` (declarative) is enabled with no other options.
 
 ---
 

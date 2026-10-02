@@ -7,6 +7,8 @@ sidebar:
   order: 9
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 The tools layer lets agents call external functions, APIs, and MCP servers. Tools integrate directly with the reasoning loop — when an agent thinks it needs information or wants to take an action, it calls a tool and uses the real result.
 
 ## Built-in Tools vs Custom Tools
@@ -15,6 +17,20 @@ The tools layer lets agents call external functions, APIs, and MCP servers. Tool
 
 ### Using Built-in Tools
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "my-agent",
+  provider: "anthropic",
+  tools: { builtins: true },  // opt in to all built-in tools
+  reasoning: {},              // Tools work with or without reasoning
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
@@ -23,13 +39,17 @@ const agent = await ReactiveAgents.create()
   .withTools({ builtins: true })  // opt in to all built-in tools
   .withReasoning()                // Tools work with or without reasoning
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("What is the population of Tokyo times 3?");
 ```
 
 ### Registering Custom Tools
 
-The canonical way to author a tool is `defineTool` — a schema plus a plain `async` handler whose `args` are typed from the schema. No Effect knowledge and no `Record<string, unknown>` casts required:
+The canonical way to author a tool is `defineTool` — a schema plus a plain `async` handler whose `args` are typed from the schema. No Effect knowledge and no `Record<string, unknown>` casts required (handlers are functions, not serializable data, so custom-tool registration is builder-only — there is no declarative config equivalent):
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -55,7 +75,7 @@ const agent = await ReactiveAgents.create()
 
 The `input` field accepts an Effect `Schema.Struct` (canonical — full parameter metadata is extracted from the AST) or **any Standard Schema** — Zod, Valibot, ArkType, or `Schema.standardSchemaV1(...)`:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { z } from "zod";
 
@@ -75,7 +95,7 @@ Raw arguments are validated against the schema at runtime before the handler run
 
 For Effect-native authors, the handler may return an `Effect` instead of a `Promise` — both are normalised at runtime:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 import { Effect, Schema } from "effect";
 
@@ -173,13 +193,29 @@ Fetches current cryptocurrency prices from [CoinGecko's free public API](https:/
 
 Prices are cached for 60 seconds — rapid repeated calls within a session return immediately without hitting the network. Responses include a `notFound: true` flag for any unrecognized symbol rather than failing the whole call.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "prices-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["crypto-price"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ allowedTools: ["crypto-price"] })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("What are the current prices of BTC, ETH, and SOL in USD?");
 ```
 
@@ -199,13 +235,29 @@ Output longer than 32 KB is truncated and the model is told how many bytes were 
 
 The tool uses `execFile` (no shell expansion), so shell operators like `|` and `>` are not available. For pipelines, use `code-execute` or `shell-execute`.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "repo-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["git-cli"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ allowedTools: ["git-cli"] })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("Summarize the last 10 commits in this repo.");
 ```
 
@@ -221,13 +273,29 @@ Runs any [GitHub CLI](https://cli.github.com/) (`gh`) command. Requires `gh` to 
 
 Adding `--json <fields>` to the command returns machine-readable JSON, which the model can process directly. Output longer than 32 KB is truncated.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "github-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["gh-cli"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ allowedTools: ["gh-cli"] })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("List open PRs and summarize what each one changes.");
 ```
 
@@ -243,13 +311,29 @@ Runs Google Workspace CLI (`gws`) commands, providing access to Gmail, Google Ca
 
 If `gws` is not installed, the tool returns a clear error immediately — the model is instructed not to retry and to report the missing binary instead.
 
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "workspace-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["gws-cli"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ allowedTools: ["gws-cli"] })
   .withReasoning()
   .build();
+```
+  </TabItem>
+</Tabs>
 
+```typescript
 const result = await agent.run("What meetings do I have today?");
 ```
 
@@ -458,7 +542,24 @@ Four transports are supported, covering every MCP server deployment pattern:
 
 Launches a subprocess and communicates via JSON-RPC over stdin/stdout. The subprocess inherits the parent process environment by default.
 
-<!-- docs-skip-typecheck -->
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "fs-agent",
+  provider: "anthropic",
+  mcpServers: [{
+    name: "filesystem",
+    transport: "stdio",
+    command: "bunx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+  }],
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+{/* docs-skip-typecheck */}
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -471,12 +572,14 @@ await using agent = await ReactiveAgents.create()
   .withReasoning()
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 #### Per-server environment variables
 
 Use `env` to inject secrets without relying on the global environment. These are **merged on top** of the parent process environment — only specify what differs:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withMCP({
   name: "github",
@@ -493,7 +596,7 @@ Use `env` to inject secrets without relying on the global environment. These are
 
 Set `cwd` to control where the subprocess starts. Useful when the MCP server reads relative paths:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withMCP({
   name: "project-tools",
@@ -508,7 +611,7 @@ Set `cwd` to control where the subprocess starts. Useful when the MCP server rea
 
 `command` accepts any executable — `docker` works directly. Docker networking flags go in `args`:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withMCP({
   name: "my-server",
@@ -530,7 +633,7 @@ Set `cwd` to control where the subprocess starts. Useful when the MCP server rea
 
 #### Registry-resolved servers (Docker Hub, with more registries planned)
 
-Instead of hand-writing the `docker run` config above, pass a catalog name as a plain string. `.withMCP()` resolves it through a pluggable `MCPRegistry` — [Docker Hub's `mcp/*` catalog](https://hub.docker.com/mcp) (200+ verified server images) is the first registry, chosen via the `registry` option (defaults to `"docker-hub"`), so additional registries (an npm/npx-based catalog, a private org registry) can plug into the same `.withMCP()` call later without an API change. Image, transport, and args are resolved for you:
+Instead of hand-writing the `docker run` config above, pass a catalog name as a plain string. `.withMCP()` resolves it through a pluggable `MCPRegistry` — [Docker Hub's `mcp/*` catalog](https://hub.docker.com/mcp) (200+ verified server images) is the first registry, chosen via the `registry` option (defaults to `"docker-hub"`), so additional registries (an npm/npx-based catalog, a private org registry) can plug into the same `.withMCP()` call later without an API change. Image, transport, and args are resolved for you (the catalog-name string form is builder-only — declarative `mcpServers` accepts config objects, not catalog names):
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -572,7 +675,7 @@ The current MVP limitation: Docker Hub's repository API doesn't expose a real im
 
 The standard transport for modern remote and cloud-hosted MCP servers (MCP spec 2025-03-26). Uses a single POST endpoint — the server responds with either a plain JSON object or an SSE stream depending on the operation.
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withMCP({
   name: "stripe",
@@ -588,7 +691,7 @@ Session management is handled automatically: the session ID returned in the `Mcp
 
 Pass `headers` to send authentication credentials on every request. Use for Bearer tokens (OAuth, JWT, PAT), API keys, or any per-server auth:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Bearer token (OAuth, PAT, JWT)
 headers: { Authorization: "Bearer ghp_..." }
@@ -610,7 +713,8 @@ The `headers` field accepts a pre-obtained Bearer token you manage yourself. If 
 ### OAuth 2.1 (`auth`)
 
 For remote servers (`streamable-http`/`sse`) protected by OAuth 2.1, pass an `auth` config and RA drives
-the whole flow itself — discovery, token exchange, automatic refresh, and secure on-disk storage. This
+the whole flow itself — discovery, token exchange, automatic refresh, and secure on-disk storage. The `auth`
+config has no declarative `mcpServers` equivalent yet, so these examples are builder-only. This
 is not available for `stdio` servers: a `stdio` config with `auth` set is a **startup error** — stdio
 servers get credentials from the environment via `env` (see [Per-server environment
 variables](#per-server-environment-variables) above), not OAuth.
@@ -728,7 +832,39 @@ rax mcp status
 
 Pass an array to connect multiple servers at build time:
 
-<!-- docs-skip-typecheck -->
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "multi-mcp-agent",
+  provider: "anthropic",
+  mcpServers: [
+    {
+      name: "filesystem",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+    },
+    {
+      name: "github",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? "" },
+    },
+    {
+      name: "stripe",
+      transport: "streamable-http",
+      endpoint: "https://mcp.stripe.com",
+      headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    },
+  ],
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+{/* docs-skip-typecheck */}
 ```typescript
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
@@ -756,12 +892,14 @@ await using agent = await ReactiveAgents.create()
   .withReasoning()
   .build();
 ```
+  </TabItem>
+</Tabs>
 
 ### Cleanup
 
 MCP stdio servers run as subprocesses — the process will hang if they aren't shut down. Always dispose the agent when done. See [Resource Management](../../reference/builder-api/#resource-management) for full patterns.
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Option A: await using (recommended) — auto-disposes on scope exit
 await using agent = await ReactiveAgents.create()
@@ -825,7 +963,7 @@ See the [A2A Protocol](/features/a2a-protocol/) docs for full details.
 
 The framework automatically converts between the tools package format and the LLM provider's native format using `toFunctionCallingFormat()`:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // Internal: tools package format
 { name: "search", description: "...", parameters: [...] }
@@ -885,7 +1023,7 @@ The expression is evaluated in-process with `result` bound to the parsed tool ou
 
 Tune compression behavior via `.withTools()`:
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withTools({
   resultCompression: {

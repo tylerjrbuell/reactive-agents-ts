@@ -7,6 +7,15 @@ sidebar:
   order: 24
 ---
 
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Aside type="note" title="Same API, two syntaxes">
+`createAgent(config)` (declarative) and the fluent `ReactiveAgents.create().withX()`
+(builder) are the same API — same names, same nesting. Where this page constructs an
+agent, both forms are shown; flip the tab to your preference. The fluent equivalents
+are covered in the [Builder API reference](/reference/builder-api/).
+</Aside>
+
 A real 2026 question: vendor Agent SDKs (OpenAI Agents SDK, the Claude Agent SDK) got good, model APIs converged, and "just call the SDK" is now legitimate advice. So before reaching for *any* framework — including this one — it's worth being honest about when you don't need one.
 
 This page is that honest take.
@@ -58,6 +67,35 @@ The harness pays for itself when you need things the SDK leaves to you:
 In short: use the SDK for a loop on one vendor; use Reactive Agents when you need a portable, typed, governed agent across vendors and local hardware.
 
 ## Side-by-side: a minimal agent
+
+The front door first — a named agent on a provider is pure data, in either syntax:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "weather-agent",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("weather-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+Then the full loop with a custom tool. A tool handler is a function, so custom-tool registration is builder-only (the declarative form covers built-in and policy options via the `tools` key):
 
 **Reactive Agents**
 
@@ -116,7 +154,7 @@ const result = await run(weatherAgent, "What is the weather in San Francisco?");
 console.log(result.finalOutput);
 ```
 
-Both are one model, one tool, one loop. The vendor SDK example is complete for that shape and tied to that provider. The Reactive Agents example runs unmodified against 8 providers (swap `.withProvider(...)`), and adding memory, a different reasoning strategy, budgets, or durability is another builder method rather than new plumbing or a provider migration.
+Both are one model, one tool, one loop. The vendor SDK example is complete for that shape and tied to that provider. The Reactive Agents example runs unmodified against 8 providers (change `provider` in the declarative config, or `.withProvider(...)` on the builder), and adding memory, a different reasoning strategy, budgets, or durability is another config key or builder method rather than new plumbing or a provider migration.
 
 ## You can use both
 

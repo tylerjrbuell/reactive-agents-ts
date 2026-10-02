@@ -23,6 +23,9 @@ across process and machine boundaries.
 
 `.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`
 (the default once `.withDurableRuns()` is set) makes a gated call pause durably.
+Approval policies have no declarative `AgentConfig` key (and `onApprove` /
+`requireFor` handlers are functions, not JSON), so the examples on this page are
+builder-only.
 
 <!-- docs-skip-typecheck -->
 ```ts

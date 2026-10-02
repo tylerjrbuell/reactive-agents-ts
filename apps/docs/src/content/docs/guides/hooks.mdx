@@ -9,6 +9,8 @@ sidebar:
 
 Every agent execution flows through a deterministic 12-phase lifecycle. Hooks let you intercept any phase to add logging, metrics, validation, or custom behavior.
 
+Hook handlers are functions, and functions aren't serializable — so hooks have no declarative `createAgent(config)` equivalent and are registered on the builder only.
+
 :::tip[No Effect import required]
 Hook handlers can be plain sync or `async` functions — no `Effect` import needed for most use cases. The Effect form is still accepted if you are already using Effect-TS elsewhere. See the [Effect-TS primer](/concepts/effect-ts/) for the full helper table.
 :::
@@ -66,7 +68,7 @@ Each phase supports three timing points:
 
 ## Hook Handler Signature
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 handler: (ctx: ExecutionContext) =>
   | ExecutionContext | void
@@ -93,7 +95,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Progress Logging
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 // …then chain on your builder:
 .withHook({
@@ -110,7 +112,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Cost Alert
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withHook({
   phase: "complete",
@@ -126,7 +128,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Audit Trail
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withHook({
   phase: "act",
@@ -142,7 +144,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 
 ### Error Handling
 
-<!-- docs-skip-typecheck -->
+{/* docs-skip-typecheck */}
 ```typescript
 .withHook({
   phase: "think",
