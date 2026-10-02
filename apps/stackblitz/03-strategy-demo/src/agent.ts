@@ -1,126 +1,161 @@
 /**
- * Strategy Demo -- side-by-side reasoning comparison
+ * Strategy Demo -- three reasoning strategies, one task, real budgets.
  *
- * Runs the same task with two strategies and compares:
- *   reactive:             ReAct loop (think -> act -> observe)
- *   plan-execute-reflect: Plan all steps first, execute, then reflect
+ *   reactive:              the think -> act -> observe loop
+ *   plan-execute-reflect:  plans every step first, executes, then reflects
+ *   adaptive:              the framework ANALYZES the task and picks for you
  *
- * Try the other available strategies via STRATEGY_B env var:
- *   tree-of-thought | reflexion | adaptive
+ * The adaptive row is the one to watch: you never choose its strategy;
+ * the framework analyzes the task and routes it, and every run reports
+ * its strategy metadata (`strategyUsed`). Each run declares a
+ * .withBudget({ tokenLimit }) cap - enforced by the reactive kernel's
+ * pre-intent guard, and reported per run below - so the comparison
+ * shows what each approach costs, not just what it says.
  *
- * Secrets to add in Stackblitz (Settings icon, left sidebar):
- *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
- *   ANTHROPIC_API_KEY  -> console.anthropic.com
- *   OPENAI_API_KEY     -> platform.openai.com
- *
- *   Or local Ollama via an HTTPS tunnel (WebContainer localhost is NOT
- *   your machine — bare localhost only works on a local clone):
- *   PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
- *   (OLLAMA_ORIGINS=* ollama serve + cloudflared tunnel --url http://localhost:11434)
+ * Setup: add a key in StackBlitz Secrets (GOOGLE_API_KEY recommended -
+ * free tier at ai.google.dev). See .env.example for all options.
  */
 
 import { ReactiveAgents } from "reactive-agents";
+import {
+  createFinisher,
+  hasKeyFor,
+  printSetupGuide,
+  resolveProvider,
+} from "./env-setup";
 
-type PN = "gemini" | "anthropic" | "openai" | "ollama";
-type Strategy = "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive";
+type Strategy =
+  | "reactive"
+  | "plan-execute-reflect"
+  | "tree-of-thought"
+  | "reflexion"
+  | "adaptive";
 
-const provider = (process.env.PROVIDER ?? "gemini") as PN;
+const provider = resolveProvider("gemini");
 
-// Treat empty / unedited placeholder values as "no key" so the user gets
-// the friendly setup message instead of a provider 400.
-const realKey = (v?: string) =>
-  !!v && v.trim().length > 0 && !/^your_|_here$|^<.*>$/i.test(v.trim());
-
-const hasKey =
-  realKey(process.env.GOOGLE_API_KEY) ||
-  realKey(process.env.ANTHROPIC_API_KEY) ||
-  realKey(process.env.OPENAI_API_KEY) ||
-  provider === "ollama";
-
-if (!hasKey) {
-  console.log(`
-================================================
-  No API key found. Add one in Stackblitz Secrets:
-
-  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
-  ANTHROPIC_API_KEY  -> console.anthropic.com
-  OPENAI_API_KEY     -> platform.openai.com
-
-  Local Ollama (Chrome) needs an HTTPS tunnel — WebContainer localhost
-  is NOT your machine. See the playground guide for the full recipe:
-    OLLAMA_ORIGINS=* ollama serve
-    cloudflared tunnel --url http://localhost:11434
-    PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
-================================================
-`);
+if (!hasKeyFor(provider)) {
+  printSetupGuide();
   process.exit(0);
 }
 
-const model =
-  process.env.MODEL ??
-  (provider === "gemini"
-    ? "gemini-2.0-flash"
-    : provider === "ollama"
-      ? "llama3.2"
-      : undefined);
+const model = process.env.MODEL?.trim() || undefined;
 
-const strategyA = (process.env.STRATEGY_A ?? "reactive") as Strategy;
-const strategyB = (process.env.STRATEGY_B ?? "plan-execute-reflect") as Strategy;
+const STRATEGIES: Strategy[] = ["reactive", "plan-execute-reflect", "adaptive"];
+const strategies: Strategy[] = process.env.STRATEGIES?.trim()
+  ? (process.env.STRATEGIES
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0) as Strategy[])
+  : STRATEGIES;
+
+const budgetLimit = Number(process.env.BUDGET_TOKENS ?? 20_000);
 
 const task =
   process.env.TASK ??
-  "Explain in 2-3 sentences why distributed systems are harder to debug than single-process applications.";
+  "A checkout API started timing out right after a deploy. Propose a 3-step " +
+  "debugging plan ordered by which step eliminates the most uncertainty first, " +
+  "and justify the order in one sentence per step.";
 
-console.log(`\nProvider: ${provider}${model ? ` (${model})` : ""}`);
+console.log(
+  `\nProvider: ${provider}${model ? ` (${model})` : " (provider default)"}`
+);
 console.log(`Task: ${task}`);
-console.log(`Comparing: ${strategyA} vs ${strategyB}\n`);
-console.log("Running both strategies in parallel...\n");
+console.log(`Comparing: ${strategies.join(" vs ")}`);
+console.log(`Per-run budget: ${budgetLimit.toLocaleString()} tokens\n`);
+console.log("Running all strategies in parallel...\n");
 
-type RunResult = { strategy: Strategy; output: string; steps: number; tokens: number; durationMs: number };
+interface RunResult {
+  readonly strategy: string;
+  readonly strategyUsed: string;
+  readonly ok: boolean;
+  readonly verdict: string;
+  readonly output: string;
+  readonly steps: number;
+  readonly tokens: number;
+  readonly durationMs: number;
+}
 
 async function runWithStrategy(strategy: Strategy): Promise<RunResult> {
   const start = Date.now();
   console.log(`-- Starting: ${strategy} --`);
 
-  const agent = await ReactiveAgents.create()
+  let builder = ReactiveAgents.create()
     .withName(`strategy-${strategy}`)
-    .withProvider(provider)
-    .withModel(model ?? "")
+    .withProvider(provider);
+
+  if (model) builder = builder.withModel(model);
+
+  const agent = await builder
+    .withObservability({ verbosity: "minimal" }) // three parallel runs - keep the shared terminal readable
     .withReasoning({ defaultStrategy: strategy })
+    .withBudget({ tokenLimit: budgetLimit }) // declared cap; the reactive kernel's arbitrator halts past it
     .withMaxIterations(6)
     .build();
 
-  const result = await agent.run(task);
+  let ok = false;
+  let strategyUsed: string = strategy;
+  let verdict = "(none)";
+  let output = "";
+  let steps = 0;
+  let tokens = 0;
 
-  console.log(`[done] ${strategy} in ${Date.now() - start}ms (${result.metadata.stepsCount} steps)\n`);
+  try {
+    const result = await agent.run(task);
+    ok = result.success && result.output.trim().length > 0;
+    output = result.output;
+    steps = result.metadata.stepsCount;
+    tokens = result.metadata.tokensUsed;
+    // What the framework ACTUALLY ran - for adaptive this is the router's
+    // pick, which may differ from any fixed strategy.
+    strategyUsed = result.metadata.strategyUsed ?? strategy;
+    verdict = result.receipt?.verdict ?? "(none)";
+  } catch (error) {
+    output = error instanceof Error ? error.message : String(error);
+  } finally {
+    await agent.dispose();
+  }
 
-  return {
-    strategy,
-    output: result.output,
-    steps: result.metadata.stepsCount,
-    tokens: result.metadata.tokensUsed,
-    durationMs: Date.now() - start,
-  };
+  console.log(
+    `[done] ${strategy} in ${Date.now() - start}ms ` +
+      `(${steps} steps, used: ${strategyUsed})\n`
+  );
+
+  return { strategy, strategyUsed, ok, verdict, output, steps, tokens, durationMs: Date.now() - start };
 }
 
-const [resultA, resultB] = await Promise.all([
-  runWithStrategy(strategyA),
-  runWithStrategy(strategyB),
-]);
+const results = await Promise.all(strategies.map(runWithStrategy));
 
 console.log("===============================================");
 console.log("                  COMPARISON                  ");
 console.log("===============================================");
 
-for (const r of [resultA, resultB]) {
-  console.log(`\n[${r.strategy}]`);
-  console.log(`  Steps:    ${r.steps}`);
-  console.log(`  Tokens:   ${r.tokens}`);
-  console.log(`  Duration: ${r.durationMs}ms`);
-  console.log(`  Output:   ${r.output.slice(0, 120)}${r.output.length > 120 ? "..." : ""}`);
+for (const r of results) {
+  console.log(`\n[${r.strategy}] -> reported strategy: ${r.strategyUsed}`);
+  console.log(`  ok:       ${r.ok ? "yes" : "no"}`);
+  console.log(`  verdict:  ${r.verdict}`);
+  console.log(`  steps:    ${r.steps}`);
+  console.log(`  tokens:   ${r.tokens.toLocaleString()} / ${budgetLimit.toLocaleString()} budget`);
+  console.log(`  duration: ${r.durationMs}ms`);
+  console.log(
+    `  output:   ${r.output.slice(0, 120)}${r.output.length > 120 ? "..." : ""}`
+  );
 }
 
+const finisher = createFinisher();
+for (const r of results) {
+  finisher.add({
+    label: `${r.strategy} run`,
+    ok: r.ok,
+    detail: r.ok ? `${r.tokens} tokens` : r.output.slice(0, 100),
+  });
+}
+finisher.report();
+
 console.log("\n-----------------------------------------------");
-const winner = resultA.tokens <= resultB.tokens ? resultA : resultB;
-console.log(`More token-efficient: ${winner.strategy} (${winner.tokens} tokens)`);
-console.log(`\nTry changing STRATEGY_B to: tree-of-thought | reflexion | adaptive`);
+const cheapest = [...results].sort((a, b) => a.tokens - b.tokens)[0];
+console.log(
+  `Most token-efficient: ${cheapest.strategy} (${cheapest.tokens.toLocaleString()} tokens)`
+);
+console.log(
+  "\nTry STRATEGIES=reactive,tree-of-thought or BUDGET_TOKENS=10000 in Secrets."
+);

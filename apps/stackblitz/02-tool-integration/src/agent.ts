@@ -1,99 +1,116 @@
 /**
- * Tool Integration -- built-in tools demo
+ * Tool Integration -- a live-data pipeline assembled from tool calls.
  *
- * The agent uses built-in tools to:
- *   1. Write reasoning notes to the scratchpad
- *   2. Execute a small JS snippet to compute a result
- *   3. Synthesize a final answer
+ * The agent chains two built-in tools with zero extra API keys:
+ *   1. crypto-price  - live BTC/ETH quotes from CoinGecko's public API
+ *   2. code-execute  - computes the portfolio math in a sandbox
+ * plus the `recall` meta-tool to save a working note that survives
+ * context compaction.
  *
- * No extra API keys required beyond the LLM provider.
- * Built-in tools run inside the WebContainer sandbox.
+ * Built-ins are opt-in: .withTools() alone registers them, but only
+ * `builtins: [...]` puts the named tools in the model's schema. This
+ * demo opts into exactly the two it needs, which is the recommended
+ * production pattern (small surfaces keep weak models focused).
  *
- * Secrets to add in Stackblitz (Settings icon, left sidebar):
- *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
- *   ANTHROPIC_API_KEY  -> console.anthropic.com
- *   OPENAI_API_KEY     -> platform.openai.com
- *
- *   Or local Ollama via an HTTPS tunnel (WebContainer localhost is NOT
- *   your machine — bare localhost only works on a local clone):
- *   PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
- *   (OLLAMA_ORIGINS=* ollama serve + cloudflared tunnel --url http://localhost:11434)
+ * The stream runs at "full" density so every ToolCallStarted /
+ * ToolCallCompleted event is visible: you watch the harness dispatch
+ * work, not just the final answer.
  */
 
 import { ReactiveAgents } from "reactive-agents";
+import {
+  createFinisher,
+  hasKeyFor,
+  printSetupGuide,
+  resolveProvider,
+} from "./env-setup";
 
-type PN = "gemini" | "anthropic" | "openai" | "ollama";
+const provider = resolveProvider("gemini");
 
-const provider = (process.env.PROVIDER ?? "gemini") as PN;
-
-// Treat empty / unedited placeholder values as "no key" so the user gets
-// the friendly setup message instead of a provider 400.
-const realKey = (v?: string) =>
-  !!v && v.trim().length > 0 && !/^your_|_here$|^<.*>$/i.test(v.trim());
-
-const hasKey =
-  realKey(process.env.GOOGLE_API_KEY) ||
-  realKey(process.env.ANTHROPIC_API_KEY) ||
-  realKey(process.env.OPENAI_API_KEY) ||
-  provider === "ollama";
-
-if (!hasKey) {
-  console.log(`
-================================================
-  No API key found. Add one in Stackblitz Secrets:
-
-  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
-  ANTHROPIC_API_KEY  -> console.anthropic.com
-  OPENAI_API_KEY     -> platform.openai.com
-
-  Local Ollama (Chrome) needs an HTTPS tunnel — WebContainer localhost
-  is NOT your machine. See the playground guide for the full recipe:
-    OLLAMA_ORIGINS=* ollama serve
-    cloudflared tunnel --url http://localhost:11434
-    PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
-================================================
-`);
+if (!hasKeyFor(provider)) {
+  printSetupGuide();
   process.exit(0);
 }
 
-const ollamaEndpoint =
-  process.env.OLLAMA_BRIDGE_EXTENSION
-    ? "reactive-agents://ollama-bridge"
-    : (process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434");
+const model = process.env.MODEL?.trim() || undefined;
 
-const model =
-  process.env.MODEL ??
-  (provider === "gemini"
-    ? "gemini-2.0-flash"
-    : provider === "ollama"
-      ? "llama3.2"
-      : undefined);
-
-const agent = await ReactiveAgents.create()
+let builder = ReactiveAgents.create()
   .withName("tool-integration-demo")
-  .withProvider(provider)
-  .withModel(model ?? "")
-  .withTools()                                        // enables: file-read, file-write, code-execute, scratchpad-write, scratchpad-read
-  .withReasoning({ defaultStrategy: "reactive" })     // ReAct loop: think -> use tool -> observe -> repeat
+  .withProvider(provider);
+
+if (model) builder = builder.withModel(model);
+
+const agent = await builder
+  .withObservability({ verbosity: "minimal" }) // quiet framework logs - the streamed tool events below are the show
+  .withTools({ builtins: ["crypto-price", "code-execute"] }) // opt in to exactly these two
+  .withReasoning({ defaultStrategy: "reactive" })            // think -> call tool -> observe -> repeat
   .withMaxIterations(8)
   .build();
 
 const task =
   process.env.TASK ??
-  "Calculate the sum of the first 10 Fibonacci numbers using the code-execute tool, then write a brief explanation to the scratchpad.";
+  "Get the current crypto price for BTC and ETH (batch both coins in one crypto-price call), " +
+  "then use code-execute to compute the USD value of a portfolio holding 2 BTC and 5 ETH. " +
+  "Save the result as a one-line note with the recall tool under the key `portfolio`, " +
+  "and give the final answer as that single sentence.";
 
-console.log(`\nProvider: ${provider}${model ? ` (${model})` : ""}`);
+console.log(
+  `\nProvider: ${provider}${model ? ` (${model})` : " (provider default)"}`
+);
 console.log(`Task: ${task}\n`);
-console.log("Running agent with built-in tools...\n");
-console.log("(Watch the terminal -- you'll see each tool call as it happens)\n");
+console.log("Watch the harness dispatch each tool call live:\n");
 
-const result = await agent.run(task);
+const finisher = createFinisher();
+let output = "";
+let failed = "";
 
-console.log("--- Final Answer ---");
-console.log(result.output);
-console.log("\n--- Stats ---");
-console.log(`Steps:    ${result.metadata.stepsCount}`);
-console.log(`Tokens:   ${result.metadata.tokensUsed}`);
-console.log(`Cost:     $${result.metadata.cost.toFixed(6)}`);
-console.log(`Duration: ${result.metadata.duration}ms`);
+for await (const event of agent.runStream(task, { density: "full" })) {
+  switch (event._tag) {
+    case "IterationProgress":
+      console.log(`\n>> iteration ${event.iteration}/${event.maxIterations}`);
+      break;
+    case "ToolCallStarted":
+      console.log(`   -> calling ${event.toolName}...`);
+      break;
+    case "ToolCallCompleted":
+      console.log(
+        `   <- ${event.toolName} ${event.success ? "succeeded" : "FAILED"}` +
+          ` in ${event.durationMs}ms`
+      );
+      break;
+    case "StreamCompleted": {
+      output = event.output;
+      if (event.toolSummary && event.toolSummary.length > 0) {
+        console.log("\n--- Tool summary (per tool, from the event bus) ---");
+        for (const t of event.toolSummary) {
+          console.log(`   ${t.name}: ${t.calls} call(s), ${Math.round(t.avgMs)}ms avg`);
+        }
+      }
+      console.log("\n--- Stats ---");
+      console.log(`Steps:    ${event.metadata.stepsCount}`);
+      console.log(`Tokens:   ${event.metadata.tokensUsed}`);
+      console.log(`Cost:     $${event.metadata.cost.toFixed(6)}`);
+      console.log(`Duration: ${event.metadata.duration}ms`);
+      break;
+    }
+    case "StreamError":
+      failed = event.cause;
+      break;
+  }
+}
+
+if (output.trim().length > 0) {
+  console.log("\n--- Final Answer ---");
+  console.log(output);
+}
+
+finisher.add({
+  label: `tool pipeline (${provider})`,
+  ok: output.trim().length > 0,
+  detail: failed || (output.trim().length > 0 ? undefined : "no final answer"),
+});
+finisher.report();
+
+await agent.dispose();
+
 console.log(`\nTry changing TASK in Secrets to give the agent a different challenge!`);

@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "engines": { "node": ">=22.5.0" },
-  "description": "Reactive Agents hello-agent demo — runs in Stackblitz, no install needed",
+  "description": "Reactive Agents hello-agent demo -- streamed reasoning + evidence receipt, runs in Stackblitz, no install needed",
   "scripts": {
     "prestart": "node -e \"const f=require('fs');f.existsSync('.env')||f.copyFileSync('.env.example','.env')\"",
     "start": "npx tsx --env-file-if-exists=.env src/agent.ts"

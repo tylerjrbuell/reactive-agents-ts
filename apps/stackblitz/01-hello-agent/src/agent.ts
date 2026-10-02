@@ -1,91 +1,102 @@
 /**
- * Hello Agent -- simplest Reactive Agents demo
+ * Hello Agent -- watch a Reactive Agent think, live.
  *
- * Runs a single Q&A query and prints the result.
+ * One question in, one answer out - but nothing is hidden: tokens
+ * stream as they're generated, every reasoning iteration announces
+ * itself, and the run finishes with an evidence receipt grading HOW
+ * the answer was produced.
  *
- * Secrets to add in Stackblitz (Settings icon, left sidebar):
- *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
- *   ANTHROPIC_API_KEY  -> console.anthropic.com
- *   OPENAI_API_KEY     -> platform.openai.com
- *
- *   Or local Ollama via an HTTPS tunnel (WebContainer localhost is NOT
- *   your machine — bare localhost only works on a local clone):
- *   PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
- *   (OLLAMA_ORIGINS=* ollama serve + cloudflared tunnel --url http://localhost:11434)
+ * Setup: add a key in StackBlitz Secrets (GOOGLE_API_KEY recommended -
+ * free tier at ai.google.dev). The demo auto-detects which provider you
+ * configured; see .env.example for all options.
  */
 
 import { ReactiveAgents } from "reactive-agents";
+import {
+  createFinisher,
+  hasKeyFor,
+  printSetupGuide,
+  resolveProvider,
+} from "./env-setup";
 
-type PN = "gemini" | "anthropic" | "openai" | "ollama";
+const provider = resolveProvider("gemini");
 
-const provider = (process.env.PROVIDER ?? "gemini") as PN;
-
-// Treat empty / unedited placeholder values as "no key" so the user gets
-// the friendly setup message instead of a provider 400.
-const realKey = (v?: string) =>
-  !!v && v.trim().length > 0 && !/^your_|_here$|^<.*>$/i.test(v.trim());
-
-const hasKey =
-  realKey(process.env.GOOGLE_API_KEY) ||
-  realKey(process.env.ANTHROPIC_API_KEY) ||
-  realKey(process.env.OPENAI_API_KEY) ||
-  provider === "ollama";
-
-if (!hasKey) {
-  console.log(`
-================================================
-  No API key found. Add one in Stackblitz Secrets:
-
-  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
-  ANTHROPIC_API_KEY  -> console.anthropic.com
-  OPENAI_API_KEY     -> platform.openai.com
-
-  Local Ollama (Chrome) needs an HTTPS tunnel — WebContainer localhost
-  is NOT your machine. See the playground guide for the full recipe:
-    OLLAMA_ORIGINS=* ollama serve
-    cloudflared tunnel --url http://localhost:11434
-    PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
-================================================
-`);
+if (!hasKeyFor(provider)) {
+  printSetupGuide();
   process.exit(0);
 }
 
-// v0.12 hook: Chrome extension can bridge localhost Ollama via postMessage
-const ollamaEndpoint =
-  process.env.OLLAMA_BRIDGE_EXTENSION
-    ? "reactive-agents://ollama-bridge"
-    : (process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434");
+const model = process.env.MODEL?.trim() || undefined;
 
-const model =
-  process.env.MODEL ??
-  (provider === "gemini"
-    ? "gemini-2.0-flash"
-    : provider === "ollama"
-      ? "llama3.2"
-      : undefined);
-
-const agent = await ReactiveAgents.create()
+let builder = ReactiveAgents.create()
   .withName("hello-agent")
-  .withProvider(provider)
-  .withModel(model ?? "")
+  .withProvider(provider);
+
+if (model) builder = builder.withModel(model);
+
+const agent = await builder
+  .withObservability({ verbosity: "minimal" }) // quiet framework logs - the demo's own stream prints carry the story
+  .withReasoning()
   .withMaxIterations(3)
   .build();
 
 const question =
   process.env.QUESTION ??
-  "What are three practical use cases for AI agents in software development?";
+  "You are on-call for a payments API. List three plausible causes of a sudden 500 spike right after a deploy, ranked by how fast you would check each.";
 
-console.log(`\nProvider: ${provider}${model ? ` (${model})` : ""}`);
+const finisher = createFinisher();
+
+console.log(
+  `\nProvider: ${provider}${model ? ` (${model})` : " (provider default)"}`
+);
 console.log(`Question: ${question}\n`);
-console.log("Running...\n");
+console.log("--- streaming (tokens + iterations appear live) ---\n");
 
-const result = await agent.run(question);
+let output = "";
+let completed = false;
+let failure = "";
+let receiptLine = "";
 
-console.log("--- Answer ---");
-console.log(result.output);
-console.log("\n--- Stats ---");
-console.log(`Steps:    ${result.metadata.stepsCount}`);
-console.log(`Tokens:   ${result.metadata.tokensUsed}`);
-console.log(`Cost:     $${result.metadata.cost.toFixed(6)}`);
-console.log(`Duration: ${result.metadata.duration}ms`);
-console.log(`\nDone. Try changing QUESTION in Secrets to ask anything!`);
+for await (const event of agent.runStream(question)) {
+  switch (event._tag) {
+    case "IterationProgress":
+      console.log(
+        `\n[iteration ${event.iteration}/${event.maxIterations}] ${event.status}`
+      );
+      break;
+    case "TextDelta":
+      process.stdout.write(event.text);
+      break;
+    case "StreamCompleted": {
+      console.log();
+      output = event.output;
+      completed = true;
+      const verdict = event.receipt?.verdict ?? "ungraded";
+      const confidence = event.receipt
+        ? ` ${(event.receipt.confidence * 100).toFixed(0)}%`
+        : "";
+      receiptLine = `verdict: ${verdict}${confidence}`;
+      console.log("\n--- Evidence receipt ---");
+      console.log(`  ${receiptLine} (grades the evidence trail, not the answer's truth)`);
+      console.log(`  duration: ${event.metadata.duration}ms`);
+      console.log(`  steps:    ${event.metadata.stepsCount}`);
+      console.log(`  tokens:   ${event.metadata.tokensUsed}`);
+      console.log(`  cost:     $${event.metadata.cost.toFixed(6)}`);
+      break;
+    }
+    case "StreamError":
+      failure = event.cause;
+      break;
+  }
+}
+
+await agent.dispose();
+
+finisher.add({
+  label: `hello run (${provider})`,
+  ok: completed && output.length > 0,
+  detail: failure || undefined,
+});
+finisher.report();
+
+console.log(`\nDone. Edit src/agent.ts or set QUESTION in Secrets to make it yours.`);

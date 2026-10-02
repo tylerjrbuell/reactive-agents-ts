@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "engines": { "node": ">=22.5.0" },
-  "description": "Reactive Agents strategy-demo — reactive vs plan-execute-reflect side-by-side",
+  "description": "Reactive Agents strategy-demo -- reactive vs plan-execute-reflect vs adaptive, with per-run token budgets",
   "scripts": {
     "prestart": "node -e \"const f=require('fs');f.existsSync('.env')||f.copyFileSync('.env.example','.env')\"",
     "start": "npx tsx --env-file-if-exists=.env src/agent.ts"

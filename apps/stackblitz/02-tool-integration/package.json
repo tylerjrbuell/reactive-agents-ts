@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "engines": { "node": ">=22.5.0" },
-  "description": "Reactive Agents tool-integration demo — scratchpad + code-execute built-in tools",
+  "description": "Reactive Agents tool integration demo -- live crypto prices -> sandboxed math -> recall note",
   "scripts": {
     "prestart": "node -e \"const f=require('fs');f.existsSync('.env')||f.copyFileSync('.env.example','.env')\"",
     "start": "npx tsx --env-file-if-exists=.env src/agent.ts"
