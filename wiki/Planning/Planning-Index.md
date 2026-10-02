@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-10-02 | [[Implementation-Plans/2026-10-02-declarative-config-parity-register|Declarative Config-Key Parity Register]] | 🟢 ACTIVE — register of builder methods lacking `createAgent(config)` keys (Class 1 candidates, Class 2 hybrids, Class 3 tri-state gap, Class 4 builder-bound-forever); feed doc-tab updates as keys land | OpenCode |
 | 2026-09-25 | [[Implementation-Plans/2026-09-25-cli-example-builder-casts|CLI/example builder casts (#225)]] | ✅ COMPLETED — #225 closed; 3 supported-chain casts removed, stale `.withA2A()` probe deleted, 5 intentional capability probes remain; merged locally to `dev` (`6bf54034`) | OpenCode |
 | 2026-09-25 | [[Implementation-Plans/2026-09-25-reasoning-silent-failure|Reasoning silent-failure wiring (#223)]] | ✅ COMPLETED — #223 closed; 8 bare `Effect.catchAll(() => Effect.void)` sites in `reactive-observer.ts` wired through `emitErrorSwallowed` + typed regression test; merged locally to `dev` (`ad8427f6`); follow-up #230 filed | OpenCode |
 | 2026-09-28 | [[Implementation-Plans/2026-09-28-providers-stream-accum|Providers streamed tool-call accumulator extraction (#216)]] | ✅ COMPLETED — #216 closed; openai.ts + litellm.ts duplicate accumulator/synthesis collapsed into `src/stream-tool-call-accumulator.ts`; openai parity test added; merged locally to `dev` (`59233139`) | OpenCode |
