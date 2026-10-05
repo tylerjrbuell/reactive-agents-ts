@@ -3,7 +3,7 @@
 Runs the same task through three reasoning strategies -- `reactive`,
 `plan-execute-reflect`, and `adaptive` -- side by side, each capped with
 a token budget, and tabulates steps, tokens, evidence verdict, and the
-strategy metadata the framework reports for each run.
+strategy actually selected (for `adaptive`, the router's pick).
 
 ## Run it
 
@@ -17,11 +17,11 @@ No key? It prints setup instructions and exits cleanly -- nothing breaks.
 ## What you're watching
 
 - **adaptive routing** -- you ask for `adaptive` and never pick a strategy;
-  the framework analyzes the task and routes it, and every run carries its
-  strategy metadata (`strategyUsed`) in the results table
-- **budget guards** -- every run declares `.withBudget({ tokenLimit })`;
-  the reactive kernel's arbitrator checks spend before each intent, and
-  the table reports every run's usage against its cap
+  the framework analyzes the task and routes it, and `strategyUsed` in the
+  results table reports the sub-strategy it actually selected
+- **budget enforcement** -- every run declares `.withBudget({ tokenLimit })`,
+  enforced at RUN level: once cumulative spend crosses the cap the run stops
+  launching new step waves and passes, and ships an honest partial
 - **evidence verdicts** -- each run's receipt grades the answer's evidence
   trail, shown per strategy in the comparison table
 
@@ -34,6 +34,6 @@ No key? It prints setup instructions and exits cleanly -- nothing breaks.
 ## Try next
 
 - Set `STRATEGIES=reactive,tree-of-thought` in `.env` for a different face-off.
-- Lower `BUDGET_TOKENS` and watch the reactive/adaptive runs wind down
-  against the cap (multi-pass strategies report usage against it too).
+- Lower `BUDGET_TOKENS` (try `3500`) and watch a long strategy cross its cap
+  mid-run, halt further work, and ship an honest partial instead.
 - Set `TASK=...` to compare strategies on your own prompt.

@@ -6,11 +6,13 @@
  *   adaptive:              the framework ANALYZES the task and picks for you
  *
  * The adaptive row is the one to watch: you never choose its strategy;
- * the framework analyzes the task and routes it, and every run reports
- * its strategy metadata (`strategyUsed`). Each run declares a
- * .withBudget({ tokenLimit }) cap - enforced by the reactive kernel's
- * pre-intent guard, and reported per run below - so the comparison
- * shows what each approach costs, not just what it says.
+ * the framework analyzes the task and routes it, and
+ * result.metadata.strategyUsed reports the sub-strategy it actually ran.
+ * Each run declares a .withBudget({ tokenLimit }) cap enforced at RUN level
+ * (the strategy consults cumulative spend before launching any new step
+ * wave or pass, and the kernel's pre-intent guard polices each sub-kernel
+ * with the REMAINING budget). A run that crosses its limit stops launching
+ * work and ships an honest partial instead of silently overspending.
  *
  * Setup: add a key in StackBlitz Secrets (GOOGLE_API_KEY recommended -
  * free tier at ai.google.dev). See .env.example for all options.
@@ -88,7 +90,7 @@ async function runWithStrategy(strategy: Strategy): Promise<RunResult> {
   const agent = await builder
     .withObservability({ verbosity: "minimal" }) // three parallel runs - keep the shared terminal readable
     .withReasoning({ defaultStrategy: strategy })
-    .withBudget({ tokenLimit: budgetLimit }) // declared cap; the reactive kernel's arbitrator halts past it
+    .withBudget({ tokenLimit: budgetLimit }) // run-level cap: past it, no new waves or passes launch
     .withMaxIterations(6)
     .build();
 
@@ -130,7 +132,7 @@ console.log("                  COMPARISON                  ");
 console.log("===============================================");
 
 for (const r of results) {
-  console.log(`\n[${r.strategy}] -> reported strategy: ${r.strategyUsed}`);
+  console.log(`\n[${r.strategy}] -> selected strategy: ${r.strategyUsed}`);
   console.log(`  ok:       ${r.ok ? "yes" : "no"}`);
   console.log(`  verdict:  ${r.verdict}`);
   console.log(`  steps:    ${r.steps}`);
