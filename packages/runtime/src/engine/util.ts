@@ -378,6 +378,15 @@ export function normalizeReasoningResult(
       llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
       terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
       rawTerminatedBy: typeof md.rawTerminatedBy === "string" ? md.rawTerminatedBy : undefined,
+      // The sub-strategy an adaptive/router run dispatched to (e.g.
+      // "plan-execute-reflect" while `strategy` stays "adaptive"). Declared on
+      // ExecutionReasoningResult["metadata"] above and read by
+      // `reasoning-think.ts` (`result.metadata?.selectedStrategy ??
+      // result.strategy`), but this rebuild never copied it: the same
+      // declare-but-drop drift class DEBT-REGISTER §3 tracks for runLedger/
+      // verdict/scratchpad. Without this, `AgentResult.metadata.strategyUsed`
+      // reports "adaptive" on every adaptive run instead of the sub-strategy.
+      selectedStrategy: typeof md.selectedStrategy === "string" ? md.selectedStrategy : undefined,
       // #40 honesty channel (Task 3, 2026-08-13): preserve the kernel's own
       // harness-authorship flag through normalization. Same failure mode
       // DEBT-REGISTER §3 documents for `runLedger`/`verdict`/`abstention`
