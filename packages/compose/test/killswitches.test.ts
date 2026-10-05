@@ -132,6 +132,53 @@ describe('budgetLimit', () => {
     });
   });
 
+  // Issue #233 — the run-scoped meter (`state.meta.runBudgetMeter`) is the
+  // authoritative run total. `budgetLimit()` must read it (maxed with the
+  // per-kernel `state.tokens`) so it halts at the same boundary as
+  // `.withBudget()` on multi-kernel runs.
+  it('prefers run-meter tokens over kernel-local tokens', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxTokens: 1000 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    const ctx = {
+      phase: 'think' as const,
+      iteration: 1,
+      state: { ...mockState, tokens: 10, meta: { runBudgetMeter: { tokens: 1500, cost: 0 } } },
+    };
+    const result = await hooks[0]!(ctx);
+    expect(result).toMatchObject({
+      abort: 'stop',
+      meta: { budgetType: 'tokens', limit: 1000, used: 1500 },
+    });
+  });
+
+  it('drives the cost abort from the run meter real cost', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxCostUSD: 0.01, costPerToken: 0.000001 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    // Kernel-local tokens (10) would estimate $0.00001 — under budget. The
+    // meter's real $0.02 must win and abort.
+    const ctx = {
+      phase: 'think' as const,
+      iteration: 1,
+      state: { ...mockState, tokens: 10, meta: { runBudgetMeter: { tokens: 10, cost: 0.02 } } },
+    };
+    const result = await hooks[0]!(ctx);
+    expect(result).toMatchObject({
+      abort: 'stop',
+      meta: { budgetType: 'cost', limit: 0.01, used: 0.02 },
+    });
+  });
+
+  it('falls back to kernel-local tokens when no run meter is armed', async () => {
+    const pipeline = buildPipeline(budgetLimit({ maxTokens: 1000 }));
+    const hooks = pipeline.collectPhaseHooks('before', 'think');
+    const ctx = { phase: 'think' as const, iteration: 1, state: { ...mockState, tokens: 1500, meta: {} } };
+    const result = await hooks[0]!(ctx);
+    expect(result).toMatchObject({
+      abort: 'stop',
+      meta: { budgetType: 'tokens', limit: 1000, used: 1500 },
+    });
+  });
+
   it('carries no meta when under budget', async () => {
     const pipeline = buildPipeline(budgetLimit({ maxTokens: 1000 }));
     const hooks = pipeline.collectPhaseHooks('before', 'think');

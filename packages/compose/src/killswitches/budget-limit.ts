@@ -12,7 +12,19 @@ export function budgetLimit(options: BudgetLimitOptions): (harness: Harness) => 
   const { maxTokens, maxCostUSD, costPerToken = 0.000001, onTrigger = 'stop' } = options;
   return (harness: Harness) => {
     harness.before('think', (ctx) => {
-      const tokens = (ctx.state as { tokens?: number }).tokens ?? 0;
+      // Issue #233 — prefer the run-scoped meter (`state.meta.runBudgetMeter`,
+      // `{ tokens, cost }`) over the per-kernel `state.tokens` so `budgetLimit()`
+      // halts at the same run boundary as `.withBudget()`. Read structurally:
+      // compose must not import from `@reactive-agents/reasoning`. Max the two
+      // so a metered run can never report less spend than the kernel recorded
+      // (unmetered paths such as `completeStructured` leave `state.tokens`
+      // ahead). Fall back to `state.tokens` when no meter is armed.
+      const state = ctx.state as {
+        tokens?: number;
+        meta?: { runBudgetMeter?: { tokens: number; cost: number } };
+      };
+      const meter = state.meta?.runBudgetMeter;
+      const tokens = meter ? Math.max(meter.tokens, state.tokens ?? 0) : (state.tokens ?? 0);
       if (maxTokens !== undefined && tokens >= maxTokens) {
         return {
           abort: onTrigger,
@@ -21,7 +33,9 @@ export function budgetLimit(options: BudgetLimitOptions): (harness: Harness) => 
         };
       }
       if (maxCostUSD !== undefined) {
-        const estimatedCost = tokens * costPerToken;
+        // Prefer the meter's real cost when it has one; otherwise estimate from
+        // the (meter-aware) token count at `costPerToken`.
+        const estimatedCost = meter && meter.cost > 0 ? meter.cost : tokens * costPerToken;
         if (estimatedCost >= maxCostUSD) {
           return {
             abort: onTrigger,
