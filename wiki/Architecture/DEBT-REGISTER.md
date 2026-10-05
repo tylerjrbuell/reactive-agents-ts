@@ -740,6 +740,20 @@ This is masked for `anthropic`/`openai`(direct)/`ollama` because those SDKs inde
 
 ---
 
+### D-2026-10-05-P — budget enforcement is per-kernel-invocation, not per-run: strategy-shaped guarantee (reflexion/ToT unguarded; plan-execute interim-gated) — tracked, canonical fix at [#231](https://github.com/tylerjrbuell/reactive-agents-ts/issues/231)
+
+**Class:** architectural debt (mechanism designed at one boundary, later consumers assume the boundary still covers them). Live evidence: stackblitz 03 demo, `plan-execute-reflect` with `.withBudget({ tokenLimit: 20000 })` ran to 25,675 tokens without halting.
+
+The wire is intact end to end (`builder` -> `RuntimeOptions.budgetLimits` -> `ReactiveAgentsConfig` -> `reasoning-think.ts:368` -> `KernelInput.budgetLimits` -> `runner.ts:375` seeds `state.meta.budgetLimits`), but the Arbitrator's pre-intent guard (`decide/arbitrator.ts` `computeBudgetSignal` ~799-833 / `arbitrationContextFromState` ~1851) counts `state.tokens` = spend SINCE THAT KERNEL START (`initialKernelState tokens: 0`). Correct for the one-kernel-per-run strategies (`reactive`, `direct`); false for multi-kernel orchestrations: `plan-execute-reflect` (N step sub-kernels each given the FULL limit + M unguarded direct `gatewayComplete` calls), `reflexion` (generate/critique/improve passes), `tree-of-thought` (branch kernels + direct scoring) — all can overspend unbounded; `blueprint` hand-rolled its own run gate (`blueprint.ts` ~606-616), the per-strategy duplication #231 exists to end.
+
+**Interim (shipped, red-on-cut pinned):** shared pure helper `strategies/budget/remaining-budget.ts` (`withSpentBudget`/`isBudgetExhausted`/`budgetStopReason`, kernel-parity `budget-limit:tokens:<spent>/<limit>`) + strategy-level wave/reflect gate in `plan-execute.ts` — cumulative spend crossed => no new work launches, honest partial (`budgetTerminalPartial`, `harnessAuthoredOutput`, appends to envelope warning). Commits `aac481dc`/`a92091cc`; tests `plan-execute-cumulative-budget.integration.test.ts` + `budget/remaining-budget.test.ts`. Overshoot now bounded to the in-flight wave for plan-execute ONLY.
+
+**Canonical fix (#231, Option A):** run-scoped `BudgetMeter` fed at the shared choke point that already sees every call (`runtime.ts:557` `makeObservableLLM` — direct calls outside the kernel main loop included), carried via `RunEnvelope` so strategies cannot forget it (precedent: v0.14 tool-policy single choke point, `build-kernel-input.ts` canonical builder), `computeBudgetSignal` input becomes run-spend while the Arbitrator stays sole termination authority (NOT an error-throwing LLM wrapper — salvage semantics), kernel-codec round-trip for the new fields, compose `budgetLimit()` killswitch pointed at the same meter, then delete the interim + blueprint bespoke gates. Acceptance = per-strategy halt tests for all 8.
+
+**Gate:** #231 acceptance tests (per-strategy red-on-cut) + extend `scripts/check-cross-cutting.sh` class if a new "field named by hand at N boundaries" shape is banned.
+
+---
+
 ## 6. The gates that keep it fixed (no fix is done without one)
 
 | Gate | Kills | Level |
