@@ -23,6 +23,7 @@ import type {
   NextMovesPlanningConfig,
 } from "../../kernel/capabilities/decide/tool-gating.js";
 import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
+import type { RunBudgetMeter } from "../run-budget.js";
 
 // ── Cross-package state bridge ───────────────────────────────────────────────
 // `KernelStateLike` (core) is a deliberately loose structural type that avoids
@@ -386,6 +387,24 @@ export interface KernelMeta {
     readonly costLimit?: number;
     readonly warningRatio?: number;
   };
+
+  /**
+   * Issue #231 / DEBT D-2026-10-05-P — the run-scoped LLM spend meter.
+   *
+   * A LIVE reference, NOT serialized state: the kernel runner reads the ambient
+   * `CurrentRunBudget` FiberRef at kernel start and stores the meter object here
+   * by reference, so the pure+sync `arbitrationContextFromState` can read the
+   * run's true cumulative spend across ALL kernels and direct LLM calls — not
+   * just `state.tokens`, which `initialKernelState` resets per kernel.
+   *
+   * On crash-resume the deserialized `meta` carries the persisted numbers (the
+   * codec treats this plain object as data); the runner max-seeds the fresh
+   * ambient meter up from it so already-spent budget is never forgotten.
+   *
+   * Absent when no meter is armed (bare kernel unit tests, or a run without a
+   * run-budget meter) — the Arbitrator then falls back to `state.tokens`.
+   */
+  readonly runBudgetMeter?: RunBudgetMeter;
 
   // ── PostCondition spine — derived-once state-grounded success authority ──────
   /**

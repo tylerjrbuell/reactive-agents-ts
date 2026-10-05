@@ -447,6 +447,15 @@ export { createReasoningLayer } from "./runtime.js";
 // ─── Observable LLM (Task 7 — direct-LLM-call observability) ───
 export { makeObservableLLM } from "./kernel/observable-llm.js";
 
+// ─── Run-scoped budget meter (Issue #231 — run-level budget enforcement) ───
+export {
+  CurrentRunBudget,
+  addRunSpend,
+  makeRunBudgetMeter,
+  withRunBudgetMeter,
+} from "./kernel/run-budget.js";
+export type { RunBudgetMeter, RunBudgetSpend } from "./kernel/run-budget.js";
+
 // ─── LLM Gateway (Overhaul Phase 1 — single mediated model-call path) ───
 export {
   gatewayComplete,

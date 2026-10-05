@@ -16,7 +16,7 @@ import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
 import { findUnconsumedStoredKeys } from "../capabilities/verify/unconsumed-evidence.js";
 import { looksSubstantive } from "../capabilities/verify/quality-utils.js";
 import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
-import { Effect, Option, Ref } from "effect";
+import { Effect, FiberRef, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
@@ -67,6 +67,7 @@ import {
 } from "./output-synthesis.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
+import { CurrentRunBudget } from "../run-budget.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 import {
   TERMINAL_ANSWER_REASONS,
@@ -376,6 +377,31 @@ export function runKernel(
       state = transitionState(state, {
         meta: { ...state.meta, budgetLimits: effectiveInput.budgetLimits },
       });
+    }
+    // Issue #231 / DEBT D-2026-10-05-P — seed the run-scoped LLM spend meter.
+    // The meter is created ONCE per agent run and carried on the ambient
+    // `CurrentRunBudget` FiberRef; we store the LIVE reference on state.meta so
+    // the pure+sync Arbitrator (`arbitrationContextFromState`) reads the run's
+    // true cumulative spend across every kernel pass and direct LLM call,
+    // instead of `state.tokens` (reset per kernel by initialKernelState).
+    {
+      const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
+      if (ambientMeter) {
+        // Crash-resume: if the deserialized state carried a persisted meter
+        // ahead of the fresh ambient one, max the ambient meter up from it
+        // before assigning, so budget already spent before the crash is never
+        // forgotten. (The persisted meter is plain data after the codec.)
+        const persisted = state.meta.runBudgetMeter;
+        if (persisted && persisted.tokens > ambientMeter.tokens) {
+          ambientMeter.tokens = persisted.tokens;
+        }
+        if (persisted && persisted.cost > ambientMeter.cost) {
+          ambientMeter.cost = persisted.cost;
+        }
+        state = transitionState(state, {
+          meta: { ...state.meta, runBudgetMeter: ambientMeter },
+        });
+      }
     }
     // HS-128 FOLLOWUP-A — seed the resolved profile.maxTokens onto state.meta
     // once at kernel-start so the verbosity-detector caller in
