@@ -975,3 +975,19 @@ task: "Phase E final whole-branch review fix wave — 7 findings (CI-breaking ne
 result: completed
 outcome: "accepted — scoped re-review verdict ALL findings ADDRESSED, no new Critical/Important breakage, 6 commits"
 ```
+
+```yaml
+date: 2026-10-05
+warden: runtime-warden
+task: "normalizeReasoningResult drops metadata.selectedStrategy (whitelist rebuild missing the declared key) -> adaptive runs report strategyUsed='adaptive' instead of the dispatched sub-strategy; add passthrough + red/green tests"
+result: completed, confidence 0.92
+outcome: "accepted - parent verified: targeted test 3 pass; full reasoning suite 2907/0; runtime tsc exit 0; live stackblitz 03 adaptive row now reports sub-strategy (plan-execute-reflect). Flagged pre-existing #214 cast-ceiling failures in runtime suite, not contributed by this change"
+```
+
+```yaml
+date: 2026-10-05
+warden: kernel-warden
+task: "cumulative run-level budget enforcement for plan-execute-reflect (Arbitrator counts per-kernel-invocation spend; step kernels each got a fresh full tokenLimit and outer LLM calls unguarded -> live 25,675 past a 20,000 cap); shared remaining-budget helper + strategy-level stop + tests"
+result: interrupted, parent-integrated
+outcome: "warden session died mid-mission leaving substantive partial work (helper + tests + plan-execute gate). Parent verified root-cause trace (red via stash: pre-fix the cumulative test fails on [EXEC s3] launching), fixed one merge-order defect found on integration (budgetStopped branch clobbered the sub-kernel envelope's deliverable-naming verificationWarning - now appends), updated plan-execute-honest-partial test to the new strategy-level stop semantics with rationale, ran strategies 85/85 + kernel budget suites 26/26 + reasoning 2907/0 + tsc clean. Live demo: BUDGET_TOKENS=3500 caps the run with honest partial. Follow-on gaps reported: reflexion.ts + tree-of-thought.ts share the multi-kernel budget gap (helper ready); separate pre-existing O(n^3) PATH_TOKEN backtracking in kernel verify/derive-conditions.ts on huge prior-step blobs (documented in the new test's comments)"
+```
