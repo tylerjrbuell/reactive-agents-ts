@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-09-29
+updated: 2026-10-05
 ---
 
 # Hot (Recent Context Cache)
@@ -9,6 +9,28 @@ updated: 2026-09-29
 **Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
+
+## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
+
+Executed `execute-backlog` on `priority:p1` → singleton #231 (canonical run-level
+budget enforcement; siblings #217/#218/#219 are 2–3k-LOC decompositions, #214 was
+re-grounded but is a cross-package audit). Routed through **kernel-warden** (via a
+`general` subagent — this harness doesn't expose `.claude/agents` warden types).
+Shipped the core mechanism: new `kernel/run-budget.ts` (plain mutable
+`RunBudgetMeter` + ambient `CurrentRunBudget` FiberRef), fed by `observable-llm.ts`
+on `complete`/`stream`, armed per execution by `services/reasoning-service.ts` when
+`budgetLimits` are declared, seeded by `loop/runner.ts` onto `state.meta.runBudgetMeter`,
+consumed by `arbitrationContextFromState` as `Math.max(meter, state.tokens)`. **Deviation
+from the issue sketch:** carried on the FiberRef (set by `ReasoningService.execute`),
+not `RunEnvelope` — same drop-proof guarantee; the pure+sync Arbitrator needs a mutable
+object, not a `Ref`. Commit `95eaf3e3`, merged locally to `dev` (`79686793`).
+reasoning 2927 pass / 0 fail (baseline 2907); typecheck 68/68; build 38/38; new files
+0 `as unknown as`. Known gaps filed: **#232** (`completeStructured` unmetered; meter
+per-`execute` not per-whole-run), **#233** (compose `budgetLimit()` parity), **#234**
+(retire plan-execute interim + blueprint bespoke gates). #231 kept open until those land.
+Retro + 3 SKILL.md amendments (mechanism-isolation in integration tests, production-seam
+test requirement, warden dispatch without warden agent types):
+[[Research/Debriefs/2026-10-05-run-level-budget-meter-execution-debrief]].
 
 ## 2026-09-28 — #230 North Star gate cwd-relative paths anchored to repo root
 
