@@ -122,7 +122,15 @@ const runPlanExecute = (
   );
 
 describe("#40 (plan-execute) — a sub-kernel's unverified ship never reaches the caller as completed", () => {
-  it("budget-terminal partial in a composite step: result.status is PARTIAL with the honesty metadata", async () => {
+  it("budget-terminal partial with tokenLimit:1: strategy stops before launching ANY step wave, terminating honestly", async () => {
+    // 2026-10 cumulative-budget fix: with a limit this tight, plan generation
+    // alone crosses it, so the strategy-level gate halts BEFORE any step
+    // sub-kernel launches. Pre-fix, every step kernel got a FRESH full pool
+    // and the run "honestly" burned far past the limit inside step 1 - the
+    // kernel-envelope verificationWarning (naming the step's pending
+    // deliverable, "report.md") was the symptom of that per-invocation
+    // accounting. The honesty channel now surfaces at the strategy stop:
+    // partial + budget markers, with the budget reason in the warning.
     const result = await runPlanExecute(budgetScenario(), {
       horizonProfile: "long",
       budgetLimits: { tokenLimit: 1 },
@@ -130,12 +138,11 @@ describe("#40 (plan-execute) — a sub-kernel's unverified ship never reaches th
 
     // Real work is preserved…
     expect(result.output).toBeTruthy();
-    // …but the reflect pass's SATISFIED cannot upgrade past the sub-kernel
-    // envelope: the caller is told the truth.
+    // …but the run never claims completion past its declared budget.
     expect(result.status).toBe("partial");
     const meta = result.metadata as Record<string, unknown>;
     expect(meta.budgetTerminalPartial).toBe(true);
-    expect(String(meta.verificationWarning ?? "")).toContain("report.md");
+    expect(String(meta.verificationWarning ?? "")).toContain("Token budget exhausted");
   });
 
   it("CONTROL: a clean composite run still reports completed with no honesty markers", async () => {

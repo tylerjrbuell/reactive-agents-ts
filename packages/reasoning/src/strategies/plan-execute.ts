@@ -93,6 +93,11 @@ import {
   type CompletionEnvelope,
 } from "../kernel/state/completion-envelope.js";
 import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
+import {
+  budgetStopReason,
+  isBudgetExhausted,
+  withSpentBudget,
+} from "./budget/remaining-budget.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -250,6 +255,13 @@ export const executePlanExecute = (
     // Durable pause (Phase D) observed on a step's sub-kernel — set once,
     // ends the plan (see the wave-loop bail below).
     let pendingPause: KernelPause | undefined;
+    // Cumulative run budget (2026-10): true once strategy-level accounting
+    // finds totalTokens/totalCost >= the declared budgetLimits. The kernel's
+    // Arbitrator guard only counts spend SINCE ITS OWN KERNEL START, so with
+    // several step sub-kernels plus unguarded outer calls (plan/analysis/
+    // reflect/synthesis/gate) the strategy must stop launching new work
+    // itself; see ./budget/remaining-budget.ts for the shared accounting.
+    let budgetStopped = false;
     // #40 / spec §1b: completion envelopes of every CONTRIBUTING step — steps
     // whose output was accepted into the plan (result.success). Joined
     // worst-of at the result boundary (kernel/state/completion-envelope.ts is
@@ -572,7 +584,14 @@ export const executePlanExecute = (
       let scOutput = only.result;
       steps.push(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
 
-      if (scOutput) {
+      // Cumulative run budget: the quality gate is discretionary outer LLM
+      // work; skip it once the declared limit is crossed (ship the raw
+      // analysis output instead of overspending).
+      const scBudgetExhausted = isBudgetExhausted(input.budgetLimits, {
+        tokens: totalTokens,
+        cost: totalCost,
+      });
+      if (scOutput && !scBudgetExhausted) {
         const gated = yield* enforceQualityGate({
           llm,
           taskDescription: input.taskDescription,
@@ -582,6 +601,16 @@ export const executePlanExecute = (
         scOutput = gated.output;
         totalTokens += gated.tokens;
         totalCost += gated.cost;
+      } else if (scOutput) {
+        steps.push(
+          makeStep(
+            "thought",
+            `[BUDGET] ${budgetStopReason(input.budgetLimits, {
+              tokens: totalTokens,
+              cost: totalCost,
+            }) ?? "budget exhausted"}: skipped quality gate`,
+          ),
+        );
       }
 
       yield* publishReasoningStep(eventBus, {
@@ -724,6 +753,28 @@ export const executePlanExecute = (
       for (const wave of waves) {
         if (waveFailed) break;
 
+        // Cumulative run budget (2026-10): the kernel-side Arbitrator guard is
+        // per-kernel-invocation, so the strategy consults CUMULATIVE spend
+        // here. Once the run limit is crossed, no new step wave launches.
+        const spentAtWaveStart = { tokens: totalTokens, cost: totalCost };
+        if (isBudgetExhausted(input.budgetLimits, spentAtWaveStart)) {
+          budgetStopped = true;
+          steps.push(
+            makeStep(
+              "thought",
+              `[BUDGET] ${budgetStopReason(input.budgetLimits, spentAtWaveStart) ?? "budget exhausted"}: halting new step waves`,
+            ),
+          );
+          break;
+        }
+        // Every step kernel in this wave gets the REMAINING budget, not a
+        // fresh full pool (withSpentBudget: shared helper, see
+        // ./budget/remaining-budget.ts for the accounting boundary).
+        const waveInput: StepExecutorInput = {
+          ...stepExecutorInput,
+          budgetLimits: withSpentBudget(input.budgetLimits, spentAtWaveStart),
+        };
+
         // Execute wave steps — concurrently if multiple, sequentially if one
         const waveEffects = wave.map((step) => {
           const stepIndex = plan.steps.indexOf(step);
@@ -766,7 +817,7 @@ export const executePlanExecute = (
                   stepIndex,
                   plan,
                   completedSteps,
-                  stepExecutorInput,
+                  waveInput,
                   toolSummaries,
                   services,
                   stepKernelMaxIterations,
@@ -1007,6 +1058,21 @@ export const executePlanExecute = (
           repairCapabilities: { perIteration: false },
         });
       }
+
+      // Cumulative run budget: the waves all finished but spend crossed the
+      // limit during the last wave. Stop BEFORE the reflect pass (and the
+      // refine/synthesis/quality-gate calls it can trigger), because each is
+      // fresh outer LLM work the declared budget says the run may not launch.
+      if (!budgetStopped && isBudgetExhausted(input.budgetLimits, { tokens: totalTokens, cost: totalCost })) {
+        budgetStopped = true;
+        steps.push(
+          makeStep(
+            "thought",
+            `[BUDGET] ${budgetStopReason(input.budgetLimits, { tokens: totalTokens, cost: totalCost }) ?? "budget exhausted"}: halting before reflect`,
+          ),
+        );
+      }
+      if (budgetStopped) break;
 
       yield* emitPhaseEnd({ emitLog, phase: "plan-execute:execute", startedAt: start, totalTokens });
 
@@ -1420,7 +1486,7 @@ export const executePlanExecute = (
         String(steps[steps.length - 1]?.content ?? "");
     }
 
-    if (finalOutput && !groundedAbstained) {
+    if (finalOutput && !groundedAbstained && !budgetStopped) {
       // plan-execute's `finalOutput` already concatenates raw `[EXEC` tool
       // observations, so the gate operates on the draft directly (no separate
       // toolData harvest needed). Shared module upgrades synthesis to use
@@ -1455,11 +1521,23 @@ export const executePlanExecute = (
 
     // Grounded abstention is an honest non-success: the output explains what
     // could not be verified, and the status must not read as completed.
-    const finalStatus: "completed" | "partial" | "failed" = groundedAbstained
+    // A cumulative-budget stop is the same class: the plan was NOT finished
+    // (remaining steps / reflect / synthesis were never launched), so the
+    // harness-joined step results ship as a partial, never as completed.
+    const finalStatus: "completed" | "partial" | "failed" = groundedAbstained || budgetStopped
       ? "partial"
       : finalOutput
         ? capStatusToEnvelope("completed", subKernelEnvelope)
         : "partial";
+
+    // Cumulative budget stop: surface the raw open-string reason exactly like
+    // the kernel killswitch does (budget-limit:tokens:<spent>/<limit>) so the
+    // runtime's terminationReason chain sees WHY the plan halted.
+    if (budgetStopped) {
+      lastRawTerminatedBy =
+        budgetStopReason(input.budgetLimits, { tokens: totalTokens, cost: totalCost }) ??
+        "budget-limit";
+    }
 
     // B2: forward the CLOSED terminatedBy so goalAchieved derives correctly
     // (every plan-execute run previously fell back to `end_turn` at
@@ -1477,6 +1555,28 @@ export const executePlanExecute = (
 
     // ONE ledger value, read twice (verdict + forwarded metadata).
     const finalLedger = yield* Ref.get(ledgerRef);
+
+    // Cumulative-budget stop: same honesty class as blueprint's budget-capped
+    // join. The output below the cliff is harness-joined step results, NOT a
+    // model-synthesized answer, and the plan did not finish. Appends to (never
+    // clobbers) a sub-kernel envelope's own verificationWarning, so a step
+    // that tripped the kernel guard mid-wave keeps its deliverable-naming
+    // detail while the strategy-level stop reason is still surfaced.
+    const envelopeMeta = honestEnvelopeMetadata(subKernelEnvelope);
+    const budgetStoppedMeta: Record<string, unknown> = budgetStopped
+      ? {
+          budgetTerminalPartial: true,
+          harnessAuthoredOutput: true,
+          verificationWarning: [
+            typeof envelopeMeta.verificationWarning === "string"
+              ? envelopeMeta.verificationWarning
+              : undefined,
+            `Token budget exhausted at ${totalTokens} tokens: remaining plan steps and the reflect/synthesis passes were not launched; the output is the harness-joined step results, not a model-synthesized answer.`,
+          ]
+            .filter((w) => w !== undefined && w.length > 0)
+            .join(" | "),
+        }
+      : {};
 
     return yield* finalizeStrategyResult({
       strategy: "plan-execute-reflect",
@@ -1499,7 +1599,8 @@ export const executePlanExecute = (
         runLedger: finalLedger,
         // H5/#40: the sub-kernel honesty fields cross the result boundary —
         // empty on a clean run, mirroring reactive's honestPartialMetadata.
-        ...honestEnvelopeMetadata(subKernelEnvelope),
+        ...envelopeMeta,
+        ...budgetStoppedMeta,
         // B2: the abstention descriptor — present ONLY on a grounded abstention,
         // so projectAbstention (which requires BOTH terminatedBy === "abstained"
         // AND this descriptor) can set receipt.abstained for plan-execute runs.
