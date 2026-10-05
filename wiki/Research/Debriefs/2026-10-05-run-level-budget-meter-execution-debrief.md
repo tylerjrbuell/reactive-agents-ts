@@ -62,6 +62,32 @@ reasoning 2927/0, typecheck 68/68, build 38/38, 0 new `as unknown as` sites.
 - **`completeStructured` exposes no usage**, so structured calls are unmetered —
   a genuine hole discovered mid-implementation, filed as #232.
 
+## Post-ship review (2026-10-05) — a real bug found and fixed
+
+A critical review of the shipped mechanism found a **correctness bug**: the
+Arbitrator combined the run-TOTAL meter numerator with the per-kernel **reduced**
+limit denominator. `plan-execute.ts:775` hands each step sub-kernel
+`withSpentBudget(original, spentSoFar)`, so the Arbitrator compared run total
+against `original − spentSoFar` and halted early by up to the prior spend.
+Probe evidence: run total 65 vs true limit 100 → `status: exceeded` because the
+reduced limit was 60. Fix (`ad95ff51`): carry the run-scoped ORIGINAL limits on a
+new `CurrentRunBudgetLimits` FiberRef → `state.meta.runBudgetLimits`, preferred by
+`arbitrationContextFromState` when the meter is present; `ReasoningService` passes
+`params.budgetLimits` to `withRunBudgetMeter`. RED→GREEN unit test added.
+
+Also fixed **#233** (`ff135d4f`): compose `budgetLimit()` now reads the run meter
+for parity with `.withBudget()`.
+
+**#234 scoped, not shipped.** Removing the strategy gates breaks the direct
+(no-meter) path and would drop the honest-partial metadata the gates emit; the
+proper fix ports that metadata to the shared runner path first. Documented on the
+issue.
+
+**#232 scoped, not shipped.** Structured metering is blocked on an
+`LLMService.completeStructured` API change (returns `Effect<A>`, no usage) across
+5 adapters; whole-run scope needs the meter created per run. Documented on the
+issue.
+
 ## Skill improvements (applied to SKILL.md this pass)
 
 1. **Mechanism isolation in integration tests.** When a bundle adds a mechanism

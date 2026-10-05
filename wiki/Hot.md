@@ -32,6 +32,17 @@ Retro + 3 SKILL.md amendments (mechanism-isolation in integration tests, product
 test requirement, warden dispatch without warden agent types):
 [[Research/Debriefs/2026-10-05-run-level-budget-meter-execution-debrief]].
 
+**Post-ship review (same day) found + fixed a real bug:** the Arbitrator combined
+run-TOTAL meter spend with plan-execute's per-kernel REDUCED limit (`withSpentBudget`),
+halting early by up to the prior spend (probe: run total 65 vs true limit 100 →
+`exceeded` because the reduced limit was 60). Fix `ad95ff51` carries the run-scoped
+ORIGINAL limits (`CurrentRunBudgetLimits` → `state.meta.runBudgetLimits`) and prefers
+them when the meter is present; `ReasoningService` passes `params.budgetLimits`.
+**#233** (compose `budgetLimit()` parity) shipped `ff135d4f`. **#234** (retire gates)
+and **#232** (structured metering / whole-run scope) scoped on-issue as design changes
+— gate removal breaks the no-meter path and drops honest-partial metadata; structured
+metering needs an `LLMService.completeStructured` usage API across 5 adapters.
+
 ## 2026-09-28 — #230 North Star gate cwd-relative paths anchored to repo root
 
 Fixed the bug that made `bun run test` (turbo, cwd=package dir) read a stale gitignored
