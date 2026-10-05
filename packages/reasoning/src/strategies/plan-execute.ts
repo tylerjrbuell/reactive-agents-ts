@@ -98,6 +98,7 @@ import {
   isBudgetExhausted,
   withSpentBudget,
 } from "./budget/remaining-budget.js";
+import { resolveRunSpend } from "./budget/run-budget-spend.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -587,10 +588,11 @@ export const executePlanExecute = (
       // Cumulative run budget: the quality gate is discretionary outer LLM
       // work; skip it once the declared limit is crossed (ship the raw
       // analysis output instead of overspending).
-      const scBudgetExhausted = isBudgetExhausted(input.budgetLimits, {
+      const scSpend = yield* resolveRunSpend({
         tokens: totalTokens,
         cost: totalCost,
       });
+      const scBudgetExhausted = isBudgetExhausted(input.budgetLimits, scSpend);
       if (scOutput && !scBudgetExhausted) {
         const gated = yield* enforceQualityGate({
           llm,
@@ -605,10 +607,7 @@ export const executePlanExecute = (
         steps.push(
           makeStep(
             "thought",
-            `[BUDGET] ${budgetStopReason(input.budgetLimits, {
-              tokens: totalTokens,
-              cost: totalCost,
-            }) ?? "budget exhausted"}: skipped quality gate`,
+            `[BUDGET] ${budgetStopReason(input.budgetLimits, scSpend) ?? "budget exhausted"}: skipped quality gate`,
           ),
         );
       }
@@ -757,12 +756,16 @@ export const executePlanExecute = (
         // per-kernel-invocation, so the strategy consults CUMULATIVE spend
         // here. Once the run limit is crossed, no new step wave launches.
         const spentAtWaveStart = { tokens: totalTokens, cost: totalCost };
-        if (isBudgetExhausted(input.budgetLimits, spentAtWaveStart)) {
+        // Issue #234 — the gate consults the SHARED run meter (maxed over the
+        // strategy's local figure) so it and the Arbitrator agree on the
+        // boundary. The local figure still feeds `withSpentBudget` below.
+        const runSpendAtWaveStart = yield* resolveRunSpend(spentAtWaveStart);
+        if (isBudgetExhausted(input.budgetLimits, runSpendAtWaveStart)) {
           budgetStopped = true;
           steps.push(
             makeStep(
               "thought",
-              `[BUDGET] ${budgetStopReason(input.budgetLimits, spentAtWaveStart) ?? "budget exhausted"}: halting new step waves`,
+              `[BUDGET] ${budgetStopReason(input.budgetLimits, runSpendAtWaveStart) ?? "budget exhausted"}: halting new step waves`,
             ),
           );
           break;
@@ -1063,12 +1066,16 @@ export const executePlanExecute = (
       // limit during the last wave. Stop BEFORE the reflect pass (and the
       // refine/synthesis/quality-gate calls it can trigger), because each is
       // fresh outer LLM work the declared budget says the run may not launch.
-      if (!budgetStopped && isBudgetExhausted(input.budgetLimits, { tokens: totalTokens, cost: totalCost })) {
+      const preReflectSpend = yield* resolveRunSpend({
+        tokens: totalTokens,
+        cost: totalCost,
+      });
+      if (!budgetStopped && isBudgetExhausted(input.budgetLimits, preReflectSpend)) {
         budgetStopped = true;
         steps.push(
           makeStep(
             "thought",
-            `[BUDGET] ${budgetStopReason(input.budgetLimits, { tokens: totalTokens, cost: totalCost }) ?? "budget exhausted"}: halting before reflect`,
+            `[BUDGET] ${budgetStopReason(input.budgetLimits, preReflectSpend) ?? "budget exhausted"}: halting before reflect`,
           ),
         );
       }

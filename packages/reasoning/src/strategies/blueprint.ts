@@ -38,6 +38,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { resolveRunSpend } from "./budget/run-budget-spend.js";
 import { LLMPlanOutputSchema, hydratePlan } from "../types/plan.js";
 import type { Plan } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
@@ -603,8 +604,13 @@ export const executeBlueprint = (
     //     kernel markers are fabricated — the evidence IS the branch taken).
     let budgetCappedJoin = false;
 
+    // Issue #234 — consult the shared run meter (maxed over the local figure)
+    // so blueprint's direct-call gate and the kernel Arbitrator agree. Blueprint
+    // runs no kernel, so this strategy-level check is its only enforcement for
+    // the SOLVE call; the meter keeps the two accounting sites consistent.
+    const runSpend = yield* resolveRunSpend({ tokens: totalTokens, cost: totalCost });
     const overBudget =
-      tokenLimit !== undefined && totalTokens >= tokenLimit;
+      tokenLimit !== undefined && runSpend.tokens >= tokenLimit;
 
     const planDeclaredSynthesis = plan.steps.some(
       (s) => s.type === "analysis" || s.type === "composite",
