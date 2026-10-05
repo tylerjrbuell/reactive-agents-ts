@@ -25,6 +25,13 @@ Runs without `.withBudget()` are byte-identical (no meter armed, no new
 `state.meta` field). New exports: `CurrentRunBudget`, `makeRunBudgetMeter`,
 `addRunSpend`, `withRunBudgetMeter`, types `RunBudgetMeter`/`RunBudgetSpend`.
 
+The meter carries the **run-scoped original limits** too (`CurrentRunBudgetLimits`
+→ `state.meta.runBudgetLimits`), and the Arbitrator uses them when the meter is
+present. Without this, run-total spend would be compared against the *reduced*
+per-kernel limit plan-execute hands its step sub-kernels (`withSpentBudget`),
+halting a run early by up to the prior spend (e.g. run total 65 vs true limit
+100 halted because the reduced limit was 60).
+
 Tests: `kernel/run-budget.test.ts` (primitive, wrapper feed, Arbitrator consume,
 runner seed, resume max-seed, codec round-trip),
 `kernel/run-budget-strategies.test.ts` (reactive / plan-execute-reflect /

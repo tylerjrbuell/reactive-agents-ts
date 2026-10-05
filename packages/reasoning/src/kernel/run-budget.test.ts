@@ -162,6 +162,44 @@ describe("run-budget — Arbitrator consumes run spend", () => {
     expect(ctx.budget?.tokensUsed).toBe(250);
     expect(ctx.budget?.status).toBe("exceeded");
   });
+
+  it("uses the run-scoped ORIGINAL limit, not a strategy-reduced per-kernel limit", () => {
+    // Issue #231 follow-up. plan-execute hands each step sub-kernel a REDUCED
+    // limit via withSpentBudget (original 100 − 40 spent = 60). The run meter
+    // holds the run-total (65). Comparing 65 against the reduced 60 fires a
+    // false "exceeded"; the true run limit is 100, so the signal must be "ok".
+    const state = transitionState(baseState(), {
+      tokens: 0,
+      cost: 0,
+      meta: {
+        ...baseState().meta,
+        budgetLimits: { tokenLimit: 60 }, // per-kernel REDUCED limit
+        runBudgetLimits: { tokenLimit: 100 }, // run-scoped ORIGINAL limit
+        runBudgetMeter: { tokens: 65, cost: 0 },
+      },
+    });
+
+    const ctx = arbitrationContextFromState(state, { task: "t" });
+    expect(ctx.budget?.tokenLimit).toBe(100);
+    expect(ctx.budget?.tokensUsed).toBe(65);
+    expect(ctx.budget?.status).toBe("ok");
+  });
+
+  it("falls back to the reduced limit when no run-scoped limits are seeded", () => {
+    // Meter armed but no runBudgetLimits → today's behavior is unchanged: the
+    // per-kernel budgetLimits still governs.
+    const state = transitionState(baseState(), {
+      tokens: 0,
+      meta: {
+        ...baseState().meta,
+        budgetLimits: { tokenLimit: 60 },
+        runBudgetMeter: { tokens: 65, cost: 0 },
+      },
+    });
+    const ctx = arbitrationContextFromState(state, { task: "t" });
+    expect(ctx.budget?.tokenLimit).toBe(60);
+    expect(ctx.budget?.status).toBe("exceeded");
+  });
 });
 
 describe("run-budget — runner seeds the live meter onto state.meta", () => {
@@ -186,6 +224,43 @@ describe("run-budget — runner seeds the live meter onto state.meta", () => {
     expect(finalState.meta.runBudgetMeter).toBe(meter);
     meter.tokens += 8;
     expect(finalState.meta.runBudgetMeter?.tokens).toBe(50);
+  });
+
+  it("seeds run-scoped ORIGINAL limits from the ambient context", async () => {
+    const meter = makeRunBudgetMeter();
+
+    const kernel: ThoughtKernel = (state) =>
+      Effect.succeed(transitionState(state, { status: "done", output: "done" }));
+
+    const finalState = await Effect.runPromise(
+      withRunBudgetMeter(
+        runKernel(kernel, { task: "t" }, { maxIterations: 3, strategy: "reactive", kernelType: "react" }).pipe(
+          Effect.provide(TestLLMServiceLayer([{ text: "x" }])),
+        ),
+        meter,
+        { tokenLimit: 100 },
+      ),
+    );
+
+    expect(finalState.meta.runBudgetLimits).toEqual({ tokenLimit: 100 });
+  });
+
+  it("does not seed run-scoped limits when withRunBudgetMeter is called without limits", async () => {
+    const meter = makeRunBudgetMeter();
+
+    const kernel: ThoughtKernel = (state) =>
+      Effect.succeed(transitionState(state, { status: "done", output: "done" }));
+
+    const finalState = await Effect.runPromise(
+      withRunBudgetMeter(
+        runKernel(kernel, { task: "t" }, { maxIterations: 3, strategy: "reactive", kernelType: "react" }).pipe(
+          Effect.provide(TestLLMServiceLayer([{ text: "x" }])),
+        ),
+        meter,
+      ),
+    );
+
+    expect(finalState.meta.runBudgetLimits).toBeUndefined();
   });
 
   it("resume max-seeds the fresh ambient meter from the persisted state", async () => {

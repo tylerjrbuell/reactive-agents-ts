@@ -67,7 +67,7 @@ import {
 } from "./output-synthesis.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
-import { CurrentRunBudget } from "../run-budget.js";
+import { CurrentRunBudget, CurrentRunBudgetLimits } from "../run-budget.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 import {
   TERMINAL_ANSWER_REASONS,
@@ -400,6 +400,18 @@ export function runKernel(
         }
         state = transitionState(state, {
           meta: { ...state.meta, runBudgetMeter: ambientMeter },
+        });
+      }
+      // Issue #231 follow-up — seed the run-scoped ORIGINAL budget limits
+      // alongside the meter. A multi-kernel strategy (plan-execute) hands each
+      // step sub-kernel a REDUCED limit via `withSpentBudget`; the Arbitrator
+      // must compare run-TOTAL spend against the run limit, not that reduced
+      // one, or it halts early by up to the prior spend. Only seeded when both
+      // a meter and limits are armed; a persisted value on resume is preserved.
+      const ambientRunLimits = yield* FiberRef.get(CurrentRunBudgetLimits);
+      if (ambientMeter && ambientRunLimits) {
+        state = transitionState(state, {
+          meta: { ...state.meta, runBudgetLimits: ambientRunLimits },
         });
       }
     }

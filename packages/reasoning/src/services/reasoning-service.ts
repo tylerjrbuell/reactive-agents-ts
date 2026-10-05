@@ -256,7 +256,7 @@ export const ReasoningServiceLive = (
             // resets. Gated on `budgetLimits` so a run without `.withBudget()`
             // stays byte-identical (no new state.meta field, no wrapper feed).
             const result = yield* (params.budgetLimits
-              ? withRunBudgetMeter(piped, makeRunBudgetMeter())
+              ? withRunBudgetMeter(piped, makeRunBudgetMeter(), params.budgetLimits)
               : piped);
 
             return result;

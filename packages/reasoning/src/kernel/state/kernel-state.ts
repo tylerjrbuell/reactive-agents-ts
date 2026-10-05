@@ -406,6 +406,26 @@ export interface KernelMeta {
    */
   readonly runBudgetMeter?: RunBudgetMeter;
 
+  /**
+   * Issue #231 follow-up — the run-scoped ORIGINAL budget limits, so the
+   * Arbitrator compares run-total spend against the run limit, not a
+   * per-kernel REDUCED limit handed to a sub-kernel by a strategy.
+   *
+   * Seeded by the kernel runner from the ambient `CurrentRunBudgetLimits`
+   * FiberRef set by `withRunBudgetMeter(effect, meter, limits)`. Absent when
+   * the run armed a meter without limits, or no meter at all — the Arbitrator
+   * then falls back to `state.meta.budgetLimits`.
+   *
+   * Structural type — declared here to avoid a runtime cycle with the
+   * arbitrator module; the canonical type is `RunBudgetLimits` from
+   * `kernel/run-budget.ts`.
+   */
+  readonly runBudgetLimits?: {
+    readonly tokenLimit?: number;
+    readonly costLimit?: number;
+    readonly warningRatio?: number;
+  };
+
   // ── PostCondition spine — derived-once state-grounded success authority ──────
   /**
    * Deterministic post-conditions derived ONCE at kernel-start from the task +

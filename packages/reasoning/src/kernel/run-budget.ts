@@ -46,11 +46,33 @@ export interface RunBudgetMeter {
 }
 
 /**
+ * Structural run-scoped budget limits. Mirrors the Arbitrator's `BudgetLimits`
+ * but declared here to avoid an import cycle (run-budget.ts is imported by
+ * kernel-state.ts and the runner; the arbitrator imports both). These are the
+ * ORIGINAL run-scoped limits, NOT the per-kernel REDUCED limits a multi-kernel
+ * strategy hands to a sub-kernel (see `withSpentBudget` in
+ * `strategies/budget/remaining-budget.ts`).
+ */
+export interface RunBudgetLimits {
+  readonly tokenLimit?: number;
+  readonly costLimit?: number;
+  readonly warningRatio?: number;
+}
+
+/**
  * Ambient run-scoped meter. `null` when no run has armed budgeting (e.g. a bare
  * kernel unit test, or a run with no `.withBudget()`); {@link addRunSpend} then
  * no-ops, so unmetered callers are byte-identical to before.
  */
 export const CurrentRunBudget = FiberRef.unsafeMake<RunBudgetMeter | null>(null);
+
+/**
+ * Ambient run-scoped ORIGINAL budget limits, set alongside the meter by
+ * {@link withRunBudgetMeter}. `null` when unarmed. The kernel runner seeds this
+ * onto `state.meta.runBudgetLimits` so the Arbitrator compares run-total spend
+ * against the RUN limit — never against a per-kernel reduced limit.
+ */
+export const CurrentRunBudgetLimits = FiberRef.unsafeMake<RunBudgetLimits | null>(null);
 
 /** Create a fresh zeroed meter. One per agent RUN. */
 export const makeRunBudgetMeter = (): RunBudgetMeter => ({ tokens: 0, cost: 0 });
@@ -72,8 +94,19 @@ export const addRunSpend = (spend: RunBudgetSpend): Effect.Effect<void> =>
  * Run `effect` with `meter` as the ambient run budget. The meter object is
  * shared by reference with every LLM call in the fiber subtree; it is mutated
  * in place, so the caller retains a live view of run spend after completion.
+ *
+ * `limits` are the ORIGINAL run-scoped budget limits (optional; defaults to
+ * `null` = unarmed). They are carried on {@link CurrentRunBudgetLimits} so the
+ * kernel runner can seed `state.meta.runBudgetLimits`, letting the Arbitrator
+ * compare run-total spend against the run limit even when a strategy handed a
+ * sub-kernel a REDUCED per-kernel limit.
  */
 export const withRunBudgetMeter = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   meter: RunBudgetMeter,
-): Effect.Effect<A, E, R> => Effect.locally(CurrentRunBudget, meter)(effect);
+  limits?: RunBudgetLimits,
+): Effect.Effect<A, E, R> =>
+  effect.pipe(
+    Effect.locally(CurrentRunBudget, meter),
+    Effect.locally(CurrentRunBudgetLimits, limits ?? null),
+  );

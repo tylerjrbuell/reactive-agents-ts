@@ -1862,10 +1862,18 @@ export function arbitrationContextFromState(
   // honest-partial metadata.
   const budgetLimits = state.meta.budgetLimits as BudgetLimits | undefined;
   const meter = state.meta.runBudgetMeter;
+  // Issue #231 follow-up — when the run meter is armed, the authoritative limit
+  // is the run-scoped ORIGINAL limit. A multi-kernel strategy (plan-execute)
+  // hands this sub-kernel a REDUCED limit via `withSpentBudget`; combining that
+  // reduced limit with run-TOTAL spend halts early by up to the prior spend.
+  // Fall back to `budgetLimits` when no run limit was seeded (unchanged path).
+  const effectiveLimits = meter
+    ? ((state.meta.runBudgetLimits as BudgetLimits | undefined) ?? budgetLimits)
+    : budgetLimits;
   const budgetSignal = computeBudgetSignal({
     tokensUsed: meter ? Math.max(meter.tokens, state.tokens ?? 0) : (state.tokens ?? 0),
     costUsd: meter ? Math.max(meter.cost, state.cost ?? 0) : (state.cost ?? 0),
-    limits: budgetLimits,
+    limits: effectiveLimits,
   });
 
   // A2 — resolve the long-horizon guard scaling from the mirrored meta fields
