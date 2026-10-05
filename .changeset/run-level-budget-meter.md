@@ -46,3 +46,11 @@ reflexion / tree-of-thought / blueprint halt on a crossed limit),
 `services/reasoning-service-run-budget.test.ts` (production wiring),
 `llm-provider/tests/structured-usage-ref.test.ts` (usage surfaced). Remaining
 gap: the meter is per-`execute`, not per-whole-run (auxiliary passes).
+
+**Strategy gates unified on the meter (#234).** Direct LLM calls between kernels
+never enter the Arbitrator, so the per-strategy gates remain the direct-call
+enforcement complement (full removal is premise-falsified). Their duplicated
+accounting is gone: `strategies/budget/run-budget-spend.ts` `resolveRunSpend()`
+reads the run meter and maxes it over the strategy's local figure, so
+plan-execute's quality-gate/wave/reflect gates and blueprint's SOLVE gate agree
+with the Arbitrator on the boundary.

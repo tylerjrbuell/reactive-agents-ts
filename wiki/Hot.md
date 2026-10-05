@@ -38,10 +38,16 @@ halting early by up to the prior spend (probe: run total 65 vs true limit 100 �
 `exceeded` because the reduced limit was 60). Fix `ad95ff51` carries the run-scoped
 ORIGINAL limits (`CurrentRunBudgetLimits` → `state.meta.runBudgetLimits`) and prefers
 them when the meter is present; `ReasoningService` passes `params.budgetLimits`.
-**#233** (compose `budgetLimit()` parity) shipped `ff135d4f`. **#234** (retire gates)
-and **#232** (structured metering / whole-run scope) scoped on-issue as design changes
-— gate removal breaks the no-meter path and drops honest-partial metadata; structured
-metering needs an `LLMService.completeStructured` usage API across 5 adapters.
+**#233** (compose `budgetLimit()` parity) shipped `ff135d4f`. Then continued the
+scoped items: **#232 Gap 1** structured metering shipped `8228ea2d`
+(`StructuredUsageRef` FiberRef surfaced by `runStructuredParseWithRetry`, fed to
+the meter by the observable wrapper; all 5 adapters). **#234** re-scoped and
+shipped `5a169029`: full gate removal is **premise-falsified** (direct LLM calls
+never enter the Arbitrator, so strategy gates are the direct-call enforcement
+complement), so instead unified their accounting on the shared meter via
+`strategies/budget/run-budget-spend.ts` `resolveRunSpend()`. **#232 Gap 2**
+(whole-run scope: auxiliary passes unbudgeted) deferred — needs a runtime-level
+meter seam. reasoning 2935 pass/0 fail; typecheck 68/68; build 38/38.
 
 ## 2026-09-28 — #230 North Star gate cwd-relative paths anchored to repo root
 

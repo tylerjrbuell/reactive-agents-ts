@@ -78,15 +78,20 @@ new `CurrentRunBudgetLimits` FiberRef → `state.meta.runBudgetLimits`, preferre
 Also fixed **#233** (`ff135d4f`): compose `budgetLimit()` now reads the run meter
 for parity with `.withBudget()`.
 
-**#234 scoped, not shipped.** Removing the strategy gates breaks the direct
-(no-meter) path and would drop the honest-partial metadata the gates emit; the
-proper fix ports that metadata to the shared runner path first. Documented on the
-issue.
+**#234 shipped (re-scoped).** Full gate removal is **premise-falsified**: direct
+LLM calls between kernels never enter the Arbitrator, so the strategy gates are
+the direct-call enforcement complement. Shipped the real fix — unify the
+accounting on the shared meter (`5a169029`): new
+`strategies/budget/run-budget-spend.ts` `resolveRunSpend()` maxes the run meter
+over the strategy's local figure; plan-execute + blueprint gates now agree with
+the Arbitrator on the boundary. Gate-behaviour tests stay green.
 
-**#232 scoped, not shipped.** Structured metering is blocked on an
-`LLMService.completeStructured` API change (returns `Effect<A>`, no usage) across
-5 adapters; whole-run scope needs the meter created per run. Documented on the
-issue.
+**#232 Gap 1 shipped.** Structured metering (`8228ea2d`): `runStructuredParseWithRetry`
+surfaces real usage on the exported `StructuredUsageRef` FiberRef; all 5 adapters
+return `{ content, usage }`; the observable wrapper feeds the meter. Public
+`completeStructured` return type unchanged. **Gap 2 (whole-run scope) deferred** —
+needs the runtime to create the meter around the engine phase loop; auxiliary
+passes are unbudgeted but bounded single-shot. Documented on the issue.
 
 ## Skill improvements (applied to SKILL.md this pass)
 
