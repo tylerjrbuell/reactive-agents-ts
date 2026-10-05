@@ -19,6 +19,7 @@ import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
 import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
+import { makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
 
 // ─── Service Tag ───
 
@@ -236,7 +237,7 @@ export const ReasoningServiceLive = (
               RunEnvelope,
               params.envelope ?? buildRunEnvelope(),
             );
-            const result = yield* provided.pipe(
+            const piped = provided.pipe(
               Effect.provide(strategyLayer),
               params.taskId
                 ? Effect.locally(CurrentRunContext, { taskId: params.taskId })
@@ -245,6 +246,18 @@ export const ReasoningServiceLive = (
                 ? Effect.locally(CurrentModelRouting, params.modelRoutingPool)
                 : (eff) => eff,
             );
+            // Issue #231 / DEBT D-2026-10-05-P — arm ONE run-scoped LLM spend
+            // meter for this reasoning execution when budget limits are
+            // declared. The observable LLM wrapper feeds it on every call path
+            // (kernel think turns AND direct plan-execute/reflexion/ToT calls);
+            // the kernel runner stores the live reference on state.meta so the
+            // pure+sync Arbitrator enforces the limit against cumulative RUN
+            // spend, not the per-kernel `state.tokens` that initialKernelState
+            // resets. Gated on `budgetLimits` so a run without `.withBudget()`
+            // stays byte-identical (no new state.meta field, no wrapper feed).
+            const result = yield* (params.budgetLimits
+              ? withRunBudgetMeter(piped, makeRunBudgetMeter())
+              : piped);
 
             return result;
           }),

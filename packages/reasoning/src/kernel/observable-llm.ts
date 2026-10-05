@@ -50,6 +50,7 @@ import {
   emitErrorSwallowed,
   errorTag,
 } from "@reactive-agents/core";
+import { CurrentRunBudget, addRunSpend } from "./run-budget.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -311,6 +312,14 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const start = Date.now();
             yield* emitLLMRequestStarted(request, "complete");
             const response = yield* inner.complete(request);
+            // Run-scoped budget accounting (Issue #231): feed the ambient meter
+            // from the provider's authoritative usage on the complete() path.
+            yield* addRunSpend({
+              tokens:
+                response.usage?.totalTokens ??
+                ((response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0)),
+              cost: response.usage?.estimatedCost ?? 0,
+            });
             yield* emitForRequest(request, response.content, Date.now() - start, "complete", response);
             return response;
           }),
@@ -325,6 +334,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const json = (() => {
               try { return JSON.stringify(result); } catch { return String(result); }
             })();
+            // Run-scoped budget gap (Issue #231 follow-up): completeStructured
+            // returns only the parsed value, so no usage is available here to
+            // feed the meter. Structured calls (plan decomposition, extraction)
+            // are therefore NOT yet metered; the Arbitrator's `Math.max(meter,
+            // state)` guard and the strategy-level budget checks remain the
+            // backstop until LLMService exposes structured usage.
             yield* emitForRequest(request, json, Date.now() - start, "completeStructured");
             return result;
           }),
@@ -341,6 +356,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             // FiberRef would read `null` post-hop. See the comment on
             // `emitLLMRequestStartedWith` for the failure mode this avoids.
             const ambientTaskId = (yield* FiberRef.get(CurrentRunContext))?.taskId;
+            // Capture the ambient run-budget meter ONCE here, on the calling
+            // fiber (same reason as ambientTaskId): the `Stream.ensuring`
+            // finalizer below may run on a different fiber after a hop, where
+            // re-reading `CurrentRunBudget` could silently return null. The
+            // captured reference is mutated in place at finalization.
+            const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
             yield* emitLLMRequestStartedWith(request, "stream", ambientTaskId);
             const accum = yield* Ref.make<{
               content: string;
@@ -424,6 +445,15 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               Stream.ensuring(
                 Effect.gen(function* () {
                   const s = yield* Ref.get(accum);
+                  // Run-scoped budget accounting (Issue #231): the stream's
+                  // accumulated usage event is the authoritative spend for this
+                  // call. Mutate the captured meter directly (a plain object —
+                  // no Effect needed; the Arbitrator reads it synchronously).
+                  if (ambientMeter) {
+                    ambientMeter.tokens +=
+                      (s.usage?.inputTokens ?? 0) + (s.usage?.outputTokens ?? 0);
+                    ambientMeter.cost += s.usage?.estimatedCost ?? 0;
+                  }
                   // Parse each call's accumulated JSON argument chunks.
                   // Unparseable JSON (or no deltas at all) never throws from
                   // the observability path — falls back to the raw string,

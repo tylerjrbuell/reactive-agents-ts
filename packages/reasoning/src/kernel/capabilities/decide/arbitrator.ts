@@ -1852,10 +1852,19 @@ export function arbitrationContextFromState(
   // state.meta.budgetLimits set at kernel-start by runner.ts. When no limits
   // are declared, computeBudgetSignal returns undefined and ctx.budget stays
   // off — backward-compatible no-op for the pre-intent guard.
+  //
+  // Issue #231 — when the run-scoped meter is present, spend is the MAX of the
+  // live meter and the per-kernel `state.tokens`/`state.cost`. The meter is the
+  // authoritative run total (fed by the observable LLM wrapper on every call
+  // path); `Math.max` guards any unmetered path (e.g. completeStructured, which
+  // exposes no usage) so a metered run can never report LESS spend than the
+  // kernel already recorded. `state.tokens`/`state.cost` stay untouched for
+  // honest-partial metadata.
   const budgetLimits = state.meta.budgetLimits as BudgetLimits | undefined;
+  const meter = state.meta.runBudgetMeter;
   const budgetSignal = computeBudgetSignal({
-    tokensUsed: state.tokens ?? 0,
-    costUsd: state.cost ?? 0,
+    tokensUsed: meter ? Math.max(meter.tokens, state.tokens ?? 0) : (state.tokens ?? 0),
+    costUsd: meter ? Math.max(meter.cost, state.cost ?? 0) : (state.cost ?? 0),
     limits: budgetLimits,
   });
 
