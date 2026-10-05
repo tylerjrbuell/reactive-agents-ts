@@ -1066,7 +1066,26 @@ export const LocalProviderLive = Layer.effect(
                             catch: (error) => ollamaError(error, model),
                         })
 
-                        return response.message?.content ?? ''
+                        // Ollama has no `mapOllamaResponse`; the complete()
+                        // path builds usage inline from prompt_eval_count /
+                        // eval_count (local.ts:526-527). Mirror that here so
+                        // the structured-usage sink is populated for the
+                        // local provider too.
+                        const structuredInputTokens =
+                            response.prompt_eval_count ?? 0
+                        const structuredOutputTokens =
+                            response.eval_count ?? 0
+                        return {
+                            content: response.message?.content ?? '',
+                            usage: {
+                                inputTokens: structuredInputTokens,
+                                outputTokens: structuredOutputTokens,
+                                totalTokens:
+                                    structuredInputTokens +
+                                    structuredOutputTokens,
+                                estimatedCost: 0, // Local models are free
+                            },
+                        }
                             }),
                     })
                 }),

@@ -729,7 +729,8 @@ export const GeminiProviderLive = Layer.effect(
                   catch: toEffectError,
                 });
 
-                return mapGeminiResponse(response, model, config.pricingRegistry).content;
+                const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
+                return { content: mapped.content, usage: mapped.usage };
               }),
           });
         }),

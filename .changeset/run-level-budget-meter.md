@@ -1,5 +1,6 @@
 ---
 "@reactive-agents/reasoning": minor
+"@reactive-agents/llm-provider": minor
 ---
 
 **Run-scoped budget enforcement (Issue #231 / DEBT D-2026-10-05-P).**
@@ -32,9 +33,16 @@ per-kernel limit plan-execute hands its step sub-kernels (`withSpentBudget`),
 halting a run early by up to the prior spend (e.g. run total 65 vs true limit
 100 halted because the reduced limit was 60).
 
-Tests: `kernel/run-budget.test.ts` (primitive, wrapper feed, Arbitrator consume,
-runner seed, resume max-seed, codec round-trip),
+**Structured calls are metered too (`llm-provider`).** `runStructuredParseWithRetry`
+now surfaces the provider's real (retry-summed) usage on the exported
+`StructuredUsageRef` FiberRef; the observable wrapper reads it after
+`completeStructured` and feeds the meter. `completeStructured`'s public return
+type is unchanged (`A`). This closes the plan-generation/extraction accounting gap.
+
+Tests: `kernel/run-budget.test.ts` (primitive, wrapper feed incl. structured,
+Arbitrator consume, runner seed, resume max-seed, codec round-trip),
 `kernel/run-budget-strategies.test.ts` (reactive / plan-execute-reflect /
 reflexion / tree-of-thought / blueprint halt on a crossed limit),
-`services/reasoning-service-run-budget.test.ts` (production wiring). Known gap:
-`completeStructured` exposes no usage, so structured calls are not yet metered.
+`services/reasoning-service-run-budget.test.ts` (production wiring),
+`llm-provider/tests/structured-usage-ref.test.ts` (usage surfaced). Remaining
+gap: the meter is per-`execute`, not per-whole-run (auxiliary passes).

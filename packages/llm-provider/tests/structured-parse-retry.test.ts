@@ -5,6 +5,13 @@ import { LLMParseError } from "../src/errors.js";
 
 const OutputSchema = Schema.Struct({ answer: Schema.String });
 
+const usage = {
+  inputTokens: 1,
+  outputTokens: 1,
+  totalTokens: 2,
+  estimatedCost: 0,
+};
+
 describe("runStructuredParseWithRetry", () => {
   it("returns the decoded value on a first-attempt success", async () => {
     let attempts = 0;
@@ -15,7 +22,10 @@ describe("runStructuredParseWithRetry", () => {
         maxRetries: 2,
         runAttempt: () => {
           attempts++;
-          return Effect.succeed(JSON.stringify({ answer: "ok" }));
+          return Effect.succeed({
+            content: JSON.stringify({ answer: "ok" }),
+            usage,
+          });
         },
       }),
     );
@@ -34,8 +44,11 @@ describe("runStructuredParseWithRetry", () => {
         runAttempt: ({ attempt, lastError }) => {
           seenLastErrors.push(lastError);
           return attempt === 0
-            ? Effect.succeed("not json")
-            : Effect.succeed(JSON.stringify({ answer: "recovered" }));
+            ? Effect.succeed({ content: "not json", usage })
+            : Effect.succeed({
+                content: JSON.stringify({ answer: "recovered" }),
+                usage,
+              });
         },
       }),
     );
@@ -54,8 +67,11 @@ describe("runStructuredParseWithRetry", () => {
         maxRetries: 1,
         runAttempt: ({ attempt }) =>
           attempt === 0
-            ? Effect.succeed(JSON.stringify({ wrongField: 1 }))
-            : Effect.succeed(JSON.stringify({ answer: "ok" })),
+            ? Effect.succeed({ content: JSON.stringify({ wrongField: 1 }), usage })
+            : Effect.succeed({
+                content: JSON.stringify({ answer: "ok" }),
+                usage,
+              }),
       }),
     );
 
@@ -69,7 +85,8 @@ describe("runStructuredParseWithRetry", () => {
           outputSchema: OutputSchema,
           schemaStr: "{}",
           maxRetries: 2,
-          runAttempt: () => Effect.succeed("still not json"),
+          runAttempt: () =>
+            Effect.succeed({ content: "still not json", usage }),
         }),
       ),
     );

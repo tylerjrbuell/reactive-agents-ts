@@ -14,9 +14,16 @@
 // read-only.
 
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
-import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import type { CompletionRequest } from "@reactive-agents/llm-provider";
+import { Context, Effect, FiberRef, Layer, Schema, Stream } from "effect";
+import {
+  LLMService,
+  StructuredUsageRef,
+  TestLLMServiceLayer,
+} from "@reactive-agents/llm-provider";
+import type {
+  CompletionRequest,
+  StructuredCompletionRequest,
+} from "@reactive-agents/llm-provider";
 import { makeObservableLLM } from "./observable-llm.js";
 import {
   CurrentRunBudget,
@@ -105,6 +112,49 @@ describe("run-budget — observable LLM wrapper feeds the meter", () => {
 
     expect(response.usage?.totalTokens ?? 0).toBeGreaterThan(0);
     expect(meter.tokens).toBe(response.usage?.totalTokens ?? -1);
+  });
+
+  it("completeStructured() advances the ambient meter from StructuredUsageRef (#232)", async () => {
+    const meter = makeRunBudgetMeter();
+    const baseLayer = TestLLMServiceLayer([{ json: { ok: true } }]);
+    // A provider double that surfaces usage on the ambient StructuredUsageRef,
+    // exactly as the real adapters now do inside runStructuredParseWithRetry.
+    const usageStub = Layer.effect(
+      LLMService,
+      Effect.gen(function* () {
+        const base = yield* LLMService;
+        return {
+          ...base,
+          completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
+            Effect.gen(function* () {
+              yield* FiberRef.set(StructuredUsageRef, {
+                inputTokens: 12,
+                outputTokens: 3,
+                totalTokens: 15,
+                estimatedCost: 0.002,
+              });
+              return Schema.decodeUnknownSync(request.outputSchema)({ ok: true });
+            }),
+        } as Context.Tag.Service<LLMService>;
+      }),
+    ).pipe(Layer.provide(baseLayer));
+    const llmLayer = makeObservableLLM().pipe(Layer.provide(usageStub));
+
+    await Effect.runPromise(
+      withRunBudgetMeter(
+        Effect.gen(function* () {
+          const llm = yield* LLMService;
+          yield* llm.completeStructured({
+            messages: [{ role: "user", content: "x" }],
+            outputSchema: Schema.Struct({ ok: Schema.Boolean }),
+          });
+        }).pipe(Effect.provide(llmLayer)),
+        meter,
+      ),
+    );
+
+    expect(meter.tokens).toBe(15);
+    expect(meter.cost).toBeCloseTo(0.002, 10);
   });
 
   it("stream() advances the ambient meter by the accumulated usage event", async () => {

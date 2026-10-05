@@ -31,6 +31,7 @@ import type { Context } from "effect";
 import {
   LLMService,
   messageContentToString,
+  StructuredUsageRef,
   type CompletionRequest,
   type StructuredCompletionRequest,
   type LLMMessage,
@@ -328,18 +329,26 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const start = Date.now();
             yield* emitLLMRequestStarted(request, "completeStructured");
             const result = yield* inner.completeStructured(request);
+            // Issue #232 Gap 1 — account structured calls. `completeStructured`
+            // still returns only the parsed value (public contract unchanged),
+            // but the provider surfaces the real retry-summed usage on the
+            // ambient `StructuredUsageRef`. Read it, feed the run-scoped meter,
+            // then clear it so a later structured path that does not set it
+            // (e.g. the replay layer) cannot read a stale value.
+            const structuredUsage = yield* FiberRef.get(StructuredUsageRef);
+            if (structuredUsage && structuredUsage.totalTokens > 0) {
+              yield* addRunSpend({
+                tokens: structuredUsage.totalTokens,
+                cost: structuredUsage.estimatedCost,
+              });
+            }
+            yield* FiberRef.set(StructuredUsageRef, null);
             // Structured result is the parsed value, not a CompletionResponse —
             // stringify for observability. The trace + diagnose layers will
             // see a JSON-ish content payload tagged completeStructured.
             const json = (() => {
               try { return JSON.stringify(result); } catch { return String(result); }
             })();
-            // Run-scoped budget gap (Issue #231 follow-up): completeStructured
-            // returns only the parsed value, so no usage is available here to
-            // feed the meter. Structured calls (plan decomposition, extraction)
-            // are therefore NOT yet metered; the Arbitrator's `Math.max(meter,
-            // state)` guard and the strategy-level budget checks remain the
-            // backstop until LLMService exposes structured usage.
             yield* emitForRequest(request, json, Date.now() - start, "completeStructured");
             return result;
           }),

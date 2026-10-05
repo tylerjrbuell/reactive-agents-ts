@@ -575,7 +575,7 @@ export const AnthropicProviderLive = Layer.effect(
             );
 
             // Prepend the "{" prefill back to the response content
-            return "{" + response.content;
+            return { content: "{" + response.content, usage: response.usage };
               }),
           });
         }),

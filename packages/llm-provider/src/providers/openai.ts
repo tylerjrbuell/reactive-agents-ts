@@ -687,11 +687,12 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   catch: (error) => toEffectError(error, providerName),
                 });
 
-                return mapOpenAIResponse(
+                const mapped = mapOpenAIResponse(
                   completeResult as OpenAIRawResponse,
                   model,
                   config.pricingRegistry,
-                ).content;
+                );
+                return { content: mapped.content, usage: mapped.usage };
               }),
           });
         }),

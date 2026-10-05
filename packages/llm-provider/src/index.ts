@@ -192,6 +192,15 @@ export type {
   ComplexityAnalysis,
 } from "./structured-output.js";
 
+/**
+ * ─── Structured usage sink (Issue #232 Gap 1) ───
+ * Fiber-local ambient ref populated by `completeStructured()` with the
+ * provider-reported token usage (summed across parse-retry attempts). Read by
+ * the observable LLM wrapper in `@reactive-agents/reasoning` to meter
+ * structured calls against the run-scoped budget.
+ */
+export { StructuredUsageRef } from "./structured-parse-retry.js";
+
 // ─── Provider Defaults ───
 export { PROVIDER_DEFAULT_MODELS, getProviderDefaultModel } from "./provider-defaults.js";
 

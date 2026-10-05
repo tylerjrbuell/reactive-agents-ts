@@ -600,11 +600,12 @@ export const LiteLLMProviderLive = Layer.effect(
                   catch: (error) => toEffectError(error),
                 });
 
-                return mapLiteLLMResponse(
+                const mapped = mapLiteLLMResponse(
                   completeResult as LiteLLMRawResponse,
                   model,
                   config.pricingRegistry,
-                ).content;
+                );
+                return { content: mapped.content, usage: mapped.usage };
               }),
           });
         }),
