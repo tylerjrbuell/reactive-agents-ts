@@ -650,6 +650,13 @@ export interface JudgmentSites {
 }
 
 /**
+ * Supported judgment backends. `"jev"` uses the TypeSafe API; `"llm"`
+ * emulates Choice/Score/Noul over the agent's own `LLMService`; `"ollama"`
+ * routes to an Ollama-compatible server via the System One protocol.
+ */
+export type JudgmentBackendName = "jev" | "llm" | "ollama";
+
+/**
  * Options for `.withJudgment()` — wires an optional `JudgmentService` into
  * the runtime for internal harness sites (opted in per-site via `sites`,
  * all default off) and for the public `agent.judge()` primitive.
@@ -658,12 +665,17 @@ export interface JudgmentSites {
  * or `TYPESAFE_API_KEY` in the environment) when a key is present, otherwise
  * `"llm"` (emulates Choice/Score/Noul over the agent's own configured
  * `LLMService` — uncalibrated, `calibrated: false` on every answer). Set
- * `backend` explicitly to override the presence-based default.
+ * `backend` explicitly to override the presence-based default. `"ollama"`
+ * requires `backend: "ollama"` and a reachable Ollama server root in
+ * `baseUrl`.
  */
 export interface JudgmentBuilderOptions {
     /** TypeSafe API key. Falls back to `TYPESAFE_API_KEY` when absent. */
     readonly apiKey?: string
-    /** TypeSafe API base URL override. */
+    /**
+     * Backend base URL override. For `jev` this is the TypeSafe API root;
+     * for `ollama` this is the Ollama server root (e.g. `http://localhost:11434`).
+     */
     readonly baseUrl?: string
     /** Model identifier passed to the backend on each `ask()` call. */
     readonly model?: string
@@ -675,7 +687,18 @@ export interface JudgmentBuilderOptions {
      * Force a backend instead of the default presence-based selection
      * (`jev` when a TypeSafe key resolves, else `llm`).
      */
-    readonly backend?: "jev" | "llm"
+    readonly backend?: JudgmentBackendName
+    /**
+     * Ollama-specific options. Only applies when `backend: "ollama"`;
+     * ignored for all other backends.
+     */
+    readonly ollama?: {
+        /**
+         * Value for Ollama's `keep_alive` parameter (seconds, or `"5m"`-style
+         * string). Only used when `backend: "ollama"`.
+         */
+        readonly keepAlive?: string | number
+    }
     /** Per-site opt-ins for internal harness consumers. All default off. */
     readonly sites?: JudgmentSites
 }
