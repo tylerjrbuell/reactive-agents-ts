@@ -29,7 +29,7 @@ import {
  */
 
 const entryToText = (entry: JudgmentEntry): string =>
-  typeof entry === "string" ? entry : JSON.stringify(entry);
+  typeof entry === "string" ? entry : JSON.stringify(entry, null, 2);
 
 const describeQuestion = (id: string, spec: QuestionSpec): string => {
   const instructions = spec.instructions !== undefined ? entryToText(spec.instructions) : "(no instructions given)";
