@@ -1,7 +1,7 @@
-import { Schema, Number, String, Literal, Struct, Array as SchemaArray, Optional } from "effect";
+import { Schema } from "effect";
 
 // Biome literals
-export const Biome = Literal(
+export const Biome = Schema.Literal(
   "ocean",
   "beach",
   "forest",
@@ -10,7 +10,7 @@ export const Biome = Literal(
   "freshwater"
 );
 // Weather condition literals (simplified)
-export const WeatherCondition = Literal(
+export const WeatherCondition = Schema.Literal(
   "sunny",
   "rain",
   "storm",
@@ -18,15 +18,14 @@ export const WeatherCondition = Literal(
 );
 
 // Simple needs schema (0..10 inclusive)
-export const NeedsSchema = Struct({
-  hunger: Number.pipe(Number.greaterThanOrEqualTo(0), Number.lessThanOrEqualTo(10)),
-  thirst: Number.pipe(Number.greaterThanOrEqualTo(0), Number.lessThanOrEqualTo(10)),
-  energy: Number.pipe(Number.greaterThanOrEqualTo(0), Number.lessThanOrEqualTo(10)),
+export const NeedsSchema = Schema.Struct({
+  hunger: Schema.Number,
+  thirst: Schema.Number,
+  energy: Schema.Number,
 });
-
 export type Needs = typeof NeedsSchema.Type;
 
-export const ActionType = Literal(
+export const ActionType = Schema.Literal(
   "move",
   "gather",
   "hunt",
@@ -42,79 +41,79 @@ export const ActionType = Literal(
 );
 export type ActionType = typeof ActionType.Type;
 
-export const ActionRequestSchema = Struct({
+export const ActionRequestSchema = Schema.Struct({
   type: ActionType,
-  target: Optional(String),
+  target: Schema.optional(Schema.String),
 });
 export type ActionRequest = typeof ActionRequestSchema.Type;
 
-export const AgentStateSchema = Struct({
-  id: String,
-  name: String,
-  personality: Struct({
-    traits: SchemaArray(String),
-    riskTolerance: Number,
+export const AgentStateSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  personality: Schema.Struct({
+    traits: Schema.Array(Schema.String),
+    riskTolerance: Schema.Number,
   }),
-  skills: Schema.struct({}), // free-form map of skill name -> level
+  skills: Schema.Record({ key: Schema.String, value: Schema.Number }),
   needs: NeedsSchema,
-  goals: SchemaArray(String),
-  inventory: SchemaArray(Struct({ kind: String, qty: Number })),
-  location: String,
-  relationships: Schema.struct({}), // map of agentId -> { trust: Number, lastInteraction: Number }
-  beliefs: SchemaArray(Struct({ subject: String, claim: String, confidence: Number })),
-  memory: SchemaArray(Struct({ tick: Number, text: String })),
-  plan: SchemaArray(String),
-  status: Literal("alive", "injured", "ill", "dead"),
+  goals: Schema.Array(Schema.String),
+  inventory: Schema.Array(Schema.Struct({ kind: Schema.String, qty: Schema.Number })),
+  location: Schema.String,
+  relationships: Schema.Record({ key: Schema.String, value: Schema.Struct({ trust: Schema.Number, lastInteraction: Schema.Number }) }),
+  beliefs: Schema.Array(Schema.Struct({ subject: Schema.String, claim: Schema.String, confidence: Schema.Number })),
+  memory: Schema.Array(Schema.Struct({ tick: Schema.Number, text: Schema.String })),
+  plan: Schema.Array(Schema.String),
+  status: Schema.Literal("alive", "injured", "ill", "dead"),
 });
 export type AgentState = typeof AgentStateSchema.Type;
 
-export const TerrainTileSchema = Struct({
-  tile: String,
+export const TerrainTileSchema = Schema.Struct({
+  tile: Schema.String,
   biome: Biome,
-  elevation: Number,
+  elevation: Schema.Number,
 });
 export type TerrainTile = typeof TerrainTileSchema.Type;
 
-export const WeatherSchema = Struct({
+export const WeatherSchema = Schema.Struct({
   condition: WeatherCondition,
-  tempC: Number,
+  tempC: Schema.Number,
 });
 export type Weather = typeof WeatherSchema.Type;
 
-export const ResourceNodeSchema = Struct({
-  id: String,
-  kind: String,
-  tile: String,
-  quantity: Number,
-  regrowthPerDay: Number,
-  initialQuantity: Number,
+export const ResourceNodeSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.String,
+  tile: Schema.String,
+  quantity: Schema.Number,
+  regrowthPerDay: Schema.Number,
+  initialQuantity: Schema.Number,
 });
 export type ResourceNode = typeof ResourceNodeSchema.Type;
 
-export const StructureSchema = Struct({
-  id: String,
-  kind: String,
-  tile: String,
-  ownerId: Optional(String),
-  durability: Number,
+export const StructureSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.String,
+  tile: Schema.String,
+  ownerId: Schema.optional(Schema.String),
+  durability: Schema.Number,
 });
 export type Structure = typeof StructureSchema.Type;
 
-export const HiddenFactsSchema = Struct({
-  secrets: SchemaArray(String),
+export const HiddenFactsSchema = Schema.Struct({
+  secrets: Schema.Array(Schema.String),
 });
 export type HiddenFacts = typeof HiddenFactsSchema.Type;
 
-export const WorldStateSchema = Struct({
-  id: String,
-  seed: Number,
-  clock: Struct({ tick: Number, day: Number, hour: Number }),
-  island: Struct({ width: Number, height: Number }),
-  terrain: SchemaArray(TerrainTileSchema),
+export const WorldStateSchema = Schema.Struct({
+  id: Schema.String,
+  seed: Schema.Number,
+  clock: Schema.Struct({ tick: Schema.Number, day: Schema.Number, hour: Schema.Number }),
+  island: Schema.Struct({ width: Schema.Number, height: Schema.Number }),
+  terrain: Schema.Array(TerrainTileSchema),
   weather: WeatherSchema,
-  resources: SchemaArray(ResourceNodeSchema),
-  structures: SchemaArray(StructureSchema),
-  agents: SchemaArray(AgentStateSchema),
+  resources: Schema.Array(ResourceNodeSchema),
+  structures: Schema.Array(StructureSchema),
+  agents: Schema.Array(AgentStateSchema),
   hidden: HiddenFactsSchema,
 });
 export type WorldState = typeof WorldStateSchema.Type;
@@ -123,7 +122,14 @@ export type WorldState = typeof WorldStateSchema.Type;
 export function parseWorld(input: unknown): WorldState | undefined {
   try {
     const result = Schema.decodeUnknownSync(WorldStateSchema)(input as any);
-    return result as WorldState;
+    // Validate that each agent's needs are non-negative
+    const ws = result as WorldState;
+    for (const a of ws.agents) {
+      if (a.needs.hunger < 0 || a.needs.thirst < 0 || a.needs.energy < 0) {
+        return undefined;
+      }
+    }
+    return ws as WorldState;
   } catch {
     return undefined;
   }
