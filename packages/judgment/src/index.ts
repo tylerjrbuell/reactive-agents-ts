@@ -5,10 +5,12 @@ export type {
   JudgmentAnswer,
   JudgmentAnswers,
   JudgmentBackend,
+  JudgmentCapabilities,
   JudgmentConfig,
   JudgmentEntry,
   JudgmentError,
   JudgmentModel,
+  JudgmentQuestionKind,
   NoulAnswer,
   NoulSpec,
   QuestionSpec,
@@ -19,6 +21,7 @@ export type {
 } from "./types.js";
 export {
   ChoiceAnswerSchema,
+  DEFAULT_JUDGMENT_CAPABILITIES,
   DEFAULT_TIMEOUT_MS,
   JudgmentBadResponse,
   JudgmentConfig as JudgmentConfigSchema,
@@ -32,6 +35,15 @@ export {
   passes,
 } from "./types.js";
 
-export { JudgmentService, makeJudgmentServiceLive, withEvents } from "./services/judgment-service.js";
+export { JudgmentService, capabilitiesOf, makeJudgmentServiceLive, withEvents } from "./services/judgment-service.js";
 export { makeJevBackend } from "./backends/jev-backend.js";
 export { makeLlmBackend } from "./backends/llm-backend.js";
+
+// System One protocol core
+export { makeSystemOneHttpBackend } from "./backends/systemone/engine.js";
+export type {
+  SystemOneProviderDescriptor,
+  SystemOneHttpConfig,
+} from "./backends/systemone/engine.js";
+export { makeOllamaBackend } from "./backends/systemone/providers/ollama.js";
+export type { OllamaJudgmentConfig } from "./backends/systemone/providers/ollama.js";

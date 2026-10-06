@@ -991,3 +991,27 @@ task: "cumulative run-level budget enforcement for plan-execute-reflect (Arbitra
 result: interrupted, parent-integrated
 outcome: "warden session died mid-mission leaving substantive partial work (helper + tests + plan-execute gate). Parent verified root-cause trace (red via stash: pre-fix the cumulative test fails on [EXEC s3] launching), fixed one merge-order defect found on integration (budgetStopped branch clobbered the sub-kernel envelope's deliverable-naming verificationWarning - now appends), updated plan-execute-honest-partial test to the new strategy-level stop semantics with rationale, ran strategies 85/85 + kernel budget suites 26/26 + reasoning 2907/0 + tsc clean. Live demo: BUDGET_TOKENS=3500 caps the run with honest partial. Follow-on gaps reported: reflexion.ts + tree-of-thought.ts share the multi-kernel budget gap (helper ready); separate pre-existing O(n^3) PATH_TOKEN backtracking in kernel verify/derive-conditions.ts on huge prior-step blobs (documented in the new test's comments)"
 ```
+
+```yaml
+date: 2026-10-06
+warden: runtime-warden
+task: "System One decision backends Task 5: judgment-layer.ts BACKENDS registry + builder ollama namespace; replace both runtime.ts judgment IIFEs"
+result: completed, confidence 0.95
+outcome: "accepted: parent verifier green (turbo typecheck filter=@reactive-agents/runtime 21/21; builder-judgment/judgment-context/agent-list-judgment-models/judge-input-export/judgment-rank + judgment package 113/0; zero new as-unknown-as casts; scope = the 4 briefed paths only). Parent integrated commit 5f03ab6d per warden no-commit contract (R2); independent task review dispatched separately."
+```
+
+```yaml
+date: 2026-10-06
+warden: runtime-warden
+task: "System One decision backends Task 6: optional images channel on agent.judge() (JudgeInput + verbatim forwarding to ask; service guard owns rejection per R5)"
+result: completed, confidence 0.95
+outcome: "accepted: parent verifier green (5 focused runtime judgment test files 39/0 incl. 4 new pins; turbo typecheck filter=@reactive-agents/runtime clean; zero new casts; scope = reactive-agent.ts + judge-images.test.ts only). Parent integrated commit e2f70240; independent task review dispatched separately."
+```
+
+```yaml
+date: 2026-10-06
+warden: kernel-warden
+task: "System One decision backends Task 7 kernel half: chunkQuestions(toolNames, maxQuestions?) cap = min(CHUNK_CAP, maxQuestions ?? Infinity); shadow resolves capabilitiesOf inside forkDaemon"
+result: completed, confidence 0.95
+outcome: "accepted: working tree already contained the implementation (residue of an interrupted funds-killed attempt); warden verified rather than re-implemented (red via HEAD-src restore 2-vs-5 ask calls, green 31/0 comprehend, typecheck 9/9, zero new casts). Parent re-verified (comprehend + kernel loop 133/0, zero casts) and integrated per warden no-commit contract. Independent Task 7 review covers both halves."
+```

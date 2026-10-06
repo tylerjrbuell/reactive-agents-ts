@@ -4,6 +4,9 @@
  * `JudgmentBackend`). Converts RA's backend-agnostic question specs to the
  * SDK's `Questions` shape and the SDK's `SystemOneResult` back to
  * `JudgmentAnswers`.
+ *
+ * Wire-protocol mirror lives in `backends/systemone/wire.ts` and must stay
+ * SDK-free; this file stays SDK-bound.
  */
 import { choice, noul, score } from "@typesafe-ai/sdk";
 import type { EntryType, ModelCard, Question, Questions, SystemOneResult } from "@typesafe-ai/sdk";

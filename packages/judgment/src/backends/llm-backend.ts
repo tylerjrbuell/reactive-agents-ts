@@ -134,6 +134,7 @@ const toJudgmentError = (cause: LLMErrors): JudgmentError => {
 /** `JudgmentBackend` over an injected `LLMService` — no vendor SDK, no TypeSafe key. */
 export const makeLlmBackend = (llm: LLMService["Type"]): JudgmentBackend => ({
   name: "llm",
+  // Capabilities are intentionally omitted; the service layer supplies defaults.
   evaluate: ({ state, questions, model }) => {
     const questionIds = Object.keys(questions);
     const schema = buildBatchSchema(questions);

@@ -22,13 +22,8 @@ import { withMemoryGuardrails } from "./memory-guardrails.js";
 
 // Optional package imports
 import { createGuardrailsLayer } from "@reactive-agents/guardrails";
-import {
-  JudgmentService,
-  makeJudgmentServiceLive,
-  makeJevBackend,
-  makeLlmBackend,
-  withEvents as withJudgmentEvents,
-} from "@reactive-agents/judgment";
+import { JudgmentService } from "@reactive-agents/judgment";
+import { buildJudgmentLayer } from "./judgment-layer.js";
 import {
   createVerificationLayer,
   createVerificationLayerWithRuntimeLlm,
@@ -732,34 +727,10 @@ export const createRuntime = (options: RuntimeOptions) => {
   // called — `JudgmentService` is genuinely not in the runtime's Layer graph in
   // that case, not a dummy/no-op stand-in (Task 8, judgment-layer plan).
   const judgmentOptLayer = options.enableJudgment
-    ? (() => {
-        const jc = options.judgmentOptions;
-        const backendName: "jev" | "llm" =
-          jc?.backend ?? (jc?.apiKey ?? process.env.TYPESAFE_API_KEY ? "jev" : "llm");
-        const site = "agent.judge";
-        const serviceLayer: Layer.Layer<JudgmentService, never, never> =
-          backendName === "jev"
-            ? makeJudgmentServiceLive(
-                makeJevBackend({
-                  apiKey: jc?.apiKey,
-                  baseUrl: jc?.baseUrl,
-                  model: jc?.model,
-                  timeoutMs: jc?.timeoutMs,
-                  defaultConfidenceFloor: jc?.defaultConfidenceFloor,
-                }),
-              )
-            : (Layer.unwrapEffect(
-                Effect.gen(function* () {
-                  const llm = yield* LLMService;
-                  return makeJudgmentServiceLive(makeLlmBackend(llm));
-                }),
-              ).pipe(
-                Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
-              ) as Layer.Layer<JudgmentService, never, never>);
-        return withJudgmentEvents(site, backendName).pipe(
-          Layer.provide(Layer.merge(serviceLayer, eventBusLayer)),
-        );
-      })()
+    ? buildJudgmentLayer(options.judgmentOptions, {
+        llmLayer: observableLlmLayer as Layer.Layer<LLMService>,
+        eventBusLayer,
+      })
     : Layer.empty;
 
   // ── Cost tracking ──
@@ -1476,32 +1447,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   // ── Judgment (mirrors the root runtime's judgmentOptLayer above, minus
   // observability wrapping — a light runtime has no `observableLlmLayer`) ──
   const lightJudgmentOptLayer = options.enableJudgment
-    ? (() => {
-        const jc = options.judgmentOptions;
-        const backendName: "jev" | "llm" =
-          jc?.backend ?? (jc?.apiKey ?? process.env.TYPESAFE_API_KEY ? "jev" : "llm");
-        const site = "agent.judge";
-        const serviceLayer: Layer.Layer<JudgmentService, never, never> =
-          backendName === "jev"
-            ? makeJudgmentServiceLive(
-                makeJevBackend({
-                  apiKey: jc?.apiKey,
-                  baseUrl: jc?.baseUrl,
-                  model: jc?.model,
-                  timeoutMs: jc?.timeoutMs,
-                  defaultConfidenceFloor: jc?.defaultConfidenceFloor,
-                }),
-              )
-            : (Layer.unwrapEffect(
-                Effect.gen(function* () {
-                  const llm = yield* LLMService;
-                  return makeJudgmentServiceLive(makeLlmBackend(llm));
-                }),
-              ).pipe(Layer.provide(llmLayer)) as Layer.Layer<JudgmentService, never, never>);
-        return withJudgmentEvents(site, backendName).pipe(
-          Layer.provide(Layer.merge(serviceLayer, eventBusLayer)),
-        );
-      })()
+    ? buildJudgmentLayer(options.judgmentOptions, { llmLayer, eventBusLayer })
     : Layer.empty;
 
   const lightCostTrackingOptLayer = options.enableCostTracking

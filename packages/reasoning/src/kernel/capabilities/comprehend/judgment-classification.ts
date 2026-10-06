@@ -22,7 +22,7 @@
  * zero-cost no-op.
  */
 import { Effect, Either, Option } from "effect";
-import { JudgmentService } from "@reactive-agents/judgment";
+import { JudgmentService, capabilitiesOf } from "@reactive-agents/judgment";
 import type { JudgmentAnswer, QuestionSpecs } from "@reactive-agents/judgment";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { EventBusInstance } from "../../state/kernel-state.js";
@@ -40,23 +40,29 @@ import {
  * Per-`ask()` question ceiling. No documented hard cap from TypeSafe on
  * question count per request (unlike `ChoiceCriteria`'s documented 255-option
  * cap) — this is a pragmatic ceiling so a run with a very large tool roster
- * doesn't send one unbounded batched request. Chosen conservatively; revisit
- * with real latency/token data once Task 10 Step 4 has shadow telemetry.
+ * doesn't send one unbounded batched request. It is now a ceiling, not a fixed
+ * batch size: the actual chunk size is `min(CHUNK_CAP, backend.maxQuestions)`.
+ * Chosen conservatively; revisit with real latency/token data once Task 10
+ * Step 4 has shadow telemetry.
  */
 const CHUNK_CAP = 30;
 
-/** Splits the base questions + per-tool Nouls into `ask()`-sized chunks (≤ CHUNK_CAP each). */
-function chunkQuestions(toolNames: readonly string[]): readonly QuestionSpecs[] {
+/** Splits the base questions + per-tool Nouls into `ask()`-sized chunks (≤ cap each). */
+function chunkQuestions(toolNames: readonly string[], maxQuestions?: number): readonly QuestionSpecs[] {
+  // `Math.max(1, ...)`: a backend declaring a non-positive `maxQuestions`
+  // would otherwise make the chunk loop's `i += cap` never advance (infinite
+  // loop). Clamp to 1-question chunks.
+  const cap = Math.max(1, Math.min(CHUNK_CAP, maxQuestions ?? Number.POSITIVE_INFINITY));
   const base = buildComprehendJudgmentBaseQuestions();
-  const firstChunkToolCap = Math.max(0, CHUNK_CAP - Object.keys(base).length);
+  const firstChunkToolCap = Math.max(0, cap - Object.keys(base).length);
   const firstChunkTools = toolNames.slice(0, firstChunkToolCap);
   const remainingTools = toolNames.slice(firstChunkToolCap);
 
   const chunks: QuestionSpecs[] = [
     { ...base, ...buildToolRequirementQuestions(firstChunkTools) },
   ];
-  for (let i = 0; i < remainingTools.length; i += CHUNK_CAP) {
-    chunks.push(buildToolRequirementQuestions(remainingTools.slice(i, i + CHUNK_CAP)));
+  for (let i = 0; i < remainingTools.length; i += cap) {
+    chunks.push(buildToolRequirementQuestions(remainingTools.slice(i, i + cap)));
   }
   return chunks;
 }
@@ -167,7 +173,8 @@ export function judgmentComprehendShadow(
 
     yield* Effect.forkDaemon(
       Effect.gen(function* () {
-        const chunks = chunkQuestions(input.availableToolNames);
+        const caps = yield* capabilitiesOf(judgment);
+        const chunks = chunkQuestions(input.availableToolNames, caps.maxQuestions);
         const state = buildComprehendJudgmentState({ task: input.task });
 
         for (const chunk of chunks) {

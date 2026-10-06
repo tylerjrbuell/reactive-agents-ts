@@ -167,6 +167,7 @@ export type JudgeInput<Q extends QuestionSpecs> = (
 ) & {
     readonly questions: Q
     readonly model?: string
+    readonly images?: readonly string[]
 }
 
 /**
@@ -562,7 +563,12 @@ export class ReactiveAgent<TOut = unknown> {
      *   reasoningSteps? }`) to opt into only the named layers, each itself
      *   `boolean | { window?, ... }` for per-layer tuning. A layer absent
      *   from the object form is OFF, unlike bare `true` where every layer
-     *   defaults on.
+     *   defaults on. `images` is an optional array of base64-encoded image
+     *   strings (PNG, JPEG, or WebP) supplied in caller order and forwarded
+     *   verbatim to the judgment backend. Use a vision-capable decision model
+     *   such as `clef` or `clef-flash`; the runtime does not fetch URLs or
+     *   data URLs. Text-only backends reject non-empty images with
+     *   `JudgmentUnsupported` at the service guard.
      * @throws Error if `.withJudgment()` was not called during build —
      *   `JudgmentService` is genuinely absent from the runtime's Layer
      *   graph in that case, not silently stubbed.
@@ -611,7 +617,7 @@ export class ReactiveAgent<TOut = unknown> {
      * gap where `state` was missing entirely.
      */
     async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
-        const { questions, model } = input
+        const { questions, model, images } = input
         let mergedState: JudgmentEntry
         let contextMerged: boolean
         if (input.includeContext) {
@@ -660,7 +666,11 @@ export class ReactiveAgent<TOut = unknown> {
                         )
                     ) as Effect.Effect<void>
                 }
-                return yield* judgmentOpt.value.ask({ state: mergedState, questions, model })
+                const askInput: { state: JudgmentEntry; questions: Q; model?: string; images?: readonly string[] } = { state: mergedState, questions, model }
+                if (images !== undefined && images.length > 0) {
+                    askInput.images = images
+                }
+                return yield* judgmentOpt.value.ask(askInput)
             })
         )
     }
@@ -715,8 +725,9 @@ export class ReactiveAgent<TOut = unknown> {
      * configured by `.withJudgment()` — the batched primitive behind the
      * judgment cookbook's re-ranking recipe.
      *
-     * Batches every candidate into a single `ask()` call when they fit
-     * `opts.chunkCap` (default 30, see `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
+     * Batches every candidate into a single `ask()` call when they fit the
+     * effective cap (`opts.chunkCap` clamped to the backend's advertised
+     * `maxQuestions`, defaulting to `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
      * `judgment-rank.ts`), chunking into multiple `ask()` calls otherwise —
      * real leverage over hand-rolling `Promise.all(candidates.map(c =>
      * agent.judge(...)))`, which fires one round trip PER candidate

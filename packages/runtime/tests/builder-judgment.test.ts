@@ -17,14 +17,16 @@
 //      selects "llm"; `backend` always overrides.
 
 import { describe, it, expect, afterEach } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type {
   ModelConfig,
   StructuredOutputCapabilities,
 } from "@reactive-agents/llm-provider";
+import { EventBus } from "@reactive-agents/core";
 import { JudgmentService } from "@reactive-agents/judgment";
-import { ReactiveAgents } from "../src/index.js";
+import { ReactiveAgents, createLightRuntime } from "../src/index.js";
+import { resolveBackendName } from "../src/judgment-layer.js";
 
 /**
  * A fake `LLMService` whose `completeStructured()` answers a single known
@@ -217,6 +219,159 @@ describe(".withJudgment() — Task 8 builder wiring", () => {
       expect(jevCallCount.count).toBe(0);
     } finally {
       if (priorKey !== undefined) process.env.TYPESAFE_API_KEY = priorKey;
+    }
+  });
+
+  it("OLLAMA SELECTION: backend:'ollama' routes to the ollama backend, not the fake LLM", async () => {
+    const fakeLlmCallCount = { count: 0 };
+    const events: Array<{ backend: string; errorTag: string }> = [];
+    const agent = await ReactiveAgents.create()
+      .withName("judgment-backend-ollama-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReplayLLM(makeFakeLLM(fakeLlmCallCount))
+      .withJudgment({
+        backend: "ollama",
+        baseUrl: "http://127.0.0.1:1",
+        ollama: { keepAlive: 0 },
+      })
+      .build();
+    agentsToDispose.push(agent);
+
+    const unsub = await agent.subscribe("JudgmentFailed", (event) => {
+      events.push({ backend: event.backend, errorTag: event.errorTag });
+    });
+    try {
+      await expect(
+        agent.judge({ state: null, questions: noulQuestion })
+      ).rejects.toBeTruthy();
+    } finally {
+      unsub();
+    }
+
+    expect(fakeLlmCallCount.count).toBe(0);
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events[0].backend).toBe("ollama");
+    expect(events[0].errorTag).toBe("JudgmentConnectionError");
+  });
+
+  it("resolveBackendName: explicit backend always wins; else jev when an apiKey resolves; else llm", () => {
+    const priorKey = process.env.TYPESAFE_API_KEY;
+    delete process.env.TYPESAFE_API_KEY;
+    try {
+      // Explicit backend always overrides presence/absence of apiKey/env.
+      expect(resolveBackendName({ backend: "llm", apiKey: "x" })).toBe("llm");
+      expect(resolveBackendName({ backend: "ollama" })).toBe("ollama");
+
+      // apiKey in config selects jev.
+      expect(resolveBackendName({ apiKey: "config-key" })).toBe("jev");
+
+      // No apiKey, no env → llm.
+      expect(resolveBackendName(undefined)).toBe("llm");
+      expect(resolveBackendName({})).toBe("llm");
+
+      // Env var selects jev.
+      process.env.TYPESAFE_API_KEY = "env-key";
+      expect(resolveBackendName(undefined)).toBe("jev");
+      expect(resolveBackendName({ backend: "jev" })).toBe("jev");
+
+      // Explicit backend still wins over env var.
+      expect(resolveBackendName({ backend: "llm" })).toBe("llm");
+      expect(resolveBackendName({ backend: "ollama" })).toBe("ollama");
+    } finally {
+      if (priorKey !== undefined) {
+        process.env.TYPESAFE_API_KEY = priorKey;
+      } else {
+        delete process.env.TYPESAFE_API_KEY;
+      }
+    }
+  });
+
+  it("both runtime tiers resolve the same backend for the same options", async () => {
+    const priorKey = process.env.TYPESAFE_API_KEY;
+    delete process.env.TYPESAFE_API_KEY;
+    try {
+      const judgmentOptions = {
+        backend: "ollama" as const,
+        baseUrl: "http://127.0.0.1:1",
+        ollama: { keepAlive: 0 },
+      };
+
+      // Root runtime tier.
+      const rootEvents: Array<{ backend: string; errorTag: string }> = [];
+      const rootAgent = await ReactiveAgents.create()
+        .withName("root-judgment-tier-agent")
+        .withProvider("test")
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withReplayLLM(makeFakeLLM({ count: 0 }))
+        .withJudgment(judgmentOptions)
+        .build();
+      agentsToDispose.push(rootAgent);
+
+      const rootUnsub = await rootAgent.subscribe("JudgmentFailed", (event) => {
+        rootEvents.push({ backend: event.backend, errorTag: event.errorTag });
+      });
+      try {
+        await expect(
+          rootAgent.judge({ state: null, questions: noulQuestion })
+        ).rejects.toBeTruthy();
+      } finally {
+        rootUnsub();
+      }
+
+      // Light/sub-agent runtime tier.
+      const lightEvents: Array<{ backend: string; errorTag: string }> = [];
+      const lightLayer = createLightRuntime({
+        agentId: "light-judgment-tier-agent",
+        provider: "test",
+        enableJudgment: true,
+        judgmentOptions,
+      });
+      const lightRuntime = ManagedRuntime.make(lightLayer);
+
+      const lightUnsub = await lightRuntime.runPromise(
+        Effect.gen(function* () {
+          const eb = yield* EventBus;
+          return yield* eb.subscribe((event) =>
+            Effect.sync(() => {
+              if (event._tag === "JudgmentFailed") {
+                lightEvents.push({
+                  backend: event.backend,
+                  errorTag: event.errorTag,
+                });
+              }
+            })
+          );
+        })
+      );
+      try {
+        await expect(
+          lightRuntime.runPromise(
+            Effect.gen(function* () {
+              const js = yield* JudgmentService;
+              return yield* js.ask({ state: null, questions: noulQuestion });
+            })
+          )
+        ).rejects.toBeTruthy();
+      } finally {
+        lightUnsub();
+        await lightRuntime.dispose();
+      }
+
+      expect(rootEvents.length).toBeGreaterThanOrEqual(1);
+      expect(lightEvents.length).toBeGreaterThanOrEqual(1);
+      expect(rootEvents[0].backend).toBe("ollama");
+      expect(lightEvents[0].backend).toBe("ollama");
+      expect(rootEvents[0].errorTag).toBe("JudgmentConnectionError");
+      expect(lightEvents[0].errorTag).toBe("JudgmentConnectionError");
+    } finally {
+      if (priorKey !== undefined) {
+        process.env.TYPESAFE_API_KEY = priorKey;
+      } else {
+        delete process.env.TYPESAFE_API_KEY;
+      }
     }
   });
 });
