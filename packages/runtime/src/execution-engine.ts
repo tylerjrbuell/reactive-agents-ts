@@ -136,6 +136,8 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 // TELEMETRY_ENABLED gate below.
 const _noticesManager = makeNoticesManager();
 
+import { armRunBudget } from "./engine/run-budget-arm.js";
+
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
 // Re-exported here for backward compatibility with external importers.
 export { checkAllowedToolsMismatch } from "./engine/util.js";
@@ -1775,6 +1777,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             }),
           );
       }
+
+      // Issue #232 Gap 2 — arm ONE run-scoped budget meter around the WHOLE run
+      // (see `engine/run-budget-arm.ts` for the full rationale). The meter is
+      // created per `execute(task)` — one per run — so the main pass AND every
+      // auxiliary pass (verification retry, continuation) feed the same
+      // accumulator, and each kernel inherits the run limits. Gated on
+      // `config.budgetLimits` → a run without `.withBudget()` stays byte-identical.
+      execute = armRunBudget(execute, config.budgetLimits);
 
       return {
         execute,

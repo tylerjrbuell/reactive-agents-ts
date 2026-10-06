@@ -1,6 +1,7 @@
 ---
 "@reactive-agents/reasoning": minor
 "@reactive-agents/llm-provider": minor
+"@reactive-agents/runtime": minor
 ---
 
 **Run-scoped budget enforcement (Issue #231 / DEBT D-2026-10-05-P).**
@@ -39,13 +40,27 @@ now surfaces the provider's real (retry-summed) usage on the exported
 `completeStructured` and feeds the meter. `completeStructured`'s public return
 type is unchanged (`A`). This closes the plan-generation/extraction accounting gap.
 
+**The meter is now WHOLE-RUN scoped (`runtime`, #232 Gap 2).** It used to be
+armed per `ReasoningService.execute`, so auxiliary passes that call `execute`
+without `budgetLimits` — the verification THINK retry and the post-think
+continuation hooks — armed no meter and were unbudgeted (a run could exceed its
+cap by a full auxiliary pass). The runtime now arms ONE meter at the
+once-per-run `ExecutionEngine.execute` boundary (`engine/run-budget-arm.ts`);
+`ReasoningService.execute` reuses that ambient meter when present (and only
+creates its own for direct callers/tests outside the engine). Every LLM call a
+run makes — main pass, auxiliary passes, memory/debrief phases — feeds the same
+accumulator, and each kernel inherits the run limits via the runner's
+`state.meta.runBudgetLimits` seed, so an auxiliary-pass kernel enforces the run
+budget even though it declares none.
+
 Tests: `kernel/run-budget.test.ts` (primitive, wrapper feed incl. structured,
 Arbitrator consume, runner seed, resume max-seed, codec round-trip),
 `kernel/run-budget-strategies.test.ts` (reactive / plan-execute-reflect /
-reflexion / tree-of-thought / blueprint halt on a crossed limit),
-`services/reasoning-service-run-budget.test.ts` (production wiring),
-`llm-provider/tests/structured-usage-ref.test.ts` (usage surfaced). Remaining
-gap: the meter is per-`execute`, not per-whole-run (auxiliary passes).
+reflexion / tree-of-thought / blueprint halt on a crossed limit; auxiliary pass
+with no `budgetLimits` halts on the ambient run limit),
+`services/reasoning-service-run-budget.test.ts` (production wiring + ambient
+meter reuse), `runtime/tests/run-budget-arm.test.ts` (runtime arming seam),
+`llm-provider/tests/structured-usage-ref.test.ts` (usage surfaced).
 
 **Strategy gates unified on the meter (#234).** Direct LLM calls between kernels
 never enter the Arbitrator, so the per-strategy gates remain the direct-call

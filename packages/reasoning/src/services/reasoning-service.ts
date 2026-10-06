@@ -1,5 +1,5 @@
 // File: src/services/reasoning-service.ts
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, FiberRef, Layer } from "effect";
 import { CurrentRunContext } from "@reactive-agents/core";
 import type {
   ReasoningResult,
@@ -19,7 +19,7 @@ import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
 import { RunEnvelope, buildRunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
-import { makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
+import { CurrentRunBudget, makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
 
 // ─── Service Tag ───
 
@@ -255,9 +255,22 @@ export const ReasoningServiceLive = (
             // spend, not the per-kernel `state.tokens` that initialKernelState
             // resets. Gated on `budgetLimits` so a run without `.withBudget()`
             // stays byte-identical (no new state.meta field, no wrapper feed).
-            const result = yield* (params.budgetLimits
-              ? withRunBudgetMeter(piped, makeRunBudgetMeter(), params.budgetLimits)
-              : piped);
+            //
+            // Issue #232 Gap 2 — prefer an already-armed ambient meter (set once
+            // per run by the runtime's `ExecutionEngine.execute`). Reusing it
+            // makes the meter WHOLE-RUN scoped: the main pass AND every auxiliary
+            // pass (verification retry, continuation) feed the same accumulator,
+            // and each kernel inherits the run limits via the runner's
+            // `runBudgetLimits` seed. Only when NO ambient meter is present (a
+            // direct `ReasoningService.execute` call outside the engine — e.g.
+            // tests) do we create one from `params.budgetLimits`, preserving the
+            // pre-#232 behavior for callers that own their own run.
+            const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
+            const result = yield* (ambientMeter
+              ? piped
+              : params.budgetLimits
+                ? withRunBudgetMeter(piped, makeRunBudgetMeter(), params.budgetLimits)
+                : piped);
 
             return result;
           }),

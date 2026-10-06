@@ -364,3 +364,44 @@ describe("run-budget — blueprint: meter fed, crossed tokenLimit halts", () => 
     expect(result.status).toBe("completed");
   });
 });
+
+describe("run-budget — auxiliary pass inherits the ambient run budget (#232 Gap 2)", () => {
+  it("a pass with NO input.budgetLimits still halts on the ambient run limit", async () => {
+    // Simulates the verification THINK retry / continuation pass: it calls the
+    // strategy with NO `budgetLimits`. The runtime armed the meter + run limits
+    // around the whole run; the kernel runner must inherit those limits from the
+    // ambient context so the Arbitrator still enforces the run budget.
+    const meter = makeRunBudgetMeter();
+    meter.tokens = 500; // the run is already past its 100-token limit
+    const scenario = TestLLMServiceLayer([
+      { match: "report\\.md", toolCall: { name: "gather", args: { q: "topic" } } },
+      { match: "professional", text: "SYNTHESIZED REPORT: the metric rose 12% last quarter." },
+      { text: "FINAL ANSWER: unsynthesized guess." },
+    ]);
+    const result = await Effect.runPromise(
+      withRunBudgetMeter(
+        executeReactive({
+          taskDescription: TASK,
+          taskType: "research",
+          memoryContext: "",
+          availableTools: ["gather"],
+          availableToolSchemas: [GATHER_SCHEMA],
+          config: defaultReasoningConfig,
+          maxIterations: 6,
+          // No `budgetLimits`: the pass declares none. Enforcement must come
+          // from the ambient run limits the runtime armed.
+        } as never).pipe(
+          Effect.provide(
+            Layer.merge(makeObservableLLM().pipe(Layer.provide(scenario)), gatherToolLayer),
+          ),
+          provideTestEnvelope,
+        ),
+        meter,
+        { tokenLimit: 100 },
+      ),
+    );
+
+    expect(result.status).not.toBe("completed");
+    expect(budgetReasonPresent(result.metadata as Record<string, unknown>)).toBe(true);
+  });
+});

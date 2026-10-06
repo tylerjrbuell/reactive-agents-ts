@@ -16,7 +16,11 @@ import { ReasoningService } from "./reasoning-service.js";
 import { createReasoningLayer } from "../runtime.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { makeObservableLLM } from "../kernel/observable-llm.js";
-import { CurrentRunBudget } from "../kernel/run-budget.js";
+import {
+  CurrentRunBudget,
+  makeRunBudgetMeter,
+  withRunBudgetMeter,
+} from "../kernel/run-budget.js";
 import type { StrategyFn } from "./strategy-registry.js";
 import { finalizeStrategyResult } from "../kernel/capabilities/sense/finalize-result.js";
 
@@ -84,5 +88,22 @@ describe("ReasoningService.execute arms the run-scoped budget meter", () => {
     const result = await Effect.runPromise(runProbe());
     const [meterTokens] = String(result.output).split(":").map(Number);
     expect(meterTokens).toBe(-1);
+  });
+
+  it("reuses an already-armed ambient meter instead of creating a fresh one (#232 Gap 2)", async () => {
+    // The runtime arms ONE meter around the whole run; an auxiliary pass calls
+    // `execute` inside that scope. Pre-load spend from an earlier pass: if
+    // execute reused the ambient meter, the probe sees 500 + this call; if it
+    // created a fresh zeroed meter, it would see only this call.
+    const ambient = makeRunBudgetMeter();
+    ambient.tokens = 500;
+    const result = await Effect.runPromise(
+      withRunBudgetMeter(runProbe({ tokenLimit: 1000 }), ambient, {
+        tokenLimit: 1000,
+      }),
+    );
+    const [meterTokens, responseTokens] = String(result.output).split(":").map(Number);
+    expect(responseTokens).toBeGreaterThan(0);
+    expect(meterTokens).toBe(500 + responseTokens);
   });
 });
