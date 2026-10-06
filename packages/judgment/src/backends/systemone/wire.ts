@@ -59,7 +59,7 @@ const toContent = (entry: JudgmentEntry | undefined): SystemOneContent => {
 };
 
 const toChoiceCriteria = (criteria: Readonly<Record<string, JudgmentEntry>>): Record<string, unknown> => {
-  const out: Record<string, unknown> = {};
+  const out: Record<string, unknown> = Object.create(null);
   for (const [label, value] of Object.entries(criteria)) {
     if (typeof value === "string" || value === null) {
       out[label] = value;
@@ -235,7 +235,7 @@ export const decodeSystemOneAnswers = (
         }),
     ),
     Effect.flatMap((response) => {
-      const out: Record<string, JudgmentAnswer> = {};
+      const out: Record<string, JudgmentAnswer> = Object.create(null);
 
       for (const [id, spec] of Object.entries(specs)) {
         const answer = response.answers[id];

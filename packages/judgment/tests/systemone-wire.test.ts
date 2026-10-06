@@ -12,6 +12,9 @@ import {
   type ScoreSpec,
 } from "../src/types.js";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 describe("encodeSystemOneRequest", () => {
   test("state: non-blank string, object, and array pass through unchanged", () => {
     const question: NoulSpec = { type: "noul" };
@@ -203,6 +206,29 @@ describe("encodeSystemOneRequest", () => {
     });
   });
 
+  test("choice label '__proto__' is preserved and does not pollute the criteria object", () => {
+    const choice: ChoiceSpec = {
+      type: "choice",
+      criteria: { ["__proto__"]: { key: "value" } },
+    };
+
+    const body = encodeSystemOneRequest({
+      model: "m",
+      state: null,
+      questions: { ["__proto__"]: choice },
+    });
+
+    const question = body.questions["__proto__"];
+    expect(isRecord(question)).toBe(true);
+    if (!isRecord(question)) throw new Error("unreachable");
+    const criteria = question.criteria;
+    expect(isRecord(criteria)).toBe(true);
+    if (!isRecord(criteria)) throw new Error("unreachable");
+    expect(Object.getPrototypeOf(criteria)).toBe(null);
+    expect(Object.prototype.hasOwnProperty.call(criteria, "__proto__")).toBe(true);
+    expect(criteria).toEqual({ ["__proto__"]: JSON.stringify({ key: "value" }) });
+  });
+
   test("images omitted from the body when absent or empty; present verbatim and in order otherwise", () => {
     const noul: NoulSpec = { type: "noul" };
 
@@ -259,8 +285,14 @@ describe("decodeSystemOneAnswers", () => {
       usage: { input_tokens: 10 },
       answers: {
         c: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.3 }, confidence: 0.7 },
-        s: { type: "score", score: 1.8, probabilities: { "0": 0.1, "1": 0.2, "2": 0.7 }, confidence: 0.75 },
-        n: { type: "noul", noul: 0.87 },
+        s: {
+          type: "score",
+          score: 1.8,
+          probabilities: { "0": 0.1, "1": 0.2, "2": 0.7 },
+          confidence: 0.75,
+          legend: { 0: "low", 1: "mid", 2: "high" },
+        },
+        n: { type: "noul", noul: 0.87, confidence: 0.99 },
       },
     };
 
@@ -283,6 +315,23 @@ describe("decodeSystemOneAnswers", () => {
     expect(answers.n).toEqual({ kind: "noul", probability: 0.87 });
   });
 
+  test("decodes a question id of '__proto__' as an own property", async () => {
+    const raw = {
+      answers: {
+        ["__proto__"]: { type: "noul" as const, noul: 0.5 },
+      },
+    };
+    const protoSpecs: QuestionSpecs = {
+      ["__proto__"]: { type: "noul" },
+    };
+
+    const answers = await Effect.runPromise(decodeSystemOneAnswers(raw, protoSpecs));
+
+    expect(Object.getPrototypeOf(answers)).toBe(null);
+    expect(Object.prototype.hasOwnProperty.call(answers, "__proto__")).toBe(true);
+    expect(answers["__proto__"]).toEqual({ kind: "noul", probability: 0.5 });
+  });
+
   test("fails JudgmentBadResponse when a requested id is missing from answers", async () => {
     const raw = {
       answers: {
@@ -294,7 +343,7 @@ describe("decodeSystemOneAnswers", () => {
     const error = await Effect.runPromise(Effect.flip(decodeSystemOneAnswers(raw, specs)));
 
     expect(error).toBeInstanceOf(JudgmentBadResponse);
-    expect(error.message).toContain("n");
+    expect(error.message).toContain('question "n"');
     expect(error.message).toMatch(/missing answer/i);
   });
 
@@ -310,7 +359,7 @@ describe("decodeSystemOneAnswers", () => {
     const error = await Effect.runPromise(Effect.flip(decodeSystemOneAnswers(raw, specs)));
 
     expect(error).toBeInstanceOf(JudgmentBadResponse);
-    expect(error.message).toContain("n");
+    expect(error.message).toContain('question "n"');
     expect(error.message).toMatch(/type mismatch/i);
   });
 
