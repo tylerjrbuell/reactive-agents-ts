@@ -42,7 +42,10 @@ function makeMockEventBus(): { events: ShadowEvent[]; eb: Option.Option<EventBus
 let askCallCount = 0;
 
 /** Every base+tool question answered with the SAME probability/value — used to construct agree/disagree fixtures per test. */
-function fakeJudgmentLayer(build: (questionIds: readonly string[]) => Record<string, unknown>) {
+function fakeJudgmentLayer(
+  build: (questionIds: readonly string[]) => Record<string, unknown>,
+  caps?: { readonly maxQuestions: number },
+) {
   askCallCount = 0;
   return Layer.succeed(JudgmentService, {
     ask: (input) => {
@@ -51,6 +54,7 @@ function fakeJudgmentLayer(build: (questionIds: readonly string[]) => Record<str
       return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
     },
     listModels: () => Effect.succeed([]),
+    ...(caps ? { capabilities: () => Effect.succeed(caps) } : {}),
   } satisfies JudgmentService["Type"]);
 }
 
@@ -195,5 +199,22 @@ describe("judgmentComprehendShadow (Task 10, shadow-only)", () => {
     // chunk 0: 5 base + 25 tools = 30; chunk 1: remaining 15 tools = 2 calls total.
     expect(askCallCount).toBe(2);
     expect(events.length).toBe(45); // 5 base + 40 tool nouls, across both chunks
+  }, 15000);
+
+  it("chunkQuestions respects a maxQuestions tighter than CHUNK_CAP", async () => {
+    const tools = Array.from({ length: 40 }, (_, i) => `tool-${i}`);
+    const events = await runShadow(fakeJudgmentLayer(agreeingAnswers, { maxQuestions: 10 }), tools);
+
+    // cap = min(30, 10) = 10; chunk 0: 5 base + 5 tools; remaining 35 tools in 4 chunks of 10.
+    expect(askCallCount).toBe(5);
+    expect(events.length).toBe(45); // all 40 tools still get shadow questions
+  }, 15000);
+
+  it("a 40-tool roster with an unbounded backend still chunks at CHUNK_CAP=30 (existing test unchanged)", async () => {
+    const tools = Array.from({ length: 40 }, (_, i) => `tool-${i}`);
+    const events = await runShadow(fakeJudgmentLayer(agreeingAnswers), tools);
+
+    expect(askCallCount).toBe(2);
+    expect(events.length).toBe(45);
   }, 15000);
 });
