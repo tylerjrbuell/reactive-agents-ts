@@ -95,11 +95,24 @@ describe("makeOllamaBackend", () => {
     const { fakeFetch, getCaptured } = makeFakeFetch();
     const backend = makeOllamaBackend({ fetch: fakeFetch });
 
-    await run(backend.evaluate({ state: null, questions: oneNoul }));
+    // Spy on AbortSignal.timeout: capture the ms argument the engine passes
+    // and delegate to the original, restoring it in `finally` even on failure.
+    const originalTimeout = AbortSignal.timeout;
+    const capturedTimeoutMs: number[] = [];
+    AbortSignal.timeout = (ms: number): AbortSignal => {
+      capturedTimeoutMs.push(ms);
+      return originalTimeout(ms);
+    };
+    try {
+      await run(backend.evaluate({ state: null, questions: oneNoul }));
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+    }
 
     const body = JSON.parse(getCaptured()[0].bodyText);
     expect(body.model).toBe("nimble");
     expect(getCaptured()[0].init.signal).toBeInstanceOf(AbortSignal);
+    expect(capturedTimeoutMs).toEqual([30_000]);
   });
 
   it("passes model:'clef' and model:'clef-flash' through to the body", async () => {

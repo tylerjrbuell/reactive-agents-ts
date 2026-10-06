@@ -228,6 +228,30 @@ describe("judgeRank() — Task 6 core primitive", () => {
     expect(calls.questionIdsPerCall.map((ids) => ids.length)).toEqual([3, 3, 1]);
   });
 
+  it("a backend declaring maxQuestions:0 behaves as 1-question chunks (no hang)", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const caps: JudgmentCapabilities = {
+      supportedKinds: ["score"],
+      distributions: false,
+      calibrated: false,
+      images: false,
+      modelCatalog: false,
+      maxQuestions: 0,
+    };
+    const judgment = makeMockJudgment({}, calls, caps);
+
+    await Effect.runPromise(
+      judgeRank(judgment, candidates(3), question) as Effect.Effect<
+        ReadonlyArray<{ id: string; score: number; confidence: number }>,
+        JudgmentError
+      >
+    );
+
+    // effectiveCap = max(1, min(30, 0)) = 1 -> one ask() call per candidate.
+    expect(calls.count).toBe(3);
+    expect(calls.questionIdsPerCall.map((ids) => ids.length)).toEqual([1, 1, 1]);
+  });
+
   it("an explicit opts.chunkCap still wins when it is tighter than maxQuestions", async () => {
     const calls = { count: 0, questionIdsPerCall: [] as string[][] };
     const caps: JudgmentCapabilities = {

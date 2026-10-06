@@ -22,7 +22,7 @@ import type { JudgmentBuilderOptions, JudgmentBackendName } from "./builder/type
 export type { JudgmentBackendName } from "./builder/types.js";
 
 /**
- * Dependencies required by `buildJudgmentLayer` — supplied by the caller so
+ * Dependencies required by `buildJudgmentLayer` : supplied by the caller so
  * the helper stays pure and does not hard-wire layer construction details.
  */
 export interface JudgmentLayerDeps {

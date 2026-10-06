@@ -189,7 +189,11 @@ export function judgeRank(
       );
     }
     const caps = yield* capabilitiesOf(judgment);
-    const effectiveCap = Math.min(chunkCap, caps.maxQuestions ?? Number.POSITIVE_INFINITY);
+    // `Math.max(1, ...)`: a backend declaring a non-positive `maxQuestions`
+    // would otherwise make `chunkArray`'s `i += effectiveCap` never advance
+    // (infinite loop). Clamp to 1-question chunks; the non-positive
+    // USER-facing `chunkCap` die guard above stays untouched.
+    const effectiveCap = Math.max(1, Math.min(chunkCap, caps.maxQuestions ?? Number.POSITIVE_INFINITY));
     assertUniqueCandidateIds(candidates);
     const chunks = chunkArray(candidates, effectiveCap);
     const results: JudgeRankResult[] = [];

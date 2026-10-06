@@ -210,6 +210,16 @@ describe("judgmentComprehendShadow (Task 10, shadow-only)", () => {
     expect(events.length).toBe(45); // all 40 tools still get shadow questions
   }, 15000);
 
+  it("a backend declaring maxQuestions:0 behaves as 1-question chunks (no hang)", async () => {
+    const tools = Array.from({ length: 3 }, (_, i) => `tool-${i}`);
+    const events = await runShadow(fakeJudgmentLayer(agreeingAnswers, { maxQuestions: 0 }), tools);
+
+    // cap = max(1, min(30, 0)) = 1 -> chunk 0: 5 base questions; then one
+    // 1-tool chunk per remaining tool. 4 ask() calls total, no hang.
+    expect(askCallCount).toBe(4);
+    expect(events.length).toBe(8); // 5 base + 3 tool nouls
+  }, 15000);
+
   it("a 40-tool roster with an unbounded backend still chunks at CHUNK_CAP=30 (existing test unchanged)", async () => {
     const tools = Array.from({ length: 40 }, (_, i) => `tool-${i}`);
     const events = await runShadow(fakeJudgmentLayer(agreeingAnswers), tools);

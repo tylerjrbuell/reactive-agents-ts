@@ -21,7 +21,7 @@ import {
   type QuestionSpecs,
 } from "../../types.js";
 
-/** Wire `state` shape: a nonempty string, an object, or an array — never `null`. */
+/** Wire `state` shape: a nonempty string, an object, or an array : never `null`. */
 export type SystemOneContent = string | Record<string, unknown> | readonly unknown[];
 
 /** System One `POST /v1/systemone` request body after RA-side encoding. */

@@ -49,7 +49,10 @@ const CHUNK_CAP = 30;
 
 /** Splits the base questions + per-tool Nouls into `ask()`-sized chunks (≤ cap each). */
 function chunkQuestions(toolNames: readonly string[], maxQuestions?: number): readonly QuestionSpecs[] {
-  const cap = Math.min(CHUNK_CAP, maxQuestions ?? Number.POSITIVE_INFINITY);
+  // `Math.max(1, ...)`: a backend declaring a non-positive `maxQuestions`
+  // would otherwise make the chunk loop's `i += cap` never advance (infinite
+  // loop). Clamp to 1-question chunks.
+  const cap = Math.max(1, Math.min(CHUNK_CAP, maxQuestions ?? Number.POSITIVE_INFINITY));
   const base = buildComprehendJudgmentBaseQuestions();
   const firstChunkToolCap = Math.max(0, cap - Object.keys(base).length);
   const firstChunkTools = toolNames.slice(0, firstChunkToolCap);

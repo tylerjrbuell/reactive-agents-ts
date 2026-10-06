@@ -172,15 +172,14 @@ export interface JudgmentCapabilities {
   /** Which question kinds this backend can answer. */
   readonly supportedKinds: ReadonlyArray<JudgmentQuestionKind>;
   /**
-   * Whether the backend returns full probability distributions over all
-   * options. `false` means answers still include a `probabilities` field, but
-   * the values are best-effort or point-estimate fills (e.g. the LLM-emulation
-   * backend) rather than calibrated distributions.
+   * True when answers carry a complete, real per-candidate distribution.
+   * False = ChoiceAnswer.probabilities is a best-effort synthesis (the `llm`
+   * backend) and consumers must gate on `confidence`, not `probabilities`.
    */
   readonly distributions: boolean;
   /** Whether the returned probabilities/confidences are calibrated. */
   readonly calibrated: boolean;
-  /** Whether the backend accepts base64/URL image strings in `ask`'s `images`. */
+  /** Whether the backend accepts base64-encoded image strings, passed through verbatim, in `ask`'s `images`. */
   readonly images: boolean;
   /** Whether the backend implements `listModels` for model catalog queries. */
   readonly modelCatalog: boolean;
@@ -218,7 +217,7 @@ export interface JudgmentBackend {
     readonly state: JudgmentEntry;
     readonly questions: QuestionSpecs;
     readonly model?: string;
-    /** Optional base64-encoded images or image URLs supplied as multimodal context. */
+    /** Optional base64-encoded image strings, passed through verbatim, supplied as multimodal context. */
     readonly images?: readonly string[];
   }) => Effect.Effect<JudgmentAnswers, JudgmentError>;
   /**

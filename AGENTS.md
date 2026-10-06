@@ -36,7 +36,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
 │   └── depends on: core
 │
-├── @reactive-agents/judgment      — Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend)
+├── @reactive-agents/judgment      : Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend)
 │   └── depends on: core, llm-provider
 │
 ├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
