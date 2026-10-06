@@ -63,6 +63,13 @@ export const makeJevBackend = (
 
   return {
     name: "jev",
+    capabilities: {
+      distributions: true,
+      calibrated: true,
+      modelCatalog: true,
+      supportedKinds: ["noul", "choice", "score"],
+      images: false,
+    },
     evaluate: ({ state, questions, model }) => {
       const questionIds = Object.keys(questions);
       return Effect.tryPromise({

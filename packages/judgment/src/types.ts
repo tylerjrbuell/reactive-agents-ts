@@ -158,6 +158,47 @@ export type JudgmentConfig = Schema.Schema.Type<typeof JudgmentConfig>;
 
 export const DEFAULT_TIMEOUT_MS = 3000;
 
+/** The three question primitives supported by the judgment interface. */
+export type JudgmentQuestionKind = "noul" | "choice" | "score";
+
+/**
+ * Describes what a `JudgmentBackend` can actually do. Service-level guards use
+ * this record before delegating to `backend.evaluate`, so consumers discover
+ * limits instead of hardcoding them.
+ */
+export interface JudgmentCapabilities {
+  /** Maximum number of questions accepted in a single `ask()` batch, if known. */
+  readonly maxQuestions?: number;
+  /** Which question kinds this backend can answer. */
+  readonly supportedKinds: ReadonlyArray<JudgmentQuestionKind>;
+  /**
+   * Whether the backend returns full probability distributions over all
+   * options. `false` means answers still include a `probabilities` field, but
+   * the values are best-effort or point-estimate fills (e.g. the LLM-emulation
+   * backend) rather than calibrated distributions.
+   */
+  readonly distributions: boolean;
+  /** Whether the returned probabilities/confidences are calibrated. */
+  readonly calibrated: boolean;
+  /** Whether the backend accepts base64/URL image strings in `ask`'s `images`. */
+  readonly images: boolean;
+  /** Whether the backend implements `listModels` for model catalog queries. */
+  readonly modelCatalog: boolean;
+}
+
+/**
+ * Conservative fallback capabilities for backends that do not declare their
+ * own. `modelCatalog` is derived from the presence of `backend.listModels` in
+ * `makeJudgmentServiceLive`.
+ */
+export const DEFAULT_JUDGMENT_CAPABILITIES: JudgmentCapabilities = {
+  supportedKinds: ["noul", "choice", "score"],
+  distributions: false,
+  calibrated: false,
+  images: false,
+  modelCatalog: false,
+};
+
 /**
  * One HTTP/inference round trip over a batch of questions sharing one state.
  * The ONLY interface a judgment provider implements — `translate.ts` in each
@@ -177,6 +218,8 @@ export interface JudgmentBackend {
     readonly state: JudgmentEntry;
     readonly questions: QuestionSpecs;
     readonly model?: string;
+    /** Optional base64-encoded images or image URLs supplied as multimodal context. */
+    readonly images?: readonly string[];
   }) => Effect.Effect<JudgmentAnswers, JudgmentError>;
   /**
    * List the models/aliases this backend's account can send in `model`.
@@ -184,6 +227,8 @@ export interface JudgmentBackend {
    * `JudgmentService.listModels` fails `JudgmentUnsupported` when absent.
    */
   readonly listModels?: () => Effect.Effect<ReadonlyArray<JudgmentModel>, JudgmentError>;
+  /** Optional capability declaration; omitted fields take defaults in the service layer. */
+  readonly capabilities?: JudgmentCapabilities;
 }
 
 /** Gate a Choice/Score answer on both probability and confidence; Noul has probability only. */

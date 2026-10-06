@@ -1,10 +1,12 @@
 import { Context, Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import {
+  DEFAULT_JUDGMENT_CAPABILITIES,
   JudgmentUnsupported,
   type JudgmentAnswer,
   type JudgmentAnswers,
   type JudgmentBackend,
+  type JudgmentCapabilities,
   type JudgmentEntry,
   type JudgmentError,
   type JudgmentModel,
@@ -23,27 +25,73 @@ export class JudgmentService extends Context.Tag("JudgmentService")<
       readonly state: JudgmentEntry;
       readonly questions: Q;
       readonly model?: string;
+      readonly images?: readonly string[];
     }) => Effect.Effect<JudgmentAnswers<Q>, JudgmentError>;
     /** List the models/aliases the backend's account can send in `ask`'s `model` field. Fails `JudgmentUnsupported` if the backend has no catalog endpoint. */
     readonly listModels: () => Effect.Effect<ReadonlyArray<JudgmentModel>, JudgmentError>;
+    /**
+     * Discover backend limits. Optional because ~25 existing service fakes across
+     * the monorepo do not implement it; when absent, `capabilitiesOf` returns
+     * `DEFAULT_JUDGMENT_CAPABILITIES`.
+     */
+    readonly capabilities?: () => Effect.Effect<JudgmentCapabilities>;
   }
 >() {}
 
+/**
+ * Resolve capabilities from any `JudgmentService`-shaped value, falling back to
+ * defaults when the service does not expose the optional method.
+ */
+export const capabilitiesOf = (svc: JudgmentService["Type"]): Effect.Effect<JudgmentCapabilities> =>
+  svc.capabilities?.() ?? Effect.succeed(DEFAULT_JUDGMENT_CAPABILITIES);
+
 /** Wraps a `JudgmentBackend` with no observability — tests and internal composition. */
-export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<JudgmentService> =>
-  Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      backend.evaluate(input).pipe(
-        // `evaluate` returns one answer per requested id (or fails) — the cast
-        // recovers the per-call generic `Q` the plain `JudgmentBackend`
-        // interface can't express; see translate.ts's `fromSdkResult` for the
-        // "never partial-trust a missing answer" guarantee this relies on.
-        Effect.map((answers) => answers as JudgmentAnswers<typeof input.questions>),
-      ),
+export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<JudgmentService> => {
+  const caps: JudgmentCapabilities = {
+    ...DEFAULT_JUDGMENT_CAPABILITIES,
+    modelCatalog: backend.listModels !== undefined,
+    ...backend.capabilities,
+  };
+
+  const guardAsk = <Q extends QuestionSpecs>(input: {
+    readonly state: JudgmentEntry;
+    readonly questions: Q;
+    readonly model?: string;
+    readonly images?: readonly string[];
+  }): Effect.Effect<JudgmentAnswers<Q>, JudgmentError> => {
+    for (const [id, question] of Object.entries(input.questions)) {
+      if (!caps.supportedKinds.includes(question.type)) {
+        return Effect.fail(
+          new JudgmentUnsupported({
+            message: `Backend "${backend.name}" does not support question kind "${question.type}" (question "${id}")`,
+          }),
+        );
+      }
+    }
+    if (input.images !== undefined && input.images.length > 0 && !caps.images) {
+      return Effect.fail(
+        new JudgmentUnsupported({
+          message: `Backend "${backend.name}" does not support images`,
+        }),
+      );
+    }
+    return backend.evaluate(input).pipe(
+      // `evaluate` returns one answer per requested id (or fails) — the cast
+      // recovers the per-call generic `Q` the plain `JudgmentBackend`
+      // interface can't express; see translate.ts's `fromSdkResult` for the
+      // "never partial-trust a missing answer" guarantee this relies on.
+      Effect.map((answers) => answers as JudgmentAnswers<typeof input.questions>),
+    );
+  };
+
+  return Layer.succeed(JudgmentService, {
+    ask: guardAsk,
     listModels: () =>
       backend.listModels?.() ??
       Effect.fail(new JudgmentUnsupported({ message: `Backend "${backend.name}" has no model catalog` })),
+    capabilities: () => Effect.succeed(caps),
   });
+};
 
 const summarizeAnswer = (
   id: string,
@@ -100,6 +148,7 @@ export const withEvents = (
             return result;
           }),
         listModels: () => inner.listModels(),
+        capabilities: inner.capabilities,
       };
     }),
   );
