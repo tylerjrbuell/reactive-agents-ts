@@ -76,7 +76,7 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
       );
     }
     return backend.evaluate(input).pipe(
-      // `evaluate` returns one answer per requested id (or fails) — the cast
+      // `evaluate` returns one answer per requested id (or fails): the cast
       // recovers the per-call generic `Q` the plain `JudgmentBackend`
       // interface can't express; see translate.ts's `fromSdkResult` for the
       // "never partial-trust a missing answer" guarantee this relies on.

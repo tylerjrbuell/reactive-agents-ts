@@ -995,23 +995,23 @@ outcome: "warden session died mid-mission leaving substantive partial work (help
 ```yaml
 date: 2026-10-06
 warden: runtime-warden
-task: "System One decision backends Task 5 — judgment-layer.ts BACKENDS registry + builder ollama namespace; replace both runtime.ts judgment IIFEs"
+task: "System One decision backends Task 5: judgment-layer.ts BACKENDS registry + builder ollama namespace; replace both runtime.ts judgment IIFEs"
 result: completed, confidence 0.95
-outcome: "accepted — parent verifier green (turbo typecheck filter=@reactive-agents/runtime 21/21; builder-judgment/judgment-context/agent-list-judgment-models/judge-input-export/judgment-rank + judgment package 113/0; zero new as-unknown-as casts; scope = the 4 briefed paths only). Parent integrated commit 5f03ab6d per warden no-commit contract (R2); independent task review dispatched separately."
+outcome: "accepted: parent verifier green (turbo typecheck filter=@reactive-agents/runtime 21/21; builder-judgment/judgment-context/agent-list-judgment-models/judge-input-export/judgment-rank + judgment package 113/0; zero new as-unknown-as casts; scope = the 4 briefed paths only). Parent integrated commit 5f03ab6d per warden no-commit contract (R2); independent task review dispatched separately."
 ```
 
 ```yaml
 date: 2026-10-06
 warden: runtime-warden
-task: "System One decision backends Task 6 — optional images channel on agent.judge() (JudgeInput + verbatim forwarding to ask; service guard owns rejection per R5)"
+task: "System One decision backends Task 6: optional images channel on agent.judge() (JudgeInput + verbatim forwarding to ask; service guard owns rejection per R5)"
 result: completed, confidence 0.95
-outcome: "accepted — parent verifier green (5 focused runtime judgment test files 39/0 incl. 4 new pins; turbo typecheck filter=@reactive-agents/runtime clean; zero new casts; scope = reactive-agent.ts + judge-images.test.ts only). Parent integrated commit e2f70240; independent task review dispatched separately."
+outcome: "accepted: parent verifier green (5 focused runtime judgment test files 39/0 incl. 4 new pins; turbo typecheck filter=@reactive-agents/runtime clean; zero new casts; scope = reactive-agent.ts + judge-images.test.ts only). Parent integrated commit e2f70240; independent task review dispatched separately."
 ```
 
 ```yaml
 date: 2026-10-06
 warden: kernel-warden
-task: "System One decision backends Task 7 kernel half — chunkQuestions(toolNames, maxQuestions?) cap = min(CHUNK_CAP, maxQuestions ?? Infinity); shadow resolves capabilitiesOf inside forkDaemon"
+task: "System One decision backends Task 7 kernel half: chunkQuestions(toolNames, maxQuestions?) cap = min(CHUNK_CAP, maxQuestions ?? Infinity); shadow resolves capabilitiesOf inside forkDaemon"
 result: completed, confidence 0.95
-outcome: "accepted — working tree already contained the implementation (residue of an interrupted funds-killed attempt); warden verified rather than re-implemented (red via HEAD-src restore 2-vs-5 ask calls, green 31/0 comprehend, typecheck 9/9, zero new casts). Parent re-verified (comprehend + kernel loop 133/0, zero casts) and integrated per warden no-commit contract. Independent Task 7 review covers both halves."
+outcome: "accepted: working tree already contained the implementation (residue of an interrupted funds-killed attempt); warden verified rather than re-implemented (red via HEAD-src restore 2-vs-5 ask calls, green 31/0 comprehend, typecheck 9/9, zero new casts). Parent re-verified (comprehend + kernel loop 133/0, zero casts) and integrated per warden no-commit contract. Independent Task 7 review covers both halves."
 ```
