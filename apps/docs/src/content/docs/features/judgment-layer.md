@@ -49,12 +49,102 @@ function buildJudgeCall<Q extends QuestionSpecs>(questions: Q): JudgeInput<Q> {
 
 ### Backends
 
-| Backend | Requires                                                                        | Calibration                                                                                                                           |
-| ------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `jev`   | A TypeSafe API key (`TYPESAFE_API_KEY` env var, or `.withJudgment({ apiKey })`) | Real calibrated probabilities from TypeSafe's System One model                                                                        |
-| `llm`   | Nothing beyond your existing provider                                           | Self-reported estimate from your LLM — `calibrated: false` on every answer, so gate on that flag if calibration matters to your logic |
+| Backend  | Requires                                                                        | Calibration                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `jev`    | A TypeSafe API key (`TYPESAFE_API_KEY` env var, or `.withJudgment({ apiKey })`) | Real calibrated probabilities from TypeSafe's System One model                                                                         |
+| `llm`    | Nothing beyond your existing provider                                           | Self-reported estimate from your LLM ( `calibrated: false` on every answer, so gate on that flag if calibration matters to your logic ) |
+| `ollama` | A local Ollama server with the decision model pulled                            | Real calibrated probabilities from Ollama's System One decision model, served locally with no API key                                  |
 
-Backend selection is automatic (`jev` when a key resolves, `llm` otherwise) unless you set `.withJudgment({ backend: "jev" | "llm" })` explicitly.
+Backend selection is automatic (`jev` when a key resolves, `llm` otherwise) unless you set `.withJudgment({ backend: "jev" | "llm" | "ollama" })` explicitly.
+
+### Local & private judgment (Ollama)
+
+The `ollama` backend points the judgment primitive at a local Ollama server's
+System One decision API. No API key, no outbound network beyond the server
+itself, and the same calibrated distributions the `jev` backend returns.
+
+Prerequisite: pull the decision model once per machine.
+
+```bash
+ollama pull nimble
+```
+
+```typescript
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama' })
+    .build()
+
+const { risky } = await agent.judge({
+    state: { action: 'delete all files in /tmp' },
+    questions: {
+        risky: { type: 'noul', instructions: 'Is this action destructive?' },
+    },
+})
+```
+
+The endpoint resolves from `baseUrl`, then `OLLAMA_ENDPOINT`, `OLLAMA_HOST`,
+`OLLAMA_BASE`, and finally `http://localhost:11434`. The first call after idle
+can take tens of seconds while the model cold-loads; the backend's default
+timeout is 30 seconds. Keep the model warm between calls with the builder's
+`keepAlive` option (for example `'10m'`, or `0` to unload after each request):
+
+```typescript
+.withJudgment({ backend: 'ollama', ollama: { keepAlive: '10m' } })
+```
+
+A missing model surfaces as a `JudgmentBadResponse` whose message names the
+model and the `ollama pull` command to run. Passing `images` to a text-only
+model (or to the `jev`/`llm` backends) fails loudly with `JudgmentUnsupported`
+rather than being dropped.
+
+#### Decision models
+
+The default model is `nimble`. Two Cloudflare models are System One-compatible
+and vision-capable, and `tev` is another text option:
+
+```typescript
+.withJudgment({ backend: 'ollama', model: 'clef' }) // 27B vision model
+.withJudgment({ backend: 'ollama', model: 'clef-flash' }) // 9B vision model
+.withJudgment({ backend: 'ollama', model: 'tev' }) // text
+```
+
+Vision models unlock the optional `images` channel on `agent.judge()`: an
+ordered array of base64-encoded PNG/JPEG/WebP strings, passed through verbatim
+(no URL or data-URL resolution) and scored together with `state`. The request
+body is capped at 32 MiB with images (64 KiB without). A vision model is
+required; sending images to a text-only model is a server-side error.
+
+```typescript
+const { passes } = await agent.judge({
+    state: { task: 'Check the checkout page for layout breakage' },
+    questions: {
+        passes: { type: 'noul', instructions: 'Is the page visually broken?' },
+    },
+    images: [base64Png],
+})
+```
+
+#### Backend capabilities
+
+Every backend declares a `JudgmentCapabilities` object describing what it can
+do, and consumers adapt automatically:
+
+| Field               | Meaning                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| `maxQuestions`      | Max questions per `ask()` call (omitted means unbounded)                                         |
+| `supportedKinds`    | Question kinds the backend answers (`noul` / `choice` / `score`)                                  |
+| `distributions`     | True when answers carry a real per-candidate distribution                                        |
+| `calibrated`        | True when `confidence` is distribution-derived (false means model self-report)                    |
+| `images`            | True when the backend accepts the optional `images` channel                                       |
+| `modelCatalog`      | True when `listModels()` resolves a real catalog                                                 |
+
+`judgeRank()` and the comprehension chunker clamp their batch sizes to
+`maxQuestions` instead of a hardcoded constant, so a backend with a tighter
+ceiling degrades into correct chunking rather than a hard error. Read the
+resolved capabilities of a `JudgmentService` with `capabilitiesOf(service)`
+(exported from `@reactive-agents/judgment` and re-exported from
+`reactive-agents`); a service that predates the field gets safe defaults.
 
 ### Auto-context: `includeContext`
 
@@ -250,6 +340,6 @@ Every judgment call emits `JudgmentEvaluated` (success) or `JudgmentFailed` (err
 
 ## Design notes
 
--   **Backend-agnostic by design.** Nothing in this layer, or in any of its consumers, hardcodes a vendor name onto a field or an internal variable — `JudgmentBackend` is the only interface a provider implements, so a future open-source System One model is a drop-in with zero consumer change.
+-   **Backend-agnostic by design.** Nothing in this layer, or in any of its consumers, hardcodes a vendor name onto a field or an internal variable. Adding a provider follows one of two tiers: a System One-compatible provider (same wire protocol as Jev and Ollama) is a descriptor file plus tests, needing only endpoint, auth, model, and limit declarations; a provider outside the System One family is a `JudgmentBackend` module with its own wire translation and error mapping. Either way the engine, the service, and every consumer are untouched.
 -   **Calibration ≠ truth.** A judgment answer's `confidence` reflects the backend's own distribution concentration, not whether the answer is _correct_ for your domain. Validate performance against your own data before trusting a threshold in production.
 -   **Shadow sites are not yet inverted.** Strategy selection, complexity routing, task comprehension, and autonomy confidence all currently run in shadow mode only — they compute and compare, but the existing heuristic/LLM path still decides. Inverting a shadow site into an active decision is a separate, evidence-gated follow-up per site.

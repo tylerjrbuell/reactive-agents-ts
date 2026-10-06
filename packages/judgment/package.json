@@ -1,7 +1,7 @@
 {
   "name": "@reactive-agents/judgment",
   "version": "0.16.0",
-  "description": "Calibrated typed judgment primitive (Choice/Score/Noul) for Reactive Agents, provider-abstracted over TypeSafe/Jev and an LLM-emulation fallback",
+  "description": "Calibrated typed judgment primitive (Choice/Score/Noul) for Reactive Agents, provider-abstracted over TypeSafe/Jev, an LLM-emulation fallback, and a local Ollama System One backend",
   "keywords": [
     "ai",
     "agents",
@@ -12,7 +12,10 @@
     "judgment",
     "classification",
     "typesafe",
-    "jev"
+    "jev",
+    "ollama",
+    "decision-models",
+    "systemone"
   ],
   "type": "module",
   "main": "./dist/index.js",

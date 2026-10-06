@@ -130,7 +130,14 @@ export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "@reactive-agents/runtime";
 
 // ─── Judgment (calibrated Choice/Score/Noul typed judgments) ───
 
-export { JudgmentService, JudgmentUnsupported } from "@reactive-agents/judgment";
+export {
+  JudgmentService,
+  JudgmentUnsupported,
+  DEFAULT_JUDGMENT_CAPABILITIES,
+  capabilitiesOf,
+  makeOllamaBackend,
+  makeSystemOneHttpBackend,
+} from "@reactive-agents/judgment";
 
 export type {
   ChoiceAnswer,
@@ -139,16 +146,21 @@ export type {
   JudgmentAnswer,
   JudgmentAnswers,
   JudgmentBackend,
+  JudgmentCapabilities,
   JudgmentEntry,
   JudgmentError,
   JudgmentModel,
+  JudgmentQuestionKind,
   NoulAnswer,
   NoulSpec,
+  OllamaJudgmentConfig,
   QuestionSpec,
   QuestionSpecs,
   ScoreAnswer,
   ScoreCriteria,
   ScoreSpec,
+  SystemOneHttpConfig,
+  SystemOneProviderDescriptor,
 } from "@reactive-agents/judgment";
 
 // ─── Core Services ───

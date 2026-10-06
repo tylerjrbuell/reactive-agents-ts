@@ -15,6 +15,7 @@
       "@reactive-agents/identity",
       "@reactive-agents/observability",
       "@reactive-agents/interaction",
+      "@reactive-agents/judgment",
       "@reactive-agents/orchestration",
       "@reactive-agents/prompts",
       "@reactive-agents/eval",

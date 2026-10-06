@@ -7,7 +7,7 @@ sidebar:
   order: 13
 ---
 
-Four worked recipes for `agent.judge()`. Each assumes `.withJudgment()` is already on the
+Six worked recipes for `agent.judge()`. Each assumes `.withJudgment()` is already on the
 builder — see [Judgment Layer](/features/judgment-layer/) for setup, backends, and the
 `includeContext` option these recipes don't otherwise cover.
 
@@ -135,3 +135,61 @@ This is the same pattern the framework's own internal grounding-fabrication shad
 (see [Judgment Layer → Internal harness sites](/features/judgment-layer/#internal-harness-sites-opt-in-per-site))
 — shadow-only there, active here, because you own the decision of what "ungrounded" should do
 in your application.
+
+## Local & private judgment
+
+Run judgments on a local Ollama server when the judged content can't leave the
+machine: support transcripts, medical notes, anything under a data-residency
+constraint. No API key, no outbound network beyond the server itself, and the
+same calibrated distributions the hosted `jev` backend returns.
+
+Prerequisite: `ollama pull nimble` once per machine.
+
+```typescript
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', ollama: { keepAlive: '10m' } })
+    .build()
+
+const { risky } = await agent.judge({
+    state: { action: 'delete all files in /tmp' },
+    questions: {
+        risky: { type: 'noul', instructions: 'Is this action destructive?' },
+    },
+})
+```
+
+The endpoint resolves from `baseUrl`, then `OLLAMA_ENDPOINT`, `OLLAMA_HOST`,
+`OLLAMA_BASE`, and finally `http://localhost:11434`. The first call after idle
+cold-loads the model (the default timeout is 30 seconds); `keepAlive` keeps it
+warm between calls. A missing model fails with a `JudgmentBadResponse` naming
+the model and the `ollama pull` command to run.
+
+## Screenshot classification
+
+Ask questions about UI state by passing a screenshot alongside the text. The
+`images` channel takes base64-encoded PNG/JPEG/WebP strings (no URLs) and
+requires a vision decision model such as Cloudflare's `clef` or `clef-flash`,
+pulled locally through Ollama.
+
+Prerequisite: `ollama pull clef` (27B) or `ollama pull clef-flash` (9B).
+
+```typescript
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', model: 'clef-flash' })
+    .build()
+
+const { passes } = await agent.judge({
+    state: { task: 'Check the checkout page for layout breakage' },
+    questions: {
+        passes: { type: 'noul', instructions: 'Is the page visually broken?' },
+    },
+    images: [base64Png],
+})
+```
+
+Images are scored together with `state`, in the order you pass them, and the
+request body is capped at 32 MiB with images. Sending images to a text-only
+model (or to the `jev`/`llm` backends) fails loudly with `JudgmentUnsupported`
+rather than being dropped.

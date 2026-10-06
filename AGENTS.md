@@ -36,7 +36,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
 │   └── depends on: core
 │
-├── @reactive-agents/judgment      — Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation)
+├── @reactive-agents/judgment      — Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend)
 │   └── depends on: core, llm-provider
 │
 ├── @reactive-agents/observability — Distributed tracing, metrics, structured logging, MetricsCollector
@@ -127,6 +127,7 @@ Foundation (no reactive-agents deps)
 | `verification`  | `src/services/verification-service.ts`  | `VerificationService`                                       |
 | `cost`          | `src/services/cost-service.ts`          | `CostService`                                               |
 | `identity`      | `src/services/identity-service.ts`      | `IdentityService`                                           |
+| `judgment`      | `src/services/judgment-service.ts`      | `JudgmentService`, `makeJevBackend`, `makeLlmBackend`, `makeOllamaBackend`, `capabilitiesOf` |
 | `observability` | `src/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
 | `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
 | `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
