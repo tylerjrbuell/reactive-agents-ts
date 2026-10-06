@@ -17,7 +17,13 @@
 
 import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
-import type { JudgmentAnswers, JudgmentError, JudgmentService, ScoreAnswer } from "@reactive-agents/judgment";
+import type {
+  JudgmentAnswers,
+  JudgmentCapabilities,
+  JudgmentError,
+  JudgmentService,
+  ScoreAnswer,
+} from "@reactive-agents/judgment";
 import { judgeRank, type JudgeRankCandidate, type JudgeRankQuestion } from "../src/judgment-rank.js";
 import { ReactiveAgents } from "../src/index.js";
 
@@ -45,8 +51,9 @@ const scoreAnswer = (value: number, confidence = 0.9): ScoreAnswer => ({
 function makeMockJudgment(
   scoresById: Readonly<Record<string, number>>,
   calls: { count: number; questionIdsPerCall: string[][] },
+  capabilities?: JudgmentCapabilities,
 ): JudgmentService["Type"] {
-  return {
+  const service: JudgmentService["Type"] = {
     ask: (input) => {
       calls.count += 1;
       const questionIds = Object.keys(input.questions);
@@ -59,6 +66,11 @@ function makeMockJudgment(
     },
     listModels: () => Effect.die(new Error("unused in this test")),
   };
+  if (capabilities !== undefined) {
+    (service as JudgmentService["Type"] & { capabilities: () => Effect.Effect<JudgmentCapabilities> }).capabilities =
+      () => Effect.succeed(capabilities);
+  }
+  return service;
 }
 
 const candidates = (n: number): readonly JudgeRankCandidate[] =>
@@ -191,6 +203,67 @@ describe("judgeRank() — Task 6 core primitive", () => {
 
     // c1 wins outright; among the 0.5 tie, c0 (earlier in input) stays before c2.
     expect(result.map((r) => r.id)).toEqual(["c1", "c0", "c2"]);
+  });
+
+  it("clamps to capabilities().maxQuestions: 7 candidates with maxQuestions:3 fires ceil(7/3)=3 ask() calls", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const caps: JudgmentCapabilities = {
+      supportedKinds: ["score"],
+      distributions: false,
+      calibrated: false,
+      images: false,
+      modelCatalog: false,
+      maxQuestions: 3,
+    };
+    const judgment = makeMockJudgment({}, calls, caps);
+
+    await Effect.runPromise(
+      judgeRank(judgment, candidates(7), question) as Effect.Effect<
+        ReadonlyArray<{ id: string; score: number; confidence: number }>,
+        JudgmentError
+      >
+    );
+
+    expect(calls.count).toBe(3);
+    expect(calls.questionIdsPerCall.map((ids) => ids.length)).toEqual([3, 3, 1]);
+  });
+
+  it("an explicit opts.chunkCap still wins when it is tighter than maxQuestions", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const caps: JudgmentCapabilities = {
+      supportedKinds: ["score"],
+      distributions: false,
+      calibrated: false,
+      images: false,
+      modelCatalog: false,
+      maxQuestions: 10,
+    };
+    const judgment = makeMockJudgment({}, calls, caps);
+
+    await Effect.runPromise(
+      judgeRank(judgment, candidates(7), question, { chunkCap: 3 }) as Effect.Effect<
+        ReadonlyArray<{ id: string; score: number; confidence: number }>,
+        JudgmentError
+      >
+    );
+
+    expect(calls.count).toBe(3);
+    expect(calls.questionIdsPerCall.map((ids) => ids.length)).toEqual([3, 3, 1]);
+  });
+
+  it("a service that omits capabilities() keeps the DEFAULT_JUDGE_RANK_CHUNK_CAP behavior", async () => {
+    const calls = { count: 0, questionIdsPerCall: [] as string[][] };
+    const judgment = makeMockJudgment({}, calls);
+
+    await Effect.runPromise(
+      judgeRank(judgment, candidates(40), question) as Effect.Effect<
+        ReadonlyArray<{ id: string; score: number; confidence: number }>,
+        JudgmentError
+      >
+    );
+
+    expect(calls.count).toBe(2);
+    expect(calls.questionIdsPerCall.map((ids) => ids.length)).toEqual([30, 10]);
   });
 });
 

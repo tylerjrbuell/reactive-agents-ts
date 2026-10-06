@@ -725,8 +725,9 @@ export class ReactiveAgent<TOut = unknown> {
      * configured by `.withJudgment()` — the batched primitive behind the
      * judgment cookbook's re-ranking recipe.
      *
-     * Batches every candidate into a single `ask()` call when they fit
-     * `opts.chunkCap` (default 30, see `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
+     * Batches every candidate into a single `ask()` call when they fit the
+     * effective cap (`opts.chunkCap` clamped to the backend's advertised
+     * `maxQuestions`, defaulting to `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
      * `judgment-rank.ts`), chunking into multiple `ask()` calls otherwise —
      * real leverage over hand-rolling `Promise.all(candidates.map(c =>
      * agent.judge(...)))`, which fires one round trip PER candidate

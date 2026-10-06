@@ -27,6 +27,7 @@
  * unsaid, it's just carried in `instructions` instead of `state`.
  */
 import { Effect } from "effect";
+import { capabilitiesOf } from "@reactive-agents/judgment";
 import type {
   JudgmentEntry,
   JudgmentError,
@@ -40,8 +41,11 @@ import type {
  * Per-`ask()` candidate ceiling. Mirrors `judgment-classification.ts`'s
  * `CHUNK_CAP` (30) — same order of magnitude, same rationale (no documented
  * hard cap from TypeSafe on question count per request, so this is a
- * pragmatic ceiling rather than a derived one). Kept as its own constant
- * (not imported from that file) since the two chunk what's fundamentally a
+ * pragmatic ceiling rather than a derived one). The effective cap used at
+ * runtime is `Math.min(opts.chunkCap ?? DEFAULT_JUDGE_RANK_CHUNK_CAP,
+ * capabilitiesOf(judgment).maxQuestions ?? Infinity)` so the backend's
+ * advertised `maxQuestions` always wins. Kept as its own constant (not
+ * imported from that file) since the two chunk what's fundamentally a
  * different unit (candidates vs. tool-derived questions) and living in
  * different packages (`runtime` has no dependency on `reasoning`'s kernel
  * internals for this).
@@ -184,8 +188,10 @@ export function judgeRank(
         ),
       );
     }
+    const caps = yield* capabilitiesOf(judgment);
+    const effectiveCap = Math.min(chunkCap, caps.maxQuestions ?? Number.POSITIVE_INFINITY);
     assertUniqueCandidateIds(candidates);
-    const chunks = chunkArray(candidates, chunkCap);
+    const chunks = chunkArray(candidates, effectiveCap);
     const results: JudgeRankResult[] = [];
     for (const chunk of chunks) {
       const questions = buildChunkQuestions(chunk, question);
