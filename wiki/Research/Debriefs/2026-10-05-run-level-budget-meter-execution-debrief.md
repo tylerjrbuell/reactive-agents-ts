@@ -12,7 +12,7 @@ Budget: 240 min (oversized P1, declared up front) | Actual: ~1 session
 
 ## Outcomes
 
-- Issues: **#231 partially addressed** (kept open); follow-ups filed **#232, #233, #234**
+- Issues: **#231 / #232 / #233 closed**; **#234** open (re-scoped, unification shipped)
 - Net test delta: **+20** (reasoning 2907 → 2927; 0 fail)
 - Net LOC delta: **+1064 / −4** (13 files)
 - Merged locally to `dev` (`79686793`); no PR (local `dev` is ahead of `origin/dev`)
@@ -89,9 +89,17 @@ the Arbitrator on the boundary. Gate-behaviour tests stay green.
 **#232 Gap 1 shipped.** Structured metering (`8228ea2d`): `runStructuredParseWithRetry`
 surfaces real usage on the exported `StructuredUsageRef` FiberRef; all 5 adapters
 return `{ content, usage }`; the observable wrapper feeds the meter. Public
-`completeStructured` return type unchanged. **Gap 2 (whole-run scope) deferred** —
-needs the runtime to create the meter around the engine phase loop; auxiliary
-passes are unbudgeted but bounded single-shot. Documented on the issue.
+`completeStructured` return type unchanged.
+
+**#232 Gap 2 shipped (follow-up session, `b64910ea`).** Whole-run scope: the
+meter was per-`execute`, so auxiliary passes (verification THINK retry,
+continuation hooks) that call `execute` with no `budgetLimits` were unbudgeted.
+New `runtime/src/engine/run-budget-arm.ts` `armRunBudget()` wraps the once-per-run
+`ExecutionEngine.execute` with one meter; `ReasoningService.execute` reuses the
+ambient meter when present. Every LLM call a run makes feeds one accumulator, and
+each kernel inherits the run limits via the runner's `runBudgetLimits` seed. #231
+and #232 closed; #234 remains open only for its (premise-falsified) removal
+acceptance.
 
 ## Skill improvements (applied to SKILL.md this pass)
 
@@ -107,6 +115,22 @@ passes are unbudgeted but bounded single-shot. Documented on the issue.
    harness exposes only `explore`/`general` subagents; the `.claude/agents`
    warden definitions are not dispatchable. Dispatch `general` with the warden
    definition + MissionBrief embedded, and record the deviation. Add to Phase 4.
+4. **Arm at the true SCOPE boundary, not merely the nearest service seam
+   (added 2026-10-05 follow-up, #232 Gap 2).** The per-run meter was armed in
+   `ReasoningService.execute`, so auxiliary passes that call `execute` with a
+   different argument shape (no `budgetLimits`) escaped it entirely — the scope
+   was "run" but the seam was "one service call". When a mechanism is scoped to
+   a lifecycle longer than the call that arms it, find the true once-per-scope
+   boundary (here: the runtime engine's `ExecutionEngine.execute`) and arm there;
+   make the inner service REUSE the ambient value instead of creating its own.
+   This generalizes the production-seam rule from "test at the seam" to "the seam
+   must match the SCOPE". Add to Phase 3's plan gates.
+5. **Extract a testable arming helper from an oversized file (same pass).** The
+   arming rule landed in a new `engine/run-budget-arm.ts` rather than inline in
+   the already-oversized `execution-engine.ts` (#221), so the rule is
+   unit-testable in isolation (`runtime/tests/run-budget-arm.test.ts`). When the
+   wiring site is a size-flagged file, extract the pure rule and test the helper
+   — do not grow the flagged file. Add to Phase 4.
 
 ## Process inflation guard (HS-18/22/31 lesson)
 

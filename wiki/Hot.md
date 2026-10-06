@@ -46,8 +46,14 @@ shipped `5a169029`: full gate removal is **premise-falsified** (direct LLM calls
 never enter the Arbitrator, so strategy gates are the direct-call enforcement
 complement), so instead unified their accounting on the shared meter via
 `strategies/budget/run-budget-spend.ts` `resolveRunSpend()`. **#232 Gap 2**
-(whole-run scope: auxiliary passes unbudgeted) deferred — needs a runtime-level
-meter seam. reasoning 2935 pass/0 fail; typecheck 68/68; build 38/38.
+(whole-run scope) then shipped `b64910ea`: new
+`runtime/src/engine/run-budget-arm.ts` `armRunBudget()` arms ONE meter at the
+once-per-run `ExecutionEngine.execute` boundary; `ReasoningService.execute`
+reuses the ambient meter; auxiliary passes (verification retry, continuation)
+now inherit the run budget via the runner's `runBudgetLimits` seed. **#231 and
+#232 closed**; #234 open only for its premise-falsified removal acceptance.
+reasoning 2941 pass/0 fail; runtime 1648 pass/2 pre-existing cast-ceiling fails;
+typecheck 68/68; build 38/38.
 
 ## 2026-09-28 — #230 North Star gate cwd-relative paths anchored to repo root
 

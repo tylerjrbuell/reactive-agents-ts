@@ -179,6 +179,11 @@ Issues: #N, #N, #N
 - If total estimated effort > `budget_minutes` → descope to fit; do NOT skip verification
 - If any unit depends on infra not in the repo → mark `blocked` on that issue, drop from bundle
 - If two units conflict (same file, conflicting changes) → sequence them, never parallelize
+- If the fix arms a mechanism scoped to a lifecycle LONGER than the call site (a per-run meter armed per service call, a per-session cache armed per request), find the true once-per-scope boundary and arm there; make the inner service REUSE the ambient value. Arming at the nearest service seam lets sibling invocations with a different argument shape escape the scope (see "Scope-boundary arming" below).
+
+**Scope-boundary arming (added 2026-10-05 v23).** A mechanism's arm site must match its declared SCOPE, not merely sit at a nearby seam. When an issue says "per run" / "per session" / "per agent" but the implementation arms it inside one service call, enumerate every OTHER way that service (or the enclosing lifecycle) is invoked and check whether each escapes the arm. If any does, move the arm to the true once-per-scope boundary and have the inner service prefer the ambient value. (Reason: 2026-10-05 #232 Gap 2 — the run-scoped budget meter was armed in `ReasoningService.execute`, so auxiliary passes that call `execute` WITHOUT `budgetLimits` (the verification THINK retry, the post-think continuation hooks) armed no meter and were unbudgeted. Fix: arm once at the runtime's `ExecutionEngine.execute` boundary (`engine/run-budget-arm.ts`) and make `ReasoningService.execute` reuse the ambient meter. Generalizes the production-seam test rule from "test at the seam" to "the seam must match the scope".)
+
+**Extract-from-oversized-file (added 2026-10-05 v23).** When the wiring for a fix lands in a file already flagged by a size/decomposition issue, put the pure rule in a NEW module and test the helper in isolation rather than growing the flagged file. (Reason: 2026-10-05 #232 Gap 2 — the arming rule went into new `engine/run-budget-arm.ts` instead of inline in the already-oversized `execution-engine.ts` (#221), making it unit-testable and not worsening the size debt.)
 
 **Substrate-aware test strategy (added 2026-05-22 v8).** When the bundle adds tests to a new framework/package, identify the test substrate up front. Three classes:
 
