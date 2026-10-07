@@ -41,7 +41,56 @@ export function viewerSafeState(world: WorldState) {
       exiles: gameplay.exiles,
       nextTwistTick: gameplay.nextTwistTick,
       twistCount: gameplay.twistCount,
+      rescueAtTick: gameplay.rescueAtTick,
+      discovered: gameplay.discovered ?? [],
+      poisonedSpring: gameplay.poisonedSpring,
     } : undefined,
+  };
+}
+
+/** A finished run's presentation data: who made it, who was lost, and the headline summary. */
+export type FinaleView = {
+  rescued: boolean;
+  title: string;
+  kicker: string;
+  summary: string;
+  roll: string[];
+};
+
+function deathDay(agent: WorldState["agents"][number]): number {
+  return Math.floor((agent.demise?.tick ?? 0) / 24) + 1;
+}
+
+/**
+ * Compute the end-of-run view from world state. Returns undefined while the run is still going.
+ * Lives server-side so the wording (and the dead-vs-living filter) is unit-testable.
+ */
+export function finaleView(world: WorldState): FinaleView | undefined {
+  const rescued = world.gameplay?.rescueAtTick !== undefined;
+  const dead = world.agents.filter((agent) => agent.status === "dead");
+  const allLost = world.agents.length > 0 && dead.length === world.agents.length;
+  if (!rescued && !allLost) return undefined;
+  const survivors = world.agents.filter((agent) => agent.status !== "dead");
+  const days = world.clock.day;
+  const hours = world.clock.tick;
+  const alliances = world.gameplay?.alliances.length ?? 0;
+  const discovered = world.gameplay?.discovered?.length ?? 0;
+  if (rescued) {
+    return {
+      rescued: true,
+      title: "🛟 Rescued",
+      kicker: "The castaways are going home",
+      summary: `The boat reached the shore after ${hours} hours (${days} days). ${survivors.length} of ${world.agents.length} castaways made it home, with ${alliances} alliance${alliances === 1 ? "" : "s"} standing and ${discovered} secret${discovered === 1 ? "" : "s"} uncovered.`,
+      roll: survivors.map((agent) => `✅ ${agent.name}`),
+    };
+  }
+  const lastDay = dead.reduce((latest, agent) => Math.max(latest, deathDay(agent)), days);
+  return {
+    rescued: false,
+    title: "💀 All lost",
+    kicker: "The island kept them all",
+    summary: `All ${world.agents.length} castaways were lost by Day ${lastDay}, after ${hours} hours. ${alliances} alliance${alliances === 1 ? "" : "s"} and ${discovered} secret${discovered === 1 ? "" : "s"} were not enough to save them.`,
+    roll: dead.map((agent) => `💀 ${agent.name} · Day ${deathDay(agent)} · ${String(agent.demise?.cause ?? "unknown").replace(/_/g, " ")}`),
   };
 }
 
@@ -239,7 +288,12 @@ export function createServer(controller: SimController, port: number = 0) {
         if (!world) return Response.json({ error: "no world" }, { status: 400 });
         return Response.json({
           ...viewerSafeState(world),
-          simulation: { running: controller.getRunning(), speed: controller.getSpeed(), gameOver: controller.isGameOver() },
+          simulation: {
+            running: controller.getRunning(),
+            speed: controller.getSpeed(),
+            gameOver: controller.isGameOver(),
+            finale: controller.isGameOver() ? finaleView(world) : undefined,
+          },
         });
       }
       if (url.pathname === "/api/events" && request.method === "GET") {

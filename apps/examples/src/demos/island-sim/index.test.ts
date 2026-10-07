@@ -2,11 +2,65 @@
 import { describe, it, expect } from "bun:test";
 import { makeFallbackWorld } from "./world/fallback.js";
 import { makeScriptedDecisionMaker } from "./decision/types.js";
-import { viewerSafeState, makeController, createServer } from "./index.js";
+import { viewerSafeState, makeController, createServer, finaleView } from "./index.js";
 import { renderPage } from "./ui/page.js";
 import { initializeIslandGameplay } from "./engine/gameplay.js";
 
 describe("ui projection", () => {
+  it("exposes the rescue marker, discoveries, and tainted spring to the viewer", () => {
+    const world = initializeIslandGameplay(makeFallbackWorld(9));
+    const withStory = {
+      ...world,
+      gameplay: {
+        ...world.gameplay!,
+        rescueAtTick: 42,
+        discovered: ["a cache is buried at D4"],
+        poisonedSpring: "D4",
+      },
+    };
+    const safe = viewerSafeState(withStory);
+    expect(safe.gameplay?.rescueAtTick).toBe(42);
+    expect(safe.gameplay?.discovered).toEqual(["a cache is buried at D4"]);
+    expect(safe.gameplay?.poisonedSpring).toBe("D4");
+  }, 15000);
+
+  it("reports a rescue finale with only survivors, never the living as dead", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(10));
+    const rescued = {
+      ...base,
+      clock: { ...base.clock, tick: 120, day: 6 },
+      structures: [...base.structures, { id: "signal-1", kind: "signal-fire", tile: "D4", ownerId: "agent-0", durability: 10 }],
+      gameplay: { ...base.gameplay!, rescueAtTick: 120 },
+    };
+    const view = finaleView(rescued)!;
+    expect(view.rescued).toBe(true);
+    expect(view.summary).toContain("made it home");
+    expect(view.summary).not.toContain("lost");
+    expect(view.roll).toHaveLength(rescued.agents.length);
+    expect(view.roll.every((line) => line.startsWith("✅"))).toBe(true);
+  }, 15000);
+
+  it("reports an all-lost finale listing only the dead with their day and cause", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(11));
+    const lost = {
+      ...base,
+      agents: base.agents.map((agent, index) => index < 3
+        ? { ...agent, status: "dead" as const, demise: { tick: 30 + index, cause: "thirst" } }
+        : agent),
+    };
+    expect(finaleView(lost)).toBeUndefined();
+    const allLost = {
+      ...lost,
+      agents: base.agents.map((agent, index) => ({ ...agent, status: "dead" as const, demise: { tick: 30 + index, cause: index % 2 === 0 ? "thirst" : "hunger" } })),
+    };
+    const finalView = finaleView(allLost)!;
+    expect(finalView.rescued).toBe(false);
+    expect(finalView.roll).toHaveLength(8);
+    expect(finalView.roll.every((line) => line.startsWith("💀"))).toBe(true);
+    expect(finalView.roll.some((line) => line.includes("thirst"))).toBe(true);
+    expect(finalView.roll.some((line) => line.includes("unknown"))).toBe(false);
+  }, 15000);
+
   it("viewerSafeState never includes hidden facts (canary)", () => {
     const world = makeFallbackWorld(5);
     const withCanary = { ...world, hidden: { ...world.hidden, secrets: ["CANARY_UI_991"] } };
@@ -216,9 +270,50 @@ describe("simulation viewing page", () => {
     expect(page).toContain("overflow:hidden");
     expect(page).toContain("@media(max-height:640px)");
   }, 15000);
+
+  it("keeps the map key complete: finale, action pings, terrain, and no stale entries", () => {
+    const page = renderPage();
+    expect(page).toContain("⛵ Rescue boat");
+    expect(page).toContain("💀 Resting place");
+    expect(page).toContain("legend-terrain");
+    expect(page).toContain("Ocean");
+    expect(page).toContain("Action ping");
+    expect(page).toContain("🩹 Hurt");
+    expect(page).toContain("🤒 Illness");
+    expect(page).toContain("🔎 Discovery");
+    expect(page).not.toContain("Terrain</span>");
+  }, 15000);
 });
 
 describe("server", () => {
+  it("reports a rescue finale through /api/state, not an all-lost one", async () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(52));
+    const ready = {
+      ...base,
+      weather: { condition: "sunny" as const, tempC: 25 },
+      structures: [...base.structures, { id: "signal-api", kind: "signal-fire", tile: "D4", ownerId: "agent-0", durability: 10 }],
+      gameplay: { ...base.gameplay!, objectives: base.gameplay!.objectives.map((goal) => goal.kind === "rescue" ? { ...goal, completed: true } : goal) },
+    };
+    const controller = makeController({
+      worldGenerator: { generate: async () => ({ world: ready, source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    await controller.step();
+    const { server, stop } = createServer(controller, 0);
+    try {
+      const state = await (await fetch(`http://localhost:${server.port}/api/state`)).json() as {
+        simulation: { gameOver: boolean; finale?: { rescued: boolean; roll: string[]; summary: string } };
+      };
+      expect(state.simulation.gameOver).toBe(true);
+      expect(state.simulation.finale?.rescued).toBe(true);
+      expect(state.simulation.finale?.roll.every((line) => line.startsWith("✅"))).toBe(true);
+      expect(state.simulation.finale?.summary).toContain("made it home");
+    } finally {
+      stop();
+    }
+  }, 15000);
+
   it("serves the chronicle after a day rolls over", async () => {
     const base = makeFallbackWorld(60);
     const late = { ...base, clock: { ...base.clock, tick: 23, hour: 23 } };
