@@ -391,7 +391,8 @@ Alignment with active work: this demo is a first real consumer of the
 
 This section extends the implemented demo. It supersedes conflicting earlier
 MVP constraints and specifications for island size, interaction actions,
-inventory presentation, regeneration, and the UI layout.
+inventory presentation, regeneration, UI layout, and the shape of LLM-generated
+world input.
 
 ### 16.1 World scale and encounter frequency
 
@@ -525,3 +526,23 @@ This is app-side input shaping, not a relaxation of the judgment backend's
 provider contract. A rejected judgment call still degrades safely, but ordinary
 high-visibility ticks must no longer trigger that fallback due to candidate
 count.
+
+### 16.7 Structured world blueprint
+
+Do not ask the local model to author the complete `WorldState`. A live probe of
+the full-state prompt produced an invalid 100x100 declaration with only 2 to 3
+terrain entries and one agent, after roughly 11k tokens. A compact blueprint
+probe produced a valid structured response in about 7 to 9 seconds and roughly
+1.7k to 2k tokens.
+
+- `.withOutputSchema(WorldBlueprintSchema, { mode: "fast", onParseFail: "degrade" })`
+  plus `defaultStrategy: "direct"` asks Ollama only for weather, eight 8-character
+  terrain rows, and at least two secrets.
+- Read `AgentResult.object` and `objectError`; never parse `result.output` as
+  JSON. Retry structured failures up to the generator attempt limit, then use
+  `makeFallbackWorld` and surface the reason.
+- `worldFromBlueprint(seed, object)` expands the blueprint using the seeded
+  fallback's cast, inventory, resources, structures, and hidden-fact defaults.
+  It normalizes short rows, substitutes deterministic terrain for unknown
+  codes, preserves an ocean border and connected safe camp route, relocates any
+  supply or structure off ocean, and validates the final 8x8 `WorldState`.
