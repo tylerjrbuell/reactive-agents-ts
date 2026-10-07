@@ -22,6 +22,11 @@ The demo is also a dogfooding vehicle: it exercises `.withJudgment()`,
 `.withOutputSchema()`, `.withEvents()`, `.withHook()`, and the replay/tracing
 surfaces, and it produces an honest framework gap register (section 12).
 
+> [!note] Follow-up design
+> Section 16 records the approved watchability and social-interaction follow-up.
+> Where it conflicts with earlier MVP dimensions, action vocabulary, inventory,
+> or UI details, section 16 takes precedence.
+
 Finding this design is built on (probe: `wiki/Research/Prototypes/p-island-decision/`):
 `agent.judge()` returns a calibrated action decision in ~130 ms versus ~7 s for a
 structured `run()` decision on a local model, so decisions are judgment-first.
@@ -381,3 +386,115 @@ Alignment with active work: this demo is a first real consumer of the
   an explicit "group" primitive or stays in the trust graph.
 - Whether vision (`clef`/`clef-flash`) should let agents read the rendered map
   directly, a possible future demo variant.
+
+## 16. Follow-up design: compact, social, watchable simulation
+
+This section extends the implemented demo. It supersedes conflicting earlier
+MVP constraints and specifications for island size, interaction actions,
+inventory presentation, regeneration, and the UI layout.
+
+### 16.1 World scale and encounter frequency
+
+- Generate and validate an 8x8 island (64 tiles), not 12x12. The structured
+  world-generation prompt and deterministic fallback must agree on dimensions.
+- Place the crash camp, survivors, and initial resources in a compact land area
+  so survivors can encounter each other and supplies without long empty treks.
+  Keep safe land routes and freshwater accessible from that area.
+- Reduce world-generation work in proportion to the smaller map. Use a compact
+  set of useful resource nodes rather than filling every tile with generated
+  detail. The UI derives map dimensions from `world.island`, not a hard-coded
+  12-column grid.
+
+### 16.2 Character-driven social actions
+
+Add an interaction resolver under `engine/` and route social actions through it
+rather than expanding the survival-action switch. Keep resolution deterministic
+for a fixed world, decisions, and seeded RNG. Decisions can use judgment when
+available; the offline scripted policy must make the same classes of decisions
+from character state and perception.
+
+Supported social outcomes:
+
+- **Help/share:** give a co-located or adjacent survivor a needed food or water
+  item. A successful transfer applies the relevant need recovery and improves
+  trust.
+- **Trade:** exchange carried item stacks with a nearby survivor. Both sides
+  must have inventory capacity for the resulting stacks.
+- **Talk:** interact with a nearby survivor; topic and trust change reflect the
+  relationship and character traits.
+- **Steal:** attempt to take one item from a nearby survivor. Success is
+  influenced by risk tolerance, opportunistic/selfish traits, skills, and
+  relationship trust. Detection or failure has a trust consequence and emits
+  an explicit event.
+- **Sabotage:** destroy or reduce one nearby shared supply. The decision and
+  chance of success are influenced by risk tolerance, hostile traits, skill,
+  and trust. It cannot directly injure or kill a character.
+
+Character state drives both intent and outcomes: needs determine when help is
+valuable, traits and risk tolerance influence action preference, skills affect
+interaction success, and trust modifies willingness and consequences. Clamp
+trust to its existing [-1, 1] range. Emit descriptive success/failure events
+with actor, target, affected item or resource, and consequence so the timeline
+explains cooperation and betrayal. No direct human-issued interaction controls
+are added; survivors remain autonomous.
+
+Add explicit optional item selection to social action requests where required,
+while keeping recipient identity as the action target. Invalid or unavailable
+items, out-of-range recipients, full inventory, and empty sabotage targets fail
+without corrupting either participant's state.
+
+### 16.3 Canonical inventory and capacity
+
+- Inventory is canonicalized as at most one stack per item kind. Every gather,
+  consume, share, trade, steal, or normalization path merges quantities rather
+  than appending duplicate entries.
+- Set a 12-unit carry capacity per survivor. Capacity counts item quantities,
+  not distinct stack kinds. Transfers and gathering cannot exceed capacity;
+  rejected operations produce an explicit event and leave inventories intact.
+- Normalize generated worlds and starting rations before the first tick. Never
+  duplicate starter rations when a generated survivor already has them.
+- Show inventory grouped by kind with total quantity and `used / capacity` in
+  the castaway dossier. Keep the roster compact; do not render one chip per
+  unit. Inventory remains agent-managed and the UI does not add manual transfer
+  controls.
+
+### 16.4 Regeneration coordination and loading feedback
+
+- Regeneration is a single-flight controller operation. Concurrent requests
+  share the active generation rather than launching multiple model calls or
+  allowing an older result to overwrite a newer world.
+- Pause the old simulation when regeneration starts. Keep its world visible
+  until a replacement is ready. On generator failure, retain the old world,
+  leave it paused, clear loading state, and report an actionable error.
+- Expose a viewer-safe `regenerating` state. The page displays a busy indicator
+  and status text, disables both regeneration buttons, and prevents repeated
+  submissions until the request settles. A successful replacement resets its
+  event cursor and selected survivor once.
+
+### 16.5 UI and acceptance criteria
+
+Keep the current responsive dark island dashboard and improve it in place:
+
+- Render the compact 8x8 terrain, resources, structures, and castaway positions.
+- Keep character cards, selected-survivor dossier, need meters, and event feed
+  readable at desktop and mobile sizes.
+- Make important social events visually distinct and specific about transfers,
+  theft, sabotage, trust changes, and failed attempts.
+- Show regeneration loading, prevent duplicate requests, and offer recovery
+  after a generation error without blanking the existing story.
+
+Acceptance tests must establish:
+
+1. Fallback and normalized generated worlds are schema-valid 8x8 worlds with
+   reachable clustered survivors/resources.
+2. Repeated inventory updates merge stacks, capacity is enforced, and failed
+   transfers do not mutate either survivor.
+3. Social outcomes are reproducible for identical inputs; character traits,
+   needs, risk tolerance, skills, and trust affect decisions or success as
+   specified; emitted events name actors, targets, and consequences.
+4. Regeneration invoked concurrently calls the generator once, pauses the old
+   run, retains the old world on failure, and clears the loading state.
+5. The browser page exposes loading/disabled states, map dimensions, grouped
+   inventory totals, and descriptions for every new social event.
+6. Existing hidden-fact projection, deterministic replay, and extinction stop
+   behavior remain intact.
