@@ -284,15 +284,275 @@ immediately.
 See the [judgment cookbook's re-ranking recipe](/cookbook/judgment-recipes/#re-ranking-candidates)
 for the full worked example.
 
-## The three primitives
+## The three question types
 
-| Primitive  | Shape                                                                      | Use when                                                          |
-| ---------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **Noul**   | One probability, no separate confidence                                    | Judging whether a single condition holds ("is this toxic?")       |
-| **Choice** | One value from a named set, plus a probability distribution and confidence | Selecting between mutually exclusive options                      |
-| **Score**  | A position on an ordered rubric (may fall between levels), plus confidence | Rating a graded dimension ("how complete is this response, 0–2?") |
+The judgment layer supports three typed question primitives. Each has a specific spec shape, answer shape, and use case. All three can be batched in a single `agent.judge()` call.
 
-Ask several independent questions over the same state in **one batched request** — they run in parallel and can't see each other's answers, which is both faster and (for the `jev` backend) cheaper than one call per question.
+### Noul — Yes/No with Probability
+
+**Use when:** You need a calibrated probability for a single binary condition. "Is this risky?", "Does this violate policy?", "Should this be escalated?"
+
+**Spec shape:**
+
+```typescript
+interface NoulSpec {
+  readonly type: "noul";
+  readonly instructions?: JudgmentEntry;        // Question text
+  readonly criteria?: {
+    readonly true?: JudgmentEntry;              // What "true" means (optional)
+    readonly false?: JudgmentEntry;             // What "false" means (optional)
+  };
+}
+```
+
+- `instructions` — The question to answer. Can be a string, object, array, or `null`.
+- `criteria.true` / `criteria.false` — Optional descriptions that disambiguate the two outcomes for the model. Omit if the question is self-explanatory.
+
+**Answer shape:**
+
+```typescript
+interface NoulAnswer {
+  readonly kind: "noul";
+  readonly probability: number;  // P(true) in [0, 1]
+}
+```
+
+- No separate `confidence` field — the probability *is* the measure.
+- `probability > 0.5` means "likely true"; `probability < 0.5` means "likely false".
+- Calibrated backends (`jev`, `ollama`) return a true probability. The `llm` backend returns a self-reported estimate with `calibrated: false` on Choice/Score answers (Noul has no calibrated flag).
+
+**Example:**
+
+```typescript
+const { risky, pii, needsReview } = await agent.judge({
+  state: { action: "rm -rf /tmp/*", user: "ci-bot" },
+  questions: {
+    risky: {
+      type: "noul",
+      instructions: "Is this action destructive or irreversible?",
+      criteria: {
+        true: "Deletes data, modifies system state, or cannot be undone",
+        false: "Read-only, reversible, or confined to a sandbox",
+      },
+    },
+    pii: {
+      type: "noul",
+      instructions: "Does the input contain personally identifiable information?",
+    },
+    needsReview: {
+      type: "noul",
+      instructions: "Should a human approve this before execution?",
+    },
+  },
+});
+
+if (risky.probability > 0.8 || pii.probability > 0.5) {
+  await requestHumanApproval();
+}
+```
+
+---
+
+### Choice — Select from Named Options
+
+**Use when:** You need to pick exactly one option from a mutually exclusive set. "Which category?", "What intent?", "Which tool should handle this?"
+
+**Spec shape:**
+
+```typescript
+interface ChoiceSpec {
+  readonly type: "choice";
+  readonly instructions?: JudgmentEntry;        // Question text
+  readonly criteria: Record<string, JudgmentEntry>;  // optionLabel -> description
+}
+```
+
+- `criteria` — An object mapping each option label to its description. TypeSafe caps this at 255 options; practical limits are lower (see `maxQuestions` in backend capabilities).
+- Labels are arbitrary strings — use descriptive names the model will understand.
+- Descriptions can be strings, objects, arrays, or `null`. `null` leaves a label undescribed.
+
+**Answer shape:**
+
+```typescript
+interface ChoiceAnswer {
+  readonly kind: "choice";
+  readonly value: string;                       // Selected option label
+  readonly probabilities: Record<string, number>; // Per-option probabilities (sum ≈ 1)
+  readonly confidence: number;                  // Distribution concentration [0, 1]
+  readonly calibrated: boolean;                 // True for jev/ollama, false for llm
+}
+```
+
+- `value` — The selected option label (one of the keys from `criteria`).
+- `probabilities` — Full distribution over all options. Useful for detecting ambiguity (flat distribution = uncertain).
+- `confidence` — How concentrated the distribution is. 1.0 = all mass on one option. Lower = more spread.
+- `calibrated` — Gate on this if you need real probabilities vs. self-reported estimates.
+
+**Example:**
+
+```typescript
+const { category, urgency, language } = await agent.judge({
+  state: { message: "My production database is down and I can't connect!" },
+  questions: {
+    category: {
+      type: "choice",
+      instructions: "What type of issue is this?",
+      criteria: {
+        bug: "A defect or regression in existing functionality",
+        feature: "Request for new functionality",
+        question: "How-to or clarification question",
+        incident: "Production outage or degradation",
+      },
+    },
+    urgency: {
+      type: "choice",
+      instructions: "How urgently does this need a response?",
+      criteria: {
+        critical: "Active outage, data loss, or security breach",
+        high: "Blocking work, major feature broken",
+        normal: "Standard priority, can wait for next sprint",
+        low: "Nice-to-have, no deadline",
+      },
+    },
+    language: {
+      type: "choice",
+      instructions: "What programming language is the user asking about?",
+      criteria: {
+        typescript: "TypeScript or JavaScript",
+        python: "Python",
+        rust: "Rust",
+        go: "Go",
+        other: "Any other language",
+      },
+    },
+  },
+});
+
+console.log(category.value);        // "incident"
+console.log(category.confidence);   // 0.94
+console.log(urgency.probabilities); // { critical: 0.87, high: 0.11, normal: 0.02, low: 0.0 }
+```
+
+---
+
+### Score — Rate on an Ordered Rubric
+
+**Use when:** You need a graded assessment on a continuous scale. "How complete is this answer?", "Rate quality 0–5", "How confident are you?"
+
+**Spec shape:**
+
+```typescript
+interface ScoreSpec {
+  readonly type: "score";
+  readonly instructions?: JudgmentEntry;        // Question text
+  readonly criteria: readonly JudgmentEntry[];  // Level descriptions, index = score
+}
+```
+
+- `criteria` — A tuple/array of **at least 2, at most 10** level descriptions (TypeSafe limit). Index 0 = lowest score, last index = highest score.
+- Each entry can be a string, object, array, or `null`.
+- The model can return a score *between* integer levels (e.g., 2.3 on a 0–4 rubric).
+
+**Answer shape:**
+
+```typescript
+interface ScoreAnswer {
+  readonly kind: "score";
+  readonly value: number;                       // Expected score (may be fractional)
+  readonly probabilities: Record<string, number>; // Distribution over integer levels
+  readonly confidence: number;                  // Distribution concentration [0, 1]
+  readonly calibrated: boolean;                 // True for jev/ollama, false for llm
+}
+```
+
+- `value` — The expected score (float). Not clamped to integer levels.
+- `probabilities` — Distribution over the integer levels (keys are stringified indices: "0", "1", "2"...).
+- `confidence` — Concentration of the distribution. Higher = more certain.
+- `calibrated` — Same meaning as Choice.
+
+**Example:**
+
+```typescript
+const { completeness, accuracy, tone } = await agent.judge({
+  state: {
+    question: "How do I implement a binary search in Rust?",
+    answer: "Use `slice.binary_search()` from the standard library...",
+  },
+  questions: {
+    completeness: {
+      type: "score",
+      instructions: "How completely does this answer address the question?",
+      criteria: [
+        "Does not answer the question at all",
+        "Addresses part of the question, major gaps remain",
+        "Addresses most of the question, minor gaps",
+        "Fully answers the question with appropriate detail",
+        "Exceeds expectations with examples, edge cases, and context",
+      ],
+    },
+    accuracy: {
+      type: "score",
+      instructions: "How technically accurate is the answer?",
+      criteria: [
+        "Fundamentally incorrect or dangerous advice",
+        "Mostly incorrect with some correct elements",
+        "Mostly correct with minor inaccuracies",
+        "Technically correct",
+        "Exemplary — includes nuance, caveats, and best practices",
+      ],
+    },
+    tone: {
+      type: "score",
+      instructions: "How appropriate is the tone for a technical answer?",
+      criteria: [
+        "Rude, dismissive, or unhelpful",
+        "Neutral but terse",
+        "Helpful and professional",
+        "Exceptionally clear, encouraging, and well-structured",
+      ],
+    },
+  },
+});
+
+console.log(completeness.value); // 3.7 (between "fully answers" and "exceeds")
+console.log(accuracy.value);     // 4.0
+console.log(tone.value);         // 2.8
+```
+
+---
+
+### Batching multiple question types
+
+All three types can be mixed in a single call. Questions run in parallel and cannot see each other's answers — this is both faster and (for `jev`) cheaper than sequential calls.
+
+```typescript
+const result = await agent.judge({
+  state: { prTitle: "Fix login timeout", prBody: "...", files: ["auth.ts", "session.ts"] },
+  questions: {
+    // Noul: binary gate
+    isSecurityRelated: { type: "noul", instructions: "Does this PR touch authentication or authorization?" },
+    // Choice: categorize
+    changeType: {
+      type: "choice",
+      instructions: "What kind of change is this?",
+      criteria: { bugfix: "Fixes a defect", feature: "Adds functionality", refactor: "Improves structure", docs: "Documentation only" },
+    },
+    // Score: quality gate
+    testCoverage: {
+      type: "score",
+      instructions: "How well tested is this change?",
+      criteria: ["No tests", "Minimal coverage", "Adequate coverage", "Comprehensive with edge cases"],
+    },
+    // Another Noul
+    breaksApi: { type: "noul", instructions: "Does this change the public API contract?" },
+  },
+});
+
+// result.isSecurityRelated.probability
+// result.changeType.value
+// result.testCoverage.value
+// result.breaksApi.probability
+```
 
 ## Internal harness sites (opt-in, per-site)
 
