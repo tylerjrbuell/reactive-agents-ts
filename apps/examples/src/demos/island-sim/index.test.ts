@@ -67,6 +67,27 @@ describe("controller", () => {
     await controller.newSimulation();
     await controller.step();
     expect(controller.isGameOver()).toBe(true);
+    const events = controller.getEventsAfter(0).events;
+    expect(events.some((item) => item.event.kind === "all-lost")).toBe(true);
+    expect(controller.getChronicle().some((entry) => entry.headline.length > 3)).toBe(true);
+  }, 15000);
+
+  it("resets the narrator chronicle when a new island is generated", async () => {
+    const late = (seed: number) => {
+      const base = makeFallbackWorld(seed);
+      return { ...base, clock: { ...base.clock, tick: 23, hour: 23 } };
+    };
+    const controller = makeController({
+      worldGenerator: { generate: async (seed) => ({ world: late(63 + (seed % 2)), source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    await controller.step();
+    expect(controller.getChronicle().length).toBeGreaterThan(0);
+    await controller.newSimulation();
+    expect(controller.getChronicle()).toEqual([]);
+    await controller.step();
+    expect(controller.getChronicle().length).toBe(1);
   }, 15000);
 
   it("newSimulation produces a world, and step advances one tick (offline)", async () => {
@@ -169,6 +190,17 @@ describe("simulation viewing page", () => {
     expect(page).toContain("💀");
     expect(page).toContain("rescue-arrived");
     expect(page).toContain("made it home");
+  }, 15000);
+
+  it("presents the narrator as a timeline with a reading pane and a new-island CTA", () => {
+    const page = renderPage();
+    expect(page).toContain("chronicle-timeline");
+    expect(page).toContain("chronicle-chips");
+    expect(page).toContain("chronicle-reader");
+    expect(page).toContain("function selectChronicleDay(");
+    expect(page).toContain("finale-restart");
+    expect(page).toContain("memorial-list");
+    expect(page).toContain("all-lost");
   }, 15000);
 });
 

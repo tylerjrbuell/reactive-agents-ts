@@ -25,7 +25,8 @@ Two framework-native opt-ins:
 - Repeated reciprocal trust forms persistent alliances. Members share an exclusive private stash; the public camp cache and island resources remain open to outsiders. When death shrinks an alliance below two survivors it dissolves and its private stash spills into the public camp cache, with grief events for mourning.
 - Under starvation pressure castaways can steal from neighbors; theft feeds the relationship-weighted exile-vote machinery. Exile lasts 12 in-world hours, reserves a survival kit, and ends with an automatic return.
 - One seeded incident is scheduled each in-world day: a washed-up cache, a distant rescue signal, or a storm front. Incidents are recoverable and replayable.
-- Finale: once the rescue objective completes with a signal fire standing in non-storm weather, a boat arrives — the story ends with how many made it home. If everyone dies first, the chronicle records the somber ending.
+- Finale: once the rescue objective completes with a signal fire standing in non-storm weather, a boat arrives — the story ends with how many made it home. If everyone dies first, the run ends with an all-lost event, a memorial roll (name · day · cause) and an epilogue chapter in the journal.
+- Narration accounts for the actual story: deaths are named with their cause, pacts, exiles, thefts, builds, twists, and rescues are all called out, and the confessional voice belongs to the day's most-affected survivor.
 - Hunger, thirst, and fatigue create pressure. Activity increases fatigue, storms make exertion harder, and rest reduces fatigue.
 
 ## Controls and viewing
@@ -38,6 +39,8 @@ Two framework-native opt-ins:
 - Select or hover a castaway to preview their needs and follow their movement. Map stacks mark co-located survivors; activate `+N` to cycle selection.
 - Movement and actions are animated between ticks: markers glide to new tiles, action glyphs (⛏️ 💧 💬 🤝 🏗️ 🆘 🌟 🌀) briefly pop above the acting castaway, and recent movement trails stay faintly visible; the focused survivor's trail is highlighted.
 - The camp dashboard shows objectives, public supplies, alliances/private stash totals, and exile countdowns. Search and filter the story rail by castaway and event type.
+- The "🎙️ Narrator's journal" is a day timeline: a scrollable strip of mood-tinted day chips over a single comfortable reading pane (headline, recap, confessional). Click a day to read its chapter; the journal resets when you start a new island.
+- Endings show a banner with a "🔄 Start a new island" button: a rescue banner with survivors evacuated, or a somber memorial listing every death with its day and cause.
 
 ## Verification
 

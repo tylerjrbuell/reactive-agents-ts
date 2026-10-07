@@ -20,8 +20,11 @@ describe("narrator", () => {
     expect(entry.day).toBe(1);
     expect(entry.headline.length).toBeGreaterThan(3);
     expect(entry.recap.length).toBeGreaterThan(10);
+    expect(entry.recap).toContain("Sawyer");
+    expect(entry.recap).toContain("thirst");
     expect(entry.confessional.name.length).toBeGreaterThan(0);
     expect(entry.confessional.quote.length).toBeGreaterThan(0);
+    expect(entry.confessional.mood).toBe("grieving");
     expect(one).toEqual(two);
   }, 15000);
 
@@ -33,5 +36,35 @@ describe("narrator", () => {
     const list = narrator.chronicle();
     expect(list.length).toBe(2);
     expect(list.at(-1)!.day).toBe(2);
+  }, 15000);
+
+  it("clears the chronicle on reset so a new island starts a fresh journal", () => {
+    const narrator = makeTemplateNarrator();
+    const world = makeFallbackWorld(62);
+    narrator.narrate({ world, day: 1, dayStartTick: 0, dayEndTick: 23, events: [] });
+    expect(narrator.chronicle().length).toBe(1);
+    narrator.reset();
+    expect(narrator.chronicle()).toEqual([]);
+  }, 15000);
+
+  it("names the salient moments: deaths, pacts, exile, and twists", () => {
+    const world = makeFallbackWorld(64);
+    const events: SimEvent[] = [
+      { kind: "agent-died", tick: 2, agentId: "agent-4", cause: "hunger" },
+      { kind: "alliance-formed", tick: 3, allianceId: "alliance-1", name: "The Shoreline", members: ["agent-0", "agent-1"] },
+      { kind: "exile-started", tick: 4, agentId: "agent-2", location: "H8", returnAtTick: 16, reason: "vote" },
+      { kind: "island-twist", tick: 5, twist: "weather-front", description: "Dark clouds gather offshore." },
+      { kind: "rescue-arrived", tick: 6, survivors: ["agent-0"] },
+    ];
+    const entry = makeTemplateNarrator().narrate({
+      world, day: 1, dayStartTick: 0, dayEndTick: 23,
+      events: events.map((event, index) => ({ sequence: index + 1, event })),
+    }) as NarrationEntry;
+    expect(entry.recap).toContain("Sayid");
+    expect(entry.recap).toContain("hunger");
+    expect(entry.recap.toLowerCase()).toContain("shoreline");
+    expect(entry.recap.toLowerCase()).toContain("exile");
+    expect(entry.recap.toLowerCase()).toContain("weather");
+    expect(entry.recap.toLowerCase()).toContain("rescue");
   }, 15000);
 });

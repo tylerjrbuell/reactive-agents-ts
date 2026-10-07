@@ -35,6 +35,7 @@ export type NarrationInput = {
 export type Narrator = {
   narrate(input: NarrationInput): Promise<NarrationEntry> | NarrationEntry;
   chronicle(): NarrationEntry[];
+  reset(): void;
 };
 
 function tally(events: readonly SimEvent[]) {
@@ -66,23 +67,95 @@ function pickNarrators(world: WorldState, events: readonly SimEvent[]): string |
   return world.agents.find((agent) => agent.status !== "dead")?.name;
 }
 
-function headlineFor(counts: ReturnType<typeof tally>, alliances: number): string {
-  if (counts.died > 0) return "The island takes one of us";
+function headlineFor(counts: ReturnType<typeof tally>, alliances: number, deaths: readonly SimEvent[]): string {
+  if (counts.died > 0) return deaths.length === 1 ? "The island takes one of us" : "The island takes more than one";
   if (counts.stolen > 0) return "Hands wander when the packs are light";
   if (alliances > 0) return "Shoreline pacts hold for another day";
   if (counts.gathered > 6) return "A provident day of gathering";
   return "Another drift of tides and hours";
 }
 
-function recapFor(counts: ReturnType<typeof tally>, alliances: number, weather: string, rescued: boolean): string {
+/** Turn the day's raw events into named, human-scale beats for the recap. */
+function highlightLines(world: WorldState, events: readonly SimEvent[]): string[] {
+  const name = (id: string) => world.agents.find((agent) => agent.id === id)?.name ?? id;
+  const lines: string[] = [];
+  for (const event of events) {
+    switch (event.kind) {
+      case "agent-died":
+        lines.push(`${name(event.agentId)} died of ${event.cause.replace(/_/g, " ")}.`);
+        break;
+      case "alliance-formed":
+        lines.push(`${event.name} formed around ${event.members.map(name).join(" and ")}.`);
+        break;
+      case "alliance-dissolved":
+        lines.push(`${event.name} broke apart.`);
+        break;
+      case "grief":
+        lines.push(event.description);
+        break;
+      case "exile-started":
+        lines.push(`${name(event.agentId)} was voted off to the exile cay.`);
+        break;
+      case "exile-returned":
+        lines.push(`${name(event.agentId)} returned from exile.`);
+        break;
+      case "island-twist":
+        lines.push(event.twist === "weather-front" ? `A weather front moved in: ${event.description}` : event.twist === "cache-found" ? "A supply cache washed ashore." : "A search plane crossed the horizon.");
+        break;
+      case "rescue-arrived":
+        lines.push("A boat reached the shore: rescue.");
+        break;
+      case "stolen":
+        lines.push(`${name(event.from)} took ${event.item} from ${name(event.to)}.`);
+        break;
+      case "sabotaged":
+        lines.push(`${name(event.from)} sabotaged ${name(event.to)}'s ${event.item}.`);
+        break;
+      case "helped":
+        lines.push(`${name(event.from)} helped ${name(event.to)} with ${event.need}.`);
+        break;
+      case "built":
+        lines.push(`${name(event.agentId)} built a ${(event.structureKind ?? "shelter").replace(/-/g, " ")}.`);
+        break;
+      default:
+        break;
+    }
+  }
+  return lines;
+}
+
+function recapFor(counts: ReturnType<typeof tally>, alliances: number, weather: string, rescued: boolean, highlights: readonly string[]): string {
   const bits = [
     `${counts.moved} treks across the ${weather} island, ${counts.gathered} bundles bound for camp, ${counts.talked} voices around the fire.`,
     counts.died > 0 ? `${counts.died} castaway${counts.died > 1 ? "s" : ""} did not last the day.` : "No one was lost today.",
+    ...highlights.slice(0, 6),
     alliances > 0 ? `${alliances} pact${alliances > 1 ? "s" : ""} hold${alliances > 1 ? "" : "s"} sway.` : "No loyalty holds sway yet.",
     counts.twists > 0 ? "The island shifted under their feet." : "",
     rescued ? "Somewhere out there, a boat has seen the smoke." : "",
   ];
   return bits.filter(Boolean).join(" ");
+}
+
+/** Choose the confessional voice: the day's most-affected survivor, else the most active. */
+function confessionalFor(world: WorldState, events: readonly SimEvent[], mood: string): { name: string; quote: string } {
+  const death = events.find((event) => event.kind === "agent-died");
+  if (death && death.kind === "agent-died") {
+    const deadName = world.agents.find((agent) => agent.id === death.agentId)?.name ?? "one of ours";
+    const survivor = world.agents.find((agent) => agent.status !== "dead" && agent.id !== death.agentId);
+    return {
+      name: survivor?.name ?? "the camp",
+      quote: `We lost ${deadName} today. The island doesn't care how good a person you are.`,
+    };
+  }
+  const speaker = pickNarrators(world, events) ?? "the camp";
+  const quote = mood === "wary"
+    ? "I keep my supplies closer than my friends these days."
+    : mood === "hopeful"
+      ? "That signal fire better be tall enough to be seen from the moon."
+      : mood === "grieving"
+        ? "We buried another one today. The tide keeps taking more than it gives."
+        : "One more day. That's all we do out here. One more day.";
+  return { name: speaker, quote };
 }
 
 /** Stand-in narrator with deterministic humane prose when no LLM provider is reachable. */
@@ -92,22 +165,13 @@ export function makeTemplateNarrator(): Narrator {  const chronicleEntries: Narr
       const events = input.events.filter((item) => item.event.tick >= input.dayStartTick && item.event.tick <= input.dayEndTick).map((item) => item.event);
       const counts = tally(events);
       const alliances = input.world.gameplay?.alliances.length ?? 0;
-      const speaker = pickNarrators(input.world, events) ?? "the camp";
+      const highlights = highlightLines(input.world, events);
       const mood = counts.died > 0 ? "grieving" : counts.stolen > 0 ? "wary" : counts.built > 0 ? "hopeful" : "steady";
       const entry: NarrationEntry = {
         day: input.day,
-        headline: headlineFor(counts, alliances),
-        recap: recapFor(counts, alliances, input.world.weather.condition, input.world.gameplay?.rescueAtTick !== undefined),
-        confessional: {
-          name: speaker,
-          mood,
-          quote: mood === "grieving"
-            ? "We buried another one today. The tide keeps taking more than it gives."
-            : mood === "wary"
-              ? "I keep my supplies closer than my friends these days."
-              : mood === "hopeful"
-                ? "That signal fire better be tall enough to be seen from the moon."
-                : "One more day. That's all we do out here. One more day.",        },
+        headline: headlineFor(counts, alliances, events),
+        recap: recapFor(counts, alliances, input.world.weather.condition, input.world.gameplay?.rescueAtTick !== undefined, highlights),
+        confessional: { ...confessionalFor(input.world, events, mood), mood },
         source: "template",
       };
       chronicleEntries.push(entry);
@@ -115,6 +179,9 @@ export function makeTemplateNarrator(): Narrator {  const chronicleEntries: Narr
     },
     chronicle() {
       return [...chronicleEntries];
+    },
+    reset() {
+      chronicleEntries.length = 0;
     },
   };
 }
@@ -126,7 +193,7 @@ export function makeTemplateNarrator(): Narrator {  const chronicleEntries: Narr
 export function makeLlmNarrator(agent: { run(input: string): Promise<{ object?: unknown; objectError?: string }> } | undefined, fallback: Narrator = makeTemplateNarrator()): Narrator {
   const chronicleEntries: NarrationEntry[] = [];
   if (!agent) {
-    return { ...fallback, chronicle: () => [...(fallback.chronicle()), ...[]] };
+    return fallback;
   }
   return {
     async narrate(input: NarrationInput): Promise<NarrationEntry> {
@@ -134,11 +201,13 @@ export function makeLlmNarrator(agent: { run(input: string): Promise<{ object?: 
       const counts = tally(events);
       const names = input.world.agents.map((agent) => agent.name).join(", ");
       try {
+        const highlights = highlightLines(input.world, events);
         const result = await agent.run(
           `Day ${input.day} on the island. Castaways: ${names}. Weather: ${input.world.weather.condition}. ` +
           `Activity: ${counts.moved} moves, ${counts.gathered} gathers, ${counts.talked} conversations, ${counts.helped} kindnesses, ` +
           `${counts.stolen} thefts, ${counts.built} builds, ${counts.died} deaths, ${counts.twists} surprises. ` +
-          `Write a reality-TV style day log.`,
+          (highlights.length > 0 ? `Notable moments: ${highlights.join(" ")} ` : "") +
+          `Write a reality-TV style day log that names who did what and mourns any deaths by name.`,
         );
         const object = result.objectError ? undefined : (result.object as Record<string, unknown> | undefined);
         if (object && typeof object.headline === "string" && typeof object.recap === "string") {
@@ -163,6 +232,10 @@ export function makeLlmNarrator(agent: { run(input: string): Promise<{ object?: 
     },
     chronicle() {
       return [...chronicleEntries, ...fallback.chronicle()];
+    },
+    reset() {
+      chronicleEntries.length = 0;
+      fallback.reset();
     },
   };
 }

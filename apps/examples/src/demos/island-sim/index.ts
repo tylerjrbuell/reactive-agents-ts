@@ -77,6 +77,7 @@ export class SimController {
     this.speed = 1;
     this.gameOver = false;
     this.lastNarrationDay = 0;
+    this.narrator.reset();
     this.selectedAgentId = null;
   }
 
@@ -94,11 +95,37 @@ export class SimController {
     }
     const rescued = result.events.some((event) => event.kind === "rescue-arrived");
     const lost = this.world.agents.length > 0 && this.world.agents.every((agent) => agent.status === "dead");
+    if (lost && !this.retainedEvents.some((item) => item.event.kind === "all-lost")) {
+      this.retainedEvents.push({
+        sequence: ++this.eventSequence,
+        event: {
+          kind: "all-lost",
+          tick: this.world.clock.tick,
+          names: this.world.agents.map((agent) => `${agent.name} · Day ${Math.floor((agent.demise?.tick ?? 0) / 24) + 1} · ${String(agent.demise?.cause ?? "unknown").replace(/_/g, " ")}`),
+        },
+      });
+    }
     if (rescued || lost) {
       this.gameOver = true;
       this.pause();
+      this.writeEpilogue();
     }
     this.narrateClosedDay();
+  }
+
+  /** Close the chronicle with a final entry for the ending day if one is not already written. */
+  private writeEpilogue(): void {
+    const world = this.world;
+    if (!world) return;
+    const day = world.clock.day;
+    if (this.narrator.chronicle().at(-1)?.day === day) return;
+    this.narrator.narrate({
+      world,
+      day,
+      dayStartTick: Math.max(0, (day - 1) * 24),
+      dayEndTick: world.clock.tick,
+      events: this.retainedEvents,
+    });
   }
 
   /** When a day closes, hand the day's events to the narrator and retain the recap. */

@@ -27,6 +27,7 @@ describe("bounded judgment target choices", () => {
         id: `agent-visible-${index}`,
         name: `Survivor ${index}`,
         location: `C${(index % 8) + 1}`,
+        status: "alive" as const,
         needs: { hunger: 5, thirst: 5, energy: 5 },
         inventory: [{ kind: "water", qty: 1 }],
       })),

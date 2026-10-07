@@ -97,6 +97,7 @@ function socialDecision(world: WorldState, perception: Perception): Decision | u
   if (world.clock.tick % 4 !== 0) return undefined;
   const self = perception.self;
   const neighbor = perception.visibleAgents
+    .filter((agent) => agent.status !== "dead")
     .filter((agent) => distance(self.location, agent.location) <= 1)
     .filter((agent) => (self.relationships[agent.id]?.trust ?? 0) < 0.55)
     .sort((left, right) => left.id.localeCompare(right.id))[0];
@@ -149,6 +150,7 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       const objective = objectiveFor(world, agentId);
       if (objective?.kind === "help") {
         const person = perception.visibleAgents
+          .filter((agent) => agent.status !== "dead")
           .filter((agent) => distance(self.location, agent.location) <= 1)
           .filter((agent) => agent.needs.hunger >= 7 || agent.needs.thirst >= 7)
           .sort((left, right) => Math.max(right.needs.hunger, right.needs.thirst) - Math.max(left.needs.hunger, left.needs.thirst))[0];
@@ -194,14 +196,16 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       const social = socialDecision(world, perception);
       if (social) return social;
 
-      if (self.needs.hunger >= 9 && !food && (world.clock.tick + desperationOffset(agentId)) % 3 === 0) {
+      if ((self.needs.hunger >= 9 || self.needs.thirst >= 9) && (world.clock.tick + desperationOffset(agentId)) % 3 === 0) {
+        const wanted = self.needs.thirst >= 9 ? "water" : ["berries", "fish", "meat"];
         const victim = perception.visibleAgents
+          .filter((agent) => agent.status !== "dead")
           .filter((agent) => distance(self.location, agent.location) <= 1)
-          .filter((agent) => agent.inventory.some((item) => ["berries", "fish", "meat"].includes(item.kind) && item.qty > 0))
+          .filter((agent) => agent.inventory.some((item) => Array.isArray(wanted) ? wanted.includes(item.kind) && item.qty > 0 : item.kind === wanted && item.qty > 0))
           .sort((left, right) => (right.needs.hunger + right.needs.thirst) - (left.needs.hunger + left.needs.thirst)
             || left.id.localeCompare(right.id))[0];
         if (victim) {
-          return decision("Desperation takes over", `Too hungry to keep starving; take food from ${victim.name}`, { type: "steal", target: victim.id }, 0.55);
+          return decision("Desperation takes over", `Too ${self.needs.thirst >= 9 ? "parched" : "hungry"} to keep going without; take from ${victim.name}`, { type: "steal", target: victim.id, item: Array.isArray(wanted) ? undefined : wanted }, 0.55);
         }
       }
 

@@ -44,4 +44,18 @@ describe("perceive", () => {
     expect(p.memory).toHaveLength(1);
     expect(Object.keys(p.relationships)).toEqual(Object.keys(w.agents[0].relationships));
   }, 15000);
+
+  it("excludes dead castaways from visible agents so decisions never target the dead", () => {
+    const source = makeFallbackWorld(11);
+    const self = source.agents[0]!;
+    const neighbor = source.agents[1]!;
+    const w = {
+      ...source,
+      agents: source.agents.map((agent) => agent.id === neighbor.id
+        ? { ...agent, location: self.location, status: "dead" as const, demise: { tick: 1, cause: "thirst" } }
+        : agent),
+    };
+    const p = perceive(w, self.id);
+    expect(p.visibleAgents.some((agent) => agent.id === neighbor.id)).toBe(false);
+  }, 15000);
 });

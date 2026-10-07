@@ -17,6 +17,7 @@ export interface Perception {
     id: string;
     name: string;
     location: string;
+    status: AgentState["status"];
     needs: AgentState["needs"];
     inventory: AgentState["inventory"];
   }>;
@@ -32,8 +33,8 @@ export function perceive(world: WorldState, agentId: string): Perception {
   const radius = 2;
   const visibleTiles = world.terrain.filter(t => distance(agent.location, t.tile) <= radius);
   const visibleAgents = world.agents
-    .filter(a => a.id !== agentId && distance(agent.location, a.location) <= radius)
-    .map(a => ({ id: a.id, name: a.name, location: a.location, needs: a.needs, inventory: a.inventory }));
+    .filter(a => a.id !== agentId && a.status !== "dead" && distance(agent.location, a.location) <= radius)
+    .map(a => ({ id: a.id, name: a.name, location: a.location, status: a.status, needs: a.needs, inventory: a.inventory }));
   const visibleResources = world.resources.filter(r => distance(agent.location, r.tile) <= radius);
   return {
     tick: world.clock.tick,

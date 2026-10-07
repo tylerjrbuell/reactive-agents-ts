@@ -153,4 +153,52 @@ describe("scripted decisions", () => {
     expect(decision.action.type).toBe("steal");
     expect(decision.action.target).toBe(victim.id);
   }, 15000);
+
+  it("steals carried water when thirst is desperate", async () => {
+    const base = makeFallbackWorld(35);
+    const agent = base.agents[0]!;
+    const victim = base.agents[1]!;
+    const world = {
+      ...base,
+      clock: { ...base.clock, tick: 21 },
+      resources: [],
+      gameplay: undefined,
+      agents: base.agents.map((candidate) => {
+        if (candidate.id === agent.id) return { ...candidate, location: "D4", needs: { hunger: 1, thirst: 9, energy: 1 }, inventory: [] };
+        if (candidate.id === victim.id) return { ...candidate, location: "D5", needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [{ kind: "water", qty: 2 }] };
+        return { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] };
+      }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("steal");
+    expect(decision.action.target).toBe(victim.id);
+  }, 15000);
+
+  it("never socializes with or targets a dead castaway", async () => {
+    const base = makeFallbackWorld(34);
+    const agent = base.agents[0]!;
+    const other = base.agents[1]!;
+    const world = {
+      ...base,
+      clock: { ...base.clock, tick: 4 },
+      resources: [],
+      gameplay: undefined,
+      agents: base.agents.map((candidate) => {
+        if (candidate.id === agent.id) return { ...candidate, location: "D4", needs: { hunger: 1, thirst: 1, energy: 1 } };
+        if (candidate.id === other.id) return { ...candidate, location: "D5", status: "dead" as const, demise: { tick: 1, cause: "thirst" }, needs: { hunger: 1, thirst: 1, energy: 1 } };
+        return { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } };
+      }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).not.toBe("talk");
+    expect(decision.action.target).not.toBe(other.id);
+  }, 15000);
 });
