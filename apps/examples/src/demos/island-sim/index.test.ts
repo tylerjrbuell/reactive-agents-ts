@@ -282,6 +282,10 @@ describe("simulation viewing page", () => {
     expect(page).toContain("🤒 Illness");
     expect(page).toContain("🔎 Discovery");
     expect(page).not.toContain("Terrain</span>");
+    expect(page).toContain("legend-group");
+    expect(page).toContain("legend-label");
+    expect(page).toContain(".map-legend{display:flex");
+    expect(page).not.toContain("minmax(132px,1fr)");
   }, 15000);
 });
 
