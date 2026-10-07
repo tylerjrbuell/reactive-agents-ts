@@ -10,15 +10,22 @@ bun run apps/examples/src/demos/island-sim/index.ts
 
 Open `http://localhost:3007` (or the port set with `PORT`). The demo uses scripted survivor decisions and tries Ollama for a compact world blueprint (`ollama/cogito:14b`) when available. World generation falls back to a deterministic island if provider setup or generation fails.
 
-Set `ISLAND_SIM_MODEL` to choose a different Ollama model. Survivor decisions remain deterministic and engine-owned.
+Set `ISLAND_SIM_MODEL` to choose a different Ollama model. Survivor decisions remain deterministic and engine-owned by default.
+
+Two framework-native opt-ins:
+
+- `ISLAND_SIM_LLM_DECISIONS=1` builds a structured-output survivor agent (higher latency/expense); any provider failure degrades that decision to the scripted maker, so the tick loop never stalls.
+- A second ReactiveAgents agent writes the day-by-day "🎙️ Narrator's journal" (`GET /api/chronicle`): reality-TV day recaps plus one confessional quote per day. When Ollama is unreachable a deterministic template narrator fills the same shape, so the chronicle always renders.
 
 ## Simulation systems
 
 - Castaways have distinct roles, personal objectives, and a shared rescue objective. Completed actions update objective progress and produce story milestones.
-- Repeated reciprocal trust forms persistent alliances. Members share an exclusive private stash; the public camp cache and island resources remain open to outsiders.
-- Carry-aware choices send full packs back to camp to store supplies instead of repeatedly attempting impossible gathers.
-- Repeated theft or sabotage inside an alliance can trigger a relationship-weighted vote. Exile lasts 12 in-world hours, reserves a survival kit, and ends with an automatic return.
+- Scarcity: berries and water regrow slowly, fish slower still, and wood/stone are finite (regrowth 0) — long games force longer treks. Storm days salt the land and suppress regrowth.
+- Deaths are remembered: castaway cards and the dossier show a 💀 cause-of-death line (`demise` is typed, serializable state).
+- Repeated reciprocal trust forms persistent alliances. Members share an exclusive private stash; the public camp cache and island resources remain open to outsiders. When death shrinks an alliance below two survivors it dissolves and its private stash spills into the public camp cache, with grief events for mourning.
+- Under starvation pressure castaways can steal from neighbors; theft feeds the relationship-weighted exile-vote machinery. Exile lasts 12 in-world hours, reserves a survival kit, and ends with an automatic return.
 - One seeded incident is scheduled each in-world day: a washed-up cache, a distant rescue signal, or a storm front. Incidents are recoverable and replayable.
+- Finale: once the rescue objective completes with a signal fire standing in non-storm weather, a boat arrives — the story ends with how many made it home. If everyone dies first, the chronicle records the somber ending.
 - Hunger, thirst, and fatigue create pressure. Activity increases fatigue, storms make exertion harder, and rest reduces fatigue.
 
 ## Controls and viewing
