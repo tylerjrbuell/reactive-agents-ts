@@ -498,3 +498,30 @@ Acceptance tests must establish:
    inventory totals, and descriptions for every new social event.
 6. Existing hidden-fact projection, deterministic replay, and extinction stop
    behavior remain intact.
+
+### 16.6 Bounded judgment target criteria
+
+The live judgment adapter must respect provider limits before calling
+`agent.judge()`. Ollama System One supports 2..26 choices, while the current
+builder includes every visible resource, survivor, carried item kind, and
+passable tile in one `target` question. This can produce 27..29 options and
+forces that tick to fall back to scripted decisions.
+
+- Build target candidates only from the agent's perception, then rank them
+  deterministically by current survival need, actionable nearby social
+  opportunities, immediate resources, adjacent passable tiles, and stable id.
+- Cap the emitted choice set at 26 for all backends. Preserve a valid option for
+  the highest-priority action classes before filling remaining slots; ties use
+  stable identifiers, never iteration order from model output.
+- Ensure sparse worlds still produce at least two distinct valid criteria.
+  Include explicit no-target/current-location choices as needed and map those
+  sentinels back to safe action semantics.
+- Add tests with more than 26 available candidates and with zero/one natural
+  candidates. Assert every `target` question has 2..26 choices, important
+  survival/social candidates win ranking, and selected labels resolve to valid
+  action targets or a safe fallback.
+
+This is app-side input shaping, not a relaxation of the judgment backend's
+provider contract. A rejected judgment call still degrades safely, but ordinary
+high-visibility ticks must no longer trigger that fallback due to candidate
+count.
