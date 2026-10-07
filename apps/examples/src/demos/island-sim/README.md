@@ -29,6 +29,7 @@ Set `ISLAND_SIM_MODEL` to choose a different Ollama model. Survivor decisions re
 - Resource and structure markers use unambiguous emoji glyphs (🫐 🐟 💧 🪵 🪨 ⛺ 🔥 🏕️ 🆘) with a labeled legend and tooltips naming kind, quantity, and tile.
 - Alliances are visualized: colored dashed lines connect member markers on the map, member rings adopt the alliance color, and hovering an alliance row highlights only that alliance's link.
 - Select or hover a castaway to preview their needs and follow their movement. Map stacks mark co-located survivors; activate `+N` to cycle selection.
+- Movement and actions are animated between ticks: markers glide to new tiles, action glyphs (⛏️ 💧 💬 🤝 🏗️ 🆘 🌟 🌀) briefly pop above the acting castaway, and recent movement trails stay faintly visible; the focused survivor's trail is highlighted.
 - The camp dashboard shows objectives, public supplies, alliances/private stash totals, and exile countdowns. Search and filter the story rail by castaway and event type.
 
 ## Verification

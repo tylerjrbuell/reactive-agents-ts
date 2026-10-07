@@ -94,8 +94,7 @@ describe("simulation viewing page", () => {
   }, 15000);
 
   it("renders visible need bars with percents, emoji icons, and alliance links", () => {
-    const page = renderPage();
-    expect(page).toContain(".need-track{display:block");
+    const page = renderPage();    expect(page).toContain(".need-track{display:block");
     expect(page).toContain(".need-fill{display:block");
     expect(page).toContain("pct+'%'");
     expect(page).toContain("const resourceGlyphs=");
@@ -114,6 +113,17 @@ describe("simulation viewing page", () => {
     expect(page).toContain("🤝 Social");
     expect(page).toContain("⚠️ Danger");
     expect(page).toContain("day-part");
+  }, 15000);
+
+  it("animates movement glide, action pings, and softer trails", () => {
+    const page = renderPage();
+    expect(page).toContain("transition:transform");
+    expect(page).toContain("@keyframes action-ping");
+    expect(page).toContain("function showActionPings(");
+    expect(page).toContain("actionPingGlyphs");
+    expect(page).toContain(".movement-trail.wrapped{opacity:.28}");
+    expect(page).toContain(".movement-trail.focus{opacity:.9}");
+    expect(page).toContain("ping");
   }, 15000);
 });
 
