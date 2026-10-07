@@ -129,4 +129,28 @@ describe("scripted decisions", () => {
     expect(decision.action.type).toBe("gather");
     expect(decision.action.target).toBe("res-near");
   }, 15000);
+
+  it("steals from a neighboring survivor when starving and no food source is available", async () => {
+    const base = makeFallbackWorld(33);
+    const agent = base.agents[0]!;
+    const victim = base.agents[1]!;
+    const world = {
+      ...base,
+      clock: { ...base.clock, tick: 21 },
+      resources: [],
+      gameplay: undefined,
+      agents: base.agents.map((candidate) => {
+        if (candidate.id === agent.id) return { ...candidate, location: "D4", needs: { hunger: 9, thirst: 1, energy: 1 }, inventory: [] };
+        if (candidate.id === victim.id) return { ...candidate, location: "D5", needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [{ kind: "fish", qty: 2 }] };
+        return { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] };
+      }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("steal");
+    expect(decision.action.target).toBe(victim.id);
+  }, 15000);
 });

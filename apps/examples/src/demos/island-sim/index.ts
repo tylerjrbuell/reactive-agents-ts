@@ -10,6 +10,9 @@ import type { SimEvent } from "./engine/events.js";
 import { renderPage } from "./ui/page.js";
 import { makeFallbackWorld } from "./world/fallback.js";
 import { WorldBlueprintSchema } from "./world/blueprint.js";
+import { NarrationLogSchema, makeTemplateNarrator, makeLlmNarrator, type Narrator } from "./narrator/narrator.js";
+import { makeLlmDecisionMaker } from "./decision/llm.js";
+import { ActionRequestSchema } from "./world/schema.js";
 
 type SequencedEvent = { sequence: number; event: SimEvent };
 const MAX_RETAINED_EVENTS = 300;
@@ -48,14 +51,17 @@ export class SimController {
   running = false;
   speed = 1;
   selectedAgentId: string | null = null;
+  private gameOver = false;
   private tickTimer: NodeJS.Timeout | null = null;
   private rng: Rng;
   private eventSequence = 0;
   private retainedEvents: SequencedEvent[] = [];
+  private lastNarrationDay = 0;
 
   constructor(
     private readonly worldGenerator: WorldGenerator,
     private readonly makeDecisionMaker: () => DecisionMaker,
+    private readonly narrator: Narrator = makeTemplateNarrator(),
   ) {
     this.rng = makeRng(Date.now());
   }
@@ -69,6 +75,8 @@ export class SimController {
     this.retainedEvents = [];
     this.eventSequence = 0;
     this.speed = 1;
+    this.gameOver = false;
+    this.lastNarrationDay = 0;
     this.selectedAgentId = null;
   }
 
@@ -84,6 +92,24 @@ export class SimController {
     if (this.retainedEvents.length > MAX_RETAINED_EVENTS) {
       this.retainedEvents.splice(0, this.retainedEvents.length - MAX_RETAINED_EVENTS);
     }
+    const rescued = result.events.some((event) => event.kind === "rescue-arrived");
+    const lost = this.world.agents.length > 0 && this.world.agents.every((agent) => agent.status === "dead");
+    if (rescued || lost) {
+      this.gameOver = true;
+      this.pause();
+    }
+    this.narrateClosedDay();
+  }
+
+  /** When a day closes, hand the day's events to the narrator and retain the recap. */
+  private narrateClosedDay(): void {
+    const world = this.world;
+    if (!world || world.clock.day <= this.lastNarrationDay) return;
+    this.lastNarrationDay = world.clock.day;
+    const day = world.clock.day - 1;
+    const dayStartTick = Math.max(0, (day - 1) * 24);
+    const dayEndTick = (day - 1) * 24 + 23;
+    void Promise.resolve(this.narrator.narrate({ world, day, dayStartTick, dayEndTick, events: this.retainedEvents }));
   }
 
   /** Resume autonomous island simulation. */
@@ -134,6 +160,16 @@ export class SimController {
     return this.selectedAgentId;
   }
 
+  /** Return whether the story has reached an ending (rescue or all lost). */
+  isGameOver(): boolean {
+    return this.gameOver;
+  }
+
+  /** Return the narrator's retained chronicle, newest last. */
+  getChronicle() {
+    return this.narrator.chronicle();
+  }
+
   /** Read retained events newer than a client cursor. */
   getEventsAfter(sequence: number): { events: SequencedEvent[]; latestSequence: number } {
     return {
@@ -153,12 +189,13 @@ export class SimController {
   }
 }
 
-/** Create a controller from injectable world and decision strategies. */
+/** Create a controller from injectable world, decision, and narrator strategies. */
 export function makeController(deps: {
   worldGenerator: WorldGenerator;
   makeDecisionMaker: () => DecisionMaker;
+  narrator?: Narrator;
 }): SimController {
-  return new SimController(deps.worldGenerator, deps.makeDecisionMaker);
+  return new SimController(deps.worldGenerator, deps.makeDecisionMaker, deps.narrator ?? makeTemplateNarrator());
 }
 
 /** Create the interactive HTTP server for the island simulation. */
@@ -175,13 +212,16 @@ export function createServer(controller: SimController, port: number = 0) {
         if (!world) return Response.json({ error: "no world" }, { status: 400 });
         return Response.json({
           ...viewerSafeState(world),
-          simulation: { running: controller.getRunning(), speed: controller.getSpeed() },
+          simulation: { running: controller.getRunning(), speed: controller.getSpeed(), gameOver: controller.isGameOver() },
         });
       }
       if (url.pathname === "/api/events" && request.method === "GET") {
         const requested = Number(url.searchParams.get("after") ?? 0);
         const after = Number.isSafeInteger(requested) && requested >= 0 ? requested : 0;
         return Response.json(controller.getEventsAfter(after));
+      }
+      if (url.pathname === "/api/chronicle" && request.method === "GET") {
+        return Response.json(controller.getChronicle());
       }
       if (request.method !== "POST") return new Response("Not found", { status: 404 });
       if (url.pathname === "/api/new-simulation") {
@@ -264,6 +304,8 @@ async function main(): Promise<void> {
   let worldGenerator: WorldGenerator = {
     generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }),
   };
+  let narrator: Narrator = makeTemplateNarrator();
+  let llmMakeDecisionMaker: (() => DecisionMaker) | null = null;
   try {
     const provider = "ollama";
     const model = process.env.ISLAND_SIM_MODEL ?? "cogito:14b";
@@ -284,13 +326,65 @@ async function main(): Promise<void> {
       },
     });
     console.info(`Island blueprint generator configured: ${provider}/${model}`);
+
+    try {
+      const narratorAgent = await ReactiveAgents.create()
+        .withName("island-story-narrator")
+        .withProvider(provider)
+        .withModel(model)
+        .withMaxIterations(1)
+        .withSystemPrompt("You are the resident narrator of a castaway survival chronicle. Write short, evocative reality-TV recaps.")
+        .withOutputSchema(NarrationLogSchema)
+        .build();
+      narrator = makeLlmNarrator({
+        run: async (prompt) => {
+          const result = await narratorAgent.run(prompt);
+          return {
+            ...(result.object === undefined ? {} : { object: result.object }),
+            ...(result.objectError === undefined ? {} : { objectError: result.objectError }),
+          };
+        },
+      });
+      console.info(`Narrator agent configured: ${provider}/${model}`);
+    } catch (error) {
+      console.info(`Narrator using the deterministic template: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    let makeDecisionMakersLocal: () => DecisionMaker = () => makeScriptedDecisionMaker();
+    if (process.env.ISLAND_SIM_LLM_DECISIONS === "1") {
+      try {
+        const survivorAgent = await ReactiveAgents.create()
+          .withName("island-survivor-mind")
+          .withProvider(provider)
+          .withModel(model)
+          .withMaxIterations(1)
+          .withSystemPrompt("You are one castaway's instincts. Respond with JSON only.")
+          .withOutputSchema(ActionRequestSchema)
+          .build();
+        makeDecisionMakersLocal = () => makeLlmDecisionMaker({
+          run: async (prompt: string) => {
+            const result = await survivorAgent.run(prompt);
+            return {
+              ...(result.object === undefined ? {} : { object: result.object }),
+              ...(result.objectError === undefined ? {} : { objectError: result.objectError }),
+            };
+          },
+        }, () => makeScriptedDecisionMaker());
+        console.info(`LLM survivor decisions enabled (high latency/expense): ${provider}/${model}`);
+      } catch (error) {
+        console.info(`LLM survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    llmMakeDecisionMaker = makeDecisionMakersLocal;
   } catch (error) {
     console.info(`Using deterministic island fallback: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const controller = makeController({
     worldGenerator,
-    makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    makeDecisionMaker: llmMakeDecisionMaker ?? (() => makeScriptedDecisionMaker()),
+    narrator,
   });
   await controller.newSimulation();
   controller.play();

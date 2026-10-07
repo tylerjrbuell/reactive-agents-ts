@@ -70,6 +70,7 @@ export const AgentStateSchema = Schema.Struct({
   memory: Schema.Array(Schema.Struct({ tick: Schema.Number, text: Schema.String })),
   plan: Schema.Array(Schema.String),
   status: Schema.Literal("alive", "injured", "ill", "dead"),
+  demise: Schema.optional(Schema.Struct({ tick: Schema.Number, cause: Schema.String })),
 });
 export type AgentState = typeof AgentStateSchema.Type;
 
@@ -150,6 +151,7 @@ export const IslandGameplaySchema = Schema.Struct({
   betrayalCounts: Schema.Record({ key: Schema.String, value: Schema.Number }),
   nextTwistTick: Schema.Number,
   twistCount: Schema.Number,
+  rescueAtTick: Schema.optional(Schema.Number),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

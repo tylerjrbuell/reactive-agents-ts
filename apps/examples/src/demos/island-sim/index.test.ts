@@ -34,6 +34,41 @@ describe("ui projection", () => {
 });
 
 describe("controller", () => {
+  it("ends the story when a boat arrives after the signal fire works", async () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(50));
+    const ready = {
+      ...base,
+      weather: { condition: "sunny" as const, tempC: 25 },
+      structures: [...base.structures, { id: "signal-test", kind: "signal-fire", tile: "D4", ownerId: "agent-0", durability: 10 }],
+      gameplay: { ...base.gameplay!, objectives: base.gameplay!.objectives.map((goal) => goal.kind === "rescue" ? { ...goal, completed: true } : goal) },
+    };
+    const controller = makeController({
+      worldGenerator: { generate: async () => ({ world: ready, source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    await controller.step();
+    expect(controller.isGameOver()).toBe(true);
+    const events = controller.getEventsAfter(0).events;
+    expect(events.some((item) => item.event.kind === "rescue-arrived")).toBe(true);
+    expect(controller.getRunning()).toBe(false);
+  }, 15000);
+
+  it("ends the story somberly when every castaway is lost", async () => {
+    const base = makeFallbackWorld(51);
+    const lost = {
+      ...base,
+      agents: base.agents.map((agent) => ({ ...agent, status: "dead" as const, demise: { tick: 3, cause: "thirst" } })),
+    };
+    const controller = makeController({
+      worldGenerator: { generate: async () => ({ world: lost, source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    await controller.step();
+    expect(controller.isGameOver()).toBe(true);
+  }, 15000);
+
   it("newSimulation produces a world, and step advances one tick (offline)", async () => {
     const controller = makeController({
       worldGenerator: { generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }) },
@@ -45,8 +80,7 @@ describe("controller", () => {
     expect(controller.world!.clock.tick).toBe(before + 1);
   }, 15000);
 
-  it("retains sequenced events from each completed tick", async () => {
-    const controller = makeController({
+  it("retains sequenced events from each completed tick", async () => {    const controller = makeController({
       worldGenerator: { generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }) },
       makeDecisionMaker: () => makeScriptedDecisionMaker(),
     });
@@ -125,9 +159,41 @@ describe("simulation viewing page", () => {
     expect(page).toContain(".movement-trail.focus{opacity:.9}");
     expect(page).toContain("ping");
   }, 15000);
+
+  it("shows the narrator journal, memorial lines, and a rescue finale", () => {
+    const page = renderPage();
+    expect(page).toContain("🎙️ Narrator's journal");
+    expect(page).toContain("function renderChronicle()");
+    expect(page).toContain("api/chronicle");
+    expect(page).toContain("demise");
+    expect(page).toContain("💀");
+    expect(page).toContain("rescue-arrived");
+    expect(page).toContain("made it home");
+  }, 15000);
 });
 
 describe("server", () => {
+  it("serves the chronicle after a day rolls over", async () => {
+    const base = makeFallbackWorld(60);
+    const late = { ...base, clock: { ...base.clock, tick: 23, hour: 23 } };
+    const controller = makeController({
+      worldGenerator: { generate: async () => ({ world: late, source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    const { server, stop } = createServer(controller, 0);
+    try {
+      await controller.step();
+      const response = await fetch(`http://localhost:${server.port}/api/chronicle`);
+      const entries = await response.json() as Array<{ day: number; headline: string }>;
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      expect(entries.at(-1)?.day).toBeGreaterThan(0);
+      expect(entries.at(-1)?.headline.length).toBeGreaterThan(3);
+    } finally {
+      stop();
+    }
+  }, 15000);
+
   it("serves the page and /api/state without hidden facts", async () => {
     const controller = makeController({
       worldGenerator: { generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }) },

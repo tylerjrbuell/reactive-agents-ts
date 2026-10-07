@@ -110,8 +110,58 @@ function allianceForAgent(gameplay: MutableGameplay, agentId: string): MutableAl
   return gameplay.alliances.find((alliance) => alliance.members.includes(agentId));
 }
 
-function formAlliances(world: MutableWorld, events: SimEvent[]): void {
-  const living = world.agents.filter((agent) => agent.status !== "dead");
+/** Adopt tombstones from the tick's death events: mark agents dead with a retained demise record. */
+function registerDeaths(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
+  for (const event of inputEvents) {
+    if (event.kind !== "agent-died") continue;
+    const agent = world.agents.find((candidate) => candidate.id === event.agentId);
+    if (!agent) continue;
+    const mutableAgent = agent as MutableAgent & { demise?: { tick: number; cause: string } };
+    mutableAgent.status = "dead";
+    if (!mutableAgent.demise) mutableAgent.demise = { tick: event.tick, cause: event.cause };
+  }
+}
+
+/** Prune dead members, dissolve shrunken alliances into camp-stored wealth, and let survivors grieve. */
+function maintainAlliances(world: MutableWorld, deathEvents: readonly SimEvent[], events: SimEvent[]): void {
+  const remaining: MutableAlliance[] = [];
+  for (const alliance of world.gameplay.alliances) {
+    const dead = alliance.members.filter((member) => world.agents.some((agent) => agent.id === member && agent.status === "dead"));
+    alliance.members = alliance.members.filter((member) => !dead.includes(member));
+    if (dead.length > 0) {
+      events.push({
+        kind: "grief",
+        tick: world.clock.tick,
+        allianceId: alliance.id,
+        name: alliance.name,
+        agentId: dead[0]!,
+        description: `${alliance.name} mourns ${dead.map((id) => world.agents.find((agent) => agent.id === id)?.name ?? id).join(", ")}.`,
+      });
+    }
+    if (alliance.members.length < 2) {
+      for (const item of alliance.stash) addToGameplayCache(world.gameplay.campCache, item.kind, item.qty);
+      alliance.stash = [];
+      events.push({
+        kind: "alliance-dissolved",
+        tick: world.clock.tick,
+        allianceId: alliance.id,
+        name: alliance.name,
+        members: [...alliance.members, ...dead],
+      });
+      continue;
+    }
+    remaining.push(alliance);
+  }
+  world.gameplay.alliances = remaining;
+}
+
+function addToGameplayCache(cache: Array<Mutable<IslandGameplay["campCache"][number]>>, kind: string, qty: number): void {
+  const existing = cache.find((item) => item.kind === kind);
+  if (existing) existing.qty += qty;
+  else cache.push({ kind, qty });
+}
+
+function formAlliances(world: MutableWorld, events: SimEvent[]): void {  const living = world.agents.filter((agent) => agent.status !== "dead");
   const assigned = new Set(world.gameplay.alliances.flatMap((alliance) => alliance.members));
   const candidates = new Map<string, Set<string>>();
 
@@ -301,6 +351,20 @@ function applyTwist(world: MutableWorld, events: SimEvent[]): void {
   world.gameplay.nextTwistTick = deterministicTwistTick(world.seed, world.gameplay.twistCount);
 }
 
+/** Once the rescue signal is out and weather permits, a boat makes contact and the story ends. */
+function maybeRescue(world: MutableWorld, events: SimEvent[]): void {
+  const gameplay = world.gameplay;
+  if (gameplay.rescueAtTick !== undefined) return;
+  const objective = gameplay.objectives.find((goal) => goal.kind === "rescue");
+  if (!objective?.completed) return;
+  const signalFire = world.structures.find((structure) => structure.kind === "signal-fire");
+  if (!signalFire) return;
+  if (world.weather.condition === "storm") return;
+  gameplay.rescueAtTick = world.clock.tick;
+  const survivors = world.agents.filter((agent) => agent.status !== "dead").map((agent) => agent.id);
+  events.push({ kind: "rescue-arrived", tick: world.clock.tick, survivors });
+}
+
 function returnExiles(world: MutableWorld, events: SimEvent[]): void {
   const remaining: MutableExile[] = [];
   for (const exile of world.gameplay.exiles) {
@@ -329,9 +393,12 @@ export function advanceIslandGameplay(world: WorldState, inputEvents: readonly S
     }
   }
   progressObjectives(next, inputEvents, events);
+  registerDeaths(next, inputEvents, events);
+  maintainAlliances(next, inputEvents, events);
   formAlliances(next, events);
   registerBetrayals(next, inputEvents, events);
   applyTwist(next, events);
+  maybeRescue(next, events);
   returnExiles(next, events);
   return { world: next, events };
 }

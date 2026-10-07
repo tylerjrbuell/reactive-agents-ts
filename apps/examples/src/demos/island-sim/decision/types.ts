@@ -87,6 +87,12 @@ function objectiveFor(world: WorldState, agentId: string) {
   return world.gameplay?.objectives.find((objective) => objective.ownerId === agentId && !objective.completed);
 }
 
+/** Desperation offset staggers when each castaway snaps so the camp's starving bursts never collide. */
+function desperationOffset(agentId: string): number {
+  const digits = agentId.replace(/\D/g, "");
+  return Number(digits) % 3;
+}
+
 function socialDecision(world: WorldState, perception: Perception): Decision | undefined {
   if (world.clock.tick % 4 !== 0) return undefined;
   const self = perception.self;
@@ -187,6 +193,17 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
 
       const social = socialDecision(world, perception);
       if (social) return social;
+
+      if (self.needs.hunger >= 9 && !food && (world.clock.tick + desperationOffset(agentId)) % 3 === 0) {
+        const victim = perception.visibleAgents
+          .filter((agent) => distance(self.location, agent.location) <= 1)
+          .filter((agent) => agent.inventory.some((item) => ["berries", "fish", "meat"].includes(item.kind) && item.qty > 0))
+          .sort((left, right) => (right.needs.hunger + right.needs.thirst) - (left.needs.hunger + left.needs.thirst)
+            || left.id.localeCompare(right.id))[0];
+        if (victim) {
+          return decision("Desperation takes over", `Too hungry to keep starving; take food from ${victim.name}`, { type: "steal", target: victim.id }, 0.55);
+        }
+      }
 
       if (objective?.kind === "explore") {
         const nextTile = perception.visibleTiles

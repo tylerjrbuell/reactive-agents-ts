@@ -16,6 +16,67 @@ describe("island gameplay systems", () => {
     expect(gameplay?.nextTwistTick).toBeGreaterThan(0);
   }, 15000);
 
+  it("dissolves an alliance that lost members to death and returns its private stash to the camp cache", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(15));
+    const [first, second] = world.agents;
+    world = {
+      ...world,
+      gameplay: {
+        ...world.gameplay!,
+        alliances: [{
+          id: "all-test",
+          name: "The Shoreline Pact",
+          members: [first!.id, second!.id],
+          formedAtTick: 4,
+          stash: [{ kind: "water", qty: 3 }, { kind: "berries", qty: 2 }],
+        }],
+      },
+    };
+    const aftermath = advanceIslandGameplay(world, [
+      { kind: "agent-died", tick: 10, agentId: first!.id, cause: "thirst" },
+    ]);
+    const dissolved = aftermath.events.find((event) => event.kind === "alliance-dissolved");
+    expect(dissolved).toBeDefined();
+    expect(aftermath.world.gameplay!.alliances).toHaveLength(0);
+    expect(aftermath.world.gameplay!.campCache).toEqual([{ kind: "water", qty: 3 }, { kind: "berries", qty: 2 }]);
+  }, 15000);
+
+  it("keeps a two-member alliance alive and retains its stash when no member has died", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(16));
+    const [first, second] = world.agents;
+    world = {
+      ...world,
+      gameplay: {
+        ...world.gameplay!,
+        alliances: [{
+          id: "all-test",
+          name: "The Shoreline Pact",
+          members: [first!.id, second!.id],
+          formedAtTick: 4,
+          stash: [{ kind: "water", qty: 1 }],
+        }],
+      },
+    };
+    const aftermath = advanceIslandGameplay(world, []);
+    expect(aftermath.world.gameplay!.alliances).toHaveLength(1);
+    expect(aftermath.world.gameplay!.campCache).toHaveLength(0);
+  }, 15000);
+
+  it("arranges the rescue once the signal objective completes with a signal fire and clear weather", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(17));
+    const rescue = world.gameplay!.objectives.find((goal) => goal.kind === "rescue")!;
+    world = {
+      ...world,
+      weather: { condition: "sunny", tempC: 25 },
+      structures: [...world.structures, { id: "signal-test", kind: "signal-fire", tile: "D4", ownerId: "agent-0", durability: 10 }],
+      gameplay: { ...world.gameplay!, objectives: world.gameplay!.objectives.map((goal) => goal.kind === "rescue" ? { ...goal, completed: true } : goal) },
+    };
+    const rescueTick = rescue? world.clock.tick : world.clock.tick;
+    const aftermath = advanceIslandGameplay({ ...world, clock: { ...world.clock, tick: rescueTick } }, []);
+    expect(aftermath.events.some((event) => event.kind === "rescue-arrived")).toBe(true);
+    expect(aftermath.world.gameplay!.rescueAtTick).toBeDefined();
+  }, 15000);
+
   it("advances only the relevant personal goal and emits a completion milestone", () => {
     let world = initializeIslandGameplay(makeFallbackWorld(12));
     const ownerId = world.agents[0]!.id;
