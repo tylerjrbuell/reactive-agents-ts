@@ -188,16 +188,36 @@ describe("makeOllamaBackend", () => {
     expect(error.message).toContain("ollama pull custom-model");
   });
 
-  it("maps a 400 to a message naming the local-GGUF requirement and clef/clef-flash for images", async () => {
+  it("maps a context-window 400 to actionable guidance without unrelated image advice", async () => {
+    const { fakeFetch } = makeFailingFetch(
+      400,
+      '{"error":"prompt 0 has 11238 tokens; expected 1–8194 (input is never truncated)"}',
+    );
+    const backend = makeOllamaBackend({ fetch: fakeFetch });
+
+    const error = await run(
+      Effect.flip(backend.evaluate({ state: "short state", questions: oneNoul })),
+    );
+
+    expect(error).toBeInstanceOf(JudgmentBadResponse);
+    expect(error.message).toContain("context window");
+    expect(error.message).toContain("includeContext");
+    expect(error.message).not.toContain("clef");
+  });
+
+  it("mentions vision models on a 400 when images were sent", async () => {
     const { fakeFetch } = makeFailingFetch(400, "bad request");
     const backend = makeOllamaBackend({ fetch: fakeFetch });
 
     const error = await run(
-      Effect.flip(backend.evaluate({ state: null, questions: oneNoul })),
+      Effect.flip(backend.evaluate({
+        state: "short state",
+        questions: oneNoul,
+        images: ["base64-image"],
+      })),
     );
 
     expect(error).toBeInstanceOf(JudgmentBadResponse);
-    expect(error.message).toContain("GGUF");
     expect(error.message).toContain("clef");
     expect(error.message).toContain("clef-flash");
   });
