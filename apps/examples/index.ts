@@ -488,163 +488,210 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/research/crypto-research-agent.ts',
     },
+    // demos — offline
+    {
+        num: 'D1',
+        label: 'island-sim',
+        category: 'demos',
+        requiresKey: false,
+        path: './src/demos/island-sim/index.ts',
+    },
 ]
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 
-const args = process.argv.slice(2)
-const offlineOnly = args.includes('--offline')
-const strictMode = args.includes('--strict')
-
-// --filter <category> or --filter=<category>
-let filterCategory: string | null = null
-const filterIdx = args.indexOf('--filter')
-if (filterIdx !== -1 && args[filterIdx + 1]) {
-    filterCategory = args[filterIdx + 1]
-} else {
-    const filterEq = args.find((a) => a.startsWith('--filter='))
-    if (filterEq) filterCategory = filterEq.split('=')[1]
+interface RunOptions {
+    args?: string[]
+    offlineOnly?: boolean
+    strictMode?: boolean
+    filterCategory?: string | null
+    numFilter?: string[]
 }
 
-// numeric filters e.g. "01 05 12"
-const numFilter = args.filter((a) => /^\d+$/.test(a))
+function parseArgs(argv: string[]): {
+    offlineOnly: boolean
+    strictMode: boolean
+    filterCategory: string | null
+    numFilter: string[]
+} {
+    const args = argv.slice(2)
+    const offlineOnly = args.includes('--offline')
+    const strictMode = args.includes('--strict')
 
-const toRun = EXAMPLES.filter((e) => {
-    if (offlineOnly && e.requiresKey) return false
-    if (filterCategory && e.category !== filterCategory) return false
-    if (numFilter.length > 0 && !numFilter.includes(e.num)) return false
-    return true
-})
+    // --filter <category> or --filter=<category>
+    let filterCategory: string | null = null
+    const filterIdx = args.indexOf('--filter')
+    if (filterIdx !== -1 && args[filterIdx + 1]) {
+        filterCategory = args[filterIdx + 1]
+    } else {
+        const filterEq = args.find((a) => a.startsWith('--filter='))
+        if (filterEq) filterCategory = filterEq.split('=')[1]
+    }
+
+    // numeric filters e.g. "01 05 12"
+    const numFilter = args.filter((a) => /^\d+$/.test(a))
+
+    return { offlineOnly, strictMode, filterCategory, numFilter }
+}
+
+function filterExamples(opts: {
+    offlineOnly: boolean
+    filterCategory: string | null
+    numFilter: string[]
+}): ExampleMeta[] {
+    return EXAMPLES.filter((e) => {
+        if (opts.offlineOnly && e.requiresKey) return false
+        if (opts.filterCategory && e.category !== opts.filterCategory) return false
+        if (opts.numFilter.length > 0 && !opts.numFilter.includes(e.num)) return false
+        return true
+    })
+}
 
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 const LINE = '─'.repeat(70)
-
-console.log(`\n┌${LINE}┐`)
-console.log(`│  Reactive Agents — Example Suite${' '.repeat(70 - 34 - 1)}│`)
-console.log(
-    `│  ${toRun.length} example(s) selected  [offline=${offlineOnly}${
-        filterCategory ? ` filter=${filterCategory}` : ''
-    }]${' '.repeat(
-        Math.max(
-            0,
-            70 -
-                3 -
-                String(toRun.length).length -
-                19 -
-                (filterCategory ? filterCategory.length + 8 : 0) -
-                1
-        )
-    )}│`
-)
-console.log(`└${LINE}┘\n`)
 
 type RunRecord = {
     meta: ExampleMeta
     result: ExampleResult | null
     error: string | null
 }
-const results: RunRecord[] = []
 
-for (const meta of toRun) {
-    const xfailTag = meta.expectsFail ? ' [xfail]' : ''
-    const label = `[${meta.num}] ${meta.category}/${meta.label}${xfailTag}`.padEnd(50)
-    process.stdout.write(`${label} `)
-    const wallStart = Date.now()
-    try {
-        const mod = (await import(meta.path)) as {
-            run: (opts?: RunConfig) => Promise<ExampleResult>
-        }
-        // In --offline mode, force the deterministic test provider so
-        // examples cannot accidentally drift onto a live LLM (which
-        // produces nondeterministic step/token counts and breaks witnesses
-        // that assert relations). Live runs intentionally use the
-        // DEFAULT_PROVIDER env to exercise real adapters.
-        const effectiveProvider = offlineOnly ? 'test' : DEFAULT_PROVIDER
-        const effectiveModel = offlineOnly ? undefined : DEFAULT_MODEL
-        console.log(effectiveModel ?? '(test)', effectiveProvider)
-        const result = await mod.run({
-            provider: effectiveProvider,
-            model: effectiveModel,
-        })
-        const elapsed = Date.now() - wallStart
-        // xfail logic: when expectsFail is set, an example failing is the
-        // expected outcome (counted as PASS). An example unexpectedly passing
-        // is counted as FAIL — the targeted feature has shipped and the flag
-        // must be removed to lock in the new behaviour as a regression gate.
-        const xfailUnexpectedPass = meta.expectsFail === true && result.passed
-        const xfailOk = meta.expectsFail === true && !result.passed
-        const effectivePassed = xfailOk || (!meta.expectsFail && result.passed)
-        const icon = xfailUnexpectedPass
-            ? '⚠️ '
-            : xfailOk
-            ? '🟡'
-            : result.passed
-            ? '✅'
-            : '❌'
-        const tag = xfailUnexpectedPass
-            ? '  UNEXPECTED PASS (drop expectsFail!)'
-            : xfailOk
-            ? '  xfail OK'
-            : ''
-        console.log(
-            `${icon}  ${result.steps}st  ${result.tokens}tk  ${elapsed}ms${tag}`
-        )
-        results.push({ meta, result, error: null })
-    } catch (err) {
-        const elapsed = Date.now() - wallStart
-        const msg = String(err).slice(0, 55)
-        // Thrown error in an xfail example is also an expected outcome.
-        const xfailOk = meta.expectsFail === true
-        const icon = xfailOk ? '🟡' : '❌'
-        const tag = xfailOk ? '  xfail OK (threw)' : ''
-        console.log(`${icon}  ERROR: ${msg}  ${elapsed}ms${tag}`)
-        results.push({ meta, result: null, error: String(err) })
-    }
-}
+async function runSuite(opts: {
+    offlineOnly: boolean
+    strictMode: boolean
+    filterCategory: string | null
+    numFilter: string[]
+}): Promise<{ passed: number; failed: number; xfails: number; unexpectedPasses: number }> {
+    const toRun = filterExamples(opts)
 
-// Compute verdicts under xfail semantics.
-// In --strict mode, xfail tolerance is disabled (every example must truly
-// pass). Strict mode is intended as the final release-gate target once all
-// failing-spec witnesses have been closed; until then it will surface those
-// gaps as hard failures.
-function effectivePassed(r: RunRecord): boolean {
-    if (r.meta.expectsFail && !strictMode) {
-        if (r.error !== null) return true
-        return r.result !== null && r.result.passed === false
-    }
-    return r.result?.passed === true
-}
-
-function unexpectedPass(r: RunRecord): boolean {
-    return r.meta.expectsFail === true && r.result?.passed === true
-}
-
-const passed = results.filter(effectivePassed).length
-const failed = results.length - passed
-const xfails = results.filter((r) => r.meta.expectsFail).length
-const unexpectedPasses = results.filter(unexpectedPass).length
-
-console.log(`\n${'━'.repeat(70)}`)
-console.log(
-    `Passed: ${passed}/${results.length}   Failed: ${failed}   xfail: ${xfails}   unexpected-pass: ${unexpectedPasses}`
-)
-if (failed > 0) {
-    console.log('\nFailed examples:')
-    for (const r of results.filter((r) => !effectivePassed(r))) {
-        const reason = unexpectedPass(r)
-            ? 'UNEXPECTED PASS — drop expectsFail flag and tighten witness'
-            : r.error ?? r.result?.output.slice(0, 80) ?? 'unknown'
-        console.log(`  [${r.meta.num}] ${r.meta.label}: ${reason}`)
-    }
-}
-if (xfails > 0) {
+    console.log(`\n┌${LINE}┐`)
+    console.log(`│  Reactive Agents — Example Suite${' '.repeat(70 - 34 - 1)}│`)
     console.log(
-        `\n${xfails} xfail example(s) — capability gap(s) documented as failing-spec witnesses.`
+        `│  ${toRun.length} example(s) selected  [offline=${opts.offlineOnly}${
+            opts.filterCategory ? ` filter=${opts.filterCategory}` : ''
+        }]${' '.repeat(
+            Math.max(
+                0,
+                70 - 3 - String(toRun.length).length - 19 - (opts.filterCategory ? opts.filterCategory.length + 8 : 0) - 1
+            )
+        )}│`
     )
-}
-console.log()
+    console.log(`└${LINE}┘\n`)
 
-// Strict mode treats any failure (including unexpected xfail passes) as fatal.
-// Default mode: fail iff there is at least one non-xfail failure.
-process.exit(failed > 0 ? 1 : 0)
+    const results: RunRecord[] = []
+
+    for (const meta of toRun) {
+        const xfailTag = meta.expectsFail ? ' [xfail]' : ''
+        const label = `[${meta.num}] ${meta.category}/${meta.label}${xfailTag}`.padEnd(50)
+        process.stdout.write(`${label} `)
+        const wallStart = Date.now()
+        try {
+            const mod = (await import(meta.path)) as {
+                run: (opts?: RunConfig) => Promise<ExampleResult>
+            }
+            // In --offline mode, force the deterministic test provider so
+            // examples cannot accidentally drift onto a live LLM (which
+            // produces nondeterministic step/token counts and breaks witnesses
+            // that assert relations). Live runs intentionally use the
+            // DEFAULT_PROVIDER env to exercise real adapters.
+            const effectiveProvider = opts.offlineOnly ? 'test' : DEFAULT_PROVIDER
+            const effectiveModel = opts.offlineOnly ? undefined : DEFAULT_MODEL
+            console.log(effectiveModel ?? '(test)', effectiveProvider)
+            const result = await mod.run({
+                provider: effectiveProvider,
+                model: effectiveModel,
+            })
+            const elapsed = Date.now() - wallStart
+            // xfail logic: when expectsFail is set, an example failing is the
+            // expected outcome (counted as PASS). An example unexpectedly passing
+            // is counted as FAIL — the targeted feature has shipped and the flag
+            // must be removed to lock in the new behaviour as a regression gate.
+            const xfailUnexpectedPass = meta.expectsFail === true && result.passed
+            const xfailOk = meta.expectsFail === true && !result.passed
+            const effectivePassed = xfailOk || (!meta.expectsFail && result.passed)
+            const icon = xfailUnexpectedPass
+                ? '⚠️ '
+                : xfailOk
+                ? '🟡'
+                : result.passed
+                ? '✅'
+                : '❌'
+            const tag = xfailUnexpectedPass
+                ? '  UNEXPECTED PASS (drop expectsFail!)'
+                : xfailOk
+                ? '  xfail OK'
+                : ''
+            console.log(
+                `${icon}  ${result.steps}st  ${result.tokens}tk  ${elapsed}ms${tag}`
+            )
+            results.push({ meta, result, error: null })
+        } catch (err) {
+            const elapsed = Date.now() - wallStart
+            const msg = String(err).slice(0, 55)
+            // Thrown error in an xfail example is also an expected outcome.
+            const xfailOk = meta.expectsFail === true
+            const icon = xfailOk ? '🟡' : '❌'
+            const tag = xfailOk ? '  xfail OK (threw)' : ''
+            console.log(`${icon}  ERROR: ${msg}  ${elapsed}ms${tag}`)
+            results.push({ meta, result: null, error: String(err) })
+        }
+    }
+
+    // Compute verdicts under xfail semantics.
+    // In --strict mode, xfail tolerance is disabled (every example must truly
+    // pass). Strict mode is intended as the final release-gate target once all
+    // failing-spec witnesses have been closed; until then it will surface those
+    // gaps as hard failures.
+    function effectivePassed(r: RunRecord): boolean {
+        if (r.meta.expectsFail && !opts.strictMode) {
+            if (r.error !== null) return true
+            return r.result !== null && r.result.passed === false
+        }
+        return r.result?.passed === true
+    }
+
+    function unexpectedPass(r: RunRecord): boolean {
+        return r.meta.expectsFail === true && r.result?.passed === true
+    }
+
+    const passed = results.filter(effectivePassed).length
+    const failed = results.length - passed
+    const xfails = results.filter((r) => r.meta.expectsFail).length
+    const unexpectedPasses = results.filter(unexpectedPass).length
+
+    console.log(`\n${'━'.repeat(70)}`)
+    console.log(
+        `Passed: ${passed}/${results.length}   Failed: ${failed}   xfail: ${xfails}   unexpected-pass: ${unexpectedPasses}`
+    )
+    if (failed > 0) {
+        console.log('\nFailed examples:')
+        for (const r of results.filter((r) => !effectivePassed(r))) {
+            const reason = unexpectedPass(r)
+                ? 'UNEXPECTED PASS — drop expectsFail flag and tighten witness'
+                : r.error ?? r.result?.output.slice(0, 80) ?? 'unknown'
+            console.log(`  [${r.meta.num}] ${r.meta.label}: ${reason}`)
+        }
+    }
+    if (xfails > 0) {
+        console.log(
+            `\n${xfails} xfail example(s) — capability gap(s) documented as failing-spec witnesses.`
+        )
+    }
+    console.log()
+
+    // Strict mode treats any failure (including unexpected xfail passes) as fatal.
+    // Default mode: fail iff there is at least one non-xfail failure.
+    process.exit(failed > 0 ? 1 : 0)
+}
+
+// Export the main function for programmatic use
+export async function runExamples(argv: string[] = process.argv): Promise<void> {
+    const { offlineOnly, strictMode, filterCategory, numFilter } = parseArgs(argv)
+    await runSuite({ offlineOnly, strictMode, filterCategory, numFilter })
+}
+
+// CLI entry point
+if (import.meta.main) {
+    await runExamples()
+}

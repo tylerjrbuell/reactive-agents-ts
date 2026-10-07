@@ -9,6 +9,7 @@ import { runInspect } from "./commands/inspect.js";
 import { runBench } from "./commands/bench.js";
 import { runCortexCli } from "./commands/cortex.js";
 import { runDemo } from "./commands/demo.js";
+import { runExamples } from "./commands/examples.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
 import { runDiscover } from "./commands/discover.js";
@@ -38,6 +39,7 @@ const HELP = `
     bench [--provider ...] [--model ...] [--tier ...] [--output ...]
                   Run benchmark suite against an LLM provider
     demo                                        Run a zero-config live demo (no API key needed)
+    examples <sub> [...]                             Run examples/demos (see --help on usage error)
     deploy up [--target local|fly|railway|render|cloudrun|digitalocean] [--mode daemon|sdk] [--dry-run]
                               Build + deploy agent container
     deploy down [--target ...]                        Stop deployment (auto-detects target)
@@ -63,6 +65,8 @@ const HELP = `
 
   Quick start:
     rax demo                                    See reactive-agents in action (no setup needed)
+    rax examples suite                          Run the full example suite
+    rax examples demo island-sim                Run island simulation demo
 `.trimEnd();
 
 export function main(argv: string[] = process.argv.slice(2)) {
@@ -134,6 +138,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "demo":
       runAsync(runDemo(argv.slice(1)));
+      break;
+
+    case "examples":
+      runAsync(runExamples(argv.slice(1)));
       break;
 
     case "trace":
