@@ -21,6 +21,10 @@ Two framework-native opt-ins:
 
 - Castaways have distinct roles, personal objectives, and a shared rescue objective. Completed actions update objective progress and produce story milestones.
 - Scarcity: berries and water regrow slowly, fish slower still, and wood/stone are finite (regrowth 0) — long games force longer treks. Storm days salt the land and suppress regrowth.
+- Idle hours are purposeful rather than padding: castaways work the shared rescue project (gathering wood, recouping stashed wood from the camp cache, raising the signal fire), then scout the island, and only inspect as a last resort. Wood stored at camp is usable again, so the signal fire (and therefore rescue) is reachable.
+- The seeded hidden facts are playable discoveries: pushing to the island frontier or scanning in place uncovers the buried cache (supplies) or the poisoned spring (drinking from that tainted water sickens the drinker). Clean water is preferred when both are in sight.
+- Injuries and illness are real states: working through a storm while exhausted can injure a castaway, and tainted water causes illness; both are healed by resting, and the roster shows the condition.
+- Night matters: after dark, tired castaways sleep instead of wandering.
 - Deaths are remembered: castaway cards and the dossier show a 💀 cause-of-death line (`demise` is typed, serializable state).
 - Repeated reciprocal trust forms persistent alliances. Members share an exclusive private stash; the public camp cache and island resources remain open to outsiders. When death shrinks an alliance below two survivors it dissolves and its private stash spills into the public camp cache, with grief events for mourning.
 - Under starvation pressure castaways can steal from neighbors; theft feeds the relationship-weighted exile-vote machinery. Exile lasts 12 in-world hours, reserves a survival kit, and ends with an automatic return.
@@ -39,7 +43,7 @@ Two framework-native opt-ins:
 - Select or hover a castaway to preview their needs and follow their movement. Map stacks mark co-located survivors; activate `+N` to cycle selection.
 - Movement and actions are animated between ticks: markers glide to new tiles, action glyphs (⛏️ 💧 💬 🤝 🏗️ 🆘 🌟 🌀) briefly pop above the acting castaway, and recent movement trails stay faintly visible; the focused survivor's trail is highlighted.
 - The camp dashboard shows objectives, public supplies, alliances/private stash totals, and exile countdowns. Search and filter the story rail by castaway and event type.
-- The "🎙️ Narrator's journal" is a day timeline: a scrollable strip of mood-tinted day chips over a single comfortable reading pane (headline, recap, confessional). Click a day to read its chapter; the journal resets when you start a new island.
+- The "🎙️ Narrator's journal" sits above the story log as a day timeline: a scrollable strip of mood-tinted day chips over a single comfortable reading pane (headline, recap, confessional). Click a day to read its chapter; the journal resets when you start a new island. The confessional voice is always a living castaway.
 - Endings show a banner with a "🔄 Start a new island" button: a rescue banner with survivors evacuated, or a somber memorial listing every death with its day and cause.
 
 ## Verification

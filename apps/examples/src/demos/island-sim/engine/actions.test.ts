@@ -96,11 +96,27 @@ describe("applyAction", () => {
     expect(outsiderAttempt.ok).toBe(false);
     expect(outsiderAttempt.world.gameplay?.alliances[0]?.stash).toEqual([{ kind: "water", qty: 2 }]);
   }, 15000);
+
+  it("sickens a castaway who drinks from the poisoned spring", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(14));
+    const waterNode = base.resources.find((resource) => resource.kind === "water")!;
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      gameplay: { ...base.gameplay!, poisonedSpring: waterNode.tile },
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: waterNode.tile }
+        : candidate),
+    };
+    const result = applyAction(world, agent.id, { type: "gather", target: waterNode.id }, makeRng(3));
+    expect(result.ok).toBe(true);
+    expect(result.events.some((event) => event.kind === "illness")).toBe(true);
+    expect(result.world.agents.find((candidate) => candidate.id === agent.id)?.status).toBe("ill");
+  }, 15000);
 });
 
 describe("needs", () => {
-  it("decay adds hunger/thirst", () => {
-    const w = makeFallbackWorld(5);
+  it("decay adds hunger/thirst", () => {    const w = makeFallbackWorld(5);
     const a = w.agents[0];
     const before = a.needs.hunger;
     const newA = decayNeeds(a, w.weather);

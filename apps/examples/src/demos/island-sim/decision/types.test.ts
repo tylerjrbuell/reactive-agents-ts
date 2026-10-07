@@ -3,6 +3,7 @@ import { describe, it, expect } from "bun:test";
 import { makeFallbackWorld } from "../world/fallback.js";
 import { perceive } from "../engine/perceive.js";
 import { makeScriptedDecisionMaker } from "./types.js";
+import { initializeIslandGameplay } from "../engine/gameplay.js";
 
 describe("scripted decisions", () => {
   it("chooses rest when energy is critical", async () => {
@@ -200,5 +201,116 @@ describe("scripted decisions", () => {
     });
     expect(decision.action.type).not.toBe("talk");
     expect(decision.action.target).not.toBe(other.id);
+  }, 15000);
+
+  it("builds a rescue signal fire once it carries enough wood, even without a personal build objective", async () => {
+    const base = makeFallbackWorld(36);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      gameplay: undefined,
+      resources: [],
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: "D5", needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [{ kind: "wood", qty: 2 }] }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("build");
+    expect(decision.action.target).toBe("signal-fire");
+  }, 15000);
+
+  it("retrieves stashed wood from the camp cache so a signal fire can still be raised", async () => {
+    const base = makeFallbackWorld(37);
+    const agent = base.agents[0]!;
+    const camp = base.structures.find((structure) => structure.kind === "camp")!.tile;
+    const world = {
+      ...base,
+      resources: [],
+      gameplay: {
+        campCache: [{ kind: "wood", qty: 3 }],
+        objectives: [{ id: "objective-rescue", kind: "rescue" as const, title: "Build a signal fire and make contact", target: 3, progress: 0, completed: false }],
+        alliances: [],
+        exiles: [],
+        betrayalCounts: {},
+        nextTwistTick: 100,
+        twistCount: 0,
+      },
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: camp, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("retrieve");
+    expect(decision.action.target).toBe("wood");
+  }, 15000);
+
+  it("scouts toward open ground instead of idling when nothing else demands attention", async () => {    const base = makeFallbackWorld(38);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      gameplay: undefined,
+      resources: [],
+      clock: { ...base.clock, tick: 22, hour: 12 },
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: "D4", needs: { hunger: 1, thirst: 1, energy: 1 } }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("move");
+  }, 15000);
+
+  it("rests to heal when wounded or ill", async () => {
+    const base = makeFallbackWorld(39);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      gameplay: undefined,
+      resources: [],
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: "D4", status: "injured" as const, needs: { hunger: 1, thirst: 1, energy: 5 } }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("rest");
+  }, 15000);
+
+  it("prefers clean water over the tainted spring when both are in sight", async () => {
+    const base = makeFallbackWorld(40);
+    const agent = base.agents[0]!;
+    const taintedTile = agent.location;
+    const world = {
+      ...base,
+      gameplay: { ...initializeIslandGameplay(base).gameplay!, poisonedSpring: taintedTile },
+      resources: [
+        { id: "res-poisoned", kind: "water", tile: agent.location, quantity: 6, regrowthPerDay: 3, initialQuantity: 6 },
+        { id: "res-clean", kind: "water", tile: "D5", quantity: 6, regrowthPerDay: 3, initialQuantity: 6 },
+      ],
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: agent.location, needs: { hunger: 1, thirst: 9, energy: 4 }, inventory: [] }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("move");
+    expect(decision.action.target).not.toBe(world.gameplay!.poisonedSpring);
   }, 15000);
 });

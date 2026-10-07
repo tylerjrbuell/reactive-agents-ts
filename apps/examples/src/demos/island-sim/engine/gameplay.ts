@@ -21,7 +21,50 @@ type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "objectives" 
   alliances: MutableAlliance[];
   exiles: MutableExile[];
   betrayalCounts: Record<string, number>;
+  discovered: string[];
+  poisonedSpring?: string;
 };
+
+/** Exploration turns the seeded hidden facts into playable discoveries: scanning in place, or pushing to the far frontier. */
+function discoverSecrets(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
+  const camp = world.structures.find((structure) => structure.kind === "camp")?.tile ?? world.structures[0]?.tile;
+  const seeker = inputEvents.find((event) => event.kind === "inspected")
+    ?? inputEvents.find((event) => event.kind === "agent-moved" && camp !== undefined
+      && Math.max(Math.abs(event.to.charCodeAt(0) - camp.charCodeAt(0)), Math.abs(Number(event.to.slice(1)) - Number(camp.slice(1)))) >= 2);
+  if (!seeker) return;
+  const remaining = world.hidden.secrets.filter((secret) => !world.gameplay.discovered.includes(secret));
+  const secret = remaining[0];
+  if (!secret) return;
+  const seekerId = seeker.kind === "agent-moved" || seeker.kind === "inspected" ? seeker.agentId : "all";
+  world.gameplay.discovered.push(secret);
+  const lowered = secret.toLowerCase();
+  if (lowered.includes("cache")) {
+    addToGameplayCache(world.gameplay.campCache, "berries", 3);
+    addToGameplayCache(world.gameplay.campCache, "wood", 2);
+    events.push({ kind: "discovered", tick: world.clock.tick, agentId: seekerId, secret, description: `A buried supply cache: ${secret}.` });
+    return;
+  }
+  if (lowered.includes("spring") || lowered.includes("water") || lowered.includes("poison")) {
+    const spring = world.resources
+      .filter((resource) => resource.kind === "water")
+      .sort((left, right) => Number(left.tile.slice(1)) - Number(right.tile.slice(1)) || left.tile.localeCompare(right.tile))[0];
+    if (spring) world.gameplay.poisonedSpring = spring.tile;
+    events.push({ kind: "discovered", tick: world.clock.tick, agentId: seekerId, secret, description: `A warning carved into a tree: ${secret}.` });
+    return;
+  }
+  events.push({ kind: "discovered", tick: world.clock.tick, agentId: seekerId, secret, description: `An unsettling find: ${secret}.` });
+}
+
+/** Resting is how injured or ill castaways get back on their feet. */
+function recoverAgents(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
+  for (const event of inputEvents) {
+    if (event.kind !== "rested") continue;
+    const agent = world.agents.find((candidate) => candidate.id === event.agentId);
+    if (!agent || (agent.status !== "injured" && agent.status !== "ill")) continue;
+    agent.status = "alive";
+    events.push({ kind: "recovered", tick: world.clock.tick, agentId: agent.id });
+  }
+}
 type MutableWorld = Omit<Mutable<WorldState>, "agents" | "gameplay" | "clock" | "weather"> & {
   agents: MutableAgent[];
   gameplay: MutableGameplay;
@@ -47,6 +90,7 @@ function mutableWorld(world: WorldState): MutableWorld {
       betrayalCounts: {},
       nextTwistTick: 24,
       twistCount: 0,
+      discovered: [],
     };
   }
   return copy;
@@ -394,6 +438,8 @@ export function advanceIslandGameplay(world: WorldState, inputEvents: readonly S
   }
   progressObjectives(next, inputEvents, events);
   registerDeaths(next, inputEvents, events);
+  recoverAgents(next, inputEvents, events);
+  discoverSecrets(next, inputEvents, events);
   maintainAlliances(next, inputEvents, events);
   formAlliances(next, events);
   registerBetrayals(next, inputEvents, events);

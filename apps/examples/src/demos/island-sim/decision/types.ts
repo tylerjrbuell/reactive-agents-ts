@@ -78,6 +78,13 @@ function chooseVisibleResource(perception: Perception, kinds: readonly string[])
       || left.tile.localeCompare(right.tile))[0];
 }
 
+/** Water from the tainted spring sickens whoever drinks it, so clean sources win unless neither is close. */
+function chooseWater(perception: Perception, poisonedSpring: string | undefined): Perception["visibleResources"][number] | undefined {
+  const water = perception.visibleResources.filter((resource) => resource.kind === "water" && resource.quantity > 0);
+  const clean = water.filter((resource) => resource.tile !== poisonedSpring);
+  return chooseVisibleResource({ ...perception, visibleResources: clean.length > 0 ? clean : water }, ["water"]);
+}
+
 /** Nodes with a single unit remaining are prone to being claimed by someone else first; harvest only stockier nodes. */
 function worthHarvesting(resource: Perception["visibleResources"][number]): boolean {
   return resource.quantity >= 2;
@@ -85,6 +92,42 @@ function worthHarvesting(resource: Perception["visibleResources"][number]): bool
 
 function objectiveFor(world: WorldState, agentId: string) {
   return world.gameplay?.objectives.find((objective) => objective.ownerId === agentId && !objective.completed);
+}
+
+/** The shared rescue project: raise one signal fire, drawing on carried or stashed wood. */
+function rescueWork(world: WorldState, self: AgentState, perception: Perception, agentId: string): Decision | undefined {
+  const signalFire = world.structures.find((structure) => structure.kind === "signal-fire");
+  if (signalFire) return undefined;
+  const carriedWood = inventoryCount(self, "wood");
+  if (carriedWood >= 2) {
+    return decision("Raise a rescue signal", "Two pieces of wood can build a signal fire", { type: "build", target: "signal-fire" });
+  }
+  const camp = campTile(world);
+  const atCamp = camp !== undefined && distance(self.location, camp) <= 1;
+  if (atCamp && carriedWood < 2 && availableCacheItem(world, agentId, "wood")) {
+    return decision("Recover stashed wood", "Retrieve stored wood to build the signal fire", { type: "retrieve", target: "wood" });
+  }
+  const woodNode = chooseVisibleResource(perception, ["wood"]);
+  if (woodNode) {
+    if (woodNode.tile === self.location) {
+      return decision("Cut driftwood", "Gather wood for the rescue signal", { type: "gather", target: woodNode.id }, 0.8);
+    }
+    const move = moveToward(world, self, woodNode.tile, "Reach driftwood for the signal fire");
+    if (move) return move;
+  }
+  return undefined;
+}
+
+/** Scouting toward open ground keeps castaways productive instead of idling in place. */
+function scoutDecision(world: WorldState, self: AgentState, perception: Perception): Decision | undefined {
+  const night = world.clock.hour < 6 || world.clock.hour >= 20;
+  if (night && self.needs.energy >= 3) return decision("Sleep through the dark", "Night offers nothing but cold; rest until dawn", { type: "rest" }, 0.6);
+  const target = perception.visibleTiles
+    .filter((tile) => tile.biome !== "ocean" && tile.tile !== self.location)
+    .sort((left, right) => distance(right.tile, self.location) - distance(left.tile, self.location)
+      || left.tile.localeCompare(right.tile))[0];
+  if (!target) return undefined;
+  return moveToward(world, self, target.tile, "Scout the island for supplies and signs") ?? undefined;
 }
 
 /** Desperation offset staggers when each castaway snaps so the camp's starving bursts never collide. */
@@ -135,7 +178,7 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
         if (inventoryCount(self, "water") > 0) return decision("Satisfy thirst", "Drink carried water before thirst peaks", { type: "drink", target: "water" });        if (atCamp && availableCacheItem(world, agentId, "water")) {
           return decision("Find water in the camp cache", "Retrieve water, then drink next hour", { type: "retrieve", target: "water" });
         }
-        const water = chooseVisibleResource(perception, ["water"]);
+        const water = chooseWater(perception, world.gameplay?.poisonedSpring);
         if (water?.tile === self.location && carried < INVENTORY_CAPACITY && worthHarvesting(water)) {
           return decision("Find water", "Gather drinking water here", { type: "gather", target: water.id });
         }
@@ -146,6 +189,10 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       }
 
       if (self.needs.energy >= 8) return decision("Recover strength", "Rest before exhaustion", { type: "rest" });
+
+      if ((self.status === "injured" || self.status === "ill") && self.needs.energy >= 3) {
+        return decision("Heal up", `${self.status === "injured" ? "A wound" : "An illness"} needs rest to mend`, { type: "rest" }, 0.8);
+      }
 
       const objective = objectiveFor(world, agentId);
       if (objective?.kind === "help") {
@@ -185,7 +232,7 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       }
 
       if (self.needs.thirst >= 6 && inventoryCount(self, "water") === 0) {
-        const water = chooseVisibleResource(perception, ["water"]);
+        const water = chooseWater(perception, world.gameplay?.poisonedSpring);
         if (water && carried < INVENTORY_CAPACITY) {
           const move = water.tile === self.location ? undefined : moveToward(world, self, water.tile, "Find fresh water");
           if (move) return move;
@@ -227,7 +274,13 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
         if (resource.tile === self.location && worthHarvesting(resource)) return decision(`Gather ${resource.kind}`, `Collect nearby ${resource.kind}`, { type: "gather", target: resource.id }, 0.75);
       }
 
-      return decision("Understand surroundings", "No urgent need or reachable supply; inspect this place", { type: "inspect", target: self.location }, 0.6);
+      const rescue = rescueWork(world, self, perception, agentId);
+      if (rescue) return rescue;
+
+      const scout = scoutDecision(world, self, perception);
+      if (scout) return scout;
+
+      return decision("Scan the horizon", "No urgent need or reachable supply; sweep the shoreline for signs", { type: "inspect", target: self.location }, 0.5);
     },
   };
 }

@@ -103,6 +103,9 @@ export async function runTick(
         agentId: decayed.id,
         cause: "need_exceeded",
       });
+    } else if (weather.condition === "storm" && exerted && decayed.needs.energy >= 9 && decayed.status === "alive") {
+      decayed.status = "injured";
+      events.push({ kind: "injured", tick, agentId: decayed.id, cause: "working through the storm" });
     }
     postDecayAgents.push(decayed);
   }

@@ -77,6 +77,56 @@ describe("island gameplay systems", () => {
     expect(aftermath.world.gameplay!.rescueAtTick).toBeDefined();
   }, 15000);
 
+  it("discovers a hidden cache during exploration and shares its supplies", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(18));
+    world = { ...world, hidden: { secrets: ["a cache is buried at D4"] } };
+    const before = world.gameplay!.campCache.length;
+    const aftermath = advanceIslandGameplay(world, [
+      { kind: "inspected", tick: 12, agentId: world.agents[0]!.id, target: "D4" },
+    ]);
+    const discovered = aftermath.events.find((event) => event.kind === "discovered");
+    expect(discovered).toBeDefined();
+    expect(aftermath.world.gameplay!.discovered).toContain("a cache is buried at D4");
+    expect(aftermath.world.gameplay!.campCache.length).toBeGreaterThan(before);
+  }, 15000);
+
+  it("records the poisoned spring when that secret is discovered", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(19));
+    world = { ...world, hidden: { secrets: ["the northern spring is poisoned"] } };
+    const aftermath = advanceIslandGameplay(world, [
+      { kind: "inspected", tick: 8, agentId: world.agents[0]!.id, target: "D4" },
+    ]);
+    expect(aftermath.world.gameplay!.poisonedSpring).toBeDefined();
+    expect(aftermath.world.gameplay!.discovered).toContain("the northern spring is poisoned");
+  }, 15000);
+
+  it("lets an injured castaway recover by resting", () => {    let world = initializeIslandGameplay(makeFallbackWorld(20));
+    world = {
+      ...world,
+      agents: world.agents.map((agent, index) => index === 0 ? { ...agent, status: "injured" as const } : agent),
+    };
+    const victimId = world.agents[0]!.id;
+    const aftermath = advanceIslandGameplay(world, [
+      { kind: "rested", tick: 30, agentId: victimId },
+    ]);
+    expect(aftermath.events.some((event) => event.kind === "recovered")).toBe(true);
+    expect(aftermath.world.agents.find((agent) => agent.id === victimId)?.status).toBe("alive");
+  }, 15000);
+
+  it("finds a secret when a castaway pushes to the far frontier", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(21));
+    const world = { ...base, hidden: { secrets: ["a cache is buried at D4"] } };
+    const camp = base.structures.find((structure) => structure.kind === "camp")!.tile;
+    const frontier = base.terrain.find((tile) => tile.biome !== "ocean"
+      && Math.max(Math.abs(tile.tile.charCodeAt(0) - camp.charCodeAt(0)), Math.abs(Number(tile.tile.slice(1)) - Number(camp.slice(1)))) >= 2);
+    expect(frontier).toBeDefined();
+    const aftermath = advanceIslandGameplay(world, [
+      { kind: "agent-moved", tick: 30, agentId: world.agents[0]!.id, from: camp, to: frontier!.tile },
+    ]);
+    expect(aftermath.events.some((event) => event.kind === "discovered")).toBe(true);
+    expect(aftermath.world.gameplay!.discovered).toContain("a cache is buried at D4");
+  }, 15000);
+
   it("advances only the relevant personal goal and emits a completion milestone", () => {
     let world = initializeIslandGameplay(makeFallbackWorld(12));
     const ownerId = world.agents[0]!.id;

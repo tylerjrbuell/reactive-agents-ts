@@ -201,6 +201,7 @@ describe("simulation viewing page", () => {
     expect(page).toContain("finale-restart");
     expect(page).toContain("memorial-list");
     expect(page).toContain("all-lost");
+    expect(page.indexOf('id="chronicle-chips"')).toBeLessThan(page.indexOf('id="event-log"'));
   }, 15000);
 });
 

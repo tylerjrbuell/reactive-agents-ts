@@ -29,4 +29,8 @@ export type SimEvent =
   | { kind: "agent-died"; tick: number; agentId: string; cause: string }
   | { kind: "grief"; tick: number; allianceId: string; name: string; agentId: string; description: string }
   | { kind: "rescue-arrived"; tick: number; survivors: string[] }
-  | { kind: "all-lost"; tick: number; names: string[] };;;
+  | { kind: "all-lost"; tick: number; names: string[] }
+  | { kind: "discovered"; tick: number; agentId: string; secret: string; description: string }
+  | { kind: "illness"; tick: number; agentId: string; cause: string }
+  | { kind: "injured"; tick: number; agentId: string; cause: string }
+  | { kind: "recovered"; tick: number; agentId: string };;;

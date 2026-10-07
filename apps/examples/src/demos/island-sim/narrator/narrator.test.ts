@@ -47,8 +47,7 @@ describe("narrator", () => {
     expect(narrator.chronicle()).toEqual([]);
   }, 15000);
 
-  it("names the salient moments: deaths, pacts, exile, and twists", () => {
-    const world = makeFallbackWorld(64);
+  it("names the salient moments: deaths, pacts, exile, and twists", () => {    const world = makeFallbackWorld(64);
     const events: SimEvent[] = [
       { kind: "agent-died", tick: 2, agentId: "agent-4", cause: "hunger" },
       { kind: "alliance-formed", tick: 3, allianceId: "alliance-1", name: "The Shoreline", members: ["agent-0", "agent-1"] },
@@ -66,5 +65,26 @@ describe("narrator", () => {
     expect(entry.recap.toLowerCase()).toContain("exile");
     expect(entry.recap.toLowerCase()).toContain("weather");
     expect(entry.recap.toLowerCase()).toContain("rescue");
+  }, 15000);
+
+  it("only ever gives the confessional to a living castaway", () => {
+    const base = makeFallbackWorld(65);
+    // Make the most active castaway dead, so the naive "most events" pick would be a corpse.
+    const dead = base.agents[2]!;
+    const world = {
+      ...base,
+      agents: base.agents.map((agent) => agent.id === dead.id
+        ? { ...agent, status: "dead" as const, demise: { tick: 2, cause: "thirst" } }
+        : agent),
+    };
+    const busy: SimEvent[] = Array.from({ length: 9 }, (_, index) => ({
+      kind: "resource-gathered", tick: index, agentId: dead.id, resourceId: "res-0", amount: 1,
+    }));
+    const entry = makeTemplateNarrator().narrate({
+      world, day: 1, dayStartTick: 0, dayEndTick: 23,
+      events: busy.map((event, index) => ({ sequence: index + 1, event })),
+    }) as NarrationEntry;
+    const speaker = world.agents.find((agent) => agent.name === entry.confessional.name);
+    expect(speaker?.status).not.toBe("dead");
   }, 15000);
 });

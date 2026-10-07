@@ -25,6 +25,7 @@ type MutableAlliance = Omit<Mutable<IslandGameplay["alliances"][number]>, "membe
 type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "alliances"> & {
   campCache: Array<Mutable<IslandGameplay["campCache"][number]>>;
   alliances: MutableAlliance[];
+  poisonedSpring?: string;
 };
 type MutableWorld = Omit<Mutable<WorldState>, "agents" | "gameplay" | "resources" | "structures"> & {
   agents: MutableAgent[];
@@ -173,7 +174,12 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
       if (!gathered.ok) return fail(world, agentId, "inventory is full; store supplies at camp first");
       resource.quantity -= 1;
       agent.inventory = gathered.inventory;
-      return { ok: true, world: next, events: [{ kind: "resource-gathered", tick, agentId, resourceId: resource.id, amount: 1 }] };
+      const events: SimEvent[] = [{ kind: "resource-gathered", tick, agentId, resourceId: resource.id, amount: 1 }];
+      if (resource.kind === "water" && next.gameplay.poisonedSpring === resource.tile && agent.status === "alive") {
+        agent.status = "ill";
+        events.push({ kind: "illness", tick, agentId, cause: "poisoned spring" });
+      }
+      return { ok: true, world: next, events };
     }
     case "eat": {
       const food = action.target ?? agent.inventory.find((item) => ["berries", "fish", "meat"].includes(item.kind) && item.qty > 0)?.kind;
@@ -181,7 +187,7 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
       const removed = removeInventoryItem(agent.inventory, food);
       if (!removed.ok) return fail(world, agentId, "food not in inventory");
       agent.inventory = removed.inventory;
-      agent.needs.hunger = Math.max(0, agent.needs.hunger - 4);
+      agent.needs.hunger = Math.max(0, agent.needs.hunger - 5);
       return { ok: true, world: next, events: [{ kind: "ate", tick, agentId, food }] };
     }
     case "drink": {
@@ -189,7 +195,7 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
       const removed = removeInventoryItem(agent.inventory, water);
       if (!removed.ok || water !== "water") return fail(world, agentId, "no water carried");
       agent.inventory = removed.inventory;
-      agent.needs.thirst = Math.max(0, agent.needs.thirst - 5);
+      agent.needs.thirst = Math.max(0, agent.needs.thirst - 6);
       return { ok: true, world: next, events: [{ kind: "drank", tick, agentId, water }] };
     }
     case "rest":

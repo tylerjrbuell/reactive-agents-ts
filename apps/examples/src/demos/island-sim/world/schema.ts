@@ -152,6 +152,8 @@ export const IslandGameplaySchema = Schema.Struct({
   nextTwistTick: Schema.Number,
   twistCount: Schema.Number,
   rescueAtTick: Schema.optional(Schema.Number),
+  discovered: Schema.optional(Schema.Array(Schema.String)),
+  poisonedSpring: Schema.optional(Schema.String),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

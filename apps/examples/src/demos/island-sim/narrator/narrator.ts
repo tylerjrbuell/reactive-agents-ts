@@ -55,10 +55,11 @@ function tally(events: readonly SimEvent[]) {
 
 
 function pickNarrators(world: WorldState, events: readonly SimEvent[]): string | undefined {
+  const living = new Set(world.agents.filter((agent) => agent.status !== "dead").map((agent) => agent.id));
   const counts = new Map<string, number>();
   for (const event of events) {
     for (const id of [(event as { agentId?: string }).agentId, (event as { from?: string }).from]) {
-      if (typeof id !== "string") continue;
+      if (typeof id !== "string" || !living.has(id)) continue;
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
   }

@@ -92,8 +92,7 @@ describe("runTick", () => {
     expect(world.agents.filter((agent) => agent.status !== "dead").length).toBeGreaterThanOrEqual(6);
   }, 15000);
 
-  it("keeps a viable community through a four-day deterministic run", async () => {
-    let world = makeFallbackWorld(20261006);
+  it("keeps a viable community through a four-day deterministic run", async () => {    let world = makeFallbackWorld(20261006);
     const rng = makeRng(world.seed);
     const maker = makeScriptedDecisionMaker();
     for (let hour = 0; hour < 100; hour += 1) {
@@ -102,5 +101,28 @@ describe("runTick", () => {
 
     expect(world.agents.filter((agent) => agent.status !== "dead").length).toBeGreaterThanOrEqual(6);
     expect(world.gameplay?.alliances.length).toBeGreaterThan(0);
+  }, 15000);
+
+  it("injures an exhausted castaway who keeps working through a storm", async () => {
+    const base = makeFallbackWorld(20261007);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      weather: { condition: "storm" as const, tempC: 12 },
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: "D4", needs: { hunger: 1, thirst: 1, energy: 7 } }
+        : candidate),
+    };
+    // A decision maker that always walks into the weather keeps the castaway exerted.
+    const marching = {
+      async decide({ world: current, perception }: { world: import("../world/schema.js").WorldState; agentId: string; perception: import("./perceive.js").Perception }) {
+        const self = perception.self;
+        const step = current.terrain.find((tile) => tile.biome !== "ocean" && Math.max(Math.abs(tile.tile.charCodeAt(0) - self.location.charCodeAt(0)), Math.abs(Number(tile.tile.slice(1)) - Number(self.location.slice(1)))) === 1)!;
+        return { goal: "March", reasoningSummary: "March", plan: ["move"], action: { type: "move" as const, target: step.tile }, confidence: 0.8, probabilities: { move: 0.8 }, calibrated: false };
+      },
+    };
+    const result = await runTick(world, marching, makeRng(5));
+    expect(result.events.some((event) => event.kind === "injured")).toBe(true);
+    expect(result.world.agents.find((candidate) => candidate.id === agent.id)?.status).toBe("injured");
   }, 15000);
 });
