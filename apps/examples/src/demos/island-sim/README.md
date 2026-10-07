@@ -44,7 +44,8 @@ Two framework-native opt-ins:
 - Movement and actions are animated between ticks: markers glide to new tiles, action glyphs (⛏️ 💧 💬 🤝 🏗️ 🆘 🌟 🌀) briefly pop above the acting castaway, and recent movement trails stay faintly visible; the focused survivor's trail is highlighted.
 - The camp dashboard shows objectives, public supplies, alliances/private stash totals, and exile countdowns. Search and filter the story rail by castaway and event type.
 - The "🎙️ Narrator's journal" sits above the story log as a day timeline: a scrollable strip of mood-tinted day chips over a single comfortable reading pane (headline, recap, confessional). Click a day to read its chapter; the journal resets when you start a new island. The confessional voice is always a living castaway.
-- Endings show a banner with a "🔄 Start a new island" button: a rescue banner with survivors evacuated, or a somber memorial listing every death with its day and cause.
+- Endings show a banner plus a modal that appears once: a rescue card listing who made it home, or an all-lost card with the memorial roll (name · day · cause), each offering "🔄 Start a new island" and "🔍 Review the island" (Esc also dismisses). The map itself reacts: a ⛵ sails in for a rescue, or the map dims with 💀 markers on every final resting tile.
+- The dashboard is built to fit one screen: full-height shell with internal scrolling in the map, roster, journal, and story log. Below 640px of viewport height it falls back to ordinary page scrolling.
 
 ## Verification
 

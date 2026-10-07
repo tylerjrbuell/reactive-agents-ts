@@ -203,6 +203,19 @@ describe("simulation viewing page", () => {
     expect(page).toContain("all-lost");
     expect(page.indexOf('id="chronicle-chips"')).toBeLessThan(page.indexOf('id="event-log"'));
   }, 15000);
+
+  it("ends a run with a modal, map finale animation, and a one-screen layout", () => {
+    const page = renderPage();
+    expect(page).toContain('id="finale-modal"');
+    expect(page).toContain("function showFinaleModal(");
+    expect(page).toContain("function renderMapFinale(");
+    expect(page).toContain("finaleDismissed");
+    expect(page).toContain("⛵");
+    expect(page).toContain("finale-dim");
+    expect(page).toContain("height:100dvh");
+    expect(page).toContain("overflow:hidden");
+    expect(page).toContain("@media(max-height:640px)");
+  }, 15000);
 });
 
 describe("server", () => {
