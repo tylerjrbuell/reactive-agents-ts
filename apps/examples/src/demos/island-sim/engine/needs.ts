@@ -1,17 +1,16 @@
 import { AgentState } from "../world/schema.js";
 import { Weather } from "../world/schema.js";
 
-export function decayNeeds(agent: AgentState, weather: Weather): AgentState {
-  const newAgent = structuredClone(agent) as AgentState;
-  // simple decay: +1 hunger, +1 thirst each tick
-  newAgent.needs.hunger = Math.min(10, newAgent.needs.hunger + 1);
-  newAgent.needs.thirst = Math.min(10, newAgent.needs.thirst + 1);
-  // weather effects
-  if (weather.condition === "storm") {
-    newAgent.needs.energy = Math.max(0, newAgent.needs.energy - 2);
-  } else {
-    newAgent.needs.energy = Math.max(0, newAgent.needs.energy - 1);
-  }
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
+type MutableAgent = Mutable<AgentState> & { needs: Mutable<AgentState["needs"]> };
+
+export function decayNeeds(agent: AgentState, weather: Weather, tick: number = 0, exerted: boolean = false): AgentState {
+  const newAgent = structuredClone(agent) as MutableAgent;
+  // Hunger and thirst rise gradually so one unproductive hour is not fatal.
+  if (tick % 4 === 0) newAgent.needs.hunger = Math.min(10, newAgent.needs.hunger + 1);
+  if (tick % 4 === 0) newAgent.needs.thirst = Math.min(10, newAgent.needs.thirst + 1);
+  // Energy is modeled as fatigue. Only strenuous actions add fatigue, with storms amplifying exertion.
+  if (exerted) newAgent.needs.energy = Math.min(10, newAgent.needs.energy + (weather.condition === "storm" ? 2 : 1));
   return newAgent;
 }
 

@@ -1,3 +1,4 @@
+// Run: bun test apps/examples/src/demos/island-sim/decision/types.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
 import { makeFallbackWorld } from "../world/fallback.js";
 import { perceive } from "../engine/perceive.js";
@@ -5,9 +6,14 @@ import { makeScriptedDecisionMaker } from "./types.js";
 
 describe("scripted decisions", () => {
   it("chooses rest when energy is critical", async () => {
-    const w = makeFallbackWorld(21);
-    const a = w.agents[0];
-    a.needs.energy = 10;
+    const base = makeFallbackWorld(21);
+    const a = base.agents[0]!;
+    const w = {
+      ...base,
+      agents: base.agents.map((agent) => agent.id === a.id
+        ? { ...agent, needs: { ...agent.needs, energy: 10 } }
+        : agent),
+    };
     const d = await makeScriptedDecisionMaker().decide({ world: w, agentId: a.id, perception: perceive(w, a.id) });
     expect(d.action.type).toBe("rest");
   });
@@ -27,4 +33,100 @@ describe("scripted decisions", () => {
       expect(vocab.has(d.action.type)).toBe(true);
     }
   });
+
+  it("stores excess supplies instead of gathering into a full pack", async () => {
+    const base = makeFallbackWorld(45);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: base.structures[0]!.tile, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [{ kind: "wood", qty: 10 }] }
+        : candidate),
+    };
+
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+
+    expect(decision.action.type).toBe("store");
+  }, 15000);
+
+  it("heads back toward camp before a full pack causes repeated gather failures", async () => {
+    const base = makeFallbackWorld(46);
+    const agent = base.agents[0]!;
+    const camp = base.structures[0]!.tile;
+    const remoteTile = base.terrain.find((tile) => tile.tile !== camp && tile.biome !== "ocean")!.tile;
+    const world = {
+      ...base,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: remoteTile, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [{ kind: "wood", qty: 12 }] }
+        : candidate),
+      resources: [],
+    };
+
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+
+    expect(decision.action.type).toBe("move");
+    const currentLocation = world.agents.find((candidate) => candidate.id === agent.id)!.location;
+    const destination = world.terrain.find((tile) => tile.tile === decision.action.target);
+    expect(destination?.biome).not.toBe("ocean");
+    expect(Math.max(
+      Math.abs(decision.action.target!.charCodeAt(0) - currentLocation.charCodeAt(0)),
+      Math.abs(Number(decision.action.target!.slice(1)) - Number(currentLocation.slice(1))),
+    )).toBe(1);
+  }, 15000);
+
+  it("only talks with adjacent castaways, never distant ones", async () => {
+    const base = makeFallbackWorld(30);
+    const agent = base.agents[0]!;
+    const other = base.agents[1]!;
+    const [col, row] = [agent.location.charCodeAt(0), Number(agent.location.slice(1))];
+    const distant = String.fromCharCode(col) + (row + 2);
+    const world = {
+      ...base,
+      clock: { ...base.clock, tick: 4 },
+      resources: [],
+      gameplay: undefined,
+      agents: base.agents.map((candidate) => {
+        if (candidate.id === agent.id) return { ...candidate, needs: { hunger: 1, thirst: 1, energy: 1 } };
+        if (candidate.id === other.id) return { ...candidate, location: distant, needs: { hunger: 1, thirst: 1, energy: 1 } };
+        return { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } };
+      }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).not.toBe("talk");
+  }, 15000);
+
+  it("prefers resource nodes with stock over depleted ones at the same distance", async () => {
+    const base = makeFallbackWorld(31);
+    const agent = base.agents[0]!;
+    const lean = { id: "res-lean", kind: "berries", tile: agent.location, quantity: 1, regrowthPerDay: 0, initialQuantity: 1 };
+    const rich = { id: "res-rich", kind: "water", tile: agent.location, quantity: 8, regrowthPerDay: 2, initialQuantity: 8 };
+    const world = {
+      ...base,
+      clock: { ...base.clock, tick: 5 },
+      resources: [lean, rich],
+      gameplay: undefined,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] }
+        : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("gather");
+    expect(decision.action.target).toBe("res-rich");
+  }, 15000);
 });

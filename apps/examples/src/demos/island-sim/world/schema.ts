@@ -36,7 +36,12 @@ export const ActionType = Schema.Literal(
   "rest",
   "trade",
   "share",
+  "help",
   "talk",
+  "steal",
+  "sabotage",
+  "store",
+  "retrieve",
   "inspect"
 );
 export type ActionType = typeof ActionType.Type;
@@ -44,6 +49,7 @@ export type ActionType = typeof ActionType.Type;
 export const ActionRequestSchema = Schema.Struct({
   type: ActionType,
   target: Schema.optional(Schema.String),
+  item: Schema.optional(Schema.String),
 });
 export type ActionRequest = typeof ActionRequestSchema.Type;
 
@@ -104,6 +110,49 @@ export const HiddenFactsSchema = Schema.Struct({
 });
 export type HiddenFacts = typeof HiddenFactsSchema.Type;
 
+export const GameplayInventoryItemSchema = Schema.Struct({
+  kind: Schema.String,
+  qty: Schema.Number,
+});
+
+export const ObjectiveKind = Schema.Literal("gather", "build", "help", "explore", "rescue");
+export const IslandObjectiveSchema = Schema.Struct({
+  id: Schema.String,
+  kind: ObjectiveKind,
+  title: Schema.String,
+  ownerId: Schema.optional(Schema.String),
+  target: Schema.Number,
+  progress: Schema.Number,
+  completed: Schema.Boolean,
+});
+
+export const AllianceSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  members: Schema.Array(Schema.String),
+  formedAtTick: Schema.Number,
+  stash: Schema.Array(GameplayInventoryItemSchema),
+});
+
+export const ExileSchema = Schema.Struct({
+  agentId: Schema.String,
+  returnAtTick: Schema.Number,
+  location: Schema.String,
+  reason: Schema.String,
+});
+
+/** Typed, serializable state owned by the island gameplay systems. */
+export const IslandGameplaySchema = Schema.Struct({
+  campCache: Schema.Array(GameplayInventoryItemSchema),
+  objectives: Schema.Array(IslandObjectiveSchema),
+  alliances: Schema.Array(AllianceSchema),
+  exiles: Schema.Array(ExileSchema),
+  betrayalCounts: Schema.Record({ key: Schema.String, value: Schema.Number }),
+  nextTwistTick: Schema.Number,
+  twistCount: Schema.Number,
+});
+export type IslandGameplay = typeof IslandGameplaySchema.Type;
+
 export const WorldStateSchema = Schema.Struct({
   id: Schema.String,
   seed: Schema.Number,
@@ -115,6 +164,7 @@ export const WorldStateSchema = Schema.Struct({
   structures: Schema.Array(StructureSchema),
   agents: Schema.Array(AgentStateSchema),
   hidden: HiddenFactsSchema,
+  gameplay: Schema.optional(IslandGameplaySchema),
 });
 export type WorldState = typeof WorldStateSchema.Type;
 

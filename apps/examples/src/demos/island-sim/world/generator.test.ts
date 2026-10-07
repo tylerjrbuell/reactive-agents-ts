@@ -31,4 +31,19 @@ describe("world generator", () => {
     expect(r.source).toBe("fallback");
     expect(r.attempts).toBe(1);
   });
+
+  it("expands a compact structured blueprint into a validated island", async () => {
+    const blueprint = {
+      weather: { condition: "sunny", tempC: 24 },
+      terrainRows: ["OOOOOOOO", "OBGBGFBBO", "OBGFWFGFBO", "OBGRWRGBBO", "OBFGWWGFBO", "OBFGWGFBO", "OBGFGFBBO", "OOOOOOOO"],
+      secrets: ["A spring runs under camp.", "A radio repeats at dusk."],
+    };
+    const generator = makeLlmWorldGenerator({ run: async () => ({ object: blueprint }) });
+
+    const result = await generator.generate(7);
+
+    expect(result.source).toBe("llm");
+    expect(result.world.terrain).toHaveLength(64);
+    expect(result.world.island).toEqual({ width: 8, height: 8 });
+  }, 15000);
 });

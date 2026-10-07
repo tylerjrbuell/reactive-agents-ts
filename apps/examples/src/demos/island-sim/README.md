@@ -1,6 +1,6 @@
-# Island Survival Simulation Demo
+# Island Survival Simulation
 
-A watchable, offline-first multi-agent island-survival simulation demo where one LLM call generates the world, `agent.judge()` picks each agent's action per tick, and a pure deterministic engine owns and renders the state.
+A watchable, offline-first island-survival story. A deterministic engine owns the world, needs, actions, social trust, alliances, objectives, exile, and daily twists. Survivor portraits, the island map, camp dashboard, and event rail update incrementally as the simulation runs.
 
 ## Run
 
@@ -8,42 +8,32 @@ A watchable, offline-first multi-agent island-survival simulation demo where one
 bun run apps/examples/src/demos/island-sim/index.ts
 ```
 
-The simulation will start on port 3007 (default). Open your browser to `http://localhost:3007` to view the simulation.
+Open `http://localhost:3007` (or the port set with `PORT`). The demo uses scripted survivor decisions and tries Ollama for a compact world blueprint (`ollama/cogito:14b`) when available. World generation falls back to a deterministic island if provider setup or generation fails.
 
-## Controls
+Set `ISLAND_SIM_MODEL` to choose a different Ollama model. Survivor decisions remain deterministic and engine-owned.
 
-- **New Simulation**: Generate a new world and reset the simulation.
-- **Start/Pause**: Start or pause the real-time simulation.
-- **Step**: Advance one tick when paused.
-- **Speed**: Adjust the simulation speed (ticks per second).
-- **Agent Select**: Choose an agent to inspect in the sidebar.
+## Simulation systems
 
-## Modes
+- Castaways have distinct roles, personal objectives, and a shared rescue objective. Completed actions update objective progress and produce story milestones.
+- Repeated reciprocal trust forms persistent alliances. Members share an exclusive private stash; the public camp cache and island resources remain open to outsiders.
+- Carry-aware choices send full packs back to camp to store supplies instead of repeatedly attempting impossible gathers.
+- Repeated theft or sabotage inside an alliance can trigger a relationship-weighted vote. Exile lasts 12 in-world hours, reserves a survival kit, and ends with an automatic return.
+- One seeded incident is scheduled each in-world day: a washed-up cache, a distant rescue signal, or a storm front. Incidents are recoverable and replayable.
+- Hunger, thirst, and fatigue create pressure. Activity increases fatigue, storms make exertion harder, and rest reduces fatigue.
 
-The demo runs in **offline mode** by default, using scripted world generation and scripted decision makers. To use live LLM providers, set the appropriate environment variables or modify the `main` function in `index.ts` to instantiate live agents.
+## Controls and viewing
 
-## Judgment Backend Selection
+- **🔄 New island** generates a fresh world; **▶ Resume story**, **⏸ Pause**, and **⏭ Advance hour** control time. Pace selects ticks per second.
+- The dashboard is a three-column grid (map, castaways + camp, story log) that stacks to two columns and then one on narrow screens.
+- Survival bars show a visual fill plus the exact percentage; needs turn amber at 40% pressure and red at 70%. Survivor cards show their current objective and an alliance-colored dot.
+- Resource and structure markers use unambiguous emoji glyphs (🫐 🐟 💧 🪵 🪨 ⛺ 🔥 🏕️ 🆘) with a labeled legend and tooltips naming kind, quantity, and tile.
+- Alliances are visualized: colored dashed lines connect member markers on the map, member rings adopt the alliance color, and hovering an alliance row highlights only that alliance's link.
+- Select or hover a castaway to preview their needs and follow their movement. Map stacks mark co-located survivors; activate `+N` to cycle selection.
+- The camp dashboard shows objectives, public supplies, alliances/private stash totals, and exile countdowns. Search and filter the story rail by castaway and event type.
 
-The live wiring in `main` prefers:
-1. `ollama` (if available)
-2. `jev` (if `TYPESAFE_API_KEY` resolves)
-3. `llm` (fallback LLM provider)
-4. `scripted` (fallback to scripted decision maker)
-
-## Cassette Export/Replay
-
-The simulation records decisions in a cassette that can be exported and replayed for deterministic playback.
-
-## Test
-
-Run the test suite:
+## Verification
 
 ```bash
 bun test apps/examples/src/demos/island-sim --timeout 15000
-```
-
-## Typecheck
-
-```bash
-bun run typecheck
+bunx tsc --ignoreConfig --noEmit --strict --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --types bun-types $(find apps/examples/src/demos/island-sim -name '*.ts' -print)
 ```

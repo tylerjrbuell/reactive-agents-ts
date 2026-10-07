@@ -1,86 +1,121 @@
-import { WorldState, WorldStateSchema, AgentState, ResourceNode, Structure, TerrainTile, HiddenFacts } from "./schema.js";
 import { randomUUID } from "node:crypto";
+import { Schema } from "effect";
+import {
+  WorldStateSchema,
+  type AgentState,
+  type ResourceNode,
+  type Structure,
+  type TerrainTile,
+  type WorldState,
+} from "./schema.js";
 
-/** Simple deterministic 12x12 island generator for demo purposes. */
-export function makeFallbackWorld(seed: number): WorldState {
-  // deterministic simple RNG (linear congruential) for world generation only
-  const rng = (function* () {
-    let s = seed;
-    while (true) {
-      s = (s * 1664525 + 1013904223) % 0x100000000;
-      yield s / 0xffffffff;
-    }
-  })();
-  const rand = () => rng.next().value as number;
+const CAMP_TILES = ["C3", "C4", "D3", "D4", "E3", "E4", "C5", "D5"] as const;
+const RESOURCES: ReadonlyArray<Pick<ResourceNode, "kind" | "tile" | "quantity">> = [
+  { kind: "berries", tile: "C3", quantity: 8 },
+  { kind: "wood", tile: "D3", quantity: 6 },
+  { kind: "water", tile: "D4", quantity: 8 },
+  { kind: "fish", tile: "B4", quantity: 4 },
+  { kind: "stone", tile: "E3", quantity: 4 },
+  { kind: "berries", tile: "F4", quantity: 8 },
+  { kind: "water", tile: "E4", quantity: 8 },
+  { kind: "wood", tile: "C5", quantity: 5 },
+  { kind: "fish", tile: "G4", quantity: 3 },
+  { kind: "berries", tile: "D5", quantity: 8 },
+];
 
-  const width = 12;
-  const height = 12;
+function makeRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function terrainFor(seed: number): TerrainTile[] {
+  const random = makeRandom(seed);
   const terrain: TerrainTile[] = [];
-  const biomes = ["ocean", "beach", "forest", "grass", "rock", "freshwater"] as const;
-  for (let r = 0; r < height; r++) {
-    const rowLetter = String.fromCharCode(65 + r);
-    for (let c = 1; c <= width; c++) {
-      const tileId = `${rowLetter}${c}`;
-      const biome = biomes[Math.floor(rand() * biomes.length)];
-      const elevation = Math.floor(rand() * 10);
-      terrain.push({ tile: tileId, biome, elevation });
+  for (let row = 0; row < 8; row += 1) {
+    for (let column = 1; column <= 8; column += 1) {
+      const tile = `${String.fromCharCode(65 + row)}${column}`;
+      const edge = row === 0 || row === 7 || column === 1 || column === 8;
+      const rim = row === 1 || row === 6 || column === 2 || column === 7;
+      const biome = edge
+        ? "ocean"
+        : tile === "D4"
+          ? "freshwater"
+          : tile === "B4" || rim
+            ? "beach"
+            : random() < 0.58
+              ? "forest"
+              : random() < 0.5
+                ? "grass"
+                : "rock";
+      terrain.push({ tile, biome, elevation: Math.floor(random() * 8) + 1 });
     }
   }
+  return terrain;
+}
 
-  // Simple resource nodes (berries, fish, wood, stone, water)
-  const resourceKinds = ["berries", "fish", "wood", "stone", "water"] as const;
-  const resources: ResourceNode[] = [];
-  for (let i = 0; i < 10; i++) {
-    const tile = terrain[Math.floor(rand() * terrain.length)].tile;
-    const kind = resourceKinds[Math.floor(rand() * resourceKinds.length)];
-    const qty = Math.floor(rand() * 5) + 1;
-    const id = `res-${i}`;
-    resources.push({ id, kind, tile, quantity: qty, regrowthPerDay: 1, initialQuantity: qty });
-  }
+function makeAgents(seed: number): AgentState[] {
+  const random = makeRandom(seed ^ 0x5f3759df);
+  const names = ["Jack", "Kate", "Sawyer", "Hurley", "Sayid", "Sun", "Jin", "Locke"];
+  return names.map((name, index) => ({
+    id: `agent-${index}`,
+    name,
+    personality: {
+      traits: [
+        ["leader", "practical"],
+        ["resourceful", "cautious"],
+        ["opportunistic", "independent"],
+        ["optimistic", "social"],
+        ["methodical", "loyal"],
+        ["empathetic", "observant"],
+        ["hardworking", "reserved"],
+        ["patient", "faithful"],
+      ][index]!,
+      riskTolerance: random(),
+    },
+    skills: {},
+    needs: {
+      hunger: Math.floor(random() * 3) + 2,
+      thirst: Math.floor(random() * 3) + 2,
+      energy: Math.floor(random() * 3) + 2,
+    },
+    goals: [],
+    inventory: [],
+    location: CAMP_TILES[index]!,
+    relationships: {},
+    beliefs: [{ subject: "island role", claim: ["doctor", "scout", "forager", "morale keeper", "radio operator", "herbalist", "fisher", "tracker"][index]!, confidence: 1 }],
+    memory: [],
+    plan: [],
+    status: "alive",
+  }));
+}
 
-  // Simple structures (lean-to, fire pit)
-  const structures: Structure[] = [];
-  for (let i = 0; i < 2; i++) {
-    const tile = terrain[Math.floor(rand() * terrain.length)].tile;
-    structures.push({ id: `struct-${i}`, kind: i === 0 ? "lean-to" : "fire-pit", tile, ownerId: undefined, durability: 10 });
-  }
-
-  // Create 8 agents with deterministic names and locations
-  const agents: AgentState[] = [];
-  const agentNames = ["Mira", "Kell", "Orin", "Jade", "Lio", "Nia", "Bren", "Tara"];
-  for (let i = 0; i < 8; i++) {
-    const locTile = terrain[Math.floor(rand() * terrain.length)].tile;
-    const id = `agent-${i}`;
-    const needs = { hunger: Math.floor(rand() * 5) + 5, thirst: Math.floor(rand() * 5) + 5, energy: Math.floor(rand() * 5) + 5 };
-    agents.push({
-      id,
-      name: agentNames[i],
-      personality: { traits: ["cautious", "practical"], riskTolerance: rand() },
-      skills: {},
-      needs,
-      goals: [],
-      inventory: [],
-      location: locTile,
-      relationships: {},
-      beliefs: [],
-      memory: [],
-      plan: [],
-      status: "alive",
-    });
-  }
-
-  const hidden: HiddenFacts = { secrets: ["the northern spring is poisoned", "a cache is buried at D4"] };
-
-  return {
+/** Create a deterministic, clustered 8x8 island with a safe camp, resource routes, and recognizable castaways. */
+export function makeFallbackWorld(seed: number): WorldState {
+  const terrain = terrainFor(seed);
+  const resources: ResourceNode[] = RESOURCES.map((resource, index) => ({
+    ...resource,
+    id: `res-${index}`,
+    regrowthPerDay: ["berries", "water", "fish"].includes(resource.kind) ? 4 : 1,
+    initialQuantity: resource.quantity,
+  }));
+  const structures: Structure[] = [
+    { id: "struct-0", kind: "camp", tile: "D4", ownerId: undefined, durability: 10 },
+    { id: "struct-1", kind: "fire-pit", tile: "D3", ownerId: undefined, durability: 10 },
+  ];
+  const world = {
     id: randomUUID(),
     seed,
     clock: { tick: 0, day: 1, hour: 0 },
-    island: { width, height },
+    island: { width: 8, height: 8 },
     terrain,
     weather: { condition: "sunny", tempC: 25 },
     resources,
     structures,
-    agents,
-    hidden,
-  } as any;
+    agents: makeAgents(seed),
+    hidden: { secrets: ["the northern spring is poisoned", "a cache is buried at D4"] },
+  };
+  return Schema.decodeUnknownSync(WorldStateSchema)(world);
 }

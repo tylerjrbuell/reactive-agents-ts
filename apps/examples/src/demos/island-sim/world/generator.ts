@@ -1,6 +1,7 @@
 import { WorldState } from "../world/schema.js";
 import { parseWorld } from "./schema.js";
 import { makeFallbackWorld } from "./fallback.js";
+import { worldFromBlueprint } from "./blueprint.js";
 
 /** Agent-like interface for structured output. */
 export interface StructuredAgentLike {
@@ -36,11 +37,17 @@ export function makeLlmWorldGenerator(
       while (attempts < maxAttempts) {
         attempts++;
         try {
-          const result = await agent.run(`Generate a world with seed ${seed}.`);
+          const result = await agent.run(
+            `Create a compact 8x8 island-survival blueprint for deterministic seed ${seed}. ` +
+            `Return JSON with weather {condition: sunny|rain|storm|cloudy, tempC: number}, ` +
+            `terrainRows: exactly 8 strings of 8 codes using O ocean, B beach, F forest, G grass, R rock, W freshwater, ` +
+            `and at least two short secrets. Keep the outer row and column ocean; put fresh water near D4; ` +
+            `make inner shore and camp routes mostly traversable. Do not include agents or resources.`,
+          );
           if (result.objectError) {
             continue;
           }
-          const maybeWorld = parseWorld(result.object);
+          const maybeWorld = parseWorld(result.object) ?? worldFromBlueprint(seed, result.object);
           if (maybeWorld !== undefined) {
             return { world: maybeWorld, source: "llm", attempts };
           }
