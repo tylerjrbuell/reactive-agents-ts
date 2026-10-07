@@ -107,18 +107,18 @@ describe("scripted decisions", () => {
     expect(decision.action.type).not.toBe("talk");
   }, 15000);
 
-  it("prefers resource nodes with stock over depleted ones at the same distance", async () => {
-    const base = makeFallbackWorld(31);
+  it("prefers the nearest resource over a stockier distant one when starving", async () => {
+    const base = makeFallbackWorld(32);
     const agent = base.agents[0]!;
-    const lean = { id: "res-lean", kind: "berries", tile: agent.location, quantity: 1, regrowthPerDay: 0, initialQuantity: 1 };
-    const rich = { id: "res-rich", kind: "water", tile: agent.location, quantity: 8, regrowthPerDay: 2, initialQuantity: 8 };
+    const near = { id: "res-near", kind: "berries", tile: agent.location, quantity: 2, regrowthPerDay: 1, initialQuantity: 2 };
+    const farTile = "ZZ9";
+    const rich = { id: "res-rich", kind: "water", tile: farTile, quantity: 9, regrowthPerDay: 2, initialQuantity: 9 };
     const world = {
       ...base,
-      clock: { ...base.clock, tick: 5 },
-      resources: [lean, rich],
       gameplay: undefined,
+      resources: [near, rich],
       agents: base.agents.map((candidate) => candidate.id === agent.id
-        ? { ...candidate, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] }
+        ? { ...candidate, needs: { hunger: 9, thirst: 1, energy: 1 }, inventory: [] }
         : { ...candidate, location: "ZZ9", needs: { hunger: 1, thirst: 1, energy: 1 } }),
     };
     const decision = await makeScriptedDecisionMaker().decide({
@@ -127,6 +127,6 @@ describe("scripted decisions", () => {
       perception: perceive(world, agent.id),
     });
     expect(decision.action.type).toBe("gather");
-    expect(decision.action.target).toBe("res-rich");
+    expect(decision.action.target).toBe("res-near");
   }, 15000);
 });

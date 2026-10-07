@@ -131,9 +131,8 @@ export async function runTick(
   }
   clock.tick += 1;
 
-  // 5. Regrow resources on day rollover
+  // 5. Regrow resources on day rollover; a storm day salts the land.
   if (weatherChanged) {
-    // Assuming one day has passed
     newWorld = regrowResources(newWorld, 1) as MutableWorld;
   }
 

@@ -8,6 +8,7 @@ import {
   type TerrainTile,
   type WorldState,
 } from "./schema.js";
+import { regrowthPolicyFor } from "../engine/resources.js";
 
 const CAMP_TILES = ["C3", "C4", "D3", "D4", "E3", "E4", "C5", "D5"] as const;
 const RESOURCES: ReadonlyArray<Pick<ResourceNode, "kind" | "tile" | "quantity">> = [
@@ -98,7 +99,7 @@ export function makeFallbackWorld(seed: number): WorldState {
   const resources: ResourceNode[] = RESOURCES.map((resource, index) => ({
     ...resource,
     id: `res-${index}`,
-    regrowthPerDay: ["berries", "water", "fish"].includes(resource.kind) ? 4 : 1,
+    regrowthPerDay: regrowthPolicyFor(resource.kind),
     initialQuantity: resource.quantity,
   }));
   const structures: Structure[] = [

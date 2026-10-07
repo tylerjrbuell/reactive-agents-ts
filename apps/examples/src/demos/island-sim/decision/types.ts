@@ -73,8 +73,8 @@ function moveToward(world: WorldState, agent: AgentState, target: string, goal: 
 function chooseVisibleResource(perception: Perception, kinds: readonly string[]): Perception["visibleResources"][number] | undefined {
   return perception.visibleResources
     .filter((resource) => kinds.includes(resource.kind) && resource.quantity > 0)
-    .sort((left, right) => Number(right.quantity >= 2) - Number(left.quantity >= 2)
-      || distance(perception.self.location, left.tile) - distance(perception.self.location, right.tile)
+    .sort((left, right) => distance(perception.self.location, left.tile) - distance(perception.self.location, right.tile)
+      || right.quantity - left.quantity
       || left.tile.localeCompare(right.tile))[0];
 }
 
@@ -107,6 +107,8 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       const atCamp = campTile(world) !== undefined && distance(self.location, campTile(world)!) <= 1;
       const food = hasFood(self);
 
+      if (self.needs.thirst >= 6 && inventoryCount(self, "water") > 0) return decision("Satisfy thirst", "Drink carried water before it becomes urgent", { type: "drink", target: "water" });
+
       if (self.needs.hunger >= 8) {
         if (food) return decision("Satisfy hunger", `Eat carried ${food} before hunger peaks`, { type: "eat", target: food });
         if (atCamp && availableCacheItem(world, agentId, "berries")) {
@@ -123,8 +125,7 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       }
 
       if (self.needs.thirst >= 8) {
-        if (inventoryCount(self, "water") > 0) return decision("Satisfy thirst", "Drink carried water before thirst peaks", { type: "drink", target: "water" });
-        if (atCamp && availableCacheItem(world, agentId, "water")) {
+        if (inventoryCount(self, "water") > 0) return decision("Satisfy thirst", "Drink carried water before thirst peaks", { type: "drink", target: "water" });        if (atCamp && availableCacheItem(world, agentId, "water")) {
           return decision("Find water in the camp cache", "Retrieve water, then drink next hour", { type: "retrieve", target: "water" });
         }
         const water = chooseVisibleResource(perception, ["water"]);
