@@ -58,6 +58,8 @@ export interface SystemOneProviderDescriptor {
     readonly status: number;
     readonly body: string;
     readonly model: string;
+    /** Whether the failed request contained at least one image. */
+    readonly hasImages: boolean;
   }) => string | undefined;
 }
 
@@ -109,11 +111,12 @@ const buildHttpError = (
   response: Response,
   bodyText: string,
   model: string,
+  hasImages: boolean,
   descriptor: SystemOneProviderDescriptor,
 ): JudgmentError => {
   const { status } = response;
   const truncated = bodyText.length > 200 ? `${bodyText.slice(0, 200)}…` : bodyText;
-  const hint = descriptor.describeHttpError?.({ status, body: bodyText, model });
+  const hint = descriptor.describeHttpError?.({ status, body: bodyText, model, hasImages });
   const message = hint ? `HTTP ${status}: ${truncated} (${hint})` : `HTTP ${status}: ${truncated}`;
 
   if (status === 401 || status === 403) {
@@ -313,7 +316,9 @@ export const makeSystemOneHttpBackend = (
                 }),
             }).pipe(
               Effect.flatMap((bodyText) =>
-                Effect.fail(buildHttpError(response, bodyText, model, descriptor)),
+                Effect.fail(
+                  buildHttpError(response, bodyText, model, images !== undefined && images.length > 0, descriptor),
+                ),
               ),
             );
           }

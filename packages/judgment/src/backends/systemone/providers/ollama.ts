@@ -46,14 +46,24 @@ export const makeOllamaBackend = (
     },
     extraBodyFields: () =>
       config.keepAlive !== undefined ? { keep_alive: config.keepAlive } : {},
-    describeHttpError: ({ status, body, model }) => {
+    describeHttpError: ({ status, body, model, hasImages }) => {
       if (status === 404) {
         return `local model not found: run \`ollama pull ${model}\``;
       }
 
       if (status === 400) {
-        const hint =
-          "System One requires local GGUF weights with a scoring-capable runner (cloud, MLX, and Safetensors models are rejected; it is not available on Ollama Cloud). Images require a vision model such as `clef` or `clef-flash`.";
+        const normalizedBody = body.toLowerCase();
+        if (
+          normalizedBody.includes("prompt") &&
+          normalizedBody.includes("tokens") &&
+          normalizedBody.includes("expected")
+        ) {
+          return "The rendered prompt exceeds the model's context window. Reduce the judgment state or disable/scope includeContext, or use a model with a larger context window.";
+        }
+
+        const hint = hasImages
+          ? "Images require a vision model such as `clef` or `clef-flash`."
+          : "System One requires local GGUF weights with a scoring-capable runner (cloud, MLX, and Safetensors models are rejected; it is not available on Ollama Cloud).";
         if (body.length === 0) {
           return hint;
         }
