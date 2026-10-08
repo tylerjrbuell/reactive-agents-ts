@@ -49,8 +49,7 @@ function bootPage(): { document: Document } {
 }
 
 describe("island map markers", () => {
-  it("renders every castaway marker with a real portrait inside, and no swallowed render errors", async () => {
-    const { document } = bootPage();
+  it("renders every castaway marker with a real portrait inside, and no swallowed render errors", async () => {    const { document } = bootPage();
     for (let attempt = 0; attempt < 50; attempt += 1) {
       if (document.querySelectorAll("#island-svg .map-agent").length === 8) break;
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -63,6 +62,9 @@ describe("island map markers", () => {
       const portrait = marker.querySelector(".map-portrait");
       expect(portrait).not.toBeNull();
       expect(portrait!.childElementCount).toBeGreaterThan(0);
+      // The portrait transform must center the 80x80 artwork on the marker origin:
+      // translate by -radius, then scale radius*2/80 (SVG applies the list right-to-left).
+      expect(portrait!.getAttribute("transform")).toBe("translate(-13 -13) scale(0.3250)");
     }
   }, 15000);
 });
