@@ -6,6 +6,34 @@ import { applyAction } from "./actions.js";
 import { makeRng } from "./rng.js";
 import type { SimEvent } from "./events.js";
 
+describe("pact names", () => {
+  it("deals each new alliance a unique deterministic name", () => {
+    const rig = () => {
+      const base = initializeIslandGameplay(makeFallbackWorld(64));
+      const [a, b, c, d] = base.agents;
+      const bond = (id: string, others: string[]) => Object.fromEntries(
+        others.map((other) => [other, { trust: 0.9, lastInteraction: 3 }]),
+      );
+      return {
+        ...base,
+        agents: base.agents.map((agent) => {
+          if (agent.id === a!.id) return { ...agent, relationships: { ...agent.relationships, ...bond(agent.id, [b!.id]) } };
+          if (agent.id === b!.id) return { ...agent, relationships: { ...agent.relationships, ...bond(agent.id, [a!.id]) } };
+          if (agent.id === c!.id) return { ...agent, relationships: { ...agent.relationships, ...bond(agent.id, [d!.id]) } };
+          if (agent.id === d!.id) return { ...agent, relationships: { ...agent.relationships, ...bond(agent.id, [c!.id]) } };
+          return agent;
+        }),
+      };
+    };
+    const first = advanceIslandGameplay(rig(), []);
+    const names = first.events.filter((e) => e.kind === "alliance-formed").map((e) => e.kind === "alliance-formed" ? e.name : "");
+    expect(names.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(names).size).toBe(names.length);
+    const second = advanceIslandGameplay(rig(), []);
+    expect(second.events.filter((e) => e.kind === "alliance-formed").map((e) => e.kind === "alliance-formed" ? e.name : "")).toEqual(names);
+  }, 15000);
+});
+
 describe("idol search discipline", () => {
   it("grants nothing when inspecting a tile with no clue", () => {
     const base = initializeIslandGameplay(makeFallbackWorld(91));

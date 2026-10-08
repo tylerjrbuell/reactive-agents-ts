@@ -217,6 +217,36 @@ function addToGameplayCache(cache: Array<Mutable<IslandGameplay["campCache"][num
   else cache.push({ kind, qty });
 }
 
+const PACT_NAMES = [
+  "The Shoreline Pact",
+  "The Tidebound",
+  "The Driftwood Circle",
+  "The Ember Accord",
+  "The Saltwater Oath",
+  "The Palmshade Pact",
+  "The Reefbound",
+  "The Northlight Compact",
+  "The Castaway Covenant",
+  "The Bonfire Bond",
+  "The Undertow Alliance",
+  "The Farshore Pact",
+] as const;
+
+/** Deal each pact a unique seeded name so the log never shows three Shorelines. */
+function pactName(members: readonly string[], tick: number, taken: ReadonlySet<string>): string {
+  const key = [...members].sort().join("|");
+  let hash = 2166136261;
+  for (const char of `${key}@${tick}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  for (let step = 0; step < PACT_NAMES.length; step += 1) {
+    const name = PACT_NAMES[Math.abs(hash + step) % PACT_NAMES.length]!;
+    if (!taken.has(name)) return name;
+  }
+  return `The Pact of ${key}`;
+}
+
 function formAlliances(world: MutableWorld, events: SimEvent[]): void {  const living = world.agents.filter((agent) => agent.status !== "dead");
   const assigned = new Set(world.gameplay.alliances.flatMap((alliance) => alliance.members));
   const candidates = new Map<string, Set<string>>();
@@ -242,9 +272,13 @@ function formAlliances(world: MutableWorld, events: SimEvent[]): void {  const l
     if (emitted.has(key) || members.some((member) => assigned.has(member))) continue;
     emitted.add(key);
     const id = `alliance-${members.map((member) => member.replace(/[^a-zA-Z0-9-]/g, "-")).join("-")}`;
+    const taken = new Set(world.gameplay.alliances.map((alliance) => alliance.name));
+    for (const event of events) {
+      if (event.kind === "alliance-formed") taken.add(event.name);
+    }
     const alliance: MutableAlliance = {
       id,
-      name: members.length === 2 ? "The Shoreline Pact" : "The Shoreline",
+      name: pactName(members, world.clock.tick, taken),
       members,
       formedAtTick: world.clock.tick,
       stash: [],
