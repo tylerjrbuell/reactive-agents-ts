@@ -44,7 +44,7 @@ function parseBlueprint(input: unknown): WorldBlueprint | undefined {
 export function worldFromBlueprint(seed: number, input: unknown): WorldState | undefined {
   const blueprint = parseBlueprint(input);
   if (!blueprint) return undefined;
-  const base = makeFallbackWorld(seed);
+  const base = makeFallbackWorld(seed, { size: 8 });
   const terrain = base.terrain.map((tile) => {
     const row = tile.tile.charCodeAt(0) - 65;
     const column = Number(tile.tile.slice(1)) - 1;

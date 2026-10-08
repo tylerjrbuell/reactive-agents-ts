@@ -9,12 +9,17 @@ describe("llm decisions", () => {
   it("asks the model for the next action and falls back to the scripted maker on provider failure", async () => {
     const world = makeFallbackWorld(70);
     const agent = world.agents[0]!;
-    const perception = perceive(world, agent.id);
+    const home = world.resources.find((r) => r.quantity > 0)!;
+    const camped = {
+      ...world,
+      agents: world.agents.map((a) => a.id === agent.id ? { ...a, location: home.tile } : a),
+    };
+    const perception = perceive(camped, agent.id);
     const scripted = makeScriptedDecisionMaker();
 
     const good = await makeLlmDecisionMaker({
-      run: async () => ({ object: { type: "gather", target: "res-0" } }),
-    }).decide({ world, agentId: agent.id, perception });
+      run: async () => ({ object: { type: "gather", target: home.id } }),
+    }).decide({ world: camped, agentId: agent.id, perception });
     expect(good.action.type).toBe("gather");
     expect(good.reasoningSummary.toLowerCase()).toContain("model");
 

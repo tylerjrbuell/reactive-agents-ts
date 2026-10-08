@@ -12,15 +12,21 @@ const fakeAgent = (answers: Record<string, unknown>): JudgmentAgentLike => ({
 
 describe("judgment decision maker", () => {
   it("maps a choice answer to a Decision with the action and calibrated confidence", async () => {
-    const w = makeFallbackWorld(55);
+    const world = makeFallbackWorld(55);
+    const self = world.agents[0]!;
+    const berry = world.resources.find((r) => r.kind === "berries" && r.quantity > 0)!;
+    const camped = {
+      ...world,
+      agents: world.agents.map((a) => a.id === self.id ? { ...a, location: berry.tile } : a),
+    };
     const agent = fakeAgent({
       action: { kind: "choice", value: "gather", confidence: 0.8, calibrated: true, probabilities: { gather: 0.8, move: 0.15, rest: 0.05 } },
       target: { kind: "choice", value: "berries", confidence: 0.9, calibrated: true, probabilities: { berries: 0.9 } },
       urgency: { kind: "score", value: 2.1, confidence: 0.6, calibrated: true, probabilities: {} },
     });
-    const d = await makeJudgmentDecisionMaker(agent).decide({ world: w, agentId: w.agents[0].id, perception: perceive(w, w.agents[0].id) });
+    const d = await makeJudgmentDecisionMaker(agent).decide({ world: camped, agentId: self.id, perception: perceive(camped, self.id) });
     expect(d.action.type).toBe("gather");
-    expect(d.action.target).toBe("res-0");
+    expect(d.action.target).toBe(berry.id);
     expect(d.confidence).toBe(0.8);
     expect(d.calibrated).toBe(true);
   }, 15000);

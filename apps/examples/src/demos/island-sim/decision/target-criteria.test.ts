@@ -26,7 +26,7 @@ describe("bounded judgment target choices", () => {
       visibleAgents: Array.from({ length: 20 }, (_, index) => ({
         id: `agent-visible-${index}`,
         name: `Survivor ${index}`,
-        location: `C${(index % 8) + 1}`,
+        location: initial.self.location,
         status: "alive" as const,
         needs: { hunger: 5, thirst: 5, energy: 5 },
         inventory: [{ kind: "water", qty: 1 }],
@@ -38,7 +38,7 @@ describe("bounded judgment target choices", () => {
     expect(count).toBeGreaterThanOrEqual(2);
     expect(count).toBeLessThanOrEqual(26);
     expect(Object.values(result.targets)).toContain("resource-0");
-    expect(Object.values(result.targets)).toContain("resource-1");
+    expect(Object.values(result.criteria).some((label) => label.startsWith("water at"))).toBe(true);
     expect(Object.keys(result.criteria).some((key) => key.startsWith("agent:"))).toBe(true);
     expect(Object.keys(result.criteria).some((key) => key.startsWith("tile:"))).toBe(true);
   }, 15000);

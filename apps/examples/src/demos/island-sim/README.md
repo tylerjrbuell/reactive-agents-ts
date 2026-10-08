@@ -8,7 +8,7 @@ A watchable, offline-first island-survival story. A deterministic engine owns th
 bun run apps/examples/src/demos/island-sim/index.ts
 ```
 
-Open `http://localhost:3007` (or the port set with `PORT`). The demo uses scripted survivor decisions and tries Ollama for a compact world blueprint (`gemma4:e4b` by default) when available. World generation falls back to a deterministic island if provider setup or generation fails.
+Open `http://localhost:3007` (or the port set with `PORT`). The demo uses scripted survivor decisions and tries Ollama for a compact world blueprint (`gemma4:e4b` by default) when available. Deterministic fallback islands are seeded 7x7 to 9x9 with lush, balanced, or rocky character, seeded resource spreads and starting weather, and a rotating secret set — every seed plays differently, while every island keeps an outer ocean ring, a freshwater camp with a grass spawn ring, nearby food plus water, and the poisoned-spring plus buried-cache secrets. World generation falls back to a deterministic island if provider setup or generation fails.
 
 Set `ISLAND_SIM_MODEL` to choose a different Ollama model, and `OLLAMA_BASE_URL` (default `http://localhost:11434`) when Ollama lives elsewhere. Survivor decisions remain deterministic and engine-owned by default.
 
@@ -41,14 +41,14 @@ Two framework-native opt-ins (mutually exclusive; judgment wins when both are se
 - **🔄 New island** generates a fresh world; **▶ Resume story**, **⏸ Pause**, and **⏭ Advance hour** control time. Pace selects ticks per second.
 - The dashboard is a three-column grid (map, castaways + camp, story log) that stacks to two columns and then one on narrow screens.
 - Survival bars show a visual fill plus the exact percentage; needs turn amber at 40% pressure and red at 70%. Survivor cards show their current objective and an alliance-colored dot.
-- Resource and structure markers use unambiguous emoji glyphs (🫐 🐟 💧 🪵 🪨 ⛺ 🔥 🏕️ 🆘) with a labeled legend and tooltips naming kind, quantity, and tile.
+- Resource and structure markers use unambiguous emoji glyphs (🫐 🐟 💧 🪵 🪨 🍖 ⛺ 🔥 🏕️ 🆘 🪤) with a labeled legend and tooltips naming kind, quantity, and tile.
 - Alliances are visualized: colored dashed lines connect member markers on the map, member rings adopt the alliance color, and hovering an alliance row highlights only that alliance's link.
 - Select or hover a castaway to preview their needs and follow their movement. Map stacks mark co-located survivors; activate `+N` to cycle selection.
 - Movement and actions are animated between ticks: markers glide to new tiles, action glyphs (⛏️ 💧 💬 🤝 🏗️ 🆘 🌟 🌀) briefly pop above the acting castaway, and recent movement trails stay faintly visible; the focused survivor's trail is highlighted.
 - The camp dashboard shows objectives, public supplies, alliances/private stash totals, exile countdowns, and the tribal council panel (countdown, last tally, exile watch). Search and filter the story rail by castaway and event type.
 - The "🎙️ Narrator's journal" sits above the story log as a day timeline: a scrollable strip of mood-tinted day chips over a single comfortable reading pane (headline, recap, confessional). Click a day to read its chapter; the journal resets when you start a new island. The confessional voice is the day's most-affected living castaway (the island itself speaks when none live).
 - Endings show a banner plus a modal that appears once: a rescue card listing who made it home, or an all-lost card with the memorial roll (name · day · cause), each offering "🔄 Start a new island" and "🔍 Review the island" (Esc also dismisses). The map itself reacts: a ⛵ sails in for a rescue, or the map dims with 💀 markers on every final resting tile. The finale text is computed server-side (`finaleView`) and shipped in `/api/state`, so the card can never disagree with the run's outcome.
-- The map key documents every marker it draws: survivors, selection, alliance rings and links, trails, groups, all five resources, all four structures, the rescue boat, resting places, the full action-ping glyph set, and the six terrain colours.
+- The map key documents every marker it draws: survivors, selection, alliance rings and links, exile and fallen marks, trails, groups, idol clues, all six resources, all five structures, weather, the rescue boat, resting places, and the full action-ping glyph set (gather, eat, drink, rest, talk, help, cache, build, discovery, hurt, illness, recovery, twist, goal, exile, idol find/play, trade, search, hunt, craft, theft, sabotage, gift, expiry, homecoming), plus the six terrain colours.
 - The dashboard is built to fit one screen and to use the full width (a 10px gutter, no max-width cap): full-height shell with internal scrolling in the map, roster, journal, and story log. Below 640px of viewport height it falls back to ordinary page scrolling.
 
 ## Verification
