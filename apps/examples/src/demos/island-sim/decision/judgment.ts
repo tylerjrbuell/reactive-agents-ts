@@ -1,6 +1,9 @@
 import type { ActionRequest } from "../world/schema.js";
+import type { WorldState } from "../world/schema.js";
 import type { Perception } from "../engine/perceive.js";
 import type { Decision, DecisionMaker } from "./types.js";
+import { applyAction } from "../engine/actions.js";
+import { makeRng } from "../engine/rng.js";
 
 /** List of all action types (must match the schema literals). */
 export const ALL_ACTION_TYPES = [
@@ -203,5 +206,134 @@ export function templateNarrative(
     goal,
     reasoningSummary,
     plan,
+  };
+}
+
+/** One camp member's snapshot inside a batched tick. */
+export type CampDecideInput = {
+  world: WorldState;
+  agentId: string;
+  perception: Perception;
+};
+
+export type CampDecideOut = Record<string, Decision>;
+
+/** A maker that can also answer a whole camp in batched judge calls. */
+export type CampDecisionMaker = DecisionMaker & {
+  decideAll(inputs: CampDecideInput[]): Promise<CampDecideOut>;
+};
+
+/** Max agents per judge call: 10 agents × 2 questions stays far under the 64-question wire cap. */
+const CAMP_BATCH_AGENTS = 10;
+
+/** One compact line per survivor keeps the batched state far under body limits. */
+function campStateLine(input: CampDecideInput): string {
+  const { perception } = input;
+  const self = perception.self;
+  const allies = perception.visibleAgents
+    .map((agent) => `${agent.name}@${agent.location}(h${agent.needs.hunger}/t${agent.needs.thirst})`)
+    .join(",") || "none";
+  const goods = perception.visibleResources
+    .filter((resource) => resource.quantity > 0)
+    .map((resource) => `${resource.kind}@${resource.tile}`)
+    .join(",") || "none";
+  return `${self.name}[${input.agentId}]@${self.location} h${self.needs.hunger}/t${self.needs.thirst}/e${self.needs.energy} ${self.status} | allies:${allies} | goods:${goods}`;
+}
+
+function legalChoice(world: WorldState, agentId: string, action: ActionRequest): boolean {
+  const index = Math.max(0, world.agents.findIndex((agent) => agent.id === agentId));
+  try {
+    return applyAction(world, agentId, action, makeRng(world.seed * 31 + world.clock.tick * 7 + index)).ok;
+  } catch {
+    return false;
+  }
+}
+
+async function scriptedFor(fallback: () => DecisionMaker, input: CampDecideInput): Promise<Decision> {
+  return fallback().decide(input);
+}
+
+function decisionFromAnswer(
+  world: WorldState,
+  agentId: string,
+  perception: Perception,
+  answers: Record<string, JudgmentAnswerLike | undefined>,
+  minConfidence: number,
+): Decision | undefined {
+  const actionAns = answers[`action:${agentId}`];
+  const value = actionAns?.kind === "choice" ? actionAns.value : undefined;
+  if (typeof value !== "string" || !(ALL_ACTION_TYPES as readonly string[]).includes(value)) return undefined;
+  if ((actionAns?.confidence ?? 0) < minConfidence) return undefined;
+  const actionType = value as ActionType;
+  const targetAns = answers[`target:${agentId}`];
+  const tval = targetAns?.kind === "choice" ? targetAns.value : undefined;
+  let target: string | undefined;
+  if (typeof tval === "string" && tval.length > 0 && tval !== "nothing-nearby"
+    && !new Set(["rest", "inspect"]).has(actionType as ActionType)) {
+    target = resolveTarget(perception, actionType, tval) ?? tval;
+  }
+  const action: ActionRequest = { type: actionType, ...(target ? { target } : {}) };
+  if (!legalChoice(world, agentId, action)) return undefined;
+  return {
+    goal: "Survive and thrive",
+    reasoningSummary: `Camp judgment chose ${actionType}${target ? ` ${target}` : ""}`,
+    plan: target ? [actionType, target] : [actionType],
+    action,
+    confidence: actionAns?.confidence ?? 0,
+    probabilities: actionAns?.probabilities ?? { [actionType]: actionAns?.confidence ?? 0 },
+    calibrated: actionAns?.calibrated ?? false,
+  };
+}
+
+/**
+ * Answer a whole camp with batched judge calls (one call per up to 10
+ * survivors) instead of one round-trip per survivor. Every answer below the
+ * confidence floor, every illegal move, and every missing answer degrades
+ * that survivor to the scripted maker; a total batch failure degrades all.
+ */
+export function makeCampJudgmentDecisionMaker(
+  agent: JudgmentAgentLike,
+  fallback: () => DecisionMaker,
+  opts: { minConfidence?: number } = {},
+): CampDecisionMaker {
+  const minConfidence = opts.minConfidence ?? 0;
+  const decideAll = async (inputs: CampDecideInput[]): Promise<CampDecideOut> => {
+    const out: CampDecideOut = {};
+    for (let start = 0; start < inputs.length; start += CAMP_BATCH_AGENTS) {
+      const chunk = inputs.slice(start, start + CAMP_BATCH_AGENTS);
+      const questions: Record<string, unknown> = {};
+      for (const input of chunk) {
+        const kinds = [...new Set([
+          ...input.perception.visibleResources.map((resource) => resource.kind),
+          ...input.perception.visibleAgents.map((agent) => agent.name),
+          "nothing-nearby",
+        ])];
+        const targetCriteria: Record<string, string> = {};
+        for (const choice of kinds) targetCriteria[choice] = choice;
+        const actionCriteria: Record<string, string> = {};
+        for (const action of ALL_ACTION_TYPES) actionCriteria[action] = action;
+        questions[`action:${input.agentId}`] = { type: "choice", criteria: actionCriteria };
+        questions[`target:${input.agentId}`] = { type: "choice", criteria: targetCriteria };
+      }
+      let answers: Record<string, JudgmentAnswerLike | undefined> = {};
+      try {
+        const state = chunk.map(campStateLine).join("\n");
+        answers = (await agent.judge({ state, questions })) as Record<string, JudgmentAnswerLike | undefined>;
+      } catch {
+        answers = {};
+      }
+      for (const input of chunk) {
+        out[input.agentId] = decisionFromAnswer(input.world, input.agentId, input.perception, answers, minConfidence)
+          ?? await scriptedFor(fallback, input);
+      }
+    }
+    return out;
+  };
+  return {
+    async decide(input: CampDecideInput): Promise<Decision> {
+      const decisions = await decideAll([input]);
+      return decisions[input.agentId] ?? scriptedFor(fallback, input);
+    },
+    decideAll,
   };
 }

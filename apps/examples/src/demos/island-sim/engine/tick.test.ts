@@ -20,6 +20,47 @@ describe("runTick", () => {
     const r = await runTick(w, makeScriptedDecisionMaker(), makeRng(1));
     expect(Object.keys(r.decisions)).toHaveLength(w.agents.filter(a => a.status !== "dead").length);
   });
+  it("prefers one batched decideAll over per-agent calls", async () => {
+    const w = makeFallbackWorld(31);
+    let batches = 0;
+    let singles = 0;
+    const scripted = makeScriptedDecisionMaker();
+    const maker = {
+      decide: async (input: { world: typeof w; agentId: string; perception: never }) => {
+        singles += 1;
+        return scripted.decide(input as never) as never;
+      },
+      decideAll: async (inputs: Array<{ world: typeof w; agentId: string; perception: never }>) => {
+        batches += 1;
+        const out: Record<string, never> = {};
+        for (const input of inputs) {
+          out[input.agentId] = await scripted.decide(input as never) as never;
+        }
+        return out;
+      },
+    };
+    const r = await runTick(w, maker as never, makeRng(1));
+    expect(batches).toBe(1);
+    expect(singles).toBe(0);
+    expect(Object.keys(r.decisions)).toHaveLength(w.agents.filter((a) => a.status !== "dead").length);
+  }, 15000);
+  it("falls back to per-agent decide when the batch throws", async () => {
+    const w = makeFallbackWorld(31);
+    let singles = 0;
+    const scripted = makeScriptedDecisionMaker();
+    const maker = {
+      decide: async (input: { world: typeof w; agentId: string; perception: never }) => {
+        singles += 1;
+        return scripted.decide(input as never) as never;
+      },
+      decideAll: async (): Promise<Record<string, never>> => {
+        throw new Error("batch down");
+      },
+    };
+    const r = await runTick(w, maker as never, makeRng(1));
+    expect(singles).toBe(w.agents.filter((a) => a.status !== "dead").length);
+    expect(Object.keys(r.decisions)).toHaveLength(w.agents.filter((a) => a.status !== "dead").length);
+  }, 15000);
   it("is deterministic for identical world, maker, and seed", async () => {
     const w = makeFallbackWorld(31);
     const a = await runTick(structuredClone(w), makeScriptedDecisionMaker(), makeRng(99));

@@ -26,7 +26,10 @@ export interface TickResult {
 /** Run a single tick of the simulation */
 export async function runTick(
   world: WorldState,
-  maker: { decide: (input: { world: WorldState; agentId: string; perception: Perception }) => Promise<Decision> },
+  maker: {
+    decide: (input: { world: WorldState; agentId: string; perception: Perception }) => Promise<Decision>;
+    decideAll?: (inputs: Array<{ world: WorldState; agentId: string; perception: Perception }>) => Promise<Record<string, Decision>>;
+  },
   rng: Rng
 ): Promise<TickResult> {
   world = initializeIslandGameplay(world);
@@ -37,13 +40,26 @@ export async function runTick(
   );
   // 1. Snapshot decisions for living agents (parallel, no RNG)
   const livingAgents = world.agents.filter(a => a.status !== "dead" && !activeExiles.has(a.id));
-  const decisionPromises = livingAgents.map(async agent => {
-    const perception = perceive(world, agent.id);
-    const decision = await maker.decide({ world, agentId: agent.id, perception });
-    return [agent.id, decision] as const;
-  });
-  const decisionPairs = await Promise.all(decisionPromises);
-  const decisions = Object.fromEntries(decisionPairs);
+  const inputs = livingAgents.map((agent) => ({ world, agentId: agent.id, perception: perceive(world, agent.id) }));
+  let decisions: Record<string, Decision>;
+  if (maker.decideAll) {
+    try {
+      decisions = await maker.decideAll(inputs);
+    } catch {
+      decisions = {};
+    }
+  } else {
+    decisions = {};
+  }
+  const missing = inputs.filter((input) => !decisions[input.agentId]);
+  if (missing.length > 0) {
+    const decisionPromises = missing.map(async (input) => {
+      const decision = await maker.decide(input);
+      return [input.agentId, decision] as const;
+    });
+    const decisionPairs = await Promise.all(decisionPromises);
+    decisions = { ...decisions, ...Object.fromEntries(decisionPairs) };
+  }
 
   // 2. Apply actions sequentially in agent-id order using RNG
   const agentsSorted = [...livingAgents].sort((a, b) => a.id.localeCompare(b.id));

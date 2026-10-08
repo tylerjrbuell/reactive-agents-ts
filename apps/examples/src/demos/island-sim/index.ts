@@ -12,7 +12,7 @@ import { makeFallbackWorld } from "./world/fallback.js";
 import { WorldBlueprintSchema } from "./world/blueprint.js";
 import { NarrationLogSchema, makeTemplateNarrator, makeLlmNarrator, type Narrator } from "./narrator/narrator.js";
 import { makeLlmDecisionMaker } from "./decision/llm.js";
-import { makeJudgmentDecisionMaker } from "./decision/judgment.js";
+import { makeCampJudgmentDecisionMaker } from "./decision/judgment.js";
 import { ActionRequestSchema } from "./world/schema.js";
 
 type SequencedEvent = { sequence: number; event: SimEvent };
@@ -476,16 +476,8 @@ async function main(): Promise<void> {
           return answers as unknown as Record<string, { kind: "choice" | "score" | "noul"; value?: string; confidence?: number; calibrated?: boolean; probabilities?: Record<string, number> }>;
         },
       };
-      const judging = makeJudgmentDecisionMaker(judgeAgent);
-      llmMakeDecisionMaker = () => ({
-        decide: async (input) => {
-          try {
-            return await judging.decide(input);
-          } catch {
-            return makeScriptedDecisionMaker().decide(input);
-          }
-        },
-      });
+      const judging = makeCampJudgmentDecisionMaker(judgeAgent, () => makeScriptedDecisionMaker());
+      llmMakeDecisionMaker = () => judging;
       mindLabel = `judgment(${backend})`;
       console.info(`Judgment survivor decisions enabled (high latency/expense): ${backend} backend; falls back to scripted minds`);
     } catch (error) {
