@@ -67,8 +67,7 @@ describe("narrator", () => {
     expect(entry.recap.toLowerCase()).toContain("rescue");
   }, 15000);
 
-  it("only ever gives the confessional to a living castaway", () => {
-    const base = makeFallbackWorld(65);
+  it("only ever gives the confessional to a living castaway", () => {    const base = makeFallbackWorld(65);
     // Make the most active castaway dead, so the naive "most events" pick would be a corpse.
     const dead = base.agents[2]!;
     const world = {
@@ -86,5 +85,74 @@ describe("narrator", () => {
     }) as NarrationEntry;
     const speaker = world.agents.find((agent) => agent.name === entry.confessional.name);
     expect(speaker?.status).not.toBe("dead");
+  }, 15000);
+
+  it("grounds the recap in the true roster: living, dead with causes, injuries, discoveries, goals, and named rescue", () => {
+    const base = makeFallbackWorld(66);
+    const world = {
+      ...base,
+      clock: { tick: 15, day: 1, hour: 15 },
+      agents: base.agents.map((agent) => {
+        if (agent.id === "agent-2") return { ...agent, status: "dead" as const, demise: { tick: 5, cause: "thirst" } };
+        if (agent.id === "agent-4") return { ...agent, status: "dead" as const, demise: { tick: 9, cause: "hunger" } };
+        if (agent.id === "agent-3") return { ...agent, status: "injured" as const };
+        return agent;
+      }),
+      gameplay: {
+        campCache: [],
+        objectives: [{ id: "o1", kind: "gather" as const, title: "Secure food", ownerId: "agent-0", target: 3, progress: 3, completed: true }],
+        alliances: [{ id: "a1", name: "The Shoreline Pact", members: ["agent-0", "agent-1"], formedAtTick: 2, stash: [] }],
+        exiles: [{ agentId: "agent-5", returnAtTick: 30, location: "H8", reason: "vote" }],
+        betrayalCounts: {},
+        nextTwistTick: 99,
+        twistCount: 0,
+        discovered: ["the northern spring is poisoned"],
+      },
+    };
+    const events: SimEvent[] = [
+      { kind: "agent-died", tick: 5, agentId: "agent-2", cause: "thirst" },
+      { kind: "agent-died", tick: 9, agentId: "agent-4", cause: "hunger" },
+      { kind: "discovered", tick: 10, agentId: "agent-0", secret: "the northern spring is poisoned", description: "A warning: the northern spring is poisoned." },
+      { kind: "objective-completed", tick: 11, agentId: "agent-0", objectiveId: "o1", title: "Secure food" },
+      { kind: "injured", tick: 12, agentId: "agent-3", cause: "fall" },
+      { kind: "rescue-arrived", tick: 15, survivors: ["agent-0", "agent-1"] },
+    ];
+    const entry = makeTemplateNarrator().narrate({
+      world, day: 1, dayStartTick: 0, dayEndTick: 23,
+      events: events.map((event, index) => ({ sequence: index + 1, event })),
+    }) as NarrationEntry;
+    expect(entry.recap).toContain("6 alive");
+    expect(entry.recap).toContain("2 lost");
+    expect(entry.recap).toContain("Sawyer");
+    expect(entry.recap).toContain("Sayid");
+    expect(entry.recap).toContain("Hurley");
+    expect(entry.recap.toLowerCase()).toContain("poison");
+    expect(entry.recap).toContain("Secure food");
+    expect(entry.recap).toContain("Jack");
+    expect(entry.recap).toContain("Kate");
+    expect(entry.confessional.quote).toContain("Sawyer");
+    expect(entry.confessional.quote).toContain("Sayid");
+    const speaker = world.agents.find((agent) => agent.name === entry.confessional.name);
+    expect(speaker?.status).not.toBe("dead");
+  }, 15000);
+
+  it("gives ballot-heavy days a grouped council line and an exile confessional from the living", () => {
+    const world = makeFallbackWorld(67);
+    const events: SimEvent[] = [
+      { kind: "vote-called", tick: 20 },
+      { kind: "vote-cast", tick: 20, voterId: "agent-0", targetId: "agent-5" },
+      { kind: "vote-cast", tick: 20, voterId: "agent-1", targetId: "agent-5" },
+      { kind: "vote-cast", tick: 20, voterId: "agent-3", targetId: "agent-5" },
+      { kind: "vote-cast", tick: 20, voterId: "agent-6", targetId: "agent-5" },
+      { kind: "exile-started", tick: 21, agentId: "agent-5", location: "H8", returnAtTick: 33, reason: "vote" },
+    ];
+    const entry = makeTemplateNarrator().narrate({
+      world, day: 1, dayStartTick: 0, dayEndTick: 23,
+      events: events.map((event, index) => ({ sequence: index + 1, event })),
+    }) as NarrationEntry;
+    expect(entry.recap).toContain("Sun");
+    expect(entry.recap.toLowerCase()).toContain("ballot");
+    expect(entry.headline.toLowerCase()).toContain("exile");
+    expect(entry.confessional.name).toBe("Jack");
   }, 15000);
 });
