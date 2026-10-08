@@ -19,7 +19,7 @@ describe("judgment decision maker", () => {
     });
     const d = await makeJudgmentDecisionMaker(agent).decide({ world: w, agentId: w.agents[0].id, perception: perceive(w, w.agents[0].id) });
     expect(d.action.type).toBe("gather");
-    expect(d.action.target).toBe("berries");
+    expect(d.action.target).toBe("res-0");
     expect(d.confidence).toBe(0.8);
     expect(d.calibrated).toBe(true);
   }, 15000);
@@ -30,6 +30,19 @@ describe("judgment decision maker", () => {
     });
     const d = await makeJudgmentDecisionMaker(agent).decide({ world: w, agentId: w.agents[0].id, perception: perceive(w, w.agents[0].id) });
     expect(d.action.type).toBe("inspect");
+  }, 15000);
+  it("resolves model-chosen names to engine ids so realtime judgments land", async () => {
+    const w = makeFallbackWorld(55);
+    const self = w.agents[0]!;
+    const ally = w.agents[1]!;
+    const agent = fakeAgent({
+      action: { kind: "choice", value: "help", confidence: 0.8, calibrated: true, probabilities: { help: 0.8 } },
+      target: { kind: "choice", value: ally.name, confidence: 0.9, calibrated: true, probabilities: {} },
+      urgency: { kind: "score", value: 3.1, confidence: 0.6, calibrated: true, probabilities: {} },
+    });
+    const d = await makeJudgmentDecisionMaker(agent).decide({ world: w, agentId: self.id, perception: perceive(w, self.id) });
+    expect(d.action.type).toBe("help");
+    expect(d.action.target).toBe(ally.id);
   }, 15000);
   it("templateNarrative is deterministic and names the top alternatives", () => {
     const n = templateNarrative({ type: "gather", target: "berries" }, { gather: 0.8, move: 0.15 }, "Find food");

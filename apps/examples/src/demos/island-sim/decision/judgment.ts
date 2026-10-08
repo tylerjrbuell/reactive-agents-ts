@@ -125,7 +125,7 @@ export function makeJudgmentDecisionMaker(agent: JudgmentAgentLike, opts: { minC
         // For simplicity, we'll set target if the action type is not one of the non-target actions.
         const noTargetActions = new Set(["rest", "inspect"]);
         if (!noTargetActions.has(actionType as ActionType)) {
-          target = tval;
+          target = resolveTarget(perception, actionType, tval) ?? tval;
         }
       }
 
@@ -147,9 +147,34 @@ export function makeJudgmentDecisionMaker(agent: JudgmentAgentLike, opts: { minC
   };
 }
 
+/**
+ * Model judgments speak names; the engine needs ids. Resolve a chosen target
+ * against live perception: agent names to ids for social actions, resource
+ * kinds to the nearest visible resource id for gathering. Returns undefined
+ * when the action takes its target verbatim (item kinds, tiles, idol ids).
+ */
+function resolveTarget(perception: Perception, actionType: ActionType, tval: string): string | undefined {
+  const social = new Set(["help", "share", "talk", "trade", "steal", "sabotage", "gift"]);
+  if ((social as Set<string>).has(actionType)) {
+    return perception.visibleAgents.find((agent) => agent.name === tval)?.id;
+  }
+  if (actionType === "gather") {
+    const here = perception.self.location;
+    const distance = (tile: string) => Math.max(
+      Math.abs(tile.charCodeAt(0) - here.charCodeAt(0)),
+      Math.abs(Number(tile.slice(1)) - Number(here.slice(1))),
+    );
+    return perception.visibleResources
+      .filter((resource) => resource.kind === tval && resource.quantity > 0)
+      .sort((left, right) => distance(left.tile) - distance(right.tile)
+        || right.quantity - left.quantity
+        || left.id.localeCompare(right.id))[0]?.id;
+  }
+  return undefined;
+}
+
 // Helper to render perception as string (we can import from perceive.ts, but to avoid circular dependency, we'll copy a simple version).
-function perceiveRender(p: Perception): string {
-  const lines: string[] = [];
+function perceiveRender(p: Perception): string {  const lines: string[] = [];
   lines.push(`Tick ${p.tick}, agent ${p.self.name} at ${p.self.location}`);
   lines.push(`Needs: hunger=${p.self.needs.hunger}, thirst=${p.self.needs.thirst}, energy=${p.self.needs.energy}`);
   lines.push(`Visible resources: ${p.visibleResources.map(r => `${r.kind}(${r.quantity})@${r.tile}`).join(", ")}`);

@@ -15,6 +15,7 @@ Set `ISLAND_SIM_MODEL` to choose a different Ollama model. Survivor decisions re
 Two framework-native opt-ins:
 
 - `ISLAND_SIM_LLM_DECISIONS=1` builds a structured-output survivor agent (higher latency/expense); any provider failure degrades that decision to the scripted maker, so the tick loop never stalls.
+- `ISLAND_SIM_JUDGMENT=1` routes each survivor choice through a `.withJudgment()` agent and the `makeJudgmentDecisionMaker` adapter (model-chosen names resolve to engine ids, so realtime judgments land as legal moves). Backend is Jev when `TYPESAFE_API_KEY` is set, else explicit Ollama (needs a local Nimble/Tev GGUF scoring model; anything else fails that tick back to the scripted maker). Expect chaotic, divergent runs.
 - A second ReactiveAgents agent writes the day-by-day "🎙️ Narrator's journal" (`GET /api/chronicle`): reality-TV day recaps plus one confessional quote per day. When Ollama is unreachable a deterministic template narrator fills the same shape, so the chronicle always renders.
 
 ## Simulation systems
