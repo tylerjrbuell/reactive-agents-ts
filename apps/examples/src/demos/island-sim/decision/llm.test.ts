@@ -24,8 +24,25 @@ describe("llm decisions", () => {
     expect(degraded).toEqual(await scripted.decide({ world, agentId: agent.id, perception }));
   }, 15000);
 
-  it("rejects actions outside the action vocabulary", async () => {
-    const world = makeFallbackWorld(71);
+  it("shows the model engine ids and degrades illegal choices to the scripted maker", async () => {
+    const world = makeFallbackWorld(72);
+    const agent = world.agents[0]!;
+    const perception = perceive(world, agent.id);
+    const scripted = makeScriptedDecisionMaker();
+    let seen = "";
+    const illegal = await makeLlmDecisionMaker({
+      run: async (prompt: string) => {
+        seen = prompt;
+        return { object: { type: "gather", target: "res-999" } };
+      },
+    }, () => scripted).decide({ world, agentId: agent.id, perception });
+    expect(seen).toContain("res-0");
+    expect(seen).toContain("agent-1");
+    expect(illegal.action.type).not.toBe("gather");
+    expect(illegal).toEqual(await scripted.decide({ world, agentId: agent.id, perception }));
+  }, 15000);
+
+  it("rejects actions outside the action vocabulary", async () => {    const world = makeFallbackWorld(71);
     const agent = world.agents[0]!;
     const scripted = makeScriptedDecisionMaker();
     const decision = await makeLlmDecisionMaker({
