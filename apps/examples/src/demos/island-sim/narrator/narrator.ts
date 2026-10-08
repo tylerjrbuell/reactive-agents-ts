@@ -39,7 +39,7 @@ export type Narrator = {
 };
 
 function tally(events: readonly SimEvent[]) {
-  const counts = { moved: 0, gathered: 0, talked: 0, helped: 0, stolen: 0, died: 0, built: 0, twists: 0, discovered: 0, objectives: 0, hurt: 0, sick: 0, recovered: 0, votes: 0, exiles: 0, rescued: 0, critical: 0 };
+  const counts = { moved: 0, gathered: 0, talked: 0, helped: 0, stolen: 0, died: 0, built: 0, twists: 0, discovered: 0, objectives: 0, hurt: 0, sick: 0, recovered: 0, votes: 0, exiles: 0, rescued: 0, critical: 0, idols: 0, negated: 0 };
   for (const event of events) {
     if (event.kind === "agent-moved") counts.moved += 1;
     else if (event.kind === "resource-gathered") counts.gathered += 1;
@@ -58,6 +58,8 @@ function tally(events: readonly SimEvent[]) {
     else if (event.kind === "exile-started" || event.kind === "exile-returned") counts.exiles += 1;
     else if (event.kind === "rescue-arrived") counts.rescued += 1;
     else if (event.kind === "needs-critical") counts.critical += 1;
+    else if (event.kind === "idol-found" || event.kind === "idol-played" || event.kind === "idol-gifted") counts.idols += 1;
+    else if (event.kind === "vote-negated") counts.negated += 1;
   }
   return counts;
 }
@@ -96,6 +98,7 @@ function headlineFor(counts: ReturnType<typeof tally>, alliances: number, deaths
   if (counts.rescued > 0) return "A boat on the horizon: rescue";
   if (counts.died > 0) return deaths.length === 1 ? "The island takes one of us" : "The island takes more than one";
   if (counts.exiles > 0) return "Voted off to the exile cay";
+  if (counts.negated > 0) return "An idol flips the council";
   if (counts.votes > 0) return "Tribal council gathers at dusk";
   if (counts.stolen > 0) return "Hands wander when the packs are light";
   if (counts.discovered > 0) return "What the island was hiding";
@@ -183,6 +186,27 @@ function highlightLines(world: WorldState, events: readonly SimEvent[]): string[
       case "built":
         secondary.push(`${name(event.agentId)} built a ${(event.structureKind ?? "shelter").replace(/-/g, " ")}.`);
         break;
+      case "idol-found":
+        priority.push(`${name(event.agentId)} found something glinting in the undergrowth.`);
+        break;
+      case "idol-played": {
+        const labels: Record<string, string> = {
+          "immunity-idol": "the immunity idol", "extra-vote": "an extra vote", "steal-protection": "steal protection",
+          "healing-herbs": "healing herbs", "supply-cache": "a supply cache", "storm-shelter": "storm shelter",
+          "signal-boost": "a signal boost", "trust-charm": "a trust charm",
+        };
+        priority.push(`${name(event.agentId)} played ${labels[event.idolKind] ?? "an advantage"}.`);
+        break;
+      }
+      case "vote-negated":
+        priority.push(`${event.negatedVotes} votes against ${name(event.agentId)} were negated by an idol.`);
+        break;
+      case "idol-gifted":
+        secondary.push(`${name(event.from)} shared an advantage with ${name(event.to)}.`);
+        break;
+      case "idol-expired":
+        secondary.push("An unplayed advantage burned at the deadline.");
+        break;
       default:
         break;
     }
@@ -225,6 +249,8 @@ function rosterLines(world: WorldState): { alive: string; lost: string; pressure
   if (exiles.length > 0) bondBits.push(`Exiled: ${exiles.map((exile) => `${world.agents.find((agent) => agent.id === exile.agentId)?.name ?? exile.agentId} at ${exile.location} until Day ${dayOf(exile.returnAtTick)}`).join("; ")}`);
   const lastVote = world.gameplay?.lastVote;
   if (lastVote?.exiledId) bondBits.push(`Last council: ${world.agents.find((agent) => agent.id === lastVote.exiledId)?.name ?? lastVote.exiledId} voted off (${lastVote.votes.length} ballots)`);
+  const heldIdols = (world.gameplay?.idols ?? []).filter((idol) => !idol.played);
+  if (heldIdols.length > 0) bondBits.push(`${heldIdols.length} hidden edge${heldIdols.length > 1 ? "s" : ""} held (kinds sealed until played)`);
   const bonds = bondBits.length > 0 ? `${bondBits.join(". ")}.` : "No loyalty holds sway yet.";
   const objectives = world.gameplay?.objectives ?? [];
   const done = objectives.filter((objective) => objective.completed);
@@ -349,7 +375,8 @@ export function makeLlmNarrator(agent: { run(input: string): Promise<{ object?: 
           `Alive now: ${livingNames}. Dead to date: ${deadNames}. ${roster.alive} ${roster.lost} ${roster.pressure} ${roster.bonds} ${roster.aims} ` +
           `Activity: ${counts.moved} moves, ${counts.gathered} gathers, ${counts.talked} conversations, ${counts.helped} kindnesses, ` +
           `${counts.stolen} thefts, ${counts.built} builds, ${counts.died} deaths, ${counts.twists} twists, ${counts.discovered} discoveries, ` +
-          `${counts.objectives} goals finished, ${counts.hurt} injured, ${counts.sick} ill, ${counts.recovered} recovered, ${counts.votes} ballots, ${counts.exiles} exiles. ` +
+          `${counts.objectives} goals finished, ${counts.hurt} injured, ${counts.sick} ill, ${counts.recovered} recovered, ${counts.votes} ballots, ${counts.exiles} exiles, ` +
+          `${counts.idols} idol moves, ${counts.negated} vote negations. ` +
           (highlights.length > 0 ? `Verified moments in order: ${highlights.join(" ")} ` : "") +
           `Rules: name only real castaways above; mourn every death above by name and cause; keep the confessional voice alive (one of: ${livingNames}); never resurrect the dead; never invent new survivors, goals, or rescues. ` +
           `Write a reality-TV style day log that names who did what and what it means for survival.`,

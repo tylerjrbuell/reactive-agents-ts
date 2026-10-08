@@ -28,7 +28,7 @@ describe("scripted decisions", () => {
   });
   it("always returns an action inside the vocabulary", async () => {
     const w = makeFallbackWorld(21);
-    const vocab = new Set(["move","gather","hunt","build","craft","eat","drink","rest","trade","share","talk","inspect"]);
+    const vocab = new Set(["move","gather","hunt","build","craft","eat","drink","rest","trade","share","talk","inspect","play","gift"]);
     for (const a of w.agents) {
       const d = await makeScriptedDecisionMaker().decide({ world: w, agentId: a.id, perception: perceive(w, a.id) });
       expect(vocab.has(d.action.type)).toBe(true);
@@ -312,5 +312,52 @@ describe("scripted decisions", () => {
     });
     expect(decision.action.type).toBe("move");
     expect(decision.action.target).not.toBe(world.gameplay!.poisonedSpring);
+  }, 15000);
+
+  it("plays healing-herbs when injured instead of resting through it", async () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(70));
+    const agent = base.agents[3]!;
+    const world = {
+      ...base,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, status: "injured" as const, needs: { hunger: 2, thirst: 2, energy: 5 } }
+        : candidate),
+      gameplay: {
+        ...base.gameplay!,
+        idols: [{ id: "idol-herbs", kind: "healing-herbs" as const, scope: "ally" as const, holderId: agent.id, foundAtTick: 4, expiresAtTick: 119, played: false }],
+      },
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("play");
+    expect(decision.action.target).toBe("idol-herbs");
+  }, 15000);
+
+  it("gifts a shareable edge to a strained adjacent ally when healthy", async () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(71));
+    const agent = base.agents[0]!;
+    const ally = base.agents[1]!;
+    const world = {
+      ...base,
+      agents: base.agents.map((candidate) => {
+        if (candidate.id === agent.id) return { ...candidate, location: "D4", needs: { hunger: 1, thirst: 1, energy: 1 } };
+        if (candidate.id === ally.id) return { ...candidate, location: "D4", needs: { hunger: 9, thirst: 1, energy: 1 } };
+        return { ...candidate, location: "ZZ9" };
+      }),
+      gameplay: {
+        ...base.gameplay!,
+        idols: [{ id: "idol-charm", kind: "trust-charm" as const, scope: "ally" as const, holderId: agent.id, foundAtTick: 4, expiresAtTick: 119, played: false }],
+      },
+    };
+    const decision = await makeScriptedDecisionMaker().decide({
+      world,
+      agentId: agent.id,
+      perception: perceive(world, agent.id),
+    });
+    expect(decision.action.type).toBe("gift");
+    expect(decision.action.target).toBe(ally.id);
   }, 15000);
 });

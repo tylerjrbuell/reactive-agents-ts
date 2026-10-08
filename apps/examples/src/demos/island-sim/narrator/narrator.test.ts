@@ -136,8 +136,26 @@ describe("narrator", () => {
     expect(speaker?.status).not.toBe("dead");
   }, 15000);
 
-  it("gives ballot-heavy days a grouped council line and an exile confessional from the living", () => {
-    const world = makeFallbackWorld(67);
+  it("keeps idol finds sealed but reveals plays and negations by name", () => {
+    const world = makeFallbackWorld(68);
+    const events: SimEvent[] = [
+      { kind: "idol-found", tick: 3, agentId: "agent-0", idolId: "idol-1", idolKind: "immunity-idol", scope: "self" },
+      { kind: "idol-played", tick: 20, agentId: "agent-0", idolId: "idol-1", idolKind: "immunity-idol" },
+      { kind: "vote-negated", tick: 20, agentId: "agent-0", idolId: "idol-1", negatedVotes: 4 },
+    ];
+    const entry = makeTemplateNarrator().narrate({
+      world, day: 1, dayStartTick: 0, dayEndTick: 23,
+      events: events.map((event, index) => ({ sequence: index + 1, event })),
+    }) as NarrationEntry;
+    expect(entry.recap).toContain("Jack");
+    expect(entry.recap).toContain("glinting");
+    expect(entry.recap).not.toContain("immunity-idol");
+    expect(entry.recap).toContain("immunity idol");
+    expect(entry.recap).toContain("4 votes against Jack were negated");
+    expect(entry.headline.toLowerCase()).toContain("idol");
+  }, 15000);
+
+  it("gives ballot-heavy days a grouped council line and an exile confessional from the living", () => {    const world = makeFallbackWorld(67);
     const events: SimEvent[] = [
       { kind: "vote-called", tick: 20 },
       { kind: "vote-cast", tick: 20, voterId: "agent-0", targetId: "agent-5" },

@@ -198,6 +198,10 @@ describe("simulation viewing page", () => {
     expect(page).toContain("alliance-list");
     expect(page).toContain("exile-list");
     expect(page).toContain("objective-list");
+    expect(page).toContain("idol-list");
+    expect(page).toContain("idol-found");
+    expect(page).toContain("vote-negated");
+    expect(page).toContain("🗝️ Advantages");
     expect(page).toContain("group-label");
     expect(page).toContain("@media");
   }, 15000);

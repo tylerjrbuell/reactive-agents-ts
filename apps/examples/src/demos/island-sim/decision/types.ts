@@ -148,6 +148,56 @@ function socialDecision(world: WorldState, perception: Perception): Decision | u
   return decision(`Build trust with ${neighbor.name}`, `Check in with a nearby castaway at hour ${world.clock.tick}`, { type: "talk", target: neighbor.id }, 0.7);
 }
 
+/** Hold-or-play brain: burn healing when hurt, arm council edges when exposed, share edges with strained allies. */
+function idolDecision(world: WorldState, self: AgentState, perception: Perception, agentId: string): Decision | undefined {
+  const idols = world.gameplay?.idols?.filter((idol) => idol.holderId === agentId && !idol.played) ?? [];
+  if (idols.length === 0) return undefined;
+  const strainedSelf = self.needs.hunger >= 7 || self.needs.thirst >= 7 || self.status === "injured" || self.status === "ill";
+  const adjacentAllies = perception.visibleAgents
+    .filter((agent) => agent.status !== "dead" && agent.id !== agentId && distance(self.location, agent.location) <= 1)
+    .sort((left, right) => Math.max(right.needs.hunger, right.needs.thirst) - Math.max(left.needs.hunger, left.needs.thirst));
+  const strainedAlly = adjacentAllies.find((agent) => agent.needs.hunger >= 7 || agent.needs.thirst >= 7);
+  const distrustedAlly = adjacentAllies.find((agent) => (self.relationships[agent.id]?.trust ?? 0) < 0.2);
+  const herbs = idols.find((idol) => idol.kind === "healing-herbs");
+  if (herbs && (self.status === "injured" || self.status === "ill")) {
+    return decision("Use healing herbs", "A wound treated now beats days of rest", { type: "play", target: herbs.id });
+  }
+  if (herbs && herbs.scope !== "self" && strainedAlly && !strainedSelf) {
+    return decision(`Share healing herbs with ${strainedAlly.name}`, "They are worse off; the edge helps them more", { type: "gift", target: strainedAlly.id, item: herbs.id });
+  }
+  const charm = idols.find((idol) => idol.kind === "trust-charm");
+  if (charm && (strainedAlly ?? distrustedAlly) && !strainedSelf) {
+    const ally = (strainedAlly ?? distrustedAlly)!;
+    return decision(`Share a trust charm with ${ally.name}`, "An edge spent on an ally buys loyalty", { type: "gift", target: ally.id, item: charm.id });
+  }
+  const cache = idols.find((idol) => idol.kind === "supply-cache");
+  if (cache && (self.needs.hunger >= 6 || self.needs.thirst >= 6 || strainedAlly)) {
+    return decision("Open the supply cache", "Food now prevents desperation later", { type: "play", target: cache.id });
+  }
+  const shelter = idols.find((idol) => idol.kind === "storm-shelter");
+  if (shelter && world.weather.condition === "storm" && self.needs.energy >= 6) {
+    return decision("Take storm shelter", "Ride out the storm instead of burning energy", { type: "play", target: shelter.id });
+  }
+  const signal = idols.find((idol) => idol.kind === "signal-boost");
+  if (signal && world.structures.some((structure) => structure.kind === "signal-fire")) {
+    return decision("Boost the rescue signal", "The fire stands; make it seen", { type: "play", target: signal.id });
+  }
+  const councilIn = (world.gameplay?.nextCouncilTick ?? Number.MAX_SAFE_INTEGER) - world.clock.tick;
+  const idol = idols.find((entry) => entry.kind === "immunity-idol");
+  if (idol && councilIn <= 24 && (strainedSelf || (world.gameplay?.betrayalCounts[agentId] ?? 0) >= 1)) {
+    return decision("Play the immunity idol", "The council is near and knives are out", { type: "play", target: idol.id });
+  }
+  const extra = idols.find((entry) => entry.kind === "extra-vote");
+  if (extra && councilIn <= 6) {
+    return decision("Play the extra vote", "Double weight at tonight's council", { type: "play", target: extra.id });
+  }
+  const ward = idols.find((entry) => entry.kind === "steal-protection");
+  if (ward && Object.values(world.gameplay?.betrayalCounts ?? {}).some((count) => count > 0)) {
+    return decision("Ward supplies", "Thieves are about; guard the pack", { type: "play", target: ward.id });
+  }
+  return undefined;
+}
+
 /** Create a deterministic decision maker that balances immediate needs, carrying limits, goals, and relationships. */
 export function makeScriptedDecisionMaker(): DecisionMaker {
   return {
@@ -189,6 +239,9 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       }
 
       if (self.needs.energy >= 8) return decision("Recover strength", "Rest before exhaustion", { type: "rest" });
+
+      const idolPlay = idolDecision(world, self, perception, agentId);
+      if (idolPlay) return idolPlay;
 
       if ((self.status === "injured" || self.status === "ill") && self.needs.energy >= 3) {
         return decision("Heal up", `${self.status === "injured" ? "A wound" : "An illness"} needs rest to mend`, { type: "rest" }, 0.8);

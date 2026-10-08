@@ -42,7 +42,9 @@ export const ActionType = Schema.Literal(
   "sabotage",
   "store",
   "retrieve",
-  "inspect"
+  "inspect",
+  "play",
+  "gift",
 );
 export type ActionType = typeof ActionType.Type;
 
@@ -153,6 +155,29 @@ export const LastVoteSchema = Schema.Struct({
   exiledId: Schema.optional(Schema.String),
 });
 
+export const IdolKind = Schema.Literal(
+  "immunity-idol",
+  "extra-vote",
+  "steal-protection",
+  "healing-herbs",
+  "supply-cache",
+  "storm-shelter",
+  "signal-boost",
+  "trust-charm",
+);
+export const IdolScope = Schema.Literal("self", "ally", "group");
+
+export const IdolSchema = Schema.Struct({
+  id: Schema.String,
+  kind: IdolKind,
+  scope: IdolScope,
+  holderId: Schema.String,
+  foundAtTick: Schema.Number,
+  expiresAtTick: Schema.Number,
+  played: Schema.Boolean,
+});
+export type Idol = typeof IdolSchema.Type;
+
 /** Typed, serializable state owned by the island gameplay systems. */
 export const IslandGameplaySchema = Schema.Struct({
   campCache: Schema.Array(GameplayInventoryItemSchema),
@@ -167,6 +192,7 @@ export const IslandGameplaySchema = Schema.Struct({
   poisonedSpring: Schema.optional(Schema.String),
   nextCouncilTick: Schema.optional(Schema.Number),
   lastVote: Schema.optional(LastVoteSchema),
+  idols: Schema.optional(Schema.Array(IdolSchema)),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

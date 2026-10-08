@@ -15,20 +15,25 @@ export function makeLlmDecisionMaker(
 ): DecisionMaker {
   return {
     async decide({ world, agentId, perception }: { world: WorldState; agentId: string; perception: Perception }): Promise<Decision> {
+      const held = world.gameplay?.idols?.filter((idol) => idol.holderId === agentId && !idol.played) ?? [];
       const prompt = [
         `You control ${perception.self.name} on an island at hour ${perception.tick}.`,
         renderPerception(perception),
+        held.length > 0
+          ? `Held advantages: ${held.map((idol) => `${idol.kind} (${idol.id}, ${idol.scope}, expires tick ${idol.expiresAtTick})`).join("; ")}. Play with {"type":"play","target":"<idol-id>"} when exposed or hurt; gift shareable edges with {"type":"gift","target":"<ally-id>","item":"<idol-id>"}.`
+          : "No advantages held.",
         `Choose exactly one island action. Allowed types: ${ALL_ACTION_TYPES.join(", ")}.`,
         `Return JSON {"type": string, "target"?: string} where target may be a resource id, tile, or survivor id.`,
       ].join("\n\n");
       try {
         const result = await agent.run(prompt);
-        const object = result.objectError ? undefined : (result.object as { type?: unknown; target?: unknown } | undefined);
+        const object = result.objectError ? undefined : (result.object as { type?: unknown; target?: unknown; item?: unknown } | undefined);
         const type = object?.type;
         if (typeof type === "string" && (ALL_ACTION_TYPES as readonly string[]).includes(type)) {
           const action: ActionRequest = {
             type: type as ActionRequest["type"],
             ...(typeof object?.target === "string" && object.target.length > 0 ? { target: object.target } : {}),
+            ...(typeof object?.item === "string" && object.item.length > 0 ? { item: object.item } : {}),
           };
           return {
             goal: "Act on model judgment",

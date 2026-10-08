@@ -46,6 +46,14 @@ export function viewerSafeState(world: WorldState) {
       poisonedSpring: gameplay.poisonedSpring,
       nextCouncilTick: gameplay.nextCouncilTick,
       lastVote: gameplay.lastVote,
+      idols: (gameplay.idols ?? []).map((idol) => ({
+        id: idol.id,
+        kind: idol.kind,
+        scope: idol.scope,
+        holderId: idol.holderId,
+        expiresAtTick: idol.expiresAtTick,
+        played: idol.played,
+      })),
     } : undefined,
   };
 }

@@ -35,4 +35,9 @@ export type SimEvent =
   | { kind: "injured"; tick: number; agentId: string; cause: string }
   | { kind: "recovered"; tick: number; agentId: string }
   | { kind: "vote-called"; tick: number }
-  | { kind: "vote-cast"; tick: number; voterId: string; targetId: string };;;
+  | { kind: "vote-cast"; tick: number; voterId: string; targetId: string }
+  | { kind: "idol-found"; tick: number; agentId: string; idolId: string; idolKind: string; scope: string }
+  | { kind: "idol-played"; tick: number; agentId: string; idolId: string; idolKind: string }
+  | { kind: "vote-negated"; tick: number; agentId: string; idolId: string; negatedVotes: number }
+  | { kind: "idol-expired"; tick: number; agentId: string; idolId: string }
+  | { kind: "idol-gifted"; tick: number; from: string; to: string; idolId: string };;;

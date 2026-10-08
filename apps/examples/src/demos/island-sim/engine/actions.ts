@@ -22,9 +22,10 @@ type MutableAlliance = Omit<Mutable<IslandGameplay["alliances"][number]>, "membe
   members: string[];
   stash: Array<Mutable<IslandGameplay["campCache"][number]>>;
 };
-type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "alliances"> & {
+type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "alliances" | "idols"> & {
   campCache: Array<Mutable<IslandGameplay["campCache"][number]>>;
   alliances: MutableAlliance[];
+  idols: Array<Mutable<NonNullable<IslandGameplay["idols"]>[number]>>;
   poisonedSpring?: string;
 };
 type MutableWorld = Omit<Mutable<WorldState>, "agents" | "gameplay" | "resources" | "structures"> & {
@@ -145,6 +146,79 @@ function isInteraction(action: ActionRequest): boolean {
   return ["trade", "share", "help", "talk", "steal", "sabotage"].includes(action.type);
 }
 
+function heldIdol(next: MutableWorld, agentId: string, idolId: string | undefined) {
+  if (!idolId) return undefined;
+  const idols = next.gameplay.idols ?? [];
+  return idols.find((idol) => idol.id === idolId && idol.holderId === agentId && !idol.played);
+}
+
+function removeIdol(next: MutableWorld, idolId: string): void {
+  next.gameplay.idols = (next.gameplay.idols ?? []).filter((idol) => idol.id !== idolId);
+}
+
+/** Play a held advantage: arm council/social edges or apply survival effects at once. */
+function playIdol(next: MutableWorld, agent: MutableAgent, idolId: string | undefined): ActionResult {
+  const tick = next.clock.tick;
+  const idol = heldIdol(next, agent.id, idolId);
+  if (!idol) return fail(next, agent.id, "advantage is not held");
+  const armed = (events: SimEvent[] = []): ActionResult => {
+    idol.played = true;
+    return { ok: true, world: next, events: [{ kind: "idol-played", tick, agentId: agent.id, idolId: idol.id, idolKind: idol.kind }, ...events] };
+  };
+  const consumed = (events: SimEvent[] = []): ActionResult => {
+    removeIdol(next, idol.id);
+    return { ok: true, world: next, events: [{ kind: "idol-played", tick, agentId: agent.id, idolId: idol.id, idolKind: idol.kind }, ...events] };
+  };
+  switch (idol.kind) {
+    case "immunity-idol":
+    case "extra-vote":
+    case "steal-protection":
+    case "trust-charm":
+      return armed();
+    case "healing-herbs": {
+      if (agent.status !== "injured" && agent.status !== "ill") return fail(next, agent.id, "no wound or illness to heal");
+      agent.status = "alive";
+      agent.needs.hunger = Math.max(0, agent.needs.hunger - 2);
+      return consumed([{ kind: "recovered", tick, agentId: agent.id }]);
+    }
+    case "supply-cache": {
+      if (idol.scope === "group") {
+        addToCache(next.gameplay.campCache, "berries", 2);
+        addToCache(next.gameplay.campCache, "water", 1);
+        return consumed();
+      }
+      const berries = addInventoryItem(agent.inventory, "berries", 1);
+      if (!berries.ok) return fail(next, agent.id, "inventory is full");
+      const water = addInventoryItem(berries.inventory, "water", 1);
+      if (!water.ok) return fail(next, agent.id, "inventory is full");
+      agent.inventory = water.inventory;
+      return consumed();
+    }
+    case "storm-shelter":
+      agent.needs.energy = Math.max(0, agent.needs.energy - 4);
+      return consumed();
+    case "signal-boost": {
+      const fire = next.structures.find((structure) => structure.kind === "signal-fire");
+      if (!fire) return fail(next, agent.id, "raise a signal fire first");
+      return consumed();
+    }
+    default:
+      return fail(next, agent.id, "unsupported advantage");
+  }
+}
+
+/** Gift a held shareable advantage to a living castaway. */
+function giftIdol(next: MutableWorld, agent: MutableAgent, targetId: string | undefined, idolId: string | undefined): ActionResult {
+  const tick = next.clock.tick;
+  const idol = heldIdol(next, agent.id, idolId);
+  if (!idol) return fail(next, agent.id, "advantage is not held");
+  if (idol.scope !== "ally" && idol.scope !== "group") return fail(next, agent.id, "that advantage cannot be gifted");
+  const target = next.agents.find((candidate) => candidate.id === targetId && candidate.status !== "dead" && candidate.id !== agent.id);
+  if (!target) return fail(next, agent.id, "ally is not available");
+  idol.holderId = target.id;
+  return { ok: true, world: next, events: [{ kind: "idol-gifted", tick, from: agent.id, to: target.id, idolId: idol.id }] };
+}
+
 /** Apply a deterministic action to a cloned world, preserving the input on failure. */
 export function applyAction(world: WorldState, agentId: string, action: ActionRequest, rng: Rng): ActionResult {
   if (isInteraction(action)) return resolveInteraction(world, agentId, action, rng);
@@ -212,6 +286,10 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
     }
     case "inspect":
       return { ok: true, world: next, events: [{ kind: "inspected", tick, agentId, target: action.target ?? agent.location }] };
+    case "play":
+      return playIdol(next, agent, action.target);
+    case "gift":
+      return giftIdol(next, agent, action.target, action.item);
     case "craft":
     case "hunt":
       return fail(world, agentId, `${action.type} is not available in this island build`);

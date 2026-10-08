@@ -112,6 +112,13 @@ export function resolveInteraction(
       return { ok: true, world: nextWorld, events };
     }
     case "steal": {
+      const ward = (nextWorld as unknown as { gameplay?: { idols?: Array<{ id: string; kind: string; holderId: string; played: boolean }> } })
+        .gameplay?.idols?.find((idol) => idol.kind === "steal-protection" && idol.played && idol.holderId === originalTarget.id);
+      if (ward) {
+        const gameplay = (nextWorld as unknown as { gameplay: { idols: Array<{ id: string }> } }).gameplay;
+        if (gameplay?.idols) gameplay.idols = gameplay.idols.filter((idol) => idol.id !== ward.id);
+        return { ok: false, world: nextWorld, events: [{ kind: "action-failed", tick, agentId, reason: "theft blocked by steal-protection" }], reason: "theft blocked by steal-protection" };
+      }
       const item = chooseItem(target, action.item);
       if (!item) return failure(world, tick, agentId, "survivor has nothing to steal");
       const actorHasCapacity = addInventoryItem(actor.inventory, item, 1);

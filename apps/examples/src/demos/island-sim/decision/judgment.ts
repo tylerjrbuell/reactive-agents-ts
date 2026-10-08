@@ -19,6 +19,8 @@ export const ALL_ACTION_TYPES = [
   "steal",
   "sabotage",
   "inspect",
+  "play",
+  "gift",
 ] as const;
 export type ActionType = typeof ALL_ACTION_TYPES[number];
 
