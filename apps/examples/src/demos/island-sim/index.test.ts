@@ -310,6 +310,15 @@ describe("simulation viewing page", () => {
     expect(page).toContain("survivorCards.clear()");
     expect(page).toContain("resetPanels();");
   }, 15000);
+
+  it("draws castaway portraits as the map markers, not letter circles", () => {
+    const page = renderPage();
+    expect(page).toContain("function buildMapPortrait(");
+    expect(page).toContain("clip-agent-");
+    expect(page).toContain("map-portrait");
+    expect(page).toContain(".map-agent.is-dead .map-portrait");
+    expect(page).toContain("Survivor portrait");
+  }, 15000);
 });
 
 describe("server", () => {
