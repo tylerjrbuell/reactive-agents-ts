@@ -444,70 +444,81 @@ async function main(): Promise<void> {
     }
 
     let makeDecisionMakersLocal: () => DecisionMaker = () => makeScriptedDecisionMaker();
-    if (process.env.ISLAND_SIM_JUDGMENT === "1") {
-      try {
-        const backend = process.env.TYPESAFE_API_KEY ? "jev" as const : "ollama" as const;
-        const survivorAgent = await ReactiveAgents.create()
-          .withName("island-survivor-judge")
-          .withProvider(provider)
-          .withModel(model)
-          .withMaxIterations(1)
-          .withSystemPrompt("You are one castaway's instincts. Answer each judgment question with the most survival-savvy choice.")
-          .withJudgment(backend === "jev" ? {} : { backend, baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434" })
-          .build();
-        const judgeAgent = {
-          judge: async (input: { state: unknown; questions: Record<string, unknown> }) => {
-            const answers = await survivorAgent.judge({
-              state: input.state as never,
-              questions: input.questions as never,
-            });
-            return answers as unknown as Record<string, { kind: "choice" | "score" | "noul"; value?: string; confidence?: number; calibrated?: boolean; probabilities?: Record<string, number> }>;
-          },
-        };
-        const scripted = () => makeScriptedDecisionMaker();
-        const judging = makeJudgmentDecisionMaker(judgeAgent);
-        makeDecisionMakersLocal = () => ({
-          decide: async (input) => {
-            try {
-              return await judging.decide(input);
-            } catch {
-              return scripted().decide(input);
-            }
-          },
-        });
-        console.info(`Judgment survivor decisions enabled (high latency/expense): ${backend} backend; falls back to scripted minds`);
-      } catch (error) {
-        console.info(`Judgment survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    } else if (process.env.ISLAND_SIM_LLM_DECISIONS === "1") {
-      try {
-        const survivorAgent = await ReactiveAgents.create()
-          .withName("island-survivor-mind")
-          .withProvider(provider)
-          .withModel(model)
-          .withMaxIterations(1)
-          .withSystemPrompt("You are one castaway's instincts. Respond with JSON only.")
-          .withOutputSchema(ActionRequestSchema)
-          .build();
-        makeDecisionMakersLocal = () => makeLlmDecisionMaker({
-          run: async (prompt: string) => {
-            const result = await survivorAgent.run(prompt);
-            return {
-              ...(result.object === undefined ? {} : { object: result.object }),
-              ...(result.objectError === undefined ? {} : { objectError: result.objectError }),
-            };
-          },
-        }, () => makeScriptedDecisionMaker());
-        console.info(`LLM survivor decisions enabled (high latency/expense): ${provider}/${model}`);
-      } catch (error) {
-        console.info(`LLM survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+    let mindLabel = "scripted";
 
     llmMakeDecisionMaker = makeDecisionMakersLocal;
   } catch (error) {
     console.info(`Using deterministic island fallback: ${error instanceof Error ? error.message : String(error)}`);
   }
+
+  // Survivor minds wire independently: a worldgen or narrator failure must
+  // never silently cancel the judgment path (or vice versa).
+  const provider = "ollama";
+  const model = process.env.ISLAND_SIM_MODEL ?? "cogito:14b";
+  let mindLabel = "scripted";
+  if (process.env.ISLAND_SIM_JUDGMENT === "1") {
+    try {
+      const backend = process.env.TYPESAFE_API_KEY ? "jev" as const : "ollama" as const;
+      const survivorAgent = await ReactiveAgents.create()
+        .withName("island-survivor-judge")
+        .withProvider(provider)
+        .withModel(model)
+        .withMaxIterations(1)
+        .withSystemPrompt("You are one castaway's instincts. Answer each judgment question with the most survival-savvy choice.")
+        .withJudgment(backend === "jev" ? {} : { backend, baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434" })
+        .build();
+      const judgeAgent = {
+        judge: async (input: { state: unknown; questions: Record<string, unknown> }) => {
+          const answers = await survivorAgent.judge({
+            state: input.state as never,
+            questions: input.questions as never,
+          });
+          return answers as unknown as Record<string, { kind: "choice" | "score" | "noul"; value?: string; confidence?: number; calibrated?: boolean; probabilities?: Record<string, number> }>;
+        },
+      };
+      const judging = makeJudgmentDecisionMaker(judgeAgent);
+      llmMakeDecisionMaker = () => ({
+        decide: async (input) => {
+          try {
+            return await judging.decide(input);
+          } catch {
+            return makeScriptedDecisionMaker().decide(input);
+          }
+        },
+      });
+      mindLabel = `judgment(${backend})`;
+      console.info(`Judgment survivor decisions enabled (high latency/expense): ${backend} backend; falls back to scripted minds`);
+    } catch (error) {
+      mindLabel = "scripted";
+      console.info(`Judgment survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else if (process.env.ISLAND_SIM_LLM_DECISIONS === "1") {
+    try {
+      const survivorAgent = await ReactiveAgents.create()
+        .withName("island-survivor-mind")
+        .withProvider(provider)
+        .withModel(model)
+        .withMaxIterations(1)
+        .withSystemPrompt("You are one castaway's instincts. Respond with JSON only.")
+        .withOutputSchema(ActionRequestSchema)
+        .build();
+      llmMakeDecisionMaker = () => makeLlmDecisionMaker({
+        run: async (prompt: string) => {
+          const result = await survivorAgent.run(prompt);
+          return {
+            ...(result.object === undefined ? {} : { object: result.object }),
+            ...(result.objectError === undefined ? {} : { objectError: result.objectError }),
+          };
+        },
+      }, () => makeScriptedDecisionMaker());
+      mindLabel = `llm(${provider}/${model})`;
+      console.info(`LLM survivor decisions enabled (high latency/expense): ${provider}/${model}`);
+    } catch (error) {
+      mindLabel = "scripted";
+      console.info(`LLM survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  console.info(`Survivor minds: ${mindLabel}`);
 
   const controller = makeController({
     worldGenerator,
