@@ -298,6 +298,18 @@ describe("simulation viewing page", () => {
     expect(page).toContain("vote-cast");
     expect(page).toContain("voted to exile");
   }, 15000);
+
+  it("clears every panel and signature cache when a new island is generated", () => {
+    const page = renderPage();
+    expect(page).toContain("function resetPanels(");
+    expect(page).toContain("keyedSystemNodes=new WeakMap()");
+    expect(page).toContain("mapSignature=''");
+    expect(page).toContain("campCacheSignature=''");
+    expect(page).toContain("filterAgentSignature=''");
+    expect(page).toContain("survivorOrder=''");
+    expect(page).toContain("survivorCards.clear()");
+    expect(page).toContain("resetPanels();");
+  }, 15000);
 });
 
 describe("server", () => {
