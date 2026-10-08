@@ -318,6 +318,14 @@ describe("simulation viewing page", () => {
     expect(page).toContain("map-portrait");
     expect(page).toContain(".map-agent.is-dead .map-portrait");
     expect(page).toContain("Survivor portrait");
+    // Portrait internals must keep their own colors: no bare element selectors
+    // under .map-agent that would repaint eyes, hair, or badge details.
+    expect(page).toContain(".map-agent.is-selected .map-ring");
+    expect(page).not.toContain(".map-agent circle{");
+    expect(page).not.toContain(".map-agent.is-selected circle");
+    expect(page).not.toContain(".map-agent.is-exiled circle");
+    expect(page).not.toContain(".map-agent text{");
+    expect(page).not.toContain(".map-agent.initial-label");
   }, 15000);
 });
 
