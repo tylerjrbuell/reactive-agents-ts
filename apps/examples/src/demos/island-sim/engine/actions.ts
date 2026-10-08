@@ -42,6 +42,14 @@ function distance(left: string, right: string): number {
   );
 }
 
+/** Tiles where a fire burns or a roof stands: cooking and deep sleep happen here. */
+function isHearth(world: MutableWorld, tile: string): boolean {
+  return world.structures.some((structure) =>
+    (structure.kind === "camp" || structure.kind === "fire-pit" || structure.kind === "signal-fire" || structure.kind === "shelter")
+    && structure.tile === tile,
+  );
+}
+
 function fail(world: WorldState, agentId: string, reason: string): ActionResult {
   return {
     ok: false,
@@ -258,10 +266,13 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
     case "eat": {
       const food = action.target ?? agent.inventory.find((item) => ["berries", "fish", "meat"].includes(item.kind) && item.qty > 0)?.kind;
       if (!food || !["berries", "fish", "meat"].includes(food)) return fail(world, agentId, "no food carried");
+      if ((food === "fish" || food === "meat") && !isHearth(next, agent.location)) {
+        return fail(world, agentId, "fish and meat must be cooked over a fire or at camp");
+      }
       const removed = removeInventoryItem(agent.inventory, food);
       if (!removed.ok) return fail(world, agentId, "food not in inventory");
       agent.inventory = removed.inventory;
-      agent.needs.hunger = Math.max(0, agent.needs.hunger - 5);
+      agent.needs.hunger = Math.max(0, agent.needs.hunger - (food === "berries" ? 5 : 6));
       return { ok: true, world: next, events: [{ kind: "ate", tick, agentId, food }] };
     }
     case "drink": {
@@ -273,7 +284,7 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
       return { ok: true, world: next, events: [{ kind: "drank", tick, agentId, water }] };
     }
     case "rest":
-      agent.needs.energy = Math.max(0, agent.needs.energy - 4);
+      agent.needs.energy = Math.max(0, agent.needs.energy - (isHearth(next, agent.location) ? 6 : 3));
       return { ok: true, world: next, events: [{ kind: "rested", tick, agentId }] };
     case "build": {
       const wood = removeInventoryItem(agent.inventory, "wood", 2);

@@ -44,6 +44,15 @@ function campTile(world: WorldState): string | undefined {
   return world.structures.find((structure) => structure.kind === "camp")?.tile ?? world.structures[0]?.tile;
 }
 
+/** Cook fires and roofs: raw fish and meat become meals here, and sleep runs deeper. */
+function hearthTiles(world: WorldState): string[] {
+  return world.structures
+    .filter((structure) =>
+      structure.kind === "camp" || structure.kind === "fire-pit" || structure.kind === "signal-fire" || structure.kind === "shelter",
+    )
+    .map((structure) => structure.tile);
+}
+
 function availableCacheItem(world: WorldState, agentId: string, kind: string): boolean {
   const alliance = world.gameplay?.alliances.find((entry) => entry.members.includes(agentId));
   return Boolean(
@@ -210,7 +219,17 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
       if (self.needs.thirst >= 6 && inventoryCount(self, "water") > 0) return decision("Satisfy thirst", "Drink carried water before it becomes urgent", { type: "drink", target: "water" });
 
       if (self.needs.hunger >= 8) {
-        if (food) return decision("Satisfy hunger", `Eat carried ${food} before hunger peaks`, { type: "eat", target: food });
+        if (food === "berries") return decision("Satisfy hunger", "Eat carried berries before hunger peaks", { type: "eat", target: food });
+        if (food === "fish" || food === "meat") {
+          if (hearthTiles(world).includes(self.location)) {
+            return decision("Satisfy hunger", `Cook carried ${food} over the fire before hunger peaks`, { type: "eat", target: food });
+          }
+          const hearth = hearthTiles(world).sort((a, b) => distance(self.location, a) - distance(self.location, b) || a.localeCompare(b))[0];
+          if (hearth) {
+            const move = moveToward(world, self, hearth, `Carry the ${food} to a cook fire before hunger peaks`);
+            if (move) return move;
+          }
+        }
         if (atCamp && availableCacheItem(world, agentId, "berries")) {
           return decision("Find food in the camp cache", "Retrieve food, then eat next hour", { type: "retrieve", target: "berries" });
         }

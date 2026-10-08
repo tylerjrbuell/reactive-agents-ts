@@ -37,7 +37,7 @@ function engineIdBlock(world: WorldState, agentId: string, perception: Perceptio
     `Nearby survivors (social actions need the id in parentheses): ${survivors}.`,
     `Walkable adjacent tiles (move needs one): ${steps}. Camp: ${camp}.`,
     `Carrying ${inventoryUnits(self.inventory)}/${INVENTORY_CAPACITY}: ${carried}.`,
-    `Target formats: gather=<resource id at your tile>, move=<adjacent tile>, eat/drink=<carried kind>, hunt needs no target (forest/grass, or a snare at your tile; craft a snare first with {"type":"craft","target":"snare"}), help/share/talk/trade/steal=<survivor id within 1 tile>, build=signal-fire (needs 2 wood), inspect=<tile>, play=<idol id>, gift needs target=<ally id> plus item=<idol id>.`,
+    `Target formats: gather=<resource id at your tile>, move=<adjacent tile>, eat=<carried kind: berries raw anywhere, fish/meat only at camp/fire-pit/signal-fire/shelter where they cook>, drink=<carried kind>, rest anywhere but shelter ground restores double, hunt needs no target (forest/grass, or a snare at your tile; craft a snare first with {"type":"craft","target":"snare"}), help/share/talk/trade/steal=<survivor id within 1 tile>, build=signal-fire (needs 2 wood), inspect=<tile>, play=<idol id>, gift needs target=<ally id> plus item=<idol id>.`,
     `Survive first: drink at thirst 6+, eat at hunger 8+, rest at energy 8+, heal when hurt. Quote ids exactly; never invent one.`,
   ].join("\n");
 }

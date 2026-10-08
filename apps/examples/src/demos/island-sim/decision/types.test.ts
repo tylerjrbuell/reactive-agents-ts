@@ -155,6 +155,29 @@ describe("scripted decisions", () => {
     expect(decision.action.target).toBe(victim.id);
   }, 15000);
 
+  it("carries raw fish to a cook fire instead of eating it raw", async () => {
+    const base = makeFallbackWorld(71);
+    const agent = base.agents[0]!;
+    const hearth = base.structures.find((st) => ["camp", "fire-pit", "signal-fire", "shelter"].includes(st.kind))!.tile;
+    const wild = base.terrain.find((t) => t.biome !== "ocean" && t.tile !== hearth && !base.structures.some((st) => st.tile === t.tile))!.tile;
+    const world = {
+      ...base,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: wild, needs: { hunger: 9, thirst: 1, energy: 1 }, inventory: [{ kind: "fish", qty: 1 }] }
+        : candidate),
+    };
+    const carry = await makeScriptedDecisionMaker().decide({ world, agentId: agent.id, perception: perceive(world, agent.id) });
+    expect(carry.action.type).toBe("move");
+    const home = {
+      ...base,
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, location: hearth, needs: { hunger: 9, thirst: 1, energy: 1 }, inventory: [{ kind: "fish", qty: 1 }] }
+        : candidate),
+    };
+    const meal = await makeScriptedDecisionMaker().decide({ world: home, agentId: agent.id, perception: perceive(home, agent.id) });
+    expect(meal.action).toEqual({ type: "eat", target: "fish" });
+  }, 15000);
+
   it("steals carried water when thirst is desperate", async () => {
     const base = makeFallbackWorld(35);
     const agent = base.agents[0]!;

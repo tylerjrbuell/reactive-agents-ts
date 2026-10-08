@@ -163,6 +163,47 @@ describe("hunt and craft", () => {
   }, 15000);
 });
 
+describe("tile-gated survival", () => {
+  it("eats berries raw anywhere but demands fire for fish and meat", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(51));
+    const agent = base.agents[0]!;
+    const wild = base.terrain.find((t) => (t.biome === "forest" || t.biome === "grass") && !base.structures.some((st) => st.tile === t.tile))!.tile;
+    const hearth = base.structures.find((st) => ["camp", "fire-pit", "signal-fire", "shelter"].includes(st.kind))!.tile;
+    const stocked = (tile: string) => ({
+      ...base,
+      agents: base.agents.map((c) => c.id === agent.id
+        ? { ...c, location: tile, needs: { hunger: 8, thirst: 1, energy: 1 }, inventory: [{ kind: "fish", qty: 1 }, { kind: "berries", qty: 1 }] }
+        : c),
+    });
+    const berries = applyAction(stocked(wild), agent.id, { type: "eat", target: "berries" }, makeRng(2));
+    expect(berries.ok).toBe(true);
+    expect(berries.world.agents.find((c) => c.id === agent.id)!.needs.hunger).toBe(3);
+    const rawFish = applyAction(stocked(wild), agent.id, { type: "eat", target: "fish" }, makeRng(2));
+    expect(rawFish.ok).toBe(false);
+    const cooked = applyAction(stocked(hearth), agent.id, { type: "eat", target: "fish" }, makeRng(2));
+    expect(cooked.ok).toBe(true);
+    expect(cooked.world.agents.find((c) => c.id === agent.id)!.needs.hunger).toBe(2);
+  }, 15000);
+  it("sleeps deeper on shelter ground than in the wild", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(52));
+    const agent = base.agents[0]!;
+    const wild = base.terrain.find((t) => t.biome !== "ocean" && !base.structures.some((st) => st.tile === t.tile))!.tile;
+    const bunk = base.structures.find((st) => ["camp", "shelter", "fire-pit", "signal-fire"].includes(st.kind))!.tile;
+    const tired = (tile: string) => ({
+      ...base,
+      agents: base.agents.map((c) => c.id === agent.id
+        ? { ...c, location: tile, needs: { hunger: 1, thirst: 1, energy: 9 } }
+        : c),
+    });
+    const wildRest = applyAction(tired(wild), agent.id, { type: "rest" }, makeRng(2));
+    expect(wildRest.ok).toBe(true);
+    expect(wildRest.world.agents.find((c) => c.id === agent.id)!.needs.energy).toBe(6);
+    const bunkRest = applyAction(tired(bunk), agent.id, { type: "rest" }, makeRng(2));
+    expect(bunkRest.ok).toBe(true);
+    expect(bunkRest.world.agents.find((c) => c.id === agent.id)!.needs.energy).toBe(3);
+  }, 15000);
+});
+
 describe("needs", () => {
   it("decay adds hunger/thirst", () => {    const w = makeFallbackWorld(5);
     const a = w.agents[0];
