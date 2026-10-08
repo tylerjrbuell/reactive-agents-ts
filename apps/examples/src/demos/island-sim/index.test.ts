@@ -203,6 +203,7 @@ describe("simulation viewing page", () => {
     expect(page).toContain("vote-negated");
     expect(page).toContain("clue-mark");
     expect(page).toContain("Idol clue");
+    expect(page).toContain("idol-found':'✨");
     expect(page).toContain("🗝️ Advantages");
     expect(page).toContain("group-label");
     expect(page).toContain("@media");
