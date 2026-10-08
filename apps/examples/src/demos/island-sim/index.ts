@@ -44,6 +44,8 @@ export function viewerSafeState(world: WorldState) {
       rescueAtTick: gameplay.rescueAtTick,
       discovered: gameplay.discovered ?? [],
       poisonedSpring: gameplay.poisonedSpring,
+      nextCouncilTick: gameplay.nextCouncilTick,
+      lastVote: gameplay.lastVote,
     } : undefined,
   };
 }

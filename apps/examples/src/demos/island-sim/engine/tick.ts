@@ -1,7 +1,7 @@
 import { WorldState, AgentState } from "../world/schema.js";
 import { SimEvent } from "./events.js";
 import { applyAction } from "./actions.js";
-import { decayNeeds } from "./needs.js";
+import { decayNeeds, deathCause } from "./needs.js";
 import { regrowResources } from "./resources.js";
 import { perceive } from "./perceive.js";
 import { Rng, makeRng } from "./rng.js";
@@ -101,7 +101,7 @@ export async function runTick(
         kind: "agent-died",
         tick,
         agentId: decayed.id,
-        cause: "need_exceeded",
+        cause: deathCause(decayed),
       });
     } else if (weather.condition === "storm" && exerted && decayed.needs.energy >= 9 && decayed.status === "alive") {
       decayed.status = "injured";

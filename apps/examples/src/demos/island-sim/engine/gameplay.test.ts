@@ -113,8 +113,7 @@ describe("island gameplay systems", () => {
     expect(aftermath.world.agents.find((agent) => agent.id === victimId)?.status).toBe("alive");
   }, 15000);
 
-  it("finds a secret when a castaway pushes to the far frontier", () => {
-    const base = initializeIslandGameplay(makeFallbackWorld(21));
+  it("finds a secret when a castaway pushes to the far frontier", () => {    const base = initializeIslandGameplay(makeFallbackWorld(21));
     const world = { ...base, hidden: { secrets: ["a cache is buried at D4"] } };
     const camp = base.structures.find((structure) => structure.kind === "camp")!.tile;
     const frontier = base.terrain.find((tile) => tile.biome !== "ocean"
@@ -125,6 +124,92 @@ describe("island gameplay systems", () => {
     ]);
     expect(aftermath.events.some((event) => event.kind === "discovered")).toBe(true);
     expect(aftermath.world.gameplay!.discovered).toContain("a cache is buried at D4");
+  }, 15000);
+
+  it("holds a tribal council at dusk every third day and exiles the majority nominee", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(22));
+    // Council time: day 3, hour 20.
+    world = { ...world, clock: { ...world.clock, tick: 68, day: 3, hour: 20 } };
+    const disliked = world.agents[3]!.id;
+    world = {
+      ...world,
+      agents: world.agents.map((agent) => ({
+        ...agent,
+        relationships: Object.fromEntries(world.agents
+          .filter((other) => other.id !== agent.id)
+          .map((other) => [other.id, { trust: other.id === disliked ? -0.6 : 0.3, lastInteraction: 0 }])),
+      })),
+    };
+    const aftermath = advanceIslandGameplay(world, []);
+    expect(aftermath.events.some((event) => event.kind === "vote-called")).toBe(true);
+    expect(aftermath.events.filter((event) => event.kind === "vote-cast").length).toBeGreaterThanOrEqual(3);
+    expect(aftermath.events.some((event) => event.kind === "exile-started" && event.agentId === disliked)).toBe(true);
+    expect(aftermath.world.gameplay!.exiles.some((exile) => exile.agentId === disliked)).toBe(true);
+    expect(aftermath.world.gameplay!.lastVote?.exiledId).toBe(disliked);
+  }, 15000);
+
+  it("does not convene a council with fewer than three living castaways", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(23));
+    world = {
+      ...world,
+      clock: { ...world.clock, tick: 68, day: 3, hour: 20 },
+      agents: world.agents.map((agent, index) => index > 1
+        ? { ...agent, status: "dead" as const, demise: { tick: 1, cause: "thirst" } }
+        : agent),
+    };
+    const aftermath = advanceIslandGameplay(world, []);
+    expect(aftermath.events.some((event) => event.kind === "vote-called")).toBe(false);
+    expect(aftermath.world.gameplay!.exiles).toHaveLength(0);
+  }, 15000);
+
+  it("breaks a tied council vote deterministically", () => {
+    const build = () => {
+      let world = initializeIslandGameplay(makeFallbackWorld(24));
+      world = { ...world, clock: { ...world.clock, tick: 68, day: 3, hour: 20 } };
+      // Every relationship is identical, so nominations and votes tie; the tie-break must be stable.
+      return {
+        ...world,
+        agents: world.agents.map((agent) => ({
+          ...agent,
+          relationships: Object.fromEntries(world.agents
+            .filter((other) => other.id !== agent.id)
+            .map((other) => [other.id, { trust: 0, lastInteraction: 0 }])),
+        })),
+      };
+    };
+    const first = advanceIslandGameplay(build(), []);
+    const second = advanceIslandGameplay(build(), []);
+    const firstExile = first.world.gameplay!.lastVote?.exiledId;
+    const secondExile = second.world.gameplay!.lastVote?.exiledId;
+    expect(firstExile).toBeDefined();
+    expect(firstExile).toBe(secondExile);
+  }, 15000);
+
+  it("makes the exiled resent the voters and shakes their alliance", () => {
+    let world = initializeIslandGameplay(makeFallbackWorld(25));
+    world = { ...world, clock: { ...world.clock, tick: 68, day: 3, hour: 20 } };
+    const [voter, ally, target, other] = world.agents;
+    world = {
+      ...world,
+      gameplay: {
+        ...world.gameplay!,
+        alliances: [{ id: "pact-1", name: "The Shoreline Pact", members: [target!.id, ally!.id], formedAtTick: 0, stash: [{ kind: "water", qty: 2 }] }],
+      },
+      agents: world.agents.map((agent) => ({
+        ...agent,
+        relationships: Object.fromEntries(world.agents
+          .filter((candidate) => candidate.id !== agent.id)
+          .map((candidate) => [candidate.id, { trust: candidate.id === target!.id ? -0.6 : 0.4, lastInteraction: 0 }])),
+      })),
+    };
+    void voter; void other;
+    const aftermath = advanceIslandGameplay(world, []);
+    const exiledId = aftermath.world.gameplay!.lastVote?.exiledId;
+    expect(exiledId).toBe(target!.id);
+    const exiled = aftermath.world.agents.find((agent) => agent.id === exiledId)!;
+    const resentments = Object.values(exiled.relationships).map((relationship) => relationship.trust);
+    expect(Math.min(...resentments)).toBeLessThan(0);
+    expect(aftermath.world.gameplay!.alliances.some((alliance) => alliance.members.includes(exiledId!))).toBe(false);
   }, 15000);
 
   it("advances only the relevant personal goal and emits a completion milestone", () => {

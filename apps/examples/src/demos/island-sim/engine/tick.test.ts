@@ -103,8 +103,7 @@ describe("runTick", () => {
     expect(world.gameplay?.alliances.length).toBeGreaterThan(0);
   }, 15000);
 
-  it("injures an exhausted castaway who keeps working through a storm", async () => {
-    const base = makeFallbackWorld(20261007);
+  it("injures an exhausted castaway who keeps working through a storm", async () => {    const base = makeFallbackWorld(20261007);
     const agent = base.agents[0]!;
     const world = {
       ...base,
@@ -124,5 +123,20 @@ describe("runTick", () => {
     const result = await runTick(world, marching, makeRng(5));
     expect(result.events.some((event) => event.kind === "injured")).toBe(true);
     expect(result.world.agents.find((candidate) => candidate.id === agent.id)?.status).toBe("injured");
+  }, 15000);
+
+  it("records the actual cause of death in the world event", async () => {
+    const base = makeFallbackWorld(20261008);
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      resources: [],
+      agents: base.agents.map((candidate) => candidate.id === agent.id
+        ? { ...candidate, needs: { hunger: 1, thirst: 10, energy: 1 }, inventory: [] }
+        : { ...candidate, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] }),
+    };
+    const result = await runTick(world, makeScriptedDecisionMaker(), makeRng(9));
+    const death = result.events.find((event) => event.kind === "agent-died" && event.agentId === agent.id);
+    expect(death && death.kind === "agent-died" ? death.cause : undefined).toBe("thirst");
   }, 15000);
 });

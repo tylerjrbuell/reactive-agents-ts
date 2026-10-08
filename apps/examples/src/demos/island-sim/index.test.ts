@@ -287,6 +287,17 @@ describe("simulation viewing page", () => {
     expect(page).toContain(".map-legend{display:flex");
     expect(page).not.toContain("minmax(132px,1fr)");
   }, 15000);
+
+  it("shows the tribal council countdown, tally, and vote events", () => {
+    const page = renderPage();
+    expect(page).toContain("🗳️ Tribal council");
+    expect(page).toContain('id="council-status"');
+    expect(page).toContain('id="council-tally"');
+    expect(page).toContain("Next council in ");
+    expect(page).toContain("vote-called");
+    expect(page).toContain("vote-cast");
+    expect(page).toContain("voted to exile");
+  }, 15000);
 });
 
 describe("server", () => {

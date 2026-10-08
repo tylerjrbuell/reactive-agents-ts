@@ -97,6 +97,12 @@ function highlightLines(world: WorldState, events: readonly SimEvent[]): string[
       case "exile-started":
         lines.push(`${name(event.agentId)} was voted off to the exile cay.`);
         break;
+      case "vote-called":
+        lines.push("The camp gathered for a tribal council at dusk.");
+        break;
+      case "vote-cast":
+        lines.push(`${name(event.voterId)} voted to exile ${name(event.targetId)}.`);
+        break;
       case "exile-returned":
         lines.push(`${name(event.agentId)} returned from exile.`);
         break;

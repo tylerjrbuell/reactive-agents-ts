@@ -142,6 +142,17 @@ export const ExileSchema = Schema.Struct({
   reason: Schema.String,
 });
 
+export const VoteCastSchema = Schema.Struct({
+  voterId: Schema.String,
+  targetId: Schema.String,
+});
+
+export const LastVoteSchema = Schema.Struct({
+  tick: Schema.Number,
+  votes: Schema.Array(VoteCastSchema),
+  exiledId: Schema.optional(Schema.String),
+});
+
 /** Typed, serializable state owned by the island gameplay systems. */
 export const IslandGameplaySchema = Schema.Struct({
   campCache: Schema.Array(GameplayInventoryItemSchema),
@@ -154,6 +165,8 @@ export const IslandGameplaySchema = Schema.Struct({
   rescueAtTick: Schema.optional(Schema.Number),
   discovered: Schema.optional(Schema.Array(Schema.String)),
   poisonedSpring: Schema.optional(Schema.String),
+  nextCouncilTick: Schema.optional(Schema.Number),
+  lastVote: Schema.optional(LastVoteSchema),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

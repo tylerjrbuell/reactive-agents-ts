@@ -22,3 +22,11 @@ export function needsCritical(agent: AgentState): "hunger" | "thirst" | "energy"
   if (agent.needs.energy >= 9) return "energy";
   return undefined;
 }
+
+/** Human-readable cause of death from the state that actually failed, including illness and injury context. */
+export function deathCause(agent: AgentState): string {
+  if (agent.needs.thirst >= 10) return agent.status === "ill" ? "tainted water" : "thirst";
+  if (agent.needs.hunger >= 10) return "starvation";
+  if (agent.needs.energy >= 10) return agent.status === "injured" ? "untreated wounds" : "exhaustion";
+  return "the island";
+}

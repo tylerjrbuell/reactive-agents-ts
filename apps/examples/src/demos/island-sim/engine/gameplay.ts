@@ -23,6 +23,8 @@ type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "objectives" 
   betrayalCounts: Record<string, number>;
   discovered: string[];
   poisonedSpring?: string;
+  nextCouncilTick?: number;
+  lastVote?: { tick: number; votes: Array<{ voterId: string; targetId: string }>; exiledId?: string };
 };
 
 /** Exploration turns the seeded hidden facts into playable discoveries: scanning in place, or pushing to the far frontier. */
@@ -91,6 +93,7 @@ function mutableWorld(world: WorldState): MutableWorld {
       nextTwistTick: 24,
       twistCount: 0,
       discovered: [],
+      nextCouncilTick: 68,
     };
   }
   return copy;
@@ -127,6 +130,7 @@ export function initializeIslandGameplay(world: WorldState): WorldState {
     completed: false,
   });
   next.gameplay.nextTwistTick = deterministicTwistTick(world.seed, 0);
+  next.gameplay.nextCouncilTick = councilTickForDay(COUNCIL_INTERVAL_DAYS);
   return next;
 }
 
@@ -322,7 +326,7 @@ function reserveExileKit(agent: MutableAgent): void {
   agent.inventory = (food.ok ? food.inventory : withWater) as MutableAgent["inventory"];
 }
 
-function beginExile(world: MutableWorld, alliance: MutableAlliance, agentId: string, events: SimEvent[]): void {
+function beginExile(world: MutableWorld, agentId: string, events: SimEvent[]): void {
   const current = world.gameplay.exiles.find((exile) => exile.agentId === agentId);
   if (current) return;
   const agent = world.agents.find((item) => item.id === agentId);
@@ -357,7 +361,7 @@ function holdAllianceVote(world: MutableWorld, agentId: string, events: SimEvent
     if (trust <= 0.2) exileWeight += weight;
     else keepWeight += weight;
   }
-  if (exileWeight > keepWeight) beginExile(world, alliance, agentId, events);
+  if (exileWeight > keepWeight) beginExile(world, agentId, events);
 }
 
 function registerBetrayals(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
@@ -409,8 +413,108 @@ function maybeRescue(world: MutableWorld, events: SimEvent[]): void {
   events.push({ kind: "rescue-arrived", tick: world.clock.tick, survivors });
 }
 
-function returnExiles(world: MutableWorld, events: SimEvent[]): void {
-  const remaining: MutableExile[] = [];
+const COUNCIL_INTERVAL_DAYS = 3;
+const COUNCIL_HOUR = 20;
+
+/** Tick of the council held on the given in-world day, at dusk. */
+function councilTickForDay(day: number): number {
+  return Math.max(0, (day - 1) * 24 + COUNCIL_HOUR);
+}
+
+/** How short the camp is running: 0 when stocked, up to 1 when supplies are thin. */
+function campScarcity(world: MutableWorld): number {
+  const living = Math.max(1, world.agents.filter((agent) => agent.status !== "dead").length);
+  const food = world.resources.filter((resource) => ["berries", "fish", "meat"].includes(resource.kind)).reduce((total, resource) => total + resource.quantity, 0);
+  const water = world.resources.filter((resource) => resource.kind === "water").reduce((total, resource) => total + resource.quantity, 0);
+  const perHead = (food + water) / living;
+  return perHead >= 4 ? 0 : 1 - perHead / 4;
+}
+
+/** Deterministic blame score: distrust, prior betrayals, and hoarding under scarcity, nudged by temperament. */
+function nominationScore(world: MutableWorld, voter: MutableAgent, target: MutableAgent, scarcity: number): number {
+  const trust = trustBetween(voter, target.id);
+  const betrayal = world.gameplay.betrayalCounts[target.id] ?? 0;
+  const hoard = target.inventory.reduce((total, item) => total + item.qty, 0) / INVENTORY_CAPACITY;
+  let score = -trust * 2 + betrayal * 0.8 + scarcity * hoard * 1.5;
+  if (voter.personality.traits.includes("opportunistic") || voter.personality.traits.includes("independent")) score += 0.2;
+  if (voter.personality.traits.includes("empathetic") || voter.personality.traits.includes("loyal")) score -= 0.25;
+  return score;
+}
+
+/** Each castaway names one target; alliance members never nominate their own. */
+function councilNominee(world: MutableWorld, voter: MutableAgent, living: MutableAgent[], scarcity: number): MutableAgent | undefined {
+  const alliance = allianceForAgent(world.gameplay, voter.id);
+  const candidates = living.filter((candidate) => candidate.id !== voter.id && !(alliance?.members.includes(candidate.id) ?? false));
+  if (candidates.length === 0) return undefined;
+  return candidates
+    .slice()
+    .sort((left, right) => nominationScore(world, voter, right, scarcity) - nominationScore(world, voter, left, scarcity)
+      || left.id.localeCompare(right.id))[0];
+}
+
+/** Survivor-style council: nominate, coordinate blocs, vote, exile the winner, and let the camp react. */
+function holdTribalCouncil(world: MutableWorld, events: SimEvent[]): void {
+  const tick = world.clock.tick;
+  const exiledNow = new Set(world.gameplay.exiles.map((exile) => exile.agentId));
+  const living = world.agents.filter((agent) => agent.status !== "dead" && !exiledNow.has(agent.id));
+  if (living.length < 3) return;
+  if (world.gameplay.rescueAtTick !== undefined) return;
+  const due = world.gameplay.nextCouncilTick ?? councilTickForDay(3);
+  if (tick < due || world.clock.hour !== COUNCIL_HOUR) return;
+
+  events.push({ kind: "vote-called", tick });
+  const scarcity = campScarcity(world);
+  const votes = new Map<string, string>();
+  for (const voter of living) {
+    const nominee = councilNominee(world, voter, living, scarcity);
+    if (nominee) votes.set(voter.id, nominee.id);
+  }
+
+  // Alliance blocs throw their weight behind the target their members already favour most.
+  for (const alliance of world.gameplay.alliances) {
+    const members = alliance.members.filter((member) => votes.has(member));
+    if (members.length < 2) continue;
+    const tally = new Map<string, number>();
+    for (const member of members) {
+      const target = votes.get(member)!;
+      if (alliance.members.includes(target)) continue;
+      tally.set(target, (tally.get(target) ?? 0) + 1);
+    }
+    const blocTarget = [...tally.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0];
+    if (blocTarget) for (const member of members) votes.set(member, blocTarget);
+  }
+
+  const castVotes = [...votes.entries()].map(([voterId, targetId]) => ({ voterId, targetId }));
+  for (const vote of castVotes) events.push({ kind: "vote-cast", tick, voterId: vote.voterId, targetId: vote.targetId });
+
+  const counts = new Map<string, number>();
+  for (const vote of castVotes) counts.set(vote.targetId, (counts.get(vote.targetId) ?? 0) + 1);
+  const winner = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1]
+      || (world.gameplay.betrayalCounts[right[0]] ?? 0) - (world.gameplay.betrayalCounts[left[0]] ?? 0)
+      || left[0].localeCompare(right[0]))[0]?.[0];
+
+  if (winner) {
+    beginExile(world, winner, events);
+    for (const vote of castVotes) {
+      if (vote.targetId !== winner) continue;
+      updateTrust(world, winner, vote.voterId, -0.5, tick);
+    }
+    for (const alliance of world.gameplay.alliances) {
+      if (!alliance.members.includes(winner)) continue;
+      for (const allyId of alliance.members) {
+        if (allyId === winner) continue;
+        for (const vote of castVotes) if (vote.targetId === winner) updateTrust(world, allyId, vote.voterId, -0.2, tick);
+      }
+      alliance.members = alliance.members.filter((member) => member !== winner);
+    }
+    maintainAlliances(world, [], events);
+  }
+  world.gameplay.lastVote = { tick, votes: castVotes, exiledId: winner };
+  world.gameplay.nextCouncilTick = councilTickForDay(world.clock.day + COUNCIL_INTERVAL_DAYS);
+}
+
+function returnExiles(world: MutableWorld, events: SimEvent[]): void {  const remaining: MutableExile[] = [];
   for (const exile of world.gameplay.exiles) {
     if (world.clock.tick < exile.returnAtTick) {
       remaining.push(exile);
@@ -443,6 +547,7 @@ export function advanceIslandGameplay(world: WorldState, inputEvents: readonly S
   maintainAlliances(next, inputEvents, events);
   formAlliances(next, events);
   registerBetrayals(next, inputEvents, events);
+  holdTribalCouncil(next, events);
   applyTwist(next, events);
   maybeRescue(next, events);
   returnExiles(next, events);

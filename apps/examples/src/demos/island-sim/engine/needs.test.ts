@@ -1,7 +1,7 @@
 // Run: bun test apps/examples/src/demos/island-sim/engine/needs.test.ts --timeout 15000
 import { describe, expect, it } from "bun:test";
 import { makeFallbackWorld } from "../world/fallback.js";
-import { decayNeeds } from "./needs.js";
+import { decayNeeds, deathCause } from "./needs.js";
 
 describe("need balance", () => {
   it("keeps fallback characters alive through the first 20 simulation hours", async () => {
@@ -29,8 +29,7 @@ describe("need balance", () => {
     expect(updated.needs.thirst).toBe(10);
   }, 15000);
 
-  it("models fatigue from exertion and makes storms more tiring", () => {
-    const world = makeFallbackWorld(2026);
+  it("models fatigue from exertion and makes storms more tiring", () => {    const world = makeFallbackWorld(2026);
     const agent = world.agents[0]!;
     const resting = decayNeeds(agent, { condition: "sunny", tempC: 24 }, 1, false);
     const active = decayNeeds(agent, { condition: "sunny", tempC: 24 }, 1, true);
@@ -39,5 +38,15 @@ describe("need balance", () => {
     expect(resting.needs.energy).toBe(agent.needs.energy);
     expect(active.needs.energy).toBe(agent.needs.energy + 1);
     expect(stormActive.needs.energy).toBe(agent.needs.energy + 2);
+  }, 15000);
+
+  it("names the actual cause of death from the state, never a generic need failure", () => {
+    const world = makeFallbackWorld(2026);
+    const agent = world.agents[0]!;
+    expect(deathCause({ ...agent, needs: { hunger: 1, thirst: 10, energy: 1 } })).toBe("thirst");
+    expect(deathCause({ ...agent, needs: { hunger: 10, thirst: 1, energy: 1 } })).toBe("starvation");
+    expect(deathCause({ ...agent, needs: { hunger: 1, thirst: 1, energy: 10 } })).toBe("exhaustion");
+    expect(deathCause({ ...agent, needs: { hunger: 1, thirst: 10, energy: 1 }, status: "ill" })).toBe("tainted water");
+    expect(deathCause({ ...agent, needs: { hunger: 1, thirst: 1, energy: 10 }, status: "injured" })).toBe("untreated wounds");
   }, 15000);
 });

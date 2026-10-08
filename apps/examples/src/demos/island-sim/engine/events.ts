@@ -33,4 +33,6 @@ export type SimEvent =
   | { kind: "discovered"; tick: number; agentId: string; secret: string; description: string }
   | { kind: "illness"; tick: number; agentId: string; cause: string }
   | { kind: "injured"; tick: number; agentId: string; cause: string }
-  | { kind: "recovered"; tick: number; agentId: string };;;
+  | { kind: "recovered"; tick: number; agentId: string }
+  | { kind: "vote-called"; tick: number }
+  | { kind: "vote-cast"; tick: number; voterId: string; targetId: string };;;
