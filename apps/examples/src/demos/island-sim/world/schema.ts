@@ -193,6 +193,7 @@ export const IslandGameplaySchema = Schema.Struct({
   nextCouncilTick: Schema.optional(Schema.Number),
   lastVote: Schema.optional(LastVoteSchema),
   idols: Schema.optional(Schema.Array(IdolSchema)),
+  idolClues: Schema.optional(Schema.Array(Schema.String)),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

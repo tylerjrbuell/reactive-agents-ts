@@ -27,6 +27,8 @@ function bootPage(): { document: Document } {
   if (!script) throw new Error("missing embedded script");
 
   const world = viewerSafeState(initializeIslandGameplay(makeFallbackWorld(20261006)));
+  if (!world.gameplay) throw new Error("gameplay missing");
+  (world.gameplay as unknown as { idolClues: string[] }).idolClues = ["H8"];
   (globalThis as Record<string, unknown>).window = window;
   (globalThis as Record<string, unknown>).document = window.document;
   (globalThis as Record<string, unknown>).SVGTextElement = window.SVGTextElement;
@@ -66,5 +68,8 @@ describe("island map markers", () => {
       // translate by -radius, then scale radius*2/80 (SVG applies the list right-to-left).
       expect(portrait!.getAttribute("transform")).toBe("translate(-13 -13) scale(0.3250)");
     }
+    const clues = [...document.querySelectorAll("#island-svg .clue-mark")];
+    expect(clues).toHaveLength(1);
+    expect(clues[0]!.textContent).toContain("✦");
   }, 15000);
 });

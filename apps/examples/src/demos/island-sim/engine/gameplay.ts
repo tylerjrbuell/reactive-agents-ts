@@ -23,6 +23,7 @@ type MutableGameplay = Omit<Mutable<IslandGameplay>, "campCache" | "objectives" 
   exiles: MutableExile[];
   betrayalCounts: Record<string, number>;
   idols: MutableIdol[];
+  idolClues: string[];
   discovered: string[];
   poisonedSpring?: string;
   nextCouncilTick?: number;
@@ -97,9 +98,11 @@ function mutableWorld(world: WorldState): MutableWorld {
       discovered: [],
       nextCouncilTick: 68,
       idols: [],
+      idolClues: [],
     };
   }
   if (!copy.gameplay.idols) copy.gameplay.idols = [];
+  if (!copy.gameplay.idolClues) copy.gameplay.idolClues = [];
   return copy;
 }
 
@@ -409,6 +412,23 @@ function applyTwist(world: MutableWorld, events: SimEvent[]): void {
   }
   world.gameplay.twistCount += 1;
   world.gameplay.nextTwistTick = deterministicTwistTick(world.seed, world.gameplay.twistCount);
+  plantIdolClue(world);
+}
+
+/** Each twist leaves whispers behind: a clue tile marking where searching may pay off. */
+function plantIdolClue(world: MutableWorld): void {
+  const clues = world.gameplay.idolClues ?? [];
+  if (clues.length >= 3) return;
+  const camp = world.structures.find((structure) => structure.kind === "camp")?.tile ?? world.structures[0]?.tile ?? "D4";
+  const land = world.terrain.filter((tile) => tile.biome !== "ocean" && tile.tile !== camp && !clues.includes(tile.tile));
+  if (land.length === 0) return;
+  const far = (tile: string) => Math.max(
+    Math.abs(tile.charCodeAt(0) - camp.charCodeAt(0)),
+    Math.abs(Number(tile.slice(1)) - Number(camp.slice(1))),
+  );
+  const ordered = land.slice().sort((left, right) => far(right.tile) - far(left.tile) || left.tile.localeCompare(right.tile));
+  const tile = ordered[Math.abs(world.seed + world.gameplay.twistCount) % ordered.length]!.tile;
+  world.gameplay.idolClues = [...clues, tile];
 }
 
 /** Once the rescue signal is out and weather permits, a boat makes contact and the story ends. */
@@ -611,6 +631,10 @@ function grantIdol(world: MutableWorld, agentId: string, events: SimEvent[], sou
 function findIdols(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
   for (const event of inputEvents) {
     if (event.kind !== "inspected") continue;
+    const clues = world.gameplay.idolClues ?? [];
+    if (clues.includes(event.target)) {
+      world.gameplay.idolClues = clues.filter((tile) => tile !== event.target);
+    }
     if (grantIdol(world, event.agentId, events, "search")) return;
   }
 }

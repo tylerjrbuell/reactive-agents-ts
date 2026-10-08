@@ -46,6 +46,7 @@ export function viewerSafeState(world: WorldState) {
       poisonedSpring: gameplay.poisonedSpring,
       nextCouncilTick: gameplay.nextCouncilTick,
       lastVote: gameplay.lastVote,
+      idolClues: gameplay.idolClues ?? [],
       idols: (gameplay.idols ?? []).map((idol) => ({
         id: idol.id,
         kind: idol.kind,

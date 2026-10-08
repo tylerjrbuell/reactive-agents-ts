@@ -70,8 +70,7 @@ describe("idols and advantages", () => {
     expect(result.world.gameplay?.idols?.length ?? 0).toBe(0);
   }, 15000);
 
-  it("gifts an advantage to an ally and burns expired holdings at Day 5", async () => {
-    const { applyAction } = await import("./actions.js");
+  it("gifts an advantage to an ally and burns expired holdings at Day 5", async () => {    const { applyAction } = await import("./actions.js");
     const { makeRng } = await import("./rng.js");
     const { advanceIslandGameplay } = await import("./gameplay.js");
     const base = initializeIslandGameplay(makeFallbackWorld(20261006));
@@ -97,5 +96,18 @@ describe("idols and advantages", () => {
     const aged = advanceIslandGameplay(stale, []);
     expect(aged.world.gameplay?.idols?.length ?? 0).toBe(0);
     expect(aged.events.some((event) => event.kind === "idol-expired")).toBe(true);
+  }, 15000);
+
+  it("plants a clue tile on a cache twist and clears it when searched", async () => {
+    const { advanceIslandGameplay } = await import("./gameplay.js");
+    const base = initializeIslandGameplay(makeFallbackWorld(20261006));
+    const tick = base.gameplay!.nextTwistTick;
+    const twisted = advanceIslandGameplay({ ...base, clock: { tick, day: 2, hour: 1 } }, []);
+    const clues = twisted.world.gameplay?.idolClues ?? [];
+    expect(clues.length).toBeGreaterThan(0);
+    const tile = clues[0]!;
+    const searched = advanceIslandGameplay(twisted.world, [{ kind: "inspected", tick, agentId: "agent-0", target: tile }]);
+    expect(searched.world.gameplay?.idolClues ?? []).not.toContain(tile);
+    expect(searched.events.some((event) => event.kind === "idol-found")).toBe(true);
   }, 15000);
 });
