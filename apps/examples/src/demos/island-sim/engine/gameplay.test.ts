@@ -2,7 +2,32 @@
 import { describe, expect, it } from "bun:test";
 import { makeFallbackWorld } from "../world/fallback.js";
 import { advanceIslandGameplay, initializeIslandGameplay } from "./gameplay.js";
+import { applyAction } from "./actions.js";
+import { makeRng } from "./rng.js";
 import type { SimEvent } from "./events.js";
+
+describe("idol search discipline", () => {
+  it("grants nothing when inspecting a tile with no clue", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(91));
+    const agent = base.agents[0]!;
+    const plain = base.terrain.find((t) => t.biome !== "ocean" && !(base.gameplay!.idolClues ?? []).includes(t.tile))!.tile;
+    const moved = { ...base, agents: base.agents.map((c) => c.id === agent.id ? { ...c, location: plain } : c) };
+    const applied = applyAction(moved, agent.id, { type: "inspect", target: plain }, makeRng(3));
+    const before = (base.gameplay!.idols ?? []).length;
+    const after = advanceIslandGameplay(applied.world, applied.events);
+    expect((after.world.gameplay!.idols ?? []).length).toBe(before);
+  }, 15000);
+  it("grants and clears the clue when inspecting a clue tile", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(92));
+    const world = { ...base, gameplay: { ...base.gameplay!, idolClues: ["C3"], idols: [] } };
+    const agent = world.agents[0]!;
+    const moved = { ...world, agents: world.agents.map((c) => c.id === agent.id ? { ...c, location: "C3" } : c) };
+    const applied = applyAction(moved, agent.id, { type: "inspect", target: "C3" }, makeRng(3));
+    const after = advanceIslandGameplay(applied.world, applied.events);
+    expect((after.world.gameplay!.idols ?? []).length).toBe(1);
+    expect(after.world.gameplay!.idolClues ?? []).not.toContain("C3");
+  }, 15000);
+});
 
 describe("island gameplay systems", () => {
   it("initializes personal roles, a shared rescue goal, and camp storage", () => {

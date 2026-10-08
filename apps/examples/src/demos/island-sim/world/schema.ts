@@ -194,6 +194,8 @@ export const IslandGameplaySchema = Schema.Struct({
   lastVote: Schema.optional(LastVoteSchema),
   idols: Schema.optional(Schema.Array(IdolSchema)),
   idolClues: Schema.optional(Schema.Array(Schema.String)),
+  /** Consecutive ticks each castaway has held any need at 10; death lands on the second. */
+  starving: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Number })),
 });
 export type IslandGameplay = typeof IslandGameplaySchema.Type;
 

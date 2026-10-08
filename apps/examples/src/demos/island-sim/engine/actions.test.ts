@@ -115,6 +115,54 @@ describe("applyAction", () => {
   }, 15000);
 });
 
+describe("hunt and craft", () => {
+  it("hunts meat in forest or grass with a snare guaranteeing extra yield", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(21));
+    const agent = base.agents[0]!;
+    const forest = base.terrain.find((t) => t.biome === "forest" || t.biome === "grass")!.tile;
+    const world = {
+      ...base,
+      structures: [...base.structures, { id: "snare-1", kind: "snare", tile: forest, durability: 3 }],
+      agents: base.agents.map((c) => c.id === agent.id ? { ...c, location: forest } : c),
+    };
+    const res = applyAction(world, agent.id, { type: "hunt" }, makeRng(7));
+    expect(res.ok).toBe(true);
+    expect(res.events[0].kind).toBe("hunted");
+    const meat = res.world.agents.find((c) => c.id === agent.id)!.inventory.find((i) => i.kind === "meat")?.qty ?? 0;
+    expect(meat).toBeGreaterThanOrEqual(2);
+  }, 15000);
+  it("fails to hunt on barren ground without a snare most hours", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(22));
+    const agent = base.agents[0]!;
+    const beach = base.terrain.find((t) => t.biome === "beach")!.tile;
+    const world = { ...base, agents: base.agents.map((c) => c.id === agent.id ? { ...c, location: beach } : c) };
+    let failed = 0;
+    for (let seed = 1; seed <= 6; seed += 1) {
+      const res = applyAction(world, agent.id, { type: "hunt" }, makeRng(seed));
+      if (!res.ok) failed += 1;
+    }
+    expect(failed).toBeGreaterThan(0);
+  }, 15000);
+  it("crafts a snare from carried wood", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(23));
+    const agent = base.agents[0]!;
+    const world = {
+      ...base,
+      agents: base.agents.map((c) => c.id === agent.id ? { ...c, inventory: [{ kind: "wood", qty: 1 }] } : c),
+    };
+    const res = applyAction(world, agent.id, { type: "craft", target: "snare" }, dummyRng);
+    expect(res.ok).toBe(true);
+    expect(res.events[0].kind).toBe("crafted");
+    expect(res.world.structures.some((st) => st.kind === "snare" && st.tile === agent.location)).toBe(true);
+  }, 15000);
+  it("fails to craft without carried wood", () => {
+    const base = initializeIslandGameplay(makeFallbackWorld(24));
+    const agent = base.agents[0]!;
+    const res = applyAction(base, agent.id, { type: "craft", target: "snare" }, dummyRng);
+    expect(res.ok).toBe(false);
+  }, 15000);
+});
+
 describe("needs", () => {
   it("decay adds hunger/thirst", () => {    const w = makeFallbackWorld(5);
     const a = w.agents[0];

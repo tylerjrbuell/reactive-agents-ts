@@ -12,9 +12,12 @@ describe("idols and advantages", () => {
 
   it("seeds an idol find from an inspect action deterministically", async () => {
     const { advanceIslandGameplay } = await import("./gameplay.js");
-    const base = initializeIslandGameplay(makeFallbackWorld(20261006));
-    const first = advanceIslandGameplay(base, [{ kind: "inspected", tick: 5, agentId: "agent-0", target: "H8" }]);
-    const second = advanceIslandGameplay(base, [{ kind: "inspected", tick: 5, agentId: "agent-0", target: "H8" }]);
+    const rig = () => {
+      const base = initializeIslandGameplay(makeFallbackWorld(20261006));
+      return { ...base, gameplay: { ...base.gameplay!, idolClues: ["H8"], idols: [] } };
+    };
+    const first = advanceIslandGameplay(rig(), [{ kind: "inspected", tick: 5, agentId: "agent-0", target: "H8" }]);
+    const second = advanceIslandGameplay(rig(), [{ kind: "inspected", tick: 5, agentId: "agent-0", target: "H8" }]);
     const finds = first.events.filter((event) => event.kind === "idol-found");
     expect(finds.length).toBeGreaterThan(0);
     expect(first.events).toEqual(second.events);

@@ -103,6 +103,7 @@ function mutableWorld(world: WorldState): MutableWorld {
   }
   if (!copy.gameplay.idols) copy.gameplay.idols = [];
   if (!copy.gameplay.idolClues) copy.gameplay.idolClues = [];
+  if (!copy.gameplay.starving) copy.gameplay.starving = {};
   return copy;
 }
 
@@ -627,14 +628,13 @@ function grantIdol(world: MutableWorld, agentId: string, events: SimEvent[], sou
   return false;
 }
 
-/** Active searching plus twist-fed clues resolve into one seeded idol pool. */
+/** Clue tiles pay off: inspecting a tile with whispers resolves into one seeded idol pool pick. */
 function findIdols(world: MutableWorld, inputEvents: readonly SimEvent[], events: SimEvent[]): void {
   for (const event of inputEvents) {
     if (event.kind !== "inspected") continue;
     const clues = world.gameplay.idolClues ?? [];
-    if (clues.includes(event.target)) {
-      world.gameplay.idolClues = clues.filter((tile) => tile !== event.target);
-    }
+    if (!clues.includes(event.target)) continue;
+    world.gameplay.idolClues = clues.filter((tile) => tile !== event.target);
     if (grantIdol(world, event.agentId, events, "search")) return;
   }
 }

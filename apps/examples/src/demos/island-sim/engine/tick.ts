@@ -1,7 +1,7 @@
 import { WorldState, AgentState } from "../world/schema.js";
 import { SimEvent } from "./events.js";
 import { applyAction } from "./actions.js";
-import { decayNeeds, deathCause } from "./needs.js";
+import { decayNeeds, deathCause, needsCritical } from "./needs.js";
 import { regrowResources } from "./resources.js";
 import { perceive } from "./perceive.js";
 import { Rng, makeRng } from "./rng.js";
@@ -86,45 +86,54 @@ export async function runTick(
     }
   }
 
-  // 3. Decay needs and check for death
+  // 3. Decay needs, warn at the edge, and check for death.
+  // Death takes two consecutive ticks at 10 so one bad hour warns instead of kills.
+  // Exiles keep metabolizing (hunger/thirst, no exertion fatigue) so exile is hardship, not vacation.
   const weather = newWorld.weather;
+  if (!newWorld.gameplay) newWorld.gameplay = initializeIslandGameplay(newWorld).gameplay as MutableWorld["gameplay"];
+  const starving = ((newWorld.gameplay as unknown as { starving?: Record<string, number> }).starving ?? {}) as Record<string, number>;
   const postDecayAgents: MutableAgent[] = [];
   for (const agent of newWorld.agents) {
-    if (agent.status === "dead" || activeExiles.has(agent.id)) {
+    if (agent.status === "dead") {
       postDecayAgents.push(agent);
       continue;
     }
-    const exerted = events.some((event) => {
+    const exiled = activeExiles.has(agent.id);
+    const exerted = !exiled && events.some((event) => {
       switch (event.kind) {
         case "agent-moved":
         case "resource-gathered":
         case "built":
         case "hunted":
+        case "crafted":
           return event.agentId === agent.id;
         default:
           return false;
       }
     });
     const decayed = decayNeeds(agent, weather, tick, exerted) as MutableAgent;
-    // Check if any need >= 10 for two consecutive ticks? Simplified: if any need >= 10, mark as dead
-    if (
-      decayed.needs.hunger >= 10 ||
-      decayed.needs.thirst >= 10 ||
-      decayed.needs.energy >= 10
-    ) {
+    const critical = needsCritical(decayed);
+    if (critical) {
+      events.push({ kind: "needs-critical", tick, agentId: decayed.id, need: critical });
+    }
+    const atLimit = decayed.needs.hunger >= 10 || decayed.needs.thirst >= 10 || decayed.needs.energy >= 10;
+    starving[decayed.id] = atLimit ? (starving[decayed.id] ?? 0) + 1 : 0;
+    if (atLimit && (starving[decayed.id] ?? 0) >= 2) {
       decayed.status = "dead";
+      delete starving[decayed.id];
       events.push({
         kind: "agent-died",
         tick,
         agentId: decayed.id,
         cause: deathCause(decayed),
       });
-    } else if (weather.condition === "storm" && exerted && decayed.needs.energy >= 9 && decayed.status === "alive") {
+    } else if (!exiled && weather.condition === "storm" && exerted && decayed.needs.energy >= 9 && decayed.status === "alive") {
       decayed.status = "injured";
       events.push({ kind: "injured", tick, agentId: decayed.id, cause: "working through the storm" });
     }
     postDecayAgents.push(decayed);
   }
+  (newWorld.gameplay as unknown as { starving: Record<string, number> }).starving = starving;
   newWorld.agents = postDecayAgents;
 
   // 4. Advance weather on day rollover using a deterministic RNG based on world seed and tick

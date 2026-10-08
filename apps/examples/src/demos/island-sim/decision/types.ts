@@ -284,6 +284,18 @@ export function makeScriptedDecisionMaker(): DecisionMaker {
         }
       }
 
+      if (self.needs.hunger >= 6 && !food && carried < INVENTORY_CAPACITY) {
+        const ground = world.terrain.find((tile) => tile.tile === self.location);
+        const snareHere = world.structures.some((structure) => structure.kind === "snare" && structure.tile === self.location);
+        const gameGround = ground?.biome === "forest" || ground?.biome === "grass";
+        if (gameGround || snareHere) {
+          return decision("Hunt for meat", "Fresh meat beats foraging when hungry", { type: "hunt" }, 0.75);
+        }
+        if (inventoryCount(self, "wood") > 0) {
+          return decision("Set a snare", "Trap steady meat for the hungry hours ahead", { type: "craft", target: "snare" }, 0.7);
+        }
+      }
+
       if (self.needs.thirst >= 6 && inventoryCount(self, "water") === 0) {
         const water = chooseWater(perception, world.gameplay?.poisonedSpring);
         if (water && carried < INVENTORY_CAPACITY) {

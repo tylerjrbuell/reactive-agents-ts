@@ -290,9 +290,29 @@ export function applyAction(world: WorldState, agentId: string, action: ActionRe
       return playIdol(next, agent, action.target);
     case "gift":
       return giftIdol(next, agent, action.target, action.item);
-    case "craft":
-    case "hunt":
-      return fail(world, agentId, `${action.type} is not available in this island build`);
+    case "craft": {
+      const target = action.target ?? "snare";
+      if (target !== "snare") return fail(world, agentId, "this island build only crafts snares");
+      const snaresHere = next.structures.filter((structure) => structure.kind === "snare" && structure.tile === agent.location).length;
+      if (snaresHere >= 3) return fail(world, agentId, "enough snares here already");
+      const wood = removeInventoryItem(agent.inventory, "wood", 1);
+      if (!wood.ok) return fail(world, agentId, "one wood is needed to craft a snare");
+      agent.inventory = wood.inventory;
+      next.structures.push({ id: `snare-${agent.id}-${tick}`, kind: "snare", tile: agent.location, ownerId: agent.id, durability: 3 });
+      return { ok: true, world: next, events: [{ kind: "crafted", tick, agentId, item: "snare" }] };
+    }
+    case "hunt": {
+      const tile = next.terrain.find((candidate) => candidate.tile === agent.location);
+      const snare = next.structures.find((structure) => structure.kind === "snare" && structure.tile === agent.location);
+      const gameBiome = tile?.biome === "forest" || tile?.biome === "grass";
+      if (!gameBiome && !snare) return fail(world, agentId, "no game on this ground; hunt in forest or grass, or set a snare");
+      const yield_ = snare ? 2 : rng.next() < 0.5 ? 1 : 0;
+      if (yield_ <= 0) return fail(world, agentId, "the hunt came up empty");
+      const stored = addInventoryItem(agent.inventory, "meat", yield_);
+      if (!stored.ok) return fail(world, agentId, "inventory is full; store supplies at camp first");
+      agent.inventory = stored.inventory;
+      return { ok: true, world: next, events: [{ kind: "hunted", tick, agentId, animalId: `game-${agent.location}-${tick}`, amount: yield_ }] };
+    }
     default:
       return fail(world, agentId, "unsupported action");
   }

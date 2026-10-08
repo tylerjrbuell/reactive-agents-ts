@@ -61,6 +61,42 @@ describe("runTick", () => {
     expect(singles).toBe(w.agents.filter((a) => a.status !== "dead").length);
     expect(Object.keys(r.decisions)).toHaveLength(w.agents.filter((a) => a.status !== "dead").length);
   }, 15000);
+  it("warns with needs-critical at 9 and only kills after consecutive ticks at 10", async () => {
+    const scripted = makeScriptedDecisionMaker();
+    const fallback = makeFallbackWorld(41);
+    const barren = {
+      ...fallback,
+      resources: [],
+      clock: { tick: 6, day: 1, hour: 6 },
+      agents: fallback.agents.map((a, i) => i === 0 ? { ...a, needs: { hunger: 8, thirst: 0, energy: 0 }, inventory: [] } : a),
+    };
+    const first = await runTick(barren, scripted, makeRng(1));
+    expect(first.world.agents[0]!.status).not.toBe("dead");
+    expect(first.events.some((e) => e.kind === "needs-critical")).toBe(true);
+    const pin = (w: typeof first.world): typeof first.world => ({
+      ...w,
+      resources: [],
+      agents: w.agents.map((a, i) => i === 0 ? { ...a, needs: { hunger: 10, thirst: 0, energy: 0 }, inventory: [] } : a),
+    });
+    const second = await runTick(pin(first.world), scripted, makeRng(1));
+    expect(second.world.agents[0]!.status).not.toBe("dead");
+    const third = await runTick(pin(second.world), scripted, makeRng(1));
+    expect(third.world.agents[0]!.status).toBe("dead");
+  }, 15000);
+  it("lets exiled castaways go hungry instead of vacationing", async () => {
+    const scripted = makeScriptedDecisionMaker();
+    const base = initializeIslandGameplay(makeFallbackWorld(42));
+    const agent = base.agents[0]!;
+    const w = {
+      ...base,
+      clock: { tick: 6, day: 1, hour: 6 },
+      agents: base.agents.map((a) => a.id === agent.id ? { ...a, needs: { hunger: 3, thirst: 3, energy: 0 } } : a),
+      gameplay: { ...base.gameplay!, exiles: [{ agentId: agent.id, returnAtTick: 600, location: "X1", reason: "test" }] },
+    };
+    const after = await runTick(w, scripted, makeRng(1));
+    const exile = after.world.agents.find((a) => a.id === agent.id)!;
+    expect(exile.needs.hunger + exile.needs.thirst).toBeGreaterThan(6);
+  }, 15000);
   it("is deterministic for identical world, maker, and seed", async () => {
     const w = makeFallbackWorld(31);
     const a = await runTick(structuredClone(w), makeScriptedDecisionMaker(), makeRng(99));
@@ -169,15 +205,18 @@ describe("runTick", () => {
   it("records the actual cause of death in the world event", async () => {
     const base = makeFallbackWorld(20261008);
     const agent = base.agents[0]!;
-    const world = {
-      ...base,
+    const pin = (w: typeof base): typeof base => ({
+      ...w,
       resources: [],
-      agents: base.agents.map((candidate) => candidate.id === agent.id
+      agents: w.agents.map((candidate) => candidate.id === agent.id
         ? { ...candidate, needs: { hunger: 1, thirst: 10, energy: 1 }, inventory: [] }
         : { ...candidate, needs: { hunger: 1, thirst: 1, energy: 1 }, inventory: [] }),
-    };
-    const result = await runTick(world, makeScriptedDecisionMaker(), makeRng(9));
-    const death = result.events.find((event) => event.kind === "agent-died" && event.agentId === agent.id);
+    });
+    const first = await runTick(pin(base), makeScriptedDecisionMaker(), makeRng(9));
+    expect(first.world.agents[0]!.status).not.toBe("dead");
+    const second = await runTick(pin(first.world), makeScriptedDecisionMaker(), makeRng(9));
+    expect(second.world.agents[0]!.status).toBe("dead");
+    const death = second.events.find((event) => event.kind === "agent-died" && event.agentId === agent.id);
     expect(death && death.kind === "agent-died" ? death.cause : undefined).toBe("thirst");
   }, 15000);
 });
