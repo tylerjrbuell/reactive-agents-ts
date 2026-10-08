@@ -453,7 +453,7 @@ async function main(): Promise<void> {
           .withModel(model)
           .withMaxIterations(1)
           .withSystemPrompt("You are one castaway's instincts. Answer each judgment question with the most survival-savvy choice.")
-          .withJudgment(backend === "jev" ? {} : { backend, baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434", model })
+          .withJudgment(backend === "jev" ? {} : { backend, baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434" })
           .build();
         const judgeAgent = {
           judge: async (input: { state: unknown; questions: Record<string, unknown> }) => {
