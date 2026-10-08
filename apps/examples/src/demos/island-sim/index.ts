@@ -479,7 +479,7 @@ async function main(): Promise<void> {
       const judging = makeCampJudgmentDecisionMaker(judgeAgent, () => makeScriptedDecisionMaker());
       llmMakeDecisionMaker = () => judging;
       mindLabel = `judgment(${backend})`;
-      console.info(`Judgment survivor decisions enabled (high latency/expense): ${backend} backend; falls back to scripted minds`);
+      console.info(`Judgment survivor decisions enabled (high latency/expense): ${backend} backend camp-batched to 1 judge call per tick; falls back to scripted minds`);
     } catch (error) {
       mindLabel = "scripted";
       console.info(`Judgment survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
