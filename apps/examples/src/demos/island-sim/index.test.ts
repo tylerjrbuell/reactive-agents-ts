@@ -209,6 +209,13 @@ describe("simulation viewing page", () => {
     expect(page).toContain("@media");
   }, 15000);
 
+  it("renders trades with given and received items, never undefined", () => {
+    const page = renderPage();
+    expect(page).toContain("event.given");
+    expect(page).toContain("event.received");
+    expect(page).not.toContain("traded '+event.item");
+  }, 15000);
+
   it("renders visible need bars with percents, emoji icons, and alliance links", () => {
     const page = renderPage();    expect(page).toContain(".need-track{display:block");
     expect(page).toContain(".need-fill{display:block");
