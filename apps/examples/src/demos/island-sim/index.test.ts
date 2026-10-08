@@ -408,6 +408,25 @@ describe("server", () => {
     }
   }, 15000);
 
+  it("starts the journal on day 1 so it matches the dashboard day count", async () => {
+    const controller = makeController({
+      worldGenerator: { generate: async () => ({ world: makeFallbackWorld(61), source: "fallback", attempts: 0 }) },
+      makeDecisionMaker: () => makeScriptedDecisionMaker(),
+    });
+    await controller.newSimulation();
+    const { server, stop } = createServer(controller, 0);
+    try {
+      for (let i = 0; i < 25; i += 1) await controller.step();
+      const response = await fetch(`http://localhost:${server.port}/api/chronicle`);
+      const entries = await response.json() as Array<{ day: number }>;
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      expect(entries.some((entry) => entry.day <= 0)).toBe(false);
+      expect(entries[0]?.day).toBe(1);
+    } finally {
+      stop();
+    }
+  }, 15000);
+
   it("serves the page and /api/state without hidden facts", async () => {
     const controller = makeController({
       worldGenerator: { generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }) },

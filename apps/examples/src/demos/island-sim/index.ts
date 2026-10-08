@@ -117,7 +117,7 @@ export class SimController {
   private rng: Rng;
   private eventSequence = 0;
   private retainedEvents: SequencedEvent[] = [];
-  private lastNarrationDay = 0;
+  private lastNarrationDay = 1;
 
   constructor(
     private readonly worldGenerator: WorldGenerator,
@@ -137,7 +137,7 @@ export class SimController {
     this.eventSequence = 0;
     this.speed = 1;
     this.gameOver = false;
-    this.lastNarrationDay = 0;
+    this.lastNarrationDay = result.world.clock.day;
     this.narrator.reset();
     this.selectedAgentId = null;
   }
