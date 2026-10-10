@@ -1,3 +1,5 @@
+// Run: bun test packages/runtime/tests/llm-timeout-builder.test.ts --timeout 15000
+// Live Ollama opt-in: REACTIVE_AGENTS_RUN_LIVE_OLLAMA_TESTS=1 bun test packages/runtime/tests/llm-timeout-builder.test.ts --timeout 15000
 import { describe, test, expect } from "bun:test";
 import { ReactiveAgents } from "../src";
 
@@ -59,12 +61,14 @@ describe(".withLlmTimeout — per-call local timeout plumbing", () => {
     await agent.dispose();
   });
 
-  // ── Live proof (auto-skips when no Ollama server, e.g. CI). ──
+  // ── Live proof requires explicit opt-in and a reachable Ollama model. ──
   // A 1ms per-call timeout MUST surface the rich LLMTimeoutError. The agent
   // never sets `request.timeoutMs`, so the "limit 1ms" in that error can ONLY
   // have come from `config.ollamaTimeoutMs` — i.e. the builder value reached
   // the LLMConfig end-to-end.
-  test.skipIf(!ollamaState.up)(
+  test.skipIf(
+    process.env.REACTIVE_AGENTS_RUN_LIVE_OLLAMA_TESTS !== "1" || !ollamaState.up,
+  )(
     "live: builder .withLlmTimeout(1) reaches LLMConfig → rich timeout error",
     async () => {
       const model = ollamaState.up ? ollamaState.model : "";

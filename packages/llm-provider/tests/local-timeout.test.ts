@@ -11,7 +11,7 @@
 //       one-line string cause (no leaked stack).
 
 import { describe, it, expect, mock, beforeEach, afterEach, afterAll } from "bun:test";
-import { Effect, Layer, Exit, Cause } from "effect";
+import { Effect, Layer, Exit, Cause, Either, Option, Stream } from "effect";
 
 // ─── Mock the `ollama` package BEFORE the provider module is imported ───
 
@@ -78,6 +78,21 @@ const runComplete = (
       const llm = yield* LLMService;
       return yield* llm.complete(request);
     }).pipe(Effect.provide(LocalProviderLive.pipe(Layer.provide(configLayer)))),
+  );
+
+const runStream = (
+  request: Parameters<LLMService["Type"]["stream"]>[0],
+  configLayer = makeConfig(),
+) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      const stream = yield* llm.stream(request);
+      return yield* Effect.either(Stream.runDrain(stream));
+    }).pipe(
+      Effect.provide(LocalProviderLive.pipe(Layer.provide(configLayer))),
+      Effect.timeoutOption("9 seconds"),
+    ),
   );
 
 const timeoutErrorOf = (exit: Exit.Exit<unknown, unknown>): LLMTimeoutError => {
@@ -231,6 +246,52 @@ describe("local provider — timeout aborts in-flight request (criterion 3)", ()
       globalThis.fetch = realFetch;
     }
   });
+
+  it("times out a stalled initial streaming fetch and aborts its signal", async () => {
+    let seenSignal: AbortSignal | undefined;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        seenSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          const abort = () =>
+            reject(new DOMException("The operation was aborted", "AbortError"));
+          if (init?.signal?.aborted) {
+            abort();
+          } else {
+            init?.signal?.addEventListener("abort", abort, { once: true });
+          }
+        });
+      },
+      { preconnect: realFetch.preconnect },
+    );
+    chatImpl = () =>
+      capturedFetch!("http://localhost:11434/api/chat", { method: "POST" });
+
+    try {
+      const result = await runStream({
+        messages: [{ role: "user", content: "hi" }],
+        model: "cogito:14b",
+        timeoutMs: 60,
+      });
+
+      expect(Option.isSome(result)).toBe(true);
+      if (Option.isSome(result)) {
+        expect(Either.isLeft(result.value)).toBe(true);
+        if (Either.isLeft(result.value)) {
+          expect(result.value.left).toBeInstanceOf(LLMTimeoutError);
+          expect((result.value.left as LLMTimeoutError).timeoutMs).toBe(60);
+        }
+      }
+      expect(seenSignal).toBeDefined();
+      expect(seenSignal?.aborted).toBe(true);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }, 15000);
 });
 
 describe("provider error mapping — dedup + one-line cause (criterion 4)", () => {

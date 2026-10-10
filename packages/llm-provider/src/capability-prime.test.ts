@@ -10,6 +10,13 @@ import { _resetProbeCacheForTesting } from "./providers/local-probe.js";
 
 const realFetch = globalThis.fetch;
 
+type MockFetch = (
+  ...args: Parameters<typeof fetch>
+) => ReturnType<typeof fetch>;
+
+const installMockFetch = (handler: MockFetch): typeof fetch =>
+  Object.assign(handler, { preconnect: realFetch.preconnect });
+
 afterEach(() => {
   globalThis.fetch = realFetch;
   _resetProbedRegistryForTesting();
@@ -17,7 +24,7 @@ afterEach(() => {
 });
 
 function stubShow(model_info: Record<string, unknown>, capabilities: string[]) {
-  globalThis.fetch = (async (url: string | URL | Request) => {
+  globalThis.fetch = installMockFetch(async (url) => {
     expect(String(url)).toContain("/api/show");
     return new Response(
       JSON.stringify({
@@ -27,7 +34,7 @@ function stubShow(model_info: Record<string, unknown>, capabilities: string[]) {
       }),
       { status: 200 },
     );
-  }) as unknown as typeof fetch;
+  });
 }
 
 describe("primeCapability — ollama", () => {
@@ -48,9 +55,9 @@ describe("primeCapability — ollama", () => {
   });
 
   it("never throws and leaves the fallback when the probe fails (offline / model not pulled)", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = installMockFetch(async () => {
       throw new Error("ECONNREFUSED");
-    }) as unknown as typeof fetch;
+    });
 
     await primeCapability("ollama", "missing:latest", { endpoint: "http://x:11434" });
 
@@ -61,10 +68,10 @@ describe("primeCapability — ollama", () => {
 describe("primeCapability — non-probe providers", () => {
   it("is a no-op (does not hit the network) for anthropic", async () => {
     let called = false;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = installMockFetch(async () => {
       called = true;
       return new Response("{}", { status: 200 });
-    }) as unknown as typeof fetch;
+    });
 
     await primeCapability("anthropic", "claude-sonnet-4-6");
 

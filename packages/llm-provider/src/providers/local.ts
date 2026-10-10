@@ -681,6 +681,7 @@ export const LocalProviderLive = Layer.effect(
                         // AbortError from surfacing as a spurious stream failure.
                         let ollamaStream: { abort: () => void } | undefined
                         let aborted = false
+                        const abortController = new AbortController()
                         let idleTimer: ReturnType<typeof setTimeout> | undefined
                         const clearIdleTimer = () => {
                             if (idleTimer !== undefined) clearTimeout(idleTimer)
@@ -690,6 +691,7 @@ export const LocalProviderLive = Layer.effect(
                             clearIdleTimer()
                             idleTimer = setTimeout(() => {
                                 aborted = true
+                                abortController.abort()
                                 ollamaStream?.abort()
                                 emit.fail(
                                     new LLMTimeoutError({
@@ -709,7 +711,9 @@ export const LocalProviderLive = Layer.effect(
                         }
                         const doStream = async () => {
                             try {
-                                const client = await getClient()
+                                const client = await getClient(
+                                    abortController.signal
+                                )
 
                                 const msgs = toOllamaMessages(request.messages)
                                 if (request.systemPrompt) {
@@ -927,6 +931,8 @@ export const LocalProviderLive = Layer.effect(
                                                 : {}),
                                         })
                                         clearIdleTimer()
+                                        aborted = true
+                                        abortController.abort()
                                         emit.end()
                                     }
                                 }
@@ -939,15 +945,22 @@ export const LocalProviderLive = Layer.effect(
                                 // since it already emitted the richer
                                 // LLMTimeoutError itself.
                                 if (!aborted) {
+                                    aborted = true
+                                    abortController.abort()
+                                    ollamaStream?.abort()
                                     emit.fail(ollamaError(error, model))
                                 }
                             }
                         }
+                        // Cover SDK setup and the initial request, not only
+                        // idle gaps after client.chat() has returned a stream.
+                        resetIdleTimer()
                         void doStream()
                         // Finalizer: run on stream interruption/scope close.
                         return Effect.sync(() => {
                             clearIdleTimer()
                             aborted = true
+                            abortController.abort()
                             ollamaStream?.abort()
                         })
                     }))

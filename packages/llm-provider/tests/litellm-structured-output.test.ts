@@ -20,14 +20,9 @@ import type { LLMService as LLMServiceType } from "../src/index.js";
 let capturedBody: Record<string, unknown> | null = null;
 
 const originalFetch = globalThis.fetch;
-const mockFetch = (async (_url: unknown, opts?: unknown) => {
-  const init = opts as { body?: string } | undefined;
-  capturedBody = init?.body ? (JSON.parse(init.body) as Record<string, unknown>) : null;
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => ({
+const mockFetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+  capturedBody = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+  return new Response(JSON.stringify({
       choices: [
         {
           message: {
@@ -39,9 +34,7 @@ const mockFetch = (async (_url: unknown, opts?: unknown) => {
       ],
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       model: "proxied",
-    }),
-    text: async () => "",
-  } as unknown as Response;
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
 }) as typeof fetch;
 
 let LiteLLMProviderLive: Layer.Layer<LLMServiceType>;
