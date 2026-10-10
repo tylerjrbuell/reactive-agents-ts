@@ -23,8 +23,9 @@ Layers compose through two operations:
 
 When you call `createRuntime()`, it composes layers based on your configuration:
 
-<!-- docs-skip-typecheck -->
 ```typescript
+import { createRuntime } from 'reactive-agents'
+
 const runtime = createRuntime({
   agentId: "my-agent",
   provider: "anthropic",

@@ -151,6 +151,8 @@ await handle.shutdown()
 Or pass credentials explicitly:
 
 ```typescript
+import { setupLangfuseExporter } from "@reactive-agents/observe"
+
 const handle = setupLangfuseExporter({
   publicKey: "pk-lf-...",
   secretKey: "sk-lf-...",

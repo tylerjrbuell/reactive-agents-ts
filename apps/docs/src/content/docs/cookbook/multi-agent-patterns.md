@@ -58,7 +58,6 @@ const seniorAgent = await ReactiveAgents.create()
 
 Use the EventBus to coordinate agents through events:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { EventBus } from "@reactive-agents/core";
 

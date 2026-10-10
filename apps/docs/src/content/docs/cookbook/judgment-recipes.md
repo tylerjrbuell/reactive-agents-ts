@@ -18,6 +18,16 @@ Don't just read the answer — read how sure the model is of it. A Choice or Sco
 signal for "should a human look at this instead of auto-acting":
 
 ```typescript
+const userMessage = "I was charged twice for my subscription — refund one payment";
+
+function routeTo(category: string): void {
+    // auto-route the confident majority
+}
+
+function routeToHumanTriage(answer: unknown): void {
+    // low-confidence or ambiguous — don't guess
+}
+
 const { category } = await agent.judge({
     state: { message: userMessage },
     questions: {
@@ -51,6 +61,9 @@ may end up ignoring — extra questions over the same `state` are cheap relative
 round trip, and every question runs in parallel against the same context:
 
 ```typescript
+const taskDescription = "Summarize today's support tickets by category";
+const toolsAvailable = ["web-search", "file-read", "file-write"];
+
 const answers = await agent.judge({
     state: { task: taskDescription, toolsAvailable },
     questions: {
@@ -87,6 +100,11 @@ calls as possible (one call when the whole set fits under `chunkCap`, chunked ca
 otherwise), instead of firing one round trip per candidate:
 
 ```typescript
+const candidates = [
+    { id: "a", text: "Reset your password from the account settings page." },
+    { id: "b", text: "Contact support and they will reset it for you." },
+];
+
 const ranked = await agent.judgeRank(
     candidates.map((c) => ({ id: c.id, state: { query, candidate: c.text } })),
     {
@@ -115,19 +133,28 @@ Catch an unsupported claim before it reaches the user — a `Noul` asking whethe
 actually backs the claim, not whether the claim merely mentions the same topic:
 
 ```typescript
-const { grounded } = await agent.judge({
-    state: { claim: generatedAnswer, evidence: sourceText },
-    questions: {
-        grounded: {
-            type: 'noul',
-            instructions:
-                'Is `claim` fully supported by `evidence` — nothing invented, embellished, or unsupported?',
-        },
-    },
-})
+const generatedAnswer = "The refund was issued on Monday.";
+const sourceText = "Refund issued Monday; confirmation #1234.";
 
-if (grounded.kind === 'noul' && grounded.probability < 0.5) {
-    return regenerateWithEvidence(sourceText) // or surface a low-confidence disclaimer
+async function regenerateWithEvidence(evidence: string): Promise<void> {
+    // re-prompt with the evidence attached, or surface a disclaimer
+}
+
+async function publishIfGrounded(): Promise<void> {
+    const { grounded } = await agent.judge({
+        state: { claim: generatedAnswer, evidence: sourceText },
+        questions: {
+            grounded: {
+                type: 'noul',
+                instructions:
+                    'Is `claim` fully supported by `evidence` — nothing invented, embellished, or unsupported?',
+            },
+        },
+    })
+
+    if (grounded.kind === 'noul' && grounded.probability < 0.5) {
+        return regenerateWithEvidence(sourceText) // or surface a low-confidence disclaimer
+    }
 }
 ```
 
@@ -175,6 +202,8 @@ pulled locally through Ollama.
 Prerequisite: `ollama pull clef` (27B) or `ollama pull clef-flash` (9B).
 
 ```typescript
+const base64Png = "<base64-encoded PNG screenshot>";
+
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withJudgment({ backend: 'ollama', model: 'clef-flash' })

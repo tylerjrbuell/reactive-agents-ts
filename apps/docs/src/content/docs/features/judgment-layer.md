@@ -90,7 +90,10 @@ timeout is 30 seconds. Keep the model warm between calls with the builder's
 `keepAlive` option (for example `'10m'`, or `0` to unload after each request):
 
 ```typescript
-.withJudgment({ backend: 'ollama', ollama: { keepAlive: '10m' } })
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', ollama: { keepAlive: '10m' } })
+    .build()
 ```
 
 A missing model surfaces as a `JudgmentBadResponse` whose message names the
@@ -104,9 +107,20 @@ The default model is `nimble`. Two Cloudflare models are System One-compatible
 and vision-capable, and `tev` is another text option:
 
 ```typescript
-.withJudgment({ backend: 'ollama', model: 'clef' }) // 27B vision model
-.withJudgment({ backend: 'ollama', model: 'clef-flash' }) // 9B vision model
-.withJudgment({ backend: 'ollama', model: 'tev' }) // text
+const visionAgent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', model: 'clef' }) // 27B vision model
+    .build()
+
+const flashAgent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', model: 'clef-flash' }) // 9B vision model
+    .build()
+
+const textAgent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama', model: 'tev' }) // text
+    .build()
 ```
 
 Vision models unlock the optional `images` channel on `agent.judge()`: an
@@ -116,6 +130,8 @@ body is capped at 32 MiB with images (64 KiB without). A vision model is
 required; sending images to a text-only model is a server-side error.
 
 ```typescript
+const base64Png = "<base64-encoded PNG screenshot>";
+
 const { passes } = await agent.judge({
     state: { task: 'Check the checkout page for layout breakage' },
     questions: {
@@ -159,6 +175,8 @@ the question" that need the surrounding turn, not just a hand-picked field. It h
     the object stays **off** — the object form is exclusive opt-in, not additive defaults:
 
 ```typescript
+import type { StepType } from '@reactive-agents/reasoning'
+
 export interface JudgeContextConfig {
     readonly messages?: boolean | { readonly window?: number }
     readonly toolResults?: boolean
@@ -167,24 +185,33 @@ export interface JudgeContextConfig {
 ```
 
 ```typescript
+const answer = "Use `slice.binary_search()` from the standard library.";
+const lastToolResult = "stdlib docs for `slice.binary_search()`.";
+
 // Before: manually re-thread the last tool result yourself
 const { grounded } = await agent.judge({
     state: { claim: answer, evidence: lastToolResult },
     questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
 })
+```
 
+```typescript
 // After: let judge() pull the whole recent context automatically
 const { grounded } = await agent.judge({
     questions: { grounded: { type: 'noul', instructions: 'Is the claim supported by the evidence?' } },
     includeContext: true, // messages + toolResults + reasoningSteps, each with its default window
 })
+```
 
+```typescript
 // Or opt into just the reasoning trace — thoughts/actions included, not only tool observations
 const { grounded } = await agent.judge({
     questions: { grounded: { type: 'noul', instructions: 'Did the agent ground its answer with a valid tool call?' } },
     includeContext: { reasoningSteps: true },
 })
+```
 
+```typescript
 // Tune the window and step types on any layer that takes one — a small
 // window keeps the prompt cheap; a narrower type list drops noise (e.g.
 // "action" without matching "observation" pairs) when only one kind of
@@ -234,9 +261,10 @@ if you need the real, un-wrapped `JudgmentUnsupported` instance:
 
 ```typescript
 import { Effect } from "effect";
-import { JudgmentService } from "@reactive-agents/judgment";
+import { JudgmentService, makeJevBackend, makeJudgmentServiceLive } from "@reactive-agents/judgment";
 // `layer` is your own `JudgmentService` layer, however you constructed it
-// (e.g. `makeJudgmentServiceLive(makeJevBackend({ apiKey }))`).
+// (e.g. `makeJudgmentServiceLive(makeJevBackend())`).
+const layer = makeJudgmentServiceLive(makeJevBackend());
 
 const models = await Effect.runPromise(
     Effect.gen(function* () {
@@ -253,6 +281,11 @@ round trip **per candidate**. `agent.judgeRank()` batches every candidate's Scor
 as few `ask()` calls as possible instead:
 
 ```typescript
+const drafts = [
+    "Restart the server and try again.",
+    "Check the server logs for the connection error, then restart.",
+];
+
 const ranked = await agent.judgeRank(
     drafts.map((text, i) => ({ id: String(i), state: { text } })),
     {
@@ -295,6 +328,8 @@ The judgment layer supports three typed question primitives. Each has a specific
 **Spec shape:**
 
 ```typescript
+import type { JudgmentEntry } from '@reactive-agents/judgment'
+
 interface NoulSpec {
   readonly type: "noul";
   readonly instructions?: JudgmentEntry;        // Question text
@@ -324,6 +359,10 @@ interface NoulAnswer {
 **Example:**
 
 ```typescript
+async function requestHumanApproval(): Promise<void> {
+    // page a human reviewer
+}
+
 const { risky, pii, needsReview } = await agent.judge({
   state: { action: "rm -rf /tmp/*", user: "ci-bot" },
   questions: {
@@ -360,6 +399,8 @@ if (risky.probability > 0.8 || pii.probability > 0.5) {
 **Spec shape:**
 
 ```typescript
+import type { JudgmentEntry } from '@reactive-agents/judgment'
+
 interface ChoiceSpec {
   readonly type: "choice";
   readonly instructions?: JudgmentEntry;        // Question text
@@ -442,6 +483,8 @@ console.log(urgency.probabilities); // { critical: 0.87, high: 0.11, normal: 0.0
 **Spec shape:**
 
 ```typescript
+import type { JudgmentEntry } from '@reactive-agents/judgment'
+
 interface ScoreSpec {
   readonly type: "score";
   readonly instructions?: JudgmentEntry;        // Question text
