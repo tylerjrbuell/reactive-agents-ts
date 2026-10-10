@@ -12,7 +12,7 @@ git clone https://github.com/tylerjrbuell/reactive-agents-ts.git
 cd reactive-agents-ts
 bun install
 bun test          # 9,000+ tests — all must pass
-bun run build     # ESM + DTS for all 34 packages
+bun run build     # ESM + DTS for all 35 packages
 ```
 
 ---
