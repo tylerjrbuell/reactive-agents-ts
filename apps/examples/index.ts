@@ -500,20 +500,8 @@ const EXAMPLES: ExampleMeta[] = [
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 
-interface RunOptions {
-    args?: string[]
-    offlineOnly?: boolean
-    strictMode?: boolean
-    filterCategory?: string | null
-    numFilter?: string[]
-}
-
-function parseArgs(argv: string[]): {
-    offlineOnly: boolean
-    strictMode: boolean
-    filterCategory: string | null
-    numFilter: string[]
-} {
+// Export the main function for programmatic use (rax examples suite)
+export async function runExamples(argv: string[] = process.argv): Promise<void> {
     const args = argv.slice(2)
     const offlineOnly = args.includes('--offline')
     const strictMode = args.includes('--strict')
@@ -531,54 +519,41 @@ function parseArgs(argv: string[]): {
     // numeric filters e.g. "01 05 12"
     const numFilter = args.filter((a) => /^\d+$/.test(a))
 
-    return { offlineOnly, strictMode, filterCategory, numFilter }
-}
-
-function filterExamples(opts: {
-    offlineOnly: boolean
-    filterCategory: string | null
-    numFilter: string[]
-}): ExampleMeta[] {
-    return EXAMPLES.filter((e) => {
-        if (opts.offlineOnly && e.requiresKey) return false
-        if (opts.filterCategory && e.category !== opts.filterCategory) return false
-        if (opts.numFilter.length > 0 && !opts.numFilter.includes(e.num)) return false
+    const toRun = EXAMPLES.filter((e) => {
+        if (offlineOnly && e.requiresKey) return false
+        if (filterCategory && e.category !== filterCategory) return false
+        if (numFilter.length > 0 && !numFilter.includes(e.num)) return false
         return true
     })
-}
 
-// ─── Runner ───────────────────────────────────────────────────────────────────
+    // ─── Runner ───────────────────────────────────────────────────────────────────
 
-const LINE = '─'.repeat(70)
-
-type RunRecord = {
-    meta: ExampleMeta
-    result: ExampleResult | null
-    error: string | null
-}
-
-async function runSuite(opts: {
-    offlineOnly: boolean
-    strictMode: boolean
-    filterCategory: string | null
-    numFilter: string[]
-}): Promise<{ passed: number; failed: number; xfails: number; unexpectedPasses: number }> {
-    const toRun = filterExamples(opts)
+    const LINE = '─'.repeat(70)
 
     console.log(`\n┌${LINE}┐`)
     console.log(`│  Reactive Agents — Example Suite${' '.repeat(70 - 34 - 1)}│`)
     console.log(
-        `│  ${toRun.length} example(s) selected  [offline=${opts.offlineOnly}${
-            opts.filterCategory ? ` filter=${opts.filterCategory}` : ''
+        `│  ${toRun.length} example(s) selected  [offline=${offlineOnly}${
+            filterCategory ? ` filter=${filterCategory}` : ''
         }]${' '.repeat(
             Math.max(
                 0,
-                70 - 3 - String(toRun.length).length - 19 - (opts.filterCategory ? opts.filterCategory.length + 8 : 0) - 1
+                70 -
+                    3 -
+                    String(toRun.length).length -
+                    19 -
+                    (filterCategory ? filterCategory.length + 8 : 0) -
+                    1
             )
         )}│`
     )
     console.log(`└${LINE}┘\n`)
 
+    type RunRecord = {
+        meta: ExampleMeta
+        result: ExampleResult | null
+        error: string | null
+    }
     const results: RunRecord[] = []
 
     for (const meta of toRun) {
@@ -595,8 +570,8 @@ async function runSuite(opts: {
             // produces nondeterministic step/token counts and breaks witnesses
             // that assert relations). Live runs intentionally use the
             // DEFAULT_PROVIDER env to exercise real adapters.
-            const effectiveProvider = opts.offlineOnly ? 'test' : DEFAULT_PROVIDER
-            const effectiveModel = opts.offlineOnly ? undefined : DEFAULT_MODEL
+            const effectiveProvider = offlineOnly ? 'test' : DEFAULT_PROVIDER
+            const effectiveModel = offlineOnly ? undefined : DEFAULT_MODEL
             console.log(effectiveModel ?? '(test)', effectiveProvider)
             const result = await mod.run({
                 provider: effectiveProvider,
@@ -644,7 +619,7 @@ async function runSuite(opts: {
     // failing-spec witnesses have been closed; until then it will surface those
     // gaps as hard failures.
     function effectivePassed(r: RunRecord): boolean {
-        if (r.meta.expectsFail && !opts.strictMode) {
+        if (r.meta.expectsFail && !strictMode) {
             if (r.error !== null) return true
             return r.result !== null && r.result.passed === false
         }
@@ -683,12 +658,6 @@ async function runSuite(opts: {
     // Strict mode treats any failure (including unexpected xfail passes) as fatal.
     // Default mode: fail iff there is at least one non-xfail failure.
     process.exit(failed > 0 ? 1 : 0)
-}
-
-// Export the main function for programmatic use
-export async function runExamples(argv: string[] = process.argv): Promise<void> {
-    const { offlineOnly, strictMode, filterCategory, numFilter } = parseArgs(argv)
-    await runSuite({ offlineOnly, strictMode, filterCategory, numFilter })
 }
 
 // CLI entry point
