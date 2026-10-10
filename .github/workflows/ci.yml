@@ -184,6 +184,9 @@ jobs:
       - name: Build docs
         working-directory: apps/docs
         run: bun run build
+      # NOTE: 503 is accepted alongside 429 because github.com throttles
+      # CI-runner link sweeps with 503 Service Unavailable (transient;
+      # the same URLs return 200 on retry). 404s and real breakage still fail.
       - name: Check links in built HTML
         uses: lycheeverse/lychee-action@v2
         with:
@@ -191,7 +194,7 @@ jobs:
           args: >-
             --verbose
             --no-progress
-            --accept 200,403,429
+            --accept 200,403,429,503
             --max-retries 2
             --retry-wait-time 2
             --root-dir apps/docs/dist
