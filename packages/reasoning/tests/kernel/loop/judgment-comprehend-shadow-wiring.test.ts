@@ -11,7 +11,8 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
+import { hasExactJudgmentAnswerKeys } from "../../judgment-answers.js";
 import { runKernel } from "../../../src/kernel/loop/runner.js";
 import { transitionState, type ThoughtKernel } from "../../../src/kernel/state/kernel-state.js";
 
@@ -34,7 +35,7 @@ const fakeJudgmentAnswering = () => {
   return Layer.succeed(JudgmentService, {
     ask: (input) => {
       askCallCount++;
-      const answers: Record<string, unknown> = {};
+      const answers: Record<string, JudgmentAnswer> = {};
       for (const id of Object.keys(input.questions)) {
         answers[id] =
           id === "complexity"
@@ -43,7 +44,9 @@ const fakeJudgmentAnswering = () => {
               ? { kind: "choice", value: "prose", probabilities: {}, confidence: 0.9, calibrated: true }
               : { kind: "noul", probability: 0.1 };
       }
-      return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
     },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);

@@ -12,10 +12,11 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { defaultVerifier, verifyAndEmit, type VerificationContext } from "../../../../src/kernel/capabilities/verify/verifier.js";
 import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
+import { hasExactJudgmentAnswerKeys } from "../../../judgment-answers.js";
 
 type ShadowEvent = Extract<AgentEvent, { _tag: "JudgmentShadow" }>;
 
@@ -30,17 +31,21 @@ const baseTerminalContext: VerificationContext = {
 
 const fakeJudgmentAnswering = (probability: number) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const answers = {
         "completion-satisfied": { kind: "noul", probability },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
-      Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+      Effect.fail(new JudgmentTimeout({ message: "shadow probe timed out", timeoutMs: 1 })),
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
@@ -144,9 +149,12 @@ describe("completion-judgment shadow (Task 2, shadow-only)", () => {
     const capturingJudgment = Layer.succeed(JudgmentService, {
       ask: (input) => {
         captured.push({ state: input.state });
-        return Effect.succeed({
+        const answers = {
           "completion-satisfied": { kind: "noul", probability: 0.9 },
-        } as unknown as JudgmentAnswers<typeof input.questions>);
+        } satisfies Record<string, JudgmentAnswer>;
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
       },
     } satisfies JudgmentService["Type"]);
 

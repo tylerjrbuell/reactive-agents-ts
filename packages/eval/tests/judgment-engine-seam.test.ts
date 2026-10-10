@@ -1,7 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 import { EvalService, EvalServiceLive, type SuiteAgentRunner } from "../src/services/eval-service.js";
 import { JudgeLLMService } from "../src/services/judge-llm-service.js";
 import type { EvalSuite } from "../src/types/eval-case.js";
@@ -31,18 +32,20 @@ const makeFakeJudgmentLayer = (callLog: { count: number }) =>
   Layer.succeed(JudgmentService, {
     ask: (input) => {
       callLog.count += 1;
-      const answers: Record<string, { kind: "score"; value: number; probabilities: Record<string, number>; confidence: number; calibrated: boolean }> = {};
+      const answers: Record<string, JudgmentAnswer> = {};
       for (const id of Object.keys(input.questions)) {
         answers[id] = { kind: "score", value: 2, probabilities: {}, confidence: 0.93, calibrated: true };
       }
-      return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
     },
     listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
   ask: () =>
-    Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+    Effect.fail(new JudgmentTimeout({ message: "too slow", timeoutMs: 3000 })),
   listModels: () => Effect.succeed([]),
 });
 

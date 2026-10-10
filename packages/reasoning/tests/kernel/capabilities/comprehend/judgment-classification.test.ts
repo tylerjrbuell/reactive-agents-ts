@@ -8,8 +8,9 @@
 // per-ask cap.
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Option } from "effect";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
+import { hasExactJudgmentAnswerKeys } from "../../../judgment-answers.js";
 import { classifyTask } from "../../../../src/kernel/capabilities/comprehend/task-classification.js";
 import { judgmentComprehendShadow } from "../../../../src/kernel/capabilities/comprehend/judgment-classification.js";
 import type { EventBusInstance } from "../../../../src/kernel/state/kernel-state.js";
@@ -43,7 +44,7 @@ let askCallCount = 0;
 
 /** Every base+tool question answered with the SAME probability/value — used to construct agree/disagree fixtures per test. */
 function fakeJudgmentLayer(
-  build: (questionIds: readonly string[]) => Record<string, unknown>,
+  build: (questionIds: readonly string[]) => Record<string, JudgmentAnswer>,
   caps?: { readonly maxQuestions: number },
 ) {
   askCallCount = 0;
@@ -51,7 +52,9 @@ function fakeJudgmentLayer(
     ask: (input) => {
       askCallCount++;
       const answers = build(Object.keys(input.questions));
-      return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
     },
     listModels: () => Effect.succeed([]),
     ...(caps ? { capabilities: () => Effect.succeed(caps) } : {}),
@@ -63,15 +66,15 @@ function fakeJudgmentFailing() {
   return Layer.succeed(JudgmentService, {
     ask: () => {
       askCallCount++;
-      return Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError);
+      return Effect.fail(new JudgmentTimeout({ message: "shadow probe timed out", timeoutMs: 1 }));
     },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 }
 
 /** Builds an answer object matching every question id to a Score(0)/Noul(false)/Choice("prose") answer — i.e. agrees with TASK's regex verdict. */
-function agreeingAnswers(questionIds: readonly string[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+function agreeingAnswers(questionIds: readonly string[]): Record<string, JudgmentAnswer> {
+  const out: Record<string, JudgmentAnswer> = {};
   for (const id of questionIds) {
     if (id === "complexity") {
       out[id] = { kind: "score", value: 0, probabilities: {}, confidence: 0.9, calibrated: true };
@@ -85,8 +88,8 @@ function agreeingAnswers(questionIds: readonly string[]): Record<string, unknown
 }
 
 /** Every question answered opposite of TASK's regex verdict. */
-function disagreeingAnswers(questionIds: readonly string[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+function disagreeingAnswers(questionIds: readonly string[]): Record<string, JudgmentAnswer> {
+  const out: Record<string, JudgmentAnswer> = {};
   for (const id of questionIds) {
     if (id === "complexity") {
       out[id] = { kind: "score", value: 2, probabilities: {}, confidence: 0.9, calibrated: true }; // complex, not trivial

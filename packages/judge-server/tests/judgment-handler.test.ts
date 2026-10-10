@@ -2,9 +2,10 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { handleJudgeRequestViaJudgment } from "../src/judgment-handler.js";
 import type { JudgeRequest } from "../src/contract.js";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 
 const REQ: JudgeRequest = {
   taskId: "t-jev-001",
@@ -19,13 +20,16 @@ const REPRO = { judgeModelSha: "jev-latest", judgeCodeSha: "code-sha" };
 
 /** ONE call, batched — asserts on the actual question set the handler sends. */
 const makeStubLayer = (
-  respond: (questionIds: string[]) => Record<string, unknown>,
+  respond: (questionIds: string[]) => Record<string, JudgmentAnswer>,
   callLog?: { count: number },
 ): Layer.Layer<JudgmentService> =>
   Layer.succeed(JudgmentService, {
     ask: (input) => {
       if (callLog) callLog.count += 1;
-      return Effect.succeed(respond(Object.keys(input.questions)) as unknown as JudgmentAnswers<typeof input.questions>);
+      const answers = respond(Object.keys(input.questions));
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
     },
     listModels: () => Effect.succeed([]),
   });

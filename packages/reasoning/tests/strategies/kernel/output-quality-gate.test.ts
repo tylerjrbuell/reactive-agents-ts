@@ -5,7 +5,7 @@ import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
 import { deliverableTerminationReason } from "../../../src/kernel/loop/runner-helpers/deliverable.js";
 import {
@@ -23,6 +23,7 @@ import {
   type ThoughtKernel,
 } from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
+import { hasExactJudgmentAnswerKeys } from "../../judgment-answers.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -906,10 +907,14 @@ describe("Task 3 wiring — grounding-fabrication shadow fires through runner.ts
 
   const fakeJudgmentAnswering = (probability: number) =>
     Layer.succeed(JudgmentService, {
-      ask: (input) =>
-        Effect.succeed({
+      ask: (input) => {
+        const answers = {
           "grounding-fabrication": { kind: "noul", probability },
-        } as unknown as JudgmentAnswers<typeof input.questions>),
+        } satisfies Record<string, JudgmentAnswer>;
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
+      },
       listModels: () => Effect.succeed([]),
     } satisfies JudgmentService["Type"]);
 

@@ -1,10 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { PreferenceLearner, PreferenceLearnerLive } from "../src/services/preference-learner.js";
 import { CheckpointService, CheckpointServiceLive } from "../src/services/checkpoint-service.js";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 
 /**
  * Task 11b (shadow-only, highest blast radius — see the plan's dedicated
@@ -16,16 +17,20 @@ import { CheckpointService, CheckpointServiceLive } from "../src/services/checkp
 
 const makeFakeJudgmentLayer = (safeToAutoApprove: number) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const answers = {
         preferenceMatch: { kind: "score", value: 2, probabilities: {}, confidence: 0.9, calibrated: true },
         safeToAutoApprove: { kind: "noul", probability: safeToAutoApprove },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
-  ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  ask: () => Effect.fail(new JudgmentTimeout({ message: "too slow", timeoutMs: 3000 })),
   listModels: () => Effect.succeed([]),
 });
 

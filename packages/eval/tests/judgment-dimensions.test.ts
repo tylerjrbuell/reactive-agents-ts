@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import type { JudgmentAnswers, JudgmentService } from "@reactive-agents/judgment";
+import type { JudgmentAnswer, JudgmentAnswers, JudgmentService } from "@reactive-agents/judgment";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 import { scoreDimensionsViaJudgment, JUDGMENT_SCORED_DIMENSIONS } from "../src/services/judgment-dimensions.js";
 
 const PARAMS = { input: "What is 2+2?", actualOutput: "4", expectedOutput: "4" };
@@ -13,11 +14,13 @@ describe("scoreDimensionsViaJudgment", () => {
       ask: (input) => {
         callCount += 1;
         lastQuestionIds = Object.keys(input.questions);
-        const answers: Record<string, unknown> = {};
+        const answers: Record<string, JudgmentAnswer> = {};
         for (const id of lastQuestionIds) {
           answers[id] = { kind: "score", value: 1, probabilities: {}, confidence: 0.8, calibrated: true };
         }
-        return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
       },
     };
 
@@ -37,11 +40,13 @@ describe("scoreDimensionsViaJudgment", () => {
     const judgment: JudgmentService["Type"] = {
       ask: (input) => {
         lastQuestionIds = Object.keys(input.questions);
-        const answers: Record<string, unknown> = {};
+        const answers: Record<string, JudgmentAnswer> = {};
         for (const id of lastQuestionIds) {
           answers[id] = { kind: "score", value: 0, probabilities: {}, confidence: 1, calibrated: true };
         }
-        return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
       },
     };
 
@@ -68,11 +73,15 @@ describe("scoreDimensionsViaJudgment", () => {
 
   it("drops a dimension whose answer isn't score-shaped, without dropping the others", async () => {
     const judgment: JudgmentService["Type"] = {
-      ask: () =>
-        Effect.succeed({
+      ask: (input) => {
+        const answers = {
           accuracy: { kind: "score", value: 2, probabilities: {}, confidence: 0.9, calibrated: true },
           relevance: { kind: "noul", probability: 0.5 }, // wrong shape — never partial-trusted
-        } as unknown as JudgmentAnswers),
+        } satisfies Record<string, JudgmentAnswer>;
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
+      },
     };
 
     const result = await Effect.runPromise(

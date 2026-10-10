@@ -12,8 +12,9 @@ import { Effect, Layer } from "effect";
 import { analyzeComplexity, type RoutingContext } from "../src/routing/complexity-router.js";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 
 type ShadowEvent = Extract<AgentEvent, { _tag: "JudgmentShadow" }>;
 
@@ -22,19 +23,23 @@ const SIMPLE_TASK = "What is 2+2?";
 
 const fakeJudgmentAnswering = (tierValue: string) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const answers = {
         tier: { kind: "choice", value: tierValue, probabilities: {}, confidence: 0.9, calibrated: true },
         "requires-code-execution": { kind: "noul", probability: 0.05 },
         "multi-step-analysis": { kind: "noul", probability: 0.05 },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
-      Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+      Effect.fail(new JudgmentTimeout({ message: "shadow probe timed out", timeoutMs: 1 })),
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 

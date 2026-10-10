@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
-import { LLMError, LLMParseError, LLMRateLimitError, LLMTimeoutError } from "@reactive-agents/llm-provider";
-import type { LLMService, StructuredCompletionRequest } from "@reactive-agents/llm-provider";
+import { DEFAULT_CAPABILITIES, LLMError, LLMParseError, LLMRateLimitError, LLMService, LLMTimeoutError } from "@reactive-agents/llm-provider";
+import type { StructuredCompletionRequest } from "@reactive-agents/llm-provider";
 import { makeLlmBackend } from "../src/backends/llm-backend.js";
 import {
   JudgmentBadResponse,
@@ -25,9 +25,21 @@ const QUESTIONS: QuestionSpecs = {
 const fakeLlm = (
   respond: <A>(request: StructuredCompletionRequest<A>) => Effect.Effect<A, never>,
 ): LLMService["Type"] =>
-  ({
+  LLMService.of({
+    complete: () => Effect.die(new Error("complete is unused by this backend test")),
+    stream: () => Effect.die(new Error("stream is unused by this backend test")),
     completeStructured: respond,
-  }) as unknown as LLMService["Type"];
+    embed: (texts) => Effect.succeed(texts.map(() => [])),
+    countTokens: () => Effect.succeed(0),
+    getModelConfig: () => Effect.succeed({ provider: "test", model: "judgment-test" }),
+    getStructuredOutputCapabilities: () => Effect.succeed({
+      nativeJsonMode: false,
+      jsonSchemaEnforcement: false,
+      prefillSupport: false,
+      grammarConstraints: false,
+    }),
+    capabilities: () => Effect.succeed(DEFAULT_CAPABILITIES),
+  });
 
 describe("makeLlmBackend", () => {
   it("maps a schema-valid structured reply to typed answers, all calibrated:false", async () => {

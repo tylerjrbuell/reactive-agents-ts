@@ -1,6 +1,12 @@
 import { Effect, Layer, Schema } from "effect";
 import { JudgeLLMService } from "@reactive-agents/eval";
-import { JudgmentService, type JudgmentAnswers } from "@reactive-agents/judgment";
+import {
+  JudgmentBadResponse,
+  JudgmentService,
+  type JudgmentAnswer,
+  type JudgmentAnswers,
+  type QuestionSpecs,
+} from "@reactive-agents/judgment";
 import { secureServe, isMain } from "@reactive-agents/runtime-shim";
 import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
@@ -45,6 +51,18 @@ const StubJudgeLayer: Layer.Layer<JudgeLLMService> = Layer.succeed(
   }),
 );
 
+const hasExactJudgmentAnswerKeys = <Q extends QuestionSpecs>(
+  questions: Q,
+  answers: Readonly<Record<string, JudgmentAnswer>>,
+): answers is JudgmentAnswers<Q> => {
+  const questionIds = Object.keys(questions);
+  const answerIds = Object.keys(answers);
+  return (
+    questionIds.length === answerIds.length &&
+    questionIds.every((id) => Object.hasOwn(answers, id))
+  );
+};
+
 /**
  * Task 5: stub `JudgmentService` for the `judgeEngine: "jev"` path — same
  * "structured passing judgment for HTTP-shape tests" role as `StubJudgeLayer`
@@ -52,7 +70,7 @@ const StubJudgeLayer: Layer.Layer<JudgeLLMService> = Layer.succeed(
  */
 const StubJudgmentLayer: Layer.Layer<JudgmentService> = Layer.succeed(JudgmentService, {
   ask: (input) => {
-    const answers: Record<string, unknown> = {};
+    const answers: Record<string, JudgmentAnswer> = {};
     for (const id of Object.keys(input.questions)) {
       const spec = input.questions[id]!;
       answers[id] =
@@ -62,7 +80,9 @@ const StubJudgmentLayer: Layer.Layer<JudgmentService> = Layer.succeed(JudgmentSe
             ? { kind: "choice", value: "accept", probabilities: { accept: 0.95 }, confidence: 0.95, calibrated: true }
             : { kind: "score", value: (spec.criteria.length - 1), probabilities: {}, confidence: 0.95, calibrated: true };
     }
-    return Effect.succeed(answers as unknown as JudgmentAnswers<typeof input.questions>);
+    return hasExactJudgmentAnswerKeys(input.questions, answers)
+      ? Effect.succeed(answers)
+      : Effect.fail(new JudgmentBadResponse({ message: "stub omitted a requested judgment answer" }));
   },
   listModels: () => Effect.succeed([]),
 });

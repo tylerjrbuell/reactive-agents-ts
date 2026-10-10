@@ -13,8 +13,8 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import {
   judgmentGroundingFabricationShadow,
   judgmentGroundingFabricationShadowFromState,
@@ -24,6 +24,7 @@ import { initialKernelState, transitionState } from "../../../../src/kernel/stat
 import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import { MIN_MODEL_SYNTHESIS_LENGTH } from "../../../../src/kernel/loop/runner-helpers/deliverable.js";
+import { hasExactJudgmentAnswerKeys } from "../../../judgment-answers.js";
 
 type ShadowEvent = Extract<AgentEvent, { _tag: "JudgmentShadow" }>;
 
@@ -35,17 +36,21 @@ const baseInput: GroundingFabricationJudgmentShadowInput = {
 
 const fakeJudgmentAnswering = (probability: number) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const answers = {
         "grounding-fabrication": { kind: "noul", probability },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
-      Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+      Effect.fail(new JudgmentTimeout({ message: "shadow probe timed out", timeoutMs: 1 })),
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
@@ -182,9 +187,12 @@ describe("judgmentGroundingFabricationShadowFromState (wiring wrapper)", () => {
     const capturingJudgment = Layer.succeed(JudgmentService, {
       ask: (input) => {
         captured.push({ state: input.state });
-        return Effect.succeed({
+        const answers = {
           "grounding-fabrication": { kind: "noul", probability: 0.5 },
-        } as unknown as JudgmentAnswers<typeof input.questions>);
+        } satisfies Record<string, JudgmentAnswer>;
+        return hasExactJudgmentAnswerKeys(input.questions, answers)
+          ? Effect.succeed(answers)
+          : Effect.die(new Error("judgment fixture omitted a requested question"));
       },
     } satisfies JudgmentService["Type"]);
 

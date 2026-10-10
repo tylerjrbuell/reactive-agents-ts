@@ -1,9 +1,10 @@
 import { describe, it, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { JudgmentService } from "@reactive-agents/judgment"
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment"
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment"
+import type { JudgmentAnswer, QuestionSpecs } from "@reactive-agents/judgment"
 import { runJudgmentHealing } from "../../src/healing/judgment-healing.js"
 import type { ToolCallSpec } from "../../src/tool-calling/types.js"
+import { hasExactJudgmentAnswerKeys } from "../judgment-answers.js"
 
 /**
  * Task 12: judgment-backed healing escalation (ADD, lowest leverage).
@@ -31,18 +32,21 @@ const workingDir = "/workspace"
 let askCallCount = 0
 
 const countingLayer = (
-  makeAnswers: (input: { readonly questions: Record<string, unknown> }) => Record<string, unknown>,
+  makeAnswers: (input: { readonly questions: QuestionSpecs }) => Record<string, JudgmentAnswer>,
 ) =>
   Layer.succeed(JudgmentService, {
     ask: (input) => {
       askCallCount++
-      return Effect.succeed(makeAnswers(input) as unknown as JudgmentAnswers<typeof input.questions>)
+      const answers = makeAnswers(input)
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"))
     },
     listModels: () => Effect.succeed([]),
   })
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
-  ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  ask: () => Effect.fail(new JudgmentTimeout({ message: "too slow", timeoutMs: 3000 })),
   listModels: () => Effect.succeed([]),
 })
 

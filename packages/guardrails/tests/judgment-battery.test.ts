@@ -1,10 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { GuardrailService, GuardrailServiceLive } from "../src/guardrail-service.js";
 import { defaultGuardrailConfig } from "../src/types.js";
+import { hasExactJudgmentAnswerKeys } from "./judgment-answers.js";
 
 /**
  * Task 11: guardrails battery (ADD — opt-in, parallel to regex).
@@ -22,19 +23,23 @@ type FakeAnswers = { readonly injection: number; readonly pii: number; readonly 
 
 const makeFakeJudgmentLayer = (answers: FakeAnswers) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const result = {
         injection: { kind: "noul", probability: answers.injection },
         pii_exposure: { kind: "noul", probability: answers.pii },
         toxicity: { kind: "noul", probability: answers.toxicity },
         jailbreak_roleplay: { kind: "noul", probability: answers.jailbreak },
         severity: { kind: "score", value: answers.severity, probabilities: {}, confidence: 0.9, calibrated: true },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, result)
+        ? Effect.succeed(result)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   });
 
 const FailingJudgmentLayer = Layer.succeed(JudgmentService, {
-  ask: () => Effect.fail({ _tag: "JudgmentTimeout", message: "too slow", timeoutMs: 3000 } as unknown as JudgmentError),
+  ask: () => Effect.fail(new JudgmentTimeout({ message: "too slow", timeoutMs: 3000 })),
   listModels: () => Effect.succeed([]),
 });
 

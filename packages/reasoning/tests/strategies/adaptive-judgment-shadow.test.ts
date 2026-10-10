@@ -12,9 +12,10 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
-import { JudgmentService } from "@reactive-agents/judgment";
-import type { JudgmentAnswers, JudgmentError } from "@reactive-agents/judgment";
+import { JudgmentService, JudgmentTimeout } from "@reactive-agents/judgment";
+import type { JudgmentAnswer } from "@reactive-agents/judgment";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { hasExactJudgmentAnswerKeys } from "../judgment-answers.js";
 
 type ShadowEvent = Extract<AgentEvent, { _tag: "JudgmentShadow" }>;
 
@@ -24,20 +25,24 @@ const SIMPLE_TASK = "What is 2 plus 2?";
 
 const fakeJudgmentAnswering = (strategyValue: string) =>
   Layer.succeed(JudgmentService, {
-    ask: (input) =>
-      Effect.succeed({
+    ask: (input) => {
+      const answers = {
         strategy: { kind: "choice", value: strategyValue, probabilities: {}, confidence: 0.9, calibrated: true },
         "explicit-steps-given": { kind: "noul", probability: 0.1 },
         "requires-retries-or-debugging": { kind: "noul", probability: 0.1 },
         "single-hop-answerable": { kind: "noul", probability: 0.9 },
-      } as unknown as JudgmentAnswers<typeof input.questions>),
+      } satisfies Record<string, JudgmentAnswer>;
+      return hasExactJudgmentAnswerKeys(input.questions, answers)
+        ? Effect.succeed(answers)
+        : Effect.die(new Error("judgment fixture omitted a requested question"));
+    },
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 
 const fakeJudgmentFailing = () =>
   Layer.succeed(JudgmentService, {
     ask: () =>
-      Effect.fail({ _tag: "JudgmentTimeout", message: "shadow probe timed out", timeoutMs: 1 } as unknown as JudgmentError),
+      Effect.fail(new JudgmentTimeout({ message: "shadow probe timed out", timeoutMs: 1 })),
     listModels: () => Effect.succeed([]),
   } satisfies JudgmentService["Type"]);
 

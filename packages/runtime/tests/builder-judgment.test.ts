@@ -17,10 +17,11 @@
 //      selects "llm"; `backend` always overrides.
 
 import { describe, it, expect, afterEach } from "bun:test";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type {
   ModelConfig,
+  StructuredCompletionRequest,
   StructuredOutputCapabilities,
 } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
@@ -38,12 +39,14 @@ const makeFakeLLM = (completeStructuredCallCount: { count: number }): Layer.Laye
   Layer.succeed(LLMService, {
     complete: () => Effect.die(new Error("unused in this test")),
     stream: () => Effect.die(new Error("unused in this test")),
-    completeStructured: <A>() => {
+    completeStructured: <A>(request: StructuredCompletionRequest<A>) => {
       completeStructuredCallCount.count += 1;
       // Matches the `llm` backend's per-question schema for a single "noul"
       // question keyed "risky" (see `packages/judgment/src/backends/llm-backend.ts`
       // `questionFieldSchema`): `{ probability: number }`.
-      return Effect.succeed({ risky: { probability: 0.83 } } as unknown as A);
+      return Effect.succeed(
+        Schema.decodeUnknownSync(request.outputSchema)({ risky: { probability: 0.83 } }),
+      );
     },
     embed: () => Effect.die(new Error("unused in this test")),
     countTokens: () => Effect.succeed(0),
