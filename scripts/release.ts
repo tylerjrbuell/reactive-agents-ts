@@ -189,18 +189,24 @@ console.log(`changelog: wrote ${header} (${notes.length} note(s)), consumed ${cs
 
 // ── Mutate: stamp every package + root to the single version ─────────────────
 
-// Rewrite internal `workspace:*` deps → the exact lockstep version. We
-// publish via `npm publish` (npm does NOT resolve the workspace protocol;
-// only `bun publish` did, but its auth is unreliable in CI). All internal
-// packages share one version, so an exact pin is correct. Reuses the
+// Rewrite internal dep ranges → the exact lockstep version. Covers both
+// `workspace:*` (bun-native) and exact pins (`0.16.0`) — exact pins are this
+// repo's convention (see AGENTS.md), and leaving them stale breaks turbo's
+// version-sensitive workspace graph: every ^build edge collapses, so DTS
+// builds race their deps' dist emission (v0.17.0: judgment DTS read
+// llm-provider/dist before index.d.ts existed → TS7016 cascade), and the
+// published metadata is incoherent (foo@0.17.0 depending on bar@0.16.0).
+// Non-exact ranges (^, ~, >=, URLs) are left untouched. Reuses the
 // module-level DEP_FIELDS (declared above for the topo-order step).
-function pinWorkspaceDeps(json: Record<string, unknown>): number {
+const internalNames = new Set([...targets, ...privateTargets].map((t) => t.name));
+function pinInternalDeps(json: Record<string, unknown>): number {
   let n = 0;
   for (const field of DEP_FIELDS) {
     const deps = json[field];
     if (!deps || typeof deps !== "object") continue;
     for (const [name, range] of Object.entries(deps as Record<string, string>)) {
-      if (typeof range === "string" && range.startsWith("workspace:")) {
+      if (typeof range !== "string" || !internalNames.has(name)) continue;
+      if (range.startsWith("workspace:") || SEMVER.test(range)) {
         (deps as Record<string, string>)[name] = version;
         n++;
       }
@@ -212,7 +218,7 @@ function pinWorkspaceDeps(json: Record<string, unknown>): number {
 let pinned = 0;
 for (const t of [...targets, ...privateTargets]) {
   t.json.version = version;
-  pinned += pinWorkspaceDeps(t.json as Record<string, unknown>);
+  pinned += pinInternalDeps(t.json as Record<string, unknown>);
   await Bun.write(t.file, JSON.stringify(t.json, null, 2) + "\n");
 }
 root.version = version;
@@ -222,7 +228,7 @@ await Bun.write("package.json", JSON.stringify(root, null, 2) + "\n");
 // (repo package.json stays unbumped by the tag-driven flow).
 await Bun.write("VERSION", version + "\n");
 console.log(
-  `stamped ${targets.length} packages + root → ${version} (pinned ${pinned} workspace:* dep(s))`,
+  `stamped ${targets.length} packages + root → ${version} (pinned ${pinned} internal dep(s))`,
 );
 
 // ── Build once (turbo cache) ─────────────────────────────────────────────────
