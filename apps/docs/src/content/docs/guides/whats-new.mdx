@@ -62,7 +62,8 @@ Strategy switches carry the prior ledger forward and mint a typed `handoff` fact
 ### Reliability, security, and cleanup
 
 - Provider keys are read at layer build time, and missing Groq/xAI credentials no longer fall through to another provider's OpenAI key. `completeStructured()` now sends valid JSON Schema to local, OpenAI, Gemini, Anthropic, and LiteLLM. See [LLM Providers](/features/llm-providers/) and [Structured Output](/guides/structured-output/).
-- Entropy is scored once per kernel thought, removing phantom divergence on healthy runs. Three inert experimental mechanisms were removed rather than retained as unmeasured switches.
+- Entropy is scored once per kernel thought, removing phantom divergence on healthy runs. Observer failures that were silently swallowed are now published as events instead of vanishing. Three inert experimental mechanisms were removed rather than retained as unmeasured switches.
+- File tools fail helpfully: an out-of-root path is still refused, but the error names the working root, states the relative-path rule, and suggests the deepest in-root match. See [Tools](/guides/tools/).
 - The `write_result_to_file` overflow hint appears only when that tool is actually offered, and `rax demo` now selects Gemini correctly when it detects a Google API key. `generateAgentCard` defaults `capabilities.streaming` to `false` because end-to-end A2A SSE streaming is not implemented.
 
 ### A new simulation showcase
