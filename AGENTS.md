@@ -561,7 +561,7 @@ Both hooks are fast, local, every-commit gates by design — slower repo-wide ch
 
 **Bump types:** `patch` (fixes), `minor` (features), `major` (breaking)
 
-**All 34 packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
+**All 33 public packages move together in lockstep** (release.ts stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design). `@reactive-agents/benchmarks` and `judge-server` are private (never published).
 
 ---
 
@@ -645,18 +645,18 @@ The row-by-row historical table (Apr–May 2026 findings, nearly all "Fixed") th
 
 ---
 
-## Current Framework Snapshot (v0.14.0, 2026-07-21)
+## Current Framework Snapshot (v0.16.0, 2026-10-10)
 
-- Monorepo scale: **34 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz) — 32 published on npm, 2 private (`benchmarks`, `judge-server`). `@reactive-agents/orchestration` and `@reactive-agents/scenarios` were removed entirely in v0.14.
-- Verified quality: **8,276 pass / 0 fail across 1,060 files** (2026-07-21) — run `bun test` for the authoritative count before release
+- Monorepo scale: **35 packages** (33 public + 2 private) and **6 app directories** (5 contain package manifests: cli, cortex, docs, examples, stackblitz; `advocate` is a source-only app directory). `@reactive-agents/orchestration` and `@reactive-agents/scenarios` were removed entirely in v0.14.
+- Latest full test run: **9,979 pass / 0 fail / 26 skip / 4 todo across 1,312 files** (2026-10-10). Original cast-ceiling, Cortex global-leak, and live Ollama timeout regressions pass, alongside the docs new-content marker coverage; see `.agents/MEMORY.md` for the prior transient Docker timeout run.
 - Current empirical state: `wiki/Research/Audit-Reports-2026-07-12/00-STATE-OF-THE-FRAMEWORK.md`
 
-> **Meta-loop overhaul ships in v0.14 (being cut from `main`; `main` is pushed).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
+> **Meta-loop overhaul shipped in v0.14.0.** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
 >
 > - **Default-on + verified** (in every reasoning run now): append-only evidence ledger (rides crash-resume), deliverable-truth (typed contract + contract-driven terminal gate + `result.receipt.deliverables[]`), honest compaction (dropped refs enumerated), recall round-trip (one reference grammar), per-iteration run `assessment` trace event, and the Phase 3.6 reliability fixes (prior context renders across strategy switches, generous final-synthesis budget, structured-output retry-once, verifier-aware stall guard, non-amputating early-stop).
 > - **Opt-in + experimental** (NOT default, NOT "better"): `.withLongHorizon()` (scales guards to `maxIterations`; verified to finish long runs but not lift-gated for default-on) and `.withAdaptiveHarness()` (run-start policy compiler + mid-run recompile; cross-tier ablation **INCONCLUSIVE** — n=1 dev-box noise — so it stays opt-in under the lift-gate veto). `.withContract()` pre-existed but is now load-bearing.
 >
-> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. Full breaking-change and feature list: `CHANGELOG.md` (`[Unreleased]` → 0.14.0).
+> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. Full v0.14 breaking-change and feature list: `CHANGELOG.md` (`[0.14.0]`).
 - **v0.14 highlights** (see `CHANGELOG.md` for the full list):
   - Tool policy (allowedTools/forbiddenTools + `.withContract` deny-list) enforced on **every** strategy at the shared choke point, including the code-action sandbox; blocked calls are recorded, never executed
   - Sub-agents fork into the parent fiber tree: `agent.terminate()` cancels in-flight children, failed children report `success: false`, child events/traces correlate to the parent, recursion cap live
