@@ -24,8 +24,10 @@ const HELP = `
     --filter <category> Filter by category (foundations, tools, multi-agent, trust, advanced, reasoning, interaction, gateway, streaming, messaging, observe, research, demos)
     <numbers>           Run specific examples by number (e.g. 01 05 12)
 
-  Demo options:
+  Demo options (passed through to the demo process):
     --port <n>          Port for server-based demos (default: auto)
+    --provider <name>   LLM provider for demos that accept one (e.g. island-sim blueprint/narrator)
+    --model <name>      Model for demos that accept one (e.g. ISLAND_SIM_MODEL)
 
   Examples:
     rax examples suite                           # Run all examples
@@ -33,6 +35,7 @@ const HELP = `
     rax examples suite --filter foundations      # Run only foundations category
     rax examples suite 01 05 12                  # Run specific examples
     rax examples demo island-sim                 # Run island simulation (starts server)
+    rax examples demo island-sim --provider ollama --model cogito:14b --port 3007
     rax examples demo halopedia-agent            # Run Halopedia agent (interactive CLI)
     rax examples demo durable-resume             # Run durable execution demo
     rax examples list                            # List available demos

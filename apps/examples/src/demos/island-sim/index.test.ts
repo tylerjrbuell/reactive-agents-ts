@@ -2,7 +2,7 @@
 import { describe, it, expect } from "bun:test";
 import { makeFallbackWorld } from "./world/fallback.js";
 import { makeScriptedDecisionMaker } from "./decision/types.js";
-import { viewerSafeState, makeController, createServer, finaleView } from "./index.js";
+import { viewerSafeState, makeController, createServer, finaleView, parseDemoArgs } from "./index.js";
 import { renderPage } from "./ui/page.js";
 import { initializeIslandGameplay } from "./engine/gameplay.js";
 
@@ -425,6 +425,15 @@ describe("server", () => {
     } finally {
       stop();
     }
+  }, 15000);
+
+  it("parses provider, model, and port flags for the rax demo runner", () => {
+    expect(parseDemoArgs([])).toEqual({ provider: "ollama", model: "cogito:14b", port: 3007 });
+    expect(parseDemoArgs(["--provider", "anthropic", "--model", "claude-haiku-4-5-20251001", "--port", "4001"]))
+      .toEqual({ provider: "anthropic", model: "claude-haiku-4-5-20251001", port: 4001 });
+    expect(parseDemoArgs(["--model=cogito:32b"])).toMatchObject({ model: "cogito:32b" });
+    expect(parseDemoArgs(["--port", "not-a-port"])).toMatchObject({ port: 3007 });
+    expect(parseDemoArgs(["--provider", "nope"])).toMatchObject({ provider: "ollama" });
   }, 15000);
 
   it("serves the page and /api/state without hidden facts", async () => {

@@ -10,7 +10,7 @@ bun run apps/examples/src/demos/island-sim/index.ts
 
 Open `http://localhost:3007` (or the port set with `PORT`). The demo uses scripted survivor decisions and tries Ollama for a compact world blueprint (`gemma4:e4b` by default) when available. Deterministic fallback islands are seeded 7x7 to 9x9 with lush, balanced, or rocky character, seeded resource spreads and starting weather, and a rotating secret set — every seed plays differently, while every island keeps an outer ocean ring, a freshwater camp with a grass spawn ring, nearby food plus water, and the poisoned-spring plus buried-cache secrets. World generation falls back to a deterministic island if provider setup or generation fails.
 
-Set `ISLAND_SIM_MODEL` to choose a different Ollama model, and `OLLAMA_BASE_URL` (default `http://localhost:11434`) when Ollama lives elsewhere. Survivor decisions remain deterministic and engine-owned by default.
+Set `ISLAND_SIM_MODEL` to choose a different Ollama model, and `OLLAMA_BASE_URL` (default `http://localhost:11434`) when Ollama lives elsewhere. Survivor decisions remain deterministic and engine-owned by default. The same knobs are CLI flags: `bun run island-sim/index.ts --provider ollama --model cogito:14b --port 3007` (or `rax examples demo island-sim --provider ollama --model cogito:14b --port 3007`); flags beat `ISLAND_SIM_PROVIDER` / `ISLAND_SIM_MODEL` / `PORT`, which beat the built-ins. Unknown providers fall back to `ollama`.
 
 Two framework-native opt-ins (mutually exclusive; judgment wins when both are set):
 

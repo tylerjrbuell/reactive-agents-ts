@@ -362,22 +362,94 @@ export type RunConfig = {
   model?: string;
 };
 
+/** CLI flags (and env fallbacks) for the standalone demo server. */
+export type DemoArgs = {
+  provider: DemoProvider;
+  model: string;
+  port: number;
+};
+
+const KNOWN_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "groq", "xai", "test"] as const;
+export type DemoProvider = typeof KNOWN_PROVIDERS[number];
+
+function asProvider(raw: string | undefined): DemoProvider {
+  return (KNOWN_PROVIDERS as readonly string[]).includes(raw ?? "") ? (raw as DemoProvider) : "ollama";
+}
+
+/**
+ * Parse `rax examples demo island-sim [--provider p] [--model m] [--port n]`
+ * passthrough args. Explicit flags win, then `ISLAND_SIM_PROVIDER`,
+ * `ISLAND_SIM_MODEL`, and `PORT`, then built-in defaults.
+ */
+export function parseDemoArgs(argv: readonly string[] = []): DemoArgs {
+  const take = (name: string): string | undefined => {
+    for (let index = 0; index < argv.length; index += 1) {
+      const arg = argv[index]!;
+      if (arg === `--${name}`) return argv[index + 1];
+      if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3);
+    }
+    return undefined;
+  };
+  const port = Number(take("port") ?? process.env.PORT);
+  return {
+    provider: asProvider(take("provider") ?? process.env.ISLAND_SIM_PROVIDER),
+    model: take("model") ?? process.env.ISLAND_SIM_MODEL ?? "cogito:14b",
+    port: Number.isSafeInteger(port) && port > 0 ? port : 3007,
+  };
+}
+
 /** Run a deterministic 100-hour offline simulation for the examples runner. */
-export async function run(_config: RunConfig = {}): Promise<ExampleResult> {
+export async function run(config: RunConfig = {}): Promise<ExampleResult> {
   const startedAt = Date.now();
   try {
+    const provider = asProvider(config.provider ?? process.env.ISLAND_SIM_PROVIDER);
+    const model = config.model ?? process.env.ISLAND_SIM_MODEL ?? "cogito:14b";
+    const live = provider !== "test";
+    let worldGenerator: WorldGenerator = {
+      generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }),
+    };
+    let narrator: Narrator = makeTemplateNarrator();
+    let worldSource = "fallback";
+    if (live) {
+      try {
+        const agent = await ReactiveAgents.create()
+          .withName("island-sim-blueprint")
+          .withProvider(provider)
+          .withModel(model)
+          .withMaxIterations(1)
+          .withOutputSchema(WorldBlueprintSchema)
+          .build();
+        worldGenerator = makeLlmWorldGenerator({
+          run: async (prompt) => {
+            const result = await agent.run(prompt);
+            return {
+              ...(result.object === undefined ? {} : { object: result.object }),
+              ...(result.objectError === undefined ? {} : { objectError: result.objectError }),
+            };
+          },
+        });
+        worldSource = "blueprint";
+      } catch {
+        worldSource = "fallback";
+      }
+    }
     const controller = makeController({
       worldGenerator: {
-        generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }),
+        generate: async (seed) => {
+          const result = await worldGenerator.generate(seed);
+          worldSource = result.source;
+          return result;
+        },
       },
       makeDecisionMaker: () => makeScriptedDecisionMaker(),
+      narrator,
     });
     await controller.newSimulation();
     for (let index = 0; index < 100; index += 1) await controller.step();
     const world = controller.getWorld();
     return {
       passed: world !== null && world.clock.tick === 100,
-      output: world ? `Simulated 100 hours with ${world.agents.filter((agent) => agent.status !== "dead").length} survivors.` : "Simulation did not initialize.",
+      output: world ? `Simulated 100 hours with ${world.agents.filter((agent) => agent.status !== "dead").length} survivors (${provider}/${model}, ${worldSource} island).` : "Simulation did not initialize.",
       steps: 100,
       tokens: 0,
       durationMs: Date.now() - startedAt,
@@ -393,15 +465,28 @@ export async function run(_config: RunConfig = {}): Promise<ExampleResult> {
   }
 }
 
-async function main(): Promise<void> {
+async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.info([
+      "Island survival demo server.",
+      "",
+      "Usage: bun run island-sim/index.ts [--provider <name>] [--model <name>] [--port <n>]",
+      "   or: rax examples demo island-sim [--provider <name>] [--model <name>] [--port <n>]",
+      "",
+      "  --provider <name>  LLM provider for the blueprint, narrator, and optional minds (default: ollama; ISLAND_SIM_PROVIDER)",
+      "  --model <name>     Model for those agents (default: cogito:14b; ISLAND_SIM_MODEL)",
+      "  --port <n>         HTTP port (default: 3007; PORT)",
+      "  ISLAND_SIM_JUDGMENT=1 / ISLAND_SIM_LLM_DECISIONS=1 opt into model-driven survivor minds.",
+    ].join("\n"));
+    return;
+  }
+  const { provider, model, port } = parseDemoArgs(argv);
   let worldGenerator: WorldGenerator = {
     generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }),
   };
   let narrator: Narrator = makeTemplateNarrator();
   let llmMakeDecisionMaker: (() => DecisionMaker) | null = null;
   try {
-    const provider = "ollama";
-    const model = process.env.ISLAND_SIM_MODEL ?? "cogito:14b";
     const agent = await ReactiveAgents.create()
       .withName("island-sim-blueprint")
       .withProvider(provider)
@@ -453,8 +538,6 @@ async function main(): Promise<void> {
 
   // Survivor minds wire independently: a worldgen or narrator failure must
   // never silently cancel the judgment path (or vice versa).
-  const provider = "ollama";
-  const model = process.env.ISLAND_SIM_MODEL ?? "cogito:14b";
   let mindLabel = "scripted";
   if (process.env.ISLAND_SIM_JUDGMENT === "1") {
     try {
@@ -519,8 +602,8 @@ async function main(): Promise<void> {
   });
   await controller.newSimulation();
   controller.play();
-  const { server, stop } = createServer(controller, Number(process.env.PORT ?? 3007));
-  console.info(`Island survival demo listening on http://localhost:${server.port}`);
+  const { server, stop } = createServer(controller, port);
+  console.info(`Island survival demo listening on http://localhost:${server.port} (${provider}/${model})`);
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
 }
