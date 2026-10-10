@@ -240,6 +240,8 @@ for await (const event of AgentStream.toAsyncIterable(effectStream)) {
 
 `AgentStream.collect(stream)` accumulates the entire stream into a single `AgentResult` — equivalent to calling `agent.run()`. Useful when you need to pass a stream to both a UI and a final-result handler.
 
+Collection preserves the same terminal truth as `agent.run()`: `success`, `terminatedBy`, and `goalAchieved` come from the `StreamCompleted` event, and `metadata.toolCalls` uses the same derivation as the non-streaming path. A failed or abstained run cannot collect as a success just because it was streamed.
+
 <!-- docs-skip-typecheck -->
 ```typescript
 const result = await AgentStream.collect(effectStream);

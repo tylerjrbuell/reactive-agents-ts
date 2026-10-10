@@ -64,6 +64,20 @@ const agent = await ReactiveAgents.create()
   </TabItem>
 </Tabs>
 
+### Timeout cold starts and stalled streams
+
+Use `.withLlmTimeout(ms)` to bound local-provider waits. On `complete()`, it bounds the full request. On `stream()`, it bounds setup through the first response and each idle gap between chunks; each arriving chunk renews the idle window. When the deadline expires, the Ollama SDK fetch is aborted so generation does not continue after the agent has stopped waiting.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama")
+  .withModel("qwen3:14b")
+  .withLlmTimeout(300_000) // local cold-load allowance
+  .build();
+```
+
+`.withTimeout(ms)` remains a separate wall-clock limit for the whole agent run. See [Builder API](/reference/builder-api/).
+
 ## Model Recommendations
 
 ### By Task Type

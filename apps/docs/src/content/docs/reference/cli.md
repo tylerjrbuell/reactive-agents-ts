@@ -101,6 +101,27 @@ output instead.
 rax demo
 ```
 
+### `rax examples`
+
+Run the offline-capable example suite or launch a standalone demo.
+
+```bash
+rax examples suite [--offline] [--filter <category>] [<numbers>...]
+rax examples list
+rax examples demo <name> [--provider <provider>] [--model <model>] [--port <port>]
+```
+
+- `suite --offline` runs examples that need no provider credentials. `--filter` selects a category; numeric arguments run selected numbered examples.
+- `list` prints available standalone demos.
+- `demo island-sim` starts the survival simulation UI. `--provider`, `--model`, and `--port` pass through to demos that support them.
+
+```bash
+rax examples suite --offline
+rax examples demo island-sim --provider ollama --model cogito:14b --port 3007
+```
+
+See the [Examples Catalog](/guides/examples/) for the runnable examples and demos.
+
 ### Cortex (companion studio)
 
 Cortex is available as a public npm package and from source. 

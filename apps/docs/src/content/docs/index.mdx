@@ -219,24 +219,38 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## New in v0.16
+## New in v0.17.0
 
-Two headline capabilities just landed: **a typed harness control surface** and **richer chat/session controls**.
+The next release adds **typed judgment across three backends**, **budgets that hold across the full run**, and **safer integrations** for the tools and agents your system already uses.
 
-<div class="ra-v12-cards">
+<div class="ra-release-cards">
 <CardGrid>
-    <Card title="Harness Control Surface" icon="setting">
-        `.withHarness({...})` is a typed, per-agent config for the harness's internal mechanisms — tool disclosure, discovery, tool index, context budgets, and more. Config beats `RA_*` env vars, which beat the default, and the resolved config is inherited by sub-agents.
+    <Card title="Typed judgment, Jev to local Ollama" icon="setting">
+        Ask calibrated Choice, Score, or Noul questions with `agent.judge()` across Jev, LLM emulation, and keyless local Ollama backends. Rank candidates with `agent.judgeRank()` and score evals through the Jev engine by default.
 
-        [Read the guide →](/features/harness-control/)
+        [Explore Judgment](/features/judgment-layer/)
     </Card>
-    <Card title="Chat & Session Controls" icon="approve-check">
-        `.withToolIntent()` for agent-level tool-routing overrides, a `verifyCitations` chat option, and an `onOverflow` hook on `agent.session()` so a long conversation summarizes older turns instead of silently dropping them.
+    <Card title="Budgets that cover the whole run" icon="approve-check">
+        `.withBudget()` now accounts for strategy switches, structured calls, and continuation work. Streamed runs collect the same success, termination reason, and tool-call metadata as `agent.run()`.
 
-        [See What's New →](/guides/whats-new/)
+        [See cost controls](/features/cost-tracking/)
+    </Card>
+    <Card title="Authenticated tools and agents" icon="approve-check">
+        Connect remote MCP servers as an OAuth 2.1 client, make precise approval-gated file edits, and explicitly serve an agent over A2A.
+
+        [Read the Tools guide](/guides/tools/#oauth-21-auth)
+    </Card>
+    <Card title="Deploy and observe" icon="setting">
+        Scaffold a Cloudflare Worker agent and export OpenInference traces to Langfuse with one preset.
+
+        [See the release highlights](/guides/whats-new/)
     </Card>
 </CardGrid>
 </div>
+
+<p class="ra-demo-cta">
+  See local judgment shape a running world in the <a href="/guides/examples/#demos">Island Survival showcase</a>.
+</p>
 
   </div>
 </div>

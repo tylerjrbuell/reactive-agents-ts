@@ -158,8 +158,8 @@ export default defineConfig({
             },
             // Curated, progressive information architecture. The onboarding path
             // ("Start Here") is ordered, not alphabetical, so a new reader is never
-            // dropped into a flat A–Z dump. Headline v0.12 surfaces carry a "New"
-            // badge; the new-page-indicator plugin adds date-based badges on top.
+            // dropped into a flat A–Z dump. Headline surfaces can carry curated badges;
+            // git-page-metadata supplies date-aware new-content markers automatically.
             sidebar: [
                 {
                     label: 'Get Started',
@@ -415,7 +415,7 @@ export default defineConfig({
                         {
                             label: "What's New",
                             link: 'guides/whats-new/',
-                            badge: { text: 'v0.16', variant: 'success' },
+                            badge: { text: 'v0.17', variant: 'success' },
                         },
                         { label: 'Contributing', link: 'guides/contributing/' },
                     ],

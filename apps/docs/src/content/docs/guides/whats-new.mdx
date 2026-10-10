@@ -12,7 +12,69 @@ import metrics from '../../../data/metrics.json';
 Get release highlights as an RSS feed: [`/rss.xml`](/rss.xml). Drop into NetNewsWire, Inoreader, or any feed reader.
 </Aside>
 
-A quick-scan guide to what has landed in each major release. Start here when returning after time away — each bullet links to the relevant documentation.
+A quick-scan guide to what has landed in each major release. Start here when returning after time away. Each bullet links to the relevant documentation.
+
+---
+
+## v0.17.0 - Local judgment, safer connections, truthful runs (October 2026)
+
+<Aside type="note" title="A2A and removed experimental APIs">
+Starting an A2A server is now explicit: call `await agent.serveA2A()`; `.withA2A()` supplies its defaults but does not start a listener. Agent Cards now default `capabilities.streaming` to `false` because end-to-end A2A SSE streaming is not implemented. Direct imports of the removed no-op A2A server layers and the three inert, opt-in harness flags (`RA_OVERHAUL`, `RA_THOUGHT_CONTINUITY`, `RA_TOOL_OBSERVE_SYMMETRY`) must be removed. The flags were off by default, so their removal does not change default agent behavior.
+</Aside>
+
+This release adds typed judgment across three backends, makes eval cheaper and repeatable, carries budget and outcome truth across the whole run, and makes remote tool access safer to deploy.
+
+### Typed judgment across Jev, LLM emulation, and local Ollama
+
+The new `@reactive-agents/judgment` package provides batched, typed Choice/Score/Noul decisions through `.withJudgment()` and `agent.judge()`. Backend selection is automatic unless overridden: `"jev"` when a TypeSafe key resolves (`apiKey` or `TYPESAFE_API_KEY`), otherwise `"llm"`.
+
+- **Jev (`backend: "jev"`):** TypeSafe's System One model with real calibrated probabilities. Backs the eval default below and the live model catalog in `agent.listJudgmentModels()`. Every call emits `JudgmentEvaluated` or `JudgmentFailed`.
+- **LLM emulation (`backend: "llm"`):** structured-output over the agent's existing `LLMService`, no TypeSafe key required. Choice/Score answers carry `calibrated: false`, so gate on that flag when calibration matters. `listJudgmentModels()` rejects with `JudgmentUnsupported` because there is no catalog endpoint.
+- **Local Ollama (`backend: "ollama"`):** the same System One protocol served locally with no API key and no outbound network. Default model `nimble`; `clef` and `clef-flash` add vision, `tev` is text-only. `ollama.keepAlive` (for example `"10m"`) keeps the decision model warm, and `images` accepts base64-only screenshots against a vision model with a 32 MiB ceiling. Backends declare `JudgmentCapabilities` (`maxQuestions`, `supportedKinds`, `distributions`, `calibrated`, `images`, `modelCatalog`); read them with `capabilitiesOf(service)`. `judgeRank()` and the comprehension chunker clamp to the real ceiling instead of a hardcoded constant.
+
+`agent.judge({ state, questions, images?, includeContext? })` calls judgments directly from user code. `state` is required unless `includeContext: true` supplies it; an explicit `state` field always wins on key collision. `includeContext` is `boolean | JudgeContextConfig`: `true` folds recent messages, tool results, and the reasoning-step trace, while the object form (`{ messages?, toolResults?, reasoningSteps? }`) opts into named layers with independent windows. `agent.judgeRank()` re-ranks candidates in bounded Score batches (`chunkCap` default 30), rejects non-positive chunk sizes and duplicate candidate ids loudly, and keeps input order on ties. `agent.listJudgmentModels()` is scoped to the judgment backend, not `.withModel()`, and these types are re-exported through the `reactive-agents` facade. Calling any of them without `.withJudgment()` throws immediately instead of silently no-oping.
+
+Harness sites opt in without silently changing existing decisions: strategy selection, complexity routing, task comprehension, completion/termination, and grounding/fabrication run shadow-only `JudgmentShadow` events for later agreement analysis. The guardrails battery is additive by default and can only add or escalate findings unless `"jev-primary"` is explicitly set; `screenOutputs` is observability-only. Autonomy approval stays fully in control of its existing gate, and tool healing only fires above a 0.8 confidence floor after the synchronous healer misses. Without `.withJudgment()`, behavior is byte-identical. See [Judgment Layer](/features/judgment-layer/) and the [judgment recipes](/cookbook/judgment-recipes/).
+
+### Cheaper, repeatable eval via the Jev engine
+
+`@reactive-agents/eval` now scores accuracy, relevance, completeness, and safety through the `jev` engine by default when a `JudgmentService` is wired: one batched request per case with real calibrated confidence instead of four float-prompt LLM calls. Dimensions the batch does not cover fall back to the existing per-dimension `llm` path; with no `JudgmentService` wired or `judgeEngine: "llm"`, behavior is byte-identical to before. `EvalConfig.repeats` (default 1) re-scores the same output to measure judge variance, pools repeats per dimension without blending calibrated judgment samples with uncalibrated LLM samples, and drives `checkRegression` and `compare` through a statistically derived minimum detectable effect when variance exists. `@reactive-agents/judge-server` gains the same `judgeEngine: "jev"` option for `/judge`. See [Evaluation Framework](/features/eval/).
+
+### Budgets, strategies, and run truth
+
+`.withBudget({ tokenLimit, costLimit })` is now enforced against cumulative run spend through a run-scoped meter, not a fresh allowance per kernel. The meter covers the main pass, auxiliary passes such as verification retries and continuation hooks, structured-output retries, and direct LLM calls between kernels; crash-resume max-seeds it from persisted numbers. Runs without `.withBudget()` are byte-identical. Compose's `budgetLimit()` reads the same spend, and plan-execute-reflect receives remaining budget per wave, stops launching new work once the limit is crossed, and terminates honestly as partial with a `budget-limit` reason. Adaptive runs now report the dispatched sub-strategy in `metadata.strategyUsed` via `selectedStrategy` instead of always reporting `"adaptive"`.
+
+Strategy switches carry the prior ledger forward and mint a typed `handoff` fact instead of folding the summary into `priorContext`; carried tool observations are de-duplicated so they do not mint twice. Trace completion carries real cost and termination reason, and `AgentStream.collect()` matches `agent.run()` for success, termination, goal achievement, and tool-call metadata. A terminal answer rejected for leaking internal scaffolding gets one bounded, verifier-checked synthesis repair before the existing honest failure path. Local streaming calls are subject to `.withLlmTimeout()` while the initial request is being set up, not only after the first response chunk; expiry aborts the Ollama SDK fetch. See [Cost Tracking](/features/cost-tracking/), [Process Model](/features/process-model/), [Streaming](/features/streaming/), and [Local Models](/guides/local-models/).
+
+### Safer tools and agent-to-agent connections
+
+- **MCP OAuth 2.1 client:** remote `streamable-http` and `sse` MCP servers can use `client_credentials`, `private_key_jwt`, or a user-authorized flow via `rax mcp login|logout|status` (with `--client-secret` and `--redirect-port` where required). Tokens use a permission-restricted store; browser login is never opened implicitly. The client also handles post-connect 401 challenges, trailing-slash issuer differences, and integer-typed tool schemas. See [MCP OAuth](/guides/tools/#oauth-21-auth).
+- **Precise file edits:** the new `file-edit` tool replaces one exact text block rather than rewriting a whole file. Ambiguous edits are refused, and the tool keeps the same high-risk approval posture as file writes. See [Tools](/guides/tools/).
+- **A2A serving:** `agent.serveA2A()` starts a real server after the agent exists; `rax serve` uses the same implementation. Task responses now use the A2A task shape, JSON-RPC IDs are preserved, non-blocking sends return promptly, configured base paths are honored, and executor misconfiguration fails immediately instead of leaving tasks stuck. `tasks/cancel` now updates the correct stored task, but does not yet interrupt its underlying run. `rax serve` host and token settings moved to `RA_A2A_HOST` and `RA_A2A_TOKEN`, with the old names kept as a deprecated fallback. See [A2A Protocol](/features/a2a-protocol/).
+
+### Deploy and observe more easily
+
+- **Cloudflare Workers:** `create-reactive-agent` adds an edge-ready `cloudflare-worker` template with Worker secret bindings and Wrangler scripts. The template is pinned to OpenAI, uses `nodejs_compat`, and omits persistent memory and shell/filesystem tools on the edge. See [Project Scaffolder](/features/create-reactive-agent/).
+- **Langfuse:** `setupLangfuseExporter()` configures OpenInference-attributed OTLP traces for Langfuse, including regional hosts and authentication headers. See [OpenTelemetry Tracing](/features/observe/#langfuse).
+- **Demand-driven local context:** `.withHarness({ numCtxPolicy: "demand" })` opts into sizing Ollama's `num_ctx` from the assembled prompt with a monotone-growing high-water mark; the default fixed policy is unchanged. See [Local Models](/guides/local-models/).
+- **Runnable examples:** `rax examples` runs the example suite, lists standalone demos, and launches demos such as Island Survival with provider, model, and port options. See [Examples Catalog](/guides/examples/) and [CLI Reference](/reference/cli/).
+
+### Reliability, security, and cleanup
+
+- Provider keys are read at layer build time, and missing Groq/xAI credentials no longer fall through to another provider's OpenAI key. `completeStructured()` now sends valid JSON Schema to local, OpenAI, Gemini, Anthropic, and LiteLLM. See [LLM Providers](/features/llm-providers/) and [Structured Output](/guides/structured-output/).
+- Entropy is scored once per kernel thought, removing phantom divergence on healthy runs. Three inert experimental mechanisms were removed rather than retained as unmeasured switches.
+- The `write_result_to_file` overflow hint appears only when that tool is actually offered, and `rax demo` now selects Gemini correctly when it detects a Google API key. `generateAgentCard` defaults `capabilities.streaming` to `false` because end-to-end A2A SSE streaming is not implemented.
+
+### A new simulation showcase
+
+The [Island Survival demo](/guides/examples/#demos) pairs a deterministic survival engine with optional local world generation and batched System One decisions. Provider failures fall back to scripted decisions, so the simulation remains playable offline. The map, alliances, council, hidden discoveries, resource scarcity, and rescue or all-lost finale make model decisions visible as consequences in a running world.
+
+### Contributors
+
+Thanks to the community contributors whose work shipped in this release:
+
+- **[sriharsha471](https://github.com/sriharsha471):** built the Langfuse exporter preset (`setupLangfuseExporter`, [PR #228](https://github.com/tylerjrbuell/reactive-agents-ts/pull/228)) and the Cloudflare Worker template for `create-reactive-agent` ([PR #204](https://github.com/tylerjrbuell/reactive-agents-ts/pull/204)), including the `wrangler.toml` project-name escaping fix.
+- **[ZentropyLabs.ai](https://github.com/HarperZ9) (Zain Dana Harper):** made path-traversal rejections corrective instead of dead ends ([PR #202](https://github.com/tylerjrbuell/reactive-agents-ts/pull/202), fixes #201). File tools now name the working root, state the relative-path rule, and suggest the deepest in-root suffix match, with `confinePath()` as the single confinement point for file-read, file-write, and directory listing.
 
 ---
 

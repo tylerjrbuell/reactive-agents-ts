@@ -8,7 +8,9 @@ sidebar:
   order: 15
 ---
 
-The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It uses an LLM-as-judge approach to score agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions. Judge calls route through `@reactive-agents/judge-server`, a private internal HTTP server (not published to npm) — you configure the judge model via `EvalService`, not by talking to that server directly.
+The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It scores agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions. Judge calls route through `@reactive-agents/judge-server`, a private internal HTTP server (not published to npm) — you configure the judge model via `EvalService`, not by talking to that server directly.
+
+By default, accuracy, relevance, completeness, and safety use the Jev judgment engine when a `JudgmentService` is wired: one batched calibrated request per case instead of four separate float-prompt LLM calls. Dimensions the batch does not cover fall back to the per-dimension LLM path; with no `JudgmentService` wired or `judgeEngine: "llm"`, behavior is byte-identical to the original all-LLM path. See [Judgment Layer](/features/judgment-layer/).
 
 ## Quick Start
 
@@ -287,7 +289,13 @@ const program = Effect.gen(function* () {
 });
 ```
 
-`compare` classifies each dimension as `improved`, `regressed`, or `unchanged` using a 0.02 delta threshold. `checkRegression` applies the configurable `regressionThreshold` (default: `0.05`) and returns structured details for any dimension that falls below baseline.
+`compare` classifies each dimension as `improved`, `regressed`, or `unchanged` using a 0.02 delta threshold. `checkRegression` applies the configurable `regressionThreshold` (default: `0.05`) and returns structured details for any dimension that falls below baseline. When `EvalConfig.repeats` is greater than 1, repeated scores produce per-dimension variance and the regression check uses a statistically derived minimum detectable effect instead of the flat threshold.
+
+## Judge engine and repeated scoring
+
+Set `judgeEngine: "jev"` (the default) to use calibrated judgment scoring when a `JudgmentService` is wired, or `"llm"` to keep the original `JudgeLLMService` float-prompt path. The `"jev"` request never fails a run when judgment is unavailable: it degrades to `"llm"` for the dimensions it cannot answer.
+
+Set `repeats` to re-score the same `actualOutput` multiple times and measure judge variance rather than agent-run variance. Repeats pool per dimension and never blend calibrated judgment samples with uncalibrated LLM samples from a transient backend failure. `repeats: 1` (the default) carries no variance data and keeps the flat-threshold behavior.
 
 ## Configuration
 
@@ -301,6 +309,8 @@ type EvalConfig = {
   parallelism?: number;          // Concurrent LLM scoring calls (default: 3)
   timeoutMs?: number;            // Per-case timeout in ms (default: 30000)
   retries?: number;              // Retry count on failure (default: 1)
+  judgeEngine?: "jev" | "llm";   // "jev" uses calibrated judgment when wired (default: "jev")
+  repeats?: number;              // Re-score the same output to measure judge variance (default: 1)
 };
 ```
 

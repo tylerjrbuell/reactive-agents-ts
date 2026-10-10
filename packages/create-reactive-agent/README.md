@@ -15,8 +15,11 @@ pnpm create reactive-agent my-agent
 | Name | Description |
 | --- | --- |
 | `minimal` | Single-file agent, no tools. Best starting point. |
-| `with-tools` | Agent with built-in tools (filesystem, fetch, math, shell). |
+| `with-tools` | Agent with built-in tools (web search, HTTP, file I/O, and code execution; shell is separately gated). |
 | `streaming` | Token-by-token streaming via `agent.runStream()`. |
+| `with-structured-output` | Typed `result.object` from a supplied schema. |
+| `with-approval-gates` | Human approval before sensitive tools execute. |
+| `with-memory` | SQLite-backed cross-session memory. |
 | `cloudflare-worker` | Deployable Cloudflare Worker (edge) agent on OpenAI. |
 
 > **`cloudflare-worker` note:** the generated project ships a `wrangler.toml` with
@@ -28,7 +31,7 @@ pnpm create reactive-agent my-agent
 
 ## Providers
 
-`anthropic` · `openai` · `google` · `ollama` (local, no key).
+`anthropic` · `openai` · `google` · `groq` · `xai` · `ollama` (local, no key).
 The `cloudflare-worker` template always uses `openai`.
 
 ## Non-interactive
@@ -45,8 +48,8 @@ npm create reactive-agent my-agent -- \
 
 | Flag | Description |
 | --- | --- |
-| `--template=<name>` | `minimal` \| `with-tools` \| `streaming` \| `cloudflare-worker` |
-| `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `ollama` |
+| `--template=<name>` | `minimal` \| `with-tools` \| `streaming` \| `with-structured-output` \| `with-approval-gates` \| `with-memory` \| `cloudflare-worker` |
+| `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `groq` \| `xai` \| `ollama` |
 | `--pm=<manager>` | `bun` \| `npm` \| `pnpm` \| `yarn` |
 | `--yes` | Skip prompts, accept defaults |
 | `--help` | Show help |

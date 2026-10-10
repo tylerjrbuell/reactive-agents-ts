@@ -1,8 +1,8 @@
 ---
 title: create-reactive-agent
 description: >-
-  Scaffold a new Reactive Agents project in seconds — interactive prompts, three
-  templates, four providers, four package managers.
+  Scaffold a new Reactive Agents project in seconds with seven templates, six
+  providers, and four package managers, including a Cloudflare Worker starter.
 sidebar:
   order: 19
 ---
@@ -42,9 +42,13 @@ The CLI detects your package manager automatically. Running without a project na
 │  my-agent
 │
 ◆  Template?
-│  ● minimal   — single-file agent, no tools
-│  ○ with-tools — agent with built-in tools (web-search, http-get, file I/O, code-execute)
-│  ○ streaming  — token-by-token via agent.runStream()
+│  ● minimal                - single-file agent, no tools
+│  ○ with-tools             - built-in tools and reasoning
+│  ○ streaming              - token-by-token via agent.runStream()
+│  ○ with-structured-output - typed result.object via a schema
+│  ○ with-approval-gates    - human-in-the-loop tool approval
+│  ○ with-memory            - cross-session SQLite memory
+│  ○ cloudflare-worker      - deployable edge Worker
 │
 ◆  Provider?
 │  ● anthropic · openai · google · groq · xai · ollama
@@ -62,7 +66,24 @@ The CLI detects your package manager automatically. Running without a project na
 |------|-------------|
 | `minimal` | Single-file agent. `ReactiveAgents.create()...build()` + `agent.run()`. Best starting point. |
 | `with-tools` | Adds `.withTools({ builtins: true })` (built-in: web-search, http-get, file I/O, code-execute) and `.withReasoning({ defaultStrategy: "reactive" })`. |
-| `streaming` | Uses `agent.runStream()` — emits `text-delta`, `tool-call`, `step-complete`, `completed`, and `error` events. |
+| `streaming` | Uses `agent.runStream()` to emit `text-delta`, `tool-call`, `step-complete`, `completed`, and `error` events. |
+| `with-structured-output` | Adds a schema and returns a typed `result.object`. |
+| `with-approval-gates` | Demonstrates human approval before a sensitive tool executes. |
+| `with-memory` | Adds SQLite-backed memory across runs. |
+| `cloudflare-worker` | OpenAI-backed, fetch-only Worker with Wrangler dev/deploy scripts and Worker secret bindings. |
+
+### Cloudflare Workers
+
+The `cloudflare-worker` template scaffolds an edge-ready Worker entry point, a `wrangler.toml` with the required `nodejs_compat` flag, a git-ignored `.dev.vars` secret stub, and `dev`/`deploy` scripts. It is pinned to OpenAI because that adapter is fetch-based and verified on the edge. Workers have no ambient `process.env`; the generated handler reads `OPENAI_API_KEY` from the Worker `env` binding. Persistent SQLite memory and shell/filesystem tools are intentionally omitted.
+
+```bash
+npm create reactive-agent my-edge-agent -- --template=cloudflare-worker --pm=bun --yes
+cd my-edge-agent
+bun install
+bun run dev
+```
+
+For production, add the secret with `wrangler secret put OPENAI_API_KEY` and run `bun run deploy`.
 
 ### Minimal output
 
@@ -137,7 +158,7 @@ npm create reactive-agent my-agent -- \
 
 | Flag | Description |
 |------|-------------|
-| `--template=<name>` | `minimal` \| `with-tools` \| `streaming` |
+| `--template=<name>` | `minimal` \| `with-tools` \| `streaming` \| `with-structured-output` \| `with-approval-gates` \| `with-memory` \| `cloudflare-worker` |
 | `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `groq` \| `xai` \| `ollama` |
 | `--pm=<manager>` | `bun` \| `npm` \| `pnpm` \| `yarn` |
 | `--yes` | Skip prompts, accept defaults |

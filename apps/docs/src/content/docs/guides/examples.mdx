@@ -43,6 +43,10 @@ bun run index.ts --offline
 # Run a specific example
 bun run src/foundations/01-simple-agent.ts
 
+# Run or list a standalone demo through Rax
+rax examples list
+rax examples demo island-sim --provider ollama --model cogito:14b --port 3007
+
 # Run all examples that match a category
 bun run index.ts --filter foundations
 ```
@@ -163,7 +167,7 @@ Cost tracking, observability, self-improvement, evaluation.
 
 ## Demos
 
-Standalone showcase apps under `apps/examples/src/demos/` — not part of the numbered `index.ts` catalog above (no `run()` export, not exercised in CI), each with its own usage notes.
+Standalone showcase apps under `apps/examples/src/demos/` are not part of the numbered `index.ts` catalog above (they have no `run()` export). Each has its own usage notes and focused tests where provided.
 
 | Example | What it shows |
 |---------|---------------|
@@ -171,6 +175,7 @@ Standalone showcase apps under `apps/examples/src/demos/` — not part of the nu
 | [local-vs-frontier](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts) | Same builder chain run twice — a local 4B model and a frontier model complete the same tool-using task, only the provider/model line changes (see [demos/README.md](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/README.md) for GIF recording) |
 | [canonical-chat-session](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/canonical-chat-session.ts) | Reference `agent.session()` conversational loop |
 | [durable-resume](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/durable-resume.ts) | Crash-resume via `.withDurableRuns()` outside the eval-scoped `22-durable-hitl` example |
+| [island-survival](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/apps/examples/src/demos/island-sim) | Deterministic survival simulation with optional local world generation and camp-batched System One decisions; provider failures fall back to scripted moves |
 
 ---
 
@@ -185,6 +190,10 @@ bun run index.ts --filter reasoning
 
 # Single file, standalone
 bun run src/foundations/01-simple-agent.ts
+
+# List or launch a standalone demo
+rax examples list
+rax examples demo island-sim --provider ollama --model cogito:14b --port 3007
 
 # All examples (requires ANTHROPIC_API_KEY etc. in .env)
 bun run index.ts

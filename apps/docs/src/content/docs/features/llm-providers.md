@@ -124,6 +124,11 @@ An inline `apiKey` also satisfies `.withStrictValidation()`'s missing-key
 check — you don't need the provider's env var set at all when the key is
 supplied this way.
 
+Provider credentials stay isolated. If `GROQ_API_KEY` or `XAI_API_KEY` is
+missing, the compatibility adapter now fails rather than silently sending the
+request with `OPENAI_API_KEY` to a different host. API keys are read when the
+provider layer is built, so update the environment before building the agent.
+
 **Known limitation:** the mechanism is wire-protocol-generic (Chat
 Completions request/response shape, SSE streaming, tool-call encoding), so it
 should work against any vendor that implements that protocol faithfully — but

@@ -79,6 +79,8 @@ const costLayer = createCostLayer({
 
 When a budget limit is exceeded, the agent fails with a `BudgetExceededError` rather than silently overspending.
 
+`.withBudget({ tokenLimit, costLimit })` is enforced against cumulative run spend, not a fresh allowance for each kernel invocation. Multi-step strategies, direct LLM calls between kernels, structured-output retries, and continuation passes all draw from the same run-scoped meter. Compose's `budgetLimit()` kill switch reads that same spend, so builder budgets and composed budgets agree. See [Compose API](/reference/compose-api/).
+
 ### Budget Persistence
 
 Budget state is persisted to SQLite via `BudgetDB`, so cost tracking survives agent restarts. When an agent starts, the budget enforcer loads the most recent spend from the database and continues from where it left off — daily and monthly budgets are enforced across restarts without resetting.
