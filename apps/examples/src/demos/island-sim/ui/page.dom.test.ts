@@ -8,15 +8,21 @@ import { initializeIslandGameplay } from "../engine/gameplay.js";
 
 let window: InstanceType<typeof Window> | undefined;
 
+const originalTestGlobals = new Map([
+  "window",
+  "document",
+  "fetch",
+  "SVGTextElement",
+].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+
 afterEach(async () => {
-  // @ts-expect-error cleanup test globals
-  delete globalThis.window;
-  // @ts-expect-error cleanup test globals
-  delete globalThis.document;
-  // @ts-expect-error cleanup test globals
-  delete globalThis.fetch;
   await window?.happyDOM.close();
   window = undefined;
+
+  for (const [key, descriptor] of originalTestGlobals) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
 });
 
 function bootPage(): { document: Document } {
