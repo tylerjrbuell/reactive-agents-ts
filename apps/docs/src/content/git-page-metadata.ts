@@ -1,6 +1,6 @@
 /**
- * Computes git-derived page metadata (badge, lastCommit, changedSections) for
- * a docs page. Pure and read-only — never writes to disk. Called fresh from
+ * Computes git-derived page metadata (badge, recentlyChanged, lastCommit,
+ * changedSections) for a docs page. Pure and read-only. Called fresh from
  * `docs-loader-with-meta.ts` on every build, so the result is never persisted
  * into source frontmatter and can't go stale.
  */
@@ -9,6 +9,11 @@ import { relative } from "node:path";
 
 const NEW_THRESHOLD_DAYS = 14;
 const UPDATED_THRESHOLD_DAYS = 15;
+
+/** Return whether a page's last Git commit falls inside the automatic updated window. */
+export function isRecentPageUpdate(lastCommitDate: string | null, now = new Date()): boolean {
+  return lastCommitDate !== null && daysSince(lastCommitDate, now.getTime()) <= UPDATED_THRESHOLD_DAYS;
+}
 
 interface CommitInfo {
   subject: string;
@@ -42,9 +47,9 @@ function getFirstCommitDate(absFilePath: string, repoRoot: string): string | nul
   return out.split("\n").filter(Boolean).pop() ?? null;
 }
 
-function daysSince(dateStr: string): number {
+function daysSince(dateStr: string, now = Date.now()): number {
   const date = new Date(dateStr + "T00:00:00Z");
-  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.floor((now - date.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function computeBadgeFields(
@@ -113,6 +118,7 @@ function getChangedSections(absFilePath: string, hash: string, repoRoot: string)
 }
 
 export interface GitPageMetadata {
+  recentlyChanged?: boolean;
   badge?: { text: string; variant: string; __auto: "1" };
   lastCommit?: { subject: string; hash: string; date: string };
   changedSections?: string[];
@@ -130,6 +136,10 @@ export function computeGitPageMetadata(
     : [];
 
   const result: GitPageMetadata = {};
+
+  if (isRecentPageUpdate(lastCommit?.date ?? null)) {
+    result.recentlyChanged = true;
+  }
 
   const badge = computeBadgeFields(stability, firstDate, lastCommit?.date ?? null);
   if (badge) result.badge = { ...badge, __auto: "1" };

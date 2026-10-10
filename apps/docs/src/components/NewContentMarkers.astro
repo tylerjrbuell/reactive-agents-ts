@@ -1,0 +1,55 @@
+---
+import { getCollection } from "astro:content";
+import { getNewContentPagePaths } from "../scripts/new-content-markers.js";
+
+const pages = await getCollection("docs");
+const pagePaths = getNewContentPagePaths(pages);
+const changedSections = Astro.locals.starlightRoute?.entry?.data?.changedSections ?? [];
+const serializedConfig = JSON.stringify({ pagePaths, changedSections })
+  .replace(/</g, "\\u003c")
+  .replace(/>/g, "\\u003e")
+  .replace(/&/g, "\\u0026");
+---
+
+<script type="application/json" data-ra-new-content-config set:html={serializedConfig}></script>
+
+<script>
+  import {
+    applyPageMapMarkers,
+    applyTocSectionMarkers,
+  } from "../scripts/new-content-markers.js";
+
+  type NewContentMarkerConfig = {
+    readonly pagePaths: readonly string[];
+    readonly changedSections: readonly string[];
+  };
+
+  function readConfig(): NewContentMarkerConfig | undefined {
+    const node = document.querySelector<HTMLScriptElement>("[data-ra-new-content-config]");
+    if (!node?.textContent) return undefined;
+
+    try {
+      return JSON.parse(node.textContent) as NewContentMarkerConfig;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function applyNewContentMarkers(): void {
+    const config = readConfig();
+    if (!config) return;
+
+    applyPageMapMarkers(
+      document.querySelectorAll<HTMLAnchorElement>(".sidebar a[href]"),
+      window.location.origin,
+      config.pagePaths,
+    );
+    applyTocSectionMarkers(
+      document.querySelectorAll<HTMLAnchorElement>("starlight-toc a[href], mobile-starlight-toc a[href]"),
+      config.changedSections,
+    );
+  }
+
+  document.addEventListener("astro:page-load", applyNewContentMarkers);
+  applyNewContentMarkers();
+</script>

@@ -10,6 +10,7 @@ import Search from 'virtual:starlight/components/Search'
 import SiteTitle from 'virtual:starlight/components/SiteTitle'
 import SocialIcons from 'virtual:starlight/components/SocialIcons'
 import ThemeSelect from 'virtual:starlight/components/ThemeSelect'
+import NewContentMarkers from './NewContentMarkers.astro'
 
 const shouldRenderSearch =
 	config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro'
@@ -39,6 +40,7 @@ const PLAYGROUND_URL = '/playground/'
 		<LanguageSelect />
 	</div>
 </div>
+<NewContentMarkers />
 
 <style>
 	@layer starlight.core {

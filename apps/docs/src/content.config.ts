@@ -29,6 +29,7 @@ export const collections = {
         // Everything below is computed at build time by docs-loader-with-meta.ts
         // (git-page-metadata.ts) — never authored by hand, never persisted to
         // source frontmatter.
+        recentlyChanged: z.boolean().optional(),
         badge: z
           .object({ text: z.string(), variant: z.string(), __auto: z.string().optional() })
           .optional(),

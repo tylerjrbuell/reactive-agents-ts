@@ -1672,9 +1672,10 @@ body {
     }
 }
 
-/* Sidebar link dot at start (added by /new-page-indicator.js) */
-.sidebar a[data-ra-new='true']::before,
-nav a[data-ra-new='true']::before {
+/* One dot marker for recently changed pages and sections in both nav surfaces. */
+.sidebar a[data-ra-new-content]::before,
+starlight-toc a[data-ra-new-content]::before,
+mobile-starlight-toc a[data-ra-new-content]::before {
     content: '';
     display: inline-block;
     width: 6px;
@@ -1689,22 +1690,25 @@ nav a[data-ra-new='true']::before {
 }
 
 [data-theme='light'] .ra-new-dot,
-[data-theme='light'] .sidebar a[data-ra-new='true']::before,
-[data-theme='light'] nav a[data-ra-new='true']::before {
+[data-theme='light'] .sidebar a[data-ra-new-content]::before,
+[data-theme='light'] starlight-toc a[data-ra-new-content]::before,
+[data-theme='light'] mobile-starlight-toc a[data-ra-new-content]::before {
     background: var(--ra-violet-deep);
     box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
     .ra-new-dot,
-    .sidebar a[data-ra-new='true']::before,
-    nav a[data-ra-new='true']::before {
+    .sidebar a[data-ra-new-content]::before,
+    starlight-toc a[data-ra-new-content]::before,
+    mobile-starlight-toc a[data-ra-new-content]::before {
         animation: none;
         box-shadow: 0 0 6px rgba(6, 182, 212, 0.55);
     }
     [data-theme='light'] .ra-new-dot,
-    [data-theme='light'] .sidebar a[data-ra-new='true']::before,
-    [data-theme='light'] nav a[data-ra-new='true']::before {
+    [data-theme='light'] .sidebar a[data-ra-new-content]::before,
+    [data-theme='light'] starlight-toc a[data-ra-new-content]::before,
+    [data-theme='light'] mobile-starlight-toc a[data-ra-new-content]::before {
         box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
     }
 }
@@ -2177,16 +2181,16 @@ nav a[data-ra-new='true']::before {
     }
 }
 
-/* "New in v0.12" highlight cards: code blocks were forcing the grid items
+/* Release highlight cards: code blocks were forcing the grid items
    wider than their column (white-space:pre min-content), bleeding the right
    card off-screen. Let the cards shrink and the code scroll horizontally. */
-.ra-v12-cards .card-grid {
+.ra-release-cards .card-grid {
     min-width: 0;
 }
-.ra-v12-cards .card {
+.ra-release-cards .card {
     min-width: 0;
 }
-.ra-v12-cards .card :where(.expressive-code, pre, .frame) {
+.ra-release-cards .card :where(.expressive-code, pre, .frame) {
     max-width: 100%;
     min-width: 0;
 }
@@ -2397,29 +2401,6 @@ ol.ra-steps > li::before {
 
 ol.ra-steps > li:last-child {
     border-left-color: transparent;
-}
-
-/* Sidebar dot — applied via JS (data-ra-updated attribute) */
-a[data-ra-updated]::before {
-    content: '';
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #1cafd9;
-    flex-shrink: 0;
-    margin-inline-end: 0.45rem;
-    vertical-align: middle;
-    box-shadow: 0 0 0 2px color-mix(in srgb, #1cafd9 25%, transparent);
-}
-
-/* TOC section change indicator */
-starlight-toc a[data-ra-changed]::before {
-    content: '●';
-    font-size: 0.5rem;
-    color: #1cafd9;
-    margin-right: 0.35rem;
-    vertical-align: middle;
 }
 
 .ra-changed-sections {
