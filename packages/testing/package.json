@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/testing",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Testing utilities for Reactive Agents — mock services, assertion helpers, and deterministic fixtures",
   "keywords": [
     "ai",
@@ -25,11 +25,11 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.16.0",
-    "@reactive-agents/llm-provider": "0.16.0",
-    "@reactive-agents/runtime": "0.16.0",
-    "@reactive-agents/tools": "0.16.0",
-    "@reactive-agents/trace": "0.16.0"
+    "@reactive-agents/core": "0.17.0",
+    "@reactive-agents/llm-provider": "0.17.0",
+    "@reactive-agents/runtime": "0.17.0",
+    "@reactive-agents/tools": "0.17.0",
+    "@reactive-agents/trace": "0.17.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

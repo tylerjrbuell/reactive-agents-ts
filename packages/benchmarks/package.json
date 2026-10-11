@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/benchmarks",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "type": "module",
   "private": true,
   "main": "./dist/index.js",
@@ -18,16 +18,16 @@
   },
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/trace": "workspace:*",
-    "@reactive-agents/cost": "workspace:*",
-    "@reactive-agents/judge-server": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/reasoning": "workspace:*",
-    "@reactive-agents/replay": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*",
-    "@reactive-agents/runtime-shim": "workspace:*",
-    "@reactive-agents/tools": "workspace:*"
+    "@reactive-agents/core": "0.17.0",
+    "@reactive-agents/trace": "0.17.0",
+    "@reactive-agents/cost": "0.17.0",
+    "@reactive-agents/judge-server": "0.17.0",
+    "@reactive-agents/llm-provider": "0.17.0",
+    "@reactive-agents/reasoning": "0.17.0",
+    "@reactive-agents/replay": "0.17.0",
+    "@reactive-agents/runtime": "0.17.0",
+    "@reactive-agents/runtime-shim": "0.17.0",
+    "@reactive-agents/tools": "0.17.0"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^1.0",

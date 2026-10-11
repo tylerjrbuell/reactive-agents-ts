@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/judge-server",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,11 +14,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/eval": "workspace:*",
-    "@reactive-agents/judgment": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/runtime-shim": "workspace:*",
+    "@reactive-agents/core": "0.17.0",
+    "@reactive-agents/eval": "0.17.0",
+    "@reactive-agents/judgment": "0.17.0",
+    "@reactive-agents/llm-provider": "0.17.0",
+    "@reactive-agents/runtime-shim": "0.17.0",
     "effect": "*"
   },
   "peerDependencies": {

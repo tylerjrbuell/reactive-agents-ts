@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/judgment",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Calibrated typed judgment primitive (Choice/Score/Noul) for Reactive Agents, provider-abstracted over TypeSafe/Jev, an LLM-emulation fallback, and a local Ollama System One backend",
   "keywords": [
     "ai",
@@ -26,8 +26,8 @@
     "test": "bun test --reporter=dots --timeout 15000"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.16.0",
-    "@reactive-agents/llm-provider": "0.16.0",
+    "@reactive-agents/core": "0.17.0",
+    "@reactive-agents/llm-provider": "0.17.0",
     "@typesafe-ai/sdk": "^0.6.0",
     "effect": "^3.10.0"
   },

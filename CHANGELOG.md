@@ -1,3 +1,494 @@
+## [0.17.0] — 2026-10-11
+
+Entropy-observer failures are now published as `ErrorSwallowed` events instead of vanishing silently. All eight bare swallow sites in the reactive observer, including the entropy-sensor scoring path that silently degraded the Reactive Controller and calibration/drift detection, route through `emitErrorSwallowed`. The never-error, not-fatal semantics are unchanged: the helper never throws and no-ops without an ambient `EventBus`.
+
+Add `rax examples` to run the example suite, list standalone demos, and launch
+demos such as Island Survival with provider, model, and port options.
+
+Reactive Agents can now connect as an OAuth 2.1 client to remote MCP servers over
+`streamable-http`/`sse`. Add an `auth` config to `.withMCP()`:
+
+```ts
+.withMCP({
+  name: "billing",
+  transport: "streamable-http",
+  endpoint: "https://mcp.example.com/mcp",
+  auth: {
+    type: "client_credentials",
+    clientId: process.env.MCP_CLIENT_ID!,
+    clientSecret: process.env.MCP_CLIENT_SECRET!,
+  },
+})
+```
+
+- Grants: `client_credentials` and `private_key_jwt` for unattended/production agents
+  (no browser, no human); `authorization_code` for delegating to a specific user's own
+  account, driven ahead of time with the new `rax mcp login|logout|status` CLI.
+- Tokens persist to a permission-locked file store (`~/.reactive-agents/mcp-auth`,
+  `0700`/`0600`) by default; pass your own `tokenStore` (e.g. `createMemoryTokenStore()`)
+  for tests/CI or alternative storage.
+- `interactive` defaults to `false` — an unattended run never unexpectedly opens a
+  browser or binds a local port; only `rax mcp login` or an explicit `interactive: true`
+  triggers the interactive flow.
+- Hardened against known attack classes on top of the MCP SDK's own OAuth support:
+  authorization-server issuer mix-up, HTTPS downgrade, and secret-echoing error
+  messages are all closed, with no unauthenticated fallback on any auth failure.
+- `stdio`-transport servers are unaffected — they take credentials via `env`, and
+  setting `auth` on a `stdio` config is a startup error, not a silent no-op.
+
+Not included (tracked as follow-ups): OS keychain-backed token storage, RFC 8693
+token exchange for sub-agent delegation, and tool-description pinning/re-consent on
+server-side mutation.
+
+Fixes found live-testing against a real third-party OAuth-protected MCP server
+(Google Home MCP, Early Access):
+- The interactive login retry now also covers a 401 raised by a request AFTER the
+  initial connect (e.g. a server, like Google's, that accepts an unauthenticated
+  `initialize` but challenges the very next request) — previously only a 401 on the
+  first connect attempt triggered the browser-login flow.
+- The authorization-server issuer-match check no longer false-positives on a
+  trailing-slash-only difference between the issuer an authorization server
+  publishes and the URL it was discovered from (Google's real issuer omits the
+  trailing slash; a naive string comparison refused every server shaped that way).
+- MCP tools whose JSON Schema uses the `"integer"` type (distinct from `"number"`)
+  now register correctly instead of failing with a schema-validation error.
+- `rax mcp login` gained `--client-secret` and `--redirect-port`, for authorization
+  servers that issue a confidential-client secret and/or validate `redirect_uri` by
+  exact match rather than accepting any loopback port.
+
+Two root-cause fixes surfaced by the StackBlitz playground demos, both
+pinned red-before-green.
+
+**Adaptive sub-strategy relay (`runtime`).** `AgentResult.metadata.strategyUsed`
+reported `"adaptive"` on every adaptive run instead of the sub-strategy the
+router dispatched. `normalizeReasoningResult` (engine/util.ts) rebuilds
+strategy metadata from a whitelist and never copied `selectedStrategy`, even
+though the same type declares it - the declare-but-drop drift class DEBT-REGISTER
+Section 3 tracks for runLedger/verdict/scratchpad. The key now passes through,
+so `reasoning-think.ts`'s existing relay chain resolves to the real sub-strategy
+and `strategyUsed` (and the engine's AgentCompleted event) report what actually
+ran. Tests: `packages/runtime/tests/normalize-reasoning-result-selected-strategy.test.ts`.
+
+**Run-level budget enforcement for plan-execute-reflect (`reasoning`).**
+`.withBudget({ tokenLimit })` could be overshot arbitrarily by
+plan-execute-reflect: the kernel's Arbitrator pre-intent guard counts spend
+SINCE ITS OWN KERNEL START, and plan-execute threaded the same FULL limit
+into every step sub-kernel while its outer plan/analysis/reflect/synthesis
+LLM calls were never guarded at all (live: 25,675 tokens past a 20,000 cap).
+New shared helper `strategies/budget/remaining-budget.ts` gives the strategy
+layer run-scoped accounting: each wave's step kernels receive the REMAINING
+budget, and once cumulative spend crosses the limit the strategy stops
+launching any new work (step waves, reflect, refinement, synthesis, quality
+gate), terminating honestly as `status: "partial"` with
+`budgetTerminalPartial`/`harnessAuthoredOutput` markers and a
+`rawTerminatedBy: budget-limit:tokens:<spent>/<limit>` reason shaped like the
+compose killswitch. Overshoot is now bounded to the in-flight wave. The
+per-kernel-invocation Arbitrator semantics are unchanged; reflexion and
+tree-of-thought share the multi-kernel gap (audit-only, follow-on work) and
+can adopt the same pure helper. Tests:
+`packages/reasoning/src/strategies/budget/remaining-budget.test.ts`,
+`packages/reasoning/src/strategies/plan-execute-cumulative-budget.integration.test.ts`
+(deterministic TestLLMService, no network).
+
+Fix `completeStructured()` sending a corrupted output schema on all 5 providers (local, openai, gemini, anthropic, litellm). Each built the schema via `Schema.encodedSchema(outputSchema)`, which returns another Effect `Schema` instance rather than a JSON-serializable object — `JSON.stringify()` on it evaluates to `undefined`. On local/openai/gemini this crashed with `SyntaxError: JSON Parse error: Unexpected identifier undefined`; on anthropic/litellm it degraded silently, sending the model the literal text `"undefined"` in place of the real schema. Fixed by using `JSONSchema.make()` instead.
+
+Fix Gemini provider selection and provider guidance in `rax demo`.
+
+Apply the Ollama per-call timeout while the streaming request is being set up,
+including the wait for the first response chunk. The timeout now aborts the
+underlying SDK fetch instead of leaving a cold or stalled request unbounded.
+
+New public judgment primitives on the agent facade, and re-exports so their types are reachable through the `reactive-agents` package (not just `@reactive-agents/runtime`):
+
+- **`agent.listJudgmentModels()`** — lists the configured `JudgmentService` backend's available models (`jev`: live TypeSafe catalog; `llm`: rejects, since it has no catalog endpoint). Throws immediately if `.withJudgment()` was never called, same contract as `agent.judge()`. Named `listJudgmentModels` (not `listModels`) — it's scoped to the judgment backend, not the LLM provider models `.withModel()` selects from.
+- **`agent.judgeRank(candidates, question, opts?)`** — batched Score-based candidate re-ranking: judges every candidate against one shared question in as few `JudgmentService.ask()` calls as possible (`opts.chunkCap`, default 30), instead of the one-round-trip-per-candidate cost of hand-rolling `Promise.all(candidates.map(c => agent.judge(...)))`. Returns candidates sorted best-first; ties keep input order.
+- **`includeContext`** on `agent.judge()` is now `boolean | JudgeContextConfig`: `true` folds every context layer (recent messages, tool results, and the full reasoning-step trace — thoughts/actions, not just tool observations) with its own default window; an object form (`{ messages?, toolResults?, reasoningSteps? }`) opts into only the named layers, each independently windowable/type-filterable.
+- `reactive-agents` (the umbrella facade package) now re-exports `JudgeInput`, `JudgeRankCandidate`, `JudgeRankOptions`, `JudgeRankQuestion`, `JudgeRankResult`, `DEFAULT_JUDGE_RANK_CHUNK_CAP` (from `@reactive-agents/runtime`) and `JudgmentModel`, `JudgmentUnsupported` (from `@reactive-agents/judgment`) — these were already exported from `@reactive-agents/runtime` but were missing from the `reactive-agents` facade, so `import type { JudgeInput } from "reactive-agents"` did not compile.
+
+`judgeRank()` now rejects loudly (instead of hanging) when `opts.chunkCap` is non-positive or non-finite, and rejects duplicate candidate ids up front rather than silently letting the last duplicate overwrite an earlier one.
+
+New `.withJudgment(options?)` builder method wires an opt-in `JudgmentService`
+(Choice/Score/Noul over `jev`/`llm`) into any agent, alongside a new public
+composable primitive: `agent.judge({ state, questions })` — calibrated typed
+judgments callable directly from user code, outside any run. Throws loudly
+if `.withJudgment()` was never called (a caller mistake, not a silent no-op).
+
+Every internal harness site this release touches is either **shadow-only**
+(computes a judgment answer and compares it against the existing
+heuristic/LLM decision for later ablation, but never changes what actually
+ships) or **additive** (can only add a signal on top of what already passes,
+never remove one, unless an explicit stricter opt-in is set):
+
+- **Strategy selection** (`@reactive-agents/reasoning`) and **complexity
+  routing** (`@reactive-agents/cost`) — shadow-only judgment classification
+  alongside the existing regex/keyword heuristics. Emits `JudgmentShadow`
+  events for agreement analysis; the heuristic decides exactly as before.
+- **Task comprehension** (`@reactive-agents/reasoning`'s kernel) — shadow-only
+  judgment fan-out reproducing the regex-derived task classification signals.
+- **Guardrails** (`@reactive-agents/guardrails`) — new opt-in judgment battery
+  (`enableJudgmentBattery`) runs parallel to the existing regex detectors.
+  Default `judgmentStrictness: "additive"` can only add a violation or
+  escalate severity (a strict superset of today's regex-only behavior);
+  `"jev-primary"` is an explicit opt-in that can also unblock a regex hit the
+  battery disagrees with. New opt-in `screenOutputs` runs the same battery
+  over replies, observability-only (`GuardrailOutputFlagged`, never blocks).
+- **Autonomy/approval confidence** (`@reactive-agents/interaction`) — the
+  highest-blast-radius shadow site in this release: `PreferenceLearner`'s
+  existing confidence/occurrences/cost-threshold auto-approve gate decides
+  exactly as today; a judgment shadow runs in parallel for future ablation,
+  never feeding back into the decision.
+- **Tool-call healing** (`@reactive-agents/tools`) — new `runJudgmentHealing`
+  escalation, additive over the existing synchronous fuzzy-match healer. Only
+  fires when the sync healer's edit-distance/alias match misses; heals only
+  above a 0.8 confidence floor, otherwise degrades to the original call
+  unchanged. The existing synchronous healing pipeline is unmodified.
+
+Every site above degrades cleanly (never fails, never blocks) when
+`JudgmentService` is unconfigured, when the backend errors or times out, or
+when a judgment answer doesn't clear its confidence floor — behavior for any
+agent that never calls `.withJudgment()` is byte-for-byte unchanged.
+
+No default-on behavior changes for existing agents. Several sites' exit
+gates (inverting a shadow into a real decision) need real production shadow
+data before that follow-up work is justified — tracked in the implementation
+plan (`wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`),
+not shipped speculatively here.
+
+`agent.judge()` gains an opt-in `includeContext` auto-context merge:
+`agent.judge({ questions, includeContext: true })` folds the agent's own
+recent message history and tool observations into `state` automatically,
+instead of requiring the caller to hand-assemble it. `messageWindow` and
+`includeToolResults` tune what gets folded in; an explicit `state` field
+always wins on key collision. Zero cost and byte-identical behavior when
+`includeContext` is omitted.
+
+`state` is now only optional when `includeContext: true` supplies it — a
+discriminated-union type change on `agent.judge()`'s options. Every existing
+call site that already passes `state` (including `state: null`) is
+unaffected; `agent.judge({ questions })` with neither `state` nor
+`includeContext` was previously a silent-`undefined` type hole and is now a
+compile-time error.
+
+Two new shadow-only judgment sites in the reasoning kernel: a
+completion/termination Noul alongside the Verifier's existing terminal
+checks, and a grounding/fabrication Noul alongside the deterministic
+content-containment check `assembleDeliverable` already runs. Both are
+observation-only — they emit `JudgmentShadow` events for later agreement
+analysis and never alter what the heuristic actually decides. Degrades
+cleanly (no-op) when `.withJudgment()` was never called.
+
+`@reactive-agents/reasoning` also exports `compressToolResult` and
+`CompressResult` (previously internal) from its package root, used by
+`agent.judge({ includeContext })`'s tool-observation folding.
+
+File tools now fail helpfully instead of just refusing. A path that escapes the working root is still refused every time, but the rejection names the working root, states the relative-path rule, and suggests the deepest in-root suffix match when one exists, so the next call can be the right one instead of another guess (previously a hallucinating model could burn several rejected calls per run). `confinePath()` is now the single confinement point for file-read, file-write, and directory listing, and the file tool schemas say relative-to-root outright.
+
+Default `generateAgentCard`'s `capabilities.streaming` to `false`. Real SSE
+streaming was never implemented — `handleMessageStream` awaits full task
+completion and joins the events into one response body, and the prior
+`createSSEStream` stub never enqueued anything onto its `ReadableStream` — so
+advertising `streaming: true` let a client rely on a capability that did not
+exist. A caller with real streaming wired can still opt in via
+`generateAgentCard({ capabilities: { streaming: true } })`.
+
+Wired `A2AOptions.basePath` (previously silently dropped): `.withA2A({ basePath })`
+now prefixes all three A2A routes (JSON-RPC, `/agent/card`,
+`/.well-known/agent.json`) via `createA2AHttpServer`'s new third argument and
+`ReactiveAgent.serveA2A({ basePath })`.
+
+Breaking, dead-code removal: `A2AServer`'s `setMessageHandler` (always
+discarded its argument; `serveA2A()` now supplies the real executor through
+`createA2AHttpServer`), the unused `generateId` helper in `a2a-server.ts`,
+the unused-and-drifted `JsonRpcMethod` type in `http-server.ts`, the stubbed
+`createSSEStream` in `streaming.ts`, and the zero-consumer `A2AService`/
+`A2AServiceLive` (`a2a-service.ts`, not even exercised by its own test file)
+are all removed. None had any non-test caller in the monorepo.
+
+Breaking, more dead-code removal (final-review pass): `createA2AServerLayer`
+and `A2AServerLive` (`runtime.ts`) built `createA2AHttpServer` with NO
+executor. Their only caller, `A2aExtraLayer`, was deleted in Task 2 of this
+same plan, leaving both exported with zero non-test callers anywhere in the
+monorepo. Removed from `runtime.ts` and from `@reactive-agents/a2a`'s and
+`@reactive-agents/reactive-agents`'s public exports. `createA2AClientLayer`/
+`A2AClientLive` are unaffected and remain exported.
+
+Fixed alongside: without an executor, `message/send` used to silently accept
+the task and leave it stuck in `submitted` forever with no error — now it
+fails immediately with an `INTERNAL_ERROR` A2AError ("No executor configured
+for this A2A server"). `createA2AHttpServer`'s `executor` parameter stays
+optional (a card-only/discovery server is still a legitimate configuration),
+but any real task-submitting call against one now surfaces the misconfiguration
+instead of hanging silently.
+
+Add `setupLangfuseExporter` — a preset that ships OpenInference-attributed agent traces to Langfuse over OTLP.
+
+- `setupLangfuseExporter(config?)` computes Langfuse's `/api/public/otel` endpoint and the HTTP Basic auth header from `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` (or explicit config), and sets `x-langfuse-ingestion-version: 4` for real-time ingestion. Returns an `ExporterHandle`.
+- `buildLangfuseConfig(config?)` exposes the pure endpoint/auth builder for advanced wiring and testing.
+- New `LangfuseExporterConfig` type: `{ publicKey?, secretKey?, host?, serviceName?, headers? }`.
+
+Because it builds on `setupOpenInferenceExporter`, spans arrive with LLM semantic attributes and render as agent/LLM/tool traces in the Langfuse UI. Regional and self-hosted hosts (EU/US/JP/custom) are supported via `host`.
+
+**Run-scoped budget enforcement (Issue #231 / DEBT D-2026-10-05-P).**
+`.withBudget({ tokenLimit, costLimit })` was enforced per kernel invocation,
+not per agent run: the Arbitrator's pre-intent guard read `state.tokens`, which
+`initialKernelState` resets to 0 at every kernel start. Multi-kernel strategies
+that also make direct LLM calls between kernels (plan-execute-reflect, reflexion,
+tree-of-thought, blueprint) therefore handed each kernel a fresh pool, and their
+direct calls entered no guard at all (live: 25,675 tokens past a 20,000 cap).
+
+The observable LLM wrapper is the one chokepoint on every call path, so it now
+feeds a run-scoped `RunBudgetMeter` carried on the ambient `CurrentRunBudget`
+FiberRef. `ReasoningService.execute` arms one meter per reasoning execution when
+budget limits are declared; the kernel runner stores the live reference on
+`state.meta.runBudgetMeter`; the pure+sync Arbitrator reads cumulative run spend
+(`Math.max(meter, state.tokens)`) instead of the per-kernel reset value, so all
+strategies inherit run-level enforcement by construction. The meter is a plain
+mutable object because `arbitrationContextFromState` is synchronous; numeric
+`+=` is atomic in single-threaded JS. Crash-resume max-seeds the fresh meter from
+the persisted numbers.
+
+Runs without `.withBudget()` are byte-identical (no meter armed, no new
+`state.meta` field). New exports: `CurrentRunBudget`, `makeRunBudgetMeter`,
+`addRunSpend`, `withRunBudgetMeter`, types `RunBudgetMeter`/`RunBudgetSpend`.
+
+The meter carries the **run-scoped original limits** too (`CurrentRunBudgetLimits`
+→ `state.meta.runBudgetLimits`), and the Arbitrator uses them when the meter is
+present. Without this, run-total spend would be compared against the *reduced*
+per-kernel limit plan-execute hands its step sub-kernels (`withSpentBudget`),
+halting a run early by up to the prior spend (e.g. run total 65 vs true limit
+100 halted because the reduced limit was 60).
+
+**Structured calls are metered too (`llm-provider`).** `runStructuredParseWithRetry`
+now surfaces the provider's real (retry-summed) usage on the exported
+`StructuredUsageRef` FiberRef; the observable wrapper reads it after
+`completeStructured` and feeds the meter. `completeStructured`'s public return
+type is unchanged (`A`). This closes the plan-generation/extraction accounting gap.
+
+**The meter is now WHOLE-RUN scoped (`runtime`, #232 Gap 2).** It used to be
+armed per `ReasoningService.execute`, so auxiliary passes that call `execute`
+without `budgetLimits` — the verification THINK retry and the post-think
+continuation hooks — armed no meter and were unbudgeted (a run could exceed its
+cap by a full auxiliary pass). The runtime now arms ONE meter at the
+once-per-run `ExecutionEngine.execute` boundary (`engine/run-budget-arm.ts`);
+`ReasoningService.execute` reuses that ambient meter when present (and only
+creates its own for direct callers/tests outside the engine). Every LLM call a
+run makes — main pass, auxiliary passes, memory/debrief phases — feeds the same
+accumulator, and each kernel inherits the run limits via the runner's
+`state.meta.runBudgetLimits` seed, so an auxiliary-pass kernel enforces the run
+budget even though it declares none.
+
+Tests: `kernel/run-budget.test.ts` (primitive, wrapper feed incl. structured,
+Arbitrator consume, runner seed, resume max-seed, codec round-trip),
+`kernel/run-budget-strategies.test.ts` (reactive / plan-execute-reflect /
+reflexion / tree-of-thought / blueprint halt on a crossed limit; auxiliary pass
+with no `budgetLimits` halts on the ambient run limit),
+`services/reasoning-service-run-budget.test.ts` (production wiring + ambient
+meter reuse), `runtime/tests/run-budget-arm.test.ts` (runtime arming seam),
+`llm-provider/tests/structured-usage-ref.test.ts` (usage surfaced).
+
+**Strategy gates unified on the meter (#234).** Direct LLM calls between kernels
+never enter the Arbitrator, so the per-strategy gates remain the direct-call
+enforcement complement (full removal is premise-falsified). Their duplicated
+accounting is gone: `strategies/budget/run-budget-spend.ts` `resolveRunSpend()`
+reads the run meter and maxes it over the strategy's local figure, so
+plan-execute's quality-gate/wave/reflect gates and blueprint's SOLVE gate agree
+with the Arbitrator on the boundary.
+
+The `write_result_to_file` hint appended to overflowing tool-result previews is now gated on that tool actually being offered to the model (`offersWriteByRef(schemas)`). Previously the hint was unconditional, so the default harness (where `write_result_to_file` is not registered unless `RA_OVERHAUL=1`) instructed models to call a tool that does not exist. Live bench measurement (rw-4, claude-haiku-4-5, n=3): the hint appeared on 13/13 overflow events before this fix and 0/13 after.
+
+Terminal scaffold-leak no longer hard-fails the run on sight, it gets ONE
+bounded corrective synthesis pass first.
+
+When a model's final answer echoed framework scaffolding
+(`[STORED: _tool_result_N]`, "compressed preview", "full text is stored")
+instead of the tool data, the always-on scaffold-leak guard rejected it and
+the run died with `ExecutionError: Verifier rejected output: final-answer:
+failed at scaffold-leak`, zero repair attempts, even though the real answer
+sat in the scratchpad the whole time. The existing repair machinery
+(`enforceQualityGate` DATA→FORMAT synthesis, the arbitrator's
+`synthesisQualityRetry`) only covers reflexion/plan-execute terminals and
+text-protocol `final-answer` intents; native-FC runs never offer the
+`final-answer` tool, so the terminal verifier gate was their only checkpoint.
+
+The runner's terminal gate now mirrors the Phase D1 cap-then-degrade
+precedent for grounding: on a scaffold-leak rejection it attempts exactly ONE
+corrective synthesis pass from the validated, scratchpad-resolved
+observations, re-verifies against the same terminal context, and ships the
+repaired answer with honest `harness_synthesis` provenance when clean. If
+the repair still leaks, the previous behavior is unchanged, the run fails
+honestly, and the specific scaffold-leak reason still surfaces on the
+result/receipt (`verifierVerdict: "reject"`). The guard itself is NOT
+weakened: scaffolding dumps can still never ship as an answer.
+
+Regression coverage: `packages/reasoning/src/kernel/loop/scaffold-leak-terminal-repair.test.ts`
+(deterministic, TestLLMServiceLayer, no network) +
+`packages/runtime/tests/scaffold-leak-repair-e2e.test.ts` (public `agent.run()` boundary).
+
+Read provider API keys from the environment at build time; refuse to send a missing groq/xai key's OpenAI fallback to a third-party host.
+
+Judgments can now run completely local and private. `.withJudgment({ backend: "ollama" })`
+points the Choice/Score/Noul primitive at Ollama's System One decision API
+(`ollama pull nimble`, or Cloudflare's `clef` / `clef-flash` for vision), with
+calibrated distributions, no API key, and no outbound network.
+
+```ts
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withJudgment({ backend: 'ollama' })
+    .build()
+```
+
+The Ollama backend is one descriptor in a shared System One protocol engine
+(`makeSystemOneHttpBackend`), so a second System One provider (hosted or
+local) is a descriptor file plus tests, not a new backend module. A provider
+outside the System One family still plugs in through the existing
+`JudgmentBackend` interface.
+
+Capability negotiation: backends now declare `JudgmentCapabilities`
+(`maxQuestions`, `supportedKinds`, `distributions`, `calibrated`, `images`,
+`modelCatalog`) and consumers adapt automatically: `judgeRank()` and the
+comprehension chunker clamp to the backend's real ceiling instead of a
+hardcoded constant. Read them with `capabilitiesOf(service)`; a service that
+predates the field gets the safe defaults.
+
+`agent.judge()` accepts an optional `images: string[]` channel (base64 only,
+vision model required, 32 MiB ceiling) for screenshot- and UI-state-style
+questions:
+
+```ts
+const { passes } = await agent.judge({
+    state: { task: 'Check the checkout page for layout breakage' },
+    questions: { passes: { type: 'noul', instructions: 'Is the page visually broken?' } },
+    images: [base64Png],
+})
+```
+
+`.withJudgment({ backend: 'ollama', ollama: { keepAlive: '10m' } })` keeps the
+decision model warm between calls. The `jev` and `llm` backends are unchanged.
+
+`AgentStream.collect(agent.runStream(...))` now reports the same terminal outcome as `agent.run(...)`: `success`, `terminatedBy`, and `goalAchieved` are read off `StreamCompleted` (which now carries them) instead of `collect()` hardcoding `success: true` and silently dropping the other two, and `metadata.toolCalls` is derived on the stream path the same way `run()` derives it (both now share `deriveMetadataToolCalls` in `engine/finalize/derive-outcome.ts`). A failed or abstained streamed run no longer collects as a success with no tool calls.
+
+A2A serving now actually works. Previously `.withA2A()` composed a server layer
+at runtime-construction time — before the agent existed — so it bound no port
+and reached no executor; an agent configured for A2A silently served nothing.
+
+Serving is now an explicit call that binds before it returns:
+
+```ts
+const handle = await agent.serveA2A({ port: 3000 });
+// ... other agents can now reach it at /.well-known/agent.json
+await handle.stop();
+```
+
+`.withA2A({ port, basePath })` still configures the defaults `serveA2A()` falls
+back to when the caller omits them. `rax serve` now uses this same server
+implementation instead of its own hand-rolled copy.
+
+Protocol fixes:
+- `message/send` returns a spec-shaped `A2ATask` (`id`, `status`, `artifacts`,
+  …) instead of a bespoke `{ taskId }`.
+- JSON-RPC responses echo the request `id` instead of a hardcoded value.
+- `configuration.blocking` is honored: a non-blocking send returns immediately
+  in `submitted`/`working` state and the caller polls `tasks/get`.
+- `tasks/cancel` now finds the task it's asked to cancel — it previously read
+  from a different task store than `message/send` wrote to and always
+  reported `TASK_NOT_FOUND`. This fixes lookup only: canceling a task
+  currently marks it `canceled` in the store without yet interrupting the
+  underlying agent run; the forked run completes in the background
+  regardless. Full cancellation (retaining a fiber handle to interrupt) is a
+  separate, out-of-scope follow-up.
+
+Client fixes: both `@reactive-agents/a2a`'s `A2AClient` and the runtime's
+`.withRemoteAgent()` / `.withAgentTool()` now read the real `A2ATask` shape
+(`task.status.state`, `task.artifacts`) instead of the old bespoke response
+shape they previously (and incorrectly) assumed.
+
+Env var rename: `rax serve`'s bind-hostname and auth-token env vars are now
+`RA_A2A_HOST`/`RA_A2A_TOKEN` (previously `RA_SERVE_HOST`/`RA_SERVE_TOKEN`),
+matching the name `agent.serveA2A()` / `@reactive-agents/a2a`'s HTTP server
+already read directly. The old names still work as a deprecated fallback
+(with a one-line stderr warning) — not dropped, since existing deployments
+may set them.
+
+Strategy switches now mint a typed `handoff` ledger fact (rendered by the standing frame, protected by compaction) instead of string-folding the switch summary into `priorContext`. Fixes a real data-loss bug found while characterizing the switch path: `initialKernelState` was resetting the run ledger to empty on every strategy switch, silently dropping all prior tool-invocation, artifact, and requirement facts recorded before the switch. The prior ledger is now carried forward across the switch, with carried tool-result observations de-duplicated against the projection chokepoint so a carried call does not mint a second `tool-result` fact.
+
+`run-completed` trace events now carry the real run cost (`totalCostUsd`) and raw termination reason (`terminatedBy`) instead of hardcoding cost to 0 and dropping the reason entirely. `AgentCompleted` gains an optional `totalCostUsd` field forwarded from `result.metadata.cost` at finalize; `RunCompletedEvent` gains an optional `terminatedBy` field mapped from `AgentCompleted.terminationReason`.
+
+New `@reactive-agents/judgment` package: a calibrated typed-judgment primitive
+(Choice/Score/Noul with probabilities) over a provider-abstracted
+`JudgmentBackend` — `jev` (TypeSafe's System One model, `@typesafe-ai/sdk`)
+and `llm` (structured-output emulation over your existing `LLMService`, no
+TypeSafe key required). Every judgment call emits `JudgmentEvaluated`/
+`JudgmentFailed` EventBus events.
+
+`@reactive-agents/eval` now scores the four LLM-judged dimensions
+(accuracy/relevance/completeness/safety) via the `jev` engine by **default**
+— one batched request per case instead of four separate float-prompt LLM
+calls, with real calibrated `confidence` (was: `parseFloat(...) || 0.5`, a
+silent 0.5 on any parse failure). The original LLM-judge path is unchanged
+and selectable via `judgeEngine: "llm"`; with no `JudgmentService` wired at
+all, behavior is byte-for-byte identical to before this release.
+`EvalConfig.repeats` (default 1) enables repeated-scoring runs whose
+variance now drives `checkRegression`/`compare` via a statistically-derived
+minimum-detectable-effect instead of a flat ±0.02/±0.05 epsilon — the same
+flat fallback still applies to `repeats:1` runs.
+
+`@reactive-agents/judge-server`'s `/judge` endpoint gains a `judgeEngine:
+"jev"` option (default remains `"llm"`) that answers `passed`/`overallScore`/
+`recommendation` from one batched Noul+Score+Choice request instead of a
+text prompt parsed with `indexOf("{")`/`JSON.parse`.
+
+No default-runtime-path behavior changes for existing agents — this release
+is the measurement-tooling layer (Phase B of the judgment-primitive plan,
+`wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`).
+The runtime `.withJudgment()` opt-in tier (Phase C) ships separately.
+
+Add opt-in demand-driven `num_ctx` for local Ollama models (`.withHarness({ numCtxPolicy: "demand" })`). Sizes `num_ctx` to the assembled prompt each turn instead of a fixed per-model value, monotone-growing within a run to avoid unnecessary Ollama model reloads. Default remains `"fixed"` (byte-identical to today's behavior); ships opt-in pending broader measurement.
+
+Add a `file-edit` builtin tool that replaces an exact block of text inside an
+existing file, instead of overwriting the whole file like `file-write`. Agents
+editing a large file no longer need to re-emit its entire contents, which cuts
+token cost and removes a class of accidental-truncation bugs.
+
+`file-edit` refuses ambiguous edits: if `oldText` is missing from the file, or
+appears more than once without `replaceAll: true`, the call fails and the file
+is left untouched. It declares the same `requiresApproval: true` /
+`riskLevel: "high"` posture as `file-write`, so it cannot be used to bypass an
+approval gate.
+
+Telemetry's `SAFE_TOOL_NAMES` list previously named two tools that don't exist
+(`file-list`, `http-request`) and was missing two real builtins
+(`list-directory`, `http-get`), which were being silently stripped from
+emitted telemetry — those two builtins now correctly appear in it.
+
+The tool-result cache's default uncacheable list now also covers the
+`write-file`, `fs-write`, and `writefile` aliases (previously only
+`file-write` itself), so a tool registered under any of those alias names is
+correctly treated as non-cacheable.
+
+Fix phantom entropy divergence on healthy runs (FM-C3). Gate event-driven
+entropy scoring to strategies without kernel-inline coverage so kernel
+thoughts are scored exactly once; fix the inverted structural source,
+unify short-run/normal composite weights, use semantic novelty instead of
+the constant-zero task alignment, and make the console dashboard recompute
+trajectory shape from deduplicated points with confidence-gated grades
+and alerts.
+
+Add a `cloudflare-worker` template: scaffolds a deployable Cloudflare Worker (edge) agent.
+
+- `wrangler.toml` with `compatibility_flags = ["nodejs_compat"]` (required for the framework's Node built-ins on workerd) and a `.dev.vars` secret stub
+- Worker `fetch` handler wired to OpenAI, with the API key injected from the Worker env binding (no `process.env` on the edge)
+- `dev` / `deploy` scripts (`wrangler dev` / `wrangler deploy`) and the `wrangler` devDependency
+- Provider is pinned to OpenAI for this template (fetch-based, edge-safe); persistent memory and shell/filesystem tools are unavailable on the edge
+
+Templates can now supply `extraDevDependencies`, `extraScripts`, and `gitignoreLines`, and template-specific files override shared ones at the same path.
+
+Removed three experimental harness mechanisms that the 2026-09-15 ablation-warden pass (`wiki/Decisions/2026-09-15-experimental-flag-verdicts.md`) found INERT on the golden corpus with no accuracy lift on the one live tier measured, and — for two of them — a large live token cost: `RA_OVERHAUL` (the `write_result_to_file` meta-tool), `RA_THOUGHT_CONTINUITY` (replaying the model's own prior thought on assistant turns), and `RA_TOOL_OBSERVE_SYMMETRY` (attaching a `VerificationResult` to the single-tool-call observation path). Each was default OFF and never promoted; this deletes the dead opt-in surface rather than leaving it unmeasured.
+
+Breaking for direct importers of `@reactive-agents/reasoning`'s `overhaulEnabled`, `thoughtContinuityEnabled`, and `toolObserveSymmetryEnabled`, and of `@reactive-agents/tools`'s `writeResultToFileTool` / `makeWriteResultToFileHandler` — all five exports are removed. `HarnessConfig`/`ResolvedHarness` lose the `thoughtContinuity` and `toolObserveSymmetry` fields. No default behavior changes: every mechanism was already OFF by default.
+
+`RA_TOOL_INDEX` and `RA_RATIONALE_AUDIT` were also assessed in the same pass and verdicted KEEP-OPT-IN (insufficient measurement power / non-accuracy audit purpose respectively) — no code change, only a JSDoc pointer to the decision doc.
+
 ## [0.16.0] — 2026-09-05
 
 Fix a set of answer-quality regressions found in live-model QA: the fabrication guard now catches invented named entities, not just fabricated numbers; a raw tool-scaffolded dump no longer ships as the answer when output-gate synthesis fails; a no-tool-needed conversational reply is now auto-promoted instead of being forced through tool-output framing; and the output gate no longer forces file-shaped formatting onto plain chat replies. Behavioral-contract enforcement (`.withContract()`), previously silently dead on the kernel execution path, is now wired.

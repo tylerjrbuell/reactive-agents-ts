@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/replay",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Deterministic re-run of recorded reactive-agent traces with prompt/model overrides",
   "keywords": [
     "ai",
@@ -24,10 +24,10 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.16.0",
-    "@reactive-agents/llm-provider": "0.16.0",
-    "@reactive-agents/trace": "0.16.0",
-    "@reactive-agents/tools": "0.16.0",
+    "@reactive-agents/core": "0.17.0",
+    "@reactive-agents/llm-provider": "0.17.0",
+    "@reactive-agents/trace": "0.17.0",
+    "@reactive-agents/tools": "0.17.0",
     "effect": "^3.10.0"
   },
   "devDependencies": {
