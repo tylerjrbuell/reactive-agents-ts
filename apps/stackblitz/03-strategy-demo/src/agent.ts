@@ -16,6 +16,9 @@
  *
  * Setup: add a key in StackBlitz Secrets (GOOGLE_API_KEY recommended -
  * free tier at ai.google.dev). See .env.example for all options.
+ *
+ * Note: all async work lives inside main() (no top-level await) so the
+ * entry also loads under StackBlitz WebContainer module evaluation.
  */
 
 import { ReactiveAgents } from "reactive-agents";
@@ -24,7 +27,7 @@ import {
   hasKeyFor,
   printSetupGuide,
   resolveProvider,
-} from "./env-setup";
+} from "./env-setup.ts";
 
 type Strategy =
   | "reactive"
@@ -34,12 +37,6 @@ type Strategy =
   | "adaptive";
 
 const provider = resolveProvider("gemini");
-
-if (!hasKeyFor(provider)) {
-  printSetupGuide();
-  process.exit(0);
-}
-
 const model = process.env.MODEL?.trim() || undefined;
 
 const STRATEGIES: Strategy[] = ["reactive", "plan-execute-reflect", "adaptive"];
@@ -57,14 +54,6 @@ const task =
   "A checkout API started timing out right after a deploy. Propose a 3-step " +
   "debugging plan ordered by which step eliminates the most uncertainty first, " +
   "and justify the order in one sentence per step.";
-
-console.log(
-  `\nProvider: ${provider}${model ? ` (${model})` : " (provider default)"}`
-);
-console.log(`Task: ${task}`);
-console.log(`Comparing: ${strategies.join(" vs ")}`);
-console.log(`Per-run budget: ${budgetLimit.toLocaleString()} tokens\n`);
-console.log("Running all strategies in parallel...\n");
 
 interface RunResult {
   readonly strategy: string;
@@ -125,39 +114,59 @@ async function runWithStrategy(strategy: Strategy): Promise<RunResult> {
   return { strategy, strategyUsed, ok, verdict, output, steps, tokens, durationMs: Date.now() - start };
 }
 
-const results = await Promise.all(strategies.map(runWithStrategy));
+async function main(): Promise<void> {
+  if (!hasKeyFor(provider)) {
+    printSetupGuide();
+    return;
+  }
 
-console.log("===============================================");
-console.log("                  COMPARISON                  ");
-console.log("===============================================");
-
-for (const r of results) {
-  console.log(`\n[${r.strategy}] -> selected strategy: ${r.strategyUsed}`);
-  console.log(`  ok:       ${r.ok ? "yes" : "no"}`);
-  console.log(`  verdict:  ${r.verdict}`);
-  console.log(`  steps:    ${r.steps}`);
-  console.log(`  tokens:   ${r.tokens.toLocaleString()} / ${budgetLimit.toLocaleString()} budget`);
-  console.log(`  duration: ${r.durationMs}ms`);
   console.log(
-    `  output:   ${r.output.slice(0, 120)}${r.output.length > 120 ? "..." : ""}`
+    `\nProvider: ${provider}${model ? ` (${model})` : " (provider default)"}`
+  );
+  console.log(`Task: ${task}`);
+  console.log(`Comparing: ${strategies.join(" vs ")}`);
+  console.log(`Per-run budget: ${budgetLimit.toLocaleString()} tokens\n`);
+  console.log("Running all strategies in parallel...\n");
+
+  const results = await Promise.all(strategies.map(runWithStrategy));
+
+  console.log("===============================================");
+  console.log("                  COMPARISON                  ");
+  console.log("===============================================");
+
+  for (const r of results) {
+    console.log(`\n[${r.strategy}] -> selected strategy: ${r.strategyUsed}`);
+    console.log(`  ok:       ${r.ok ? "yes" : "no"}`);
+    console.log(`  verdict:  ${r.verdict}`);
+    console.log(`  steps:    ${r.steps}`);
+    console.log(`  tokens:   ${r.tokens.toLocaleString()} / ${budgetLimit.toLocaleString()} budget`);
+    console.log(`  duration: ${r.durationMs}ms`);
+    console.log(
+      `  output:   ${r.output.slice(0, 120)}${r.output.length > 120 ? "..." : ""}`
+    );
+  }
+
+  const finisher = createFinisher();
+  for (const r of results) {
+    finisher.add({
+      label: `${r.strategy} run`,
+      ok: r.ok,
+      detail: r.ok ? `${r.tokens} tokens` : r.output.slice(0, 100),
+    });
+  }
+  finisher.report();
+
+  console.log("\n-----------------------------------------------");
+  const cheapest = [...results].sort((a, b) => a.tokens - b.tokens)[0];
+  console.log(
+    `Most token-efficient: ${cheapest.strategy} (${cheapest.tokens.toLocaleString()} tokens)`
+  );
+  console.log(
+    "\nTry STRATEGIES=reactive,tree-of-thought or BUDGET_TOKENS=10000 in Secrets."
   );
 }
 
-const finisher = createFinisher();
-for (const r of results) {
-  finisher.add({
-    label: `${r.strategy} run`,
-    ok: r.ok,
-    detail: r.ok ? `${r.tokens} tokens` : r.output.slice(0, 100),
-  });
-}
-finisher.report();
-
-console.log("\n-----------------------------------------------");
-const cheapest = [...results].sort((a, b) => a.tokens - b.tokens)[0];
-console.log(
-  `Most token-efficient: ${cheapest.strategy} (${cheapest.tokens.toLocaleString()} tokens)`
-);
-console.log(
-  "\nTry STRATEGIES=reactive,tree-of-thought or BUDGET_TOKENS=10000 in Secrets."
-);
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

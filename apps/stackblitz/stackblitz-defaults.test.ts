@@ -44,7 +44,7 @@ describe("StackBlitz demo defaults", () => {
       const source = readDemoFile(demo, "src/agent.ts");
 
       expect(source).not.toContain("const ollamaEndpoint =");
-      expect(source).toContain('from "./env-setup"');
+      expect(source).toContain('from "./env-setup.ts"');
     }, 15000);
   }
 
@@ -110,5 +110,47 @@ describe("StackBlitz demo defaults", () => {
 
     expect(readme).toContain("streams");
     expect(readme).toContain("receipt");
+  }, 15000);
+
+  it("keeps entries free of top-level await for WebContainer evaluation", () => {
+    // StackBlitz WebContainer instantiates the entry in a way that rejects
+    // top-level await / top-level for-await with
+    // `SyntaxError: Unexpected reserved word`. All async work must live
+    // inside main(), invoked via main().catch at the bottom.
+    for (const demo of DEMOS) {
+      const source = readDemoFile(demo, "src/agent.ts");
+
+      expect(source).toContain("async function main()");
+      expect(source).toContain("main().catch(");
+      for (const line of source.split("\n")) {
+        const trimmed = line.trim();
+        if (
+          trimmed.startsWith("import ") ||
+          trimmed.startsWith("//") ||
+          trimmed.startsWith("*") ||
+          trimmed.startsWith("/*")
+        ) {
+          continue;
+        }
+        // No top-level `await ...` or `for await ...` outside main().
+        // (Indented awaits inside main()/helpers are fine.)
+        expect(line).not.toMatch(/^(const|let|var)\s+\w+\s*=\s*await\s/);
+        expect(line).not.toMatch(/^await\s/);
+        expect(line).not.toMatch(/^for\s+await\s*\(/);
+      }
+    }
+  }, 15000);
+
+  it("uses explicit .ts import extensions so plain node can run the entry", () => {
+    // Lets the demos run under Node's native type-stripping
+    // (node --env-file-if-exists=.env src/agent.ts) as a tsx fallback.
+    // (The shared-setup assertion above already pins the .ts extension;
+    // this guards against a bare "./env-setup" slipping back in.)
+    for (const demo of DEMOS) {
+      const source = readDemoFile(demo, "src/agent.ts");
+
+      expect(source).toContain('from "./env-setup.ts"');
+      expect(source).not.toMatch(/from "\.\/env-setup"/);
+    }
   }, 15000);
 });
