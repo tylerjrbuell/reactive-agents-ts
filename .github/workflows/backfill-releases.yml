@@ -39,6 +39,10 @@ jobs:
                   skipped_existing=0
 
                   for tag in $(git tag --sort=creatordate); do
+                    # Lockstep releases are `vX.Y.Z`. Legacy per-package tags
+                    # (e.g. `@reactive-agents/health@0.7.6`) contain `/` and
+                    # break the tmp path below — skip anything that isn't v*.
+                    case "$tag" in v[0-9]*) ;; *) continue ;; esac
                     version="${tag#v}"
                     tmp="/tmp/release-${tag}.md"
 

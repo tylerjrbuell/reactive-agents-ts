@@ -214,7 +214,12 @@ jobs:
             }
           "
 
+          # Idempotent: a backfilled or previously-created release is updated
+          # rather than failing the whole workflow on `already exists`.
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
             --notes-file /tmp/release-notes.md \
-            --target main
+            --target main \
+          || gh release edit "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release-notes.md
