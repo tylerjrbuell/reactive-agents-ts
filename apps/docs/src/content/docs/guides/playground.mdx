@@ -18,7 +18,9 @@ This page embeds each scenario at a fixed height. For a real full-viewport edito
 ## Quick setup
 
 <Aside type="tip" title="Edit .env directly in the editor">
-Each playground has a `.env` file open in the editor. Replace `your_gemini_key_here` with your actual key, then click the terminal **restart** button (↺).
+Each playground has a `.env` file open in the editor. Paste your key after
+the `=` (for example `GOOGLE_API_KEY=AIza...`), then click the terminal
+**restart** button (↺).
 </Aside>
 
 Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credit card required.
@@ -59,7 +61,7 @@ Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credi
   </TabItem>
   <TabItem label="Tool Integration">
 
-    **Agent with built-in tools.** The agent uses `code-execute` and `scratchpad-write` — tools that run inside the WebContainer sandbox. No extra API keys needed.
+    **Agent with built-in tools.** The agent uses `crypto-price` and `code-execute` — a live crypto quote plus sandboxed math — then saves the result with the `recall` meta-tool. No extra API keys needed.
 
     Set `TASK` in Secrets to give the agent a custom challenge.
 
@@ -75,7 +77,7 @@ Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credi
   </TabItem>
   <TabItem label="Strategy Demo">
 
-    **Two strategies, same task.** See how `reactive` and `plan-execute-reflect` differ in steps, tokens, and style. Set `STRATEGY_B` to try `tree-of-thought`, `reflexion`, or `adaptive`.
+    **Three strategies, same task.** See how `reactive`, `plan-execute-reflect`, and `adaptive` differ in steps, tokens, and style. Set `STRATEGIES=reactive,tree-of-thought` to try any other combination.
 
     <iframe
       src="https://stackblitz.com/github/tylerjrbuell/reactive-agents-ts/tree/main/apps/stackblitz/03-strategy-demo?embed=1&file=README.md,.env,src%2Fagent.ts&terminal=start&theme=dark&view=editor"
@@ -140,3 +142,49 @@ run the scenario on your own machine, outside the browser sandbox.
 This tunnel hop is the gap the v0.12 browser-extension Ollama bridge will
 close. Until then, the zero-setup path is a cloud key (Gemini free tier).
 </Aside>
+
+---
+
+## Troubleshooting
+
+### `npm error code EIO: '<package>' not found in cache`
+
+A WebContainer install can fail with:
+
+```
+npm error code EIO
+npm error EIO: '@reactive-agents/<pkg>@<version>' not found in cache, try running install again
+```
+
+**This is a StackBlitz WebContainer cache-corruption issue in the browser
+profile, not a problem with the package named in the message.** The named
+package is simply whichever one the corrupted cache trips over; it exists on
+npm and installs cleanly in a fresh environment.
+
+It is often profile-wide: the same embed works in a different browser, a
+different Chrome profile, or a private window while failing in the original
+one. `npm cache clean --force` and deleting `node_modules` frequently do **not**
+clear it, because the stale state lives in the persisted WebContainer
+snapshot, not just npm's cache directory.
+
+**Recovery, in order of reliability:**
+
+1. Open the playground in a **different browser profile** (or a private/
+   guest window, or a different browser). This is the fix that reliably works.
+2. If you are on the embed's own tab, use StackBlitz's **fork** to get a
+   fresh container.
+3. As a last resort, clear site data for `stackblitz.com` in your browser
+   settings, then reload.
+
+There is nothing to change in the demo project to fix this, it is a
+StackBlitz-side cache state. See
+[facebook/docusaurus#11615](https://github.com/facebook/docusaurus/issues/11615)
+for the same failure and confirmation that a fresh profile resolves it.
+
+### Other issues
+
+- **No API key message** — expected; paste a key into the `.env` tab (see
+  [Quick setup](#quick-setup) above) and click the terminal restart (↺) button.
+- **Model returns no tool calls** — set `MODEL` in `.env` to a tool-calling
+  model for your provider (for example `MODEL=gemini-2.5-flash`), or clear it
+  to fall back to the provider default.
