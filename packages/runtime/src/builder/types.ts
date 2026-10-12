@@ -1100,6 +1100,22 @@ export interface AgentResultMetadata {
         readonly repairGaps?: readonly string[]
     }
     /**
+     * Honest-partial markers (engine-produced, `@reactive-agents/reasoning`
+     * completion-status). A run that shipped output the terminal verifier did
+     * not bless as model-authored is reported `partial` (so `success` is
+     * `false`) rather than `completed`.
+     *
+     * - `harnessAuthoredOutput` — the answer was authored by the harness, not
+     *   the model: an assembled deliverable, or a deterministic abstention such
+     *   as the exhausted-run message (GH #206). Present on any run whose output
+     *   the harness produced.
+     * - `verificationWarning` — the specific unmet requirement(s) the
+     *   result-boundary verifier flagged (e.g. a budget-terminal partial naming
+     *   what stayed unmet).
+     */
+    readonly harnessAuthoredOutput?: boolean
+    readonly verificationWarning?: string
+    /**
      * Namespaced extension slot (cross-cutting cascade Task 9). Strategy-authored
      * metadata with no dedicated top-level field rides here and is forwarded
      * verbatim, one level deep. Declared on the public surface so a consumer can

@@ -50,9 +50,7 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(typeof result.output).toBe("string");
     expect(result.output.length).toBeGreaterThan(0);
     expect(result.output).toContain("Could not complete the task within the available budget.");
-    expect(
-      (result.metadata as { harnessAuthoredOutput?: boolean }).harnessAuthoredOutput,
-    ).toBe(true);
+    expect(result.metadata.harnessAuthoredOutput).toBe(true);
     await agent.dispose();
   }, 20000);
 

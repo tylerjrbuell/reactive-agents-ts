@@ -1115,6 +1115,10 @@ interface AgentResult {
         | 'abstained'         // Agent honestly declined — could not ground an answer (see abstention below)
     llmCalls?: number // Number of LLM calls made during the kernel loop (available when reasoning is enabled)
 
+    // Honest-partial markers (present when the harness authored the shipped output)
+    harnessAuthoredOutput?: boolean // true when output was produced by the harness, not the model (assembled deliverable or exhausted-run abstention)
+    verificationWarning?: string    // the result-boundary verifier's note, when it flagged something
+
     // Abstention (present iff terminatedBy === 'abstained')
     abstention?: {
         reason: string    // Why the agent declined rather than fabricating

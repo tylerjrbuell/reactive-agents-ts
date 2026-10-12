@@ -55,7 +55,7 @@ describe("engine empty-output invariant", () => {
       // already-forced-false coherence check. Both fixed; this assertion
       // now passes.
       expect(
-        (r.metadata as { harnessAuthoredOutput?: boolean }).harnessAuthoredOutput,
+        r.metadata.harnessAuthoredOutput,
       ).toBe(true);
       expect(r.receipt?.deliverables).toEqual([
         { spec: "produce the file ./qa-test-empty/x.txt", produced: true },
