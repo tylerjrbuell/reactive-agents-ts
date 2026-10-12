@@ -117,6 +117,13 @@ export type Deliverable =
       readonly reason:
         | "no_substantive_output"
         | "max_iterations_no_artifacts"
+        // GH #206: the run stopped after effort (iteration/tool budget
+        // exhausted, or its terminal was rejected) without producing a verified
+        // answer. Distinct from `max_iterations_no_artifacts` (a raw budget
+        // marker) and from the abstention sentinels (an earned/forced decline):
+        // this is the "we tried and ran out of room" honest partial, and it
+        // carries the attempts summary in `detail`.
+        | "budget_exhausted_no_output"
         | "awaiting_approval"
         // Durable pause (Task 9): the act capability intercepted a
         // `request_user_input` tool call and paused the run for a human
@@ -161,6 +168,14 @@ export function deliverableToContent(d: Deliverable): string {
       switch (d.reason) {
         case "max_iterations_no_artifacts":
           return "Task did not converge within the iteration budget.";
+        case "budget_exhausted_no_output":
+          // Deterministic honest partial (GH #206). `detail` is the harness's
+          // per-run attempts summary (tool calls made/succeeded, iterations
+          // reached). Never a success claim; never model-authored.
+          return (
+            "Could not complete the task within the available budget." +
+            (d.detail ? ` What was attempted: ${d.detail}.` : "")
+          );
         case "awaiting_approval":
           return "Run paused — awaiting human approval.";
         case "awaiting_interaction":
@@ -239,6 +254,7 @@ export function sentinelDeliverable(
   reason:
     | "no_substantive_output"
     | "max_iterations_no_artifacts"
+    | "budget_exhausted_no_output"
     | "awaiting_approval"
     | "awaiting_interaction"
     | "model-abstained",
