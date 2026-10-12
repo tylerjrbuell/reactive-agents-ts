@@ -1194,6 +1194,25 @@ reason (`max_iterations`, `end_turn`, …) and status `failed`, not `abstained`.
 Infrastructure faults (`terminatedBy: "llm_error"`) are excluded, so their real
 cause is kept on `result.error` rather than masked by an abstention.
 
+### Give-up answers become abstentions, not success
+
+When the model ends by declining (an apology, or an incapability statement such
+as "the available tools do not support this action") and the run grounded
+nothing (no successful non-meta tool call), the harness reports an honest
+`abstained` rather than `success: true`. The model's own explanation is kept as
+`result.output`, and `result.abstention.reason` carries it. This closes the case
+where a stuck run ended via loop detection / exhaustion and shipped its give-up
+text as a success. A run that DID gather evidence (any successful data tool) is
+never downgraded, so a terse answer backed by real work still succeeds.
+
+```typescript
+const result = await agent.run('Send a Slack message to #general')
+if (result.terminatedBy === 'abstained') {
+    console.log(result.output) // "The available tools do not include a function for Slack."
+    console.log(result.success) // false
+}
+```
+
 ### `AgentDebrief`
 
 A structured post-run synthesis produced automatically when memory is enabled:

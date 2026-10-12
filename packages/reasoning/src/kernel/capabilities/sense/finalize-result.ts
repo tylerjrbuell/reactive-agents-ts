@@ -37,6 +37,11 @@ import {
   buildAbstentionOutput,
   shouldSynthesizeAbstention,
 } from "./abstention-synthesis.js";
+import {
+  hasGroundedEvidence,
+  isGiveUpAnswer,
+  isHarnessForcedTerminal,
+} from "./give-up-answer.js";
 
 declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
@@ -348,9 +353,46 @@ export function finalizeStrategyResult(
           })
         : finalBase;
 
+    // Give-up honesty gate: a COMPLETED result whose output is a give-up /
+    // incapability statement, with nothing grounded behind it, is not a
+    // success. `resolveCompletionStatus` maps any non-failed `done` state to
+    // `completed`, and the terminal verifier's give-up check requires unused
+    // available tools (so a zero-tool run never trips it), together these let
+    // a loop_graceful / exhaustion give-up ship as `success:true`. Downgrade to
+    // the honest `abstained` terminal (the engine maps terminatedBy:"abstained"
+    // to success:false), keeping the model's own explanation as the output.
+    // Fenced to COMPLETED so failed/abstained/paused results are byte-identical,
+    // and to no-grounded-evidence so a run that DID gather data is never
+    // downgraded.
+    const resolvedText = typeof resolved.output === "string" ? resolved.output : "";
+    const metaRawTerminal = params.extraMetadata?.["rawTerminatedBy"];
+    const rawTerminal =
+      typeof params.kernelMeta?.terminatedBy === "string"
+        ? params.kernelMeta.terminatedBy
+        : typeof metaRawTerminal === "string"
+          ? metaRawTerminal
+          : undefined;
+    const finalResult =
+      resolved.status === "completed" &&
+      rawTerminatedBy !== "abstained" &&
+      !hasGroundedEvidence(params.steps) &&
+      (isHarnessForcedTerminal(rawTerminal) || isGiveUpAnswer(resolvedText))
+        ? buildStrategyResult({
+            ...params,
+            extraMetadata: {
+              ...params.extraMetadata,
+              terminatedBy: "abstained",
+              ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
+                ? { rawTerminatedBy: "abstained" }
+                : {}),
+              abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
+            },
+          })
+        : resolved;
+
     const judged: ReasoningResult = {
-      ...resolved,
-      metadata: { ...resolved.metadata, verdict },
+      ...finalResult,
+      metadata: { ...finalResult.metadata, verdict },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

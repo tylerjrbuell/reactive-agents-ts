@@ -35,7 +35,7 @@ Built on Effect-TS: schema-validated boundaries, tagged errors, no untyped throw
 | **One import to start**      | Reasoning, memory, guardrails, and cost routing are all opt-in, added one `.with()` call at a time |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM (40+ models), Test |
 | **8 reasoning strategies**   | ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action (@experimental) |
-| **9,992 tests**             | Latest full run: 9,992 pass / 0 fail / 27 skip / 4 todo (2026-10-12) |
+| **10,001 tests**             | Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12) |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -157,7 +157,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **9,992 tests** across 1315 files. Latest full run: 9,992 pass / 0 fail / 27 skip / 4 todo (2026-10-12)
+- **10,001 tests** across 1317 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -897,7 +897,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (9,992 tests / 1315 files, ~3m)
+bun test                 # Run full test suite (10,001 tests / 1317 files, ~3m)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
