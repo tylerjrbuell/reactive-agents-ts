@@ -19,6 +19,59 @@ commit/PR noted.
 
 ---
 
+## 2026-10-12 sweep — full backlog re-ground (`execute-backlog` SCAN + GROUND)
+
+**Sources read this pass:** all **27** open GH issues (titles + labels + full bodies +
+comments), `bun run build` (**38/38** green), `bun run typecheck` (**68/68** green),
+`bun test packages/runtime/test/as-unknown-as-ceiling.test.ts` (**green**), `wc -l` +
+`grep -c "^export "` on every decomposition candidate, `wiki/Hot.md`, `wiki/Architecture/
+DEBT-REGISTER.md` (B3 seam row + B3 census + wither census test rows), `wiki/Issues/
+Running Issues Log.md` (via Hot.md pointers). **Baseline:** clean tree on `dev`,
+build 38/38, typecheck 68/68.
+
+### GROUND — every scored candidate re-verified against current code
+
+| # | Claim | Result now | Disposition |
+|---|---|---|---|
+| 214 | 79–80 src vs ceiling 78; 265 tests vs ceiling 237 | src **74** ≤ 78; tests **237** ≤ 237 (exact); ceiling test **GREEN** | **STALE — already resolved** by the wire-or-delete hardening wave (commit `8de1df98`). Close with the recheck below; not code work. |
+| 206 | `resolvePassOutput()` returns `null` on budget exhaustion; no abstention text | **VERIFIED** (`run-pass.ts:78-99`); the kernel/reactive path has no synthesis. `plan-execute.ts:1581` + `blueprint.ts:756` already emit honest-partial text on *token-budget* exhaustion — the gap is the **iteration-budget** kernel path. | REAL, highest user value |
+| 217 | `reactive-agent.ts` 3,112 LOC | **3,263** (drifted +151) | REAL (drift) |
+| 218 | `builder.ts` 3,081 LOC | 3,081 | REAL |
+| 219 | `think.ts` 2,135 LOC | 2,135 | REAL |
+| 220 | `arbitrator.ts` 1,908 LOC / 31 exports | 1,925 / 31 | REAL (drift) |
+| 221 | `execution-engine.ts` 1,807 LOC | 1,817 | REAL (drift) |
+| 222 | `iterate-pass.ts` 1,734 + `runner.ts` 1,703 | 1,734 + **1,826** (drift) | REAL |
+| 213 | 9 SILENT withers need behavioral proof | Census + batch-1 precedent (`builder-seam-behavioral.test.ts`) confirmed. **~4 of the 9 are UNOBSERVABLE-DETERMINISTIC with the `test` provider** (`withA2A` needs a live server, `withCircuitBreaker`/`withStallPolicy`/`withGrounding` need live/grounded runs) — partial executability. | REAL, partial |
+| 226 | `bounded-parallel.test.ts` real-`setTimeout` flake risk | VERIFIED (5–50 ms delays, no fake clock) | REAL, small |
+| 33 | No OTel sampling / `ReasoningStepCompleted` nesting in tracing | VERIFIED (0 hits, re-confirmed) | REAL |
+| 31 / 32 | No Langfuse / Braintrust exporter | VERIFIED (exporters dir unchanged) | REAL |
+| 54 / 55 | No Mistral / Cohere adapter | VERIFIED | REAL |
+| 34/36/42/43/44/45/48/49/51 | Phase D–G research benches / gates | Verified "still real" but **need live models (qwen3:14b) or τ-bench infra** — not executable in a dev-box 90-min budget | Parked, not scored |
+
+### SCORE (blast × frequency × fix-cost-inverse; max 27)
+
+| Item | Blast | Freq | Cost(inv) | Score |
+|---|---|---|---|---|
+| **#206** abstention synthesis (kernel path) | 2 (every budget-exhausted run) | 3 (routine path) | 2 (needs design pass) | **12** |
+| **#33** OTel sampling + span nesting | 2 | 2 | 2 | **8** |
+| **#213** wither batch 2 | 2 (public API surface) | 2 | 2 | **8** (×0.75 executability → ~6) |
+| **#54/#55** Mistral/Cohere adapters | 2 (capability class) | 1 (opt-in vendor) | 2 | **4** each |
+| **#226** bounded-parallel flake | 1 (test-only) | 1 | 3 | **3** |
+| **#31/#32** Langfuse/Braintrust exporter | 1 | 1 | 2 | **2** each |
+| **#217–222** decompositions | 1 (internal velocity) | 1 | 1 (large/uncertain) | **1** each |
+| **#38/#50/#52** doc chores | 1 | 1 | 2–3 | 2–3 |
+
+### Sprint batches (capped, score-sorted, package-coherent)
+
+**Sprint 1 — highest user value:** #206 (abstention synthesis, kernel iteration-budget path).
+**Sprint 2 — observability (one package):** #33 + #31 + #32.
+**Sprint 3 — capability expansion (`llm-provider`, contributor-ready):** #54 + #55 (+ #38 doc).
+**Sprint 4 — framework robustness:** #213 (observable subset) + #226.
+**Sprint 5 — internal debt (per-package, one file at a time):** #217/#218/#221 (`runtime`), #219/#220/#222 (`reasoning`), #234.
+**Housekeeping (no code):** close #214 with the recheck evidence above.
+
+---
+
 ## 2026-09-23 sweep (second pass, same day) — fresh DISCOVER + sprint batching
 
 **Trigger:** re-invoked with no args, immediately after the morning's backlog overhaul
