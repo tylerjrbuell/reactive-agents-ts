@@ -72,10 +72,16 @@ describe("engine empty-output invariant", () => {
     try {
       const r = await agent.run("Summarize the plot of Hamlet in one sentence.");
       expect(r.success).toBe(false);
-      // Fixed 2026-08-14, see Phase 4 Task 3 — same root cause and fix as
-      // the harnessAuthoredOutput finding in the test above (metadata
-      // whitelist + gate ordering). This assertion now passes.
-      expect(String((r as { error?: string }).error ?? "")).toContain("no output");
+      // GH #206 (2026-10-12): an exhausted run with no verified answer now
+      // ships a deterministic honest abstention as its OUTPUT instead of
+      // silence. Pre-#206 this run shipped empty output and the engine's
+      // generic "no output" error; both were honest but unusable. The failure
+      // cause is still real and non-empty (the engine surfaces the abstention
+      // as the cause too).
+      expect(String(r.output ?? "")).toContain(
+        "Could not complete the task within the available budget.",
+      );
+      expect(String((r as { error?: string }).error ?? "").length).toBeGreaterThan(0);
     } finally {
       await agent.dispose();
     }

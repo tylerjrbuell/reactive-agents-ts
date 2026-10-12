@@ -1,5 +1,5 @@
 {
-  "tests": 9979,
-  "updated": "2026-10-10",
-  "_note": "Latest full bun test run (bun test --timeout 15000): 9979 pass / 0 fail / 26 skip / 4 todo across 1312 files. The count is passing tests only. NOT auto-refreshed by CI; update manually after a full local run when the count moves."
+  "tests": 9992,
+  "updated": "2026-10-12",
+  "_note": "Latest full bun test run (bun test --timeout 15000): 9992 pass / 0 fail / 27 skip / 4 todo across 1315 files. The count is passing tests only. NOT auto-refreshed by CI; update manually after a full local run when the count moves."
 }

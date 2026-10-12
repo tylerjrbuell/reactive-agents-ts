@@ -33,6 +33,10 @@ import { compileRunContract } from "../../contract/run-contract.js";
 import { isSideEffectLanded, writtenPathSatisfies, type PostCondition } from "../verify/post-conditions.js";
 import { buildStrategyResult } from "./step-utils.js";
 import { hasSuccessfulRequiredToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
+import {
+  buildAbstentionOutput,
+  shouldSynthesizeAbstention,
+} from "./abstention-synthesis.js";
 
 declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
@@ -306,9 +310,47 @@ export function finalizeStrategyResult(
         })
       : base;
 
+    // GH #206: honest abstention synthesis on effort exhaustion.
+    //
+    // A run that stopped after effort (iteration/tool budget exhausted, or its
+    // terminal was rejected) with no verified output used to ship EMPTY output:
+    // `resolvePassOutput` correctly refuses to resurrect a rejected
+    // continuation, but nothing filled the gap. Synthesize a deterministic,
+    // harness-authored abstention naming what was attempted, WITHOUT touching
+    // the honest `failed` status (success stays false). Infra faults
+    // (llm_error/kernel_error) are excluded so their real provider cause on
+    // `result.error` is never masked. Additive: fires ONLY on empty output, so
+    // every path that already produced an answer (including the enforced
+    // abstention above) is byte-identical.
+    //
+    // `terminatedBy` source order: the RAW kernel meta wins (it distinguishes
+    // `kernel_error` from `max_iterations`, which the narrowed public enum
+    // collapses), falling back to the strategy-forwarded public value.
+    const metaTerminatedBy = params.extraMetadata?.["terminatedBy"];
+    const rawTerminatedBy =
+      typeof params.kernelMeta?.terminatedBy === "string"
+        ? params.kernelMeta.terminatedBy
+        : typeof metaTerminatedBy === "string"
+          ? metaTerminatedBy
+          : undefined;
+    const outputEmpty =
+      finalBase.output == null ||
+      (typeof finalBase.output === "string" && finalBase.output.trim().length === 0);
+    const resolved =
+      finalBase.status === "failed" &&
+      outputEmpty &&
+      shouldSynthesizeAbstention(rawTerminatedBy)
+        ? buildStrategyResult({
+            ...params,
+            output: buildAbstentionOutput(params.steps),
+            status: "failed",
+            extraMetadata: { ...params.extraMetadata, harnessAuthoredOutput: true },
+          })
+        : finalBase;
+
     const judged: ReasoningResult = {
-      ...finalBase,
-      metadata: { ...finalBase.metadata, verdict },
+      ...resolved,
+      metadata: { ...resolved.metadata, verdict },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

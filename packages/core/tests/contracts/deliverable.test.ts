@@ -148,6 +148,23 @@ describe("Deliverable — typed channel into state.output", () => {
     expect(
       deliverableToContent(sentinelDeliverable("max_iterations_no_artifacts")),
     ).toBe("Task did not converge within the iteration budget.");
+    // GH #206: an exhausted run that produced no verified answer ships an
+    // honest abstention naming what was attempted. Bare (no detail) keeps the
+    // reason-only sentence; with detail it appends the attempts summary.
+    expect(
+      deliverableToContent(sentinelDeliverable("budget_exhausted_no_output")),
+    ).toBe("Could not complete the task within the available budget.");
+    expect(
+      deliverableToContent(
+        sentinelDeliverable(
+          "budget_exhausted_no_output",
+          "3 tool call(s) attempted, 0 succeeded",
+        ),
+      ),
+    ).toBe(
+      "Could not complete the task within the available budget. " +
+        "What was attempted: 3 tool call(s) attempted, 0 succeeded.",
+    );
     // No sentinel reason may render as a success claim.
     for (const reason of [
       "no_substantive_output",
@@ -155,6 +172,7 @@ describe("Deliverable — typed channel into state.output", () => {
       "awaiting_approval",
       "awaiting_interaction",
       "model-abstained",
+      "budget_exhausted_no_output",
     ] as const) {
       expect(deliverableToContent(sentinelDeliverable(reason))).not.toBe("Task complete.");
     }
