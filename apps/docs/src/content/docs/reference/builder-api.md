@@ -1166,6 +1166,30 @@ if (result.terminatedBy === 'abstained') {
 run-level surface is distinct from the per-field structured-output `abstained`
 map (`.withOutputSchema({ abstainBelow })`) — the two are unrelated and may coexist.
 
+### Exhausted runs ship an abstention, never silence
+
+A run that stops after effort (the iteration or tool budget is exhausted, or its
+terminal answer is rejected) without producing a verified answer does not return
+empty output. The harness synthesizes a deterministic, harness-authored
+abstention that names what was attempted. `success` is `false` (this is not a
+success claim), and `metadata.harnessAuthoredOutput` is `true`:
+
+```typescript
+const result = await agent.run('Fetch the live ZZZ-token price and summarize it')
+if (!result.success) {
+    console.log(result.output)
+    // "Could not complete the task within the available budget.
+    //  What was attempted: 3 tool call(s) attempted (web-search), 0 succeeded."
+    console.log(result.metadata.harnessAuthoredOutput) // true
+}
+```
+
+This is deterministic (no extra LLM call) and distinct from the forced
+`abstained` terminal above: an exhausted run reports `terminatedBy` as its real
+reason (`max_iterations`, `end_turn`, …) and status `failed`, not `abstained`.
+Infrastructure faults (`terminatedBy: "llm_error"`) are excluded, so their real
+cause is kept on `result.error` rather than masked by an abstention.
+
 ### `AgentDebrief`
 
 A structured post-run synthesis produced automatically when memory is enabled:
