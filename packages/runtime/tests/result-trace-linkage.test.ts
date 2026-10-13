@@ -74,7 +74,7 @@ describe("Result→trace linkage (W0.5)", () => {
         // (replay/src/load.ts:29-31). A file of valid-JSON-but-schema-invalid
         // lines would pass a hand-parse and fail here.
         const t = await loadTrace(tracePath!);
-        expect(t.runId).toBe(runId);
+        expect(t.runId).toBe(runId!); // defined + ULID-shaped asserted above
         expect(t.events.length).toBeGreaterThan(0);
         expect(t.events.some((e) => e.kind === "run-started")).toBe(true);
         expect(t.events.every((e) => e.runId === runId)).toBe(true);

@@ -19,13 +19,10 @@
  * lane exists to pin the COMPOSITION the docs teach, which nothing wired
  * together before (the benchmarks golden rail uses a private helper instead).
  *
- * Known fixture quirk, asserted below rather than hidden: the live recorder
- * normalizes `run-started.task` to "" (packages/trace/src/normalize.ts), so
- * `RecordedRun.task` is empty on fresh recordings — the CI lane passes the
- * task explicitly to `agent.run(...)`, mirroring the recorded task extracted
- * from the golden's first llm-exchange. `replay()` (the orchestrator) is
- * affected by the same quirk; the fix belongs in the trace producer
- * (packages/trace) and is surfaced in the W0.8 task report.
+ * The task the CI lane replays is read straight from `RecordedRun.task`: GH
+ * #236 landed the producer fix (runtime stamps the prompt into `AgentStarted`,
+ * normalize carries it into `run-started`), so fresh recordings, including
+ * the committed golden below, carry the real task end-to-end.
  */
 import { afterAll, describe, expect, test } from "bun:test"
 import { existsSync, mkdtempSync, rmSync } from "node:fs"
@@ -86,12 +83,10 @@ describe("replay-as-CI lane (cookbook: Deterministic testing)", () => {
         const exchanges = eventsOf(run.trace.events, "llm-exchange")
         expect(exchanges.length).toBeGreaterThan(0)
 
-        // The live recorder stamps run-started.task as "" (see module header),
-        // so the task the CI lane replays is extracted from the golden's first
-        // exchange rather than RecordedRun.task.
-        const firstUser = exchanges[0]!.messages.find((m) => m.role === "user")
-        expect(firstUser).toBeDefined()
-        const task = firstUser!.content
+        // GH #236 producer fix: RecordedRun.task carries the real prompt
+        // stamped by the recorder (no more first-exchange extraction).
+        expect(run.task.length).toBeGreaterThan(0)
+        const task = run.task
 
         const table = buildSequentialLLMTable(run.trace.events)
         expect(table.size).toBe(exchanges.length)

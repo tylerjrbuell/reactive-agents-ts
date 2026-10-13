@@ -53,7 +53,11 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         timestamp: raw.timestamp,
         iter: -1,
         seq,
-        task: "",
+        // GH #236: the real prompt, stamped by the emitter (capped at 64KB
+        // there, `taskTruncated` marks a clip). The "" fallback keeps
+        // traces and emit paths predating the fix valid: old hand-rolled
+        // AgentStarted events without `task` still normalize cleanly.
+        task: raw.task ?? "",
         model: raw.model,
         provider: raw.provider,
         config: {},

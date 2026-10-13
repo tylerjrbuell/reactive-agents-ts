@@ -137,6 +137,14 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 // TELEMETRY_ENABLED gate below.
 const _noticesManager = makeNoticesManager();
 
+/**
+ * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
+ * Same 64KB budget convention as the `AgentCompleted.output` cap applied by
+ * `engine/finalize/run-finalize.ts` (`RUN_OUTPUT_CAP`); clipped emissions
+ * set `taskTruncated: true`.
+ */
+const STARTED_TASK_CAP = 64 * 1024;
+
 import { armRunBudget } from "./engine/run-budget-arm.js";
 
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
@@ -698,6 +706,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       | undefined) ??
                     rootContext(ctx.taskId, config.agentId);
                   yield* FiberRef.set(CurrentRunContextRef, ambientRunContext);
+                  // GH #236: stamp the real task text into AgentStarted so
+                  // normalize's run-started (and RecordedRun.task downstream)
+                  // carries the prompt instead of "". Payload budget: capped
+                  // at 64KB here at the publisher, the same convention as
+                  // AgentCompleted.output (engine/finalize/run-finalize.ts
+                  // RUN_OUTPUT_CAP); taskTruncated marks a clip.
+                  const startedTaskText = extractTaskText(task.input);
+                  const startedTaskClipped = startedTaskText.length > STARTED_TASK_CAP;
                   yield* eb.publish({
                     _tag: "AgentStarted",
                     taskId: ctx.taskId,
@@ -705,6 +721,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     provider: String(ctx.provider ?? "unknown"),
                     model: String(ctx.selectedModel ?? "unknown"),
                     timestamp: executionStartMs,
+                    task: startedTaskClipped
+                      ? startedTaskText.slice(0, STARTED_TASK_CAP)
+                      : startedTaskText,
+                    ...(startedTaskClipped ? { taskTruncated: true } : {}),
                     ...(task.metadata?.context?.["parentAgentId"]
                       ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),

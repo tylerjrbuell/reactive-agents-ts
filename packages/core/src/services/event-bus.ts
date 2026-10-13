@@ -412,6 +412,19 @@ export type AgentEvent =
       /** B8-T3b: delegation depth (RunContext.depth). 0 at the root, 1 for a
        *  directly-delegated sub-agent, etc. */
       readonly depth?: number;
+      /**
+       * GH #236: the run's prompt/task text, stamped at the emission site
+       * so `run-started` trace events (and therefore `RecordedRun.task`)
+       * carry the real task instead of "". Optional for backward-compat
+       * with older emitters and hand-rolled test events; consumers fall
+       * back to "" when absent. Capped at 64KB by the publisher
+       * (execution-engine.ts) under the same payload budget convention as
+       * `AgentCompleted.output` (see run-finalize.ts `RUN_OUTPUT_CAP`);
+       * `taskTruncated` marks a clip.
+       */
+      readonly task?: string;
+      /** True iff `task` was clipped to the 64KB publisher cap. */
+      readonly taskTruncated?: boolean;
     }
   | {
       /**
