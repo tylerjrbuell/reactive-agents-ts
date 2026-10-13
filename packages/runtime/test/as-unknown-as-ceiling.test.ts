@@ -289,6 +289,11 @@ function countAsUnknownAs(file: string): Hit[] {
 // hiding — 233 was the count immediately before them. Like the `src`
 // ceiling, this may only shrink going forward; a package growing its cast
 // count without a bump fails loudly instead of silently.
+// - 2026-10-13 (Wave 2 local-tier-reliability follow-ups): 240 → 242. The
+//   capability-store version-gate test needs two `plantRow(... as unknown as
+//   Record<string, unknown>)` fixture widenings to feed legacy-shaped rows to
+//   the gate; typed test-double helpers do not cover the raw-store seam. Test-
+//   fixture widening only; no production-site casts added.
 // - 2026-10-13 (Wave 2a, local-tier-reliability program): 237 → 240. The
 //   recorded pin had ALREADY drifted to 239 on this branch before the Wave 2a
 //   dispatch (verified at 64a94a309~1 — carried debt from prior wave commits
@@ -300,7 +305,7 @@ function countAsUnknownAs(file: string): Hit[] {
 //   as the 2026-06-06 capability-prime bump precedent above; bun's
 //   `typeof fetch` carries static members a plain stub can't structurally
 //   satisfy (documented 2026-08-20).
-const TESTS_CEILING = 240;
+const TESTS_CEILING = 242;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

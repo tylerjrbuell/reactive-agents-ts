@@ -98,7 +98,13 @@ const SCOPED_ROOTS = [
 //     warning in packages/runtime/src/builder.ts (.withDurableRuns() without
 //     .withReasoning() never checkpoints). Category-A: sync build() config
 //     validation, no hydrated Effect runtime yet.
-const WARN_CEILING = 11;
+// - 2026-10-13 (Wave 0.3, local-tier-reliability program): 11 → 12. The
+//   implicit-test-provider warning ("agent will return canned output...")
+//   fires synchronously inside build() BEFORE any Effect runtime is hydrated,
+//   so Effect.logWarning/EventBus are unavailable - the legitimate sync-
+//   fallback case this ceiling's option 2 names. Kept deliberately prominent
+//   (the program's front-door fake-green guard), not migrated.
+const WARN_CEILING = 12;
 // Sprint-1 (2026-06-02): bumped 0 → 3 to accommodate three diagnostic-gated
 // console.error sites (RA_ASSEMBLY_DEBUG trace in think.ts; two RA_OVERHAUL_DEBUG
 // traces in overhaul/context-projection.ts). All three are env-gated debug
