@@ -52,6 +52,8 @@ claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFE
 
 **Wave-4 close capture (2026-10-13, `fixtures/post-w4/`): detection PASS (frozen-fixture replay lane: 146/146 arbiter non-progress, loop trips, (e) precondition holds, FP guard green on substantive fixture), band demotes live (green→economize in 9/9 stall runs), tail-bloat guard clean (S1 tokensIn −7%). TERMINATION SEAM OPEN: impossible-task+tools-layer arms (N=3) early-stop at iter 3–4 (wall −37%) but 3/3 shipped FABRICATED success claims with verdict success (inverse of GH #245; controller's honest-abstain ad-hoc did NOT reproduce). Wave 4 must NOT be marked verified on the termination seam — controller decision needed.** Also surfaced a program-wide integrity fact: "temp 0" was never threaded to the wire (recorded provider default 0.5 through post-w1-fix, 0.3 from post-w2 on) — rows comparable within era; threading is provider-warden scope (`fixtures/post-w4/MANIFEST.md` disclosure).
 
+**Wave-4 verdict re-run at TRUE temp 0 (`fixtures/post-w4-fixed/`, 2026-10-13): VERDICT PASS — Wave 4 markable VERIFIED.** Substrate proven (temperature=0 on every new wire exchange, first time in program); honesty gate 5/5 on the exact fabrication config (success:true→abstained; no over-blocking on grounded S2); true-0 reveals shape determinism (prior "variance" was decoding-temp); residual FILED for Wave 5: abstained runs still ship the model's "successfully sent" claim in OUTPUT TEXT (verdict-level fixed, content-level unscrubbed).
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)

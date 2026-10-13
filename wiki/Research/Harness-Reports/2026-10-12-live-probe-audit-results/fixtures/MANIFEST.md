@@ -89,6 +89,8 @@ markup; phi4 clean run 3/3 tier-1 parses; act coder 0/5 executed, fail-safe iner
 box-blocked. **rung-3 PARTIAL, rung-2 BLOCKED-credit** — see that dir's MANIFEST). Wave-4 close set:
 `post-w4/` (detection lane 7/7 on frozen fixture + FP guard; 11 live runs; **termination seam ships a
 live false-success regression 3/3 on impossible-task+tools-layer — recorded OPEN**; tail-bloat clean).
+True-temp-0 re-run set: `post-w4-fixed/` (substrate proven 0-on-wire; **honesty gate PASS 5/5**,
+wave-4 VERIFIED at verdict level; output-text claim residual filed for Wave 5).
 
 ## Probe rows (unit-style, re-run under final Wave-0 code state)
 
