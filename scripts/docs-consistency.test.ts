@@ -112,6 +112,28 @@ const PRECOUNT_RE = new RegExp(
 /** "Reasoning strategies | <N>" comparison-table cell — count stated AFTER. */
 const TABLE_RE = /\breasoning strategies\s*\|\s*(?:✅\s*)?(\d+)/gi;
 
+/**
+ * TOTAL-CLAIM SCOPE (review round 1): a "<N> strategies" mention only asserts
+ * how many strategies the framework REGISTERS when it carries total-claim
+ * context. Local/per-recipe counts — the playground's "Two strategies, same
+ * task" demoing one stackblitz, tier-subset phrasings, etc. — are NOT totals
+ * and must not be pinned (and prose must not be bent to flatter the regex).
+ * A PRECOUNT match is asserted iff ANY total signal holds:
+ *   - an adjective rides in the phrase ("8 reasoning strategies",
+ *     "the 8 built-in strategies", "the five canonical strategies");
+ *   - total context words immediately precede ("ships eight strategies",
+ *     "all eight strategies", "with eight strategies", "total");
+ *   - an enumeration follows directly ("8 strategies (ReAct, …");
+ *   - the claim sits in a markdown table row (a comparison-table cell);
+ *   - it is the complement form "the other N strategies" (asserted as N+1).
+ * Everything else is recorded as an ignored local claim and printed, so a
+ * total claim that ever loses its context signals surfaces as a shrinkage
+ * in the ignored list rather than a silent hole in the pin.
+ */
+const TOTAL_ADJECTIVE_RE =
+  /\b(reasoning|built-in|pluggable|registered|canonical|core|main)\b/i;
+const TOTAL_CONTEXT_RE = /\b(all|ships|ship|with|total|available)\s+$/i;
+
 function toNumber(token: string): number {
   return /^\d+$/.test(token)
     ? Number.parseInt(token, 10)
@@ -134,11 +156,12 @@ function markdownFiles(dir: string): string[] {
     .filter((p) => existsSync(p));
 }
 
-function extractClaims(file: string): Claim[] {
+function extractClaims(file: string): { totals: Claim[]; local: Claim[] } {
   const text = readFileSync(file, "utf-8");
-  const claims: Claim[] = [];
-  const lineOf = (index: number) =>
-    text.slice(0, index).split("\n").length;
+  const lines = text.split("\n");
+  const totals: Claim[] = [];
+  const local: Claim[] = [];
+  const lineOf = (index: number) => text.slice(0, index).split("\n").length;
 
   for (const m of text.matchAll(PRECOUNT_RE)) {
     const idx = m.index ?? 0;
@@ -147,17 +170,25 @@ function extractClaims(file: string): Claim[] {
     // prose), not about the registered strategy count.
     if (/^\s+files?\b/.test(text.slice(end, end + 10))) continue;
     const isComplement = /\bother\s+$/i.test(text.slice(0, idx));
-    claims.push({
+    const claimLine = lines[lineOf(idx) - 1] ?? "";
+    const isTotal =
+      isComplement ||
+      TOTAL_ADJECTIVE_RE.test(m[0]) ||
+      TOTAL_CONTEXT_RE.test(text.slice(0, idx)) ||
+      /^\s*\(/.test(text.slice(end, end + 2)) ||
+      (claimLine.match(/\|/g) ?? []).length >= 2;
+    const claim: Claim = {
       file,
       line: lineOf(idx),
       text: m[0],
       stated: toNumber(m[1]),
       isComplement,
-    });
+    };
+    (isTotal ? totals : local).push(claim);
   }
   for (const m of text.matchAll(TABLE_RE)) {
     const idx = m.index ?? 0;
-    claims.push({
+    totals.push({
       file,
       line: lineOf(idx),
       text: m[0],
@@ -165,12 +196,17 @@ function extractClaims(file: string): Claim[] {
       isComplement: false,
     });
   }
-  return claims;
+  return { totals, local };
 }
 
 function relative(p: string): string {
   return p.slice(REPO_ROOT.length + 1);
 }
+
+const SCANNED = [README, ...markdownFiles(DOCS_DIR)];
+const SCAN = SCANNED.map(extractClaims);
+const TOTAL_CLAIMS = SCAN.flatMap((s) => s.totals);
+const LOCAL_CLAIMS = SCAN.flatMap((s) => s.local);
 
 describe("docs-consistency: strategy counts pinned to StrategyRegistry bootstrap", () => {
   it(
@@ -195,15 +231,11 @@ describe("docs-consistency: strategy counts pinned to StrategyRegistry bootstrap
   );
 
   it(
-    "every strategy-count claim in README + docs pages matches the registry",
+    "every TOTAL strategy-count claim in README + docs pages matches the registry",
     () => {
-      const scanned = [README, ...markdownFiles(DOCS_DIR)];
-      const claims = scanned.flatMap(extractClaims);
-      // Fail loudly with ALL violations in one run.
       const expected = (c: Claim) =>
         c.isComplement ? TRUTH.canonical.length - 1 : TRUTH.canonical.length;
-      const violations = claims
-        .filter((c) => c.stated !== expected(c))
+      const violations = TOTAL_CLAIMS.filter((c) => c.stated !== expected(c))
         .map(
           (c) =>
             `  ${relative(c.file)}:${c.line} — "${c.text}" states ${c.stated}; ` +
@@ -217,9 +249,20 @@ describe("docs-consistency: strategy counts pinned to StrategyRegistry bootstrap
         `${violations.length} strategy-count claim(s) drift from the registry ` +
           `bootstrap (${relative(REGISTRY_SRC)}):\n${violations.join("\n")}`,
       ).toBe(0);
-      // The scan must actually find claims — a regex that silently matches
-      // nothing is a dead pin.
-      expect(claims.length).toBeGreaterThanOrEqual(15);
+      // Observability: local (non-total) claims are deliberately NOT pinned.
+      // Print them so a drift-prone total phrased WITHOUT context words shows
+      // up here instead of silently escaping the pin.
+      for (const c of LOCAL_CLAIMS) {
+        console.log(
+          `[docs-consistency] ignored local claim: ${relative(c.file)}:${c.line} — "${c.text}"`,
+        );
+      }
+      // The scan must actually find total claims — a regex that silently
+      // matches nothing is a dead pin.
+      expect(TOTAL_CLAIMS.length).toBeGreaterThanOrEqual(15);
+      // And the complement form must still be present (guards the 'other N'
+      // rule against silently disappearing from prose).
+      expect(TOTAL_CLAIMS.some((c) => c.isComplement)).toBe(true);
     },
     15_000,
   );
