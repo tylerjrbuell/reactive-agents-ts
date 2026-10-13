@@ -105,7 +105,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 ### 🔌 Providers & Models
 - **8 LLM providers**: Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
 - **Model-adaptive context**: 4 tiers (local, mid, large, frontier) with tier-aware prompts and compaction; this is what makes 4B+ Ollama models viable for tool-calling agents
-- **Adaptive tool calling**: an FC dialect probe routes to a native function-calling driver or a 3-tier text-parse driver (XML, JSON, pseudo-code)
+- **Adaptive tool calling**: an FC dialect probe routes to a native function-calling driver or a 3-tier text-parse driver (XML, JSON, pseudo-code); text-parse execution is currently opt-in behind `REACTIVE_AGENTS_TEXT_PARSE` (`shadow` = record would-have-executed, `act` = execute) while the Stage-B rollout completes
 - **Healing pipeline**: normalizes tool-name aliases, parameter aliases, paths, and type coercion before every execution, so malformed calls from smaller models get repaired instead of failing
 - **Fallback chains**: `withFallbacks()` for graceful degradation across providers and models
 - **Native thinking mode**: `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning; `.withModel({ thinking: true })` is the quick boolean
