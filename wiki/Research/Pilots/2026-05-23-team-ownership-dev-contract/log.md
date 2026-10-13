@@ -1182,3 +1182,11 @@ task: "GH #243 root fix: DIALECT_PRIOR_CONFIDENCE_FLOOR=2 + explicit-presence ph
 result: completed, confidence 0.9
 outcome: "accepted: review Approved 0C/1I(next-wave chore: full v2 suite re-commit for truthful metadata + coder:14b measurement). Precedence traced: no ra=1 demotion path survives; absent-vs-schema-default indistinguishable. Static entries re-reconciled to evidence w/ dated history comments. RED->GREEN + floor-before-refresh discrimination recorded. llm-provider 510/0, typecheck 4/4. Deeper-than-brief root cause (hardcoded dialect stub, never a measurement) self-discovered - the bricking class was folklore-circular by construction; program's first self-caused P1 fully closed pending S3 re-capture gate."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "#243-review Important #1 discharge: full-suite v2 calibration-runner --commit refresh of 4 priors (qwen3:4b/qwen3:14b/cogito:14b/coder:14b) via shipped probe seam - hand-merged metadata replaced by uniform v2 measurements; coder:14b dialect measured 3/3 none"
+result: completed, confidence 0.9
+outcome: "accepted (controller direct verification, ruling: data-only artifact of an already-reviewed seam - diff = 4 JSON + changeset exactly; field moves match claims incl. the disclosed 2000-censor cap). Wave-2 provenance sin-class fully closed. New true fact: coder:14b is genuinely text-dialect by measurement -> Wave 3 S4-grade target; two priors tightened optimalToolResultChars 4000->2000 (censored ladder cap, ledged as runner design note). S3 re-capture gate (R1) dispatched next."
+```
