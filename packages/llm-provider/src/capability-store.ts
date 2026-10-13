@@ -47,7 +47,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { Schema } from "effect";
-import { CapabilitySchema, type Capability } from "./capability.js";
+import { CapabilitySchema, CURRENT_PROBE_VERSION, type Capability } from "./capability.js";
 import { normalizeModelId } from "./calibration.js";
 import type { CapabilityCache } from "./capability-resolver.js";
 
@@ -161,32 +161,65 @@ const NOOP_STORE: CapabilityCache = {
   },
 };
 
-// ─── Active store (injectable) ────────────────────────────────────────────────
+// ─── Active store (injectable, version-gated) ────────────────────────────────
 
 let activeStore: CapabilityCache = defaultFileStore;
 
 /**
- * The store the probe path writes through to and reads from. Defaults to the
- * JSON file store under `~/.reactive-agents/capabilities/` (a no-op store
- * while `REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE=1`); override with
- * `setCapabilityStore` to plug a `CalibrationStore` (or any duck-typed
- * `CapabilityCache`) at composition time.
+ * The staleness gate (2026-10-13 user bug, qwen3.5): a persisted
+ * `source: "probe"` row is authoritative ONLY when its `probeVersion`
+ * matches `CURRENT_PROBE_VERSION`. Absent (pre-versioning legacy) or
+ * non-current (the producer probe evolved) ⇒ reported as a MISS, driving
+ * the caller into a live re-probe whose write-through overwrites the stale
+ * file (self-heal — the gate never deletes). Same discipline as #243's
+ * calibration-prior versioning: persisted measurements stop being trusted
+ * when the producer changes.
+ *
+ * The gate wraps the ACTIVE store (not just the file default) so injected
+ * stores (e.g. a CalibrationStore) cannot smuggle legacy rows past it.
+ */
+function gateStaleRows(inner: CapabilityCache): CapabilityCache {
+  return {
+    loadCapability: (provider, model, endpoint) => {
+      const cap = inner.loadCapability(provider, model, endpoint);
+      if (cap === null) return null;
+      if (cap.source === "probe" && cap.probeVersion !== CURRENT_PROBE_VERSION) {
+        return null; // legacy producer — force a re-probe
+      }
+      return cap;
+    },
+    saveCapability: (cap, endpoint) => inner.saveCapability(cap, endpoint),
+  };
+}
+
+let gatedView: CapabilityCache = gateStaleRows(activeStore);
+
+/**
+ * The staleness-GATED view of the active store (see gateStaleRows). Reads
+ * and writes on the live routing paths go through here. Defaults to the JSON
+ * file store under `~/.reactive-agents/capabilities/` (a no-op store while
+ * `REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE=1`); override the ungated base
+ * with `setCapabilityStore` to plug a `CalibrationStore` (or any
+ * duck-typed `CapabilityCache`) at composition time — the gate stays on.
  */
 export function getCapabilityStore(): CapabilityCache {
   if (isCapabilityStoreDisabled()) return NOOP_STORE;
-  return activeStore;
+  return gatedView;
 }
 
 /**
- * Injection seam: replace the active capability store (pass `null` to restore
- * the default file store). A `CalibrationStore` from
+ * Injection seam: replace the BASE capability store (pass `null` to restore
+ * the default file store). The probe-version staleness gate remains applied
+ * on top of whatever is injected. A `CalibrationStore` from
  * `@reactive-agents/reactive-intelligence` satisfies `CapabilityCache`
- * structurally and can be passed here without a package dependency. An
- * explicit injection is honored even under the disable env (the caller owns
- * that intent).
+ * structurally and can be passed here without a package dependency. Note
+ * the disable env seam takes precedence over injections at read time (it
+ * forces the no-op view); callers wanting an injected store must leave
+ * `REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE` unset.
  */
 export function setCapabilityStore(cache: CapabilityCache | null): void {
   activeStore = cache ?? defaultFileStore;
+  gatedView = gateStaleRows(activeStore);
 }
 
 /**

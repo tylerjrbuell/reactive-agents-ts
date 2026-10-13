@@ -35,6 +35,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // size (billions) and tri-state chat-template tool-token emission.
       "parameterSizeBillions",
       "toolTemplateEmitsTokens",
+      // Optional (2026-10-13, qwen3.5 stale-row fix): producer version of
+      // the probe; the capability store refuses non-current probe rows.
+      "probeVersion",
       // Optional (GH #239): marks harness-stub rows whose tier may not
       // arbitrate for any consumer (test/test bench-window row).
       "nominal",

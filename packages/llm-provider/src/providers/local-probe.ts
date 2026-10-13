@@ -20,6 +20,7 @@
 // (capability discovery API) etc. live next to their providers.
 
 import type { Capability, TokenizerFamily } from "../capability.js";
+import { CURRENT_PROBE_VERSION } from "../capability.js";
 import { getCapabilityStore } from "../capability-store.js";
 
 // ─── Module-scope cache (in-memory layer over the persistent store) ─────────
@@ -196,6 +197,9 @@ function showResponseToCapability(
     toolCallDialect: caps.has("tools") ? "native-fc" : "none",
     parameterSizeBillions: parseParameterSizeBillions(show.details?.parameter_size),
     toolTemplateEmitsTokens: detectToolTemplateEmission(show.template),
+    // Producer stamp: persisted rows are trusted for routing only while
+    // this matches CURRENT_PROBE_VERSION (capability-store staleness gate).
+    probeVersion: CURRENT_PROBE_VERSION,
     source: "probe",
   };
 }

@@ -61,6 +61,29 @@ export type ToolCallDialect = typeof ToolCallDialectSchema.Type;
 export const CapabilitySourceSchema = Schema.Literal("probe", "static-table", "user", "fallback");
 export type CapabilitySource = typeof CapabilitySourceSchema.Type;
 
+/**
+ * Producer version of the Ollama capability probe (local-probe.ts). Rows in
+ * the persistent capability store are trusted for ROUTING only when their
+ * `probeVersion` equals this constant; absent (legacy) or non-current rows
+ * are treated as a cache MISS and trigger a live re-probe, whose
+ * write-through overwrites them (self-heal — legacy files are never
+ * deleted). Rationale (2026-10-13 user bug): a pre-stub-guard probe
+ * persisted `toolTemplateEmitsTokens:false` for qwen3.5 measured off a
+ * 13-char plugin stub; the #243 guard changed what that scan MEANS, but the
+ * store outlived the change and pinned a native-capable model (2/2 live
+ * tool_calls) to text-parse. Same discipline as #243's calibration-prior
+ * versioning: persisted measurements stop being trusted when the producer
+ * evolves.
+ *
+ * v1 = W2a probe (size/thinking/template scan, NO stub guard).
+ * v2 = #243 probe (plugin-stub templates measure UNMEASURED, not false).
+ *
+ * Lives in the schema module (not the probe module) because BOTH the probe
+ * (stamp) and the store (gate) import it — placing it in local-probe.ts
+ * would cycle store ← probe (the store is imported BY the probe).
+ */
+export const CURRENT_PROBE_VERSION = 2
+
 // ─── Capability struct ───────────────────────────────────────────────────────
 
 /**
@@ -165,6 +188,26 @@ export const CapabilitySchema = Schema.Struct({
 
   /** Where this capability came from (probe / static-table / fallback). */
   source: CapabilitySourceSchema,
+
+  /**
+   * Producer version of the CAPABILITY PROBE that wrote this row — stamped
+   * by `probeOllamaCapability` (local-probe.ts), NOT the calibration-suite
+   * PROBE_VERSION in calibration-runner.ts (different producer, different
+   * lifecycle; see CURRENT_PROBE_VERSION below).
+   *
+   * Consumers that TRUST a persisted probe row for routing MUST compare
+   * against `CURRENT_PROBE_VERSION`: absent (legacy) or non-current rows
+   * carry measurement semantics the current probe no longer endorses, and
+   * must be treated as a cache MISS (re-probe; write-through self-heals).
+   * Motivation (2026-10-13 user bug): a W2a-era row persisted
+   * `toolTemplateEmitsTokens: false` measured off qwen3.5's 13-char
+   * plugin-stub template; the #243 stub guard changed what that scan MEANS
+   * (stubs now measure UNMEASURED), but the store outlived the guard — the
+   * stale false pinned a capable model onto text-parse. Same class as #243's
+   * stale calibration priors: persisted measurement data must carry a
+   * version and stop being trusted when the producer changes.
+   */
+  probeVersion: Schema.optional(Schema.Number),
 });
 
 export type Capability = typeof CapabilitySchema.Type;
