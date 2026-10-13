@@ -1150,3 +1150,11 @@ task: "Wave 2d: FC wire-payload honesty (2.4, names-and-types applied to tools[]
 result: completed, confidence 0.95
 outcome: "accepted: review Approved 0C/2I -> #1 fixed round 1 (d5ecf6b77 >=3x pin per spec, measured 7x headroom), #2 residual adaptive/decompose classify sites -> GH #240. Independent trace verification of the classify-source finding (2/8 post-w1 fixtures carry strategy-evaluator classify exchanges) praised. W4.0 note: structural pin greps iterate-pass.ts source — will need re-pinning through the 4.0 refactor. Full reasoning 3,013/0 + runtime parity + typecheck 9/9."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2e+fix: head-truncation guard (2.5) — ollama-scoped preflight (wire-truthful num_ctx), schemas->pair-safe-history ladder, system head never sacrificed, harness-signal + ledger fact, demand sizing schema-inclusive, conservative reserve; W2c reconciliation documented (option a)"
+result: completed, confidence 0.96
+outcome: "accepted: review Approved 0C + 4I; #1 rung-2 fork/#2 demand leak/#3 reserve fixed round 1 (05a944e28, RED->GREEN + discriminating cuts, re-review all ADDRESSED, pairing algorithm verified against live projection invariants); #4 explicitNumCtx cross-authority -> GH #241 filed by parent. Full reasoning 3,025/0, runtime parity, typechecks clean. Ollama-scoping judged honest decision with shipped precedent + indirect regression cover (reviewer: tests were correctly scoped, guard was mis-scoped)."
+```
