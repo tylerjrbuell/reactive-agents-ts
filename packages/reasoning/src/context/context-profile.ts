@@ -108,13 +108,18 @@ export type ContextProfile = typeof ContextProfileSchema.Type;
 export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
   local: {
     tier: "local",
-    // Bumped 2000 → 4000 (2026-05-28). Filter tasks ("top N by criterion")
-    // need ALL items visible — sort criterion may not be among the first 8.
-    // Local models routinely ship 32K+ context (qwen3:14b, cogito:14b), so
-    // 4000 chars (~1K tokens) for tool obs is well within budget. The 2000
-    // ceiling was tuned for 4K-context models that haven't shipped in a
-    // year. Try-fit pattern still compresses to preview when total exceeds.
-    toolResultMaxChars: 4000,
+    // D-2026-07-30-H RESOLVED (Wave 2a, 2026-10-13): the 2026-05-28 bump to
+    // 4000 made the LOCAL tier preserve MORE of an old tool result than MID
+    // (1200) — an inverted ladder where a capable model saw less history
+    // than a tiny one. The dispatched fix chose local ≤ mid, landing on
+    // 1200. The filter-task concern that motivated 4000 ("all items visible")
+    // is preserved where it actually bites: this tier's toolResultPreviewItems
+    // stays at 8 (the one sanctioned local-above-mid budget — see the
+    // ratchet test; capable models are resolved to `mid` by resolveProfile,
+    // so what remains in `local` is small-window models that DO need tighter
+    // char budgets, not wider ones). Try-fit pattern still compresses to
+    // preview when total exceeds.
+    toolResultMaxChars: 1200,
     toolResultPreviewItems: 8,
     toolSchemaDetail: "names-and-types",
     maxIterations: 8,

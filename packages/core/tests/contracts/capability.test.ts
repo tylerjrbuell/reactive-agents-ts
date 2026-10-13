@@ -22,7 +22,10 @@ describe("Capability — single source of model truth", () => {
   });
 
   it("TIER_TOOL_RESULT_PRESERVE mirrors the legacy CONTEXT_PROFILES empirical table", () => {
-    expect(TIER_TOOL_RESULT_PRESERVE.local).toBe(4000);
+    // local 1200 since the D-2026-07-30-H fix (Wave 2a) — was 4000, an
+    // inversion against mid. Kept in lockstep by reasoning's
+    // context-profile-ratchet.test.ts.
+    expect(TIER_TOOL_RESULT_PRESERVE.local).toBe(1200);
     expect(TIER_TOOL_RESULT_PRESERVE.mid).toBe(1200);
     expect(TIER_TOOL_RESULT_PRESERVE.large).toBe(800);
     expect(TIER_TOOL_RESULT_PRESERVE.frontier).toBe(600);

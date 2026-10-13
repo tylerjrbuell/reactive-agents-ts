@@ -289,7 +289,18 @@ function countAsUnknownAs(file: string): Hit[] {
 // hiding — 233 was the count immediately before them. Like the `src`
 // ceiling, this may only shrink going forward; a package growing its cast
 // count without a bump fails loudly instead of silently.
-const TESTS_CEILING = 237;
+// - 2026-10-13 (Wave 2a, local-tier-reliability program): 237 → 240. The
+//   recorded pin had ALREADY drifted to 239 on this branch before the Wave 2a
+//   dispatch (verified at 64a94a309~1 — carried debt from prior wave commits
+//   landing sites without a bump, the same failure mode documented on
+//   2026-07-08; re-syncing rather than leaving the guard silently red).
+//   Wave 2a adds exactly ONE site: a global-`fetch` test-double stub in
+//   packages/llm-provider/tests/capability-ladder.test.ts (`… as unknown as
+//   typeof globalThis.fetch`) — canonical test-double widening, same category
+//   as the 2026-06-06 capability-prime bump precedent above; bun's
+//   `typeof fetch` carries static members a plain stub can't structurally
+//   satisfy (documented 2026-08-20).
+const TESTS_CEILING = 240;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

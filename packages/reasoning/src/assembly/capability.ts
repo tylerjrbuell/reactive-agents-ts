@@ -69,8 +69,12 @@ export function nextNumCtx(
 
 // Phase 1b (2026-07-07): single source of truth — derive from CONTEXT_PROFILES
 // instead of maintaining a mirror table that can drift (sweep report 02, F4).
+// Wave 2a (2026-10-13): fallback literals below are DEAD defaults kept in sync
+// with the table by tests/context/context-profile-ratchet.test.ts — the D-H
+// fix moved local 4000 → 1200; update mirrors here AND in
+// @reactive-agents/core TIER_TOOL_RESULT_PRESERVE together, or the ratchet fails.
 const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
-  local: CONTEXT_PROFILES.local.toolResultMaxChars ?? 4000,
+  local: CONTEXT_PROFILES.local.toolResultMaxChars ?? 1200,
   mid: CONTEXT_PROFILES.mid.toolResultMaxChars ?? 1200,
   large: CONTEXT_PROFILES.large.toolResultMaxChars ?? 800,
   frontier: CONTEXT_PROFILES.frontier.toolResultMaxChars ?? 600,

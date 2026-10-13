@@ -553,9 +553,21 @@ conversation-assembly) patched these superseded/dead paths — its
 budget helpers + their tests (§4 dead-code move), OR wire it and prove lift —
 but ResultStore already owns this seam, so deletion is the honest move.
 
-### D-2026-07-30-H — tuning inversion: `mid` old-result preserve budget (1200) < `local` (4000)
+### D-2026-07-30-H — ✅ RESOLVED (2026-10-13, Wave 2a) — tuning inversion: `mid` old-result preserve budget (1200) < `local` (4000)
 
 **Class:** tuning smell — NOT a bug. Filed to prevent a wrong-layer spot-fix.
+
+**Resolution (Wave 2a, local-tier-reliability program, 2026-10-13):** dispatched
+fix chose `local ≤ mid`: `CONTEXT_PROFILES.local.toolResultMaxChars` 4000 →
+1200, plus the `core` mirror `TIER_TOOL_RESULT_PRESERVE.local` 4000 → 1200 so
+both live consumers (legacy profile path + canonical `project()` budget) move
+together. `local.toolResultPreviewItems` keeps its sanctioned 8 (filter-task
+exception — item COUNT visibility was the 2026-05-28 concern, not char budget).
+Regression guard: `packages/reasoning/tests/context/context-profile-ratchet.test.ts`
+— whole-table monotone ladder + D-H guard (local ≤ mid on the char budget) +
+core-mirror lockstep pin. Harm question ("UNMEASURED") stays unmeasured; this
+discharge is a ladder-consistency fix under the program's authority, not a
+lift claim.
 
 **First read (WRONG, corrected here):** "profile tier resolves `mid` while the
 Ollama probe says `local` — a divergence like the window bug." **Checked:** it

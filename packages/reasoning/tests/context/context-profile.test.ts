@@ -14,9 +14,16 @@ describe("CONTEXT_PROFILES", () => {
     expect(CONTEXT_PROFILES.frontier).toBeDefined();
   });
 
-  it("local tier has largest tool result budgets (more context for weaker models)", () => {
+  it("local preserve budget matches mid after the D-2026-07-30-H fix (was an inversion)", () => {
+    // Pre-Wave-2a this asserted local.toolResultMaxChars > mid (4000 vs 1200)
+    // — the exact shape D-2026-07-30-H filed as an inverted budget ("capable
+    // model preserves LESS than a tiny one"). Dispatched fix (2026-10-13)
+    // chose local ≤ mid; the ratchet test owns the full ladder now. The
+    // preview-items budget keeps its sanctioned local exception (8) for
+    // filter tasks — see the 2026-05-28 comment in context-profile.ts.
     const local = CONTEXT_PROFILES.local;
-    expect(local.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultMaxChars);
+    expect(local.toolResultMaxChars).toBeLessThanOrEqual(CONTEXT_PROFILES.mid.toolResultMaxChars);
+    expect(local.toolResultPreviewItems).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultPreviewItems);
   });
 
   it("frontier tier is tuned for efficiency (tighter than default)", () => {

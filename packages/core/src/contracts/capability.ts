@@ -115,9 +115,15 @@ export interface CapabilityResolver {
  * Tier-aware default per-result preservation budget (chars). Mirrors the
  * legacy `CONTEXT_PROFILES[tier].toolResultMaxChars` empirical table.
  * Exposed for callers building capabilities from probe/cache data.
+ *
+ * D-2026-07-30-H (Wave 2a, 2026-10-13): local was 4000 while mid was 1200 —
+ * a tiny tier preserving MORE than a capable one. Fixed to 1200 so the
+ * ladder is monotone at the local/mid boundary. This mirror MUST be updated
+ * together with CONTEXT_PROFILES; packages/reasoning/tests/context/
+ * context-profile-ratchet.test.ts pins both copies against each other.
  */
 export const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
-  local: 4000,
+  local: 1200,
   mid: 1200,
   large: 800,
   frontier: 600,
