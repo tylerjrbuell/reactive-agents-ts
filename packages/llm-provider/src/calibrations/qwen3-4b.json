@@ -1,6 +1,6 @@
 {
   "modelId": "qwen3:4b",
-  "calibratedAt": "2026-10-13T13:06:14.721Z",
+  "calibratedAt": "2026-10-13T13:21:40.410Z",
   "probeVersion": 2,
   "runsAveraged": 3,
   "steeringCompliance": "hybrid",
@@ -8,6 +8,5 @@
   "observationHandling": "uses-recall",
   "systemPromptAttention": "strong",
   "optimalToolResultChars": 2000,
-  "toolCallDialect": "native-fc",
-  "dialectProbeNote": "toolCallDialect re-measured 2026-10-13 via GH #243 behavioral probe (3/3 majority \"native-fc\"); other fields from the prior calibration run"
+  "toolCallDialect": "native-fc"
 }

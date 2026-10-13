@@ -1,13 +1,12 @@
 {
   "modelId": "cogito:14b",
-  "calibratedAt": "2026-10-13T13:06:36.227Z",
+  "calibratedAt": "2026-10-13T13:25:17.498Z",
   "probeVersion": 2,
   "runsAveraged": 3,
   "steeringCompliance": "hybrid",
   "parallelCallCapability": "reliable",
   "observationHandling": "uses-recall",
   "systemPromptAttention": "strong",
-  "optimalToolResultChars": 4000,
-  "toolCallDialect": "native-fc",
-  "dialectProbeNote": "toolCallDialect re-measured 2026-10-13 via GH #243 behavioral probe (3/3 majority \"native-fc\"); other fields from the prior calibration run"
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "native-fc"
 }
