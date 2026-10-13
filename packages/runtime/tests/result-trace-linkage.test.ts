@@ -11,17 +11,21 @@
  * (REACTIVE_AGENTS_TRACE_DIR at module scope, restored in afterAll).
  *
  * Rax-consumable assertion: instead of shelling out to the `rax` CLI (fragile
- * in-suite: spawns a whole Bun process, cwd-sensitive, timeout-prone), this
- * test asserts the trace file parses as JSONL whose events carry the run's
- * runId, which is exactly the schema `rax diagnose replay` consumes
- * (packages/diagnose/src/lib/resolve.ts + packages/trace run-file format).
- * The path itself is asserted to live under the same dir the diagnose CLI
- * reads (REACTIVE_AGENTS_TRACE_DIR).
+ * in-suite: spawns a whole Bun process, cwd-sensitive, timeout-prone), the
+ * trace file is asserted through `loadTrace` from `@reactive-agents/trace` —
+ * the SAME schema-strict loader the diagnose CLI stack consumes (it silently
+ * drops lines failing `isTraceEvent` and stamps `runId` from the first valid
+ * event, replay.ts:20-35), plus the `run-started` presence that
+ * `loadRecordedRun` requires (replay/src/load.ts:29-31). That provably
+ * exercises the real consumer contract in-process. The path itself is
+ * asserted to live under the dir the diagnose CLI reads
+ * (REACTIVE_AGENTS_TRACE_DIR).
  */
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadTrace } from "@reactive-agents/trace";
 import { ReactiveAgents } from "../src";
 
 const TRACE_DIR = mkdtempSync(join(tmpdir(), "ra-trace-linkage-"));
@@ -63,11 +67,17 @@ describe("Result→trace linkage (W0.5)", () => {
         expect(tracePath).toBe(join(TRACE_DIR, `${runId}.jsonl`));
         expect(existsSync(tracePath!)).toBe(true);
 
-        // (c) diagnose-consumable: file parses as JSONL TraceEvents stamped with this runId
-        const lines = readFileSync(tracePath!, "utf8").split("\n").filter((l) => l.length > 0);
-        expect(lines.length).toBeGreaterThan(0);
-        const events = lines.map((l) => JSON.parse(l) as { runId?: string });
-        expect(events.every((e) => e.runId === runId)).toBe(true);
+        // (c) diagnose-consumable via the loader the CLI stack itself uses:
+        // loadTrace drops any line failing isTraceEvent, so surviving events
+        // prove schema validity; runId is stamped from the first valid event;
+        // run-started presence covers loadRecordedRun's hard requirement
+        // (replay/src/load.ts:29-31). A file of valid-JSON-but-schema-invalid
+        // lines would pass a hand-parse and fail here.
+        const t = await loadTrace(tracePath!);
+        expect(t.runId).toBe(runId);
+        expect(t.events.length).toBeGreaterThan(0);
+        expect(t.events.some((e) => e.kind === "run-started")).toBe(true);
+        expect(t.events.every((e) => e.runId === runId)).toBe(true);
     });
 
     test("explicit test-provider run without tracing (REACTIVE_AGENTS_TRACE=off): fields honestly absent", async () => {
