@@ -324,6 +324,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
+    /**
+     * True once the user has expressed an explicit provider intent — via
+     * `.withProvider(...)` or the dedicated test-scaffolding arm
+     * `.withTestScenario(...)`. `build()` uses this to warn when the provider
+     * would silently resolve to the `"test"` default (W0.3 front-door truth:
+     * canned output reporting success without ever calling a model).
+     */
+    private _providerExplicit: boolean = false
     private _providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }
     private _model?: string
     private _thinking?: boolean
@@ -887,6 +895,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withProvider(provider: ProviderName, config?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }): this {
         this._provider = provider
+        this._providerExplicit = true
         this._providerConfig = config
         return this
     }
@@ -2062,6 +2071,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     withTestScenario(turns: TestTurn[]): this {
         this._testScenario = turns
         this._provider = 'test'
+        this._providerExplicit = true
         return this
     }
 
@@ -2556,6 +2566,26 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 "[reactive-agents] .withDurableRuns() is configured but the run will NOT checkpoint: " +
                 "crash-resume checkpoints require the kernel path — add .withReasoning(). " +
                 "(The run row and approval rails still work.)",
+            )
+        }
+
+        // Implicit-test-provider warning (W0.3, Local-Tier Reliability program):
+        // the builder's `_provider` default is "test", so a user who never calls
+        // .withProvider() silently gets canned output that reports success with
+        // no model ever called (the program's named "fake green" trap at the
+        // framework's front door). Signal only: no throw, no default flip.
+        // Explicit arms stay silent: .withProvider(...) (also used by quick() and
+        // fromConfig()), .withTestScenario(...), and .withReplayLLM(...) — with a
+        // replay LLM override the `_provider` field is irrelevant, so warning
+        // about canned test output would be a false positive. Warn once per
+        // build(), not per run().
+        // Category-A sync fallback (see packages/core/src/errors/index.ts): sync build() config validation, no hydrated Effect runtime yet.
+        if (this._provider === 'test' && !this._providerExplicit && this._llmOverrideLayer === undefined) {
+            console.warn(
+                "[reactive-agents] ⚠ No provider was chosen: this agent silently defaults to the \"test\" provider, " +
+                "which returns canned output and reports success without ever calling a model. " +
+                "Choose one explicitly with .withProvider(\"anthropic\"|\"openai\"|\"ollama\"|...), " +
+                "or make the test provider intentional with .withProvider(\"test\") / .withTestScenario(...).",
             )
         }
 
