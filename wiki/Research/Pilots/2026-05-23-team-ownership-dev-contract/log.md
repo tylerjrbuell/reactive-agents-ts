@@ -1174,3 +1174,11 @@ task: "Wave 2 close capture: 20 runs (S1/S2/S3 arms, three-point PRE->W1-fix->PO
 result: completed, confidence 0.88
 outcome: "accepted: WAVE-2 VERDICT MIXED recorded on scoreboard honestly. Guard 0/20 head-truncations (alive, 1 over-fire), classify delta explained (reliability=high arms), payload measured -51% llama tokensIn; caught Wave 2's OWN regression: stale dialect:none prior (runsAveraged 1) demotes capable qwen3:4b to text-mode with unparsable taught markup -> 5/5->0/5. GH #243 filed + provider fix dispatched. Wave-4 baseline-continuity finding (thrash phenotype no longer live-reproducible) ledged: W4 uses frozen fixture. Wave-3 gate set: post-fix S3 re-capture + 3.2 markup round-trip."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "GH #243 root fix: DIALECT_PRIOR_CONFIDENCE_FLOOR=2 + explicit-presence phantom-kill in deriveSupportsToolCalling; calibration-runner v2 genuine dialect probe (v1 stub deleted); 8/8 shipped-prior audit vs live /api/show + behavioral evidence, 3 refuted none-claims refreshed via probe seam with provenance; gemma4 stub-template guard found mid-audit; coder:14b flagged-not-fabricated"
+result: completed, confidence 0.9
+outcome: "accepted: review Approved 0C/1I(next-wave chore: full v2 suite re-commit for truthful metadata + coder:14b measurement). Precedence traced: no ra=1 demotion path survives; absent-vs-schema-default indistinguishable. Static entries re-reconciled to evidence w/ dated history comments. RED->GREEN + floor-before-refresh discrimination recorded. llm-provider 510/0, typecheck 4/4. Deeper-than-brief root cause (hardcoded dialect stub, never a measurement) self-discovered - the bricking class was folklore-circular by construction; program's first self-caused P1 fully closed pending S3 re-capture gate."
+```
