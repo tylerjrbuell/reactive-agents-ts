@@ -1078,3 +1078,11 @@ task: "Wave 1.3+1.4: think.ts accumulator consumes thinking_delta/content_comple
 result: completed, confidence 0.92
 outcome: "accepted: parent verifier pending task review; warden evidence: 3-arm consumption RED->GREEN + cut-arm + byte-identical no-thinking golden; reasoning 2977/0, trace 88/0, replay+diagnose 72/0, typechecks clean. Escalation (2-line core transit gap) APPROVED + integrated by parent at 91e8d6006 (precedent: #236 core stamp; typed subscribers now see the fields). Consent ruling honored: thinking presence never gated by config.thinking. Next: 1.5 harness lift capture unblocked."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 1.5: first program LIFT capture — post-w1 S2 N=5 + S1 drift guard, scoreboard PRE/POST section, Hot.md #38"
+result: completed, confidence 085
+outcome: "accepted (review folded with re-capture per controller ruling): verdict MIXED — channel lift CONFIRMED 5/5 (0 -> 6.0-9.5K thinkingChars/run), quality lift NOT — surfaced the terse-answer rescue-guard DEFECT (file-ready, in-authority declined, correctly escalated to kernel-warden). Lift Protocol doing its job: measurement caught W1's own activation-reachable regression before Wave 2 could lean on contaminated S2 numbers. Also disclosed dist-rebuild need (checked-out dist predated kernel commit)."
+```
