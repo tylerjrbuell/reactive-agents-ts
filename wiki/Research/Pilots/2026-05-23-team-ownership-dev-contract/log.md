@@ -1062,3 +1062,11 @@ task: "Task 0 baseline capture: scripts/lift/ bench + extractor + replay-gate, S
 result: completed, confidence 0.88
 outcome: "accepted: parent verifier green (extractor 6/6, scoreboard columns all populated-or-named-gap, zero packages/ diff range-verified). First dispatch died mid-recon (budget, zero artifacts) -- status-check resume recovered cleanly. Task review Approved: S3-llama3.2 run-4 canonical false-success verified field-for-field from raw trace (146 discover-tools, empty-headings report.md artifact), S2 starve confirmed, redaction limited to disclosed dummy strings (structurally cannot false-pass the gate), replay gate asserts real string equality. Interface deviation ruled against plan text (amended). rung-2 haiku deferred on account credit (one-command rerun recorded)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 1.1+1.2 thinking channel on streaming wire protocol: StreamEvent +thinking_delta/content_complete.thinking (additive), local.ts same-loop-pass forwarding gated by existing capability seam, anthropic routed, gemini/openai/litellm audited+recorded, ui-core drop-with-reason + react/svelte/vue parity tripwire"
+result: completed, confidence 0.9
+outcome: "pending task review; parent verifier: focused stream test + llm-provider typecheck at HEAD de369f77. NOTE for 1.3 dispatch (warden-disclosed semantics): on thinking-capable models thinking flows even with config.thinking:false (Ollama cannot opt out) — kernel must treat thinking as always-possible on capable models. First dispatch of this mission died with zero disk artifacts; retry directive (incremental report writes + commit-as-soon-green) delivered."
+```
