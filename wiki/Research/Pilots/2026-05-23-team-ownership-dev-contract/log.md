@@ -1086,3 +1086,11 @@ task: "Wave 1.5: first program LIFT capture — post-w1 S2 N=5 + S1 drift guard,
 result: completed, confidence 085
 outcome: "accepted (review folded with re-capture per controller ruling): verdict MIXED — channel lift CONFIRMED 5/5 (0 -> 6.0-9.5K thinkingChars/run), quality lift NOT — surfaced the terse-answer rescue-guard DEFECT (file-ready, in-authority declined, correctly escalated to kernel-warden). Lift Protocol doing its job: measurement caught W1's own activation-reachable regression before Wave 2 could lean on contaminated S2 numbers. Also disclosed dist-rebuild need (checked-out dist predated kernel commit)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W1.5-defect fix: gate stream-parser branch-4 prose fallback on (empty content OR exchange truncated); terse correct answers survive end_turn, marker rescues (branches 1-3) and empty-content rescue untouched; TRUNCATING_STOP_REASONS + exchangeTruncated from existing accumulator"
+result: completed, confidence 0.95
+outcome: "accepted: review Approved 0C/0I. Deviation (branch-4-only, pre-authorized) verified SOUND — gate default-safe, single production caller, zero new plumbing (accumulatedStopReason pre-existing), W1.3 suite byte-unchanged. RED 2/6->GREEN 6/6 + cut-test + reasoning 2983/0. 4 latent-hardening minors ledged for final-review triage (stop_sequence reachability, marker-clobber inherited paths -> re-capture counts, changeset wording, set typing)."
+```
