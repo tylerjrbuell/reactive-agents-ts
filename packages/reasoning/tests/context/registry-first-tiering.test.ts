@@ -22,7 +22,11 @@ import {
 } from "@reactive-agents/llm-provider";
 import { resolveProfileWithWindow, resolveProfile } from "../../src/context/profile-resolver.js";
 
-function probedRow(model: string, tier: Capability["tier"]): Capability {
+function probedRow(
+  model: string,
+  tier: Capability["tier"],
+  nominal?: boolean,
+): Capability {
   return {
     provider: "ollama",
     model,
@@ -36,6 +40,7 @@ function probedRow(model: string, tier: Capability["tier"]): Capability {
     supportsThinkingMode: false,
     supportsStreamingToolCalls: true,
     toolCallDialect: "none",
+    ...(nominal ? { nominal: true } : {}),
     source: "probe",
   };
 }
@@ -139,13 +144,33 @@ describe("W2b registry-first tiering — registry miss → provisional regex", (
     expect(p.provisionalTier).toBe(true);
   }, 15000);
 
-  it("stub 'test' provider is NOT tiered by its nominal static row (carve-out) — regex mid, provisional", () => {
-    // The test/test capability row declares tier local for the BENCH WINDOW
-    // contract; its own comment says the values describe a stub, not a
-    // model. Tiering by it would flip every scripted runtime run's profile.
+  it("stub 'test' provider is NOT tiered by its nominal static row — regex mid, provisional", () => {
+    // GH #239: the mechanism is now registry-owned — the test/test row
+    // carries `nominal: true` and tierFromRegistry refuses any nominal row
+    // (no provider-name carve-out). Behavior identical to the W2b arm this
+    // replaces: tiering by it would flip every scripted runtime run's
+    // profile from the regex-mid to local tier defaults.
     const p = resolveProfileWithWindow("test", "test");
     expect(p.tier).toBe("mid");
     expect(p.provisionalTier).toBe(true);
+  }, 15000);
+
+  it("GH #239: ANY registry row marked `nominal` cannot arbitrate tier — marker, not provider name", () => {
+    // The stub-truth must travel ON THE DATA so every consumer gets it for
+    // free (the W2b provider-name carve-out was per-consumer duplication
+    // waiting to happen — Wave 3b was about to add a second carve-out).
+    // A probe-registered nominal row must fall to the provisional regex,
+    // exactly like the static test row does.
+    registerProbedCapability(probedRow("stub-nominal:v1", "local", true));
+    const p = resolveProfileWithWindow("stub-nominal:v1", "ollama");
+    expect(p.tier).toBe("mid");
+    expect(p.provisionalTier).toBe(true);
+    // Control: the SAME tier row without the marker IS the arbiter.
+    _resetProbedRegistryForTesting();
+    registerProbedCapability(probedRow("stub-nominal:v1", "local"));
+    const q = resolveProfileWithWindow("stub-nominal:v1", "ollama");
+    expect(q.tier).toBe("local");
+    expect(q.provisionalTier).toBeUndefined();
   }, 15000);
 });
 

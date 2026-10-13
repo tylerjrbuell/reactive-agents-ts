@@ -147,6 +147,22 @@ export const CapabilitySchema = Schema.Struct({
    */
   toolTemplateEmitsTokens: Schema.optional(Schema.Boolean),
 
+  /**
+   * Marks a row that describes harness SCAFFOLDING, not a real model —
+   * e.g. the `test/test` bench-window stub whose window/tier values exist
+   * only so capability preflight sees a resolvable row. A nominal row's
+   * `tier` is a placeholder, NOT an arbiter verdict (GH #239): tier/budget
+   * consumers MUST check this marker before letting the row classify
+   * anything, so stub truth never escapes the registry as a per-consumer
+   * name carve-out (the W2b `providerKey === "test"` special case it
+   * replaced was duplication waiting for Wave 3b to add a second one).
+   *
+   * Registry-level by design: the marker travels on the data, so any
+   * consumer gets the correct behavior for free from `resolveCapability` /
+   * `registerProbedCapability` / the store round-trip.
+   */
+  nominal: Schema.optional(Schema.Boolean),
+
   /** Where this capability came from (probe / static-table / fallback). */
   source: CapabilitySourceSchema,
 });
@@ -182,6 +198,10 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "test/test": {
     provider: "test",
     model: "test",
+    // GH #239: nominal stub row — its tier/window describe the harness stub,
+    // not a model. Tier consumers must NOT arbitrate from it (the registry
+    // read path checks this marker; see profile-resolver.tierFromRegistry).
+    nominal: true,
     tier: "local",
     maxContextTokens: 32_768,
     recommendedNumCtx: 32_768,

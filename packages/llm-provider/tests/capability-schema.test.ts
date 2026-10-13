@@ -8,6 +8,7 @@
 import { describe, it, expect } from "bun:test";
 import { Schema, ParseResult } from "effect";
 import { Capability, CapabilitySchema, STATIC_CAPABILITIES } from "../src/capability.js";
+import { resolveCapability } from "../src/capability-resolver.js";
 
 describe("Capability struct (Phase 1 S1.1)", () => {
   it("schema exposes exactly the documented field set", () => {
@@ -34,6 +35,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // size (billions) and tri-state chat-template tool-token emission.
       "parameterSizeBillions",
       "toolTemplateEmitsTokens",
+      // Optional (GH #239): marks harness-stub rows whose tier may not
+      // arbitrate for any consumer (test/test bench-window row).
+      "nominal",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count
@@ -41,6 +45,20 @@ describe("Capability struct (Phase 1 S1.1)", () => {
     const ast = (CapabilitySchema as unknown as { ast: { propertySignatures: { name: string }[] } }).ast;
     const actual = new Set(ast.propertySignatures.map((p) => p.name));
     expect(actual).toEqual(expected);
+  });
+
+  it("the test/test static row is marked nominal, and resolveCapability carries the marker (GH #239)", () => {
+    // Stub truth is registry-owned: consumers read the marker off the data,
+    // they do NOT special-case the provider name per call site.
+    expect(STATIC_CAPABILITIES["test/test"]?.nominal).toBe(true);
+    const resolved = resolveCapability("test", "test");
+    expect(resolved.nominal).toBe(true);
+    // Every OTHER real-model row must NOT carry the marker — the exemption
+    // is per-row, not per-provider-table.
+    for (const [key, cap] of Object.entries(STATIC_CAPABILITIES)) {
+      if (key === "test/test") continue;
+      expect(cap.nominal, key).not.toBe(true);
+    }
   });
 
   it("decodes a valid capability without error", () => {

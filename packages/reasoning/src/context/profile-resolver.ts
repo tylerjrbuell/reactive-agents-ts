@@ -203,15 +203,14 @@ function registryLookupKey(
 export function tierFromRegistry(model: string, provider?: string): ModelTier | null {
   const key = registryLookupKey(model, provider);
   if (key === null) return null;
-  // Stub-provider carve-out: the `test/test` static row exists so the bench's
-  // capability preflight sees a resolvable row (window is nominal; its own
-  // comment: "values describe the stub, not a model"). Its tier is NOT an
-  // arbiter verdict about a real model — consuming it would silently move
-  // every scripted-provider agent run from the regex-mid profile to local
-  // tier defaults (disclosure mode included). Registry-first tiering applies
-  // to providers whose rows describe models.
-  if (key.providerKey === "test") return null;
+  // GH #239 (replaces the W2b provider-name carve-out): stub truth is
+  // registry-owned. The `test/test` static row marks itself `nominal` —
+  // its tier is a placeholder for the bench window contract, not a verdict
+  // about a model — so ANY consumer consulting the registry read path gets
+  // "do not arbitrate" for free, instead of duplicating a provider-string
+  // special case per call site (which Wave 3b was about to become).
   const cap = resolveCapability(key.providerKey, key.modelKey);
+  if (cap.nominal === true) return null;
   return cap.source === "fallback" ? null : cap.tier;
 }
 
