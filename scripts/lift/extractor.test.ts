@@ -55,6 +55,13 @@ describe("lift baseline extractor", () => {
     expect(m.firstActingIter).toBeNull() // no tool-call-start events
   })
 
+  test("W1.5 additive forensics fields (absent on pre-W1 fixture ⇒ zeros, never throws)", () => {
+    expect(m.thinkingCharsSum).toBe(0)
+    expect(m.thinkingExchangeCount).toBe(0)
+    expect(m.maxThinkContentChars).toBe(41) // "FINAL ANSWER: deterministic replay works."
+    expect(m.traceBytes).toBeGreaterThan(1000)
+  })
+
   test("tolerates partial/invalid lines (hung-run flushes)", () => {
     const partial = readFileSync(FIXTURE, "utf8") + "\n{\"kind\":\"run-comp"
     const m2 = extractRunMetrics(partial, "unit-smoke", 2)

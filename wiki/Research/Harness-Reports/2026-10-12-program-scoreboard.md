@@ -69,4 +69,39 @@ VALID baseline data; success-vs-thrash mix is documented per arm above as captur
    S2/S3/S4 arms (concrete builtin set skips the classifier per reliability profile).
 5. Haiku arms deferred on account credit (named blocker above); all local arms fully populated.
 
+## Post-W1 lift measurement (W1.5, captured 2026-10-13 07:45–07:48 at HEAD a44952626)
+
+Arms re-captured N=5 (S2) + N=2 drift-guard (S1), temp 0, into `fixtures/post-w1/` (baseline
+fixtures untouched). Same extractor definitions as baseline; additively-new forensics fields
+(`thinkingCharsSum` etc.) recorded only post-W1 by construction. Traces + rows:
+`fixtures/post-w1/MANIFEST.md` + `fixtures/post-w1/post-w1-metrics.jsonl`.
+
+| metric (s2-qwen34b) | PRE (baseline) | POST (W1) | delta |
+|---|---|---|---|
+| success rate | 5/5 | 5/5 | = |
+| empty-content-iteration rate (same def: think exchanges with empty content ∧ no toolCalls / think calls) | 0% | 0% | = (S2 starve ≠ empty by this def; the PRE defect was the 4-char-content-vs-2K-thinking split) |
+| thinking retained per run (chars) | 0 — channel DROPPED (probe-2: 0/4 StreamEvents carry thinking) | 6,019–9,459 (5/5 runs; thinkingChars on 100% of think exchanges) | **channel wired** |
+| deliverable: run-completed.output | '3052' (4-char spec-compliant answer) ×5 | 525–1,915-char raw reasoning tail ×5 | **REGRESSION (defect below)** |
+| llmCalls/run · iterations | 1 ×5 | 1 ×5 | = |
+| tokens/run | mean 2,482 (2132–2902) | mean 3,024 (2246–3176) | +22% (temp-0 qwen3 thinking-length variance; tokensIn identical 310) |
+| trace bytes/run | mean 7,051 | mean 8,754 | **+24%** — capped 240-ch preview/exchange + forensics fields ride the trace; the "~2.6K full thinking on step metadata" claim is runtime-only, NOT trace-observable (W1.4: full reasoning never rides the trace) |
+| s1-qwen34b drift guard (N=2) | baseline: abstained/failure, all-zero evidenceDelta, 7 calls (6 think + 1 classify), loop_resolution terminate | 2/2 shape-identical, no verdict/termination drift; 17.2–18.3K thinkingChars now recorded/run | stable |
+
+**VERDICT: MIXED — channel lift CONFIRMED, quality lift NOT CONFIRMED, + 1 newly-reachable DEFECT.**
+
+1. CONFIRMED (mechanism): thinking flows provider→kernel→trace on 5/5 runs; rescue machinery is
+   reachable on capable models. Cut-test (sever local.ts thinking emission → consumption tests red)
+   was executed by kernel-warden in W1.3 — cited at eb0f42a0c body + pilot log (7c48eb3f5), not re-run.
+2. NOT CONFIRMED (quality): the model's visible answer was ALREADY '3052' pre-W1 on this frozen
+   scenario (5/5, temp 0); post-W1 the delivered output got WORSE, not better.
+3. DEFECT (file-ready; NOT fixed here — zero packages/** edits, kernel-warden scope):
+   `think.ts:1362` rescue heuristic (`thought.trim().length < 50 && thinking.length > 100` →
+   `stream-parser.ts:246-249` branch 4 "last 1–2 substantive paragraphs of thinking") fires on every
+   task spec that demands a terse answer. Post-W1 it replaced the correct 4-char answer with
+   internal-reasoning prose (mid-sentence, truncated) in 5/5 S2 runs. Pre-W1 the same guard never
+   fired because `thinking` was null (the channel was dropped upstream) — W1 did not introduce the
+   heuristic, it supplied the input that makes it fire on correct terse answers. Suggested fix shape: never rescue over a non-empty cleanContent that passes the
+   FA-shape/verdict check; or gate branch-4 on cleanContent being empty.
+   Full trace excerpts: fixtures/post-w1/MANIFEST.md.
+
 **Wave-4+ red-on-cut pointer:** the canonical false-success/thrash shape for pattern (e)/(c)/(d) cuts is fixture `01M4SXNTN38VM8ZQ0Q85A7FA3E` (s3-llama3.2 run-4), NOT the qwen S1 rows (which abstain honestly at temp 0 — baseline truth, see S1 termination-mix note).

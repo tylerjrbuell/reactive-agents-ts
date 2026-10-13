@@ -23,7 +23,7 @@
  *   bun run scripts/lift/bench.ts <arm-id> [<arm-id> ...]
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { ReactiveAgents } from "@reactive-agents/runtime"
 import { withFileRoot } from "@reactive-agents/tools"
 
@@ -70,6 +70,11 @@ export interface RunMetrics {
   readonly finalDeliverablesMissing: number | null
   readonly maxToolSchemaNamesPerCall: number
   readonly schemaNamesPerCall: readonly number[]
+  /** W1.5 additions (post-W1 forensics; absent on baseline rows by construction). */
+  readonly thinkingCharsSum: number
+  readonly thinkingExchangeCount: number
+  readonly maxThinkContentChars: number
+  readonly traceBytes: number
 }
 
 type Json = Record<string, unknown>
@@ -109,6 +114,9 @@ export function extractRunMetrics(jsonl: string, arm: string, runIndex: number):
   let tokensInSum = 0
   let tokensOutSum = 0
   let emptyContentThinkExchanges = 0
+  let thinkingCharsSum = 0
+  let thinkingExchangeCount = 0
+  let maxThinkContentChars = 0
   const schemaNamesPerCall: number[] = []
   for (const e of exchanges) {
     const purpose = asStr(e.purpose, "unknown")
@@ -120,6 +128,15 @@ export function extractRunMetrics(jsonl: string, arm: string, runIndex: number):
     const content = asStr(resp.content)
     const toolCalls = asArr(resp.toolCalls)
     if (purpose === "think" && content.trim() === "" && toolCalls.length === 0) emptyContentThinkExchanges++
+    if (purpose === "think" && content.length > maxThinkContentChars) maxThinkContentChars = content.length
+    // W1.4 forensics (additive optional fields; absent = 0 on pre-W1 traces)
+    const tc = resp.thinkingChars
+    if (typeof tc === "number" && tc > 0) {
+      thinkingCharsSum += tc
+      thinkingExchangeCount++
+    } else if (typeof resp.thinkingPreview === "string" && resp.thinkingPreview.length > 0) {
+      thinkingExchangeCount++
+    }
     const names = asArr(e.toolSchemaNames)
     schemaNamesPerCall.push(names.length)
   }
@@ -192,6 +209,10 @@ export function extractRunMetrics(jsonl: string, arm: string, runIndex: number):
     finalDeliverablesMissing: missing,
     maxToolSchemaNamesPerCall: schemaNamesPerCall.reduce((m, x) => Math.max(m, x), 0),
     schemaNamesPerCall,
+    thinkingCharsSum,
+    thinkingExchangeCount,
+    maxThinkContentChars,
+    traceBytes: new TextEncoder().encode(jsonl).length,
   }
 }
 
@@ -256,8 +277,8 @@ function freshTraceFile(traceDir: string, afterMs: number): string | null {
   return best
 }
 
-async function prepareWorkspace(arm: ArmSpec, runIndex: number): Promise<string> {
-  const ws = join(FIXTURES_DIR, "workspaces", `${arm.id}-run${runIndex}`)
+function prepareWorkspace(traceDir: string, arm: ArmSpec, runIndex: number): string {
+  const ws = join(traceDir, "workspaces", `${arm.id}-run${runIndex}`)
   mkdirSync(ws, { recursive: true })
   writeFileSync(join(ws, "sales-q1.txt"), "Q1 sales by product (USD)\nWidget: 1200\nGadget: 800\nGizmo: 500\n")
   writeFileSync(join(ws, "sales-q2.txt"), "Q2 sales by product (USD)\nWidget: 900\nGadget: 1100\nGizmo: 400\n")
@@ -269,6 +290,7 @@ export interface ScenarioRunOptions {
   readonly runIndex: number
   readonly temperature: number
   readonly traceDir: string
+  readonly metricsLog?: string
 }
 
 /** One scenario run: build → run (with hang guard) → extract → append metric line. */
@@ -309,7 +331,7 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   let result: Awaited<ReturnType<typeof agent.run>> | null = null
   try {
     const exec = arm.fileTools
-      ? withFileRoot(await prepareWorkspace(arm, runIndex), () => agent.run(arm.task))
+      ? withFileRoot(prepareWorkspace(traceDir, arm, runIndex), () => agent.run(arm.task))
       : agent.run(arm.task)
     let guardTimer: ReturnType<typeof setTimeout> | undefined
     try {
@@ -338,7 +360,10 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   const traceFile = tracePath ?? ""
   const base = traceFile && existsSync(traceFile) ? extractRunMetrics(readFileSync(traceFile, "utf8"), arm.id, runIndex) : extractRunMetrics("", arm.id, runIndex)
   const metrics: RunMetrics = { ...base, traceFile, wallClockMs, hung, ...(hung ? { success: null } : {}) }
-  appendFileSync(METRICS_LOG, JSON.stringify(metrics) + "\n")
+  appendFileSync(
+    opts.metricsLog ?? join(traceDir, traceDir === FIXTURES_DIR ? "baseline-metrics.jsonl" : "post-w1-metrics.jsonl"),
+    JSON.stringify(metrics) + "\n",
+  )
   console.log(JSON.stringify(metrics))
   return metrics
 }
@@ -346,17 +371,27 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2)
-  if (args.length === 0 || args[0] === "list") {
+  const raw = process.argv.slice(2)
+  let outDir = FIXTURES_DIR
+  let nOverride: number | null = null
+  const ids: string[] = []
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === "--out") { outDir = resolve(raw[++i]!); continue }
+    if (raw[i] === "--n") { nOverride = Number(raw[++i]); continue }
+    ids.push(raw[i]!)
+  }
+  if (ids.length === 0 || ids[0] === "list") {
     for (const a of ARMS) console.log(`${a.id}\t${a.scenario}\t${a.provider}\t${a.model}\tn=${a.n}`)
     return
   }
-  for (const id of args) {
+  mkdirSync(outDir, { recursive: true })
+  for (const id of ids) {
     const arm = ARMS.find((a) => a.id === id)
     if (!arm) { console.error(`unknown arm: ${id}`); process.exit(1) }
-    for (let k = 1; k <= arm.n; k++) {
-      console.error(`[bench] ${arm.id} run ${k}/${arm.n} start`)
-      await runScenario({ arm, runIndex: k, temperature: 0, traceDir: FIXTURES_DIR })
+    const n = nOverride ?? arm.n
+    for (let k = 1; k <= n; k++) {
+      console.error(`[bench] ${arm.id} run ${k}/${n} start`)
+      await runScenario({ arm, runIndex: k, temperature: 0, traceDir: outDir })
     }
   }
 }

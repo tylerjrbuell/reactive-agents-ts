@@ -23,6 +23,15 @@ arms deferred on an Anthropic credit blocker (named in scoreboard). Until the fr
 later wave's plan, treat harness behavior on these paths as read-only for measurement purposes — any
 `packages/**` change to emitters, guards, or termination on these paths invalidates the diff.
 
+**W1.5 post-fix lift (2026-10-13): #38 thought-continuity unblocked (was void on local by
+construction).** The frozen S2 re-capture (N=5, temp 0, `fixtures/post-w1/`) shows the thinking
+channel now flowing provider→kernel→trace on 5/5 runs (6.0–9.5K thinkingChars/run vs 0 baseline —
+channel was dropped upstream pre-W1). Verdict MIXED: mechanism CONFIRMED, quality lift NOT
+CONFIRMED — the W1-supplied input makes the pre-existing `think.ts` terse-answer rescue guard fire
+on correct 4-char answers, replacing the spec-compliant '3052' deliverable with 525–1,915 chars of
+reasoning prose in 5/5 runs (file-ready defect, kernel-warden scope; S1 drift guard 2/2
+shape-identical). PRE/POST rows + defect: scoreboard post-W1 section.
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
