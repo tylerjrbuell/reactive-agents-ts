@@ -611,12 +611,30 @@ export const defaultVerifier: Verifier = {
       const fabMode: FabricationGuardMode = resolveFabricationGuardMode(ctx.fabricationGuard);
       if (fabMode !== "off") {
         const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
+        // GH #245 — a run whose tool surface produced NO evidence cannot ground
+        // (or refute) a measurement claim. When the corpus is empty AND the
+        // answer is not an explicit BENCHMARK claim (before/after, faster/vs,
+        // %-improvement, optimization), the perf-shaped number is more likely a
+        // DERIVED value in reasoning prose than an invented benchmark: record
+        // the finding (advisory) and let the answer stand — the receipt stays
+        // ungrounded. A genuine benchmark fabrication (benchmark-shaped) still
+        // rejects, so the W2 over-action failure mode stays guarded.
+        const corpusEmpty = corpus.trim().length === 0;
+        const benchmarkShaped =
+          /\bfaster\b|\bslower\b|speed-?up|\bimprove|\breduc|\boptimiz|\bversus\b|\bvs\.?\b|benchmark|before.{0,24}after/i.test(
+            ctx.content,
+          );
         const fab = detectFabricatedMeasurement(ctx.content, corpus);
         checks.push({
           name: "output-not-fabricated-measurement",
           passed: fab.ok,
-          severity: fab.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
-          reason: fab.ok ? undefined : fab.violations.join("; "),
+          severity:
+            fab.ok ? "pass" : fabMode === "block" && !(corpusEmpty && !benchmarkShaped) ? "reject" : "warn",
+          reason: fab.ok
+            ? undefined
+            : corpusEmpty && !benchmarkShaped
+              ? `no tool evidence to ground against (advisory, not enforced): ${fab.violations.join("; ")}`
+              : fab.violations.join("; "),
         });
 
         // Check 4d: contradicted-test-claim guard. Same fabrication-guard

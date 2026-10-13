@@ -9,6 +9,9 @@ import { Effect } from "effect";
 import type { ReasoningStep } from "../../../../src/types/step.js";
 import { finalizeStrategyResult } from "../../../../src/kernel/capabilities/sense/finalize-result.js";
 import { provideTestEnvelope } from "../../../../src/kernel/envelope/run-envelope.js";
+import { artifactProduced } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
+import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
+import type { RunAssessment } from "../../../../src/kernel/assessment/assess.js";
 
 let seq = 0;
 function step(
@@ -48,6 +51,7 @@ function mint(params: {
   terminatedBy?: string;
   rawTerminatedBy?: string;
   steps?: readonly ReasoningStep[];
+  kernelMeta?: Record<string, unknown>;
 }) {
   return Effect.runPromise(
     provideTestEnvelope(
@@ -59,6 +63,7 @@ function mint(params: {
         start: Date.now(),
         totalTokens: 10,
         totalCost: 0,
+        ...(params.kernelMeta !== undefined ? { kernelMeta: params.kernelMeta as never } : {}),
         extraMetadata: {
           ...(params.terminatedBy !== undefined ? { terminatedBy: params.terminatedBy } : {}),
           ...(params.rawTerminatedBy !== undefined ? { rawTerminatedBy: params.rawTerminatedBy } : {}),
@@ -259,5 +264,89 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     expect(md.abstention).toBeDefined();
     // The model's prose is kept; only the verdict changes (wire-or-delete honesty).
     expect(String(result.output).startsWith("Sales breakdown by item")).toBe(true);
+  });
+});
+
+// ── 5.1 contract-coverage arm (the deterministic EVIDENCE net) ────────────────
+const COVERAGE_CONTRACT: RunContract = {
+  requirements: [
+    {
+      id: "artifact:./report.md",
+      kind: "artifact-produced",
+      spec: { description: "produce report.md", condition: artifactProduced("./report.md"), acceptance: "deterministic" },
+    },
+    { id: "answer", kind: "question-answered", spec: { description: "answer the task", acceptance: "self-critique" } },
+  ],
+  deliverables: [],
+  constraints: [],
+  horizon: "short",
+  postConditions: [artifactProduced("./report.md")],
+};
+
+function assessmentWith(outstanding: readonly string[]): RunAssessment {
+  return {
+    requirements: { satisfied: [], outstanding, blocked: [] },
+    deliverables: { produced: [], missing: [] },
+    evidenceDelta: 0,
+    phase: "gather",
+    pace: { burnRatio: 0.1, band: "green" },
+    health: { recentFailures: 0, consecutiveFailures: 0, stuckSignals: 0, iterationsSinceEvidence: 0, failureArgVariety: 0 },
+  };
+}
+
+const coverageMeta = (outstanding: readonly string[]): Record<string, unknown> => ({
+  runContract: COVERAGE_CONTRACT,
+  assessment: assessmentWith(outstanding),
+});
+
+describe("finalizeStrategyResult: 5.1 contract-coverage arm", () => {
+  it("(ii) S3-shape: a deterministic requirement outstanding caps the claim at partial", async () => {
+    const result = await mint({
+      output: "Here is the report.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")], // grounded
+      kernelMeta: coverageMeta(["artifact:./report.md", "answer"]),
+    });
+    expect(result.status).toBe("partial");
+    expect((result.metadata as Record<string, unknown>).outstandingCriteria).toContain("artifact:./report.md");
+  });
+
+  it("(iii) grounded + satisfied (only the answer floor outstanding) => completed unchanged", async () => {
+    const result = await mint({
+      output: "Here is the report.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: coverageMeta(["answer"]),
+    });
+    expect(result.status).toBe("completed");
+  });
+
+  it("(iv) an abstained verdict is not capped", async () => {
+    const result = await mint({
+      output: "Could not complete the task: no grounded answer could be produced from the available tools.",
+      status: "completed",
+      terminatedBy: "abstained",
+      steps: [obsStep("recall")],
+      kernelMeta: coverageMeta(["artifact:./report.md", "answer"]),
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect(result.status).toBe("completed");
+  });
+
+  it("(i) S1-shape: success-claim prose, 0 tool calls, harness-forced terminal => abstained + output scrubbed", async () => {
+    const FAB = "The task has been successfully completed. The message was successfully sent. 🚀";
+    const result = await mint({
+      output: FAB,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+      kernelMeta: coverageMeta(["answer"]),
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect(String(result.output)).not.toContain("successfully sent");
+    expect(String(result.output)).toContain("Could not complete the task");
   });
 });

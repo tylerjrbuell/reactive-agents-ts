@@ -141,12 +141,26 @@ interface MeasurementClaim {
  * dates, versions, and Big-O notation carry none of these units, so the guard
  * never fires on legitimate non-measurement numbers.
  */
-const UNIT_MEASUREMENT_PATTERNS: readonly RegExp[] = [
+const TIMING_PATTERNS: readonly RegExp[] = [
   // Timing with an explicit duration unit: "150 ms", "1.2s", "90ns", "3 seconds".
   /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:ns|µs|us|ms|nanoseconds?|microseconds?|milliseconds?|seconds?|secs?\b|minutes?\b|mins?\b|hours?\b)/gi,
+];
+
+const THROUGHPUT_PATTERNS: readonly RegExp[] = [
   // Throughput: "12000 ops/s", "5 MB/s", "300 qps", "2x faster/speedup".
   /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:ops\/s(?:ec)?|requests?\/s(?:ec)?|qps|[kmg]b\/s|x\s*(?:faster|speed-?up))/gi,
 ];
+
+/**
+ * W5.1 (a) — a bare duration in prose is only a MEASUREMENT CLAIM when its
+ * sentence carries a measurement context (a perf keyword or an explicit
+ * measurement verb). GH #245: a no-tool reasoning answer that DERIVES a
+ * duration ("the loop takes 10 ms per step") must not be scraped as a
+ * fabricated benchmark. Throughput units are inherently perf and are NOT
+ * context-gated.
+ */
+const MEASUREMENT_CONTEXT =
+  /faster|slower|improv|speed-?up|speedup|reduc|gain|increase|decrease|optimiz|performance|perf\b|efficien|effective|throughput|latency|runtime|benchmark|better|worse|took|takes|taking|ran|runs|running|measur|elapsed|duration|\btime\b|completed in|finished in/i;
 
 /** Percentage claim: `N%`. Counted as a measurement ONLY when a perf keyword sits nearby. */
 const PERCENT_PATTERN = /(\d+(?:\.\d+)?)\s*%/g;
@@ -184,7 +198,18 @@ function sentenceAround(text: string, idx: number): string {
  */
 function extractMeasurementClaims(output: string): MeasurementClaim[] {
   const claims: MeasurementClaim[] = [];
-  for (const pat of UNIT_MEASUREMENT_PATTERNS) {
+  for (const pat of TIMING_PATTERNS) {
+    for (const m of output.matchAll(pat)) {
+      const idx = m.index ?? 0;
+      // W5.1 (a) — context gate (GH #245): a bare duration in reasoning prose
+      // (a DERIVED value) is not a benchmark claim unless the sentence carries
+      // a measurement context.
+      if (!MEASUREMENT_CONTEXT.test(sentenceAround(output, idx))) continue;
+      const value = parseNumericValue(m[1]);
+      if (value !== null) claims.push({ phrase: m[0].trim(), value });
+    }
+  }
+  for (const pat of THROUGHPUT_PATTERNS) {
     for (const m of output.matchAll(pat)) {
       const value = parseNumericValue(m[1]);
       if (value !== null) claims.push({ phrase: m[0].trim(), value });

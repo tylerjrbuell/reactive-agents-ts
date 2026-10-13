@@ -41,7 +41,14 @@ import {
   hasGroundedEvidence,
   isGiveUpAnswer,
   isHarnessForcedTerminal,
+  looksLikeSuccessClaim,
 } from "./give-up-answer.js";
+import {
+  capStatusToEnvelope,
+  honestEnvelopeMetadata,
+  type CompletionEnvelope,
+} from "../../state/completion-envelope.js";
+import type { KernelMeta } from "../../state/kernel-state.js";
 
 declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
@@ -176,6 +183,51 @@ function enforcedTerminalMetadata(
     terminatedBy: "abstained",
     ...(extra?.rawTerminatedBy !== undefined ? { rawTerminatedBy: "abstained" } : {}),
   };
+}
+
+/**
+ * 5.1 — the CONTRACT-COVERAGE envelope (the deterministic EVIDENCE net at the
+ * terminal mint).
+ *
+ * `envelopeFromKernelState` carries `outstandingCriteria` from the assessment's
+ * outstanding+blocked partition — but that partition includes the
+ * non-deterministic `answer` (self-critique) floor, which is ALWAYS outstanding
+ * (assess() cannot verify it). Capping on the raw partition would degrade every
+ * run to `partial`, so this arm keys on the DETERMINISTIC requirements only: a
+ * requirement with a `spec.condition` that the run's evidence left unmet. Those
+ * are exactly the S1/S3 false-success shapes (artifacts/tools never produced
+ * while the run claimed success).
+ *
+ * When the assessment is present it is authoritative (it already partitions
+ * every iteration); otherwise the condition is checked directly against the
+ * ledger/output. Reuses the envelope law — no new scorer.
+ */
+function contractCoverageEnvelope(
+  meta: KernelMeta | undefined,
+  ledger: RunLedger | undefined,
+  output: string,
+): CompletionEnvelope {
+  const contract = meta?.runContract;
+  if (!contract) return { completionStatus: "completed" };
+  const assessment = meta?.assessment;
+  const outstandingSet = new Set<string>([
+    ...(assessment?.requirements.outstanding ?? []),
+    ...(assessment?.requirements.blocked ?? []),
+  ]);
+  const detOutstanding = contract.requirements
+    .filter((r) => {
+      if (r.spec.condition === undefined) return false; // answer floor: not deterministic
+      if (assessment !== undefined) return outstandingSet.has(r.id);
+      return !conditionMetByLedger(r.spec.condition, ledger ?? [], output);
+    })
+    .map((r) => r.id);
+  return detOutstanding.length > 0
+    ? {
+        completionStatus: "partial",
+        outstandingCriteria: detOutstanding,
+        verificationWarning: `contract requirements outstanding: ${detOutstanding.join(", ")}`,
+      }
+    : { completionStatus: "completed" };
 }
 
 export interface FinalizeExtras {
@@ -380,23 +432,55 @@ export function finalizeStrategyResult(
         : typeof metaRawTerminal === "string"
           ? metaRawTerminal
           : undefined;
-    const finalResult =
+    const giveUpArm = isGiveUpAnswer(resolvedText);
+    const gateFires =
       resolved.status !== "failed" &&
       rawTerminatedBy !== "abstained" &&
       !hasGroundedEvidence(params.steps) &&
-      (isHarnessForcedTerminal(rawTerminal) || isGiveUpAnswer(resolvedText))
-        ? buildStrategyResult({
+      (isHarnessForcedTerminal(rawTerminal) || giveUpArm);
+    // (b) content-scrub: on the HARNESS-FORCED arm, ungrounded prose that CLAIMS
+    // the task/action was completed (a fabricated success claim, e.g.
+    // "successfully sent … 🚀") would ship the lie on an abstained verdict, so it
+    // is replaced with the honest abstention sentinel. A neutral substantive
+    // answer (not a success claim) and the give-up-phrasing arm keep the model's
+    // own prose.
+    const scrubOutput = gateFires && !giveUpArm && looksLikeSuccessClaim(resolvedText);
+    const gateOutput = scrubOutput ? ENFORCED_ABSTENTION_OUTPUT : resolvedText;
+    const gated = gateFires
+      ? buildStrategyResult({
+          ...params,
+          output: gateOutput,
+          extraMetadata: {
+            ...params.extraMetadata,
+            terminatedBy: "abstained",
+            ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
+              ? { rawTerminatedBy: "abstained" }
+              : {}),
+            abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
+            ...(scrubOutput ? { harnessAuthoredOutput: true } : {}),
+          },
+        })
+      : resolved;
+
+    // ── 5.1 contract-coverage arm (the deterministic EVIDENCE net) ────────────
+    // Composes AFTER the give-up gate: the give-up gate is the phrasing/harness
+    // net (→ abstained); this is the evidence net — a run whose DETERMINISTIC
+    // contract requirements are still unmet cannot claim `completed`; the claim
+    // is capped at `partial` via the envelope law (capStatusToEnvelope), reusing
+    // the existing worst-of join rather than a new scorer. An abstention is not
+    // capped (its claim is already honest).
+    const coverage = contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText);
+    const abstained = (gated.metadata as Record<string, unknown>).terminatedBy === "abstained";
+    const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
+    const finalResult =
+      cappedStatus === gated.status
+        ? gated
+        : buildStrategyResult({
             ...params,
-            extraMetadata: {
-              ...params.extraMetadata,
-              terminatedBy: "abstained",
-              ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
-                ? { rawTerminatedBy: "abstained" }
-                : {}),
-              abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
-            },
-          })
-        : resolved;
+            output: gated.output,
+            status: cappedStatus,
+            extraMetadata: { ...params.extraMetadata, ...honestEnvelopeMetadata(coverage) },
+          });
 
     const judged: ReasoningResult = {
       ...finalResult,

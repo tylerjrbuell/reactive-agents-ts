@@ -630,3 +630,61 @@ describe("Verifier contract — developer overrides", () => {
     expect(verdict.summary).toContain("domain-specific");
   });
 });
+
+// ── GH #245: a no-tool-run DERIVED value must not hard-fail the run ──────────
+describe("defaultVerifier — GH #245 (no-tool derived value is not a fabrication)", () => {
+  const fabCheck = (checks: readonly { name: string; severity?: string }[]) =>
+    checks.find((c) => c.name === "output-not-fabricated-measurement");
+
+  it("downgrades the fabricated-measurement check to warn when the corpus is EMPTY", () => {
+    const r = defaultVerifier.verify({
+      action: "final-answer",
+      content: "The loop runs 10 iterations, so the total is about 50 ms.",
+      actionSuccess: true,
+      task: "explain the loop's runtime",
+      priorSteps: [], // no tool evidence — nothing to ground against
+      terminal: true,
+      toolsUsed: new Set(),
+      fabricationGuard: "block",
+    });
+    const check = fabCheck(r.checks);
+    expect(check).toBeDefined();
+    // Advisory, not enforced: the answer stands (receipt stays ungrounded —
+    // `verified:false` records the ungrounded state, but the SEVERITY is `warn`,
+    // never `reject`, so the run is not hard-failed).
+    expect(check!.severity).toBe("warn");
+    expect(r.severity).not.toBe("reject");
+  });
+
+  it("still REJECTS a fabricated measurement when tool evidence exists to ground against", () => {
+    const obs: ReasoningStep = {
+      id: "o1" as ReasoningStep["id"],
+      type: "observation",
+      content: "benchmark output: baseline=90ms",
+      timestamp: new Date(0),
+      metadata: {
+        observationResult: {
+          success: true,
+          toolName: "code-execute",
+          displayText: "benchmark output: baseline=90ms",
+          category: "code-execute",
+          resultKind: "data",
+          preserveOnCompaction: false,
+          trustLevel: "untrusted",
+        } as ObservationResult,
+      },
+    };
+    const r = defaultVerifier.verify({
+      action: "final-answer",
+      content: "The optimized version runs in 150 ms, a clear improvement.",
+      actionSuccess: true,
+      task: "benchmark the change",
+      priorSteps: [obs],
+      terminal: true,
+      toolsUsed: new Set(["code-execute"]),
+      fabricationGuard: "block",
+    });
+    const check = fabCheck(r.checks);
+    expect(check!.severity).toBe("reject");
+  });
+});

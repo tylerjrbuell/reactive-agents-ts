@@ -96,6 +96,29 @@ export function isGiveUpAnswer(text: string): boolean {
 }
 
 /**
+ * W5.1 (b) — the INVERSE of the give-up detector: does `text` CLAIM the task was
+ * completed / the action performed? On a HARNESS-FORCED, UNGROUNDED terminal
+ * such a claim is a fabrication (the run ground nothing), so the terminal mint
+ * replaces it with the honest abstention sentinel rather than shipping the lie.
+ * Deliberately NARROW (completion/delivery assertions only) so a neutral
+ * substantive answer is never scrubbed.
+ */
+const SUCCESS_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
+  /\bhas been successfully completed\b/i,
+  /\b(?:successfully|has been|was|is now)\s+(?:sent|delivered|completed|executed|performed|carried out|done)\b/i,
+  /\b(?:message|task|request|action)\s+(?:has been|was|is)\s+(?:sent|delivered|completed|done|executed)\b/i,
+  /\bno further action (?:is\s+)?required\b/i,
+  /\btool result confirmation\b/i,
+];
+
+/** Does `text` assert the task/action was completed (a success claim)? */
+export function looksLikeSuccessClaim(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  return SUCCESS_CLAIM_PATTERNS.some((p) => p.test(trimmed));
+}
+
+/**
  * Did the run ground ANYTHING in a real tool? True when at least one
  * observation reports `success: true` for a tool the run actually used to
  * gather evidence. Excluded (they are NOT evidence the task was done):
