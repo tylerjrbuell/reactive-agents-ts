@@ -88,6 +88,7 @@ import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/deb
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
+import { mintTraceLinkage } from "./engine/finalize/trace-linkage.js";
 
 // ─── Narrow service types for optional deps ───
 // ObsLike + asObsLike are canonical at engine/runtime-context.ts — reused here
@@ -1308,6 +1309,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     : {}),
                 });
 
+                // W0.5 result→trace linkage: settle-flush this run's buffered
+                // trace events, then mint {runId, tracePath} iff the recorder's
+                // file (<traceDir>/<taskId>.jsonl, taskId IS the trace runId)
+                // exists. null when tracing disabled/unrecorded; fields stay
+                // honestly absent (wire-or-delete; never a phantom path).
+                const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
+
                 const result: TaskResult & {
                   format?: string;
                   terminatedBy?: string;
@@ -1451,6 +1459,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // now, exactly as the boundary verdict above does.
                     ...(ctx.metadata.cacheHit === true
                       ? ({ cacheHit: true } as Record<string, unknown>)
+                      : {}),
+                    // W0.5: run→trace linkage (Lift Protocol plumbing). Enumerated
+                    // by name like harnessAuthoredOutput above; present ONLY when
+                    // the trace file was flushed and verified to exist at mint.
+                    ...(traceLinkage !== null
+                      ? ({ runId: traceLinkage.runId, tracePath: traceLinkage.tracePath } as Record<string, unknown>)
                       : {}),
                   },
                   completedAt: new Date(),

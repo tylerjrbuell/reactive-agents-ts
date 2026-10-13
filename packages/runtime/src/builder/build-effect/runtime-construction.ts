@@ -159,6 +159,13 @@ export interface BuilderRuntimeStateView {
   readonly _contextProfile?: Partial<ContextProfile>;
   readonly _resultCompression?: ResultCompressionConfig;
   readonly _telemetryConfig?: TelemetryConfig;
+  /**
+   * Resolved tracing config (`null` = disabled), the same value
+   * `composeTracingLayer` wires the recorder with. Read by
+   * {@link buildBaseRuntimeAndEngine} to thread `traceDir` into the engine
+   * config for W0.5 result→trace linkage.
+   */
+  readonly _tracingConfig: { readonly dir: string } | null;
   readonly _memoryOptions?: MemoryOptions;
   readonly _guardrailsOptions?: GuardrailsOptions;
   readonly _verificationOptions?: VerificationOptions;
@@ -476,6 +483,12 @@ export const buildBaseRuntimeAndEngine = (
       contextProfile: state._contextProfile,
       resultCompression: state._resultCompression,
       telemetryConfig: state._telemetryConfig,
+      // W0.5 result→trace linkage: the SAME resolved tracing dir that
+      // composeTracingLayer hands TraceRecorderServiceLive (builder.ts
+      // `tracingConfig: self._tracingConfig`) rides into the engine config so
+      // the finalize seam can derive `<traceDir>/<runId>.jsonl` honestly.
+      // null (tracing disabled) => metadata carries no tracePath.
+      traceDir: state._tracingConfig === null ? null : state._tracingConfig.dir,
       // When memory is enabled without an explicit dbPath (v0.12: memory is
       // off in a bare builder, so this means the user opted in via
       // `.withMemory()` / `.withLearning()` / a HarnessProfile without

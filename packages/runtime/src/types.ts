@@ -848,6 +848,15 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
   /** Options for `outputValidator` — controls retry count. */
   readonly outputValidatorOptions?: { maxRetries?: number };
   /**
+   * Absolute directory the TraceRecorder writes per-run JSONL files to
+   * (`<traceDir>/<runId>.jsonl`), or `null`/absent when tracing is disabled.
+   * Threaded from the builder's resolved `_tracingConfig.dir` through
+   * `RuntimeOptions` so the finalize seam can mint honest
+   * `metadata.runId`/`metadata.tracePath` linkage (W0.5) without knowing the
+   * builder. Runtime-only (not Schema-serialised); derived, never user-authored.
+   */
+  readonly traceDir?: string | null;
+  /**
    * Allowlist of tool names. When set, only these tools appear in the LLM prompt AND
    * execution of any non-listed (non-meta) tool is blocked. Use for hard agent restrictions.
    * Framework meta-tools (final-answer, recall, brief, etc.) always bypass this gate.

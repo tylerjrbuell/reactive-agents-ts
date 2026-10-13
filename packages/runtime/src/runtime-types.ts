@@ -944,6 +944,15 @@ export interface RuntimeOptions {
    * `runtime-construction.ts` when `.withHarness()` registrations are present.
    */
   harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+
+  /**
+   * Absolute directory the TraceRecorder writes per-run JSONL files to, or
+   * null when tracing is disabled. Sourced from the builder's resolved
+   * `_tracingConfig.dir` (W0.5 result→trace linkage); reaches
+   * `ReactiveAgentsConfig.traceDir` so the finalize seam can mint honest
+   * `metadata.runId`/`metadata.tracePath`.
+   */
+  traceDir?: string | null;
 }
 
 /**

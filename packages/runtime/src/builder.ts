@@ -3129,6 +3129,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _thinking: self._thinking,
         _thinkingOptions: self._thinkingOptions,
         _toolsOptions: self._toolsOptions,
+        _tracingConfig: self._tracingConfig,
         _userInteraction: self._userInteraction,
         _verificationOptions: self._verificationOptions,
         _verificationStep: self._verificationStep,

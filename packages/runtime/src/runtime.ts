@@ -324,6 +324,9 @@ export const createRuntime = (options: RuntimeOptions) => {
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
     logPrefix: options.observabilityOptions?.logPrefix,
+    // W0.5 result→trace linkage: the builder-resolved trace dir (null when
+    // tracing disabled) rides to the finalize seam via this engine config.
+    traceDir: options.traceDir,
     // When a user sets `numCtx` (provider context window), keep the
     // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
     // kernel packs/sends within the SAME budget the provider will accept.
