@@ -1198,3 +1198,11 @@ task: "R1 WAVE-3 GATE: post-#243 S3-qwen34b re-capture N=5 (+bonus 2) three-poin
 result: completed, confidence 0.92
 outcome: "accepted: GATE PASS measured 0/5 -> 5/5 canonical (7/7), deliverable-correct 5/5, all four #243 signatures zero, thinking retention 6-12K intact, S2 2/2 stable. Wave-2's MIXED regression component CLOSED with live proof; floor+truthful-priors compose correctly end-to-end. Disclosed slips kept honest: global --n flag semantics (bonus rows kept), terminatedBy label churn flagged for docs truth-up, box-contention wall times annotated not hidden. #243 verification comment posted; close at merge with the branch."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 3a: Stage-B think->acting transition behind default-off REACTIVE_AGENTS_TEXT_PARSE=off|shadow|act - orphaned act.ts extractCalls reached via same dispatch pipeline (guards/policy/healing/ledger, growRunLedger untouched); builder-derived teach/parse single grammar (#243 binding); parse-diff observability for promotion measurement"
+result: completed, confidence 0.92 (round 2)
+outcome: "accepted: review Approved 0C/3I -> fix round 1/5 all ADDRESSED, re-review clean. Warden's disclosed extra (gate-mirror alone bypassable via act re-extraction -> dispatch flipped to consume GATED set, RED arm proved 2-raw-1-gated=1-execution) verified true by re-reviewer - enforcement now argument-for-argument identical to native incl budget Layer-3/single-step/quota-conflict. failMsg now reads the live taught block structurally, fail-safe-unreadable (never teaches guessed grammar). Stale-thread: thread deleted as dispatch source, skip-and-record + both pins. reasoning 3,041/0, runtime parity 1,677/0 (default-off proven)."
+```
