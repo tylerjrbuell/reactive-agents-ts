@@ -1326,3 +1326,11 @@ task: "temp fix round 1 (e8252af2): verification-retry third seam command-first 
 result: completed, confidence 0.9
 outcome: "accepted: scoped re-review CLEAN - all 3 findings ADDRESSED (retry-route pin real, #246 claim verified by grep, intent pin revert-sensitive); no new breakage; unset-command path byte-identical. Temp threading consistent at all 3 kernel seams. WAVE 4 VERIFIED overall."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 5 kernel lane: 5.1 contract coverage into verdict (outstanding>0 AND status!=abstention => cap at partial; S1/S3 as gate scenarios; cut RED) + 5.2 judgment citation plumbing; folds GH #245 (no-tool derived value => warn not hard-fail, benchmark fabrication still rejects) + close-capture content-scrub residual (abstained output no longer ships success claims)"
+result: completed, confidence 0.85
+outcome: "accepted pending review; S1-shape => abstained + scrubbed, S3-shape => partial + outstandingCriteria, grounded+satisfied unchanged, abstained unaffected. reasoning 3114/0, runtime 1682/0, replay 37/0. Concern routed to runtime lane: AgentResult.success coarse bit (execution-engine maps partial+substantive -> true) - runtime-warden 5.3/5.4 scope."
+```
