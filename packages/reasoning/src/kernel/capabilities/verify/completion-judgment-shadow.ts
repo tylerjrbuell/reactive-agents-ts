@@ -90,11 +90,16 @@ const answerToBoolean = (answer: JudgmentAnswer): boolean | null =>
  */
 export function judgmentCompletionShadow(
   input: CompletionJudgmentShadowInput,
-): Effect.Effect<void, never> {
+): Effect.Effect<string | null> {
   return Effect.gen(function* () {
     const maybeJudgment = yield* Effect.serviceOption(JudgmentService);
-    if (Option.isNone(maybeJudgment)) return;
+    if (Option.isNone(maybeJudgment)) return null;
     const judgment = maybeJudgment.value;
+
+    // W5.2 — the judgment-entry REFERENCE returned synchronously so the terminal
+    // verdict can cite it when present (ledger-side plumbing; the verdict is
+    // NOT inverted on it). The judgment itself stays fire-and-forget below.
+    const ref = "judgment://completion-satisfied";
 
     yield* Effect.forkDaemon(
       Effect.gen(function* () {
@@ -126,5 +131,7 @@ export function judgmentCompletionShadow(
           .pipe(Effect.catchAll(() => Effect.void));
       }),
     );
+
+    return ref;
   });
 }

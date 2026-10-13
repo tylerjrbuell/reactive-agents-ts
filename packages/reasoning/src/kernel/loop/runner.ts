@@ -1341,6 +1341,10 @@ export function runKernel(
         context: buildTerminalVerifyContext(state.output),
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
+        // W5.2 — stamp the completion-judgment entry ref when the shadow fires.
+        onJudgmentRef: (ref) => {
+          state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+        },
       });
 
       // ── Phase D1 — block-mode evidence-grounding: cap-then-degrade ─────────
@@ -1412,6 +1416,9 @@ export function runKernel(
           context: buildTerminalVerifyContext(correctedContent),
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,
+          onJudgmentRef: (ref) => {
+            state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+          },
         });
       }
 
@@ -1486,6 +1493,9 @@ export function runKernel(
               context: buildTerminalVerifyContext(repairedContent),
               taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
+              onJudgmentRef: (ref) => {
+                state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+              },
             });
             yield* emitLog({
               _tag: "warning",

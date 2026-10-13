@@ -350,6 +350,11 @@ export function finalizeStrategyResult(
       failed,
       ...(auxiliary ? { auxiliaryPass: true } : {}),
       ...(repairGaps ? { repairGaps } : {}),
+      // W5.2 — cite the completion-judgment entry when the Phase-D shadow fired
+      // (ledger-side plumbing; the verdict is NOT inverted on it).
+      ...(typeof params.kernelMeta?.completionJudgmentRef === "string"
+        ? { judgmentRef: params.kernelMeta.completionJudgmentRef }
+        : {}),
     };
 
     // Re-mint through `buildStrategyResult` rather than patching `base`, so the

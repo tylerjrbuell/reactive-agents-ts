@@ -793,8 +793,16 @@ export function verifyAndEmit(args: {
   readonly context: VerificationContext;
   readonly taskId: string;
   readonly iteration: number;
+  /**
+   * W5.2 — invoked with the completion-judgment entry reference when the shadow
+   * fires (i.e. a JudgmentService is present). The kernel uses it to stamp
+   * `state.meta.completionJudgmentRef` so the terminal verdict can CITE the
+   * judgment entry (ledger-side plumbing only — the verdict is never inverted
+   * on it).
+   */
+  readonly onJudgmentRef?: (ref: string) => void;
 }): Effect.Effect<VerificationResult, never> {
-  const { verifier, context, taskId, iteration } = args;
+  const { verifier, context, taskId, iteration, onJudgmentRef } = args;
   return Effect.gen(function* () {
     const verdict = verifier.verify(context);
     yield* emitVerifierVerdict({
@@ -815,7 +823,7 @@ export function verifyAndEmit(args: {
     // `verdict.verified`). Fire-and-forget; `verdict` above is already final
     // and is returned unchanged below — this never alters it.
     if (context.terminal === true) {
-      yield* judgmentCompletionShadow({
+      const judgmentRef = yield* judgmentCompletionShadow({
         task: context.task,
         candidateOutput: context.content,
         // Fix round (final review #1/#2): observation `content` can be
@@ -832,6 +840,7 @@ export function verifyAndEmit(args: {
           .map((s) => sanitizeForJudgment(s.content)),
         heuristicVerified: verdict.verified,
       });
+      if (judgmentRef !== null) onJudgmentRef?.(judgmentRef);
     }
 
     return verdict;

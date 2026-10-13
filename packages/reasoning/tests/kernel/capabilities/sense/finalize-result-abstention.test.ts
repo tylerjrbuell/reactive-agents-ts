@@ -350,3 +350,25 @@ describe("finalizeStrategyResult: 5.1 contract-coverage arm", () => {
     expect(String(result.output)).toContain("Could not complete the task");
   });
 });
+
+// ── 5.2 judgment-entry citation (ledger-side plumbing; NO inversion) ─────────
+describe("finalizeStrategyResult: 5.2 judgment-entry citation", () => {
+  it("cites the completion-judgment entry when present, WITHOUT inverting the verdict", async () => {
+    const result = await mint({
+      output: "The answer is 42.",
+      status: "completed",
+      kernelMeta: { completionJudgmentRef: "judgment://completion-satisfied" },
+    });
+    const verdict = (result.metadata as Record<string, unknown>).verdict as Record<string, unknown>;
+    expect(verdict.judgmentRef).toBe("judgment://completion-satisfied");
+    // Plumbing only — the citation never changes the status or enforces.
+    expect(result.status).toBe("completed");
+    expect(verdict.enforced).toBe(false);
+  });
+
+  it("omits the citation when the shadow did not fire (no judgment service)", async () => {
+    const result = await mint({ output: "The answer is 42.", status: "completed" });
+    const verdict = (result.metadata as Record<string, unknown>).verdict as Record<string, unknown>;
+    expect(verdict.judgmentRef).toBeUndefined();
+  });
+});
