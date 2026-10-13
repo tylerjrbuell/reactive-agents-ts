@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "measured": "2026-10-13 /api/chat prompt_eval_count + committed fixture traces (llama-family only)",
+  "families": {
+    "llama": {
+      "dense": 1.25
+    }
+  }
+}

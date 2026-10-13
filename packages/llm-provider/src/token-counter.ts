@@ -1,5 +1,7 @@
 import { Effect } from "effect";
 import type { LLMMessage } from "./types.js";
+import type { TokenizerFamily } from "./capability.js";
+import { getTokenizerDenseFactor } from "./tokenizer-factors.js";
 
 /**
  * Estimate the chars-per-token ratio based on content characteristics.
@@ -19,29 +21,53 @@ function charsPerToken(text: string): number {
 }
 
 /**
+ * W2c (plan 2.3): per-family DENSE-regime divisor. The base heuristic gives
+ * structural JSON 3 chars/token; measured `prompt_eval_count` on llama-family
+ * BPE vocabularies says real dense JSON costs 1.03–1.16× that (live) and
+ * 1.245× on committed FC traffic (per-tool template wrap). The correction is
+ * applied ONLY to the dense branch (3/factor → 2.4 chars/token at 1.25):
+ * prose/mixed measured the heuristic OVER-counting (0.77–0.89×), so touching
+ * them would push budget gates the wrong way.
+ */
+function denseCharsPerToken(family: TokenizerFamily | undefined): number {
+  return 3 / getTokenizerDenseFactor(family);
+}
+
+/**
  * Estimate token count for messages.
  * Uses content-aware heuristics: ~3 chars/token for code/JSON, ~4 for English text.
  * This is used as a fallback when the provider's token counting API is unavailable.
+ *
+ * W2c: optional `tokenizerFamily` (the Capability registry field — zero
+ * consumers since S1.1, this is its first) applies the measured per-family
+ * dense-JSON correction. Omitted / "unknown" / unmeasured family ⇒ factor
+ * 1.0 ⇒ byte-identical legacy behavior at every existing call site.
  */
 export const estimateTokenCount = (
   messages: readonly LLMMessage[],
+  tokenizerFamily?: TokenizerFamily,
 ): Effect.Effect<number, never> =>
   Effect.sync(() => {
     let totalTokens = 0;
+    const denseCpt = denseCharsPerToken(tokenizerFamily);
 
     for (const msg of messages) {
       if (typeof msg.content === "string") {
-        totalTokens += Math.ceil(msg.content.length / charsPerToken(msg.content));
+        const cpt = charsPerToken(msg.content);
+        totalTokens += Math.ceil(msg.content.length / (cpt === 3 ? denseCpt : cpt));
       } else {
         // Content blocks
         for (const block of msg.content) {
           if (block.type === "text") {
-            totalTokens += Math.ceil(block.text.length / charsPerToken(block.text));
+            const cpt = charsPerToken(block.text);
+            totalTokens += Math.ceil(block.text.length / (cpt === 3 ? denseCpt : cpt));
           } else if (block.type === "tool_result") {
-            totalTokens += Math.ceil(block.content.length / charsPerToken(block.content));
+            const cpt = charsPerToken(block.content);
+            totalTokens += Math.ceil(block.content.length / (cpt === 3 ? denseCpt : cpt));
           } else if (block.type === "tool_use") {
             const json = JSON.stringify(block.input);
-            totalTokens += Math.ceil(json.length / 3); // Tool input is always JSON
+            // Tool input is always JSON — dense regime, corrected.
+            totalTokens += Math.ceil(json.length / denseCpt);
           }
           // Images not counted in token estimation
         }

@@ -1289,7 +1289,18 @@ export const LocalProviderLive = Layer.effect(
 
             countTokens: (messages) =>
                 Effect.gen(function* () {
-                    return yield* estimateTokenCount(messages)
+                    // W2c (plan 2.3): feed the Capability registry's
+                    // tokenizerFamily into the shared estimator so the
+                    // measured llama-family dense correction applies to
+                    // local models. Sync lookup (static-table / probed
+                    // registry / store); an unprobed model resolves to the
+                    // conservative fallback whose family is "unknown" ⇒
+                    // factor 1.0 = legacy behavior.
+                    const family = resolveCapability(
+                        'ollama',
+                        defaultModel,
+                    ).tokenizerFamily
+                    return yield* estimateTokenCount(messages, family)
                 }),
 
             getModelConfig: () =>

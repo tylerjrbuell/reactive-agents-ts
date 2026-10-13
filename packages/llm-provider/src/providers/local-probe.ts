@@ -19,7 +19,7 @@
 // providers don't have an equivalent). Future probes for Anthropic
 // (capability discovery API) etc. live next to their providers.
 
-import type { Capability } from "../capability.js";
+import type { Capability, TokenizerFamily } from "../capability.js";
 import { getCapabilityStore } from "../capability-store.js";
 
 // ─── Module-scope cache (in-memory layer over the persistent store) ─────────
@@ -104,6 +104,23 @@ export function detectToolTemplateEmission(
 // ─── /api/show response → Capability ─────────────────────────────────────────
 
 /**
+ * GGUF family → Capability tokenizerFamily bucket. Measured dense-regime
+ * factors are keyed on the enum; the registry convention already labels qwen
+ * entries "llama" in STATIC_CAPABILITIES, and qwen BPE vocabularies measured
+ * with llama-family scatter (1.03–1.16 live). Before this, the probe returned
+ * "unknown" for every qwen model — leaving the W2c factors unreachable for
+ * exactly the local models whose num_ctx overflowed.
+ */
+export function tokenizerFamilyFromGgufFamily(
+  family: string | undefined,
+): TokenizerFamily {
+  if (!family) return "unknown";
+  const lower = family.toLowerCase();
+  if (lower === "llama" || lower.startsWith("qwen")) return "llama";
+  return "unknown";
+}
+
+/**
  * Translate Ollama's /api/show response into a Capability descriptor.
  *
  * Key extractions:
@@ -159,7 +176,7 @@ function showResponseToCapability(
     maxContextTokens: contextLength,
     recommendedNumCtx,
     maxOutputTokens: Math.min(4096, Math.floor(contextLength / 4)),
-    tokenizerFamily: family === "llama" ? "llama" : "unknown",
+    tokenizerFamily: tokenizerFamilyFromGgufFamily(show.details?.family),
     supportsPromptCaching: false,
     supportsVision: caps.has("vision"),
     supportsThinkingMode: caps.has("thinking"),
