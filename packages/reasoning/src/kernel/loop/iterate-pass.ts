@@ -330,6 +330,11 @@ export function runIterationPass(
     let prevDecisionLogCountForLearn = carrier.prevDecisionLogCountForLearn;
     let prevArtifactCount = carrier.prevArtifactCount;
     let consecutiveStalled = carrier.consecutiveStalled;
+    // W4.1 (e) — evidence-staleness iterations, read from the current pass's
+    // assessment (health.iterationsSinceEvidence). A local, not a carrier field:
+    // it is recomputed from the ledger each pass, so multiple assessments per
+    // iteration cannot over-count it.
+    let evidenceStaleIterations = 0;
     let requiredToolRedirects = carrier.requiredToolRedirects;
     let requiredToolNudgeCount = carrier.requiredToolNudgeCount;
     let failureRecoveryRedirects = carrier.failureRecoveryRedirects;
@@ -517,6 +522,16 @@ export function runIterationPass(
             deliverablesMissing: assessment.deliverables.missing.length,
             burnRatio: assessment.pace.burnRatio,
           });
+
+          // W4.1 (e) — evidence-staleness iterations. Read from the assessment's
+          // already-computed `health.iterationsSinceEvidence` (ledger-derived, so
+          // it cannot over-count when a pass assesses more than once). Gated to
+          // the working phases (synthesize/verify are not "still gathering").
+          const workRemaining =
+            assessment.phase !== "synthesize" && assessment.phase !== "verify";
+          evidenceStaleIterations = workRemaining
+            ? assessment.health.iterationsSinceEvidence
+            : 0;
 
           // ── HarnessPlan mid-run recompile (meta-loop Phase 6 / task G1) ──────
           // The adaptive lever: on a cadence, recompile the run's HarnessPlan from
@@ -1484,6 +1499,7 @@ export function runIterationPass(
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
+          { evidenceStaleIterations },
         );
 
         // ── Strategy switching ────────────────────────────────────────────

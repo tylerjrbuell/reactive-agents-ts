@@ -260,6 +260,30 @@ export type {
 } from "./kernel/assessment/assess.js";
 export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
 
+// ─── Progress arbiter (design law #5 / W4.7) ─────────────────────────────────
+// The ONE SUBSTANTIVE vs NON-PROGRESS predicate every progress consumer derives
+// from (loop-detector patterns a/c/d/e, assess() evidenceDelta). Exported so the
+// replay-lane fixture pin can assert the thrash classification against the frozen
+// trace. `detectLoop` is exported for the same fixture pin.
+export {
+  classifyToolResult,
+  classifyActionStep,
+  classifyOutput,
+  creditsEvidence,
+  contentIsNoOp,
+  isMetaTool,
+  isPseudoTool,
+  actionToolName,
+} from "./kernel/assessment/progress-arbiter.js";
+export type {
+  ProgressClass,
+  NonProgressKind,
+  ProgressVerdict,
+  ObservationLike,
+} from "./kernel/assessment/progress-arbiter.js";
+export { detectLoop } from "./kernel/capabilities/reflect/loop-detector.js";
+export type { LoopDetectorOptions } from "./kernel/capabilities/reflect/loop-detector.js";
+
 // ─── HarnessPlan — the policy compiler (meta-loop Phase 6 / task G1) ──────────
 // The adaptive crown (convergence ruling C6). Compiles the per-run harness config
 // from capability + calibration + contract.horizon + task classification; withers
