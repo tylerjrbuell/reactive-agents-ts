@@ -174,7 +174,7 @@ bun add reactive-agents
 npm install reactive-agents
 ```
 
-> **Note:** `effect` ships as a dependency of `reactive-agents` and installs automatically. If you import from `effect` directly in your own code, add it explicitly: `bun add effect` (or `npm install effect`).
+> **Note:** `effect` is a **peer dependency** of `reactive-agents` (the published packages declare `"effect": "^3.10.0"` under `peerDependencies` — moved off regular dependencies; see [What's new](https://docs.reactiveagents.dev/guides/whats-new/)). If you import from `effect` directly in your own code, or your package manager doesn't install peer dependencies for you, add it explicitly: `bun add effect` (or `npm install effect`).
 
 Set your provider key first (each provider's variable is listed in [Environment Variables](#environment-variables) below):
 

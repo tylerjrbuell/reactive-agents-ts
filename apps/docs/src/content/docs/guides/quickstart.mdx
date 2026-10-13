@@ -70,11 +70,11 @@ bun install
 <FileTree>
 - my-agent-app/
   - src/
-    - **agent.ts** Your first agent — runnable with `bun run src/agent.ts`
-    - tools/ Drop custom tools here; auto-discovered when wired into builder
-  - .env Provider API keys (gitignored by default)
-  - package.json `reactive-agents` dependency + `bun run agent` script
-  - tsconfig.json strict mode + Bun-aware module resolution
+    - **index.ts** Your agent — run it with `bun start` (`bun run src/index.ts`)
+  - .env.example Provider API key template — copy to `.env` and fill in
+  - package.json `reactive-agents` dependency + `start` / `typecheck` scripts
+  - tsconfig.json strict mode + Bundler module resolution
+  - .gitignore (ignores `.env`)
   - README.md
 </FileTree>
 
@@ -87,7 +87,7 @@ bun add reactive-agents
 ```
 
 :::note[Effect dependency]
-`effect` ships as a dependency of `reactive-agents` and is installed automatically. For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/). Add `effect` to your app only if you rely on it outside the framework’s re-exports.
+`effect` is a **peer dependency** of `reactive-agents` (`"effect": "^3.10.0"`) — not a bundled regular dependency. If your package manager doesn't install peer dependencies automatically, add it yourself: `bun add effect`. For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/).
 :::
 
 ## 2. Set Up Environment

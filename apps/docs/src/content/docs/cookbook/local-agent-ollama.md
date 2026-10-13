@@ -47,7 +47,7 @@ bun init -y
 bun add reactive-agents
 ```
 
-`effect` ships as a dependency and installs automatically — you only import it directly if you write custom tools or hooks.
+`effect` is a **peer dependency** of `reactive-agents` (`"effect": "^3.10.0"`), not a bundled regular dependency — add it to your project (`bun add effect`) if your package manager doesn't install peers for you or you import from it directly when writing custom tools or hooks.
 
 ## Step 2 — A minimal local agent
 
