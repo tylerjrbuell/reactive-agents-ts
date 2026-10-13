@@ -238,7 +238,7 @@ Input/condition classes no happy-path test covers — each line's pin is added t
 | Eval CI disabled; τ-bench unscheduled; cf-TODO | 7.2 |
 | SLM bench panel; priors n=1-3 | 7.3 |
 | Verification island / verifierTier zero-dispatch | 7.4 |
-| Scaffold ^0.14 pin / .env / test-provider fake / makeKernel / tracePath / scaffolder split / strategy-count docs / replay buried / result-field soup | 0.1-0.8 |
+| Scaffold ^0.14 pin / .env / test-provider fake / makeKernel / tracePath / scaffolder split / strategy-count docs / replay buried / result-field soup | W0.1-W0.8 |
 
 ## Sequencing (operation order)
 
