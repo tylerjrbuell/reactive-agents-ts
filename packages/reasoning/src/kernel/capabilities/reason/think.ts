@@ -579,9 +579,12 @@ export function handleThinking(
     // ContextCurator (S2.5): sole authority for the per-iteration prompt.
     // - Slice A: port + default wrapper (byte-identical with ContextManager).
     // - Slice B: curator owns the trust-aware "Recent tool observations" section.
-    // - Slice C: profile.recentObservationsLimit threads through here so agents
-    //   can opt-in via profileOverrides without touching kernel internals.
-    //   Defaults to 0 across all tiers → off by default, preserves prior shape.
+    // - Slice C (HISTORICAL): profile.recentObservationsLimit once threaded
+    //   through here. W2f census grep: it now has ZERO code readers — the
+    //   field + its all-tier default 0 survive as a public profileOverrides
+    //   surface whose effect died in a later curator refactor. Truth law:
+    //   do not claim a thread that is not there. Removal (or re-wiring)
+    //   is filed as DEBT D-2026-10-13-W2F-1.
     // Canonical context-assembly seam: systemPrompt+messages come from
     // project(), the SOLE assembler. (The legacy `curate()` fallback and its
     // `RA_ASSEMBLY` env gate were deleted in Sprint-1 A2, 2026-06-02 — see
