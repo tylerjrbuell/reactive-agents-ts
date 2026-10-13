@@ -25,7 +25,7 @@ import {
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitHarnessSignalInjected } from "../../utils/diagnostics.js";
-import { readTextParseTransitionMode } from "../../utils/text-parse-mode.js";
+import { readTaughtCallShape, readTextParseTransitionMode } from "../../utils/text-parse-mode.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
@@ -1593,7 +1593,13 @@ export function handleThinking(
       const textParseMode = readTextParseTransitionMode();
       if (textParseMode !== "off") {
         const parsed = context.toolCallingDriver.extractCalls(thought, driverSchemas);
-        const markerPresent = thought.includes("<tool_call");
+        // GH #243 pin (review r1#2): the markup marker we detect AND the
+        // format we re-teach on failure are READ from `driverInstructions` —
+        // the same taught string this run's prompt was built from — never
+        // hand-typed here. No structurally-readable block ⇒ no markup claim
+        // (fail safe to today's path rather than guess a grammar).
+        const taughtShape = readTaughtCallShape(driverInstructions);
+        const markerPresent = taughtShape !== undefined && thought.includes(taughtShape.open);
         if (textParseMode === "shadow") {
           const parsedSummaries = parsed.map((c) => ({
             name: c.name,
@@ -1620,41 +1626,83 @@ export function handleThinking(
           }
         } else if (parsed.length > 0) {
           // act mode: map to the SAME acting flow. Ids mirror act.ts's own
-          // text-parse mapping so re-extraction and this fallback agree.
+          // text-parse mapping so the gated set and any legacy re-extraction
+          // agree.
           const textParsedCalls: ToolCallSpec[] = parsed.map((e, i) => ({
             id: `text-parse-${state.iteration}-${i}`,
             name: e.name,
             arguments: e.arguments,
             ...(e.rationale ? { rationale: e.rationale } : {}),
           }));
-          // The native branch's exact transition shape: status acting +
-          // meta.lastThought (this turn's text) so act.ts's extractCalls
-          // seam sees the CURRENT markup, not a stale thread entry.
-          return transitionState(state, {
-            steps: newSteps,
-            tokens: newTokens,
-            inputTokens: newInputTokens,
-            outputTokens: newOutputTokens,
-            cost: newCost,
-            status: "acting",
-            meta: {
-              ...state.meta,
-              pendingNativeToolCalls: textParsedCalls,
-              lastThought: thought,
-              lastThinking: thinking,
-            },
-          });
-        } else if (markerPresent) {
+          // Review r1#1 (controller ruling: mirror, not comment): run the
+          // parsed batch through the SAME pure gate the native resolver
+          // branch uses — per-tool budget prefilter (maxCallsPerTool Layer
+          // 3, its only enforcement point), dependency-chain optional-batch
+          // blocking, relevantTools pass-through, single-step mode
+          // (nextMovesPlanning disabled ⇒ one call per step), and the
+          // quotaBudgetConflict fail-fast via guardRequiredToolsBlock. No
+          // remaining gate delta vs native is known at the decision point.
+          const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
+          const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
+            textParsedCalls,
+            input.requiredTools ?? [],
+            state.toolsUsed,
+            input.relevantTools,
+            toolCallCounts,
+            input.maxCallsPerTool,
+            input.requiredToolQuantities,
+            input.strictToolDependencyChain,
+            input.nextMovesPlanning,
+          );
+          if (blockedOptionalBatch) {
+            const redirect = guardRequiredToolsBlock(
+              textParsedCalls,
+              input,
+              state,
+              profile,
+              hooks,
+              newSteps,
+              newTokens,
+              newCost,
+              thought,
+              thinking,
+            );
+            if (redirect) return redirect;
+          }
+          if (effective.length > 0) {
+            // The native branch's exact transition shape: status acting +
+            // the GATED set on pendingNativeToolCalls (act.ts dispatches it
+            // ahead of any re-extraction) + meta.lastThought (this turn's
+            // text) for the resume/legacy extraction fallback.
+            return transitionState(state, {
+              steps: newSteps,
+              tokens: newTokens,
+              inputTokens: newInputTokens,
+              outputTokens: newOutputTokens,
+              cost: newCost,
+              status: "acting",
+              meta: {
+                ...state.meta,
+                pendingNativeToolCalls: effective,
+                lastThought: thought,
+                lastThinking: thinking,
+              },
+            });
+          }
+          // Parsed calls all gated out (budget/dep-chain) — fall through,
+          // exactly as the native branch does on an emptied batch.
+        } else if (markerPresent && taughtShape !== undefined) {
           // act mode + markup + zero parsed: NEVER silent. Deterministic,
           // observation-shaped message back into the loop (same house
           // pattern as the required-tools nudge), ledger-visible via the
           // existing observation → tool-result projection, retry
           // instruction on the guidance channel (no stray USER message).
+          // The retry text QUOTES the live taught block (r1#2) — the nudge
+          // itself speaks builder truth, so it cannot drift from the grammar.
           const failMsg =
-            "text-parse: your reply contained <tool_call> markup but no tool call could be parsed. " +
-            "Re-emit the call in the exact taught format — one line inside the <tool_call> block starting " +
-            "with 'tool: <tool-name>', then one '<param-name>: <value>' line per parameter, and close " +
-            "with the block's end marker. Tool names must match a listed tool exactly.";
+            "text-parse: your reply contained " + taughtShape.open + " markup but no tool call " +
+            "could be parsed. Re-emit exactly one call block in the taught format:\n" +
+            taughtShape.block;
           const failStep = makeStep("observation", failMsg, {
             observationResult: makeObservationResult("system", false, failMsg),
           });

@@ -40,3 +40,50 @@ export function readTextParseTransitionMode(): TextParseTransitionMode {
   if (raw === "shadow" || raw === "act") return raw;
   return "off";
 }
+
+/**
+ * A tool-call example block extracted from the driver's LIVE taught
+ * instructions — the W3a review-round-1 fix for the GH #243 drift class:
+ * the retry nudge and the markup detector must speak the grammar the builder
+ * currently teaches, never a hand-typed copy of it.
+ *
+ * Detection is structural, not literal: the first line that is ONLY a tag
+ * (`<name>`, no colon-suffix — a taught param line like
+ * `"<param-name>: <value>"` is deliberately not a lone tag) opens the
+ * example block; its matching `</name>` line closes it. If a future builder
+ * renames the marker or re-lays the example, this reads the NEW shape with no
+ * edit on the reasoning side — and the pinned test
+ * (text-parse-transition.test.ts, "failMsg quotes the LIVE taught block")
+ * breaks if builder output and the shape reader ever disagree.
+ */
+export interface TaughtCallShape {
+  /** The open marker line exactly as taught (e.g. a single-tag line). */
+  readonly open: string;
+  /** The matching close marker line. */
+  readonly close: string;
+  /** The example block verbatim from the builder output, markers included. */
+  readonly block: string;
+}
+
+/**
+ * Read the taught call shape from `buildPromptInstructions()` output.
+ * `undefined` when no structurally-unambiguous example block exists — callers
+ * MUST fail safe (treat as "no markup signal", fall through to today's path)
+ * rather than guess a grammar the builder did not teach.
+ */
+export function readTaughtCallShape(instructions: string): TaughtCallShape | undefined {
+  const lines = instructions.split("\n");
+  let openIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*<[A-Za-z_][\w.-]*>\s*$/.test(lines[i] ?? "")) {
+      openIdx = i;
+      break;
+    }
+  }
+  if (openIdx === -1) return undefined;
+  const open = (lines[openIdx] ?? "").trim();
+  const close = `</${open.slice(1, -1)}>`;
+  const closeIdx = lines.findIndex((l, i) => i > openIdx && l.trim() === close);
+  if (closeIdx === -1) return undefined;
+  return { open, close, block: lines.slice(openIdx, closeIdx + 1).join("\n") };
+}

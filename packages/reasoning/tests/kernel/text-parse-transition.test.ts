@@ -39,6 +39,9 @@ import {
   type ToolServiceInstance,
 } from "../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
+import { readTaughtCallShape } from "../../src/kernel/utils/text-parse-mode.js";
+import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 
 const ENV_FLAG = "REACTIVE_AGENTS_TEXT_PARSE";
 
@@ -54,6 +57,9 @@ const WEB_SEARCH_SCHEMA = {
 
 const textParseDriver = new TextParseDriver();
 const TAUGHT = textParseDriver.buildPromptInstructions([WEB_SEARCH_SCHEMA]);
+// ONE shape derivation shared by src and these tests (GH #243 pin): the
+// example block is READ from the live builder output, never re-typed here.
+const TAUGHT_SHAPE = readTaughtCallShape(TAUGHT);
 
 /** Replace each `<...>` placeholder in a taught line, positionally. */
 function fillTaughtLine(line: string, values: readonly string[]): string {
@@ -72,9 +78,8 @@ function taughtShapeCall(
   toolName: string,
   args: readonly (readonly [string, string])[],
 ): string {
-  const blockMatch = TAUGHT.match(/<tool_call>[\s\S]*?<\/tool_call>/);
-  expect(blockMatch).not.toBeNull();
-  const lines = blockMatch![0].split("\n");
+  expect(TAUGHT_SHAPE).not.toBeUndefined();
+  const lines = TAUGHT_SHAPE!.block.split("\n");
   const open = lines[0]!;
   const close = lines[lines.length - 1]!;
   const toolLine = fillTaughtLine(lines[1]!, [toolName]);
@@ -94,9 +99,8 @@ function respondInTaughtShape(
 
 /** The marker lines verbatim from the taught block, with an unparseable body. */
 function malformedTaughtMarkup(): string {
-  const blockMatch = TAUGHT.match(/<tool_call>[\s\S]*?<\/tool_call>/);
-  expect(blockMatch).not.toBeNull();
-  const lines = blockMatch![0].split("\n");
+  expect(TAUGHT_SHAPE).not.toBeUndefined();
+  const lines = TAUGHT_SHAPE!.block.split("\n");
   return [
     "I will act now.",
     lines[0]!,
@@ -135,9 +139,12 @@ const THINK_INPUT: KernelInput = {
   availableToolSchemas: [WEB_SEARCH_SCHEMA],
 };
 
-function thinkContext(driver: KernelContext["toolCallingDriver"]): KernelContext {
+function thinkContext(
+  driver: KernelContext["toolCallingDriver"],
+  input: KernelInput = THINK_INPUT,
+): KernelContext {
   return {
-    input: THINK_INPUT,
+    input,
     profile: CONTEXT_PROFILES.local,
     compression: { budget: 800, previewItems: 5, autoStore: true, codeTransform: true },
     toolService: Option.none(),
@@ -171,13 +178,14 @@ async function runThinkWithFlag(
   flag: string | undefined,
   driver: KernelContext["toolCallingDriver"],
   content: string,
+  overrides: { readonly input?: KernelInput; readonly state?: KernelState } = {},
 ): Promise<{ readonly state: KernelState; readonly signals: readonly CapturedSignal[] }> {
   const prev = process.env[ENV_FLAG];
   if (flag === undefined) delete process.env[ENV_FLAG];
   else process.env[ENV_FLAG] = flag;
   try {
     const signals: CapturedSignal[] = [];
-    const state = freshState();
+    const state = overrides.state ?? freshState();
     let result: KernelState | undefined;
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -192,7 +200,7 @@ async function runThinkWithFlag(
             });
           }),
         );
-        result = yield* handleThinking(state, thinkContext(driver));
+        result = yield* handleThinking(state, thinkContext(driver, overrides.input ?? THINK_INPUT));
         // Let the bus dispatch settle before the subscription scope closes.
         yield* Effect.sleep("50 millis");
       }).pipe(Effect.provide(Layer.merge(EventBusLive, stubLLM(content)))),
@@ -389,7 +397,7 @@ describe("W3a arm 4: act-mode parse failure loops deterministically", () => {
     expect(obsResult?.success).toBe(false);
     // … and a guidance channel (house rule: pendingGuidance, never a stray
     // USER message) so the next think carries the retry instruction.
-    expect(state.pendingGuidance?.errorRecovery).toInclude("tool_call");
+    expect(state.pendingGuidance?.errorRecovery).toBeDefined();
     // The loop advanced (iteration + 1) instead of stalling.
     expect(state.iteration).toBe(1);
     // … plus a trace-visible diagnostic event.
@@ -419,5 +427,151 @@ describe("W3a arm 5: flag unset (default off) changes nothing", () => {
     const { state, signals } = await runThinkWithFlag("yes-please", textParseDriver, response);
     expect(state.status).not.toBe("acting");
     expect(signals.filter((s) => s.origin.startsWith("text-parse-"))).toHaveLength(0);
+  }, 15000);
+});
+
+// ─── FIX ROUND R1 #1 — required-tools BATCH GATE mirrored in the act branch ──
+// Native passes every resolved call batch through
+// `gateNativeToolCallsForRequiredTools` (+ `guardRequiredToolsBlock` redirect)
+// before acting: per-tool budget prefilter (maxCallsPerTool Layer 3 — its ONLY
+// enforcement point), dependency-chain optional-batch blocking, relevantTools
+// pass-through, single-step mode. The text-parse act branch must run the SAME
+// pure gate over its parsed calls, and dispatch must CONSUME the gated set —
+// re-extracting raw markup ahead of the gate would silently bypass budgets.
+
+describe("W3a r1#1: act-mode text-parse honors the required-tools batch gate", () => {
+  it("maxCallsPerTool budget exhausted → the parsed call is gated out (no acting)", async () => {
+    expect(TAUGHT_SHAPE).not.toBeUndefined();
+    // One PRIOR successful web-search observation: buildSuccessfulToolCallCounts
+    // counts it, Layer 3 drops the new call (count 1 >= max 1).
+    const priorSuccess = makeStep("observation", "3 hits", {
+      observationResult: makeObservationResult("web-search", true, "3 hits"),
+      toolCallId: "tc-prior-1",
+    });
+    const seeded = { ...freshState(), steps: [priorSuccess] };
+    const response = respondInTaughtShape("web-search", [["query", "btc price again"]]);
+    const { state } = await runThinkWithFlag(
+      "act",
+      textParseDriver,
+      response,
+      {
+        input: { ...THINK_INPUT, maxCallsPerTool: { "web-search": 1 } },
+        state: seeded,
+      },
+    );
+    // Budget-exhausted batch gates to zero → native-parity fall-through: the
+    // loop must NOT dispatch the call.
+    expect(state.status).not.toBe("acting");
+  }, 15000);
+
+  it("transition stores the GATED set on pendingNativeToolCalls (dispatch consumes it)", async () => {
+    const response = respondInTaughtShape("web-search", [["query", "btc price"]]);
+    const { state } = await runThinkWithFlag("act", textParseDriver, response);
+    expect(state.status).toBe("acting");
+    const pending = state.meta.pendingNativeToolCalls;
+    expect(pending).toBeDefined();
+    expect(pending!.length).toBe(1);
+    expect(pending![0]!.name).toBe("web-search");
+  }, 15000);
+
+  it("dispatch executes the gated set, never a re-extraction of the raw markup", async () => {
+    // lastThought carries TWO markup calls; the gated set carries ONE (the
+    // second would have been budget-filtered). Dispatch must run exactly the
+    // gated one.
+    const twoCalls = [
+      taughtShapeCall("web-search", [["query", "first"]]),
+      taughtShapeCall("web-search", [["query", "second"]]),
+    ].join("\n");
+    const calls: ExecutedCall[] = [];
+    const next = await runActing(
+      actingState({
+        pendingNativeToolCalls: [
+          { id: "text-parse-0-0", name: "web-search", arguments: { query: "first" } },
+        ],
+        lastThought: twoCalls,
+        lastThinking: null,
+      }),
+      textParseDriver,
+      calls,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.arguments).toEqual({ query: "first" });
+    expect(next.status).not.toBe("acting");
+  }, 15000);
+});
+
+// ─── FIX ROUND R1 #2 — retry nudge speaks the LIVE taught grammar ────────────
+// failMsg and the markup detector must be DERIVED from the builder's current
+// example block (GH #243 class: a hand-typed format string drifts from the
+// grammar and re-creates the taught-vs-parsed sin through the nudge).
+
+describe("W3a r1#2: parse-failure nudge quotes the live taught block", () => {
+  it("the failure observation quotes the example block VERBATIM from buildPromptInstructions output", async () => {
+    expect(TAUGHT_SHAPE).not.toBeUndefined();
+    const response = malformedTaughtMarkup();
+    const { state } = await runThinkWithFlag("act", textParseDriver, response);
+    const failObs = state.steps.filter(
+      (s) => s.type === "observation" && s.content.includes("text-parse"),
+    );
+    expect(failObs).toHaveLength(1);
+    const content = failObs[0]!.content;
+    // The nudge carries the LIVE block, not a paraphrase …
+    expect(content).toInclude(TAUGHT_SHAPE!.block);
+    // … and every line of it exists in the current builder output (if the
+    // builder drifts, this assertion localizes the break to builder-vs-nudge).
+    for (const line of TAUGHT_SHAPE!.block.split("\n")) {
+      expect(TAUGHT).toInclude(line);
+    }
+    // The guidance channel replays the same derived message, no literal grammar.
+    expect(state.pendingGuidance?.errorRecovery).toBe(content);
+  }, 15000);
+});
+
+// ─── FIX ROUND R1 #3 — stale-thread semantics pinned ────────────────────────
+// When acting is entered, state.messages' last assistant entry is the
+// PREVIOUS turn's already-executed markup (assistant entries land only at
+// end-of-acting). The thread is NOT a dispatch source: gated pending first,
+// fresh meta.lastThought as the legacy/resume fallback, and NOTHING when
+// neither exists — skip-and-continue, never stale re-dispatch.
+
+describe("W3a r1#3: a stale assistant thread never re-dispatches", () => {
+  // Stale entry names a REAL available tool (web-search, old args): an
+  // unknown tool name would be blocked by the availability guard for reasons
+  // unrelated to this seam, weakening the pin.
+  const staleMarkup = taughtShapeCall("web-search", [["query", "STALE prior-turn query"]]);
+
+  it("fresh lastThought + thread holding PRIOR-turn markup → only fresh calls run, once", async () => {
+    const calls: ExecutedCall[] = [];
+    const fresh = respondInTaughtShape("web-search", [["query", "current"]], "current turn");
+    const state: KernelState = {
+      ...actingState({ lastThought: fresh, lastThinking: null }),
+      messages: [
+        { role: "user" as const, content: "Find the BTC price" },
+        { role: "assistant" as const, content: staleMarkup },
+        { role: "tool_result" as const, toolCallId: "tc-old", toolName: "file-write", content: "done" },
+      ],
+    };
+    const next = await runActing(state, textParseDriver, calls);
+    // exactly the fresh web-search — never the thread's file-write.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.toolName).toBe("web-search");
+    expect(calls[0]!.arguments).toEqual({ query: "current" });
+    expect(next.steps.filter((s) => s.type === "action" && s.content.includes("STALE"))).toHaveLength(0);
+  }, 15000);
+
+  it("no lastThought, no gated set, thread with markup → SKIP (zero executions), loop continues", async () => {
+    const calls: ExecutedCall[] = [];
+    const state: KernelState = {
+      ...actingState({ lastThinking: null }),
+      messages: [
+        { role: "user" as const, content: "Find the BTC price" },
+        { role: "assistant" as const, content: staleMarkup },
+      ],
+    };
+    const next = await runActing(state, textParseDriver, calls);
+    // The hazard door is closed: the thread is never an extraction source.
+    expect(calls).toHaveLength(0);
+    expect(next.status).toBe("thinking");
+    expect(next.iteration).toBe(1);
   }, 15000);
 });

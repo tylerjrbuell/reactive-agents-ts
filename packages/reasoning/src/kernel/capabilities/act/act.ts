@@ -83,17 +83,6 @@ export const FILE_TOOL_NAMES = new Set([
   "shell-execute",
 ]);
 
-/** Extract the text content of the last assistant message from the conversation history. */
-function getLastAssistantText(messages: readonly KernelMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg && msg.role === "assistant") {
-      return typeof msg.content === "string" ? msg.content : "";
-    }
-  }
-  return "";
-}
-
 const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
   Effect.serviceOption(ObservableLogger).pipe(
     Effect.flatMap((opt) =>
@@ -222,16 +211,27 @@ export function handleActing(
 
     let pendingCalls: readonly ToolCallSpec[];
     if (context.toolCallingDriver.mode === "text-parse") {
-      // W3a Stage B: on a think→acting transition THIS turn's text lives on
-      // meta.lastThought (set alongside the native branch's convention).
-      // state.messages does not receive the assistant message until
-      // conversation assembly at the END of acting — extracting from the
-      // thread here would re-parse a PREVIOUS turn's already-executed
-      // markup and re-dispatch stale calls. Fall back to the thread for
-      // resume paths where acting is re-entered without a fresh transition.
-      const lastAssistantText =
-        state.meta.lastThought ?? getLastAssistantText(state.messages);
-      const extracted = context.toolCallingDriver.extractCalls(lastAssistantText, filteredToolSchemas);
+      // W3a review r1#1/#3 dispatch semantics, pinned by
+      // tests/kernel/text-parse-transition.test.ts:
+      //  1. The GATED set wins. think.ts's act-mode transition applied the
+      //     same required-tools/budget/dep-chain gate the native branch uses
+      //     and stored the survivors on meta.pendingNativeToolCalls —
+      //     re-extracting the raw markup ahead of it would silently bypass
+      //     budget drops (the gate only bites if dispatch consumes it).
+      //  2. When NO gated set rides the checkpoint, re-extract THIS turn's
+      //     text from meta.lastThought (set alongside the native branch's
+      //     convention) — the legacy/resume fallback that keeps the driver's
+      //     extractCalls seam reached.
+      //  3. The conversation THREAD is never an extraction source. When
+      //     acting is entered, the last assistant message is the PREVIOUS
+      //     turn's already-executed markup (assistant entries land in
+      //     state.messages only at end-of-acting via conversation-assembly)
+      //     — parsing it re-dispatched stale calls.
+      const gatedPresent = pendingNativeCalls !== undefined && pendingNativeCalls.length > 0;
+      const fallbackText = gatedPresent ? "" : state.meta.lastThought ?? "";
+      const extracted = fallbackText.length > 0
+        ? context.toolCallingDriver.extractCalls(fallbackText, filteredToolSchemas)
+        : [];
       const textParsedCalls: readonly ToolCallSpec[] = extracted.map((e, i) => ({
         id: `text-parse-${state.iteration}-${i}`,
         name: e.name,
@@ -1174,7 +1174,23 @@ export function handleActing(
       });
     }
 
-    // No pending native tool calls — shouldn't happen, transition back to thinking
+    // No pending native tool calls — shouldn't happen, transition back to thinking.
+    // W3a r1#3 (safe resume semantics, pinned by test): a text-parse acting
+    // entry with NEITHER a gated set NOR meta.lastThought cannot know which
+    // turn any markup belongs to, so it dispatches NOTHING — never a
+    // stale-thread re-parse — and records the degenerate resume as a
+    // harness_signal step (existing ledger kind) instead of staying silent.
+    if (context.toolCallingDriver.mode === "text-parse") {
+      const resumeSignal =
+        "text-parse: acting entered without a gated call set or this turn's text " +
+        "(resume edge) — dispatch skipped; stale-thread re-parse is never attempted.";
+      return transitionState(state, {
+        status: "thinking",
+        steps: [...state.steps, makeStep("harness_signal", resumeSignal)],
+        pendingGuidance: undefined,
+        iteration: state.iteration + 1,
+      });
+    }
     return transitionState(state, {
       status: "thinking",
       pendingGuidance: undefined,
