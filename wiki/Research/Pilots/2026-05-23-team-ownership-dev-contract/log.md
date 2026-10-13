@@ -1270,3 +1270,11 @@ task: "W4 control plane (4.1+4.6+4.7: ONE progress arbiter, pattern-(e) zero-evi
 result: completed, confidence 0.8
 outcome: "accepted pending review; END-TO-END LIVE VERIFIED by controller: impossible task 4-5 iters/23.4s/~1980tok -> 2 iters/9.1s/857tok with honest abstain reason + band green->economize; hard reasoning-only task unaffected (1 iter, success). Warden disclosed the trade-off (no-tool 3rd-pass tasks stand down) - review targets it. User-reported defect (inefficient termination) closed at root: detection now actuates by default."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4-live fix round 1 (a77dd5c13): stand-down requires a flail signature (canonical give-up refusal OR near-duplicate thoughts >0.85 Levenshtein) so no-tool REASONING survives; long-horizon escape hatch; NO_OP marker hardening; #206 budget e2e restored"
+result: completed, confidence 0.82
+outcome: "accepted pending scoped re-review; LIVE VERIFIED by controller both directions: impossible task 2 iters/6.6s/835tok honest abstain (was 4-5/23.4s/~1980tok); qwen3:4b no-tool reasoning task NOT stood down (correct derivation produced). Review's Critical (bare staleness aborted deriving runs at pass 3, no escape hatch) closed with RED-first FP pin + two cut arms. reasoning 3086/0, runtime 1678/0, replay 37/0. Surfaced a PRE-EXISTING defect (GH filed): fabrication guard hard-fails correct reasoning answers on derived durations - routed to Wave 5 verdict honesty."
+```
