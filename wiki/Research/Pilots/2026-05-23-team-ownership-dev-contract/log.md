@@ -1118,3 +1118,11 @@ task: "Wave 2a: probe ladder (parameter_size decimals + thinking + tool-template
 result: completed, confidence 0.85
 outcome: "accepted after review (first reviewer dispatch died empty; resume-extract delivered full verdict): Approved 0C/3I. Adversarial checks passed: store-first genuinely shadows nothing (cold-Map decoy test), no reachable stranding for unmeasured models, cross-package hunks minimal+load-bearing (core test UPDATE not weakening), cast-ceiling bump verified as sanctioned test-double (src adds zero casts), pre-existing 239>237 drift confirmed. Importants -> W2a-fixup dispatch (function_call/.functioncall markers, store-key baseUrl, test-disable seam). YAGNI-deflect on tier-from-size accepted (plan's own clause). First dispatch of this mission had died zero-output (third such); lean-retry-with-commit-per-area pattern again delivered."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "W2a review fix loop round 1: function_call template markers, endpoint-scoped store rows, CAPABILITY_STORE_DISABLE seam + key-sanitize/atomic-write minors"
+result: completed, confidence 0.9
+outcome: "accepted-pending-review: 1 commit (a298ba7e). RED 5 -> GREEN. llm-provider 492/0, typecheck llm-provider+core+reasoning+runtime 24/24, RI+testing 23/23 (duck-type back-compat), RI+testing tests 125/0, cast-ceiling guard 2/0 (239<240, one stub cast designed out). Deviation surfaced: fix 2 needed optional endpoint args on CapabilityCache (3 files, not 1) because the store cannot learn baseUrl from (provider,model) alone; legacy rows self-heal per controller preference."
+```
