@@ -1,19 +1,19 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
-
-// MUST track the current release major/minor. Templates rely on APIs that need
-// >= 0.14 (`.withOutputSchema`, `.withDurableRuns`, `.withApprovalPolicy`), so a
-// stale fallback scaffolds projects that install a framework too old to compile
-// them. The lockstep release flow (scripts/release.ts) stamps real versions
-// into package.json at publish time; callers can inject the exact version via
-// `opts.version` — this constant is only the safety net when they don't.
-const RA_VERSION_FALLBACK = "^0.14.0";
+import { ownPackageVersionRange } from "../lib/own-version.js";
 
 export function renderSharedFiles(
   opts: ScaffoldOptions,
   tpl: Pick<Template, "extraDependencies" | "extraDevDependencies" | "extraScripts" | "gitignoreLines">,
 ): readonly TemplateFile[] {
-  const raVersion = opts.version ?? RA_VERSION_FALLBACK;
+  // The default pin is derived from THIS package's own (lockstep-stamped)
+  // version, so a scaffolded project always installs the framework release the
+  // templates actually compile against. Templates rely on APIs that need
+  // >= 0.14 (`.withOutputSchema`, `.withDurableRuns`, `.withApprovalPolicy`) -
+  // a hardcoded fallback drifted behind the releases and scaffolded projects
+  // that could not compile. `opts.version` still wins when injected; there is
+  // no lying literal (drift is a release error - see scripts/release.ts).
+  const raVersion = opts.version ?? ownPackageVersionRange();
 
   const packageJson = JSON.stringify(
     {

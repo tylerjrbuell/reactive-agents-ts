@@ -70,6 +70,33 @@ for (const file of pkgFiles) {
 }
 if (targets.length === 0) fail("no public packages discovered");
 
+// ── Scaffold template-version guard (drift = release error) ──────────────────
+// create-reactive-agent's templates pin `^<own package.json version>` for
+// `reactive-agents` (src/lib/own-version.ts). Two drift modes would silently
+// scaffold projects that cannot compile the template APIs, so both abort the
+// release:
+//  1. a hardcoded `"reactive-agents": "<literal>"` reintroduced into template
+//     source (the pre-W0.1 `^0.14.0` fallback failure mode);
+//  2. the scaffold package missing from the stamp set - its version would stay
+//     stale while the framework moved.
+// The post-stamp check below (real releases only; --dry-run mutates nothing)
+// re-reads the stamped package.json from disk as the final tripwire.
+const SCAFFOLD_PKG_DIR = "packages/create-reactive-agent";
+{
+  const stamped = [...targets, ...privateTargets].some((t) => t.name === "create-reactive-agent");
+  if (!stamped) {
+    fail(`${SCAFFOLD_PKG_DIR}/package.json was not discovered as a release target - scaffold templates would keep pinning a stale reactive-agents version`);
+  }
+  const templateFiles = [...new Glob("*.ts").scanSync({ cwd: `${SCAFFOLD_PKG_DIR}/src/templates` })]
+    .map((f) => `${SCAFFOLD_PKG_DIR}/src/templates/${f}`);
+  for (const f of templateFiles) {
+    const src = await Bun.file(f).text();
+    if (/"reactive-agents":\s*["']/.test(src)) {
+      fail(`hardcoded reactive-agents version literal in ${f} - templates must derive the pin from create-reactive-agent's own stamped package.json (see src/lib/own-version.ts)`);
+    }
+  }
+}
+
 const names = new Set(targets.map((t) => t.name));
 
 // npm auth must be valid before we touch anything.
@@ -230,6 +257,25 @@ await Bun.write("VERSION", version + "\n");
 console.log(
   `stamped ${targets.length} packages + root → ${version} (pinned ${pinned} internal dep(s))`,
 );
+
+// Tripwire for drift mode 2 (see scaffold template-version guard above): the
+// templates read this file at build time, so a stamp that missed it - or a
+// version literal back in the template source - ships a lying scaffold.
+{
+  const stamped = JSON.parse(await Bun.file(`${SCAFFOLD_PKG_DIR}/package.json`).text()) as {
+    name?: unknown;
+    version?: unknown;
+  };
+  if (stamped.name !== "create-reactive-agent") {
+    fail(`${SCAFFOLD_PKG_DIR}/package.json reads name '${String(stamped.name)}' - expected 'create-reactive-agent'`);
+  }
+  if (stamped.version !== version) {
+    fail(
+      `scaffold template drift: ${SCAFFOLD_PKG_DIR}/package.json stamped '${String(stamped.version)}', expected '${version}' - ` +
+        `scaffolded projects would pin ^${String(stamped.version)} while the release is ${version}`,
+    );
+  }
+}
 
 // ── Build once (turbo cache) ─────────────────────────────────────────────────
 
