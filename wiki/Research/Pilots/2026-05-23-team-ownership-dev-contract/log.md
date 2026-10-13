@@ -1046,3 +1046,11 @@ task: "Wave 0 W0.5: result->trace linkage — runId + tracePath minted on AgentR
 result: completed, confidence 0.9 (round 2)
 outcome: "accepted: task review 'Needs fixes' on 1 Important (test hand-parse weaker than rax contract — loadTrace drops invalid lines silently, loadRecordedRun throws without run-started); fix round 1/5 (42175a34..4c99fb04, test-only) asserted via the CLI's own loadTrace barrel export + run-started/every-event pins; scoped re-review: ADDRESSED, no new breakage. Parent verifier green (focused 3/3, runtime typecheck). Production code clean on all 3 named risks at first review. Deferred minors ledged (Option.isSome idiom, absolute-path JSDoc wording, join duplication recorder<->mint). Cross-task ⚠️: streaming/light-sub-agent results lack linkage — follow-up if Wave-1 lift captures need them."
 ```
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "GH #236 cross-domain bundle: AgentStarted gains task/taskTruncated (core), execution-engine stamps real prompt with 64KB publisher cap (runtime), normalize run-started branch consumes raw.task ?? '' (trace), replay workaround removed + golden regenerated via real recorder + fresh-task/orchestrator/back-compat pins (replay)"
+result: completed, confidence 0.9 (round 2)
+outcome: "accepted: review Approved (single-emission-site verified by repo-wide grep; regeneration signature proves genuine fixture regen; authority discipline praised — resisted out-of-manifest events.ts edit, disclosed consequence -> GH #237 filed by parent). Fix round 1/5 (fa6b39dc): back-compat pin's fabricated run-completed line replaced byte-for-byte with real pre-fix golden (re-reviewer verified provenance against git show), events.length===2 strict pin added. Parent verifier: focused test green, replay 34/0. W0.5 TS2769 type-only ride-along accepted as bundle-gate hygiene (disclosed)."
+```
