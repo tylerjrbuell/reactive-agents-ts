@@ -61,7 +61,20 @@ export class TextParseDriver implements ToolCallingDriver {
     })
   }
 
+  /**
+   * Structured tier-1. First the taught WRAPPED form
+   * (`<tool_call>…</tool_call>`, the highest-fidelity shape); if it yields
+   * nothing, the wrapper-tolerant BARE form: the SAME taught `tool: <name>` +
+   * `<param>: <value>` grammar minus the surrounding tags. The wrapper is
+   * tolerated; the grammar is not loosened.
+   */
   private parseTier1(text: string): ExtractedCall[] {
+    const wrapped = this.parseWrappedTier1(text)
+    if (wrapped.length > 0) return wrapped
+    return parseUnwrappedBlocks(text)
+  }
+
+  private parseWrappedTier1(text: string): ExtractedCall[] {
     const blockRe = /<tool_call>([\s\S]*?)<\/tool_call>/g
     const calls: ExtractedCall[] = []
     let match: RegExpExecArray | null
@@ -193,4 +206,107 @@ function findBalancedArrays(text: string): string[] {
     if (depth !== 0) break  // unterminated — give up
   }
   return out
+}
+
+// ── Wrapper-tolerant tier-1: bare `tool:` param-line blocks ──────────────────
+//
+// W3c measured motivation (fixtures/post-w3): qwen2.5-coder:14b, routed
+// text-parse by a MEASURED dialect-none prior, emits the taught tool/param
+// lines but drops BOTH `<tool_call>` wrapper tags at temp 0. The wrapped-only
+// tier parsed 0 calls (shadow would-have-executed 0/5; act 0/5 executed). These
+// helpers accept the bare block: the SAME grammar the builder teaches, minus
+// the wrapper. A block still MUST open with a `tool: <name>` line, so this is
+// tolerant of the wrapper, not of the grammar (GH #243: no guessed format).
+
+/** A taught tool line: `tool: <name>` - one name token, nothing else. */
+const TOOL_LINE_RE = /^[ \t]*tool:[ \t]*(\S+)[ \t]*$/
+/** A taught param line at column 0: `<key>: <value>` (identifier or `<placeholder>`). */
+const PARAM_LINE_RE = /^(<[^>\s]+>|[A-Za-z_][\w.-]*)[ \t]*:[ \t]*(.*)$/
+/** A YAML block-scalar header value (`|`, `>`, optionally chomped). */
+const BLOCK_SCALAR_RE = /^[|>][+-]?$/
+
+/**
+ * Scan `text` for BARE `tool: <name>` blocks (the taught grammar without the
+ * `<tool_call>` wrapper) and extract one call per block. Tolerant of interleaved
+ * prose, `---` rules, code fences, a leading prose line, and YAML block-scalar
+ * param values (`content: |` + indented lines, blanks included). Returns [] when
+ * no `tool:` line exists, so it never invents a call from prose.
+ */
+function parseUnwrappedBlocks(text: string): ExtractedCall[] {
+  const lines = text.split("\n")
+  const calls: ExtractedCall[] = []
+  let i = 0
+  while (i < lines.length) {
+    const toolMatch = TOOL_LINE_RE.exec(lines[i]!)
+    if (!toolMatch) {
+      i++
+      continue
+    }
+    const name = toolMatch[1]!
+    i++
+    const args: Record<string, unknown> = {}
+    while (i < lines.length) {
+      const raw = lines[i]!
+      // A blank line, a fresh call, or any non-param line ends the block.
+      if (raw.trim() === "") break
+      if (TOOL_LINE_RE.test(raw)) break
+      const paramMatch = PARAM_LINE_RE.exec(raw)
+      if (!paramMatch) break
+      const key = paramMatch[1]!
+      const value = paramMatch[2] ?? ""
+      i++
+      if (BLOCK_SCALAR_RE.test(value.trim())) {
+        const scalar = readBlockScalar(lines, i)
+        args[key] = scalar.value
+        i = scalar.next
+      } else {
+        args[key] = value
+      }
+    }
+    // Confidence is a hair below the wrapped path (0.95): same tier, weaker
+    // framing. Parse mode stays `tier-1` - no new vocabulary, no new consumer.
+    calls.push({ name, arguments: args, parseMode: "tier-1", confidence: 0.9 })
+  }
+  return calls
+}
+
+/**
+ * Consume the indented (and blank) lines of a YAML block scalar starting at
+ * `start`, returning the dedented value and the index of the next line. Stops
+ * at the first non-blank line at column 0 (e.g. the next param, or `---`).
+ */
+function readBlockScalar(
+  lines: readonly string[],
+  start: number,
+): { readonly value: string; readonly next: number } {
+  const collected: string[] = []
+  let i = start
+  while (i < lines.length) {
+    const line = lines[i]!
+    if (line.trim() === "") {
+      collected.push("")
+      i++
+      continue
+    }
+    if (/^[ \t]/.test(line)) {
+      collected.push(line)
+      i++
+      continue
+    }
+    break
+  }
+  while (collected.length > 0 && collected[collected.length - 1]!.trim() === "") collected.pop()
+  return { value: dedentLines(collected), next: i }
+}
+
+/** Strip the common leading indentation from a block-scalar body. */
+function dedentLines(lines: readonly string[]): string {
+  let min = Number.POSITIVE_INFINITY
+  for (const line of lines) {
+    if (line.trim() === "") continue
+    const indent = line.length - line.trimStart().length
+    if (indent < min) min = indent
+  }
+  if (!Number.isFinite(min)) min = 0
+  return lines.map((line) => line.slice(Math.min(min, line.length))).join("\n")
 }

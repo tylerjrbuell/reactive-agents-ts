@@ -52,6 +52,192 @@ describe("Tier 1 — structured XML format", () => {
   })
 })
 
+// ─── Tier 1 (wrapper-tolerant): bare param-line blocks ──────────────────────
+// W3c measured gap (fixtures/post-w3, qwen2.5-coder:14b): at temp 0 the coder
+// emits the taught `tool: <name>` + param lines but DROPS both `<tool_call>`
+// wrapper tags, so the wrapped-only tier parsed 0 calls (shadow would-have 0/5;
+// act 0/5 executed). These fixtures are the VERBATIM `llm-exchange` response
+// bodies from the committed traces (runIds in each test), not a guessed shape.
+
+describe("Tier 1 (wrapper-tolerant): bare param-line blocks", () => {
+  // Verbatim head of trace 01M4TYJZZKR32AP7C80HX9SQ4H (w3-shadow-coder14b run 1):
+  // two unwrapped file-reads separated by a `---` rule.
+  const bareReadsRuleSeparated = [
+    "tool: file-read",
+    "path: sales-q1.txt",
+    "encoding: utf-8",
+    "",
+    "---",
+    "",
+    "tool: file-read",
+    "path: sales-q2.txt",
+    "encoding: utf-8",
+  ].join("\n")
+
+  // Verbatim file-write block of trace 01M4TYKSSYR90C7AKYKEM0T5B2 (run 2):
+  // a YAML block-scalar `content: |` value with interior blank lines.
+  const bareWriteBlockScalar = [
+    "tool: file-write",
+    "path: report.md",
+    "content: |",
+    "  ## Summary",
+    "  This report summarizes the sales data for the first and second quarters.",
+    "",
+    "  ## Totals",
+    "  - ProductA: 180 (Q1: 100, Q2: 80)",
+    "  - ProductB: 270 (Q1: 150, Q2: 120)",
+    "  - ProductC: 380 (Q1: 200, Q2: 180)",
+    "  - Grand Total: 830",
+    "",
+    "  ## Recommendation",
+    "  ProductA is declining as its revenue decreased from Q1 to Q2.",
+    "encoding: utf-8",
+  ].join("\n")
+
+  it("parses a bare block with no wrapper tags", () => {
+    const calls = driver.extractCalls(bareReadsRuleSeparated, tools)
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.name).toBe("file-read")
+    expect(calls[0]?.arguments).toEqual({ path: "sales-q1.txt", encoding: "utf-8" })
+    expect(calls[1]?.arguments).toEqual({ path: "sales-q2.txt", encoding: "utf-8" })
+    // Same tier label as the wrapped path: this IS structured tier-1, tolerant
+    // of the wrapper, not of the grammar.
+    expect(calls[0]?.parseMode).toBe("tier-1")
+    expect(calls[0]?.confidence).toBeGreaterThanOrEqual(0.9)
+  })
+
+  it("parses a bare block whose param value is a YAML block scalar", () => {
+    const calls = driver.extractCalls(bareWriteBlockScalar, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("file-write")
+    expect(calls[0]?.arguments.encoding).toBe("utf-8")
+    const content = calls[0]?.arguments.content as string
+    // Interior blank line preserved; block-scalar indentation stripped; the
+    // trailing `encoding: utf-8` line is NOT swallowed into the value.
+    expect(content).toBe(
+      [
+        "## Summary",
+        "This report summarizes the sales data for the first and second quarters.",
+        "",
+        "## Totals",
+        "- ProductA: 180 (Q1: 100, Q2: 80)",
+        "- ProductB: 270 (Q1: 150, Q2: 120)",
+        "- ProductC: 380 (Q1: 200, Q2: 180)",
+        "- Grand Total: 830",
+        "",
+        "## Recommendation",
+        "ProductA is declining as its revenue decreased from Q1 to Q2.",
+      ].join("\n"),
+    )
+  })
+
+  it("parses interleaved prose + separators + inline `${...}` value (run 1 full shape)", () => {
+    // Verbatim structural excerpt of 01M4TYJZZKR32AP7C80HX9SQ4H: two reads,
+    // prose with markdown headings/fences in between, then an unwrapped
+    // file-write whose `content:` value is an inline template reference.
+    const text = [
+      "tool: file-read",
+      "path: sales-q1.txt",
+      "encoding: utf-8",
+      "",
+      "---",
+      "",
+      "tool: file-read",
+      "path: sales-q2.txt",
+      "encoding: utf-8",
+      "",
+      "---",
+      "",
+      "Let's assume the content of `sales-q1.txt` is as follows:",
+      "",
+      "**Step 1: Parse the content of both files.**",
+      "",
+      "tool: file-write",
+      "path: report.md",
+      "content: ${reportContent}",
+      "encoding: utf-8",
+      "",
+      "---",
+      "",
+      "This will generate the `report.md` file.",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(3)
+    expect(calls.map((c) => c.name)).toEqual(["file-read", "file-read", "file-write"])
+    expect(calls[2]?.arguments.path).toBe("report.md")
+    expect(calls[2]?.arguments.content).toBe("${reportContent}")
+    // The bold markdown and prose lines are NOT absorbed as params.
+    expect(calls[2]?.arguments["**Step 1"]).toBeUndefined()
+  })
+
+  it("tolerates a leading prose line before the first bare block (run 3 shape)", () => {
+    const text = [
+      "Let's start by reading the contents of both files.",
+      "",
+      "tool: file-read",
+      "path: sales-q1.txt",
+      "",
+      "---",
+      "",
+      "tool: file-read",
+      "path: sales-q2.txt",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.arguments).toEqual({ path: "sales-q1.txt" })
+    expect(calls[1]?.arguments).toEqual({ path: "sales-q2.txt" })
+  })
+
+  it("tolerates a bare block wrapped in a fenced code block", () => {
+    const text = [
+      "Here is the call:",
+      "```",
+      "tool: web-search",
+      "query: typescript generics",
+      "```",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("web-search")
+    expect(calls[0]?.arguments).toEqual({ query: "typescript generics" })
+  })
+
+  it("does NOT invent calls from prose that merely contains colons", () => {
+    const text = [
+      "Note: this is a plan, not a call.",
+      "**Step 1: think**",
+      "- ProductA: 180",
+      "The tool: is useful.",
+    ].join("\n")
+    expect(driver.extractCalls(text, tools)).toHaveLength(0)
+  })
+
+  it("prefers the wrapped taught block when present (unchanged precedence)", () => {
+    const text = [
+      "<tool_call>\ntool: file-read\npath: /foo.ts\n</tool_call>",
+      "tool: web-search",
+      "query: should not be reached",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("file-read")
+  })
+
+  // GH #243 pin preserved: the wrapper-tolerant path accepts the SAME taught
+  // grammar the builder emits, minus the wrapper tags, derived from the live
+  // builder output, never re-typed. If builder and parser drift, this breaks.
+  it("accepts the taught example block with its wrapper lines stripped (builder-derived)", () => {
+    const built = driver.buildPromptInstructions(tools)
+    const match = /<tool_call>\n([\s\S]*?)\n<\/tool_call>/.exec(built)
+    expect(match).not.toBeNull()
+    const inner = match![1]!
+    const calls = driver.extractCalls(inner, tools)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[0]?.name).toBe("<tool-name>")
+    expect(calls[0]?.arguments["<param-name>"]).toBe("<value>")
+  })
+})
+
 describe("Tier 2 — JSON in text", () => {
   it("parses JSON object in prose", () => {
     const text = `Let me call {"tool": "file-read", "path": "/workspace/foo.ts"} to read the file.`
