@@ -1094,3 +1094,11 @@ task: "W1.5-defect fix: gate stream-parser branch-4 prose fallback on (empty con
 result: completed, confidence 0.95
 outcome: "accepted: review Approved 0C/0I. Deviation (branch-4-only, pre-authorized) verified SOUND — gate default-safe, single production caller, zero new plumbing (accumulatedStopReason pre-existing), W1.3 suite byte-unchanged. RED 2/6->GREEN 6/6 + cut-test + reasoning 2983/0. 4 latent-hardening minors ledged for final-review triage (stop_sequence reachability, marker-clobber inherited paths -> re-capture counts, changeset wording, set typing)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "W1.5 re-capture: post-w1-fix S2 N=5 + S1 drift guard against fixed kernel (af7d1b45), marker-clobber count, FINAL Wave-1 verdict"
+result: completed, confidence 0.9
+outcome: "accepted (capture verification = its own review, per controller ruling): FINAL WAVE-1 VERDICT CONFIRMED — defect prose-tail 5/5->0/5 with per-run outputs quoted ('3052', end_turn), marker-clobber 0/5, thinkingChars 6.7-10.8K 5/5, S1 drift 2/2 shape-identical, zero packages/ edits range-verified. Honest residual recorded (S2 answer never changed at temp 0 => quality win = defect-free retention + rescue availability; accuracy lift provable only on thinking-only tasks, W1.3 unit arms). Methodology finding folded into Lift Protocol plan text: ~±17% token variance => N>5 for sub-15% deltas. Hot.md #38 amended per authorized contradiction clause."
+```
