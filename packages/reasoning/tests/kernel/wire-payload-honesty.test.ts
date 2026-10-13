@@ -217,11 +217,17 @@ describe("W2d 2.4 — FC wire payload honors toolSchemaDetail", () => {
     expect(serialized).toContain("ranked results");
   }, 15000);
 
-  it("description-heavy fixture: local payload is ≥2x smaller than the frontier payload (window reclaimed)", async () => {
+  it("description-heavy fixture: local payload is ≥3x smaller than the frontier payload (window reclaimed)", async () => {
     const localTools = (await captureRequest(CONTEXT_PROFILES.local)).tools;
     const frontierTools = (await captureRequest(CONTEXT_PROFILES.frontier)).tools;
     const localSize = JSON.stringify(localTools).length;
     const frontierSize = JSON.stringify(frontierTools).length;
-    expect(localSize * 2).toBeLessThan(frontierSize);
+    // Spec red-on-cut threshold (brief 2.4): ≥3x. Measured on THIS fixture:
+    // descriptions total 1,516 chars of the 1,829-byte full payload; the
+    // stripped wire payload keeps ~262 bytes of structure
+    // (name/type/required/enum/items) — ~7x reduction at the fixture's
+    // description-weight (the real audit payload measured ~80% descriptions;
+    // 3x is the spec floor, comfortably cleared).
+    expect(localSize * 3).toBeLessThan(frontierSize);
   }, 15000);
 });
