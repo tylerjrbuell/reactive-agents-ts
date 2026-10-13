@@ -60,6 +60,14 @@ const HARNESS_FORCED_TERMINALS: ReadonlySet<string> = new Set([
   "loop_detected_with_veto",
   "controller_signal_veto",
   "budget_exceeded",
+  // W4-live honesty regression (post-W4 close capture, MANIFEST §2): the RI
+  // dispatcher early-stop is a HARNESS-forced end (flat trajectory / approaching
+  // maxIterations), exactly like the entries above. It was OMITTED, so the
+  // give-up gate stayed silent on it and a zero-evidence run whose prose CLAIMED
+  // completion ("has been successfully completed") shipped as `success:true`.
+  // The gate's other arm (`isGiveUpAnswer`) cannot catch a success-claim, so the
+  // terminal-class arm is the only net for this fabrication shape.
+  "dispatcher-early-stop",
 ]);
 
 /** True when the raw kernel terminal names a HARNESS-forced end. */

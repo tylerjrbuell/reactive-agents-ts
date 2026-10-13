@@ -353,17 +353,25 @@ export function finalizeStrategyResult(
           })
         : finalBase;
 
-    // Give-up honesty gate: a COMPLETED result whose output is a give-up /
-    // incapability statement, with nothing grounded behind it, is not a
-    // success. `resolveCompletionStatus` maps any non-failed `done` state to
-    // `completed`, and the terminal verifier's give-up check requires unused
-    // available tools (so a zero-tool run never trips it), together these let
-    // a loop_graceful / exhaustion give-up ship as `success:true`. Downgrade to
-    // the honest `abstained` terminal (the engine maps terminatedBy:"abstained"
-    // to success:false), keeping the model's own explanation as the output.
-    // Fenced to COMPLETED so failed/abstained/paused results are byte-identical,
-    // and to no-grounded-evidence so a run that DID gather data is never
-    // downgraded.
+    // Give-up / fabrication honesty gate: a result whose output is a give-up /
+    // incapability statement OR whose terminal is HARNESS-FORCED, with nothing
+    // grounded behind it, is not a success. `resolveCompletionStatus` maps any
+    // non-failed `done` state to `completed`, and the terminal verifier's
+    // give-up check requires unused available tools (so a zero-tool run never
+    // trips it), together these let a loop_graceful / exhaustion give-up ship as
+    // `success:true`. Downgrade to the honest `abstained` terminal (the engine
+    // maps terminatedBy:"abstained" to success:false), keeping the model's own
+    // explanation as the output.
+    //
+    // Fence W4-live: NOT-failed (completed OR partial). The engine treats
+    // `partial` + substantive output as success (`execution-engine.ts`), so a
+    // harness-forced terminal that leaves the kernel `thinking` (e.g. the RI
+    // dispatcher early-stop) mints a `partial` result — and fencing to
+    // `completed` left that route unguarded. A harness-forced terminal with ZERO
+    // grounded evidence is not a success under EITHER status. Failed/abstained/
+    // paused results stay byte-identical (failed excluded here; abstained by the
+    // rawTerminatedBy guard; paused terminals are never harness-forced), and a
+    // run that DID gather data is never downgraded.
     const resolvedText = typeof resolved.output === "string" ? resolved.output : "";
     const metaRawTerminal = params.extraMetadata?.["rawTerminatedBy"];
     const rawTerminal =
@@ -373,7 +381,7 @@ export function finalizeStrategyResult(
           ? metaRawTerminal
           : undefined;
     const finalResult =
-      resolved.status === "completed" &&
+      resolved.status !== "failed" &&
       rawTerminatedBy !== "abstained" &&
       !hasGroundedEvidence(params.steps) &&
       (isHarnessForcedTerminal(rawTerminal) || isGiveUpAnswer(resolvedText))

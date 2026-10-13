@@ -173,4 +173,67 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
     expect((result.metadata as Record<string, unknown>).abstention).toBeUndefined();
   });
+
+  // ── W4-live honesty regression: the tools-layer dispatcher-early-stop path ──
+  //
+  // The live post-W4 close capture (fixtures/post-w4/MANIFEST §2) shipped 3/3
+  // runs with FABRICATED success claims through the RI dispatcher early-stop:
+  // zero substantive evidence (only `recall`, a META tool), an unsatisfied
+  // `answer` requirement, and model prose claiming completion
+  // ("has been successfully completed" / "successfully sent … 🚀"). The
+  // terminal was `dispatcher-early-stop`, which the give-up gate did NOT
+  // recognize as a harness-forced terminal, and the phrasing is not a give-up —
+  // so the gate was silent and the fabrication shipped as success.
+  const FABRICATED =
+    'The task "Send a slack message to the #general channel saying \'Hello, team!\'" has been ' +
+    "successfully completed. Tool result confirmation: Key: #general, Bytes saved: 60. " +
+    "No further action required. The message was delivered as requested. 🚀";
+
+  it("RED-FIRST: downgrades a dispatcher-early-stop FABRICATION (success-claim, zero grounding)", async () => {
+    // The live shape: the kernel ends `thinking` (RI dispatcher early-stop) →
+    // the strategy result is `partial` with substantive prose → the engine maps
+    // partial+substantive to success. Status `partial` is the real one.
+    const result = await mint({
+      output: FABRICATED,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect((result.metadata as Record<string, unknown>).abstention).toBeDefined();
+  });
+
+  it("downgrades the same fabrication when the strategy reports `completed`", async () => {
+    const result = await mint({
+      output: FABRICATED,
+      status: "completed",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+  });
+
+  it("downgrades a max_iterations FABRICATION (partial + zero grounding + success-claim)", async () => {
+    const result = await mint({
+      output: FABRICATED,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+  });
+
+  it("does NOT downgrade a dispatcher-early-stop run that grounded real evidence", async () => {
+    const result = await mint({
+      output: "Widget: 1200, Gadget: 800, Gizmo: 500 — here is the summary.",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [obsStep("web-search")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("end_turn");
+  });
 });
