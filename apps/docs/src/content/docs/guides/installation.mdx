@@ -113,7 +113,7 @@ The easiest way to get started is with the `reactive-agents` meta-package, which
 </Tabs>
 
 :::note[Effect dependency]
-`effect` is a **peer dependency** of `reactive-agents` (`"effect": "^3.10.0"`) — not a bundled regular dependency. If your package manager doesn't install peer dependencies automatically, add it yourself: `bun add effect`. When you write hooks, tools, or tests, import helpers explicitly — e.g. `import { Effect } from "effect"` — then use **`Effect.succeed`**, **`Effect.fail`**, **`Effect.gen`**, **`Effect.runPromise`**, etc. See the [Effect-TS primer](/concepts/effect-ts/) for a cheat sheet.
+`reactive-agents` declares `effect` as a **peer dependency** (`"effect": "^3.10.0"`) and `@reactive-agents/core` additionally carries it as a regular dependency — so `effect` lands in your install tree via the framework; declare it yourself (`bun add effect`) if you import from it directly. When you write hooks, tools, or tests, import helpers explicitly — e.g. `import { Effect } from "effect"` — then use **`Effect.succeed`**, **`Effect.fail`**, **`Effect.gen`**, **`Effect.runPromise`**, etc. See the [Effect-TS primer](/concepts/effect-ts/) for a cheat sheet.
 :::
 
 Then import from a single entry point (`ReactiveAgents` for the builder, `createAgent` for the declarative config):

@@ -174,7 +174,7 @@ bun add reactive-agents
 npm install reactive-agents
 ```
 
-> **Note:** `effect` is a **peer dependency** of `reactive-agents` (the published packages declare `"effect": "^3.10.0"` under `peerDependencies` — moved off regular dependencies; see [What's new](https://docs.reactiveagents.dev/guides/whats-new/)). If you import from `effect` directly in your own code, or your package manager doesn't install peer dependencies for you, add it explicitly: `bun add effect` (or `npm install effect`).
+> **Note:** `reactive-agents` declares `effect` as a **peer dependency** (`^3.10.0`), and so do most framework packages. A few — e.g. `@reactive-agents/core` — *additionally* declare it as a regular dependency (a dual declaration), so `effect` arrives in your install tree transitively via the framework regardless, while the peer declaration is how the packages ask your app to share one `effect` version with them. If you import from `effect` directly in your own code, declare it explicitly: `bun add effect` (or `npm install effect`).
 
 Set your provider key first (each provider's variable is listed in [Environment Variables](#environment-variables) below):
 

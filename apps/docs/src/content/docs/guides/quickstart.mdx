@@ -87,7 +87,7 @@ bun add reactive-agents
 ```
 
 :::note[Effect dependency]
-`effect` is a **peer dependency** of `reactive-agents` (`"effect": "^3.10.0"`) — not a bundled regular dependency. If your package manager doesn't install peer dependencies automatically, add it yourself: `bun add effect`. For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/).
+`reactive-agents` declares `effect` as a **peer dependency** (`"effect": "^3.10.0"`), and `@reactive-agents/core` additionally carries it as a regular dependency — so `effect` lands in your install tree via the framework anyway. If you import from `effect` directly in your own code, declare it explicitly (`bun add effect`). For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/).
 :::
 
 ## 2. Set Up Environment
