@@ -1294,3 +1294,11 @@ task: "W4 remainder: 4.4 outstanding recitation default-on (CONTRACT_PROFILE sho
 result: completed, confidence 0.85
 outcome: "accepted: review APPROVED 0C/1I/4M. Cache-safety verified STRUCTURAL (volatile-tail seam after compaction); parity pin genuine; zero-LLM claim outcome-proven (scripted evaluator ignored on default path); pattern-id reason real. Important #1: the plan's 4.4 tail-bloat guard (tokens/run) UNRUN -> parent measurement lane at wave close (always-outstanding floor makes the tail non-empty every contract run; bounded by cap). Minors: within-turn-only dedupe (intent clarification), 'requirement-relevant' wording vs evidence-bearing slice, candidate-naming comment, ladder-ignores-fit (bounded by maxSwitches=1 + carried iteration cap). GH #240 stays open (separate adaptive/decompose seam). reasoning 3101/0, runtime 1678/0, replay 37/0."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 4 close capture: detection (fixture-replay) + live termination + no-regression + tail-bloat guard + temperature-integrity check"
+result: completed, confidence 0.9
+outcome: "accepted as measurement; WAVE 4 NOT VERIFIED: detection PASS (146/146 arbiter non-progress, (c)/(d)/(e) trip, FP guard green), no-regression PASS, tail-bloat CLEAN (-7%/+4% noise), termination PARTIAL with a LIVE HONESTY REGRESSION (3/3 early-stop runs minted fabricated success claims, 0 tool calls, verdict success - the program's core false-success class via a new route) -> kernel fix dispatched + w4-terminate re-run required. Integrity finding: commanded temperature never reached the wire (provider default 0.5/0.3 recorded) - all temp-0 labels truth-upped with era note; threading fix routed to provider-warden. Warden discipline note: refused to mark the wave verified and escalated instead."
+```
