@@ -438,8 +438,25 @@ export { parsePartial } from "./structured-output/partial-parse.js";
 export { stripThinking } from "./kernel/utils/stream-parser.js";
 
 // ─── React Kernel (public entrypoint for callers that drive the kernel directly) ───
-export { executeReActKernel, reactKernel } from "./kernel/loop/react-kernel.js";
-export type { KernelInput, ReActKernelInput, ReActKernelResult, SkillsContext } from "./kernel/state/kernel-state.js";
+/**
+ * Public composable-kernel extension surface (W0.4a): `makeKernel` builds a
+ * `ThoughtKernel` from a substitutable `Phase` pipeline; `Guard` and
+ * `MetaToolHandler` type the act-stage interception and meta-tool dispatch
+ * hooks; `KernelContext` is what every phase/handler receives. These were
+ * previously reachable only through the docs' repo-relative imports.
+ */
+export { executeReActKernel, reactKernel, makeKernel } from "./kernel/loop/react-kernel.js";
+export type {
+  KernelInput,
+  ReActKernelInput,
+  ReActKernelResult,
+  SkillsContext,
+  KernelContext,
+  Phase,
+  ThoughtKernel,
+} from "./kernel/state/kernel-state.js";
+export type { Guard } from "./kernel/capabilities/act/guard.js";
+export type { MetaToolHandler } from "./kernel/capabilities/act/meta-tool-handlers.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";
