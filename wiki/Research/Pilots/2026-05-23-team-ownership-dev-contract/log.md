@@ -1038,3 +1038,11 @@ warden: kernel-warden
 task: "Wave 0 W0.4b: composable-kernel.md rewritten against published package imports; all skip markers cleared (12, not 11); SKIP_CEILING ratchet 235->223 with dated history; stale prose fixed honestly (onError event, KernelHooks arity, codec type, removed guard mechanism)"
 result: completed, confidence 0.92
 outcome: "pending task-review; parent verifier: full doc gate re-run at HEAD. Warden declined export-widening (runKernel/transitionState/KernelHooks/KernelStatus/KernelRunOptions stay internal) — correctly routed to parent. Ruling: out of W0.4 scope; revisit only if Wave 4 kernel work needs a public seam."
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "Wave 0 W0.5: result->trace linkage — runId + tracePath minted on AgentResultMetadata at single finalize seam (engine/finalize/trace-linkage.ts), settle-flush + existsSync honest-absence gate, traceDir threaded builder->RuntimeOptions->config single-sourced"
+result: completed, confidence 0.9 (round 2)
+outcome: "accepted: task review 'Needs fixes' on 1 Important (test hand-parse weaker than rax contract — loadTrace drops invalid lines silently, loadRecordedRun throws without run-started); fix round 1/5 (42175a34..4c99fb04, test-only) asserted via the CLI's own loadTrace barrel export + run-started/every-event pins; scoped re-review: ADDRESSED, no new breakage. Parent verifier green (focused 3/3, runtime typecheck). Production code clean on all 3 named risks at first review. Deferred minors ledged (Option.isSome idiom, absolute-path JSDoc wording, join duplication recorder<->mint). Cross-task ⚠️: streaming/light-sub-agent results lack linkage — follow-up if Wave-1 lift captures need them."
+```
