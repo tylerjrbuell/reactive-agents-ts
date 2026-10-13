@@ -1214,3 +1214,11 @@ task: "Wave 3b (plan 3.3 + triad): dialect-live routing per spec end-state (capa
 result: completed, confidence 0.9
 outcome: "accepted: review Approved 0C/0I. Reviewer independently opened the spec - shipped mapping faithful to §4/§5 as written (the 'fuses' ambiguity resolved by the spec's own 'at the source' clause), danger cell (caps=false + native-fc claim) routes text-parse never native. Cross-domain ratifications: 2 additive llm-provider hunks + core carriers (mandate-bound, item 6 of brief). Triad arms verified as true mutation pins incl phantom-re-entry kill arm. reasoning 3053/0, runtime parity 1683/0, tools drivers 53/0 (15 pre-existing Docker arms noted)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "W3c Stage-B promotion data: shadow-soak (coder:14b N=5, phi4-mini N=3) + act-mode (coder N=5, phi4 N=2) - would-have-executed rate, first-acting, deliverable outcome, safety watch"
+result: completed, confidence 0.88 (resumed after a mid-close-out crash; incremental writes preserved all arms)
+outcome: "rung-3 PARTIAL, plan-3.5 NOT declarable: shadow seam PROVEN (phi4 clean-run 3/3 tier-1 taught-grammar parses; placeholder-arg caveat) but coder:14b markup hits a parser-coverage gap (would-have-executed 0/5) and act end-to-end is unmeasured (coder parse-gap + phi4 2/2 hung on box stalls 6/8 attempts). Safety watch clean: no double-dispatch/budget-bypass/parse-loops in 12 completed runs; fail-safe legacy path byte-identical. File-ready follow-ups routed: wrapper-tolerant tier-1 (tools-warden, preserve #243 grammar pin), ParamNameHealer proof (kernel), quiet-box act-phi4 re-run (harness). Zero packages/** edits."
+```
