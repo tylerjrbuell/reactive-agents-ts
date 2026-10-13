@@ -222,7 +222,15 @@ export function handleActing(
 
     let pendingCalls: readonly ToolCallSpec[];
     if (context.toolCallingDriver.mode === "text-parse") {
-      const lastAssistantText = getLastAssistantText(state.messages);
+      // W3a Stage B: on a think→acting transition THIS turn's text lives on
+      // meta.lastThought (set alongside the native branch's convention).
+      // state.messages does not receive the assistant message until
+      // conversation assembly at the END of acting — extracting from the
+      // thread here would re-parse a PREVIOUS turn's already-executed
+      // markup and re-dispatch stale calls. Fall back to the thread for
+      // resume paths where acting is re-entered without a fresh transition.
+      const lastAssistantText =
+        state.meta.lastThought ?? getLastAssistantText(state.messages);
       const extracted = context.toolCallingDriver.extractCalls(lastAssistantText, filteredToolSchemas);
       const textParsedCalls: readonly ToolCallSpec[] = extracted.map((e, i) => ({
         id: `text-parse-${state.iteration}-${i}`,

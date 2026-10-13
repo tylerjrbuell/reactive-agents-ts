@@ -25,6 +25,7 @@ import {
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
 import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { readTextParseTransitionMode } from "../../utils/text-parse-mode.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
@@ -1573,6 +1574,113 @@ export function handleThinking(
       messages: messagesForTrace,
       rawResponse: rawThought,
     });
+
+    // ── W3a Stage B: text-parse think→acting transition ──────────────────────
+    // (spec 2026-06-03-driver-redesign Stage B; flag-gated, default `off` =
+    // byte-unchanged). The driver already TEACHES the markup format and
+    // PARSES it (`buildPromptInstructions` + `extractCalls`) — what was
+    // missing was the TRANSITION: nothing moved a text-parse loop to
+    // `acting`, so act.ts's text-parse `extractCalls` seam was unreachable
+    // and a dialect-`none` model burned maxIterations emitting markup
+    // (the S4 defect class). This block only DECIDES; dispatch stays
+    // single-sourced in act.ts's existing pipeline (guards, policy choke
+    // point, HealingPipeline, ledger seam — no second executor).
+    //
+    // TEACH/PARSE SINGLE SOURCE (GH #243): parsed against `driverSchemas`,
+    // the same schema set the prompt's tool instructions were built from —
+    // one grammar, builder is truth.
+    if (context.toolCallingDriver.mode === "text-parse") {
+      const textParseMode = readTextParseTransitionMode();
+      if (textParseMode !== "off") {
+        const parsed = context.toolCallingDriver.extractCalls(thought, driverSchemas);
+        const markerPresent = thought.includes("<tool_call");
+        if (textParseMode === "shadow") {
+          const parsedSummaries = parsed.map((c) => ({
+            name: c.name,
+            argumentKeys: Object.keys(c.arguments),
+            parseMode: c.parseMode,
+          }));
+          // Observe-only promotion preflight: record the parse-diff (what
+          // the parser saw vs. what the loop did — nothing) WITHOUT
+          // touching the transition; falls through to today's exact path.
+          if (parsed.length > 0 || markerPresent) {
+            yield* emitHarnessSignalInjected({
+              taskId: state.taskId,
+              iteration: state.iteration,
+              signalKind: "other",
+              origin: "text-parse-shadow",
+              content: `text-parse shadow: driver parsed ${parsed.length} call(s) from this turn's markup; loop acted on 0 (shadow mode).`,
+              metadata: {
+                textParseMode,
+                parsedCalls: parsedSummaries,
+                markerPresent,
+                acted: false,
+              },
+            });
+          }
+        } else if (parsed.length > 0) {
+          // act mode: map to the SAME acting flow. Ids mirror act.ts's own
+          // text-parse mapping so re-extraction and this fallback agree.
+          const textParsedCalls: ToolCallSpec[] = parsed.map((e, i) => ({
+            id: `text-parse-${state.iteration}-${i}`,
+            name: e.name,
+            arguments: e.arguments,
+            ...(e.rationale ? { rationale: e.rationale } : {}),
+          }));
+          // The native branch's exact transition shape: status acting +
+          // meta.lastThought (this turn's text) so act.ts's extractCalls
+          // seam sees the CURRENT markup, not a stale thread entry.
+          return transitionState(state, {
+            steps: newSteps,
+            tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
+            cost: newCost,
+            status: "acting",
+            meta: {
+              ...state.meta,
+              pendingNativeToolCalls: textParsedCalls,
+              lastThought: thought,
+              lastThinking: thinking,
+            },
+          });
+        } else if (markerPresent) {
+          // act mode + markup + zero parsed: NEVER silent. Deterministic,
+          // observation-shaped message back into the loop (same house
+          // pattern as the required-tools nudge), ledger-visible via the
+          // existing observation → tool-result projection, retry
+          // instruction on the guidance channel (no stray USER message).
+          const failMsg =
+            "text-parse: your reply contained <tool_call> markup but no tool call could be parsed. " +
+            "Re-emit the call in the exact taught format — one line inside the <tool_call> block starting " +
+            "with 'tool: <tool-name>', then one '<param-name>: <value>' line per parameter, and close " +
+            "with the block's end marker. Tool names must match a listed tool exactly.";
+          const failStep = makeStep("observation", failMsg, {
+            observationResult: makeObservationResult("system", false, failMsg),
+          });
+          yield* hooks.onObservation(state, failMsg, false);
+          yield* emitHarnessSignalInjected({
+            taskId: state.taskId,
+            iteration: state.iteration,
+            signalKind: "other",
+            origin: "text-parse-parse-failure",
+            content: failMsg,
+            metadata: { textParseMode, parsedCalls: [], markerPresent: true, acted: false },
+          });
+          return transitionState(state, {
+            steps: [...newSteps, failStep],
+            tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            priorThought: thought.trim(),
+            pendingGuidance: { errorRecovery: failMsg },
+          });
+        }
+        // act mode, no markup, nothing parsed → today's path (answer/loop).
+      }
+    }
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
     // If the model produced no tool call, no FINAL ANSWER prefix (handled by
