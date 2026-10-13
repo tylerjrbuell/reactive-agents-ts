@@ -1254,3 +1254,11 @@ task: "Live user-bug fix chain: qwen3.5 scratch.ts EOF at iter 0 - (a) provider:
 result: completed, confidence 0.9
 outcome: "accepted pending delimiter re-review; END-TO-END VERIFIED by controller live: scratch.ts success (4 steps, 6.4s, native route 12 schemas), ollama journal parser-failure count 0 (was universal), tool-sourced final answer. Provider pair reviewed APPROVED (minors ledged: Tier-0 cache seam ungated-latent, future-version demotion, EOF-vs-model-name edge, 400-arm comment). New root-cause law ledged for debrief: version-gate persisted measurement data."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4.0 iterate-pass refactor-first: generator return-protocol single-writer (18 sync sites + closure -> 0 + one unconditional write-back); W2d source-grep pin replaced by a behavior test (real runKernel, discriminating classifier-skip presence/absence)"
+result: completed, confidence 0.85 (warden self-rated; review upgraded)
+outcome: "accepted: review APPROVED 0C/0I. Byte-identical claim independently verified: all 19 base exit paths had adjacent sync(); carrier referenced in exactly 2 places (entry destructure + write-back) so nothing observes mid-pass staleness; same 15 fields; error channel never. reasoning 3,050/0, runtime parity, typecheck 22/22. Out-of-authority census consumer-string edit (1 line) parent-accepted as the re-pin's consequence. Parent also bumped both guard ratchets with dated rationale (as-unknown-as 240->242, console-ceiling 11->12) - the W0.3 test-provider warning is the console site (sync build() context, ceiling's own exception)."
+```
