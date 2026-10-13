@@ -75,7 +75,13 @@ Template-probe verdict (S4 model selection, /api/show): phi4-mini-reasoning embe
 Baseline tables above are frozen. Lift measurements live in sibling directories with their own
 row files: `post-w1/` (W1.5 first measurement — MIXED, defect surfaced) and `post-w1-fix/`
 (W1.5 re-capture at kernel fix af7d1b45f — **FINAL WAVE-1 VERDICT CONFIRMED**; prose-tail 5/5→0/5,
-marker-clobber 0/5, thinking retained 5/5, S1 drift clean). PRE/POST/POST-FIX deltas + verdict:
+marker-clobber 0/5, thinking retained 5/5, S1 drift clean), and `post-w2/` (Wave-2 close capture,
+2026-10-13: S1/S2 shape-stable, head-truncation incidents 0, classifier-skip 0 with explanation
+(both capture models carry classifier=high — pre-authorized delta-0 row), llama input-side cost
+−51% via schema-count change, PLUS one file-ready regression: S3 qwen3:4b 5/5→0/5 success —
+W2a probe-derived supportsToolCalling + stale 1-run prior `toolCallDialect:"none"` demoted the arm
+to text-parse and nothing parses the taught markup; discover-tools thrash phenotype gone from the
+llama wire (Wave-4 baseline-continuity note). PRE/POST/POST-FIX/W2 deltas + verdicts:
 `../../2026-10-12-program-scoreboard.md`.
 
 ## Probe rows (unit-style, re-run under final Wave-0 code state)

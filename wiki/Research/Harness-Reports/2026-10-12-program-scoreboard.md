@@ -131,4 +131,55 @@ note: the S2 answer itself never changed (model already emitted '3052' pre-W1 at
 the answer-accuracy lift itself is only demonstrable on thinking-only-answer tasks (W1.3 unit arms:
 rescue thought == answer), not on the frozen S2 prompt.
 
+## Post-W2 close capture (2026-10-13 12:33–12:39 at HEAD 471d7ed8d, dist rebuilt first)
+
+Arms: S1 N=5, S2 N=5, S3-qwen34b N=5, S3-llama32 N=5 (S3 pairs exceeded the N=3 spec — extra
+variance rows kept) into `fixtures/post-w2/`. Rows + signal counts: `fixtures/post-w2/MANIFEST.md`.
+
+### Three-point table (baseline PRE → post-w1-fix → post-w2), same extractor definitions
+
+| arm | metric | PRE (Wave 0) | W1-fix | POST-W2 | W2 delta |
+|---|---|---|---|---|---|
+| s1-qwen34b | success rate | 0/5 | 0/5 | **0/5** (abstained ×5) | = (no drift) |
+| s1-qwen34b | tokens/run mean | 2,678 | 2,559 (N=2) | 2,358 (1,859–2,849) | −12% (variance band) |
+| s1-qwen34b | llmCalls · classify/run | 7 · 1 | 7 · 1 | **7 · 1** | **0 — by design**: both capture models carry classifierReliability=high (bench calibration lines: qwen3:4b 53–67 samples, llama3.2 5–9), W2d skip correctly never fires; 0 `classifier-skip` signals / 20 runs |
+| s2-qwen34b | success · output | 5/5 · '3052' | 5/5 · '3052' | **5/5 · '3052' ×5** | = (quality intact); terminatedBy label end_turn→**llm_end_turn** (label-only rename, semantics unchanged) |
+| s2-qwen34b | thinkingChars/run | 0 (dropped) | 6.0–9.5K | 4.1–8.4K ×5 | retained |
+| s3-qwen34b | success rate | 5/5 | — | **0/5** | **REGRESSION — see defect** |
+| s3-qwen34b | schemas/req | 4 | — | **0** | native FC demoted to text-parse |
+| s3-llama32 | success rate (verdict) | 5/5 | — | 5/5 | = verdicts; content degraded (2/5 empty-skeleton reports, 2/5 wrong grand totals — baseline run2 also had a blank total, flakiness pre-existing) |
+| s3-llama32 | tokensIn/req mean | 1,084 | — | **~522 (−51%)** | schema-count 3→2 (discover-tools no longer base-visible) + history shape; NOT the W2d names-and-types seam (both models resolve tier=mid on this box — registry holds no rows for them; GH #239 stub-row gap) |
+| s3-llama32 | canonical thrash signature (01M4SXNTN38 shape) | 1/5 (run-4: discover-tools ×146 false-success) | — | **0/5** | phenotype gone — discover-tools dropped from the wire; Wave-4 baseline-continuity finding (record, don't fix) |
+
+### WAVE-2 VERDICT: MIXED — cost seams hold or measured-absent honestly; S3 local arm ships a REGRESSION
+
+Per plan clause + four ledged seams, attributed from evidence (not assumed):
+
+1. **Estimator +25% dense (2.3, W2c tokenizer-aware)**: wired — surfaces in the guard's
+   `correctedTokensBefore` accounting; no direct wire-side token count available (MEASUREMENT GAP
+   unchanged). Not contradicted.
+2. **Registry tier → local (2.1/W2b)**: **no live effect on capture arms** — Capability registry on
+   this box contains only probe/test-fixture rows (qwen3.5, gemma4, qwen3-14b…); qwen3:4b +
+   llama3.2:latest still resolve mid via regex fallback. The mid→local flip that would activate
+   W2d compaction is exactly what stub-row issue **#239** exists to fix.
+3. **W2d compacted schemas**: **>=3x claim stays unit-pinned only** (`d5ecf6b77` wire-payload-honesty
+   shrink pin, local arms); live local tier never engaged (2 above). Classifier-skip enforcement:
+   correct **delta-0** (0 skip signals; both models classifier=high — pre-authorized honest row).
+4. **W2e head-truncation guard**: **head-truncation incidents 0/20** (system head intact everywhere;
+   no `systemPromptTruncated`); guard preflight observable — fired 1/20 (s3-qwen34b r1, conservative
+   over-fire direction, dropped none, shipped). File-ready observation: its ceiling reported
+   numCtx=32768 while the arm pinned wire num_ctx=8192 → preflight ceiling does not read the
+   request-level override.
+
+**DEFECT (headline, file-ready, NOT fixed here)**: S3 qwen3:4b 5/5→**0/5**. W2a (57b6836a) derives
+`supportsToolCalling` from the template probe; the shipped prior `calibrations/qwen3-4b.json`
+(2026-05-24, runsAveraged=1, probeVersion 1) says `toolCallDialect:"none"` → arm routed to
+text-parse: tool-surface-visible/callable ≠ wire schemas (`toolSchemaNames=[]`), model emits the
+prompt-taught `<tool_call> tool: …` markup and nothing parses it (0 tool-call-start, no
+report.md, success=false). Live Ollama verifies native FC for qwen3:4b (baseline worked) — the 1-run
+stale prior contradicts current evidence, and the text-parse parser doesn't accept the harness's own
+taught markup shape. Owners: provider-warden (prior refresh/routing) + kernel-warden (markup-parser
+contract). Wave 2's S3 before/after clause therefore FAILS on qwen3:4b: Wave 3+ inherits this row
+and must re-capture after the fix.
+
 **Wave-4+ red-on-cut pointer:** the canonical false-success/thrash shape for pattern (e)/(c)/(d) cuts is fixture `01M4SXNTN38VM8ZQ0Q85A7FA3E` (s3-llama3.2 run-4), NOT the qwen S1 rows (which abstain honestly at temp 0 — baseline truth, see S1 termination-mix note).

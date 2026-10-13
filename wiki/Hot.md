@@ -36,6 +36,16 @@ shape-identical). PRE/POST rows + defect: scoreboard post-W1 section.
 marker-clobber 0/5, thinking retained 6.7–10.8K/run ×5, S1 drift guard clean). Wave 1 settled;
 every Wave 4+ S2 number inherits the post-w1-fix rows (scoreboard RE-CAPTURE section).
 
+**Wave-2 close capture (2026-10-13, HEAD 471d7ed8d): verdict MIXED — cost seams hold honestly, one
+live regression.** S1/S2 shape-stable (0/5 abstention and 5/5 '3052' quality intact; llmCalls
+delta-0 on classify is CORRECT — both capture models carry classifier=high so W2d skip properly
+never fires; 0 head-truncation incidents / 20 runs, W2e guard observable with conservative over-fire).
+W2d >=3x compaction NOT live-exercisable: qwen3:4b/llama3.2 resolve tier=mid (registry stub-row gap
+= GH #239). **Regression filed (not fixed here)**: S3 qwen3:4b 5/5→0/5 — W2a probe-derived
+supportsToolCalling + a stale 1-run May prior (`toolCallDialect:"none"`) demoted the arm to
+text-parse whose parser rejects the harness's own taught markup; Wave 3 must not build local-FC
+claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFEST.md`.
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)

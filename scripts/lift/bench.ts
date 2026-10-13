@@ -23,7 +23,7 @@
  *   bun run scripts/lift/bench.ts <arm-id> [<arm-id> ...]
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { basename, join, resolve } from "node:path"
 import { ReactiveAgents } from "@reactive-agents/runtime"
 import { withFileRoot } from "@reactive-agents/tools"
 
@@ -361,7 +361,8 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   const base = traceFile && existsSync(traceFile) ? extractRunMetrics(readFileSync(traceFile, "utf8"), arm.id, runIndex) : extractRunMetrics("", arm.id, runIndex)
   const metrics: RunMetrics = { ...base, traceFile, wallClockMs, hung, ...(hung ? { success: null } : {}) }
   appendFileSync(
-    opts.metricsLog ?? join(traceDir, traceDir === FIXTURES_DIR ? "baseline-metrics.jsonl" : "post-w1-metrics.jsonl"),
+    opts.metricsLog ??
+      join(traceDir, traceDir === FIXTURES_DIR ? "baseline-metrics.jsonl" : `${basename(traceDir)}-metrics.jsonl`),
     JSON.stringify(metrics) + "\n",
   )
   console.log(JSON.stringify(metrics))
