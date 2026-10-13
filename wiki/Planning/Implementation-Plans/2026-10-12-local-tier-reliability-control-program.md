@@ -119,7 +119,7 @@ Input/condition classes no happy-path test covers — each line's pin is added t
 - [x] 2.4 **FC payload honesty:** `toolSchemaDetail:"names-and-types"` applied to the wire array at `think.ts:980` (drop description strings; keep name/type/required/enum). Extend the existing prompt-text stripper's semantics; do not fork a second stripper. Review Focus / red-on-cut: local arm payload ≥3× smaller; frontier arm unchanged.
 - [x] 2.5 **Head-truncation guard:** preflight assembled-prompt corrected tokens + outputBudget ≤ num_ctx; on overflow shrink the tool surface first (drop least-relevant schemas using the classifier's existing relevance ranking at the `tool-surface-resolved` seam), then history. Review Focus #6 pin: system prompt head survives an engineered 8K-overflow scenario. Emits a harness-signal + ledger fact (observable, not magic).
 - [x] 2.6 **Classifier skip honesty:** `classifierReliability:"low"` must actually skip the extra `purpose:"classify"` round-trip (live trace: fired on local anyway — the documented skip is unenforced). Pin: classify-calls/req metric in scoreboard drops 1 on low-reliability local arms.
-- [ ] 2.7 **Census + register:** every touched field PROVEN (mutation-cut) or deleted; unreachable CONTEXT_PROFILES fields removed; DEBT-REGISTER rows (D-…-H RESOLVED; D-…-I stays opt-in — measured reload penalty stands, do not flip).
+- [x] 2.7 **Census + register:** every touched field PROVEN (mutation-cut) or deleted; unreachable CONTEXT_PROFILES fields removed; DEBT-REGISTER rows (D-…-H RESOLVED; D-…-I stays opt-in — measured reload penalty stands, do not flip).
 
 **Lift:** S3 before/after — schema-tokens/req, head-truncation incidents (0), llmCalls/run (−classify), tokens/run. **Changeset:** `minor`.
 

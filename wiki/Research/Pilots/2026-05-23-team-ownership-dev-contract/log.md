@@ -1158,3 +1158,11 @@ task: "Wave 2e+fix: head-truncation guard (2.5) — ollama-scoped preflight (wir
 result: completed, confidence 0.96
 outcome: "accepted: review Approved 0C + 4I; #1 rung-2 fork/#2 demand leak/#3 reserve fixed round 1 (05a944e28, RED->GREEN + discriminating cuts, re-review all ADDRESSED, pairing algorithm verified against live projection invariants); #4 explicitNumCtx cross-authority -> GH #241 filed by parent. Full reasoning 3,025/0, runtime parity, typechecks clean. Ollama-scoping judged honest decision with shipped precedent + indirect regression cover (reviewer: tests were correctly scoped, guard was mis-scoped)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2f (plan 2.7): prove-or-delete census of every Wave-2-touched field - w2-wave-census.test.ts ratchet on ContextProfileSchema.fields, 31-row register, 12 mutation-cuts, CONTEXT_PROFILES unreachable sweep, DEBT rows W2F-1/2 (+ D-30-I kept)"
+result: completed, confidence 0.9
+outcome: "accepted pending census-design review: tally 29 PROVEN/1 dead-registered (recentObservationsLimit, public knob -> removal wave)/1 justified-keep (provisionalTier, W3 obligated consumer)/0 deleted. Ratchet self-corrected from instance-keys undercount to schema-fields after authoring - exactly the inert-green class it guards. Warden disclosed stale-tool-echo incident mid-dispatch, re-grounded shipped state from filesystem; reviewer spot-checking rows from ground truth. reasoning 3,025/0, provider 502/0, runtime 1,677/0 (+4 census), typecheck 23/23."
+```
