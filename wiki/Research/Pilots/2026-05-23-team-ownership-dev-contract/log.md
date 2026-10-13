@@ -1206,3 +1206,11 @@ task: "Wave 3a: Stage-B think->acting transition behind default-off REACTIVE_AGE
 result: completed, confidence 0.92 (round 2)
 outcome: "accepted: review Approved 0C/3I -> fix round 1/5 all ADDRESSED, re-review clean. Warden's disclosed extra (gate-mirror alone bypassable via act re-extraction -> dispatch flipped to consume GATED set, RED arm proved 2-raw-1-gated=1-execution) verified true by re-reviewer - enforcement now argument-for-argument identical to native incl budget Layer-3/single-step/quota-conflict. failMsg now reads the live taught block structurally, fail-safe-unreadable (never teaches guessed grammar). Stale-thread: thread deleted as dispatch source, skip-and-record + both pins. reasoning 3,041/0, runtime parity 1,677/0 (default-off proven)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "Wave 3b (plan 3.3 + triad): dialect-live routing per spec end-state (capability sole arbiter, claim=provenance never downgrades), phantom rule at runner caller via loadDialectPriorClaim, provisionalTier keep-obligation pinned, sentinel exemption verified, RF2 triad mutation-pin (sever any leg -> red), core nominal carriers survive toCanonical/adaptCache"
+result: completed, confidence 0.9
+outcome: "accepted: review Approved 0C/0I. Reviewer independently opened the spec - shipped mapping faithful to §4/§5 as written (the 'fuses' ambiguity resolved by the spec's own 'at the source' clause), danger cell (caps=false + native-fc claim) routes text-parse never native. Cross-domain ratifications: 2 additive llm-provider hunks + core carriers (mandate-bound, item 6 of brief). Triad arms verified as true mutation pins incl phantom-re-entry kill arm. reasoning 3053/0, runtime parity 1683/0, tools drivers 53/0 (15 pre-existing Docker arms noted)."
+```
