@@ -225,7 +225,15 @@ export const executeReactive = (
       contextProfile: input.contextProfile,
       providerName: input.providerName,
       resultCompression: input.resultCompression,
+      // GH temp-threading (Wave-4): `input.temperature` (the runtime's
+      // command-first merge `config.temperature ?? config.contextProfile
+      // ?.temperature`, reasoning-think.ts) must ride the KernelInput.
+      // Before this, the commanded `.withModel({temperature})` was dropped
+      // HERE even when the runtime forwarded it, so think.ts:339 always
+      // stamped the tier/profile value. Precedence preserved where no
+      // command exists: contextProfile above the strategy-config default.
       temperature:
+        input.temperature ??
         input.contextProfile?.temperature ??
         input.config.strategies.reactive.temperature,
       agentId: input.agentId,

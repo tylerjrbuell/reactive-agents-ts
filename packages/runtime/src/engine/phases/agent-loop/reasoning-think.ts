@@ -333,7 +333,19 @@ export const runReasoningThink = (
       strategySwitching: config.strategySwitching,
       modelId: resolvedModelId,
       taskCategory,
-      temperature: config.contextProfile?.temperature as number | undefined,
+      // GH temp-threading (Wave-4): COMMAND-FIRST precedence:
+      // `config.temperature ?? config.contextProfile?.temperature`. The old
+      // line forwarded ONLY the context-profile value, silently dropping the
+      // commanded `.withModel({temperature})` on the same config; think.ts:339
+      // (`input.temperature ?? profile.temperature ?? 0.7`) then ALWAYS stamped
+      // a nonzero tier/profile value, shadowing every adapter's
+      // `request.temperature ?? defaultTemperature` (Wave-4 "temp 0" captures
+      // actually sampled at 0.5/0.3). `??` preserves an explicit 0. Unset both
+      // => undefined => tier-profile fallback at think.ts:339 (no behavior
+      // change for callers who never command a temperature).
+      temperature: (config.temperature ?? config.contextProfile?.temperature) as
+        | number
+        | undefined,
       environmentContext: config.environmentContext as Record<string, string> | undefined,
       allowedTools: effectiveAllowedTools.length > 0 ? effectiveAllowedTools : undefined,
       metaTools: config.metaTools,
