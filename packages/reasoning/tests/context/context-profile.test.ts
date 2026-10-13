@@ -211,10 +211,17 @@ describe("resolveProfile — provider-scoped tier resolution", () => {
     expect(resolveProfile("llama-flash-mini", undefined, "ollama").tier).toBe("mid");
   });
 
-  it("ollama: routes small models (<=3B) to local", () => {
+  // W2b: the ollama `/(\d+)b/` size heuristic is DELETED (plan 2.1 — the
+  // Capability registry is the single tier arbiter; the regex overriding it
+  // for every >=4B tag and mis-reading "1.7b" as "7b" was the bug). On the
+  // regex-only resolveProfile path, unregistered ollama tags now take the
+  // conservative mid default (LOCAL_PATTERNS still names truly-small models);
+  // real builder flows get the measured tier from the probe row via
+  // resolveProfileWithWindow (see registry-first-tiering.test.ts).
+  it("ollama: unregistered tags default to mid — size-regex (<=3B → local) is gone", () => {
     expect(resolveProfile("tinyllama:1b", undefined, "ollama").tier).toBe("local");
-    expect(resolveProfile("qwen:2b", undefined, "ollama").tier).toBe("local");
-    expect(resolveProfile("qwen:3b", undefined, "ollama").tier).toBe("local");
+    expect(resolveProfile("qwen:2b", undefined, "ollama").tier).toBe("mid");
+    expect(resolveProfile("qwen:3b", undefined, "ollama").tier).toBe("mid");
   });
 
   it("unknown provider falls through to global patterns unchanged", () => {

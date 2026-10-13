@@ -100,6 +100,19 @@ export const ContextProfileSchema = Schema.Struct({
    * but `"hybrid"` exists for the case where it does).
    */
   toolIndexMaxEntries: Schema.optional(Schema.Number),
+  /**
+   * W2b (registry-first tiering, plan 2.1) — true when this profile's TIER
+   * came from the provisional model-name regex because the Capability
+   * registry (the single tier arbiter under design law #1) had NO row for
+   * the model (not static-table, not probe, not user-supplied). Registry-hit
+   * and explicit-caller profiles never carry the flag (undefined).
+   *
+   * Consumers: classification-matrix tests pin it now; Wave 3 driver routing
+   * must treat a provisional tier as UNVERIFIED (it is a guess from the
+   * model name, not a measured or curated fact). Set only by
+   * `resolveProfileWithWindow` on its returned profile.
+   */
+  provisionalTier: Schema.optional(Schema.Boolean),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 
