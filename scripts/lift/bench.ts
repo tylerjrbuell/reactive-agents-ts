@@ -297,6 +297,8 @@ interface ArmSpec {
   readonly fullHarness?: boolean
   /** W3c: REACTIVE_AGENTS_TEXT_PARSE transition mode for the run (text-parse arms only). */
   readonly parseMode?: "shadow" | "act"
+  /** W4: enable the tools layer with NO builtins in the base schema (user scratch.ts shape). */
+  readonly toolsLayer?: boolean
 }
 
 export const ARMS: readonly ArmSpec[] = [
@@ -313,6 +315,9 @@ export const ARMS: readonly ArmSpec[] = [
   { id: "w3-shadow-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 3, fileTools: true, parseMode: "shadow" },
   { id: "w3-act-coder14b", scenario: "S4", provider: "ollama", model: "qwen2.5-coder:14b", task: S3_TASK, n: 5, fileTools: true, parseMode: "act" },
   { id: "w3-act-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 2, fileTools: true, parseMode: "act" },
+  // W4 close-out: the user-reported impossible-task shape (same task + builtins:false as the
+  // controller's scratch.ts live verification; stand-down should end it in <=2-3 iterations).
+  { id: "w4-terminate", scenario: "S1", provider: "ollama", model: "qwen3:4b", task: S1_TASK, n: 3, fileTools: false, toolsLayer: true },
 ]
 
 const HANG_MS = 8 * 60_000
@@ -376,6 +381,7 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
       .withMemory()
   } else {
     if (arm.fileTools) builder = builder.withTools({ builtins: ["file-read", "file-write"] })
+    else if (arm.toolsLayer) builder = builder.withTools({ builtins: false })
     builder = builder
       .withoutMemory()
       .withReasoning({ strategies: { reactive: { maxIterations: 10 } } })

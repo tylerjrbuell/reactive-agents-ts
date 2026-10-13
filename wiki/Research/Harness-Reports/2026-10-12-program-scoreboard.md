@@ -230,3 +230,45 @@ per-arm in bench.ts). Full batch table + parser-gap attribution: `fixtures/post-
 act-mode end-to-end execution UNMEASURED — phi4 box-blocked, coder parser-gap-blocked);
 rung-2 BLOCKED-NOTED (Anthropic credit). Plan-3.5 rung agreement cannot be declared on this data.
 Safety watch: no double-dispatch, no budget bypass, no parse-failure loops across 12 completed runs.**
+
+## Post-W4 close capture (2026-10-13, HEAD 482cbef47, 11 live runs + deterministic detection lane)
+
+Rows/details: `fixtures/post-w4/MANIFEST.md` + `detection-results.jsonl` + `post-w4-metrics.jsonl`.
+
+**WAVE-4 VERDICT (per seam, measured facts):**
+
+1. **DETECTION: PASS** (fixture-replay, no live thrash claimed). Frozen thrash fixture
+   `01M4SXNTN38…`: 146/146 non-progress/meta-tool arbiter classifications, loop detector trips
+   ((c)/(d)), pattern-(e) precondition (delta=0 ∧ outstanding>0) on every assessment; FP guard
+   fully green on a substantive fixture (classify→substantive, loop silent, flail signature does
+   not arm). Upstream pins 22/22 pass. Band rule live-verified: green→economize demotion appears
+   in 9/9 live stall runs' assessment streams (impossible-task shapes) and in S1 no-regression rows.
+2. **EFFICIENT TERMINATION: PARTIAL — honesty sub-claim FAILS on the tools-layer config.**
+   Impossible-task (builtins:false, qwen3:4b, N=3): early-stop ships iter 3–4 (vs baseline 6),
+   wall 17.0 s vs 26.8 s (−37%); but llmCalls mean 7.3 / tokens 2,704 did NOT reproduce the
+   controller's ad-hoc 2-iter/842-tok shape, and **3/3 runs shipped FABRICATED completion claims
+   with verdict success=true** (0 tool calls, 0 evidence). Plain S1 (no tools layer) still abstains
+   honestly 3/3 — so the fabrication path is specific to the tools-layer early-stop synthesis.
+   Inverse of GH #245 (guard silent on actual fabrication) — file-ready, packages/** untouched.
+   Wave 4's "terminate efficiently WITH honest abstain" claim must NOT be closed on this capture.
+3. **NO-REGRESSION: PASS with two attributed changes.** S1 shape stable (0/5-band, honest abstain
+   3/3) with classify 1→0/run (llmCalls 7→6, W4 lane — recorded not assumed); S2 reasoning answers
+   3/3 success, terse, thinking retained 5.2–6.4K, GH #245 guard caused no observed FP; S3 N=2
+   mixed (run1 honest failure with 68K-ch thinking ramble, run2 success + correct report.md 4900) —
+   temp-0 variance, insufficient rows to call drift.
+4. **TAIL-BLOAT GUARD (4.4): NO measurable bloat.** S1 tokensIn 1,375→1,275 (−7%), S2 +4%
+   (noise-band); tail tokens not separately extractable (named MEASUREMENT GAP — per-section token
+   attribution), S3 row contaminated by run1 early-failure (N=2). Cap-8 recitation consistent with
+   flat input columns; the classify-drop removes one call's worth, net position non-worse.
+
+**Wave-4 close status: detection + band + tail-cost seams land; the termination seam ships a live
+false-success regression (3/3) on the impossible-task+tools-layer shape and is recorded OPEN —
+controller decision needed before Wave 4 is marked verified.**
+
+> **PROGRAM-WIDE TRUTH-UP (integrity, W4 close capture):** the "temperature 0" label on every
+> baseline/post-* row is aspirational — bench commanded 0, but `llm-exchange.temperature` records
+> the provider default on the wire: **0.5 through post-w1-fix, 0.3 from post-w2 onward**
+> (crossover within Wave 2's provider changes). Rows remain comparable within each era; the
+> recurring temp-0 variance annotations are re-read as non-zero-decoding variance. Threading fix
+> is provider-warden scope (no packages/** edit made here). Details: `fixtures/post-w4/MANIFEST.md`
+> disclosure 1.

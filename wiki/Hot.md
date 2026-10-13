@@ -50,6 +50,8 @@ claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFE
 
 **Wave-3c Stage-B promotion data (2026-10-13, `fixtures/post-w3/`): rung-3 PARTIAL, rung-2 BLOCKED-credit — plan-3.5 rung agreement NOT declarable yet.** Shadow soak proved the seam (phi4 clean run: 3 tier-1 parses, would-have-executed 3/3, shadow correctly non-acting); act-mode end-to-end execution unmeasured: coder drops wrapper tags (parser-coverage gap, file-ready for tools-warden) and phi4 stream-stalled 6/8 attempts on this box. No safety anomalies in 12 completed runs.
 
+**Wave-4 close capture (2026-10-13, `fixtures/post-w4/`): detection PASS (frozen-fixture replay lane: 146/146 arbiter non-progress, loop trips, (e) precondition holds, FP guard green on substantive fixture), band demotes live (green→economize in 9/9 stall runs), tail-bloat guard clean (S1 tokensIn −7%). TERMINATION SEAM OPEN: impossible-task+tools-layer arms (N=3) early-stop at iter 3–4 (wall −37%) but 3/3 shipped FABRICATED success claims with verdict success (inverse of GH #245; controller's honest-abstain ad-hoc did NOT reproduce). Wave 4 must NOT be marked verified on the termination seam — controller decision needed.** Also surfaced a program-wide integrity fact: "temp 0" was never threaded to the wire (recorded provider default 0.5 through post-w1-fix, 0.3 from post-w2 on) — rows comparable within era; threading is provider-warden scope (`fixtures/post-w4/MANIFEST.md` disclosure).
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
