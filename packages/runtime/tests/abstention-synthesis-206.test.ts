@@ -76,6 +76,28 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     await agent.dispose();
   }, 20000);
 
+  // W4-live (round-1 fix, Important 3): the stand-down pre-empts the
+  // budget-exhaustion terminal on the default path, so the #206
+  // budget_exhausted_no_output e2e arm is exercised with `.withLongHorizon()` —
+  // the stand-down's escape hatch defers it, the run exhausts, and the exact
+  // #206 sentinel text ships. This keeps that path e2e-tested (not just the
+  // unit-pinned string).
+  it("long-horizon deferred: budget-exhaustion still ships the exact #206 sentinel", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("abstention-206-budget-longhorizon")
+      .withTestScenario([{ text: "" }])
+      .withReasoning({ strategies: { reactive: { maxIterations: 8, temperature: 0.7 } } })
+      .withLongHorizon()
+      .build();
+
+    const result = await agent.run("Test task");
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("Could not complete the task within the available budget.");
+    expect(result.metadata.harnessAuthoredOutput).toBe(true);
+    await agent.dispose();
+  }, 20000);
+
   // ── Live proof (opt-in + reachable Ollama). The only tool always fails and
   // is REQUIRED, so the run can neither ground an answer nor satisfy the tool
   // gate: it must fail with an honest abstention, never silence. ──

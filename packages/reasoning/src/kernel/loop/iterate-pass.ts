@@ -182,6 +182,7 @@ import {
   unproducedDeliverables,
 } from "./runner-helpers/deliverable.js";
 import { actionToolName } from "../../kernel/assessment/progress-arbiter.js";
+import { detectFlailSignature } from "./runner-helpers/flail-signature.js";
 
 /**
  * W4-live — the default-on zero-evidence stand-down threshold. Consecutive
@@ -548,41 +549,65 @@ export function runIterationPass(
           // no substantive evidence) must terminate efficiently by DEFAULT — not
           // grind to maxIterations or a graceful loop. Reuses the assessment's
           // ledger-derived staleness signal (the SAME currency as the band rule
-          // and pattern (e)) and the honest-abstain single-owner path. NOT gated
-          // behind `.withLongHorizon()`: the plan (4.2) ruled this reconciliation
-          // arm default-on as behavior-ordering over already-computed signals.
+          // and pattern (e)) and the honest-abstain single-owner path. Default-on
+          // as behavior-ordering over already-computed signals (plan 4.2), with a
+          // `.withLongHorizon()` escape hatch (see below).
+          //
+          // FLAIL REQUIREMENT (round-1 fix): bare staleness is ALSO true of a
+          // legitimate no-tool reasoning trajectory (no tools ⇒
+          // iterationsSinceEvidence == the iteration index). The stand-down fires
+          // only when the trajectory shows a flail signature — REFUSAL (canonical
+          // `isGiveUpAnswer`) or REPETITION (near-duplicate thoughts) — so a weak
+          // model deriving a multi-step answer across turns is never aborted
+          // mid-derivation. See runner-helpers/flail-signature.ts.
           //
           // Operator-tuning guard: an EXPLICIT `loopDetection` config is the
           // operator's override of the loop-machinery family — defer to it (the
           // live default path passes none, so the actuator is armed there).
           //
-          // False-positive guard: any tool ATTEMPT at all (substantive OR meta,
-          // even one still in flight) stands the actuator down. A run that is
-          // actively calling tools — a legitimate recall/brief/find workflow, a
-          // gather in flight — is owned by the loop/recovery guards, not this
-          // stand-down. Only a trajectory that calls NO tool at all (the live
-          // `builtins:false` impossible shape: zero tool-call events) is
-          // zero-progress here. A declared required tool also defers (the
-          // required-tool/stall guards own that stall).
+          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
+          // classified horizon is "long") defers the stand-down.
+          //
+          // Tool guard: any tool ATTEMPT at all (substantive OR meta, even one
+          // still in flight) stands the actuator down. A run that is actively
+          // calling tools — a legitimate recall/brief/find workflow, a gather in
+          // flight — is owned by the loop/recovery guards. Only a trajectory that
+          // calls NO tool at all (the live `builtins:false` impossible shape) is
+          // zero-progress here. A declared required tool also defers.
           const zeroEvidenceActuatorArmed = currentOptions.loopDetection === undefined;
           const noRequiredTools = requiredTools.length === 0;
           const attemptedAnyTool = state.steps.some(
             (s) => s.type === "action" && actionToolName(s) !== undefined,
           );
+          // W4-live fix (round 1) — FLAIL discriminator. Bare staleness is also
+          // true of a legitimate no-tool REASONING trajectory (a weak model
+          // deriving across turns: no tools ⇒ iterationsSinceEvidence == the
+          // iteration index). Fire only on a flail signature — REFUSAL
+          // (canonical isGiveUpAnswer) OR REPETITION (near-duplicate thoughts).
+          // A deriving run's thoughts change each pass → no signature → survives.
+          const flail = detectFlailSignature(state.steps, evidenceStaleIterations);
+          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
+          // classified horizon is "long") defers the stand-down — long runs are
+          // expected to spend many turns without evidence.
+          const longHorizonDeferred =
+            horizon !== undefined || state.meta.runContract?.horizon === "long";
           if (
             zeroEvidenceActuatorArmed &&
             noRequiredTools &&
+            !longHorizonDeferred &&
             state.tokens > 0 &&
             evidenceStaleIterations >= EVIDENCE_STALE_TERMINATE_THRESHOLD &&
             assessment.requirements.outstanding.length > 0 &&
             !attemptedAnyTool &&
+            flail.flailing &&
             countArtifacts(state) === 0 &&
             countDeliverableCandidates(state) === 0
           ) {
+            const signal = flail.refusal ? "refused to proceed" : "repeated itself without progress";
             const reason =
               `no new task evidence for ${evidenceStaleIterations} iteration(s) while ` +
-              `${assessment.requirements.outstanding.length} requirement(s) remain outstanding — ` +
-              `the task cannot be grounded with the available tools`;
+              `${assessment.requirements.outstanding.length} requirement(s) remain outstanding ` +
+              `(the model ${signal}) — the task cannot be grounded with the available tools`;
             state = terminate(state, {
               reason: "abstained",
               deliverable: sentinelDeliverable("no_substantive_output", reason),

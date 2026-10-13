@@ -23,6 +23,7 @@ import {
 } from "../state/kernel-state.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../utils/observation-helpers.js";
+import { detectFlailSignature } from "./runner-helpers/flail-signature.js";
 
 const testLayer = TestLLMServiceLayer();
 
@@ -79,6 +80,33 @@ const runStub = (kernel: ThoughtKernel, task: string, maxIterations = 20) =>
     }).pipe(Effect.provide(testLayer)),
   );
 
+/**
+ * A no-tool DERIVING trajectory (stub, with simulated LLM tokens so it passes
+ * the real-trajectory guard): each pass emits DISTINCT reasoning text — a weak
+ * model working a multi-step problem across several turns. Must NOT be stood
+ * down (deriving, not flailing).
+ */
+function makeDerivingKernel(): ThoughtKernel {
+  let n = 0;
+  const passes = [
+    "First, identify the unknowns and write the two conditions as equations.",
+    "Next, substitute the known quantities into the first equation and simplify it.",
+    "Then solve the simplified equation and check the result against the second condition.",
+  ];
+  return (state: KernelState) => {
+    const text = passes[Math.min(n, passes.length - 1)]!;
+    n++;
+    return Effect.succeed(
+      transitionState(state, {
+        status: "thinking",
+        iteration: state.iteration + 1,
+        tokens: (state.tokens ?? 0) + 60,
+        steps: [...state.steps, makeStep("thought", text)],
+      }),
+    );
+  };
+}
+
 describe("W4-live — default-on zero-evidence stand-down", () => {
   it("impossible task abstains honestly within <=2 iterations (NOT horizon-gated)", async () => {
     const pass = await runImpossible(
@@ -98,4 +126,54 @@ describe("W4-live — default-on zero-evidence stand-down", () => {
     expect(result.meta?.terminatedBy).not.toBe("abstained");
     expect(result.steps.filter((s) => s.type === "action").length).toBeGreaterThan(2);
   }, 15000);
+
+  it("FALSE-POSITIVE GUARD: a no-tool REASONING trajectory needing >=3 distinct thought passes SURVIVES", async () => {
+    // A weak model given a multi-step problem: turn 1 plans, turn 2 derives,
+    // turn 3 continues — DISTINCT content each pass, no refusal. The stand-down
+    // must NOT fire (this is deriving, not flailing).
+    const result = await runStub(
+      makeDerivingKernel(),
+      "A multi-step word problem requiring derivation across several turns.",
+      6,
+    );
+    expect(result.meta?.terminatedBy).not.toBe("abstained");
+    expect(result.steps.filter((s) => s.type === "thought").length).toBeGreaterThanOrEqual(3);
+  }, 15000);
+});
+
+describe("flail signature — the DERIVING vs FLAILING discriminator", () => {
+  const t = (content: string) => makeStep("thought", content);
+
+  it("no signature for DISTINCT advancing thoughts (deriving)", () => {
+    const steps = [
+      t("First, identify the unknowns and write the two equations."),
+      t("Next, substitute the known quantities and simplify the first equation."),
+      t("Then solve and verify the result against the second condition."),
+    ];
+    expect(detectFlailSignature(steps, 3).flailing).toBe(false);
+  });
+
+  it("repetition: near-duplicate thoughts (flailing)", () => {
+    const steps = [
+      t("I apologize, but I'm unable to send a Slack message as I don't have access to Slack API tools."),
+      t("I apologize, but I'm unable to send a Slack message as I don't have access to Slack API tools."),
+    ];
+    const v = detectFlailSignature(steps, 2);
+    expect(v.repetition).toBe(true);
+    expect(v.flailing).toBe(true);
+  });
+
+  it("repetition: repeated EMPTY thoughts (the live empty-loop shape)", () => {
+    expect(detectFlailSignature([t(""), t("")], 2).repetition).toBe(true);
+  });
+
+  it("refusal: a give-up thought with distinct wording is a flail", () => {
+    const steps = [
+      t("Let me consider the available options for this request carefully."),
+      t("The available tools do not include any Slack messaging functionality."),
+    ];
+    const v = detectFlailSignature(steps, 2);
+    expect(v.refusal).toBe(true);
+    expect(v.flailing).toBe(true);
+  });
 });

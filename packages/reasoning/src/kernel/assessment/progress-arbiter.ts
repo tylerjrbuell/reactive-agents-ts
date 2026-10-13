@@ -85,14 +85,34 @@ const GIVE_UP_MARKERS: readonly string[] = [
 ];
 
 /**
+ * A no-op result is SHORT and degenerate. A long result that merely mentions a
+ * marker phrase (e.g. a file body containing "already done") is substantive —
+ * the length cap + word-boundary match prevent that misclassification.
+ */
+const NO_OP_MAX_LENGTH = 200;
+
+/** Whole-word/phrase occurrence of `needle` (already lower-cased) in `haystack`. */
+function hasMarker(haystack: string, needle: string): boolean {
+  const idx = haystack.indexOf(needle);
+  if (idx === -1) return false;
+  const before = idx === 0 ? "" : haystack[idx - 1]!;
+  const afterIdx = idx + needle.length;
+  const after = afterIdx >= haystack.length ? "" : haystack[afterIdx]!;
+  const isBoundary = (ch: string): boolean => ch === "" || !/[a-z0-9]/.test(ch);
+  return isBoundary(before) && isBoundary(after);
+}
+
+/**
  * Does this tool-result content add no task evidence? Empty / whitespace-only
- * content and the narrow degenerate phrasings above count as no-ops.
+ * content, or a SHORT degenerate phrasing, counts as a no-op. A long result that
+ * merely contains a marker word does NOT (word-boundary + length cap).
  */
 export function contentIsNoOp(content: string | undefined): boolean {
   if (content === undefined) return true;
   const t = content.trim().toLowerCase();
   if (t.length === 0) return true;
-  return NO_OP_MARKERS.some((m) => t.includes(m));
+  if (t.length > NO_OP_MAX_LENGTH) return false;
+  return NO_OP_MARKERS.some((m) => hasMarker(t, m));
 }
 
 /** Is this tool name a framework META tool (harness helper, not real work)? */
