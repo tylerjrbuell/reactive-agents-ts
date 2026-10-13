@@ -24,6 +24,12 @@ export function renderSharedFiles(
       // Minimum Node version stated in the framework README.
       engines: { node: ">=22.5" },
       scripts: {
+        // Bun auto-loads .env at startup, so the bun arm needs no flag. The
+        // tsx arm deliberately does NOT use `tsx --env-file=.env`: a missing
+        // .env makes Node exit 9 ("node: .env: not found" - measured), and
+        // `--env-file-if-exists` requires Node >= 22.9, above the declared
+        // engines floor. The generated entry loads .env itself instead; keep
+        // this asymmetry in sync with renderEnvGuard below.
         start: opts.packageManager === "bun" ? "bun run src/index.ts" : "tsx src/index.ts",
         typecheck: "tsc --noEmit",
         ...(tpl.extraScripts ?? {}),
@@ -88,10 +94,59 @@ export function renderSharedFiles(
   ];
 }
 
+/**
+ * The keyless-failure seam emitted at the top of every Node-runnable
+ * template's src/index.ts (all templates except cloudflare-worker, which
+ * reads its key from the Worker env binding instead).
+ *
+ * For the tsx/Node arm, the entry loads `.env` itself via
+ * `process.loadEnvFile` (Node >= 20.12, inside the >= 22.5 engines floor) in a
+ * try/catch: a missing `.env` falls through to the named guard error rather
+ * than crashing. The bun arm gets only the guard, because bun auto-loads
+ * `.env` at startup (and bun-types does not declare `loadEnvFile`, so emitting
+ * it there would fail the generated `typecheck`). One seam, every template:
+ * change the message here, not in seven files.
+ */
+export function renderEnvGuard(opts: ScaffoldOptions): string {
+  const envVar = providerEnvVar(opts.provider);
+  if (!envVar) {
+    return "// Ollama is local - no API key required.";
+  }
+  const envLoad =
+    opts.packageManager === "bun"
+      ? ""
+      : `if (!process.env.${envVar}) {
+  // Node does not auto-load .env (bun does): read it here so a copied
+  // .env.example works without exporting variables by hand. A missing .env
+  // throws here and is swallowed - the guard below names the fix instead.
+  try {
+    process.loadEnvFile();
+  } catch {
+    // no .env yet: fall through to the check
+  }
+}
+
+`;
+  return `${envLoad}if (!process.env.${envVar}) {
+  console.error("Missing ${envVar}: copy .env.example to .env (or export the variable), then run the start script again.");
+  process.exit(1);
+}`;
+}
+
 function renderReadme(opts: ScaffoldOptions): string {
   const envVar = providerEnvVar(opts.provider);
   const envBlock = envVar
-    ? `\`\`\`bash\nexport ${envVar}=your-key-here\n\`\`\``
+    ? `Create \`.env\` from \`.env.example\` and set \`${envVar}\`:
+
+\`\`\`bash
+cp .env.example .env
+\`\`\`
+
+${
+      opts.packageManager === "bun"
+        ? "bun loads `.env` automatically at startup - no flag or export needed."
+        : "The start script loads `.env` automatically (the generated entry reads it via `process.loadEnvFile` on Node >= 22.5). Exporting the variable in your shell also works."
+    }`
     : `Ollama runs locally. Install and start it from <https://ollama.com>.`;
 
   return `# ${opts.projectName}

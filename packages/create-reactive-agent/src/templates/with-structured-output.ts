@@ -1,5 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
+import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
+import { renderEnvGuard } from "./shared.js";
 
 export const withStructuredOutputTemplate: Template = {
   name: "with-structured-output",
@@ -12,18 +13,11 @@ export const withStructuredOutputTemplate: Template = {
 
 function renderIndex(opts: ScaffoldOptions): string {
   const model = providerDefaultModel(opts.provider);
-  const envVar = providerEnvVar(opts.provider);
-  const envCheck = envVar
-    ? `if (!process.env.${envVar}) {
-  console.error("Missing ${envVar} in environment. See .env.example.");
-  process.exit(1);
-}`
-    : `// Ollama is local — no API key required.`;
 
   return `import { ReactiveAgents } from "reactive-agents";
 import { Schema } from "effect";
 
-${envCheck}
+${renderEnvGuard(opts)}
 
 // Declare the shape you want back. Any Effect Schema (or Standard Schema, e.g.
 // a Zod schema) works. The agent is nudged to emit conforming JSON, which is
