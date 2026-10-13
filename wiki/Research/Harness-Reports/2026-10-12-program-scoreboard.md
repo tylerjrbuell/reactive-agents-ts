@@ -104,4 +104,31 @@ fixtures untouched). Same extractor definitions as baseline; additively-new fore
    FA-shape/verdict check; or gate branch-4 on cleanContent being empty.
    Full trace excerpts: fixtures/post-w1/MANIFEST.md.
 
+## Post-W1-FIX re-capture (W1.5 recapture, 2026-10-13 07:59–08:03 at kernel fix af7d1b45f)
+
+Captured into `fixtures/post-w1-fix/` (dist rebuilt first; same prompts/temp/extractor defs;
+baseline + post-w1 dirs untouched). Rows + marker-clobber table: `fixtures/post-w1-fix/MANIFEST.md`.
+
+| metric (s2-qwen34b) | PRE (baseline) | POST-W1 (defect) | POST-W1-FIX | Δ |
+|---|---|---|---|---|
+| delivered output | '3052' ×5 | reasoning tails 525–1,915 ch ×5 | **'3052' ×5** | defect eliminated |
+| prose-tail signature rate | 0/5 | 5/5 | **0/5** | fixed-kernel proof |
+| marker-clobber (FA/ACTION/code-fence in output) | 0/5 | 0/5 | **0/5** | recorded even at zero (review item) |
+| thinkingChars/run | 0 (channel dropped) | 6,019–9,459 | **6,696–10,762 (5/5)** | channel retained |
+| success rate / iterations / llmCalls | 5/5 · 1 · 1 | 5/5 · 1 · 1 | 5/5 · 1 · 1 | = |
+| tokens/run mean | 2,482 | 3,024 | 2,903 | temp-0 variance band |
+| trace bytes mean | 7,051 | 8,754 | 7,355 | forensics fields kept, prose tail gone |
+| s1-qwen34b drift guard (N=2) | baseline band | no drift | **no drift** (abstained, 7 calls, 1 classify, all-zero evidenceDelta, loop_resolution ×1, tok 2436/2681 ∈ 2440–3061 band) | stable |
+
+**FINAL WAVE-1 VERDICT: CONFIRMED (channel + quality), defect closed with live proof.**
+The thinking channel is wired end-to-end (6.7–10.8K thinkingChars recorded on 5/5 runs, was 0/dropped
+pre-W1) AND the S2 deliverable is back to the terse correct answer '3052' on 5/5 runs — the W1.5
+reasoning-tail signature measured 5/5 → 0/5 across the fix, marker-clobber 0/5, no S1 behavioral
+drift. Wave 1's claim ("thought-continuity unblocked; largest per-run SLM quality win path opened")
+is now honestly inheritable: every Wave 4+ S2 number baselines against THESE rows. Residual honesty
+note: the S2 answer itself never changed (model already emitted '3052' pre-W1 at temp 0), so the
+"quality win" on THIS scenario is defect-free retention of reasoning data + rescue availability —
+the answer-accuracy lift itself is only demonstrable on thinking-only-answer tasks (W1.3 unit arms:
+rescue thought == answer), not on the frozen S2 prompt.
+
 **Wave-4+ red-on-cut pointer:** the canonical false-success/thrash shape for pattern (e)/(c)/(d) cuts is fixture `01M4SXNTN38VM8ZQ0Q85A7FA3E` (s3-llama3.2 run-4), NOT the qwen S1 rows (which abstain honestly at temp 0 — baseline truth, see S1 termination-mix note).

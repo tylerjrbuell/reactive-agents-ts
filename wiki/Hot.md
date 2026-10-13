@@ -31,6 +31,10 @@ CONFIRMED — the W1-supplied input makes the pre-existing `think.ts` terse-answ
 on correct 4-char answers, replacing the spec-compliant '3052' deliverable with 525–1,915 chars of
 reasoning prose in 5/5 runs (file-ready defect, kernel-warden scope; S1 drift guard 2/2
 shape-identical). PRE/POST rows + defect: scoreboard post-W1 section.
+**AMENDED 2026-10-13 (recapture at fix af7d1b45f): verdict is now CONFIRMED (channel + quality)**
+— post-w1-fix re-capture measured the defect signature 5/5 → 0/5 (delivered output '3052' ×5,
+marker-clobber 0/5, thinking retained 6.7–10.8K/run ×5, S1 drift guard clean). Wave 1 settled;
+every Wave 4+ S2 number inherits the post-w1-fix rows (scoreboard RE-CAPTURE section).
 
 ---
 

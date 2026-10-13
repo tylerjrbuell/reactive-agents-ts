@@ -70,6 +70,14 @@ Template-probe verdict (S4 model selection, /api/show): phi4-mini-reasoning embe
 | S1-haiku | haiku-s1-1..3 | claude-haiku-4-5-20251001 | 01M4SYHG6J74ZWFA17513Z4V59, 01M4SYHGXSS471WQ1GK6QFAZZH, 01M4SYHH522REMEW71X1PPZKBB | 2026-10-13 06:17 | **BLOCKER EVIDENCE, not baseline runs**: ra-full-mirror wiring works (built, streamed, recorded) but Anthropic returns 400 "credit balance is too low" at iteration 0 → terminatedBy llm_error. Row marked rung-2 deferred. |
 | S3-haiku | haiku-s3-1..3 | claude-haiku-4-5-20251001 | 01M4SYHHBHGME1YWPCQ9C55NAV, 01M4SYHHJ7NE3ZW639VBXSX0M5, 01M4SYHHSN4K6GCP5KCTG0JXWX | 2026-10-13 06:17 | same 400 credit blocker. |
 
+## Post-W1 measurement sets (lift protocol, added 2026-10-13)
+
+Baseline tables above are frozen. Lift measurements live in sibling directories with their own
+row files: `post-w1/` (W1.5 first measurement — MIXED, defect surfaced) and `post-w1-fix/`
+(W1.5 re-capture at kernel fix af7d1b45f — **FINAL WAVE-1 VERDICT CONFIRMED**; prose-tail 5/5→0/5,
+marker-clobber 0/5, thinking retained 5/5, S1 drift clean). PRE/POST/POST-FIX deltas + verdict:
+`../../2026-10-12-program-scoreboard.md`.
+
 ## Probe rows (unit-style, re-run under final Wave-0 code state)
 
 Full stdout captured at `probes/probe-2-final.txt` + `probes/probe-3-final.txt` (re-run 2026-10-13 under Wave-0-close HEAD):
