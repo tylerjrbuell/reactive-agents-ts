@@ -68,3 +68,5 @@ VALID baseline data; success-vs-thrash mix is documented per arm above as captur
 4. **classify-calls/req**: 1 classify per S1 run on qwen3:4b/3.5 (0.17 per think exchange); 0 on
    S2/S3/S4 arms (concrete builtin set skips the classifier per reliability profile).
 5. Haiku arms deferred on account credit (named blocker above); all local arms fully populated.
+
+**Wave-4+ red-on-cut pointer:** the canonical false-success/thrash shape for pattern (e)/(c)/(d) cuts is fixture `01M4SXNTN38VM8ZQ0Q85A7FA3E` (s3-llama3.2 run-4), NOT the qwen S1 rows (which abstain honestly at temp 0 — baseline truth, see S1 termination-mix note).

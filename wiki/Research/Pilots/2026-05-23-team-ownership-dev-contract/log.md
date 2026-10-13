@@ -1054,3 +1054,11 @@ task: "GH #236 cross-domain bundle: AgentStarted gains task/taskTruncated (core)
 result: completed, confidence 0.9 (round 2)
 outcome: "accepted: review Approved (single-emission-site verified by repo-wide grep; regeneration signature proves genuine fixture regen; authority discipline praised — resisted out-of-manifest events.ts edit, disclosed consequence -> GH #237 filed by parent). Fix round 1/5 (fa6b39dc): back-compat pin's fabricated run-completed line replaced byte-for-byte with real pre-fix golden (re-reviewer verified provenance against git show), events.length===2 strict pin added. Parent verifier: focused test green, replay 34/0. W0.5 TS2769 type-only ride-along accepted as bundle-gate hygiene (disclosed)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Task 0 baseline capture: scripts/lift/ bench + extractor + replay-gate, S1/S2/S3/S4 temp-0 N=5 live captures (34 traces + workspaces + MANIFEST + scoreboard + Hot.md freeze), zero framework edits"
+result: completed, confidence 0.88
+outcome: "accepted: parent verifier green (extractor 6/6, scoreboard columns all populated-or-named-gap, zero packages/ diff range-verified). First dispatch died mid-recon (budget, zero artifacts) -- status-check resume recovered cleanly. Task review Approved: S3-llama3.2 run-4 canonical false-success verified field-for-field from raw trace (146 discover-tools, empty-headings report.md artifact), S2 starve confirmed, redaction limited to disclosed dummy strings (structurally cannot false-pass the gate), replay gate asserts real string equality. Interface deviation ruled against plan text (amended). rung-2 haiku deferred on account credit (one-command rerun recorded)."
+```

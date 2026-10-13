@@ -60,17 +60,17 @@ Input/condition classes no happy-path test covers — each line's pin is added t
 
 **Files:** Create `scripts/lift/bench.ts` (scenario runner), `wiki/Research/Harness-Reports/2026-10-12-program-scoreboard.md` (init + baseline columns), `wiki/Research/Harness-Reports/2026-10-12-live-probe-audit-results/fixtures/MANIFEST.md`; reuse `scripts/probe-2-thinking-loss.ts`, `scripts/probe-3-context-math.ts`, `scripts/probe-4-wander-repro.ts` (created during verification — relocate into `scripts/lift/`).
 
-**Produces (Interfaces):** `runScenario({id, model, task, tools, config, n, temperature:0, traceDir}) → ScenarioRun[]` with per-run metric extraction from trace JSONL (`assessment.evidenceDelta`, `llm-exchange` content/toolCalls/usage, `guard-fired`, `decision-evaluated`, `run-completed`); MANIFEST schema: `scenario | model | runId | date | defect signature counts`.
+**Produces (Interfaces):** `runScenario({arm, runIndex, temperature:0, traceDir}) → RunMetrics` per-run + CLI arm/n loop (amended at Task 0 ship — per-run return enables crash-safe incremental capture; see scripts/lift/bench.ts) with per-run metric extraction from trace JSONL (`assessment.evidenceDelta`, `llm-exchange` content/toolCalls/usage, `guard-fired`, `decision-evaluated`, `run-completed`); MANIFEST schema: `scenario | model | runId | date | defect signature counts`.
 
-- [ ] 0.1 Implement `scripts/lift/bench.ts` + metric extractor (parses trace events by kind; no framework imports beyond the public builder).
-- [ ] 0.2 Define the four canonical scenarios (temp 0):
+- [x] 0.1 Implement `scripts/lift/bench.ts` + metric extractor (parses trace events by kind; no framework imports beyond the public builder).
+- [x] 0.2 Define the four canonical scenarios (temp 0):
       **S1 thrash** — no tools registered, task "Send a slack message to #general saying 'Hello team'" (qwen3.5 + qwen3:4b). Signature: evidenceDelta=0 every assessment, loop-detector silent, early-stop or loop_graceful.
       **S2 thinking-starve** — arithmetic word problem sized so thinking ≫ visible content (qwen3:4b). Signature: empty-content think iterations, `providerThinking`-rescue miss.
       **S3 multi-step file task** — read 2 small input files → transform → write 3-section report; builtins `file` toolset; 8K num_ctx (qwen3:4b, llama3.2). Signature: schema tokens ≈ 4-5K/req, false-success possible, outstanding-never-satisfied loop.
       **S4 no-FC loop** — builtin `file` toolset against a model whose template probe reports no tool emission (verify candidate via `/api/show` on llama3.1/phi4-mini first; SLM-fallback arm). Signature: markup emitted, nothing acts, maxIterations burn.
-- [ ] 0.3 Capture S1-S3 N=5 each into fixtures/ + MANIFEST; probe-2/probe-3 outputs recorded as unit-style fixture rows.
-- [ ] 0.4 Rung-2 (haiku) equivalents of S1/S3 via existing bench harness (`getVariant("ra-full")`), stored alongside.
-- [ ] 0.5 Initialize scoreboard with baseline values; declare measurement freeze (Doctrine #4) in Hot.md; commit `test(lift): baseline fixtures + scoreboard for reliability program`.
+- [x] 0.3 Capture S1-S3 N=5 each into fixtures/ + MANIFEST; probe-2/probe-3 outputs recorded as unit-style fixture rows.
+- [x] 0.4 Rung-2 (BLOCKED: Anthropic credit; one-command rerun documented in scoreboard) (haiku) equivalents of S1/S3 via existing bench harness (`getVariant("ra-full")`), stored alongside.
+- [x] 0.5 Initialize scoreboard with baseline values; declare measurement freeze (Doctrine #4) in Hot.md; commit `test(lift): baseline fixtures + scoreboard for reliability program`.
 
 **Gate:** scoreboard has baseline values for every ⚡ metric column; S1 fixture replays deterministically via the replay lane.
 
