@@ -19,115 +19,126 @@ Strategy (policy: when to run, how many times, what config)
 
 **Before this architecture:** Each strategy owned its own execution loop. `reactive.ts` was 905 lines. Tool call handling, EventBus wiring, and observation formatting were duplicated across 5 files.
 
-**After:** `reactive.ts` is 266 lines (down from 905). All strategies call `runKernel(reactKernel, ...)`. Tool handling lives once in `tool-execution.ts`.
+**After:** All strategies call the internal `runKernel(reactKernel, ...)`. Tool handling lives once in `tool-execution.ts`. `reactive.ts` dropped to 266 lines at the refactor and is 384 today — it has grown since with strategy features, far from the 905-line duplicated-loop era.
 
 ## ThoughtKernel
 
-A `ThoughtKernel` is the contract for a single reasoning step:
+A `ThoughtKernel` is the contract for a single reasoning step. It is exported from `@reactive-agents/reasoning` — so is `Phase`, `KernelContext`, `Guard`, `MetaToolHandler`, and `makeKernel` — which means every extension point on this page compiles against the published package:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-type ThoughtKernel = (
+import { Effect } from "effect";
+import type { LLMService } from "@reactive-agents/llm-provider";
+import type {
+  KernelContext,
+  KernelState,
+  ThoughtKernel,
+} from "@reactive-agents/reasoning";
+
+// The published contract, shown verbatim. The pin assignment below only
+// compiles if this shape matches the real exported type.
+declare const kernel: ThoughtKernel;
+const contract: (
   state: KernelState,
   context: KernelContext,
-) => Effect.Effect<KernelState, never, LLMService>;
+) => Effect.Effect<KernelState, never, LLMService> = kernel;
 ```
 
 The kernel receives immutable state and a frozen context, performs one reasoning step (think, act, or observe), and returns the next state. The runner calls it in a loop until `state.status` is `"done"` or `"failed"`.
 
-`KernelState` is **immutable** — each step produces a new state via `transitionState()`. This makes reasoning chains replayable and serializable for collective learning.
+`KernelState` is **immutable** — each step produces a new state. This makes reasoning chains replayable and serializable for collective learning.
 
 ### KernelState
 
-<!-- docs-skip-typecheck -->
+The state's field inventory (framework type `kernel-state.ts`):
+
 ```typescript
-interface KernelState {
+import type { KernelState } from "@reactive-agents/reasoning";
+
+// Published shape. Pick pins the field inventory — renaming or removing any
+// field below makes this stop compiling.
+type StateShape = Pick<
+  KernelState,
   // Identity
-  readonly taskId: string;
-  readonly strategy: string;
-  readonly kernelType: string;
-
+  | "taskId" | "strategy" | "kernelType"
   // Accumulation
-  readonly steps: readonly ReasoningStep[];
-  readonly toolsUsed: ReadonlySet<string>;
-  /** LLM thread (assistant turns + tool_result messages), compacted with a sliding window */
-  readonly messages: readonly KernelMessage[];
-  /** Reactive Intelligence / `pulse` — human-readable controller decisions this run */
-  readonly controllerDecisionLog: readonly string[];
-
+  | "steps" | "ledger" | "toolsUsed" | "scratchpad" | "messages"
+  | "controllerDecisionLog"
   // Metrics
-  readonly iteration: number;
-  readonly tokens: number;
-  readonly cost: number;
-
+  | "iteration" | "tokens" | "inputTokens" | "outputTokens" | "cost" | "llmCalls"
   // Control
-  readonly status: KernelStatus;   // "thinking" | "acting" | "observing" | "done" | "failed" | ...
-  readonly output: string | null;
-  readonly error: string | null;
-
+  | "status" | "output" | "error"
   // Strategy-specific extension point
-  readonly meta: Readonly<Record<string, unknown>>;
-}
+  | "meta"
+>;
 ```
 
-The concrete TypeScript type also carries an internal `ReadonlyMap` used to sync compressed tool-result storage with the **`recall`** meta-tool. Application docs treat **`recall`** as the user-facing working-memory API — not that map.
+- `steps` is the observability record (`ReasoningStep[]`); `messages` is the LLM conversation thread (assistant turns + tool results), compacted with a sliding window.
+- `ledger` is the append-only event store the meta-loop projects from; `steps` stays authoritative for now, with the ledger as a queryable mirror.
+- `status` is a closed union: `"thinking" | "acting" | "observing" | "done" | "failed" | "evaluating"` (plus harness-set values).
+
+`KernelState` also carries `scratchpad: ReadonlyMap<string, string>`, used internally to sync compressed tool-result storage with the **`recall`** meta-tool. Application docs treat **`recall`** as the user-facing working-memory API — not that map.
 
 ### State Transitions
 
-Use the provided factory functions — never mutate state directly:
+State fields are `readonly` — never mutate. Inside the framework, `initialKernelState()` and `transitionState()` (`kernel-state.ts`) are the sanctioned factories and are guarded by a mutation-discipline test; they are **framework-internal** and not on the published package surface. Extension authors produce the next state the same structural way:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-// Create initial state
-const state = initialKernelState({
-  maxIterations: 10,
-  strategy: "reactive",
-  kernelType: "react",
-  taskId: "task-abc",
-});
+import type { KernelState } from "@reactive-agents/reasoning";
 
-// Produce the next state (returns a new object — does not mutate)
-const nextState = transitionState(state, {
+declare const current: KernelState;
+
+// Produce the next state (returns a new object — does not mutate).
+const next: KernelState = {
+  ...current,
   status: "acting",
-  iteration: state.iteration + 1,
-  meta: { ...state.meta, pendingToolRequest: toolReq },
-});
+  iteration: current.iteration + 1,
+};
 ```
 
 ### Serialization
 
-`KernelState` uses `ReadonlySet` and `ReadonlyMap` which are not JSON-safe. Use the provided helpers for persistence:
+`KernelState` uses `ReadonlySet`/`ReadonlyMap` which are not JSON-safe. The published codec helpers round-trip it through a JSON **string** (Set → sorted array, Map → plain object), and crash-resume persists exactly that string onto `KernelInput.resumeState`:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-// KernelState → JSON-safe object (Set → sorted array, Map → plain object)
-const serialized: SerializedKernelState = serializeKernelState(state);
+import { Effect } from "effect";
+import {
+  deserializeKernelState,
+  serializeKernelState,
+  type KernelState,
+} from "@reactive-agents/reasoning";
 
-// JSON-safe object → KernelState (array → Set, object → Map)
-const restored: KernelState = deserializeKernelState(serialized);
+declare const running: KernelState;
+
+// KernelState → JSON-safe string, and back.
+const snapshot: string = serializeKernelState(running);
+const restored: KernelState = deserializeKernelState(snapshot);
 ```
 
 ### KernelContext
 
-The context is assembled once by `runKernel()` and passed unchanged to every kernel step:
+The context is assembled once by the runner and passed unchanged to every kernel step:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-interface KernelContext {
-  readonly input: KernelInput;              // frozen task inputs
-  readonly profile: ContextProfile;         // model-adaptive thresholds
-  readonly compression: ResultCompressionConfig;
-  readonly toolService: MaybeService<ToolServiceInstance>;
-  readonly hooks: KernelHooks;              // EventBus lifecycle callbacks
-}
+import type { KernelContext } from "@reactive-agents/reasoning";
+
+// Published shape (kernel-state.ts). Pick pins the field inventory:
+type ContextShape = Pick<
+  KernelContext,
+  | "input"             // frozen task inputs (KernelInput)
+  | "profile"           // model-adaptive thresholds (ContextProfile)
+  | "compression"       // tool-result compression config
+  | "toolService"       // Option — None when no ToolService is registered
+  | "hooks"             // EventBus lifecycle callbacks (KernelHooks)
+  | "toolCallingDriver" // native-FC vs text-parse driver (from calibration)
+  | "memoryService"     // Option — semantic store for successful tool results
+>;
 ```
 
 ## KernelRunner
 
-`runKernel()` is the universal execution loop. Every reasoning strategy delegates to this function instead of implementing its own while-loop.
+`runKernel()` is the universal execution loop. Every reasoning strategy delegates to this function instead of implementing its own while-loop. It is **framework-internal** (`kernel/loop/runner.ts`) — application code drives runs through the strategy layer or `executeReActKernel` (shown below):
 
-<!-- docs-skip-typecheck -->
-```typescript
+```text
 function runKernel(
   kernel: ThoughtKernel,
   input: KernelInput,
@@ -135,7 +146,7 @@ function runKernel(
 ): Effect.Effect<KernelState, never, LLMService>
 ```
 
-`KernelRunOptions` controls iteration limits and tagging:
+`KernelRunOptions` controls iteration limits and tagging (core fields — it also carries loop-detection and strategy-switching config):
 
 ```typescript
 interface KernelRunOptions {
@@ -148,75 +159,115 @@ interface KernelRunOptions {
 }
 ```
 
-The runner handles nine steps internally:
+The runner handles these steps internally:
 
-1. **Service resolution** — resolves LLM, ToolService, and EventBus via `Effect.serviceOption`
-2. **Profile merging** — merges `input.contextProfile` over the `"mid"` baseline profile
-3. **KernelHooks construction** — builds EventBus-wired hooks via `buildKernelHooks()`
-4. **KernelContext assembly** — freezes a single context object for the entire execution
-5. **Initial state creation** — calls `initialKernelState(options)` with `status: "thinking"`
-6. **Main loop** — calls `kernel(state, context)` until `done`, `failed`, or `maxIterations` reached
-7. **Embedded tool call guard** — if the final output contains a bare tool call (e.g. `web-search({"query":"test"})`), the runner executes it and replaces the output. This guards against models that embed tool calls inside `FINAL ANSWER` text.
-8. **Terminal hooks** — fires `onDone` or `onError`
-9. **Return** — returns the final `KernelState`
+1. **Service resolution** — resolves LLM, ToolService, and EventBus via `resolveStrategyServices`
+2. **Cross-cutting cascade merge** — the run-wide `RunEnvelope` fields (harness pipeline, budgets, calibration, …) merge at this single universal entry, so every strategy receives them
+3. **Profile merging** — merges `input.contextProfile` over the `"mid"` baseline profile
+4. **KernelHooks construction** — builds EventBus-wired hooks via `buildKernelHooks()`
+5. **KernelContext assembly** — freezes a single context object for the entire execution
+6. **Initial state creation** — calls `initialKernelState(options)` with `status: "thinking"`
+7. **Main loop** — calls `kernel(state, context)` until `done`, `failed`, or `maxIterations` reached
+8. **Guards** — required-tools availability (pre-loop), loop detection, fabrication/contract terminal checks
+9. **Terminal hooks + return** — fires `onDone` or `onError`, returns the final `KernelState`
 
 ### Using the built-in ReAct kernel
 
-The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all strategies:
+The built-in `reactKernel` implements the Think → Act → Observe step contract and is the default kernel used by all strategies. Both it and the phase-level assembler are public:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-import { runKernel } from "./kernel/loop/runner.js";
-import { reactKernel } from "./kernel/loop/react-kernel.js";
-
-const finalState = yield* runKernel(
+import {
+  makeKernel,
   reactKernel,
-  {
-    task: "Summarize the latest release notes",
-    availableToolSchemas: schemas,
-    taskId: "task-123",
-  },
-  {
-    maxIterations: 10,
-    strategy: "reactive",
-    kernelType: "react",
-  },
-);
+  type ThoughtKernel,
+} from "@reactive-agents/reasoning";
+
+// The built-in single-step ReAct kernel (equivalent to makeKernel()):
+const builtin: ThoughtKernel = reactKernel;
+
+// Or assemble one yourself from a Phase pipeline — pass your own think/act
+// phases, or take the defaults:
+const assembled: ThoughtKernel = makeKernel();
 ```
 
 For backwards compatibility, a wrapped form is also available:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-import { executeReActKernel } from "./kernel/loop/react-kernel.js";
+import { Effect } from "effect";
+import { executeReActKernel } from "@reactive-agents/reasoning";
 
-const result: ReActKernelResult = yield* executeReActKernel({
-  task: "Summarize the latest release notes",
-  availableToolSchemas: schemas,
-  maxIterations: 10,
-  parentStrategy: "reactive",
-  kernelPass: "reactive:main",
-  taskId: "task-123",
-});
-// result.output, result.steps, result.totalTokens, result.toolsUsed, result.iterations
+// Drives the full ReAct loop and returns the run result, not step state.
+// The input is a KernelInput; only `task` is required.
+const run = () =>
+  Effect.gen(function* () {
+    const result = yield* executeReActKernel({
+      task: "Summarize the latest release notes",
+      availableToolSchemas: [],
+      maxIterations: 10,
+      parentStrategy: "reactive",
+      kernelPass: "reactive:main",
+      taskId: "task-123",
+    });
+    // result.output, result.steps, result.totalTokens, result.toolsUsed,
+    // result.iterations, result.terminatedBy
+    return result;
+  });
 ```
 
 ## KernelHooks
 
-`KernelHooks` is the **single source of truth** for kernel lifecycle events. It is the only place `ToolCallCompleted` is published, which prevents the double-counting in `MetricsCollector` that occurred before this architecture.
+`KernelHooks` is the **single source of truth** for kernel lifecycle events. It is the only place `ToolCallCompleted` is published, which prevents the double-counting in `MetricsCollector` that occurred before this architecture. The interface is not a named package export — reach it through `KernelContext["hooks"]`:
 
-<!-- docs-skip-typecheck -->
 ```typescript
-interface KernelHooks {
-  readonly onThought:     (state: KernelState, thought: string) => Effect.Effect<void, never>;
-  readonly onAction:      (state: KernelState, tool: string, input: string) => Effect.Effect<void, never>;
-  readonly onObservation: (state: KernelState, result: string) => Effect.Effect<void, never>;
-  readonly onDone:        (state: KernelState) => Effect.Effect<void, never>;
-  readonly onError:       (state: KernelState, error: string) => Effect.Effect<void, never>;
+import { Effect } from "effect";
+import type {
+  KernelContext,
+  KernelState,
+} from "@reactive-agents/reasoning";
+
+type KernelHooks = KernelContext["hooks"];
+
+// The core five, shown verbatim. The pin only compiles while these
+// signatures match the real ones.
+interface DisplayedHooks {
+  readonly onThought: (
+    state: KernelState,
+    thought: string,
+    prompt?: {
+      system: string;
+      user: string;
+      messages?: readonly { readonly role: string; readonly content: string }[];
+      rawResponse?: string;
+    },
+  ) => Effect.Effect<void, never>;
+  readonly onAction: (
+    state: KernelState,
+    tool: string,
+    input: string,
+    opts?: {
+      readonly callId?: string;
+      readonly rationale?: import("@reactive-agents/core").Rationale;
+    },
+  ) => Effect.Effect<void, never>;
+  readonly onObservation: (
+    state: KernelState,
+    result: string,
+    success: boolean,
+  ) => Effect.Effect<void, never>;
+  readonly onDone: (state: KernelState) => Effect.Effect<void, never>;
+  readonly onError: (
+    state: KernelState,
+    error: string,
+  ) => Effect.Effect<void, never>;
 }
+
+declare const hooks: KernelHooks;
+const pinned: DisplayedHooks = hooks;
 ```
 
-Events emitted per hook:
+The full interface has five more hooks since this page was first written: `onIterationProgress`, `onStrategySwitched`, `onStrategySwitchEvaluated`, `onContextSynthesized`, and `onLedgerAppend` (the runner's live ledger tap).
+
+Events emitted per hook (with an EventBus registered):
 
 | Hook | EventBus events published |
 |---|---|
@@ -224,17 +275,9 @@ Events emitted per hook:
 | `onAction` | `ReasoningStepCompleted` (with `action` field) |
 | `onObservation` | `ReasoningStepCompleted` (with `observation` field) + `ToolCallCompleted` |
 | `onDone` | `FinalAnswerProduced` |
-| `onError` | _(no-op — no event emitted)_ |
+| `onError` | `ReasoningFailed` |
 
-When no EventBus is present, `buildKernelHooks()` returns hooks that silently no-op — kernels do not need to guard against a missing EventBus.
-
-For tests and simple runs, `noopHooks` is exported from `kernel-state.ts`:
-
-<!-- docs-skip-typecheck -->
-```typescript
-import { noopHooks } from "./kernel/state/kernel-state.js";
-// All five hook methods are Effect.void — safe, no EventBus required
-```
+When no EventBus is present, `buildKernelHooks()` returns hooks that silently no-op — kernels do not need to guard against a missing EventBus. For tests and simple runs, the framework-internal `noopHooks` constant (`kernel-state.ts`, not on the published surface) provides the same all-`Effect.void` defaults.
 
 ## Registering a Custom Kernel
 
@@ -242,47 +285,40 @@ import { noopHooks } from "./kernel/state/kernel-state.js";
 
 ### StrategyRegistry kernel API
 
-<!-- docs-skip-typecheck -->
 ```typescript
-class StrategyRegistry extends Context.Tag("StrategyRegistry")<
-  StrategyRegistry,
-  {
-    // ... strategy methods ...
+import { Effect } from "effect";
+import { reactKernel, StrategyRegistry } from "@reactive-agents/reasoning";
 
-    /** Register a custom ThoughtKernel by name. */
-    readonly registerKernel: (
-      name: string,
-      kernel: ThoughtKernel,
-    ) => Effect.Effect<void>;
-
-    /** Retrieve a registered ThoughtKernel by name. Fails with StrategyNotFoundError if absent. */
-    readonly getKernel: (
-      name: string,
-    ) => Effect.Effect<ThoughtKernel, StrategyNotFoundError>;
-
-    /** List all registered kernel names. */
-    readonly listKernels: () => Effect.Effect<readonly string[]>;
-  }
->() {}
+// The three kernel-registry methods, as published on the StrategyRegistry
+// service interface:
+const use = Effect.gen(function* () {
+  const registry = yield* StrategyRegistry;
+  yield* registry.registerKernel("react-alias", reactKernel);
+  const kernel = yield* registry.getKernel("react-alias"); // ThoughtKernel
+  yield* registry.registerKernel("unused", kernel);
+  return yield* registry.listKernels();
+});
 ```
 
-The built-in kernel `"react"` is pre-registered in `StrategyRegistryLive`. Custom kernels are additive — registering one does not affect built-in kernels or strategies.
+`getKernel` fails with `StrategyNotFoundError` when the name is absent. The built-in kernel `"react"` is pre-registered in `StrategyRegistryLive`. Custom kernels are additive — registering one does not affect built-in kernels or strategies.
 
 ### Writing and registering a custom kernel
 
-<!-- docs-skip-typecheck -->
+`ThoughtKernel`, `KernelState`, `KernelContext`, `Phase`, and `makeKernel` are published exports of `@reactive-agents/reasoning`. The one piece that remains framework-internal is `transitionState()` — custom phases build the next state by spreading, which is exactly what it does internally:
+
 ```typescript
-// ThoughtKernel, KernelState, KernelContext and transitionState are the kernel's
-// internal contracts (defined above). They are not part of the public package
-// surface — this snippet illustrates the shape a custom kernel takes internally.
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import {
+  makeKernel,
+  StrategyRegistry,
+  type KernelContext,
+  type KernelState,
+  type Phase,
+} from "@reactive-agents/reasoning";
 
-// A minimal single-shot kernel: one LLM call, then done
-const oneShotKernel: ThoughtKernel = (
-  state: KernelState,
-  context: KernelContext,
-): Effect.Effect<KernelState, never, LLMService> =>
+// A minimal single-shot think phase: one LLM call, then done.
+const oneShotThink: Phase = (state: KernelState, context: KernelContext) =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
     const response = yield* llm.complete({
@@ -292,26 +328,26 @@ const oneShotKernel: ThoughtKernel = (
 
     yield* context.hooks.onThought(state, response.content);
 
-    return transitionState(state, {
-      status: "done",
+    return {
+      ...state,
+      status: "done" as const,
       output: response.content,
       tokens: state.tokens + response.usage.totalTokens,
       iteration: state.iteration + 1,
-    });
+    };
   });
 
-// Register in your app setup
-const program = Effect.gen(function* () {
+// Assemble a ThoughtKernel from phases. The default pipeline is
+// [think, act]; here the one-shot replaces the think phase and a no-op
+// act phase finishes the tuple.
+const act: Phase = (state) => Effect.succeed(state);
+const oneShotKernel = makeKernel({ phases: [oneShotThink, act] });
+
+// Register in your app setup; retrieve and run via your own strategy layer.
+const setup = Effect.gen(function* () {
   const registry = yield* StrategyRegistry;
   yield* registry.registerKernel("one-shot", oneShotKernel);
-
-  // Retrieve and run later
-  const kernel = yield* registry.getKernel("one-shot");
-  const finalState = yield* runKernel(kernel, { task: "Hello" }, {
-    maxIterations: 1,
-    strategy: "one-shot",
-    kernelType: "one-shot",
-  });
+  return yield* registry.getKernel("one-shot");
 });
 ```
 
@@ -319,10 +355,10 @@ const program = Effect.gen(function* () {
 
 | Before | After |
 |---|---|
-| `reactive.ts` — 905 lines | `reactive.ts` — 266 lines |
+| `reactive.ts` — 905 lines | `reactive.ts` — 266 at refactor (384 today, feature growth) |
 | Tool execution duplicated ×5 | `tool-execution.ts` — shared once |
 | EventBus wiring scattered across 5 strategy files | `kernel-hooks.ts` — single source |
 | Double `ToolCallCompleted` metrics in MetricsCollector | Fixed — `KernelHooks.onObservation` is the only publisher |
-| Hard to add a new strategy | Implement one `ThoughtKernel` step function, call `runKernel()` |
-| `KernelState` was mutable | Immutable — `transitionState()` returns a new object each time |
-| No bare tool call guard | `runKernel()` detects and executes embedded tool calls post-loop |
+| Hard to add a new strategy | Implement a `Phase` / `ThoughtKernel`, `makeKernel({ phases })`, register via `StrategyRegistry` |
+| `KernelState` was mutable | Immutable — spread produces each new state (`transitionState()` wraps this internally) |
+| No terminal-truth enforcement | Contract-driven terminal gates (required-tools, fabrication guard) reject ungrounded final answers |
