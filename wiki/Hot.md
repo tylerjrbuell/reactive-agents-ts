@@ -46,6 +46,8 @@ supportsToolCalling + a stale 1-run May prior (`toolCallDialect:"none"`) demoted
 text-parse whose parser rejects the harness's own taught markup; Wave 3 must not build local-FC
 claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFEST.md`.
 
+**Wave-3 gate (R1 re-capture 2026-10-13): PASS** — S3 qwen3:4b 0/5→5/5 (+2 bonus 7/7) at fix 354b6aef8+674b6c4f8; tool execution restored, 5/5 report.md content-correct, markup-unparsed signature 0/5 (`fixtures/post-243/`).
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)

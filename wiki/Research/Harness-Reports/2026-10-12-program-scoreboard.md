@@ -183,3 +183,33 @@ contract). Wave 2's S3 before/after clause therefore FAILS on qwen3:4b: Wave 3+ 
 and must re-capture after the fix.
 
 **Wave-4+ red-on-cut pointer:** the canonical false-success/thrash shape for pattern (e)/(c)/(d) cuts is fixture `01M4SXNTN38VM8ZQ0Q85A7FA3E` (s3-llama3.2 run-4), NOT the qwen S1 rows (which abstain honestly at temp 0 — baseline truth, see S1 termination-mix note).
+
+## Post-#243 gate re-capture (R1, 2026-10-13 13:30–13:40 at HEAD 674b6c4f8, dist rebuilt first)
+
+`fixtures/post-243/` — S3 qwen3:4b re-captured N=5 canonical (+2 bonus batch-A rows; see that dir's
+MANIFEST for the CLI-flag-slip note), S2 sanity N=2. Fix under test: floor 354b6aef8 + truthful
+priors 674b6c4f8; pre-capture verified `qwen3-4b.json` = `native-fc`, probeVersion 2, runsAveraged 3.
+
+**Three-point S3-qwen34b row (identical arm, temp 0, same extractor defs):**
+
+| metric | PRE-regression (baseline) | REGRESSED (post-w2) | POST-FIX (post-243) |
+|---|---|---|---|
+| success rate | 5/5 | 0/5 | **5/5** (7/7 incl. bonus) |
+| schemas on wire / think-exchange | 4 | **0** | **3** (file-read, file-write, recall) |
+| tool-call-start events/run | 3 (read×2, write×1) | 0 | **3 ×7/7** (acted iter 0) |
+| report.md written (content truth) | 5/5 (4900 correct) | 0/5 | **5/5, grand total 4900 + 3 sections, 5/5 correct** |
+| taught-markup-shipped-unparsed signature | 0/5 | 5/5 | **0/5** |
+| tokens/run mean | 6,229 | 2,829 (failed early) | 3,962 (3,706–5,042) |
+| thinkingChars/run | (pre-W1 era) | 3.6–14.8K | 6.0–12.1K (retained) |
+| classify / skip signals / head-trunc incidents | — | 0/0/0 | 0/0/0 (unchanged) |
+
+S2 sanity (N=2): shapes stable — '3052' 4-char visible answer ×2, 1 think call, thinking retained
+8.1–9.7K; wall 77.7/82.6 s = box contention, non-hung. Label churn observed: terminatedBy reverted
+`llm_end_turn` (post-w2) → `end_turn` (here) across the W2 fixes — semantics identical, docs truth-up
+candidate.
+
+**WAVE-3 GATE: PASS.** The #243 un-brick is live-verified on the exact scenario that regressed:
+tool-call execution restored 7/7, deliverable-correct 5/5, all four regression signatures gone, no
+new signatures. Wave-2 VERDICT MIXED's headline defect is CLOSED; Wave 3 Stage-B claims may build on
+this row. Residual inheritable caveat: S3 falseSuccess heuristic still fires 5/5 (stale terminal
+tallies — definition unchanged, raw fields ground truth; pattern-(e) cuts unaffected).

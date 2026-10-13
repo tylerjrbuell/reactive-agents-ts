@@ -82,7 +82,8 @@ marker-clobber 0/5, thinking retained 5/5, S1 drift clean), and `post-w2/` (Wave
 W2a probe-derived supportsToolCalling + stale 1-run prior `toolCallDialect:"none"` demoted the arm
 to text-parse and nothing parses the taught markup; discover-tools thrash phenotype gone from the
 llama wire (Wave-4 baseline-continuity note). PRE/POST/POST-FIX/W2 deltas + verdicts:
-`../../2026-10-12-program-scoreboard.md`.
+`../../2026-10-12-program-scoreboard.md`. Wave-3 gate set: `post-243/` (S3 qwen3:4b re-capture at
+fix 354b6aef8+674b6c4f8 — **GATE PASS**, 5/5 success restored + S2 sanity 2/2 stable).
 
 ## Probe rows (unit-style, re-run under final Wave-0 code state)
 
