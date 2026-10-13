@@ -1070,3 +1070,11 @@ task: "Wave 1.1+1.2 thinking channel on streaming wire protocol: StreamEvent +th
 result: completed, confidence 0.9
 outcome: "pending task review; parent verifier: focused stream test + llm-provider typecheck at HEAD de369f77. NOTE for 1.3 dispatch (warden-disclosed semantics): on thinking-capable models thinking flows even with config.thinking:false (Ollama cannot opt out) — kernel must treat thinking as always-possible on capable models. First dispatch of this mission died with zero disk artifacts; retry directive (incremental report writes + commit-as-soon-green) delivered."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 1.3+1.4: think.ts accumulator consumes thinking_delta/content_complete.thinking -> existing providerThinking/rescueFromThinking activate (zero new parse logic); llm-exchange forensics thinkingChars + PREVIEW_MAX-capped preview (additive-optional, REQUIRED_FIELDS_BY_KIND untouched)"
+result: completed, confidence 0.92
+outcome: "accepted: parent verifier pending task review; warden evidence: 3-arm consumption RED->GREEN + cut-arm + byte-identical no-thinking golden; reasoning 2977/0, trace 88/0, replay+diagnose 72/0, typechecks clean. Escalation (2-line core transit gap) APPROVED + integrated by parent at 91e8d6006 (precedent: #236 core stamp; typed subscribers now see the fields). Consent ruling honored: thinking presence never gated by config.thinking. Next: 1.5 harness lift capture unblocked."
+```
