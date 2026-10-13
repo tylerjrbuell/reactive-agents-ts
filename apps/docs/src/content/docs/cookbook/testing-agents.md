@@ -218,6 +218,78 @@ test("output matches snapshot", async () => {
 });
 ```
 
+## Deterministic testing: replaying recorded runs
+
+`withTestScenario()` stubs the LLM directly, so it can't catch regressions in the harness itself (prompt assembly, tool plumbing, termination logic). The stronger lane: record one real run to a JSONL trace, commit it as a fixture, and replay the **whole harness** against that recording in CI — no API keys, no network, byte-identical output. This is the measurement substrate the project's Lift Protocol uses for before/after captures of harness changes.
+
+**Step 1 — record a golden.** Run the agent once, locally, with tracing pointed at a directory you control. The result carries `metadata.tracePath` — the flushed trace file.
+
+```typescript
+import { cpSync } from "node:fs";
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withTestScenario([{ text: "FINAL ANSWER: deterministic replay works." }])
+  .withReasoning({ defaultStrategy: "reactive" })
+  .withMaxIterations(2)
+  // Explicit dir: the default ~/.reactive-agents/traces is retention-pruned
+  // (500 files / 14 days by default) — never reference the live path from CI.
+  .withObservability({ tracing: { dir: "./recordings" } })
+  .build();
+
+const result = await agent.run("Explain why deterministic replay matters for CI.");
+await agent.dispose();
+
+if (result.metadata.tracePath) {
+  cpSync(result.metadata.tracePath, "./tests/fixtures/agent-golden.jsonl");
+}
+```
+
+**Step 2 — commit the fixture** (`tests/fixtures/agent-golden.jsonl`) and replay it in your test suite. `loadRecordedRun` parses the JSONL; `buildSequentialLLMTable` + `makeReplayLLMLayer` replace the model layer with the recorded stream, and `.withReplayLLM` wires it into the builder upstream of every consumer:
+
+```typescript
+import { expect, test } from "bun:test";
+import { ReactiveAgents } from "reactive-agents";
+import {
+  buildSequentialLLMTable,
+  loadRecordedRun,
+  makeReplayLLMLayer,
+} from "@reactive-agents/replay";
+
+test("golden run reproduces with no API keys", async () => {
+  const run = await loadRecordedRun("./tests/fixtures/agent-golden.jsonl");
+  const table = buildSequentialLLMTable(run.trace.events);
+
+  const agent = await ReactiveAgents.create()
+    .withProvider("test") // never called — withReplayLLM replaces the model layer
+    .withModel(run.model || "replay")
+    .withReasoning({ defaultStrategy: "reactive" })
+    .withMaxIterations(2) // mirror the recorded harness config
+    .withObservability({ tracing: false }) // the replay must not re-record
+    .withReplayLLM(makeReplayLLMLayer(table))
+    .build();
+
+  const result = await agent.run("Explain why deterministic replay matters for CI.");
+  await agent.dispose();
+
+  expect(result.success).toBe(true);
+  expect(result.output).toBe("deterministic replay works.");
+});
+```
+
+A working, tested version of exactly this flow — committed fixture and regeneration script included — lives in the repo at `packages/replay/tests/replay-ci-lane.test.ts`.
+
+### Why the sequential table
+
+`loadRecordedRun` also returns a key-based exact-replay table (`run.llmTable`), where a call hits only if its rendered prompt is byte-identical — after the record-side truncation/flattening projection — to the recorded one. The prompt embeds live values (date/time and other per-run content), so this table typically misses when you replay in a new process even seconds after recording; it is the right tool for same-prompt A/B edits in one process, not for CI goldens. `buildSequentialLLMTable` instead dispenses the Nth recorded response to the Nth model call: immune to benign prompt drift, yet still a precise regression signal — if a harness change makes a different number of model calls, the table runs dry and `makeReplayLLMLayer` fails loudly rather than silently reaching a live provider.
+
+### Pinning caveats (read before your first golden)
+
+- **Sampling variance is the enemy of the golden, not the replay.** The replay itself is deterministic by construction (it dispenses recorded bytes), but an unpinned *recording* isn't: the same prompt does not produce the same trace. Record with the scripted `test` provider, or with `temperature: 0` on a provider that actually honors it — otherwise every re-record silently replaces the golden with a different draw, and "the test still passes" stops meaning anything.
+- **Mirror the recorded config.** Strategy, iteration budget, and tool surface must match the recording. The sequential table doesn't check prompt content, so a config change that reorders or adds model calls can dispense recorded responses into different decision points — the run may "pass" while testing something else. When in doubt, diff the replay against the golden with `diffTraces`.
+- **This lane replaces the model layer only.** Recordings that call tools replay those tools live (confine them, e.g. a sandboxed `fileRoot`) or freeze tool results with `makeReplayToolLayer` — see [Snapshot & Replay](/features/snapshot-replay/).
+- **Commit fixtures; never point CI at `~/.reactive-agents/traces`.** That directory is retention-pruned (oldest-first, 500 files / 14 days by default).
+
 ## `@reactive-agents/testing` Package
 
 For lower-level testing, the dedicated testing package provides mock services and assertion helpers:
@@ -358,6 +430,7 @@ test("max iterations terminates cleanly", async () => {
 ## Tips
 
 - **Use `withTestScenario()`** for all unit and integration tests — it's fast and deterministic
+- **Replay a committed trace fixture** (Deterministic testing above) when a test must cover the harness itself, not just the model stub
 - **Use `@reactive-agents/testing`** for lower-level mock services and assertions
 - **Mock tools** with `Effect.succeed()` handlers to avoid network calls
 - **Test each feature independently** — guardrails, reasoning, tools, memory each have independent test surfaces
