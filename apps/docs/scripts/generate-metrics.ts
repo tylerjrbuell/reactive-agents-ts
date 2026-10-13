@@ -77,10 +77,34 @@ const countTestFiles = (): number => {
   return count;
 };
 
-const countDirectoryEntries = (relPath: string, predicate: (name: string) => boolean): number => {
-  const dir = join(REPO_ROOT, relPath);
-  if (!existsSync(dir)) return 0;
-  return readdirSync(dir).filter(predicate).length;
+/**
+ * Parse the canonical registered-strategy count from the StrategyRegistry
+ * bootstrap — the single source of truth for "how many strategies ship".
+ * Each `["key", impl]` entry in the `StrategyRegistryLive` map is a
+ * registered key; keys that share an implementation are ALIASES (react →
+ * reactive, rewoo → blueprint) and count as one. Counting strategy source
+ * FILES on disk (the previous approach) drifted from the registry and from
+ * the prose — the 8/7/5 contradiction class pinned by
+ * scripts/docs-consistency.test.ts. Keep the parse in lockstep with that
+ * test's `readRegistryTruth`.
+ */
+const countStrategies = (): number => {
+  const path = join(REPO_ROOT, "packages/reasoning/src/services/strategy-registry.ts");
+  const src = readFileSync(path, "utf-8");
+  const block = src.match(/new Map<string, StrategyFn>\(\[([\s\S]*?)\]\),/);
+  if (!block) {
+    throw new Error(
+      "generate-metrics: StrategyRegistry bootstrap Map not found in " +
+        path + " — update this parse alongside the registry.",
+    );
+  }
+  const impls = new Set<string>();
+  for (const m of block[1].matchAll(/\[\s*"([^"]+)"\s*,\s*([^\]]+?)\s*\]/g)) {
+    // `asStrategyFn(executeDirect)` and `executeDirect` name the same executor.
+    const inner = m[2].match(/\(([^()]*)\)\s*$/);
+    impls.add((inner ? inner[1] : m[2]).trim());
+  }
+  return impls.size;
 };
 
 /* ─────────── Source-code parsing ─────────── */
@@ -159,22 +183,7 @@ const main = () => {
   const apps = countApps();
   const testFiles = countTestFiles();
   const phases = countLifecyclePhases();
-  const strategies = countDirectoryEntries(
-    "packages/reasoning/src/strategies",
-    (name) =>
-      name.endsWith(".ts") &&
-      !name.endsWith(".test.ts") &&
-      !name.endsWith(".spec.ts") &&
-      !name.includes("prompts") &&
-      !name.includes("registry") &&
-      !name.includes("kernel") &&
-      // Helper modules colocated in this directory, not registered strategies.
-      !name.includes("adaptive-judgment-questions") &&
-      !name.includes("memory-fence") &&
-      // `direct` is a no-op passthrough (no reasoning loop), not a reasoning
-      // strategy — excluding it keeps the count honest at the registered 8.
-      !name.includes("direct"),
-  );
+  const strategies = countStrategies();
   // Provider count = keys of the declared provider registry
   // (PROVIDER_DEFAULT_MODELS), the single source of truth for selectable
   // providers. File-counting `providers/*.ts` undercounts because
