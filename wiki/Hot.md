@@ -48,6 +48,8 @@ claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFE
 
 **Wave-3 gate (R1 re-capture 2026-10-13): PASS** — S3 qwen3:4b 0/5→5/5 (+2 bonus 7/7) at fix 354b6aef8+674b6c4f8; tool execution restored, 5/5 report.md content-correct, markup-unparsed signature 0/5 (`fixtures/post-243/`).
 
+**Wave-3c Stage-B promotion data (2026-10-13, `fixtures/post-w3/`): rung-3 PARTIAL, rung-2 BLOCKED-credit — plan-3.5 rung agreement NOT declarable yet.** Shadow soak proved the seam (phi4 clean run: 3 tier-1 parses, would-have-executed 3/3, shadow correctly non-acting); act-mode end-to-end execution unmeasured: coder drops wrapper tags (parser-coverage gap, file-ready for tools-warden) and phi4 stream-stalled 6/8 attempts on this box. No safety anomalies in 12 completed runs.
+
 ---
 
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)

@@ -75,6 +75,15 @@ export interface RunMetrics {
   readonly thinkingExchangeCount: number
   readonly maxThinkContentChars: number
   readonly traceBytes: number
+  /** W3c additions: text-parse Stage-B parse-diff observability. */
+  readonly parseMode: string | null
+  readonly shadowSignals: number
+  readonly markupTurns: number
+  readonly parsedCallsTotal: number
+  readonly parsedCallNames: Readonly<Record<string, number>>
+  readonly wouldHaveExecutedCalls: number
+  readonly parseFailureSignals: number
+  readonly callableSurface: readonly string[]
 }
 
 type Json = Record<string, unknown>
@@ -157,6 +166,38 @@ export function extractRunMetrics(jsonl: string, arm: string, runIndex: number):
   }))
   const loopDetectorEvents = guards.filter((g) => g.guard.toLowerCase().includes("loop")).length
 
+  // W3c Stage-B parse-diff: harness-signal-injected events from the text-parse
+  // transition (origin text-parse-shadow / text-parse-parse-failure) + the
+  // compiled callable surface (tool-surface-resolved) for would-have-executed
+  // matching (parsed name ∈ callable ⇒ the shadow parse would have hit a
+  // REGISTERED tool schema in act mode).
+  const signals = byKind("harness-signal-injected")
+  let shadowSignals = 0
+  let markupTurns = 0
+  let parsedCallsTotal = 0
+  let wouldHaveExecutedCalls = 0
+  let parseFailureSignals = 0
+  const parsedCallNames: Record<string, number> = {}
+  const callableSet = new Set<string>()
+  for (const e of byKind("tool-surface-resolved")) for (const t of asArr(e.callable)) if (typeof t === "string") callableSet.add(t)
+  for (const s of signals) {
+    const origin = asStr(s.origin)
+    if (origin === "text-parse-shadow") {
+      shadowSignals++
+      const md = (s.metadata ?? {}) as Json
+      if (md.markerPresent === true) markupTurns++
+      for (const c of asArr(md.parsedCalls)) {
+        const call = (c ?? {}) as Json
+        const name = asStr(call.name, "?")
+        parsedCallsTotal++
+        parsedCallNames[name] = (parsedCallNames[name] ?? 0) + 1
+        if (callableSet.has(name)) wouldHaveExecutedCalls++
+      }
+    } else if (origin === "text-parse-parse-failure") {
+      parseFailureSignals++
+    }
+  }
+
   const decisionEvaluated: Record<string, number> = {}
   for (const e of byKind("decision-evaluated")) {
     const dt = asStr(e.decisionType, "?")
@@ -213,6 +254,14 @@ export function extractRunMetrics(jsonl: string, arm: string, runIndex: number):
     thinkingExchangeCount,
     maxThinkContentChars,
     traceBytes: new TextEncoder().encode(jsonl).length,
+    parseMode: null,
+    shadowSignals,
+    markupTurns,
+    parsedCallsTotal,
+    parsedCallNames,
+    wouldHaveExecutedCalls,
+    parseFailureSignals,
+    callableSurface: [...callableSet],
   }
 }
 
@@ -246,6 +295,8 @@ interface ArmSpec {
   readonly numCtx?: number
   /** Mirror the benchmarks ra-full variant (tools+reasoning+RI+memory) — rung-2 arms. */
   readonly fullHarness?: boolean
+  /** W3c: REACTIVE_AGENTS_TEXT_PARSE transition mode for the run (text-parse arms only). */
+  readonly parseMode?: "shadow" | "act"
 }
 
 export const ARMS: readonly ArmSpec[] = [
@@ -257,6 +308,11 @@ export const ARMS: readonly ArmSpec[] = [
   { id: "s4-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 3, fileTools: true },
   { id: "haiku-s1", scenario: "S1", provider: "anthropic", model: "claude-haiku-4-5-20251001", task: S1_TASK, n: 3, fileTools: false, fullHarness: true },
   { id: "haiku-s3", scenario: "S3", provider: "anthropic", model: "claude-haiku-4-5-20251001", task: S3_TASK, n: 3, fileTools: true, fullHarness: true },
+  // W3c Stage-B promotion-data arms (REACTIVE_AGENTS_TEXT_PARSE; text-parse-driver models only)
+  { id: "w3-shadow-coder14b", scenario: "S4", provider: "ollama", model: "qwen2.5-coder:14b", task: S3_TASK, n: 5, fileTools: true, parseMode: "shadow" },
+  { id: "w3-shadow-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 3, fileTools: true, parseMode: "shadow" },
+  { id: "w3-act-coder14b", scenario: "S4", provider: "ollama", model: "qwen2.5-coder:14b", task: S3_TASK, n: 5, fileTools: true, parseMode: "act" },
+  { id: "w3-act-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 2, fileTools: true, parseMode: "act" },
 ]
 
 const HANG_MS = 8 * 60_000
@@ -329,6 +385,11 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   const startTs = Date.now()
   let hung = false
   let result: Awaited<ReturnType<typeof agent.run>> | null = null
+  // W3c: the transition mode is env-read per think-turn (text-parse-mode.ts is the
+  // single reader); arms that set parseMode pin it for the duration of the run.
+  const parseEnvKey = "REACTIVE_AGENTS_TEXT_PARSE"
+  const prevParseEnv = process.env[parseEnvKey]
+  if (arm.parseMode !== undefined) process.env[parseEnvKey] = arm.parseMode
   try {
     const exec = arm.fileTools
       ? withFileRoot(prepareWorkspace(traceDir, arm, runIndex), () => agent.run(arm.task))
@@ -351,6 +412,8 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
       ])
     } catch { /* dispose failure is not capture-fatal */ }
     if (disposeTimer !== undefined) clearTimeout(disposeTimer)
+    if (prevParseEnv === undefined) delete process.env[parseEnvKey]
+    else process.env[parseEnvKey] = prevParseEnv
   }
 
   const wallClockMs = Date.now() - startTs
@@ -359,7 +422,7 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   if (!tracePath) tracePath = freshTraceFile(traceDir, startTs - 5_000)
   const traceFile = tracePath ?? ""
   const base = traceFile && existsSync(traceFile) ? extractRunMetrics(readFileSync(traceFile, "utf8"), arm.id, runIndex) : extractRunMetrics("", arm.id, runIndex)
-  const metrics: RunMetrics = { ...base, traceFile, wallClockMs, hung, ...(hung ? { success: null } : {}) }
+  const metrics: RunMetrics = { ...base, traceFile, wallClockMs, hung, parseMode: arm.parseMode ?? null, ...(hung ? { success: null } : {}) }
   appendFileSync(
     opts.metricsLog ??
       join(traceDir, traceDir === FIXTURES_DIR ? "baseline-metrics.jsonl" : `${basename(traceDir)}-metrics.jsonl`),

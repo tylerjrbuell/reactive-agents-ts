@@ -213,3 +213,20 @@ tool-call execution restored 7/7, deliverable-correct 5/5, all four regression s
 new signatures. Wave-2 VERDICT MIXED's headline defect is CLOSED; Wave 3 Stage-B claims may build on
 this row. Residual inheritable caveat: S3 falseSuccess heuristic still fires 5/5 (stale terminal
 tallies — definition unchanged, raw fields ground truth; pattern-(e) cuts unaffected).
+
+## Post-W3 Stage-B promotion data (W3c, 2026-10-13, HEAD ed6241793, 18 runs)
+
+Shadow-soak + act-mode arms on the two text-dialect models (`REACTIVE_AGENTS_TEXT_PARSE` pinned
+per-arm in bench.ts). Full batch table + parser-gap attribution: `fixtures/post-w3/MANIFEST.md`.
+
+| seam | measured | attribution |
+|---|---|---|
+| shadow coder:14b (N=5) | **would-have-executed 0/5**, 0 shadow signals | model emits taught PARAM LINES but drops both wrapper tags at temp 0 → tier-1 regex (wrapped block) + tiers-2/3 (JSON) all miss; shadow gate (`parsed>0 OR markerPresent`) correctly silent — faithful observation, not lost signal |
+| shadow phi4-mini (N=3+3 retry) | **1 clean run: 3 calls parsed tier-1, would-have-executed 3/3 by name** (acted=false, shadow respected); 5/6 attempts hung/llm_error | the transition seam WORKS on a model that follows the taught grammar; caveat: parsed argumentKeys were the taught PLACEHOLDER lines (`<param-name>`) — act would need HealingPipeline repair (unproven, batch D hung) |
+| act coder:14b (N=5) | **0/5 executed**, 0/5 anomalies | act branch gated `parsed>0`, nudge gated `markerPresent` — both inert for un-wrapped markup; runs fall through to legacy 1-call end_turn failure (byte-identical designed fallback). **Blocker is teach/parse COVERAGE, not the W3a pipeline** |
+| act phi4-mini (N=2) | both hung (480 s guard) | box instability (6/8 phi4 attempts hung/errored this window) — act-vs-shadow discriminator not yet measurable on the one model whose markup parses |
+
+**PROMOTION-READINESS LINE: rung-3 PARTIAL (seam proven observable + parsing 3/3 once on phi4;
+act-mode end-to-end execution UNMEASURED — phi4 box-blocked, coder parser-gap-blocked);
+rung-2 BLOCKED-NOTED (Anthropic credit). Plan-3.5 rung agreement cannot be declared on this data.
+Safety watch: no double-dispatch, no budget bypass, no parse-failure loops across 12 completed runs.**

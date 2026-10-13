@@ -83,7 +83,10 @@ W2a probe-derived supportsToolCalling + stale 1-run prior `toolCallDialect:"none
 to text-parse and nothing parses the taught markup; discover-tools thrash phenotype gone from the
 llama wire (Wave-4 baseline-continuity note). PRE/POST/POST-FIX/W2 deltas + verdicts:
 `../../2026-10-12-program-scoreboard.md`. Wave-3 gate set: `post-243/` (S3 qwen3:4b re-capture at
-fix 354b6aef8+674b6c4f8 — **GATE PASS**, 5/5 success restored + S2 sanity 2/2 stable).
+fix 354b6aef8+674b6c4f8 — **GATE PASS**, 5/5 success restored + S2 sanity 2/2 stable). Stage-B
+promotion data set: `post-w3/` (shadow-soak coder 0/5 would-have — parser-coverage gap on un-wrapped
+markup; phi4 clean run 3/3 tier-1 parses; act coder 0/5 executed, fail-safe inert; act phi4 2/2 hung
+box-blocked. **rung-3 PARTIAL, rung-2 BLOCKED-credit** — see that dir's MANIFEST).
 
 ## Probe rows (unit-style, re-run under final Wave-0 code state)
 
