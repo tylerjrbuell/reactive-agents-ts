@@ -86,17 +86,29 @@ const TOOL_TEMPLATE_MARKERS: readonly string[] = [
 ];
 
 /**
+ * Minimum template length that makes the scan meaningful. GH #243 audit:
+ * plugin-defined models (e.g. gemma4:e4b) return a ~13-char passthrough stub
+ * from /api/show because the real template lives in Ollama's Go code —
+ * scanning it measures NOTHING. Sub-threshold templates are reported
+ * UNMEASURED (undefined) instead of a stranding `false`.
+ */
+const MIN_SCANNABLE_TEMPLATE_CHARS = 64
+
+/**
  * Tri-state chat-template tool-emission detection from /api/show's
  * `template` string.
  *
  *   true       — template references tool-call constructs (has an emission path)
- *   false      — template measured (non-empty) and contains NO tool constructs
- *   undefined  — no template in the response (older Ollama, plugin models) → unmeasured
+ *   false      — template measured (scannable length) and contains NO tool constructs
+ *   undefined  — not scannable: missing/empty, or a plugin-model stub below
+ *                MIN_SCANNABLE_TEMPLATE_CHARS (older Ollama, plugin models)
  */
 export function detectToolTemplateEmission(
   template: string | undefined,
 ): boolean | undefined {
-  if (template === undefined || template.trim().length === 0) return undefined;
+  if (template === undefined) return undefined;
+  const trimmed = template.trim();
+  if (trimmed.length === 0 || trimmed.length < MIN_SCANNABLE_TEMPLATE_CHARS) return undefined;
   const lower = template.toLowerCase();
   return TOOL_TEMPLATE_MARKERS.some((marker) => lower.includes(marker));
 }

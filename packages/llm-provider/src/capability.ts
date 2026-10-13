@@ -504,10 +504,12 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: false,
     supportsStreamingToolCalls: true,
-    // Reconciled 2026-07-30 to match calibrations/cogito-14b.json (3 runs
-    // averaged, "none") — see the qwen3:14b entry below for why this is a
-    // data-correctness fix with no current routing effect.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc: the May "none"
+    // claim traced to the calibration-runner's hardcoded stub (never a
+    // measurement). Today's behavioral probe: 3/3 parseable tool_calls.
+    // See calibrations/cogito-14b.json (probeVersion 2) +
+    // calibration-static-consistency.test.ts for the drift guard.
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   "ollama/qwen3:14b": {
@@ -522,17 +524,12 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    // Was "native-fc" (a hand-authored guess), contradicting this model's own
-    // empirical calibration file (calibrations/qwen3-14b.json, 3 runs
-    // averaged, toolCallDialect: "none") — reconciled 2026-07-30 in favor of
-    // the measured value (2026-07-29 systems audit, root cause #4). Currently
-    // has NO behavioral effect: select-driver.ts's `_dialect` param is
-    // unused (Stage A, text-parse routing not yet built) and every provider
-    // hardcodes `supportsToolCalling: true` regardless of dialect — this is
-    // a data-correctness fix, not a routing change. See
-    // calibration-static-consistency.test.ts for the guard against this
-    // recurring silently.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc. History: "native-fc"
+    // (hand guess) -> "none" (2026-07-30, matching the calibration file —
+    // which was the runner's hardcoded stub, never a measurement) -> today's
+    // behavioral probe 6/6 tool_calls at honest num_predict (the earlier
+    // "empty" reads were the W1 thinking-starvation artifact at low budgets).
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   // Smaller local-tier siblings used by the public `local-models` bench
@@ -552,10 +549,13 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    // Reconciled 2026-07-30 to match calibrations/qwen3-4b.json (measured
-    // "none") — see the qwen3:14b entry above for why this is a
-    // data-correctness fix with no current routing effect.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc: the 2026-07-30
+    // "none" alignment inherited a runsAveraged:1 prior that was the
+    // calibration-runner's hardcoded stub, and W2a's floor-less derivation
+    // then regressed S3 5/5 -> 0/5 on it. Today's probes: template emits,
+    // card declares tools, 6/6 behavioral tool_calls. See refreshed
+    // calibrations/qwen3-4b.json (probeVersion 2).
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   "ollama/cogito:8b": {

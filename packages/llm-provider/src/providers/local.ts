@@ -21,7 +21,7 @@ import { resolveCapability, registerProbedCapability } from '../capability-resol
 import { probeOllamaCapability } from './local-probe.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
 import { getCapabilityStore } from '../capability-store.js'
-import { loadCalibration } from '../calibration.js'
+import { loadDialectPriorClaim } from '../calibration.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
@@ -121,36 +121,69 @@ export interface ToolCallingClaim {
 }
 
 /**
+ * GH #243 (Wave-2 close capture, 2026-10-13): minimum `runsAveraged` a
+ * calibration dialect prior needs before it may flip live routing to
+ * unsupported. The S3 qwen3:4b regression (5/5 -> 0/5) was caused by a
+ * 2026-05-24 prior with runsAveraged:1 whose `toolCallDialect: "none"` was
+ * (a) a single-run sample AND (b) never actually measured at all — the
+ * calibration-runner of that era shipped a hardcoded stub (root cause fixed
+ * alongside this floor). A 1-run prior is indistinguishable from noise;
+ * Review Focus #2's "unknown never strands" extends to UNKNOWN CONFIDENCE.
+ * Floor = 2: the smallest N where a majority vote exists.
+ */
+export const DIALECT_PRIOR_CONFIDENCE_FLOOR = 2
+
+/**
  * Derive the per-model `supportsToolCalling` claim — replacing the old
  * hardcoded `true` (Wave 2a, 2026-10-13; was `local.ts:1150`).
  *
- * The claim is a conjunction: the chat template must actually emit tool-call
- * tokens (measured via /api/show `template` scan → `toolTemplateEmitsTokens`)
- * AND the dialect signal must not contradict it (the empirical calibration
- * posterior when one exists, else the capability record's own dialect).
+ * Signals, in SHIPPED PRECEDENCE (GH #243 revision of the Wave-2a ordering):
+ *   A. Live template evidence — `toolTemplateEmitsTokens` from the /api/show
+ *      probe (W2a). Tri-state: true / false / undefined (= unmeasured).
+ *   B. Calibration dialect PRIOR — only an EXPLICIT `toolCallDialect` field
+ *      (GH #243: the schema default "none" is NOT a claim — absence must not
+ *      strand) AND only at `runsAveraged >= DIALECT_PRIOR_CONFIDENCE_FLOOR`.
+ *   C. The capability record's own dialect (probe card / static table).
  *
- * Fail-safe ordering (Review Focus #2 spirit — a wrong-true costs a failed
- * tool round-trip, a wrong-false silently strips tools from a capable
- * model, which is the worse failure):
- *   1. Template NEVER MEASURED (`toolTemplateEmitsTokens === undefined` —
- *      static-table entry, fallback, or probe response without a template)
- *      → `true`, PROVISIONAL. Permissive: an unmeasured model keeps the
- *      behavior it had before this derivation existed.
- *   2. Template MEASURED with NO tool-token emission → `false`, STRICT.
- *      This is the cogito/qwen3-class lie detector: `capabilities` may
- *      advertise "tools", but a template with no emission path means the
- *      model structurally cannot be told about tools.
+ * Ordering (fail-safe per Review Focus #2 — a wrong-false silently strips
+ * tools from a capable model, the worse failure):
+ *   1. Template NEVER MEASURED → prior honored ONLY if explicit + confident
+ *      (B passes) and says none → false; otherwise `true`, PROVISIONAL.
+ *      ("prior 'none' honored only when probe unavailable/uncertain AND
+ *      runsAveraged >= floor" — w2c-brief/GH#243.)
+ *   2. Template MEASURED with NO tool-token emission → `false`, STRICT
+ *      (structural: nothing can render tools). Plugin-model templates too
+ *      short to scan count as UNMEASURED (see detectToolTemplateEmission).
  *   3. Template EMITS tool tokens:
- *        - dialect posterior (calibration file, if measured) "none" →
- *          `false` with reason (measured empirics override template theory).
- *        - otherwise → `true` (emission ∧ dialect ok). Provisional only when
- *          no calibration posterior exists yet.
+ *        - explicit confident prior "none" → `false` (measured behavioral
+ *          posterior outranks structural template evidence — a template can
+ *          render calls the model still cannot emit).
+ *        - explicit prior "none" BELOW floor → prior DISREGARDED → permissive
+ *          `true`, PROVISIONAL, reason cites the floor. ← GH #243 core fix.
+ *        - else fall through to C: capability dialect "none" → `false` with
+ *          reason; otherwise `true` (provisional iff no explicit prior).
+ *
+ * Refresh discipline: stale priors must be re-probed through the runner
+ * (which now MEASURES dialect), never hand-edited — see calibrations/*.json
+ * dated comments + w2-fix-report.md audit table.
  *
  * @internal exported for unit testing only.
  */
 export function deriveSupportsToolCalling(capability: Capability): ToolCallingClaim {
     const emits = capability.toolTemplateEmitsTokens
+    const prior = loadDialectPriorClaim(capability.model)
+    const priorIsNoneClaim = prior !== undefined && prior.dialect === 'none'
+    const confidentNonePrior = priorIsNoneClaim && prior.runsAveraged >= DIALECT_PRIOR_CONFIDENCE_FLOOR
+
     if (emits === undefined) {
+        // (1) Probe unavailable/uncertain — a confident explicit prior may govern.
+        if (confidentNonePrior) {
+            return {
+                supported: false,
+                provisional: false,
+                reason: 'tool-template emission unmeasured; confident dialect prior (runsAveraged >= floor) is none',
+            }
+        }
         return {
             supported: true,
             provisional: true,
@@ -158,28 +191,41 @@ export function deriveSupportsToolCalling(capability: Capability): ToolCallingCl
         }
     }
     if (!emits) {
+        // (2) Structural no-emission path — strict false regardless of priors.
         return {
             supported: false,
             provisional: false,
             reason: 'chat template emits no tool-call tokens (measured)',
         }
     }
-    // Emission measured true — consult the empirical dialect posterior first.
-    const calibration = loadCalibration(capability.model)
-    const dialect = calibration?.toolCallDialect ?? capability.toolCallDialect
+    // (3) Template emits tool tokens — reconcile prior (B) then record (C).
+    if (confidentNonePrior) {
+        return {
+            supported: false,
+            provisional: false,
+            reason: 'template emits tool tokens but measured dialect posterior is none',
+        }
+    }
+    if (priorIsNoneClaim) {
+        // GH #243: below-floor "none" prior is noise, not evidence — ignore.
+        return {
+            supported: true,
+            provisional: true,
+            reason: 'template emits tool tokens; dialect:none prior below confidence floor — disregarded, permissive',
+        }
+    }
+    const dialect = prior?.dialect ?? capability.toolCallDialect
     if (dialect === 'none') {
         return {
             supported: false,
             provisional: false,
-            reason: calibration?.toolCallDialect === 'none'
-                ? 'template emits tool tokens but measured dialect posterior is none'
-                : 'template emits tool tokens but capability dialect is none',
+            reason: 'template emits tool tokens but capability dialect is none',
         }
     }
     return {
         supported: true,
-        provisional: calibration === undefined,
-        reason: calibration === undefined
+        provisional: prior === undefined,
+        reason: prior === undefined
             ? 'template emits tool tokens; no dialect posterior yet'
             : 'template emits tool tokens; dialect posterior ok',
     }

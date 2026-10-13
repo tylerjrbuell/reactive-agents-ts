@@ -14,7 +14,7 @@ import type { Tool as OllamaTool } from "ollama";
 // Shared resolution (OLLAMA_ENDPOINT → OLLAMA_HOST → OLLAMA_BASE → localhost)
 // so calibrating a model and running it can never disagree about the endpoint.
 const OLLAMA_BASE = resolveOllamaEndpoint();
-const PROBE_VERSION = 1;
+const PROBE_VERSION = 2;
 
 // ── Probe Result Types ────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ interface ProbeResults {
   observationHandling: ModelCalibration["observationHandling"];
   systemPromptAttention: ModelCalibration["systemPromptAttention"];
   optimalToolResultChars: number;
+  toolCallDialect: ModelCalibration["toolCallDialect"];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -272,13 +273,71 @@ async function probeCompressionThreshold(modelId: string): Promise<number> {
 
 // ── Main Runner ───────────────────────────────────────────────────────────────
 
+// ── Probe 6: Tool-Calling Dialect (GH #243) ──────────────────────────────────
+//
+// The MEASUREMENT the runner never had: v1 shipped a hardcoded
+// `toolCallDialect: "none"` stub into every prior, and the floor-less W2a
+// derivation trusted it — bricking qwen3:4b (GH #243). This probe answers the
+// behavioral question: when tools are on the wire, does the model emit a
+// parseable native tool_calls block?
+//
+// Budget discipline (W1 lesson): NO num_predict cap here — thinking-class
+// models (qwen3) burn budget inside
+
+/**
+ * Probe the tool-calling dialect BEHAVIORALLY (v2 of the probe suite).
+ * One required-tool chat call; the verdict is native-fc when the response
+ * carries a parseable `message.tool_calls` block naming a known tool, else
+ * none. `text-parse` is deliberately NOT detected here — recognizing markup
+ * in content is the Wave-3 parser seam's job, not this probe's.
+ *
+ * @internal exported for the prior-refresh script (GH #243 audit).
+ */
+export async function probeToolCallDialect(
+  modelId: string,
+): Promise<ModelCalibration["toolCallDialect"]> {
+  const tools: OllamaTool[] = [
+    {
+      type: "function",
+      function: {
+        name: "get_weather",
+        description: "Get current weather for a city",
+        parameters: {
+          type: "object",
+          properties: {
+            city: { type: "string", description: "City name" },
+          },
+          required: ["city"],
+        },
+      },
+    },
+  ];
+  const res = await ollamaChat(modelId, [
+    {
+      role: "user",
+      content:
+        "What is the weather in Paris right now? You MUST call the get_weather tool.",
+    },
+  ], tools);
+  const calls = (res.message as {
+    tool_calls?: Array<{ function?: { name?: string } }>;
+  } | undefined)?.tool_calls;
+  const emitted =
+    Array.isArray(calls) &&
+    calls.length > 0 &&
+    typeof calls[0]?.function?.name === "string" &&
+    calls[0].function.name.length > 0;
+  return emitted ? "native-fc" : "none";
+}
+
 async function runProbes(modelId: string): Promise<ProbeResults> {
-  const [steering, parallel, recall, attention, chars] = await Promise.all([
+  const [steering, parallel, recall, attention, chars, dialect] = await Promise.all([
     probeSteeringChannel(modelId),
     probeParallelBatching(modelId),
     probeRecallBehavior(modelId),
     probeSystemPromptDecay(modelId),
     probeCompressionThreshold(modelId),
+    probeToolCallDialect(modelId),
   ]);
 
   return {
@@ -287,6 +346,7 @@ async function runProbes(modelId: string): Promise<ProbeResults> {
     observationHandling: recall,
     systemPromptAttention: attention,
     optimalToolResultChars: chars,
+    toolCallDialect: dialect,
   };
 }
 
@@ -314,7 +374,7 @@ export async function runCalibrationProbes(
     observationHandling: majority(results.map((r) => r.observationHandling)),
     systemPromptAttention: majority(results.map((r) => r.systemPromptAttention)),
     optimalToolResultChars: median(results.map((r) => r.optimalToolResultChars)),
-    toolCallDialect: "none" as const,
+    toolCallDialect: majority(results.map((r) => r.toolCallDialect)),
   };
 }
 
