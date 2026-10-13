@@ -113,7 +113,8 @@ describe("Tier 1 (wrapper-tolerant): bare param-line blocks", () => {
     expect(calls[0]?.arguments.encoding).toBe("utf-8")
     const content = calls[0]?.arguments.content as string
     // Interior blank line preserved; block-scalar indentation stripped; the
-    // trailing `encoding: utf-8` line is NOT swallowed into the value.
+    // trailing `encoding: utf-8` line is NOT swallowed into the value. Default
+    // `|` clip chomping keeps ONE trailing break (YAML semantics).
     expect(content).toBe(
       [
         "## Summary",
@@ -127,7 +128,7 @@ describe("Tier 1 (wrapper-tolerant): bare param-line blocks", () => {
         "",
         "## Recommendation",
         "ProductA is declining as its revenue decreased from Q1 to Q2.",
-      ].join("\n"),
+      ].join("\n") + "\n",
     )
   })
 
@@ -235,6 +236,102 @@ describe("Tier 1 (wrapper-tolerant): bare param-line blocks", () => {
     expect(calls.length).toBeGreaterThan(0)
     expect(calls[0]?.name).toBe("<tool-name>")
     expect(calls[0]?.arguments["<param-name>"]).toBe("<value>")
+  })
+})
+
+// ─── Hardening (W3c review round 1) ──────────────────────────────────────────
+// Three real corruption paths for the models the bare path exists for.
+
+describe("Tier 1 (wrapper-tolerant): hardening", () => {
+  it("indent symmetry: an INDENTED bare block parses WITH its params (not empty args)", () => {
+    // Finding 1: TOOL_LINE_RE allowed leading indent but PARAM_LINE_RE anchored
+    // at col 0, so a block nested in a numbered explanation opened with {} args.
+    const text = [
+      "1. First, read the inputs:",
+      "   tool: file-read",
+      "   path: sales-q1.txt",
+      "   encoding: utf-8",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("file-read")
+    expect(calls[0]?.arguments).toEqual({ path: "sales-q1.txt", encoding: "utf-8" })
+  })
+
+  it("indented block: a following param at the block indent is NOT swallowed into a block scalar", () => {
+    const text = [
+      "   tool: file-write",
+      "   path: out.md",
+      "   content: |",
+      "     hello",
+      "   encoding: utf-8",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.arguments.content).toBe("hello\n")
+    expect(calls[0]?.arguments.encoding).toBe("utf-8")
+  })
+
+  it("mid-param prose ends the list: documented truncation, not a silent prose-skipper", () => {
+    // Finding 2: a later param after an interleaved sentence is DROPPED (loud:
+    // upstream required-param validation rejects). Genuine in-list prose
+    // tolerance was rejected (FP on data-sample lines between blocks).
+    const text = [
+      "tool: file-write",
+      "path: report.md",
+      "Here is the content:",
+      "content: |",
+      "  hello",
+      "encoding: utf-8",
+    ].join("\n")
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("file-write")
+    expect(calls[0]?.arguments).toEqual({ path: "report.md" })
+  })
+
+  it("a lone `tool:` line in prose with no params is NOT a call (no empty-args dispatch)", () => {
+    // Review minor: the real FP shape. A bare opener without the taught
+    // param-line structure must not open a `{}` call (which could execute a
+    // no-required-param tool).
+    const text = [
+      "The model was taught to emit a call, for example:",
+      "tool: file-read",
+      "and then keep reasoning.",
+    ].join("\n")
+    expect(driver.extractCalls(text, tools)).toHaveLength(0)
+  })
+
+  // ── Finding 3: exact value per block-scalar style + chomping ───────────────
+  const scalarWrite = (header: string, bodyLines: readonly string[]): string =>
+    [
+      "tool: file-write",
+      "path: out.md",
+      `content: ${header}`,
+      ...bodyLines.map((l) => (l === "" ? "" : "  " + l)),
+      "encoding: utf-8",
+    ].join("\n")
+  const contentOf = (text: string): unknown =>
+    driver.extractCalls(text, tools)[0]?.arguments.content
+
+  it("`|` literal, default clip: keeps one trailing break", () => {
+    expect(contentOf(scalarWrite("|", ["alpha", "beta"]))).toBe("alpha\nbeta\n")
+  })
+
+  it("`|-` strip: no trailing break", () => {
+    expect(contentOf(scalarWrite("|-", ["alpha", "beta"]))).toBe("alpha\nbeta")
+  })
+
+  it("`|+` keep: retains trailing blank line(s)", () => {
+    expect(contentOf(scalarWrite("|+", ["alpha", ""]))).toBe("alpha\n\n")
+  })
+
+  it("`>` folded, default clip: single breaks fold to spaces, blank line = paragraph break", () => {
+    expect(contentOf(scalarWrite(">", ["alpha", "beta", "", "gamma"]))).toBe("alpha beta\ngamma\n")
+  })
+
+  it("`>-` folded strip: no trailing break", () => {
+    expect(contentOf(scalarWrite(">-", ["alpha", "beta"]))).toBe("alpha beta")
   })
 })
 

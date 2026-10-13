@@ -1230,3 +1230,11 @@ task: "W3c parser-coverage fix (Stage-B blocker): make TextParseDriver tier-1 wr
 result: completed, confidence 0.9
 outcome: "accepted-pending-controller: measured 0/10 -> 10/10 coder:14b runs parse (all names in callable surface [file-read,file-write]; 8x3 calls, 2x2 calls faithful to emission). RED->GREEN: 6 new tests fail on the pre-change driver, pass after; wrapped-tier tests unchanged. GH #243 grammar pin preserved via builder-derived test (taught block with wrapper lines stripped parses). Authority: packages/tools/** only (parser + tests + changeset) - reasoning-side markerPresent stays wrapped-only but is now moot for coder (parsed>0 drives both shadow and act); noted as residual for kernel-warden, not edited. tools drivers 61/0, healing+tool-calling 125/0, reasoning kernel 736/0, reasoning strategies/kernel 549/0, text-parse-transition 16/0, tools typecheck+build clean."
 ```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c review fix round 1/5: harden bare-block parse against three real corruption paths - (1) indent asymmetry (indented block opened with {} args), (2) mid-param prose truncation, (3) `>`/chomp block-scalar syntax accepted but not interpreted"
+result: completed, confidence 0.9
+outcome: "ADDRESSED: (1) tool+param indent now symmetric w/ per-param indent captured and used as the block-scalar base, so a following param at block indent is not swallowed; bare block now requires >=1 param, killing the empty-args dispatch class. (2) in-list prose tolerance REJECTED on measured FP evidence - coder runs embed `ProductA: 100` data lines between blocks; tolerance scoped BETWEEN blocks, mid-param prose ends the list loudly (required-param validation rejects), docstring corrected to match + pinning test. (3) `>` folding + `-`/`+`/clip chomping implemented to exact values, per-form value tests added. RED 8 fail -> GREEN 70/0 (tools/tests/drivers); empirical 0/10 -> 10/10 over committed coder traces, zero empty-args. reasoning kernel+strategies 1285/0, healing+tool-calling 125/0, tools typecheck+build+eslint clean. Authority packages/tools/** only."
+```

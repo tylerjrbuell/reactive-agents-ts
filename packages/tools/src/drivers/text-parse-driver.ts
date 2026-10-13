@@ -219,18 +219,40 @@ function findBalancedArrays(text: string): string[] {
 // tolerant of the wrapper, not of the grammar (GH #243: no guessed format).
 
 /** A taught tool line: `tool: <name>` - one name token, nothing else. */
-const TOOL_LINE_RE = /^[ \t]*tool:[ \t]*(\S+)[ \t]*$/
-/** A taught param line at column 0: `<key>: <value>` (identifier or `<placeholder>`). */
-const PARAM_LINE_RE = /^(<[^>\s]+>|[A-Za-z_][\w.-]*)[ \t]*:[ \t]*(.*)$/
-/** A YAML block-scalar header value (`|`, `>`, optionally chomped). */
-const BLOCK_SCALAR_RE = /^[|>][+-]?$/
+const TOOL_LINE_RE = /^([ \t]*)tool:[ \t]*(\S+)[ \t]*$/
+/**
+ * A taught param line: `<key>: <value>` (identifier or `<placeholder>`),
+ * optionally indented. Indentation is captured so it can be normalized and so a
+ * block scalar can tell its continuations from a following param (indent
+ * symmetry with the tool line - an indented block must find its params).
+ */
+const PARAM_LINE_RE = /^([ \t]*)(<[^>\s]+>|[A-Za-z_][\w.-]*)[ \t]*:[ \t]*(.*)$/
+/** YAML block-scalar header: literal `|` or folded `>`, optional chomp `-`/`+`. */
+const BLOCK_SCALAR_HEADER_RE = /^([|>])([+-]?)$/
 
 /**
  * Scan `text` for BARE `tool: <name>` blocks (the taught grammar without the
- * `<tool_call>` wrapper) and extract one call per block. Tolerant of interleaved
- * prose, `---` rules, code fences, a leading prose line, and YAML block-scalar
- * param values (`content: |` + indented lines, blanks included). Returns [] when
- * no `tool:` line exists, so it never invents a call from prose.
+ * `<tool_call>` wrapper) and extract one call per block.
+ *
+ * Tolerance is scoped BETWEEN blocks, not within a param list:
+ *  - BETWEEN blocks: prose, `---` rules, code fences and a leading prose line
+ *    are skipped; a block ends at a blank line, the next `tool:` opener, or the
+ *    first non-param line.
+ *  - WITHIN a block: a contiguous run of `<key>: <value>` params (indentation
+ *    normalized, symmetric with the tool line) plus YAML block-scalar values
+ *    (`|`, `>`, with `-`/`+` chomping).
+ *  - A bare block MUST carry at least one param to be a call; a lone
+ *    `tool: <name>` line in prose is NOT emitted, so it can never dispatch an
+ *    empty-args call to a no-required-param tool.
+ *
+ * Deliberate truncation (NOT a silent in-list prose skipper): mid-param prose
+ * ends the param list, so a later `content:` after an interleaved sentence is
+ * dropped. Genuine in-list prose tolerance was rejected: real no-FC emissions
+ * embed data-sample lines (`ProductA: 100`, `Product B: 1500`) in the prose
+ * BETWEEN blocks (measured: post-w3 runs 01M4TYKSSY/01M4TYM336/01M4V2WYQF), so a
+ * skip-until-next-opener would attach those as wrong args - a worse, harder to
+ * detect corruption than a documented missing trailing param, which the
+ * downstream required-param validation surfaces loudly.
  */
 function parseUnwrappedBlocks(text: string): ExtractedCall[] {
   const lines = text.split("\n")
@@ -242,9 +264,10 @@ function parseUnwrappedBlocks(text: string): ExtractedCall[] {
       i++
       continue
     }
-    const name = toolMatch[1]!
+    const name = toolMatch[2]!
     i++
     const args: Record<string, unknown> = {}
+    let paramCount = 0
     while (i < lines.length) {
       const raw = lines[i]!
       // A blank line, a fresh call, or any non-param line ends the block.
@@ -252,33 +275,47 @@ function parseUnwrappedBlocks(text: string): ExtractedCall[] {
       if (TOOL_LINE_RE.test(raw)) break
       const paramMatch = PARAM_LINE_RE.exec(raw)
       if (!paramMatch) break
-      const key = paramMatch[1]!
-      const value = paramMatch[2] ?? ""
+      const indent = paramMatch[1]!.length
+      const key = paramMatch[2]!
+      const value = paramMatch[3] ?? ""
       i++
-      if (BLOCK_SCALAR_RE.test(value.trim())) {
-        const scalar = readBlockScalar(lines, i)
-        args[key] = scalar.value
+      const header = BLOCK_SCALAR_HEADER_RE.exec(value.trim())
+      if (header) {
+        const scalar = readBlockScalar(lines, i, indent)
+        args[key] = renderBlockScalar(
+          scalar.body,
+          scalar.trailingBlanks,
+          header[1] as "|" | ">",
+          (header[2] ?? "") as "" | "-" | "+",
+        )
         i = scalar.next
       } else {
         args[key] = value
       }
+      paramCount++
     }
-    // Confidence is a hair below the wrapped path (0.95): same tier, weaker
-    // framing. Parse mode stays `tier-1` - no new vocabulary, no new consumer.
-    calls.push({ name, arguments: args, parseMode: "tier-1", confidence: 0.9 })
+    if (paramCount > 0) {
+      // Confidence is a hair below the wrapped path (0.95): same tier, weaker
+      // framing. Parse mode stays `tier-1` - no new vocabulary, no new consumer.
+      calls.push({ name, arguments: args, parseMode: "tier-1", confidence: 0.9 })
+    }
   }
   return calls
 }
 
 /**
  * Consume the indented (and blank) lines of a YAML block scalar starting at
- * `start`, returning the dedented value and the index of the next line. Stops
- * at the first non-blank line at column 0 (e.g. the next param, or `---`).
+ * `start`. A non-blank line continues the scalar only while its indentation
+ * exceeds `baseIndent` (the header param's own indentation), so a following
+ * param at the block indent is NOT swallowed. Returns the raw body lines
+ * (indentation intact), the count of trailing blank lines (for `+` chomping),
+ * and the index of the next line.
  */
 function readBlockScalar(
   lines: readonly string[],
   start: number,
-): { readonly value: string; readonly next: number } {
+  baseIndent: number,
+): { readonly body: readonly string[]; readonly trailingBlanks: number; readonly next: number } {
   const collected: string[] = []
   let i = start
   while (i < lines.length) {
@@ -288,19 +325,42 @@ function readBlockScalar(
       i++
       continue
     }
-    if (/^[ \t]/.test(line)) {
+    const indent = line.length - line.trimStart().length
+    if (indent > baseIndent) {
       collected.push(line)
       i++
       continue
     }
     break
   }
-  while (collected.length > 0 && collected[collected.length - 1]!.trim() === "") collected.pop()
-  return { value: dedentLines(collected), next: i }
+  let end = collected.length
+  while (end > 0 && collected[end - 1]!.trim() === "") end--
+  return { body: collected.slice(0, end), trailingBlanks: collected.length - end, next: i }
+}
+
+/**
+ * Render a block scalar per its style + chomping:
+ *  - `|` literal keeps line breaks; `>` folds single breaks to spaces and blank
+ *    lines to paragraph breaks.
+ *  - chomping: `-` strips the trailing break, `+` keeps every trailing blank
+ *    line, the default clips to exactly one trailing break (YAML semantics).
+ */
+function renderBlockScalar(
+  body: readonly string[],
+  trailingBlanks: number,
+  style: "|" | ">",
+  chomp: "" | "-" | "+",
+): string {
+  if (body.length === 0) return chomp === "+" ? "\n".repeat(trailingBlanks) : ""
+  const dedented = dedentLines(body)
+  const joined = style === ">" ? foldLines(dedented) : dedented.join("\n")
+  if (joined === "") return ""
+  const breaks = chomp === "-" ? "" : chomp === "+" ? "\n".repeat(1 + trailingBlanks) : "\n"
+  return joined + breaks
 }
 
 /** Strip the common leading indentation from a block-scalar body. */
-function dedentLines(lines: readonly string[]): string {
+function dedentLines(lines: readonly string[]): string[] {
   let min = Number.POSITIVE_INFINITY
   for (const line of lines) {
     if (line.trim() === "") continue
@@ -308,5 +368,20 @@ function dedentLines(lines: readonly string[]): string {
     if (indent < min) min = indent
   }
   if (!Number.isFinite(min)) min = 0
-  return lines.map((line) => line.slice(Math.min(min, line.length))).join("\n")
+  return lines.map((line) => (line.trim() === "" ? "" : line.slice(min)))
+}
+
+/** Fold a `>` block-scalar body: single breaks to spaces, blank lines kept. */
+function foldLines(lines: readonly string[]): string {
+  let out = ""
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line === "") {
+      out += "\n"
+      continue
+    }
+    if (i > 0 && lines[i - 1] !== "") out += " "
+    out += line
+  }
+  return out
 }
