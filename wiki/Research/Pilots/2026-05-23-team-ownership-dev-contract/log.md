@@ -1310,3 +1310,11 @@ task: "Wave-4 close-capture escalations: (1) kernel honesty fix db7c5e985 (dispa
 result: completed (3 dispatches), confidence 0.9
 outcome: "accepted pending review: honesty RED-first pin + over-blocking guard + cut all green (reasoning 3105/0); temp RED (Expected 0/Received 0.5) -> GREEN with command-first precedence (runtime 1686/0, reasoning 3109/0). Program-wide consequence: every historical temp-0 capture was wire-wrong (era-labelled); substrate restored, harness re-run dispatched. Provider warden correctly BLOCKED on the out-of-authority runtime seam rather than crossing it - contract working as designed."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden + runtime-warden
+task: "Wave-4 verdict re-run at TRUE temp 0 (80bdc50dd) + temp fix round 1 (e8252af2: verification-retry third seam, changeset honesty, over-block intent pin)"
+result: completed, confidence 0.93
+outcome: "WAVE 4 VERIFIED: temp-0 substrate proven 9/9; honesty 0/5 fabricated (was 3/3); grounded S2 2/2 no over-block; detection/no-regression/tail-cost clean. Methodology: true-0 yields shape determinism (prior 'variance' was decoding temp). Temp threading now consistent at all THREE kernel seams (reasoning-think, reactive KernelInput, verification-retry); non-kernel strategies honestly scoped to GH #246. Residual filed for Wave 5: abstained output TEXT still ships success claims (verdict-level honest, content-level unscrubbed)."
+```
