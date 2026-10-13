@@ -70,25 +70,38 @@ function qwenFixture(
   };
 }
 
-/** Install a fetch mock serving the given /api/show payload; returns a restore fn. */
-function mockShowResponse(payload: unknown): () => void {
+/**
+ * Install a fetch mock serving the given /api/show payload. Returns the
+ * restore fn plus a live counter (asserting store hits require knowing
+ * whether the network was touched).
+ */
+function mockShowResponse(payload: unknown | (() => unknown)): {
+  restore: () => void
+  calls: () => number
+} {
   const originalFetch = globalThis.fetch;
   let fetchCount = 0;
   globalThis.fetch = mock(async () => {
     fetchCount++;
-    return new Response(JSON.stringify(payload), { status: 200 });
+    const body = typeof payload === "function" ? (payload as () => unknown)() : payload;
+    return new Response(JSON.stringify(body), { status: 200 });
   }) as unknown as typeof globalThis.fetch;
-  const restore = () => {
-    globalThis.fetch = originalFetch;
+  return {
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+    calls: () => fetchCount,
   };
-  return restore;
 }
 
 let storeDir: string;
+let storeDirRoot: string;
 
 beforeEach(() => {
-  // Every test gets a fresh temp dir so the file store starts empty.
-  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-cap-store-test-"));
+  // Private parent dir: `..`-escape assertions must look INSIDE this dir
+  // (worst case an escape writes here), never at the shared /tmp namespace.
+  storeDirRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ra-cap-store-"));
+  storeDir = path.join(storeDirRoot, "store");
   setCapabilityStoreDirForTesting(storeDir);
 });
 
@@ -97,12 +110,12 @@ afterEach(() => {
   _resetProbedRegistryForTesting();
   setCapabilityStore(null);
   setCapabilityStoreDirForTesting(null);
-  fs.rmSync(storeDir, { recursive: true, force: true });
+  fs.rmSync(storeDirRoot, { recursive: true, force: true });
 });
 
 describe("probe ladder — parameter_size / thinking / tool-template emission", () => {
   it("parses fractional parameter_size like '1.7B' into billions", async () => {
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "1.7B", ["completion", "tools", "thinking"]),
     );
     try {
@@ -122,7 +135,7 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
       ["120B", 120],
     ];
     for (const [size, expected] of cases) {
-      const restore = mockShowResponse(qwenFixture(TOOL_TEMPLATE, size, ["completion"]));
+      const { restore } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, size, ["completion"]));
       try {
         const cap = await probeOllamaCapability(`size-int-${expected}b:v1`, "http://localhost:11434");
         expect(cap!.parameterSizeBillions).toBe(expected);
@@ -133,7 +146,7 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
   }, 15_000);
 
   it("leaves parameterSizeBillions undefined for unparseable size strings", async () => {
-    const restore = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "unknown", ["completion"]));
+    const { restore } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "unknown", ["completion"]));
     try {
       const cap = await probeOllamaCapability("size-bad:v1", "http://localhost:11434");
       expect(cap!.parameterSizeBillions).toBeUndefined();
@@ -143,7 +156,7 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
   }, 15_000);
 
   it("detects tool-token emission from a tool-aware chat template", async () => {
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]),
     );
     try {
@@ -157,7 +170,7 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
   }, 15_000);
 
   it("detects NO tool-token emission from a plain template", async () => {
-    const restore = mockShowResponse(qwenFixture(NO_TOOL_TEMPLATE, "3.0B", ["completion"]));
+    const { restore } = mockShowResponse(qwenFixture(NO_TOOL_TEMPLATE, "3.0B", ["completion"]));
     try {
       const cap = await probeOllamaCapability("emit-no:v1", "http://localhost:11434");
       expect(cap!.toolTemplateEmitsTokens).toBe(false);
@@ -167,7 +180,7 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
   }, 15_000);
 
   it("leaves toolTemplateEmitsTokens undefined when /api/show returns no template", async () => {
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(undefined, "3.0B", ["completion", "tools"]),
     );
     try {
@@ -177,11 +190,51 @@ describe("probe ladder — parameter_size / thinking / tool-template emission", 
       restore();
     }
   }, 15_000);
+
+  it("detects function_call-era templates (W2a review fix 1: no stranding false)", async () => {
+    // Old ChatML/OpenAI-style tool rendering seen in converted GGUF templates:
+    // renders .FunctionCall + the literal "function_call" token but NO
+    // "tool_call" text. Must measure TRUE — a false here would strand a
+    // genuinely tool-capable model at strict-false (Review Focus #2 class).
+    const FUNCTION_CALL_TEMPLATE = [
+      "{{- range .Messages }}",
+      "{{- if .FunctionCall }}",
+      'function_call: {"name": {{.FunctionCall.Name}}, "arguments": {{.FunctionCall.Arguments}}}',
+      "{{- else }}",
+      "{{ .Content }}",
+      "{{- end }}",
+      "{{- end }}",
+    ].join("\n");
+    const { restore } = mockShowResponse(
+      qwenFixture(FUNCTION_CALL_TEMPLATE, "7.0B", ["completion", "tools"]),
+    );
+    try {
+      const cap = await probeOllamaCapability("function-call-era:v1", "http://localhost:11434");
+      expect(cap!.toolTemplateEmitsTokens).toBe(true);
+    } finally {
+      restore();
+    }
+
+    // Bare `.FunctionCall` access (no literal token text) must also measure true.
+    const { restore: restore2 } = mockShowResponse(
+      qwenFixture(
+        '{{- if ne .FunctionCall "" }}<tool>{{ .FunctionCall }}</tool>{{- end }}',
+        "7.0B",
+        ["completion", "tools"],
+      ),
+    );
+    try {
+      const cap = await probeOllamaCapability("fn-call-accessor:v1", "http://localhost:11434");
+      expect(cap!.toolTemplateEmitsTokens).toBe(true);
+    } finally {
+      restore2();
+    }
+  }, 15_000);
 });
 
 describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
   it("persists a probe result; a cold in-memory cache re-reads it from the store without hitting the network", async () => {
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "4.0B", ["completion", "tools", "thinking"]),
     );
     try {
@@ -195,7 +248,7 @@ describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
     // Simulate a fresh process: wipe the in-memory Map only — the store file
     // survives. The next probe call must be served from the STORE.
     _resetProbeCacheForTesting();
-    const restore2 = mockShowResponse(qwenFixture(NO_TOOL_TEMPLATE, "999B", []));
+    const { restore: restore2 } = mockShowResponse(qwenFixture(NO_TOOL_TEMPLATE, "999B", []));
     try {
       const second = await probeOllamaCapability("persist-me:v1", "http://localhost:11434");
       expect(second).not.toBeNull();
@@ -209,7 +262,7 @@ describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
   }, 15_000);
 
   it("store file decodes cleanly through the CapabilitySchema (no corrupt rows)", async () => {
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]),
     );
     try {
@@ -229,14 +282,14 @@ describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
     const saved: string[] = [];
     const builtin = getCapabilityStore();
     setCapabilityStore({
-      loadCapability: (provider: string, model: string) =>
-        builtin.loadCapability(provider, model),
-      saveCapability: (cap) => {
+      loadCapability: (provider: string, model: string, endpoint?: string) =>
+        builtin.loadCapability(provider, model, endpoint),
+      saveCapability: (cap, endpoint) => {
         saved.push(cap.model);
-        builtin.saveCapability(cap);
+        builtin.saveCapability(cap, endpoint);
       },
     });
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]),
     );
     try {
@@ -245,12 +298,14 @@ describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
       restore();
     }
     expect(saved).toEqual(["injected:v1"]);
-    expect(builtin.loadCapability("ollama", "injected:v1")).not.toBeNull();
+    expect(
+      builtin.loadCapability("ollama", "injected:v1", "http://localhost:11434"),
+    ).not.toBeNull();
   }, 15_000);
 
   it("a corrupt store row is ignored and re-probed (store never returns garbage)", async () => {
     // Seed a valid probe first.
-    const restore = mockShowResponse(
+    const { restore } = mockShowResponse(
       qwenFixture(TOOL_TEMPLATE, "2.0B", ["completion", "tools"]),
     );
     try {
@@ -264,12 +319,126 @@ describe("CalibrationStore write-through (deferred S2.4 persistence)", () => {
     for (const f of files) {
       fs.writeFileSync(path.join(storeDir, f), "{ not json !!");
     }
-    const restore2 = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "2.0B", ["completion", "tools"]));
+    const { restore: restore2 } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "2.0B", ["completion", "tools"]));
     try {
       const cap = await probeOllamaCapability("corrupt:v1", "http://localhost:11434");
       expect(cap).not.toBeNull(); // re-probed, not poisoned by the bad row
     } finally {
       restore2();
+    }
+  }, 15_000);
+});
+
+// ─── W2a review fix 2: store rows are baseUrl-scoped ─────────────────────────
+
+describe("capability store — baseUrl-scoped rows (W2a review fix 2)", () => {
+  it("two endpoints serving the same tag never cross-serve rows", async () => {
+    const fixtureA = qwenFixture(TOOL_TEMPLATE, "2.0B", ["completion", "tools"]);
+    const fixtureB = qwenFixture(TOOL_TEMPLATE, "4.0B", ["completion", "tools"]);
+    const { restore: restoreA } = mockShowResponse(fixtureA);
+    try {
+      await probeOllamaCapability("dual-endpoint:v1", "http://localhost:11434");
+    } finally {
+      restoreA();
+    }
+    // Cold in-memory Map; second endpoint must NOT be served row A (it would
+    // have the WRONG quantization-derived size if it were).
+    _resetProbeCacheForTesting();
+    const { restore: restoreB } = mockShowResponse(fixtureB);
+    try {
+      const capB = await probeOllamaCapability("dual-endpoint:v1", "http://otherbox:11435");
+      expect(capB!.parameterSizeBillions).toBe(4); // endpoint B's own probe
+    } finally {
+      restoreB();
+    }
+    // And endpoint A still gets its OWN persisted row back without the network.
+    _resetProbeCacheForTesting();
+    const { restore: restoreGuard, calls } = mockShowResponse(fixtureB);
+    try {
+      const capA = await probeOllamaCapability("dual-endpoint:v1", "http://localhost:11434");
+      expect(calls()).toBe(0); // served from A's endpoint-scoped store row
+      expect(capA!.parameterSizeBillions).toBe(2);
+    } finally {
+      restoreGuard();
+    }
+  }, 15_000);
+
+  it("legacy (endpoint-less) rows are treated as a miss and self-heal on next probe", async () => {
+    // Plant a row at the OLD key format (provider-model, no endpoint suffix).
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(storeDir, "ollama-legacy-tag-v1.json"),
+      JSON.stringify(qwenFixture(NO_TOOL_TEMPLATE, "999B", [])), // decoy values
+      "utf-8",
+    );
+    const { restore } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "1.7B", ["completion", "tools"]));
+    try {
+      const cap = await probeOllamaCapability("legacy-tag:v1", "http://localhost:11434");
+      // The decoy row must NOT be served — fresh probe wins.
+      expect(cap!.parameterSizeBillions).toBeCloseTo(1.7, 5);
+    } finally {
+      restore();
+    }
+    // New-format file exists; old-format row left orphaned (harmless).
+    const files = fs.readdirSync(storeDir);
+    expect(files.some((f) => f.startsWith("ollama-legacy-tag-v1-"))).toBe(true);
+  }, 15_000);
+
+  it("atomic write leaves no temp files behind (minor: torn-write prevention)", async () => {
+    const { restore } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]));
+    try {
+      await probeOllamaCapability("atomic:v1", "http://localhost:11434");
+    } finally {
+      restore();
+    }
+    const files = fs.readdirSync(storeDir);
+    expect(files.filter((f) => f.endsWith(".tmp") || f.includes(".tmp-")).length).toBe(0);
+    expect(files.filter((f) => f.endsWith(".json")).length).toBe(1);
+  }, 15_000);
+
+  it("model names cannot escape the store directory via / or .. (minor: key hardening)", async () => {
+    const escapee = "evil/../../pwned:v1";
+    const { restore } = mockShowResponse(qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]));
+    try {
+      const cap = await probeOllamaCapability(escapee, "http://localhost:11434");
+      expect(cap).not.toBeNull();
+    } finally {
+      restore();
+    }
+    // The escape attempt must have landed as ONE sanitized file inside the
+    // store dir. The private parent (storeDirRoot) must be clean — an old
+    // unsanitized implementation resolved `evil/../../pwned-v1.json` to
+    // `../pwned-v1.json` relative to it and wrote OUTSIDE the store dir.
+    const files = fs.readdirSync(storeDir);
+    expect(files.length).toBe(1);
+    expect(files[0]).toMatch(/^[a-z0-9-]+\.json$/);
+    const siblings = fs.readdirSync(storeDirRoot).filter((f) => f !== "store");
+    expect(siblings).toEqual([]);
+  }, 15_000);
+});
+
+// ─── W2a review fix 3: test-disable seam ─────────────────────────────────────
+
+describe("capability store — REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE seam", () => {
+  it("with the env seam set, the probe reads nothing and writes nothing (in-memory only)", async () => {
+    process.env.REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE = "1";
+    try {
+      const fixture = qwenFixture(TOOL_TEMPLATE, "8.0B", ["completion", "tools"]);
+      const { restore, calls } = mockShowResponse(fixture);
+      try {
+        await probeOllamaCapability("disabled-write:v1", "http://localhost:11434");
+        // Second call with a COLD memory cache must hit the network again —
+        // proof that nothing was persisted to read back.
+        _resetProbeCacheForTesting();
+        await probeOllamaCapability("disabled-write:v1", "http://localhost:11434");
+      } finally {
+        restore();
+      }
+      expect(calls()).toBe(2);
+      // No store directory was ever created (writes skipped entirely).
+      expect(fs.existsSync(storeDir) ? fs.readdirSync(storeDir).length : 0).toBe(0);
+    } finally {
+      delete process.env.REACTIVE_AGENTS_CAPABILITY_STORE_DISABLE;
     }
   }, 15_000);
 });

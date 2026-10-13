@@ -78,6 +78,8 @@ const TOOL_TEMPLATE_MARKERS: readonly string[] = [
   "tool_call",
   ".toolcalls",
   ".tool_calls",
+  "function_call",
+  ".functioncall",
   "function.name",
   '"tool"',
   "'tool'",
@@ -194,8 +196,11 @@ export async function probeOllamaCapability(
 
   // Store-first for cross-process persistence: a prior run's probe result
   // (or an injected CalibrationStore row) serves without touching network.
+  // Rows are endpoint-scoped (W2a review fix 2) — the same tag on two
+  // servers never cross-serves; baseUrl-less legacy rows are a miss and
+  // self-heal on the next successful probe.
   const store = getCapabilityStore();
-  const fromStore = store.loadCapability("ollama", model);
+  const fromStore = store.loadCapability("ollama", model, baseUrl);
   if (fromStore) {
     probeCache.set(key, fromStore);
     return fromStore;
@@ -218,8 +223,9 @@ export async function probeOllamaCapability(
     const data = (await res.json()) as Parameters<typeof showResponseToCapability>[1];
     const cap = showResponseToCapability(model, data);
     probeCache.set(key, cap);
-    // S2.4 write-through — persist per model so future processes skip the probe.
-    store.saveCapability(cap);
+    // S2.4 write-through — persist per model + endpoint so future processes
+    // skip the probe.
+    store.saveCapability(cap, baseUrl);
     return cap;
   } catch {
     return null;

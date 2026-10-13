@@ -101,10 +101,21 @@ function warnFallbackOnce(provider: string, model: string): void {
  * The resolver only ever calls `loadCapability`. `saveCapability` is on the
  * interface so callers (builder/probe code) can write through using the
  * same cache reference.
+ *
+ * `endpoint` (W2a review fix 2, 2026-10-13): optional server-identity scope.
+ * Probe code folds the live baseUrl into the row key so two servers serving
+ * the same tag with different quantizations can never cross-serve rows.
+ * Two-arg implementations (e.g. CalibrationStore, whose schema has no
+ * endpoint column) remain structurally assignable — they simply ignore the
+ * scope, preserving their existing (provider, model) semantics.
  */
 export interface CapabilityCache {
-  readonly loadCapability: (provider: string, model: string) => Capability | null;
-  readonly saveCapability: (cap: Capability) => void;
+  readonly loadCapability: (
+    provider: string,
+    model: string,
+    endpoint?: string,
+  ) => Capability | null;
+  readonly saveCapability: (cap: Capability, endpoint?: string) => void;
 }
 
 /**

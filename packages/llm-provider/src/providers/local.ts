@@ -1320,8 +1320,11 @@ export const LocalProviderLive = Layer.effect(
                     const cap =
                         fromResolver.source === 'static-table' ||
                         fromResolver.source === 'fallback'
-                            ? (getCapabilityStore().loadCapability('ollama', defaultModel) ??
-                              fromResolver)
+                            ? (getCapabilityStore().loadCapability(
+                              'ollama',
+                              defaultModel,
+                              endpoint,
+                          ) ?? fromResolver)
                             : fromResolver
                     const claim = deriveSupportsToolCalling(cap)
                     return {
