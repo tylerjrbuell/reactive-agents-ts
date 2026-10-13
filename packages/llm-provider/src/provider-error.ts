@@ -41,9 +41,21 @@ const MODEL_NOT_FOUND = /model\s+['"]?(\S+?)['"]?\s+not found/i;
 /**
  * Node/undici network faults that mean "the request never reached a verdict —
  * retry it." These arrive as an error `code` string and/or a message fragment.
+ *
+ * EOF tokens (user report, trace 01M4V5GH4H43KJDCA3EC0JGVZW, 2026-10-13):
+ * Ollama's Go transport surfaces a server-side stream drop (model load/evict
+ * race under box contention — killed a live qwen3.5 run at iteration 0 and
+ * 6/8 phi4 attempts in the W3c capture window) as a bare `EOF` read error —
+ * `unexpected EOF` when the JSON/stream decoder loses the body mid-read.
+ * Both mean exactly "the response ended before any verdict" — the same
+ * contract as the ECONNRESET/socket-hang-up family, so they belong in this
+ * vocabulary and nothing else does. Word-bounded so identifiers merely
+ * containing the letters (e.g. `xEOFy`) do not match. `context canceled` /
+ * `aborted` are deliberately EXCLUDED: those signal user-initiated
+ * termination and must never auto-retry.
  */
 const NETWORK_FAULT =
-  /\b(ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|EPIPE|EHOSTUNREACH|ECONNABORTED|socket hang up|network error|fetch failed|premature close)\b/i;
+  /\b(ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|EPIPE|EHOSTUNREACH|ECONNABORTED|socket hang up|network error|fetch failed|premature close|unexpected EOF|EOF)\b/i;
 
 const statusOf = (e: RawProviderError): number | undefined => {
   const s = e.status ?? e.status_code ?? e.statusCode ?? e.code;
