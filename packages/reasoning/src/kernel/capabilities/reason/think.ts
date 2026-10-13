@@ -979,7 +979,17 @@ export function handleThinking(
         ];
     const llmTools = wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
-      description: ts.description,
+      // W2d 2.4 (FC payload honesty): on compact profiles
+      // ("names-only"/"names-and-types" — the local tier) the profile has
+      // ALREADY declared this model cannot afford description prose, yet the
+      // wire `tools:` array kept shipping it — measured ~4,000 corrected
+      // tokens ≈49% of an 8K window, ~80% of that descriptions. The wire
+      // array now honors the SAME semantics as the prompt-text stripper
+      // above (description cleared, not a second stripper): name, types,
+      // required list and enum values are KEPT; description strings are
+      // dropped. Full-detail profiles (mid/large/frontier) are
+      // byte-unchanged — big models keep tool fidelity.
+      description: compactProfile ? "" : ts.description,
       inputSchema: {
         type: "object" as const,
         properties: Object.fromEntries(
@@ -987,7 +997,7 @@ export function handleThinking(
             p.name,
             {
               type: p.type ?? "string",
-              description: p.description,
+              ...(compactProfile ? {} : { description: p.description }),
               // Gemini requires `items` on every array-type parameter
               ...(p.type === "array" ? { items: p.items ?? { type: "string" } } : {}),
               ...(p.enum ? { enum: p.enum } : {}),

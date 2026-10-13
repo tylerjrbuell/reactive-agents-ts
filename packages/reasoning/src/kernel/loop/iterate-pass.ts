@@ -1514,6 +1514,11 @@ export function runIterationPass(
                 currentInput.task ?? "",
                 available,
                 triedStrategies,
+                // W2d 2.6 — the runtime already threads calibration onto the
+                // kernel input; low/skip reliability must skip this
+                // round-trip (documented behavior, previously unenforced —
+                // the live post-w1 S1 traces prove it fired on local arms).
+                { classifierReliability: currentInput.calibration?.classifierReliability },
               );
             }
 
