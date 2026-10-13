@@ -1134,3 +1134,11 @@ task: "Wave 2b (plan 2.1): registry-first tiering in resolveProfileWithWindow; o
 result: completed, confidence 0.93
 outcome: "accepted: verifier green (matrix 17/17 re-run by parent). Review Approved 0C — carve-out judged acceptable (case-safe, exact-keyed registry, pinned arm) with the underlying stub-row data bug escalated correctly (-> GH #239, parent-filed); both modified existing test files verified UPDATE-TO-TRUTH (net coverage up); fail-safe registry-miss semantics confirmed (fallback source never poses as verdict, no throw path). Infra discovery: runtime suite tests reasoning SRC via tsconfig paths (dist irrelevant to bun test)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "W2c (plan 2.3): tokenizer-aware dense-JSON correction in estimateTokenCount, measured per-family factors beside calibrations, registry tokenizerFamily gets first consumer"
+result: completed, confidence 0.85
+outcome: "1 work commit (f8fae1d67). Measurement path = committed traces (0.97-1.02 llama traffic; FC-residual 1.245) + sanctioned live /api/chat probe (dense 1.032-1.157, prose 0.767-0.892 over-count). Plan seed 1.35 DISPROVED (probe-3 folklore, circular provenance); shipped llama dense factor 1.25, prose/mixed untouched (unsafe-direction guard), unknown=>1.0 zero behavior change. RED-first weak point disclosed (first RED was parse/module failure, not assertion-level). llm-provider 502/0, reasoning/context 95/0, runtime 1673/0, typecheck 10/10. think.ts:1034 + rate-limiter + prompt-manager flagged-not-threaded (census in w2c-report.md); W2e inherits the corrected helper. Concern: real overflow driver is the OMITTED FC-schema input, not the char ratio — 2.5 preflight must add the schema term."
+```
