@@ -1246,3 +1246,11 @@ task: "W3c round 2 (live user-facing bug): text-parse taught delimiter `<tool_ca
 result: completed, confidence 0.9
 outcome: "Trigger evidence: journal qwen35.go:115 + qwen3coder.go:87 'tool call parsing failed' error=EOF on the text-parse run; binary strings show <tool_call> x15 / </tool_call> x14, <tool_use> x0. Chose <tool_use>: absent from both parsers' vocabulary AND stays a lone <name> tag so reasoning readTaughtCallShape (GH #243 pin) is untouched - no reasoning source edit. Additive: regex accepts tool_use|tool_call; bare/JSON/scalar paths unchanged. RED 3 -> GREEN tools/tests/drivers 72/0; reasoning kernel+strategies 1285/0; coder fixtures 10/10; builder scan shows all Ollama trigger literals absent (only benign `<tool` substring remains, prefix-match ruled out). tools typecheck/build/eslint clean. File-ready: stale comment driver-instructions.test.ts:3 (kernel-warden)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden + tools-warden
+task: "Live user-bug fix chain: qwen3.5 scratch.ts EOF at iter 0 - (a) provider: NETWORK_FAULT += EOF (pre-first-emission retry engages) + capability-store CURRENT_PROBE_VERSION gate (stale probe rows self-heal); (b) tools: taught delimiter <tool_call> -> <tool_use> (Ollama parser trigger collision; binary-strings evidence 15/14 vs 0/0), legacy form still accepted"
+result: completed, confidence 0.9
+outcome: "accepted pending delimiter re-review; END-TO-END VERIFIED by controller live: scratch.ts success (4 steps, 6.4s, native route 12 schemas), ollama journal parser-failure count 0 (was universal), tool-sourced final answer. Provider pair reviewed APPROVED (minors ledged: Tier-0 cache seam ungated-latent, future-version demotion, EOF-vs-model-name edge, 400-arm comment). New root-cause law ledged for debrief: version-gate persisted measurement data."
+```
