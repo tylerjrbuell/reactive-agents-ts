@@ -649,7 +649,7 @@ Includes per-phase timing, tool-call summary, cost estimate, and smart alerts, a
 ## CLI (`rax`)
 
 ```bash
-rax init my-project --template full              # Scaffold a project
+rax init my-project --template with-tools        # Scaffold a project
 rax create agent researcher --recipe researcher   # Generate an agent from recipe
 rax create agent my-agent --interactive           # Interactive scaffolding (readline prompts)
 rax demo                                           # Run the live demo with a detected provider, or recorded output

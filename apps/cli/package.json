@@ -38,6 +38,7 @@
     "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
     "@reactive-agents/diagnose": "workspace:*",
+    "create-reactive-agent": "workspace:*",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"

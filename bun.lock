@@ -49,6 +49,7 @@
         "@reactive-agents/trace": "workspace:*",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
+        "create-reactive-agent": "workspace:*",
         "effect": "^3.10.0",
         "ora": "^8.2.0",
       },
@@ -197,16 +198,16 @@
       "name": "@reactive-agents/benchmarks",
       "version": "0.17.0",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/cost": "workspace:*",
-        "@reactive-agents/judge-server": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/reasoning": "workspace:*",
-        "@reactive-agents/replay": "workspace:*",
-        "@reactive-agents/runtime": "workspace:*",
-        "@reactive-agents/runtime-shim": "workspace:*",
-        "@reactive-agents/tools": "workspace:*",
-        "@reactive-agents/trace": "workspace:*",
+        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/cost": "0.17.0",
+        "@reactive-agents/judge-server": "0.17.0",
+        "@reactive-agents/llm-provider": "0.17.0",
+        "@reactive-agents/reasoning": "0.17.0",
+        "@reactive-agents/replay": "0.17.0",
+        "@reactive-agents/runtime": "0.17.0",
+        "@reactive-agents/runtime-shim": "0.17.0",
+        "@reactive-agents/tools": "0.17.0",
+        "@reactive-agents/trace": "0.17.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -305,8 +306,8 @@
         "rax-diagnose": "./dist/cli.js",
       },
       "dependencies": {
-        "@reactive-agents/replay": "0.16.0",
-        "@reactive-agents/trace": "0.16.0",
+        "@reactive-agents/replay": "0.17.0",
+        "@reactive-agents/trace": "0.17.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -417,11 +418,11 @@
       "name": "@reactive-agents/judge-server",
       "version": "0.17.0",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
-        "@reactive-agents/eval": "workspace:*",
-        "@reactive-agents/judgment": "workspace:*",
-        "@reactive-agents/llm-provider": "workspace:*",
-        "@reactive-agents/runtime-shim": "workspace:*",
+        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/eval": "0.17.0",
+        "@reactive-agents/judgment": "0.17.0",
+        "@reactive-agents/llm-provider": "0.17.0",
+        "@reactive-agents/runtime-shim": "0.17.0",
         "effect": "*",
       },
       "peerDependencies": {
@@ -649,10 +650,10 @@
       "name": "@reactive-agents/replay",
       "version": "0.17.0",
       "dependencies": {
-        "@reactive-agents/core": "0.16.0",
-        "@reactive-agents/llm-provider": "0.16.0",
-        "@reactive-agents/tools": "0.16.0",
-        "@reactive-agents/trace": "0.16.0",
+        "@reactive-agents/core": "0.17.0",
+        "@reactive-agents/llm-provider": "0.17.0",
+        "@reactive-agents/tools": "0.17.0",
+        "@reactive-agents/trace": "0.17.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -4373,11 +4374,11 @@
 
     "@reactive-agents/advocate/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/benchmarks/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+    "@reactive-agents/benchmarks/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "@reactive-agents/channels/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
-    "@reactive-agents/cli/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+    "@reactive-agents/cli/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "@reactive-agents/compose/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
@@ -4387,7 +4388,7 @@
 
     "@reactive-agents/cost/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
-    "@reactive-agents/diagnose/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+    "@reactive-agents/diagnose/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "@reactive-agents/eval/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
@@ -4423,7 +4424,7 @@
 
     "@reactive-agents/reasoning/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
-    "@reactive-agents/replay/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+    "@reactive-agents/replay/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "@reactive-agents/runtime/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
@@ -4545,7 +4546,7 @@
 
     "convict/yargs-parser": ["yargs-parser@20.2.9", "", {}, "sha512-y11nGElTIV+CT3Zv9t7VKl+Q3hTQoT9a1Qzezhhl6Rp21gJ/IVTW7Z3y9EWXhuUBC2Shnf+DX0antecpAwSP8w=="],
 
-    "create-reactive-agent/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+    "create-reactive-agent/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
