@@ -1110,6 +1110,15 @@ export function handleThinking(
 
     // Accumulate content + emit text deltas via FiberRef callback
     let accumulatedContent = "";
+    // W1.3 thinking-channel consumption: accumulate the provider's internal
+    // reasoning (StreamEvent `thinking_delta` chunks, or the full accumulated
+    // text reported once on `content_complete.thinking`). Presence is NOT
+    // consent (W1.2 ruling): on thinking-capable models this channel flows
+    // even with no thinking config, so it is always-possible input here.
+    // Zero new parsing — the value is handed untouched to
+    // `thoughtResponse.thinking`, where the existing providerThinking /
+    // rescueFromThinking / lastThinking machinery below consumes it.
+    let accumulatedThinking = "";
     let accumulatedUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -1131,8 +1140,20 @@ export function handleThinking(
           if (textDeltaCb) {
             yield* textDeltaCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reason/think.ts:342", tag: errorTag(err) })));
           }
+        } else if (event.type === "thinking_delta") {
+          // W1.3 — internal-reasoning chunk (qwen3 `thinking` stream under
+          // Ollama, Anthropic extended-thinking blocks). Accumulated verbatim;
+          // never forwarded to the user-facing textDeltaCb.
+          accumulatedThinking += event.thinking;
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;
+          // Providers that report the full accumulated thinking once here
+          // (streaming symmetry with CompletionResponse.thinking) overwrite
+          // the delta-sum — they are the authoritative copy. Absent → keep
+          // whatever the deltas accumulated.
+          if (event.thinking !== undefined && event.thinking.length > 0) {
+            accumulatedThinking = event.thinking;
+          }
           // Extract stop reason from content_complete event if present
           if ("stopReason" in event && typeof (event as Record<string, unknown>).stopReason === "string") {
             accumulatedStopReason = (event as Record<string, unknown>).stopReason as string;
@@ -1251,6 +1272,12 @@ export function handleThinking(
       stopReason: accumulatedStopReason as StopReason,
       usage: accumulatedUsage,
       model: input.modelId ?? "unknown",
+      // W1.3 — mirror CompletionResponse.thinking (llm-provider types.ts): the
+      // provider's internal reasoning, when the model produced any. Set ONLY
+      // when non-empty so the no-thinking object shape is byte-identical to
+      // HEAD (arm-2 regression pin). Consumed below by the pre-existing
+      // providerThinking → rescueFromThinking → lastThinking machinery.
+      ...(accumulatedThinking.length > 0 ? { thinking: accumulatedThinking } : {}),
     };
 
     // Increment LLM call counter
@@ -1326,7 +1353,7 @@ export function handleThinking(
 
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
-    const providerThinking = (thoughtResponse as Record<string, unknown>).thinking as string | undefined;
+    const providerThinking = thoughtResponse.thinking;
     const thinking = extractedThinking || providerThinking || null;
     let thought = cleanContent || providerThinking || rawThought;
     // Thinking models (e.g. cogito) may put the full answer in the thinking field

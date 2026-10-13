@@ -107,6 +107,13 @@ type PartialCompletion = {
   readonly resolvedParams?: {
     readonly contextWindow?: number;
   };
+  /**
+   * W1.4 — provider internal reasoning for this exchange (mirrors
+   * CompletionResponse.thinking on the complete() path; accumulated from
+   * thinking_delta / content_complete.thinking on the stream path). Carried
+   * to `emitLLMExchange`, which caps it to a preview before it hits the trace.
+   */
+  readonly thinking?: string;
 };
 
 function emitForRequest(
@@ -198,6 +205,13 @@ function emitForRequestWith(
         : {}),
       costUsd: fullResponse?.usage?.estimatedCost,
       durationMs,
+      // W1.4 forensics: raw accumulated reasoning handed to emitLLMExchange,
+      // which derives the capped forensics fields — the full text NEVER
+      // rides onto the trace payload. Absent stays absent (byte-identical
+      // exchanges on non-thinking models).
+      ...(typeof fullResponse?.thinking === "string" && fullResponse.thinking.length > 0
+        ? { thinking: fullResponse.thinking }
+        : {}),
     },
   }).pipe(Effect.zipRight(contextPressure));
 }
@@ -378,6 +392,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               usage?: PartialCompletion["usage"];
               resolvedParams?: PartialCompletion["resolvedParams"];
               stopReason?: StopReason;
+              thinking?: string;
             }>({ content: "", toolCalls: [] });
             const innerStream = yield* inner.stream(request);
             return innerStream.pipe(
@@ -386,6 +401,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   switch (event.type) {
                     case "text_delta":
                       return { ...s, content: s.content + event.text };
+                    case "thinking_delta":
+                      // W1.4 forensics: accumulate the internal-reasoning
+                      // channel alongside the visible text. Emitted only when
+                      // the provider's thinking-capability seam is on —
+                      // presence is data, never consent (W1.2 ruling).
+                      return { ...s, thinking: (s.thinking ?? "") + event.thinking };
                     case "content_complete": {
                       // Prefer the provider's authoritative accumulated text
                       // when it arrives — text_delta sums may diverge for
@@ -396,6 +417,13 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                       return {
                         ...s,
                         content: event.content,
+                        // Streaming symmetry with CompletionResponse.thinking:
+                        // when the provider reports the full accumulated
+                        // reasoning here, it is authoritative over the
+                        // delta-sum (same contract as think.ts's accumulator).
+                        ...(event.thinking !== undefined && event.thinking.length > 0
+                          ? { thinking: event.thinking }
+                          : {}),
                         ...(event.stopReason !== undefined && s.stopReason === undefined
                           ? { stopReason: event.stopReason }
                           : {}),
@@ -494,6 +522,13 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                       toolCalls,
                       usage: s.usage,
                       ...(s.resolvedParams ? { resolvedParams: s.resolvedParams } : {}),
+                      // W1.4 forensics: hand the accumulated reasoning to the
+                      // exchange emitter, which caps it to a preview. Only
+                      // when non-empty — no-thinking streams keep the exact
+                      // HEAD payload shape.
+                      ...(s.thinking !== undefined && s.thinking.length > 0
+                        ? { thinking: s.thinking }
+                        : {}),
                     },
                     ambientTaskId,
                   );

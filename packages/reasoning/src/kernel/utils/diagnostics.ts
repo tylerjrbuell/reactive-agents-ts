@@ -548,6 +548,12 @@ export function emitLLMExchange(args: {
     readonly cacheReadTokensIn?: number;
     readonly costUsd?: number;
     readonly durationMs?: number;
+    /**
+     * W1.4 forensics input: the provider's RAW accumulated reasoning for this
+     * exchange. NEVER published as-is — `emitLLMExchange` derives the capped
+     * `thinkingChars` / `thinkingPreview` pair below and drops this string.
+     */
+    readonly thinking?: string;
   };
 }): Effect.Effect<void, never> {
   return Effect.gen(function* () {
@@ -561,6 +567,45 @@ export function emitLLMExchange(args: {
     });
     const respTrunc = truncate(args.response.content, RESPONSE_MAX);
 
+    // W1.4 forensics — derive the capped thinking fields onto the published
+    // exchange (the full reasoning text NEVER rides onto the trace payload).
+    // The cap is the EXISTING trace-budgeting constant PREVIEW_MAX (top of
+    // this file) via the same preview() helper every other exchange preview
+    // uses. Conditional spread: absent/empty thinking keeps the exact HEAD
+    // payload shape (old exchanges byte-identical; old traces still load).
+    const exchangeResponse = {
+      content: respTrunc.text ?? "",
+      ...(respTrunc.truncated ? { truncated: true } : {}),
+      toolCalls: args.response.toolCalls,
+      stopReason: args.response.stopReason,
+      tokensIn: args.response.tokensIn,
+      tokensOut: args.response.tokensOut,
+      ...(typeof args.response.cacheCreationTokensIn === "number"
+        ? { cacheCreationTokensIn: args.response.cacheCreationTokensIn }
+        : {}),
+      ...(typeof args.response.cacheReadTokensIn === "number"
+        ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
+        : {}),
+      costUsd: args.response.costUsd,
+      durationMs: args.response.durationMs,
+      ...(typeof args.response.thinking === "string" && args.response.thinking.length > 0
+        ? {
+            thinkingChars: args.response.thinking.length,
+            thinkingPreview: preview(args.response.thinking),
+          }
+        : {}),
+    };
+
+    // Core's `LLMExchangeEmitted` transit type does not (yet) declare the two
+    // W1.4 forensics fields — the canonical recording schema does
+    // (trace/src/events.ts LLMExchangeEvent.response), and the trace bridge
+    // (`normalize.ts` toTraceEvent) copies `response` VERBATIM, so the fields
+    // ride end-to-end without any core edit. Passing the named local above
+    // (non-fresh, all REQUIRED target props present) keeps TypeScript's
+    // structural typing happy without widening core. Recommended follow-up
+    // for the parent: a 2-line additive-optional declaration in
+    // packages/core/src/services/event-bus.ts:LLMExchangeEmitted to make the
+    // transit type explicit (out of this dispatch's authority).
     yield* busOpt.value
       .publish({
         _tag: "LLMExchangeEmitted",
@@ -580,22 +625,7 @@ export function emitLLMExchange(args: {
         maxTokens: args.maxTokens,
         ...(args.promptPrefixHash ? { promptPrefixHash: args.promptPrefixHash } : {}),
         ...(args.toolSurfaceHash ? { toolSurfaceHash: args.toolSurfaceHash } : {}),
-        response: {
-          content: respTrunc.text ?? "",
-          ...(respTrunc.truncated ? { truncated: true } : {}),
-          toolCalls: args.response.toolCalls,
-          stopReason: args.response.stopReason,
-          tokensIn: args.response.tokensIn,
-          tokensOut: args.response.tokensOut,
-          ...(typeof args.response.cacheCreationTokensIn === "number"
-            ? { cacheCreationTokensIn: args.response.cacheCreationTokensIn }
-            : {}),
-          ...(typeof args.response.cacheReadTokensIn === "number"
-            ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
-            : {}),
-          costUsd: args.response.costUsd,
-          durationMs: args.response.durationMs,
-        },
+        response: exchangeResponse,
         timestamp: Date.now(),
       })
       .pipe(
