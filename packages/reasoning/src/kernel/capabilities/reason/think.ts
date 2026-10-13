@@ -13,8 +13,8 @@
 import { Effect, Stream, FiberRef, Either, Ref, Option } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
-import { LLMService, selectAdapter, estimateTokenCount } from "@reactive-agents/llm-provider";
-import { gatewayStream } from "../../llm-gateway.js";
+import { LLMService, selectAdapter, estimateTokenCount, resolveCapability } from "@reactive-agents/llm-provider";
+import { gatewayStream, resolveOutputBudget, type LlmCallIntent } from "../../llm-gateway.js";
 import { downshiftBudgetBand } from "../../assessment/pace-actions.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
@@ -24,7 +24,7 @@ import {
 } from "../attend/context-utils.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
-import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
@@ -76,6 +76,7 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { authorityOf } from "../decide/authority.js";
+import { preflightHeadTruncation } from "./head-truncation-guard.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
@@ -1027,6 +1028,88 @@ export function handleThinking(
       state.meta.assessment,
     );
 
+    // ── W2e head-truncation guard (plan 2.5) ────────────────────────────────
+    // Deterministic pre-request preflight: corrected prompt tokens (system +
+    // history + the schema term — fed for the first time here) + the gateway's
+    // own output budget, against the model's num_ctx ceiling. On overflow the
+    // ladder shrinks TOOL SURFACE first (required + classifier-relevant
+    // protected), then HISTORY oldest-first. The system-prompt HEAD is never
+    // the sacrifice: Ollama head-truncates silently when the real prompt
+    // overflows (the chars/4 undercount + never-estimated tools array made
+    // every gate read green while the agent ran without its identity). Fires
+    // only when a window ceiling is resolvable (profile.maxTokens, bound to
+    // recommendedNumCtx by resolveProfileWithWindow/applyCapabilityMaxTokens);
+    // identity-preserving no-op on fit. Pure arithmetic — no LLM call.
+    const thinkIntent: LlmCallIntent = {
+      purpose: "think",
+      tier: profile.tier,
+      thinkingModel: profile.thinkingModel === true,
+      ...(economizeBand ? { paceBand: economizeBand } : {}),
+      ...(state.maxOutputTokensOverride !== undefined
+        ? { budgetTokens: state.maxOutputTokensOverride }
+        : {}),
+    };
+    // Schema term reflects ONLY what actually ships: text-parse mode sends no
+    // `tools:` param at all, so charging it would over-fire on a phantom cost.
+    const shippedWireTools =
+      context.toolCallingDriver.mode !== "text-parse" ? llmTools : [];
+    // Fires ONLY on the provider whose wire actually enforces num_ctx by
+    // head-truncating (Ollama/local.ts resolveOllamaNumCtx): cloud providers
+    // take no numCtx param and reject/handle long prompts server-side, and
+    // nominal capability rows (fallback 2048 for unrecognized/test models)
+    // would otherwise starve surfaces that never needed the window. Same
+    // provider-scoping rationale as the demand-num_ctx policy below
+    // (D-2026-07-30-I: `tier: "local"` is the generic fallback and the test
+    // stub's row — tier alone would misfire here too).
+    const guardWire =
+      input.providerName === "ollama" && profile.maxTokens !== undefined
+        ? yield* preflightHeadTruncation({
+            systemPrompt: systemPromptWithDriver,
+            messages: messagesForRequest,
+            wireTools: shippedWireTools,
+            // The reserve is the gateway's OWN arithmetic for this exact
+            // intent — one definition of the budget, no drift between the
+            // guard and what gatewayStream will allocate.
+            outputBudget: resolveOutputBudget(thinkIntent) ?? 0,
+            numCtx: profile.maxTokens,
+            tokenizerFamily: resolveCapability(input.providerName ?? "", input.modelId ?? "").tokenizerFamily,
+            requiredTools: input.requiredTools ?? [],
+            relevantTools: input.relevantTools ?? [],
+          })
+        : null;
+    const wireMessages = guardWire?.messages ?? messagesForRequest;
+    const wireTools = guardWire?.wireTools ?? shippedWireTools;
+    if (guardWire !== null && guardWire.fired) {
+      const guardMessage =
+        `⚠️ head-truncation-guard: corrected prompt (${guardWire.correctedTokensBefore} tok) ` +
+        `+ output budget exceeded num_ctx ${profile.maxTokens}; shrank tool surface ` +
+        `(dropped ${guardWire.droppedToolNames.length > 0 ? guardWire.droppedToolNames.join(", ") : "none"})` +
+        ` then history (${guardWire.droppedMessageCount} oldest message(s)) to ` +
+        `${guardWire.correctedTokensAfter} tok. System prompt head untouched` +
+        `${guardWire.stillOverflowing ? " — STILL OVERFLOWS after both ladders; provider-side truncation risk remains" : ""}.`;
+      // The step is the LEDGER fact: step-projection maps harness_signal
+      // steps to the existing `harness-signal` kind through growRunLedger
+      // at the pass boundary (no new kinds — wire-or-delete honored by reuse).
+      state = transitionState(state, {
+        steps: [...state.steps, makeStep("harness_signal", guardMessage)],
+      });
+      yield* emitHarnessSignalInjected({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        signalKind: "other",
+        origin: "head-truncation-guard",
+        content: guardMessage,
+        metadata: {
+          correctedTokensBefore: guardWire.correctedTokensBefore,
+          correctedTokensAfter: guardWire.correctedTokensAfter,
+          numCtx: profile.maxTokens,
+          droppedToolNames: guardWire.droppedToolNames,
+          droppedMessageCount: guardWire.droppedMessageCount,
+          stillOverflowing: guardWire.stillOverflowing,
+        },
+      });
+    }
+
     // D-2026-07-30-I: demand-driven num_ctx (opt-in). Only the local Ollama
     // provider reads request.numCtx (local.ts resolveOllamaNumCtx — request
     // wins over capability/config defaults), so this is a no-op elsewhere.
@@ -1043,7 +1126,7 @@ export function handleThinking(
         ? nextNumCtx(
             yield* estimateTokenCount([
               { role: "system" as const, content: systemPromptWithDriver },
-              ...messagesForRequest,
+              ...wireMessages,
             ]),
             2000,
             state.meta.numCtxHighWater,
@@ -1056,16 +1139,8 @@ export function handleThinking(
       });
     }
 
-    const llmStreamEffect = gatewayStream(llm, {
-      purpose: "think",
-      tier: profile.tier,
-      thinkingModel: profile.thinkingModel === true,
-      ...(economizeBand ? { paceBand: economizeBand } : {}),
-      ...(state.maxOutputTokensOverride !== undefined
-        ? { budgetTokens: state.maxOutputTokensOverride }
-        : {}),
-    }, {
-      messages: messagesForRequest,
+    const llmStreamEffect = gatewayStream(llm, thinkIntent, {
+      messages: wireMessages,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
       temperature: temp,
@@ -1076,7 +1151,9 @@ export function handleThinking(
       ...(demandNumCtx !== undefined ? { numCtx: demandNumCtx } : {}),
       // TextParseDriver: pass empty tools array — constrained providers (Anthropic/OpenAI)
       // enforce FC when tools are present, which breaks text-parse mode for local models.
-      ...(llmTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: llmTools } : {}),
+      // W2e: `wireTools` is the head-truncation-guard output (== llmTools when the
+      // request fits — identity-preserving).
+      ...(wireTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: wireTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
