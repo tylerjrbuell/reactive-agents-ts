@@ -1031,3 +1031,10 @@ task: "Wave 0 W0.4a: export composable-kernel extension surface from @reactive-a
 result: completed, confidence 0.95
 outcome: "accepted: parent verifier green (focused pin test 4/4, turbo typecheck filter=@reactive-agents/reasoning; warden runs: RED 3-fail runtime + 10 TS2339/TS2694 compile, GREEN 4/4, reasoning suite 2968/0/4todo, typecheck --force 9/9). Independent task review Approved, 0 Critical/0 Important-for-task; diff surgically exports-only; collision + type-pin-elision named risks checked. Disclosed gap ledged as parent follow-up: tests/** excluded from package tsconfig, so type-pins do not compile-fail in CI (runtime pins compensate). Warden correctly escalated the pilot-log obligation instead of widening authority."
 ```
+
+```yaml
+date: 2026-10-12
+warden: kernel-warden
+task: "Wave 0 W0.4b: composable-kernel.md rewritten against published package imports; all skip markers cleared (12, not 11); SKIP_CEILING ratchet 235->223 with dated history; stale prose fixed honestly (onError event, KernelHooks arity, codec type, removed guard mechanism)"
+result: completed, confidence 0.92
+outcome: "pending task-review; parent verifier: full doc gate re-run at HEAD. Warden declined export-widening (runKernel/transitionState/KernelHooks/KernelStatus/KernelRunOptions stay internal) — correctly routed to parent. Ruling: out of W0.4 scope; revisit only if Wave 4 kernel work needs a public seam."
