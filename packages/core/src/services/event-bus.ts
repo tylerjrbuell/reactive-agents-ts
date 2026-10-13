@@ -1254,6 +1254,14 @@ export type AgentEvent =
         readonly cacheReadTokensIn?: number;
         readonly costUsd?: number;
         readonly durationMs?: number;
+        /**
+         * Thinking forensics (W1.4): chars of thinking the model produced this
+         * exchange (absent = channel produced none). Pair with `thinkingPreview`
+         * so rax diagnose shows what the model actually reasoned.
+         */
+        readonly thinkingChars?: number;
+        /** W1.4 forensics: capped preview of the thinking text (same budget as other trace payloads). */
+        readonly thinkingPreview?: string;
       };
       readonly timestamp: number;
     }
