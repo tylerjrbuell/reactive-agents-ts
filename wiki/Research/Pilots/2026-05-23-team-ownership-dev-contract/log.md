@@ -1110,3 +1110,11 @@ task: "Wave 2a: capability probe ladder (size/thinking/tool-template capture + c
 result: completed, confidence 0.85
 outcome: "3 commits (64a94a309, 57b06836a, d2c58d6a6). llm-provider 486/0, core+reasoning 3160/0, runtime 1673/0, typecheck 24/24. Cross-authority notes for parent: (1) CONTEXT_PROFILES lives in reasoning/core, not llm-provider — Area 3 executed per explicit dispatch instruction despite the 'packages/reasoning out of scope' line (interpreted as resolver-consumption exclusion), commit scoped fix(reasoning) honestly; (2) D-H fix had to move core TIER_TOOL_RESULT_PRESERVE mirror too or the live project() budget keeps the inversion; (3) as-unknown-as-ceiling TESTS_CEILING 237->240: pin was already red at 239 on arrival (pre-Wave-2a drift, verified at 64a94a309~1), +1 is sanctioned fetch-stub — guard option 3 used; (4) dispatch's 'monotone non-decreasing whole table' unsatisfiable literally for preserve budgets (designed shape descends) — ratchet encodes per-family direction + D-H guard, documented in test header + w2a-report."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 2a: probe ladder (parameter_size decimals + thinking + tool-template emission) + CapabilityStore write-through persistence replacing process-Maps + supportsToolCalling derived (fail-safe permissive-provisional / strict-false only measured-no-emission) + D-2026-07-30-H ladder inversion fixed with per-family ratchet test (cross-package hunks dispatch-driven, controller-adjudicated)"
+result: completed, confidence 0.85
+outcome: "accepted after review (first reviewer dispatch died empty; resume-extract delivered full verdict): Approved 0C/3I. Adversarial checks passed: store-first genuinely shadows nothing (cold-Map decoy test), no reachable stranding for unmeasured models, cross-package hunks minimal+load-bearing (core test UPDATE not weakening), cast-ceiling bump verified as sanctioned test-double (src adds zero casts), pre-existing 239>237 drift confirmed. Importants -> W2a-fixup dispatch (function_call/.functioncall markers, store-key baseUrl, test-disable seam). YAGNI-deflect on tier-from-size accepted (plan's own clause). First dispatch of this mission had died zero-output (third such); lean-retry-with-commit-per-area pattern again delivered."
+```
