@@ -171,6 +171,22 @@ export interface LimitExceeded {
 // ObjectDelta/UiTreeDelta/StepEvent: declared for forward-compat, NOT emitted
 // in v1. TrustEvent graduated out of "reserved" in Arc 1 Task 8 — it IS
 // emitted (alongside StreamCompleted) starting this version.
+//
+// WAVE 1 RECORDED DECISION (Local-Tier Reliability, 2026-10-13): the
+// provider-level `thinking_delta` StreamEvent added to
+// `@reactive-agents/llm-provider`'s union is DELIBERATELY NOT mirrored onto
+// this wire protocol. Reason: this protocol mirrors the runtime's
+// `AgentStreamEvent` (packages/runtime/src/stream-types.ts), not the
+// provider's StreamEvent union — provider thinking is consumed SERVER-side by
+// the reasoning kernel (think.ts `providerThinking`/`rescueFromThinking`,
+// dispatch 1.3) and never crosses the SSE boundary here. Surfacing internal
+// reasoning to browsers would be a separate product/privacy decision
+// requiring an `AgentStreamEvent` tag first (runtime-side). The #188
+// three-way-binding divergence class is pinned instead by the bindings parity
+// test (packages/react/tests/stream-parity.test.tsx), which feeds the three
+// bindings an identical fixture INCLUDING an unknown forward-compat tag and
+// asserts they stay behaviorally equivalent — so any future wire field
+// addition (thinking included) has a pre-existing divergence tripwire.
 export interface ObjectDelta {
   readonly _tag: "ObjectDelta";
   readonly partial: unknown;

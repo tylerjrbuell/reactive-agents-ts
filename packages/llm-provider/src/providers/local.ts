@@ -777,12 +777,52 @@ export const LocalProviderLive = Layer.effect(
                                 ollamaStream = stream
                                 resetIdleTimer()
 
+                                // Wave 1.2 — thinking channel gate. Reuses the
+                                // SAME capability seam the complete()/budget
+                                // paths use (`think` from resolveThinking +
+                                // capability.supportsThinkingMode from the
+                                // probe already resolved above) — no second
+                                // probe, no new capability machinery. qwen3-
+                                // family models think BY DEFAULT even when the
+                                // `think` param is omitted (see
+                                // widenNumPredictForThinking), so the gate
+                                // opens for explicit opt-in OR a capable
+                                // model; incapable models emit zero
+                                // thinking_delta regardless of chunk shape.
+                                const thinkingStreamActive =
+                                    think === true ||
+                                    (think === undefined &&
+                                        capability.supportsThinkingMode === true)
+
                                 let fullContent = ''
+                                let fullThinking = ''
                                 const accumulatedLogprobs: TokenLogprob[] = []
                                 const accumulatedToolCalls: ToolCall[] = []
 
                                 for await (const chunk of stream) {
                                     resetIdleTimer()
+
+                                    // Wave 1.2 — accumulate + emit thinking in
+                                    // the SAME pass as content. Ollama surfaces
+                                    // reasoning chunks on `message.thinking`;
+                                    // the SDK types lag the wire, so mirror
+                                    // complete()'s cast (:522-525).
+                                    if (thinkingStreamActive) {
+                                        const thinkingChunk =
+                                            (
+                                                chunk.message as
+                                                    | { thinking?: string }
+                                                    | undefined
+                                            )?.thinking
+                                        if (thinkingChunk) {
+                                            fullThinking += thinkingChunk
+                                            emit.single({
+                                                type: 'thinking_delta',
+                                                thinking: thinkingChunk,
+                                            })
+                                        }
+                                    }
+
                                     if (chunk.message?.content) {
                                         fullContent += chunk.message.content
                                         emit.single({
@@ -893,6 +933,14 @@ export const LocalProviderLive = Layer.effect(
                                         emit.single({
                                             type: 'content_complete',
                                             content: fullContent,
+                                            // Wave 1.2 — streaming symmetry
+                                            // with CompletionResponse.thinking:
+                                            // only attach when thinking was
+                                            // actually produced (additive —
+                                            // consumers tolerate absence).
+                                            ...(fullThinking.length > 0
+                                                ? { thinking: fullThinking }
+                                                : {}),
                                             // Shared table-driven done_reason
                                             // mapping (mirrors complete()).
                                             ...(hasToolCalls

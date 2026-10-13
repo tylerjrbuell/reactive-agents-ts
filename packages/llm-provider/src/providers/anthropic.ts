@@ -357,11 +357,25 @@ export const AnthropicProviderLive = Layer.effect(
             // When `useAdapterNormalization` is true we SUPPRESS per-chunk
             // tool_use_* emissions and synthesize them in `finalMessage` once
             // the adapter has normalized the complete response.
+            //
+            // Wave 1.2 — extended-thinking deltas route through the SAME
+            // `thinking_delta` StreamEvent the local (Ollama) provider emits,
+            // gated by the existing `streamThinkEnabled` capability seam
+            // (resolveThinkingEnabled — opt-in, never auto-enables). Prior to
+            // this they were silently dropped here.
+            let accumulatedThinking = "";
             stream.on("streamEvent", (event: unknown) => {
-              const e = event as { type: string; delta?: { type: string; text?: string; partial_json?: string }; content_block?: { type: string; id?: string; name?: string }; index?: number };
+              const e = event as { type: string; delta?: { type: string; text?: string; thinking?: string; partial_json?: string }; content_block?: { type: string; id?: string; name?: string }; index?: number };
               if (e.type === "content_block_delta") {
                 if (e.delta?.type === "text_delta" && e.delta.text) {
                   emit.single({ type: "text_delta", text: e.delta.text });
+                } else if (
+                  streamThinkEnabled &&
+                  e.delta?.type === "thinking_delta" &&
+                  e.delta.thinking
+                ) {
+                  accumulatedThinking += e.delta.thinking;
+                  emit.single({ type: "thinking_delta", thinking: e.delta.thinking });
                 } else if (
                   !useAdapterNormalization &&
                   e.delta?.type === "input_json_delta" &&
@@ -435,7 +449,28 @@ export const AnthropicProviderLive = Layer.effect(
                 return;
               }
 
-              emit.single({ type: "content_complete", content });
+              // Wave 1.2 — attach the accumulated extended-thinking to the
+              // terminal event (symmetry with local.ts + the `thinking_delta`
+              // passthrough above). Delta accumulation is authoritative; the
+              // block extraction is a fallback for streams that surface the
+              // thinking block only on the final message.
+              const thinkingBlocks = streamThinkEnabled
+                ? accumulatedThinking ||
+                  (
+                    msg.content as Array<{
+                      type: string;
+                      thinking?: string;
+                    }>
+                  )
+                    .filter((b) => b.type === "thinking" && b.thinking)
+                    .map((b) => b.thinking ?? "")
+                    .join("")
+                : "";
+              emit.single({
+                type: "content_complete",
+                content,
+                ...(thinkingBlocks.length > 0 ? { thinking: thinkingBlocks } : {}),
+              });
               emit.single({
                 type: "usage",
                 usage: {
