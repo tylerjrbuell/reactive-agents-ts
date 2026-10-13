@@ -19,7 +19,7 @@ import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifi
 import { Effect, FiberRef, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME, scratchpadStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
@@ -265,8 +265,23 @@ export function runKernel(
     // injection above. Capable (or unknown) ⇒ native driver (resolver present,
     // tools attached — the coherent triple). Only a provider that explicitly
     // reports `supportsToolCalling === false` gets the text-parse driver.
+    //
+    // W3b (plan 3.3): the dialect argument is the EXPLICIT-CLAIM reader
+    // `loadDialectPriorClaim` (GH #243 phantom rule). It is never sourced from
+    // `effectiveInput.calibration?.toolCallDialect` — that schema field defaults
+    // absent→"none" (ModelCalibrationSchema) and re-enters the phantom-claim
+    // class #243 removed. Per the spec's Stage-B end state the claim NEVER picks
+    // the route (capability is the sole arbiter, design law #1); it rides on the
+    // selected driver as source-tagged provenance (spec §3) so a wrong route
+    // is visible on the run context, not silent. A registry-provisional tier
+    // (`profile.provisionalTier === true`, W2b) is NOT a routing input either:
+    // the degraded text-parse route fires only on a strict capability verdict
+    // — pinned end-to-end in tests/kernel/loop/tool-routing-triad.test.ts.
+    const dialectClaim = effectiveInput.modelId
+      ? loadDialectPriorClaim(effectiveInput.modelId)
+      : undefined;
     const toolCallingDriver = selectToolCallingDriver(
-      effectiveInput.calibration?.toolCallDialect,
+      dialectClaim?.dialect,
       providerSupportsToolCalling,
     );
 

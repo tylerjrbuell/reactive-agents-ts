@@ -266,7 +266,7 @@ export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
 export { selectToolCallingDriver } from "./drivers/select-driver.js"
 export { extractRationale, parseRationaleBlocks, stripRationaleBlocks } from "./drivers/rationale-parser.js"
-export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallObservation } from "./drivers/tool-calling-driver.js"
+export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallDialectClaim, ToolCallObservation } from "./drivers/tool-calling-driver.js"
 
 // ─── Healing Pipeline ───
 export { runHealingPipeline } from "./healing/healing-pipeline.js"

@@ -1,8 +1,14 @@
-import type { ExtractedCall, ToolCallingDriver, ToolSchema } from "./tool-calling-driver.js"
+import type { ExtractedCall, ToolCallingDriver, ToolCallDialectClaim, ToolSchema } from "./tool-calling-driver.js"
 import { extractRationale, parseRationaleBlocks } from "./rationale-parser.js"
 
 export class TextParseDriver implements ToolCallingDriver {
   readonly mode = "text-parse" as const
+  /** Provenance claim that informed this selection (undefined = no claim). */
+  readonly dialectClaim: ToolCallDialectClaim | undefined
+
+  constructor(dialectClaim?: ToolCallDialectClaim) {
+    this.dialectClaim = dialectClaim
+  }
 
   buildPromptInstructions(tools: readonly ToolSchema[]): string {
     const toolList = tools
