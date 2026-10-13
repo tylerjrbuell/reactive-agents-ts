@@ -21,11 +21,16 @@ describe("TextParseDriver", () => {
     expect(driver.mode).toBe("text-parse")
   })
 
-  it("buildPromptInstructions includes tool names and format guide", () => {
+  it("buildPromptInstructions includes tool names and the new format guide", () => {
     const instructions = driver.buildPromptInstructions(tools)
     expect(instructions).toContain("file-read")
     expect(instructions).toContain("web-search")
-    expect(instructions).toContain("<tool_call>")
+    expect(instructions).toContain("<tool_use>")
+    // Collision pin: the taught text must NEVER contain the host runtime's own
+    // qwen tool-call trigger token (Ollama qwen35.go/qwen3coder.go key on it;
+    // emitting it poisons the stream -> EOF). See buildPromptInstructions JSDoc.
+    expect(instructions).not.toContain("<tool_call>")
+    expect(instructions).not.toContain("</tool_call>")
   })
 })
 
@@ -229,13 +234,34 @@ describe("Tier 1 (wrapper-tolerant): bare param-line blocks", () => {
   // builder output, never re-typed. If builder and parser drift, this breaks.
   it("accepts the taught example block with its wrapper lines stripped (builder-derived)", () => {
     const built = driver.buildPromptInstructions(tools)
-    const match = /<tool_call>\n([\s\S]*?)\n<\/tool_call>/.exec(built)
+    const match = /<tool_use>\n([\s\S]*?)\n<\/tool_use>/.exec(built)
     expect(match).not.toBeNull()
     const inner = match![1]!
     const calls = driver.extractCalls(inner, tools)
     expect(calls.length).toBeGreaterThan(0)
     expect(calls[0]?.name).toBe("<tool-name>")
     expect(calls[0]?.arguments["<param-name>"]).toBe("<value>")
+  })
+
+  // W3c round 2 - delimiter collision fix (Ollama qwen parser trigger).
+  it("round 2: the NEW taught `<tool_use>` wrapper round-trips (builder-derived)", () => {
+    const built = driver.buildPromptInstructions(tools)
+    const match = /<tool_use>\n([\s\S]*?)\n<\/tool_use>/.exec(built)
+    expect(match).not.toBeNull()
+    const inner = match![1]!
+    const wrapped = `<tool_use>\n${inner}\n</tool_use>`
+    const calls = driver.extractCalls(wrapped, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("<tool-name>")
+    expect(calls[0]?.arguments["<param-name>"]).toBe("<value>")
+  })
+
+  it("round 2: the LEGACY `<tool_call>` wrapped form still parses (additive back-compat)", () => {
+    const text = "<tool_call>\ntool: file-read\npath: /foo.ts\n</tool_call>"
+    const calls = driver.extractCalls(text, tools)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.name).toBe("file-read")
+    expect(calls[0]?.arguments).toEqual({ path: "/foo.ts" })
   })
 })
 

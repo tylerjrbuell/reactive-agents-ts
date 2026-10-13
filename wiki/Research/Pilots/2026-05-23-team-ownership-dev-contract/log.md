@@ -1238,3 +1238,11 @@ task: "W3c review fix round 1/5: harden bare-block parse against three real corr
 result: completed, confidence 0.9
 outcome: "ADDRESSED: (1) tool+param indent now symmetric w/ per-param indent captured and used as the block-scalar base, so a following param at block indent is not swallowed; bare block now requires >=1 param, killing the empty-args dispatch class. (2) in-list prose tolerance REJECTED on measured FP evidence - coder runs embed `ProductA: 100` data lines between blocks; tolerance scoped BETWEEN blocks, mid-param prose ends the list loudly (required-param validation rejects), docstring corrected to match + pinning test. (3) `>` folding + `-`/`+`/clip chomping implemented to exact values, per-form value tests added. RED 8 fail -> GREEN 70/0 (tools/tests/drivers); empirical 0/10 -> 10/10 over committed coder traces, zero empty-args. reasoning kernel+strategies 1285/0, healing+tool-calling 125/0, tools typecheck+build+eslint clean. Authority packages/tools/** only."
 ```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c round 2 (live user-facing bug): text-parse taught delimiter `<tool_call>` collided with Ollama's own qwen tool-call parser (stream poisoned -> EOF at iter 0). Move taught wrapper to `<tool_use>`; keep legacy + bare acceptance."
+result: completed, confidence 0.9
+outcome: "Trigger evidence: journal qwen35.go:115 + qwen3coder.go:87 'tool call parsing failed' error=EOF on the text-parse run; binary strings show <tool_call> x15 / </tool_call> x14, <tool_use> x0. Chose <tool_use>: absent from both parsers' vocabulary AND stays a lone <name> tag so reasoning readTaughtCallShape (GH #243 pin) is untouched - no reasoning source edit. Additive: regex accepts tool_use|tool_call; bare/JSON/scalar paths unchanged. RED 3 -> GREEN tools/tests/drivers 72/0; reasoning kernel+strategies 1285/0; coder fixtures 10/10; builder scan shows all Ollama trigger literals absent (only benign `<tool` substring remains, prefix-match ruled out). tools typecheck/build/eslint clean. File-ready: stale comment driver-instructions.test.ts:3 (kernel-warden)."
+```

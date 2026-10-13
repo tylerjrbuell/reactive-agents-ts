@@ -20,15 +20,26 @@ export class TextParseDriver implements ToolCallingDriver {
       })
       .join("\n\n")
 
+    // W3c round 2: the taught delimiter is `<tool_use>`, NOT `<tool_call>`.
+    // `<tool_call>` is the host runtime's OWN qwen tool-call trigger: when a
+    // text-parse model emitted it, Ollama's qwen35.go/qwen3coder.go parsers
+    // intercepted the output, failed to JSON-decode our `tool: <name>` body, and
+    // poisoned the stream (journal: `qwen3.5 tool call parsing failed` /
+    // `qwen tool call parsing failed` error=EOF) -> the framework saw EOF.
+    // `<tool_use>` is absent from the Ollama binary's parser vocabulary
+    // (measured: `<tool_call>` x15 / `</tool_call>` x14 / `<tool_use>` x0), so it
+    // cannot be intercepted. The legacy `<tool_call>` form is still PARSED
+    // (back-compat); only TEACHING moves. Keep it a lone `<name>` tag line: the
+    // reasoning-side shape reader keys on that structure (GH #243 pin).
     return [
       "## Available Tools\n",
       toolList,
       "\n## How to Call a Tool",
       "Use this exact format — one tool call per block:",
-      "<tool_call>",
+      "<tool_use>",
       "tool: <tool-name>",
       "<param-name>: <value>",
-      "</tool_call>",
+      "</tool_use>",
       "\nUse relative paths for file operations (e.g., `src/main.ts` not `/absolute/path`).",
       "Wait for the tool result before calling the next tool.",
     ].join("\n")
@@ -62,11 +73,12 @@ export class TextParseDriver implements ToolCallingDriver {
   }
 
   /**
-   * Structured tier-1. First the taught WRAPPED form
-   * (`<tool_call>…</tool_call>`, the highest-fidelity shape); if it yields
-   * nothing, the wrapper-tolerant BARE form: the SAME taught `tool: <name>` +
-   * `<param>: <value>` grammar minus the surrounding tags. The wrapper is
-   * tolerated; the grammar is not loosened.
+   * Structured tier-1. First the WRAPPED form (highest fidelity): the NEW
+   * taught `<tool_use>…</tool_use>` OR the LEGACY `<tool_call>…</tool_call>`
+   * (additive back-compat for recorded fixtures / models that learned the old
+   * prompt). If neither yields, the wrapper-tolerant BARE form: the SAME taught
+   * `tool: <name>` + `<param>: <value>` grammar minus the surrounding tags.
+   * The wrapper is tolerated; the grammar is not loosened.
    */
   private parseTier1(text: string): ExtractedCall[] {
     const wrapped = this.parseWrappedTier1(text)
@@ -75,7 +87,9 @@ export class TextParseDriver implements ToolCallingDriver {
   }
 
   private parseWrappedTier1(text: string): ExtractedCall[] {
-    const blockRe = /<tool_call>([\s\S]*?)<\/tool_call>/g
+    // Accepts the new taught `<tool_use>` AND the legacy `<tool_call>` wrapper
+    // (additive: teaching changed, parsing widened).
+    const blockRe = /<(?:tool_use|tool_call)>([\s\S]*?)<\/(?:tool_use|tool_call)>/g
     const calls: ExtractedCall[] = []
     let match: RegExpExecArray | null
     while ((match = blockRe.exec(text)) !== null) {
