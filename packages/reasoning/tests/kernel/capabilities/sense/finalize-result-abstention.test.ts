@@ -236,4 +236,28 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     });
     expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("end_turn");
   });
+
+  // CONTROLLER RULING (round-1 review, minor #3): the widened fence's
+  // over-block shape is INTENDED, not a bug. A `partial` result on a
+  // HARNESS-FORCED terminal with zero successful real-tool observations
+  // abstains even when the prose is substantive and is neither a give-up nor
+  // a success-claim: the honesty thesis says a run that ground NOTHING under
+  // a harness-forced end has no warrant for a success verdict, whatever the
+  // answer reads like. The over-block cost (an occasional ungrounded-but-correct
+  // answer demoted) is accepted; the escape hatch for real work is evidence,
+  // pinned by the grounded-run test above.
+  it("INTENDED (ruling): substantive, non-give-up answer ALSO abstains on a harness-forced terminal with zero grounding", async () => {
+    const result = await mint({
+      output: "Sales breakdown by item: Widget 1200 units, Gadget 800 units, Gizmo 500 units; total 2500 units.",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    const md = result.metadata as Record<string, unknown>;
+    expect(md.terminatedBy).toBe("abstained");
+    expect(md.abstention).toBeDefined();
+    // The model's prose is kept; only the verdict changes (wire-or-delete honesty).
+    expect(String(result.output).startsWith("Sales breakdown by item")).toBe(true);
+  });
 });

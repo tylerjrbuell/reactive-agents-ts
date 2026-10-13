@@ -78,7 +78,15 @@ export const runVerificationThinkRetry = (
         sessionId: c.taskId,
         modelId: String(config.defaultModel ?? ""),
         taskCategory,
-        temperature: config.contextProfile?.temperature as number | undefined,
+        // GH temp-threading (Wave-4, review round-1): THIRD seam of the same
+        // defect shape. This retry re-runs the REAL task and its output
+        // becomes the user-visible answer, so the commanded
+        // `.withModel({temperature})` must survive here exactly as on the
+        // primary pass: command-first, mirroring the reasoning-think.ts
+        // merge (`config.temperature ?? config.contextProfile?.temperature`).
+        // Unset command keeps the profile value (no behavior change).
+        temperature: (config.temperature ??
+          config.contextProfile?.temperature) as number | undefined,
         environmentContext: config.environmentContext as Record<string, string> | undefined,
         initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: string }[],
         calibration: resolvedCalibration,
