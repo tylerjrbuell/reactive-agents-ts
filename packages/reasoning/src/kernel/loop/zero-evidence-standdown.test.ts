@@ -153,13 +153,19 @@ describe("flail signature — the DERIVING vs FLAILING discriminator", () => {
     expect(detectFlailSignature(steps, 3).flailing).toBe(false);
   });
 
-  it("repetition: near-duplicate thoughts (flailing)", () => {
-    const steps = [
-      t("I apologize, but I'm unable to send a Slack message as I don't have access to Slack API tools."),
-      t("I apologize, but I'm unable to send a Slack message as I don't have access to Slack API tools."),
-    ];
+  it("repetition: near-duplicate SUBSTANTIVE thoughts (flailing)", () => {
+    const apology =
+      "I apologize, but I'm unable to send a Slack message because I don't have access to any Slack API tools in my current environment.";
+    const steps = [t(apology), t(apology)];
     const v = detectFlailSignature(steps, 2);
     expect(v.repetition).toBe(true);
+    expect(v.flailing).toBe(true);
+  });
+
+  it("a short near-duplicate apology still flails — via the refusal arm (task-level signal)", () => {
+    const apology =
+      "I apologize, but I'm unable to send a Slack message as I don't have access to Slack API tools.";
+    const v = detectFlailSignature([t(apology), t(apology)], 2);
     expect(v.flailing).toBe(true);
   });
 
@@ -175,5 +181,33 @@ describe("flail signature — the DERIVING vs FLAILING discriminator", () => {
     const v = detectFlailSignature(steps, 2);
     expect(v.refusal).toBe(true);
     expect(v.flailing).toBe(true);
+  });
+
+  // ── round-2 precision pins (RED-first at the round-1 HEAD) ────────────────
+  it("PRECISION: terse 'Step N:' increments are NOT repetition (length guard)", () => {
+    const pairs: Array<[string, string]> = [
+      ["Step 1: identify the unknowns.", "Step 2: identify the unknowns."],
+      ["Let x be the number of widgets.", "Let y be the number of gadgets."],
+      ["Now substitute x = 3.", "Now substitute y = 4."],
+    ];
+    for (const [a, b] of pairs) {
+      const v = detectFlailSignature([t(a), t(b)], 2);
+      expect({ a, b, flailing: v.flailing }).toEqual({ a, b, flailing: false });
+    }
+  });
+
+  it("PRECISION: 'cannot complete step N until ...' narration is NOT a refusal", () => {
+    const steps = [
+      t("First, set up the equations from the two conditions."),
+      t("I cannot complete step 3 until I compute step 2."),
+    ];
+    expect(detectFlailSignature(steps, 2).flailing).toBe(false);
+  });
+
+  it("refusal: the live impossible-task apology shape still arms (capability signal)", () => {
+    const steps = [
+      t("I'm unable to send a Slack message as I don't have access to Slack API tools in my environment."),
+    ];
+    expect(detectFlailSignature(steps, 2).refusal).toBe(true);
   });
 });
