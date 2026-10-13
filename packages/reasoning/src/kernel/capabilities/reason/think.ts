@@ -13,8 +13,8 @@
 import { Effect, Stream, FiberRef, Either, Ref, Option } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
-import { LLMService, selectAdapter, estimateTokenCount, resolveCapability } from "@reactive-agents/llm-provider";
-import { gatewayStream, resolveOutputBudget, type LlmCallIntent } from "../../llm-gateway.js";
+import { LLMService, selectAdapter, resolveCapability } from "@reactive-agents/llm-provider";
+import { gatewayStream, type LlmCallIntent } from "../../llm-gateway.js";
 import { downshiftBudgetBand } from "../../assessment/pace-actions.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
@@ -76,7 +76,11 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { authorityOf } from "../decide/authority.js";
-import { preflightHeadTruncation } from "./head-truncation-guard.js";
+import {
+  estimateWireTokens,
+  guardOutputReserve,
+  preflightHeadTruncation,
+} from "./head-truncation-guard.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
@@ -1061,6 +1065,16 @@ export function handleThinking(
     // provider-scoping rationale as the demand-num_ctx policy below
     // (D-2026-07-30-I: `tier: "local"` is the generic fallback and the test
     // stub's row — tier alone would misfire here too).
+    // One tokenizer-family resolution shared by the guard bill AND the
+    // demand-num_ctx sizing (W2e review #2: both must see the SAME
+    // schema-inclusive, family-corrected arithmetic — no drift).
+    const wireTokenizerFamily = resolveCapability(
+      input.providerName ?? "",
+      input.modelId ?? "",
+    ).tokenizerFamily;
+    // W2e review #3: provider-default budget (resolveOutputBudget → undefined,
+    // maxTokens omitted = output bounded only by the window) reserves the
+    // documented thinking-safe minimum via the guard module, never 0.
     const guardWire =
       input.providerName === "ollama" && profile.maxTokens !== undefined
         ? yield* preflightHeadTruncation({
@@ -1070,9 +1084,9 @@ export function handleThinking(
             // The reserve is the gateway's OWN arithmetic for this exact
             // intent — one definition of the budget, no drift between the
             // guard and what gatewayStream will allocate.
-            outputBudget: resolveOutputBudget(thinkIntent) ?? 0,
+            outputBudget: guardOutputReserve(thinkIntent),
             numCtx: profile.maxTokens,
-            tokenizerFamily: resolveCapability(input.providerName ?? "", input.modelId ?? "").tokenizerFamily,
+            tokenizerFamily: wireTokenizerFamily,
             requiredTools: input.requiredTools ?? [],
             relevantTools: input.relevantTools ?? [],
           })
@@ -1124,10 +1138,16 @@ export function handleThinking(
     const demandNumCtx =
       h.numCtxPolicy === "demand" && input.providerName === "ollama"
         ? nextNumCtx(
-            yield* estimateTokenCount([
-              { role: "system" as const, content: systemPromptWithDriver },
-              ...wireMessages,
-            ]),
+            // W2e review #2 (demand-policy leak): size from the guard's OWN
+            // schema-inclusive, family-corrected arithmetic — a bucket that
+            // ignored the FC tools array under-provisioned num_ctx while the
+            // guard (capped at the same ceiling) read green.
+            yield* estimateWireTokens(
+              systemPromptWithDriver,
+              wireMessages,
+              wireTools,
+              wireTokenizerFamily,
+            ),
             2000,
             state.meta.numCtxHighWater,
             profile.maxTokens,

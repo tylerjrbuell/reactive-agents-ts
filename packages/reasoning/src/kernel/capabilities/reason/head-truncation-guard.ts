@@ -48,6 +48,8 @@ import {
   type LLMMessage,
   type TokenizerFamily,
 } from "@reactive-agents/llm-provider";
+import { resolveOutputBudget, type LlmCallIntent } from "../../llm-gateway.js";
+import { THINKING_SAFE_MIN_TOKENS } from "../../utils/stream-parser.js";
 
 /** The FC wire-array element shape as built by think.ts `llmTools`. */
 export interface WireToolPayload {
@@ -124,6 +126,60 @@ export function estimateWireTokens(
  * already fits, the SAME array references come back and `fired` is false —
  * every non-overflow request is byte-identical to the pre-guard path.
  */
+/**
+ * Group a wire thread into keep-or-drop EXCHANGE units: an `assistant`
+ * message carrying `tool_use` content blocks plus the immediately-following
+ * `tool` result messages form one unit (a parallel batch collapses into
+ * it); every other message is a singleton unit. Mirrors the block model of
+ * assembly/compaction.ts at the provider-message level, so rung-2 dropping
+ * can never strand a tool_result without its tool_use (or vice versa) —
+ * an invalid native-FC thread on the wire.
+ */
+function fcExchangeUnits(
+  messages: readonly LLMMessage[],
+): Array<LLMMessage[]> {
+  const units: Array<LLMMessage[]> = [];
+  let i = 0;
+  while (i < messages.length) {
+    const m = messages[i]!;
+    const isToolCallTurn =
+      m.role === "assistant" &&
+      typeof m.content !== "string" &&
+      m.content.some((b) => b.type === "tool_use");
+    if (isToolCallTurn) {
+      const unit: LLMMessage[] = [m];
+      i++;
+      while (i < messages.length && messages[i]!.role === "tool") {
+        unit.push(messages[i]!);
+        i++;
+      }
+      units.push(unit);
+    } else {
+      units.push([m]);
+      i++;
+    }
+  }
+  return units;
+}
+
+/**
+ * The output-budget RESERVE the head-truncation guard bills against
+ * num_ctx. Delegates to the gateway's OWN arithmetic (`resolveOutputBudget`)
+ * so the guard and the request can never disagree on the allocation.
+ *
+ * W2e review #3: when the gateway resolves to `undefined`
+ * (budgetClass "provider-default" — maxTokens omitted, generation is
+ * BOUNDED ONLY BY THE WINDOW itself), reserving 0 is the wrong
+ * (under-fire) direction; ruling #1 says conservative = fire. The floor is
+ * `THINKING_SAFE_MIN_TOKENS` — the documented framework minimum the
+ * gateway cites for thinking-safe terse budgets
+ * (kernel/utils/stream-parser.ts, pinned 2048 by stream-parser tests),
+ * not a magic number.
+ */
+export function guardOutputReserve(intent: LlmCallIntent): number {
+  return resolveOutputBudget(intent) ?? THINKING_SAFE_MIN_TOKENS;
+}
+
 export function preflightHeadTruncation<T extends WireToolPayload>(
   input: HeadTruncationGuardInput<T>,
 ): Effect.Effect<HeadTruncationGuardResult<T>, never> {
@@ -176,20 +232,32 @@ export function preflightHeadTruncation<T extends WireToolPayload>(
       );
     }
 
-    // ── Ladder 2: history, oldest-first, newest turn always kept ─────────
-    // LAZY copy: identity of the untouched arrays is preserved until a drop
-    // actually happens (fit paths return the input references verbatim).
+    // ── Ladder 2: history by COHERENT FC EXCHANGES, oldest-first ─────────
+    // Rung-2 dropping must never orphan a provider pair (W2e review #1):
+    // an assistant turn emitting tool_use blocks travels with the `tool`
+    // results that answer it — the same exchange-unit invariant the
+    // assembly compaction declares ("a kept tool_result is never orphaned
+    // and a dropped tool_use never leaves a dangling answer",
+    // assembly/compaction.ts block model). A naive per-message slice can
+    // stop mid-exchange and produce an INVALID wire exactly on the paths
+    // this rung exists for. Non-FC messages are singleton units. The
+    // newest unit is always kept. LAZY identity: untouched until a drop.
     let messages: readonly LLMMessage[] = input.messages;
     let droppedMessages = 0;
-    while (current > capacity && messages.length > 1) {
-      messages = messages.slice(1);
-      droppedMessages++;
-      current = yield* estimateWireTokens(
-        input.systemPrompt,
-        messages,
-        tools,
-        input.tokenizerFamily,
-      );
+    if (current > capacity) {
+      const units = fcExchangeUnits(messages);
+      while (current > capacity && units.length > 1) {
+        const droppedUnit = units.shift();
+        if (droppedUnit === undefined) break;
+        droppedMessages += droppedUnit.length;
+        messages = units.flat();
+        current = yield* estimateWireTokens(
+          input.systemPrompt,
+          messages,
+          tools,
+          input.tokenizerFamily,
+        );
+      }
     }
 
     return {
