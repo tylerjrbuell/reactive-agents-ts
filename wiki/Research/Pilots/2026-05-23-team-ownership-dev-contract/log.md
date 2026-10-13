@@ -1190,3 +1190,11 @@ task: "#243-review Important #1 discharge: full-suite v2 calibration-runner --co
 result: completed, confidence 0.9
 outcome: "accepted (controller direct verification, ruling: data-only artifact of an already-reviewed seam - diff = 4 JSON + changeset exactly; field moves match claims incl. the disclosed 2000-censor cap). Wave-2 provenance sin-class fully closed. New true fact: coder:14b is genuinely text-dialect by measurement -> Wave 3 S4-grade target; two priors tightened optimalToolResultChars 4000->2000 (censored ladder cap, ledged as runner design note). S3 re-capture gate (R1) dispatched next."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "R1 WAVE-3 GATE: post-#243 S3-qwen34b re-capture N=5 (+bonus 2) three-point row, signature clearance (schemas-on-wire, tool-call-start, workspace deliverable, no-unparsed-markup), S2 sanity"
+result: completed, confidence 0.92
+outcome: "accepted: GATE PASS measured 0/5 -> 5/5 canonical (7/7), deliverable-correct 5/5, all four #243 signatures zero, thinking retention 6-12K intact, S2 2/2 stable. Wave-2's MIXED regression component CLOSED with live proof; floor+truthful-priors compose correctly end-to-end. Disclosed slips kept honest: global --n flag semantics (bonus rows kept), terminatedBy label churn flagged for docs truth-up, box-contention wall times annotated not hidden. #243 verification comment posted; close at merge with the branch."
+```
