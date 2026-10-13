@@ -1278,3 +1278,11 @@ task: "W4-live fix round 1 (a77dd5c13): stand-down requires a flail signature (c
 result: completed, confidence 0.82
 outcome: "accepted pending scoped re-review; LIVE VERIFIED by controller both directions: impossible task 2 iters/6.6s/835tok honest abstain (was 4-5/23.4s/~1980tok); qwen3:4b no-tool reasoning task NOT stood down (correct derivation produced). Review's Critical (bare staleness aborted deriving runs at pass 3, no escape hatch) closed with RED-first FP pin + two cut arms. reasoning 3086/0, runtime 1678/0, replay 37/0. Surfaced a PRE-EXISTING defect (GH filed): fabrication guard hard-fails correct reasoning answers on derived durations - routed to Wave 5 verdict honesty."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4-live fix rounds 1+2: flail-signature precision (MIN_REPETITION_LENGTH=100 mirroring contentStabilityEvaluator; thoughtRefusal = canonical isGiveUpAnswer + task-level/no-capability gate + step-narration exclusion)"
+result: completed, confidence 0.85
+outcome: "accepted: scoped re-reviews rounds 1+2 -> round 2 All findings ADDRESSED, no new Critical/Important breakage; one narrow residual disclosed (deriving preamble 'don't have access' can still arm). Controller live-verified both directions: impossible 2 iters/10.3s/842tok honest abstain; qwen3:4b multi-step reasoning survives with correct answer. reasoning 3090/0, runtime 1678/0, replay 37/0. User-reported inefficient-termination defect CLOSED with measured lift."
+```
