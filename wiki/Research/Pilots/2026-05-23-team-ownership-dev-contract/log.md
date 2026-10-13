@@ -1262,3 +1262,11 @@ task: "W4.0 iterate-pass refactor-first: generator return-protocol single-writer
 result: completed, confidence 0.85 (warden self-rated; review upgraded)
 outcome: "accepted: review APPROVED 0C/0I. Byte-identical claim independently verified: all 19 base exit paths had adjacent sync(); carrier referenced in exactly 2 places (entry destructure + write-back) so nothing observes mid-pass staleness; same 15 fields; error channel never. reasoning 3,050/0, runtime parity, typecheck 22/22. Out-of-authority census consumer-string edit (1 line) parent-accepted as the re-pin's consequence. Parent also bumped both guard ratchets with dated rationale (as-unknown-as 240->242, console-ceiling 11->12) - the W0.3 test-provider warning is the console site (sync build() context, ceiling's own exception)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4 control plane (4.1+4.6+4.7: ONE progress arbiter, pattern-(e) zero-evidence staleness, evidenceDelta crediting, band rule) then LIVE-GAP fix e0c6a456f (band keyed on deterministic outstanding short-circuited green; actuator horizon-gated -> default-on 2-stale-iteration stand-down + 4.3 gate routing)"
+result: completed, confidence 0.8
+outcome: "accepted pending review; END-TO-END LIVE VERIFIED by controller: impossible task 4-5 iters/23.4s/~1980tok -> 2 iters/9.1s/857tok with honest abstain reason + band green->economize; hard reasoning-only task unaffected (1 iter, success). Warden disclosed the trade-off (no-tool 3rd-pass tasks stand down) - review targets it. User-reported defect (inefficient termination) closed at root: detection now actuates by default."
+```
