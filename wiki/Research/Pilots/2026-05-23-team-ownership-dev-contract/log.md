@@ -1015,3 +1015,19 @@ task: "System One decision backends Task 7 kernel half: chunkQuestions(toolNames
 result: completed, confidence 0.95
 outcome: "accepted: working tree already contained the implementation (residue of an interrupted funds-killed attempt); warden verified rather than re-implemented (red via HEAD-src restore 2-vs-5 ask calls, green 31/0 comprehend, typecheck 9/9, zero new casts). Parent re-verified (comprehend + kernel loop 133/0, zero casts) and integrated per warden no-commit contract. Independent Task 7 review covers both halves."
 ```
+
+```yaml
+date: 2026-10-12
+warden: runtime-warden
+task: "Wave 0 W0.3: implicit-test-provider warning — builder tracks _providerExplicit; build/buildEffect emit actionable once-per-build warning when provider silently defaults to 'test' (fake-green front door); explicit arms (.withProvider('test'), .withTestScenario, .withReplayLLM override) silent"
+result: completed, confidence 0.85 (round 2; round 1 was 0.7)
+outcome: "accepted: parent verifier green (builder-test-provider-warning + durable-checkpoint 10/0 scoped; runtime suite 1670/0/6; turbo typecheck filter=@reactive-agents/runtime 21/21). Independent task review Approved with 1 Important (buildEffect terminal uncovered, violating the file's own public-entry-duplication precedent); fix round 1 (commits 29a06365..2379ef22) deviated from prescribed dual-call-site to single call in buildEffect because build() delegates via Effect.runPromise(this.buildEffect()) (:2704) — re-review verified deviation correct (warn-once preserved, no-double-warn regression pin added). Authority note: brief manifest under-listed packages/runtime/tests/**; contract table governs — durable-checkpoint test edit accepted as in-domain. Deviations + findings all disclosed by warden."
+```
+
+```yaml
+date: 2026-10-12
+warden: kernel-warden
+task: "Wave 0 W0.4a: export composable-kernel extension surface from @reactive-agents/reasoning index (makeKernel value; Phase/Guard/KernelContext/MetaToolHandler/ThoughtKernel types; KernelState untouched) + public-entry pin test + minor changeset"
+result: completed, confidence 0.95
+outcome: "accepted: parent verifier green (focused pin test 4/4, turbo typecheck filter=@reactive-agents/reasoning; warden runs: RED 3-fail runtime + 10 TS2339/TS2694 compile, GREEN 4/4, reasoning suite 2968/0/4todo, typecheck --force 9/9). Independent task review Approved, 0 Critical/0 Important-for-task; diff surgically exports-only; collision + type-pin-elision named risks checked. Disclosed gap ledged as parent follow-up: tests/** excluded from package tsconfig, so type-pins do not compile-fail in CI (runtime pins compensate). Warden correctly escalated the pilot-log obligation instead of widening authority."
+```
