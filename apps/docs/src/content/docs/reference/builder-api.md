@@ -1102,6 +1102,9 @@ interface AgentResult {
         strategyUsed?: string // Reasoning strategy used (if reasoning enabled)
         stepsCount: number // Number of reasoning steps / iterations
         confidence?: 'high' | 'medium' | 'low' // From final-answer tool
+        // Honest-partial markers (present when the harness authored the shipped output)
+        harnessAuthoredOutput?: boolean // true when output was produced by the harness, not the model (assembled deliverable or exhausted-run abstention)
+        verificationWarning?: string    // the result-boundary verifier's note, when it flagged something
     }
 
     // Enriched fields (present when reasoning is enabled)
@@ -1115,9 +1118,8 @@ interface AgentResult {
         | 'abstained'         // Agent honestly declined — could not ground an answer (see abstention below)
     llmCalls?: number // Number of LLM calls made during the kernel loop (available when reasoning is enabled)
 
-    // Honest-partial markers (present when the harness authored the shipped output)
-    harnessAuthoredOutput?: boolean // true when output was produced by the harness, not the model (assembled deliverable or exhausted-run abstention)
-    verificationWarning?: string    // the result-boundary verifier's note, when it flagged something
+    // Honest-partial markers (on `metadata`, not top level)
+    // See AgentResultMetadata in packages/runtime/src/builder/types.ts.
 
     // Abstention (present iff terminatedBy === 'abstained')
     abstention?: {
@@ -1126,12 +1128,20 @@ interface AgentResult {
     }
 
     // Durable HITL (present when a run paused for human approval — see Durable HITL guide)
-    status?: 'completed' | 'awaiting-approval' | 'failed' // defaults to 'completed' when absent
+    status?: 'completed' | 'awaiting-approval' | 'awaiting-interaction' | 'failed' // defaults to 'completed' when absent
     pendingApproval?: {
         runId: string    // pass to approveRun(runId) / denyRun(runId, reason)
         gateId: string
         toolName: string // the gated tool call awaiting a decision
         args: unknown
+    }
+    // Agentic-UI interaction rail (present only when status === 'awaiting-interaction')
+    pendingInteraction?: {
+        runId: string
+        interactionId: string
+        kind: string
+        prompt: string
+        schema: unknown
     }
 
     // Debrief (present when .withMemory() + .withReasoning() are enabled)
@@ -1148,6 +1158,100 @@ interface AgentResult {
 multi-file run lists exactly which outputs never landed (`produced: false`)
 instead of claiming success. The full receipt shape, verdicts, and optional
 Ed25519 signing are documented in [The Process Model](/features/process-model/).
+
+### How to tell what happened: the decision procedure
+
+`AgentResult` carries overlapping outcome fields, and reading them in the wrong
+order leads to the wrong conclusion. Branch in this order. Every step cites the
+source it was verified against (`packages/runtime/src/reactive-agent.ts`,
+`packages/runtime/src/builder/types.ts`, `packages/runtime/src/builder/helpers.ts`,
+`packages/core/src/types/result.ts`, `packages/core/src/types/receipt.ts`).
+
+0. **Did `run()` reject at all?** `agent.run()` *returns a result* for nearly
+   every failure mode. It throws only for run-boundary events:
+   - **Interruption** — `agent.terminate()`, or a kill-switch aborting the run
+     fiber (`.withKillSwitch()`), rejects with a kill-switch error
+     (`reactive-agent.ts` — the `runSignal?.aborted` branch of the `execute().catch`).
+   - **The bare-builder asymmetry** — when reasoning was **not** enabled (no
+     `.withReasoning()`, no declarative `reasoning` config — what the code calls
+     a *bare builder*), a provider fault (`terminatedBy: "llm_error"`) or an
+     iteration-cap stop (`terminatedBy: "max_iterations"`) **re-throws an
+     `ExecutionError` instead of returning a result**
+     (`reactive-agent.ts` — `BARE_BUILDER_THROWS_ON`). The *same two faults on a
+     builder with reasoning enabled* come back as a graceful result
+     (`success: false`, `status: "failed"`) — that is the kernel's tested
+     contract (`reactive-agent.ts` — the B1 comment above the throw). Every
+     *other* `success: false` outcome — abstention, fabrication-guard rejection,
+     empty output with no verified deliverable — returns a result on **both**
+     builder kinds and never throws (`reactive-agent.ts` — the deliberate
+     "NOT extended to every success:false reason" note).
+   - **Any other engine rejection** is unwrapped, fed to `.withErrorHandler()`
+     if registered, and re-thrown as a run-boundary error
+     (`reactive-agent.ts` — the tail of the `execute().catch`).
+
+   Unifying the bare-builder throw contract with the result-returning contract
+   is **deferred to a future breaking release**. Until then this asymmetry is
+   the real behavior: wrap `run()` in `try/catch` whenever the builder might be
+   bare.
+
+1. **`result.status`** — lifecycle first. `"awaiting-approval"` → the run
+   paused at an approval gate; `pendingApproval` carries the `runId` for
+   `approveRun()` / `denyRun()` (or pass `onApproval` to `run()` and the
+   pause→decide→resume loop is driven for you — `reactive-agent.ts`).
+   `"awaiting-interaction"` → `pendingInteraction` + `respondToInteraction()`.
+   `"failed"` → graceful failure; go to step 2. `"completed"` or absent →
+   normal path.
+2. **`result.success`** — whether the run terminated with an accepted outcome.
+   `false` is *not* an exception: read `result.error` (message) and
+   `result.terminatedBy` (cause) off the result itself.
+3. **`result.terminatedBy`** — how the loop ended: `final_answer_tool` |
+   `final_answer` | `max_iterations` | `end_turn` | `llm_error` | `abstained`
+   (`packages/core/src/types/result.ts` — the `TerminatedBy` literal).
+4. **`result.goalAchieved`** — the semantic readout, distinct from `success`:
+   `true` = a final answer was delivered; `false` = exhausted / errored /
+   abstained; `null` = ambiguous (`end_turn` — the model stopped its turn
+   without signaling completion; treat as "maybe") (`builder/types.ts`).
+   Declared deliverables then override the heuristic deterministically: any
+   declared deliverable missing → `false`; all produced → a `null` upgrades to
+   `true`; an explicit `false` is never upgraded (`builder/helpers.ts`).
+5. **`result.abstention`** — present iff `terminatedBy === "abstained"`: the
+   agent honestly declined, with `reason` and the `missing` list (`builder/types.ts`).
+6. **`result.receipt?.verdict`** — an evidence *grade* for HOW the answer was
+   produced: `"tool-grounded"` | `"partially-grounded"` | `"ungrounded"` |
+   `"abstained"` | `"failed"` (`packages/core/src/types/receipt.ts`). It grades
+   the run's evidence trail, **not** the factual correctness of `output` — not
+   a truth certificate (`builder/types.ts`).
+7. **`result.metadata.harnessAuthoredOutput` / `result.metadata.verificationWarning`**
+   — honest-partial markers, on `metadata` (not top level): `true` when the
+   shipped output was authored by the harness rather than the model, plus the
+   result-boundary verifier's note when it flagged unmet requirements
+   (`builder/types.ts` — `AgentResultMetadata`).
+
+```typescript
+// Ordered interpretation — mirrors the numbered steps above.
+try {
+    const result = await agent.run("Summarize the current price of BTC")
+
+    if (result.status === "awaiting-approval" && result.pendingApproval) {
+        // paused, not finished — approveRun(runId) / denyRun(runId, reason)
+    } else if (result.status === "awaiting-interaction" && result.pendingInteraction) {
+        // paused on the interaction rail — respondToInteraction(...)
+    } else if (!result.success) {
+        console.log(result.terminatedBy, result.error) // why it failed
+    } else {
+        console.log(result.output)
+        console.log(result.goalAchieved)               // true / false / null
+        console.log(result.receipt?.verdict)           // evidence grade
+        console.log(result.metadata.harnessAuthoredOutput) // honest-partial marker
+    }
+} catch {
+    // Only: terminate()/kill-switch interruption, or a BARE builder (no
+    // .withReasoning()) hitting llm_error / max_iterations.
+}
+```
+
+Quick recipe: **status → success → terminatedBy → goalAchieved → receipt.verdict.**
+Everything else is annotation.
 
 ### Abstention (`terminatedBy: "abstained"`)
 
