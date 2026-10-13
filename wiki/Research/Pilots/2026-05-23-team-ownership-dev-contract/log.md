@@ -1286,3 +1286,11 @@ task: "W4-live fix rounds 1+2: flail-signature precision (MIN_REPETITION_LENGTH=
 result: completed, confidence 0.85
 outcome: "accepted: scoped re-reviews rounds 1+2 -> round 2 All findings ADDRESSED, no new Critical/Important breakage; one narrow residual disclosed (deriving preamble 'don't have access' can still arm). Controller live-verified both directions: impossible 2 iters/10.3s/842tok honest abstain; qwen3:4b multi-step reasoning survives with correct answer. reasoning 3090/0, runtime 1678/0, replay 37/0. User-reported inefficient-termination defect CLOSED with measured lift."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4 remainder: 4.4 outstanding recitation default-on (CONTRACT_PROFILE showOutstanding, F10 volatile tail, dedupe+satisfied-exclusion, cap 8 + (+K more), no-contract parity) + 4.5 deterministic escalation (strategy-ladder.ts, zero-LLM default path outcome-pinned, availableStrategies from KERNEL_STRATEGY_CANDIDATES, pattern-id handoff reason, keyObservations cap 12)"
+result: completed, confidence 0.85
+outcome: "accepted: review APPROVED 0C/1I/4M. Cache-safety verified STRUCTURAL (volatile-tail seam after compaction); parity pin genuine; zero-LLM claim outcome-proven (scripted evaluator ignored on default path); pattern-id reason real. Important #1: the plan's 4.4 tail-bloat guard (tokens/run) UNRUN -> parent measurement lane at wave close (always-outstanding floor makes the tail non-empty every contract run; bounded by cap). Minors: within-turn-only dedupe (intent clarification), 'requirement-relevant' wording vs evidence-bearing slice, candidate-naming comment, ladder-ignores-fit (bounded by maxSwitches=1 + carried iteration cap). GH #240 stays open (separate adaptive/decompose seam). reasoning 3101/0, runtime 1678/0, replay 37/0."
+```
