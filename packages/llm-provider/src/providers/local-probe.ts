@@ -3,8 +3,16 @@
 // Phase 1 Sprint 2 S2.4 (lifted forward) — Ollama capability probe via
 // /api/show. Replaces the static-table band-aid for local models: any
 // model the user has pulled gets its capabilities derived from Ollama's
-// own report at first use, then cached in module scope so subsequent
-// requests within the same process skip the probe.
+// own report at first use, then cached so subsequent requests skip the
+// probe.
+//
+// Wave 2a (2026-10-13) — S2.4-proper landed: the process-Map cache below
+// collapses onto the persistent capability store (capability-store.ts).
+// Read order: in-memory Map → capability store → live /api/show probe;
+// a successful probe writes through to BOTH. Cross-process persistence
+// means a fresh process for an already-probed model hits the store, not
+// the network. A duck-typed CalibrationStore can be injected via
+// `setCapabilityStore()` to replace the default JSON-file store.
 //
 // Why this lives in `providers/local.ts`-adjacent: the probe is
 // inherently provider-specific (Ollama exposes /api/show; cloud
@@ -12,16 +20,17 @@
 // (capability discovery API) etc. live next to their providers.
 
 import type { Capability } from "../capability.js";
+import { getCapabilityStore } from "../capability-store.js";
 
-// ─── Module-scope cache ──────────────────────────────────────────────────────
+// ─── Module-scope cache (in-memory layer over the persistent store) ─────────
 
 /**
  * One probe per (model, baseUrl) per process. Subsequent requests for the
- * same model reuse the cached Capability — no re-probing.
+ * same model reuse the cached Capability — no re-probing, no store read.
  *
- * For cross-process persistence (so users don't re-probe on every script
- * run), Sprint 2 S2.4-proper will write through to CalibrationStore. This
- * module-scope Map is the immediate fix.
+ * The persistent layer beneath this Map is the capability store
+ * (capability-store.ts) — the deferred S2.4 CalibrationStore write-through
+ * landed there in Wave 2a.
  */
 const probeCache = new Map<string, Capability>();
 
@@ -29,20 +38,65 @@ function probeKey(baseUrl: string, model: string): string {
   return `${baseUrl}::${model}`;
 }
 
-// ─── Tier classification from parameter size ────────────────────────────────
+// ─── /api/show field parsing ────────────────────────────────────────────────
 
-function tierFromParameterSize(sizeStr: string | undefined): Capability["tier"] {
-  // Ollama returns sizes like "3.0B", "8.0B", "70.0B", "405.0B"
-  if (!sizeStr) return "local";
-  const m = sizeStr.match(/^([\d.]+)B$/i);
-  if (!m) return "local";
+/**
+ * Parse Ollama's `details.parameter_size` ("1.7B", "8.0B", "120B") into a
+ * parameter count in billions. Returns undefined for anything unparseable
+ * ("unknown", missing, quantization-suffixed strings) so downstream claims
+ * can distinguish "measured small" from "not measured".
+ */
+export function parseParameterSizeBillions(sizeStr: string | undefined): number | undefined {
+  if (!sizeStr) return undefined;
+  const m = sizeStr.trim().match(/^([\d.]+)B$/i);
+  if (!m) return undefined;
   const billions = Number(m[1]);
-  // All Ollama models are "local" by definition; tier here is informational.
-  // Could refine: <8B → local-small, 8-30B → local, 30B+ → local-large.
-  // Sticking with "local" for now since downstream consumers don't yet
-  // discriminate within local-tier.
-  if (Number.isNaN(billions)) return "local";
+  return Number.isFinite(billions) && billions > 0 ? billions : undefined;
+}
+
+/**
+ * Derive the informational tier bucket from a parameter size. All
+ * Ollama-served models are "local" by definition — downstream consumers
+ * don't yet discriminate within local-tier (see D-2026-07-30-H: the
+ * PROFILE tier, resolved elsewhere, is the load-bearing classification;
+ * this field stays informational).
+ */
+function tierFromParameterSize(sizeStr: string | undefined): Capability["tier"] {
+  if (parseParameterSizeBillions(sizeStr) === undefined) return "local";
   return "local";
+}
+
+/**
+ * Markers that a Go/Jinja chat template renders tool calls. Detection is
+ * deliberately generous (any tool-call construct in the template text):
+ * this field answers "does the template have a path that emits tool
+ * tokens", which is what the model's ACTUAL tool-calling ability hinges
+ * on for local models whose `capabilities` array is known to lie
+ * (cogito/qwen3 family: advertise tools, template drops them).
+ */
+const TOOL_TEMPLATE_MARKERS: readonly string[] = [
+  "tool_call",
+  ".toolcalls",
+  ".tool_calls",
+  "function.name",
+  '"tool"',
+  "'tool'",
+];
+
+/**
+ * Tri-state chat-template tool-emission detection from /api/show's
+ * `template` string.
+ *
+ *   true       — template references tool-call constructs (has an emission path)
+ *   false      — template measured (non-empty) and contains NO tool constructs
+ *   undefined  — no template in the response (older Ollama, plugin models) → unmeasured
+ */
+export function detectToolTemplateEmission(
+  template: string | undefined,
+): boolean | undefined {
+  if (template === undefined || template.trim().length === 0) return undefined;
+  const lower = template.toLowerCase();
+  return TOOL_TEMPLATE_MARKERS.some((marker) => lower.includes(marker));
 }
 
 // ─── /api/show response → Capability ─────────────────────────────────────────
@@ -56,7 +110,11 @@ function tierFromParameterSize(sizeStr: string | undefined): Capability["tier"] 
  *     exposes this, so missing means an unusual/older model.
  *   - capabilities: Ollama returns ["completion", "vision", "tools", "thinking"]
  *     as flat strings. We map them to our boolean fields.
- *   - parameter_size: drives tier classification.
+ *   - parameter_size: captured into `parameterSizeBillions` and drives tier
+ *     classification.
+ *   - template: scanned for tool-call tokens → `toolTemplateEmitsTokens`
+ *     (Wave 2a — the raw-material signal behind the derived
+ *     supportsToolCalling claim; see providers/local.ts).
  *
  * Pure / no I/O. Caller does the fetch.
  */
@@ -66,6 +124,7 @@ function showResponseToCapability(
     capabilities?: readonly string[];
     details?: { family?: string; parameter_size?: string };
     model_info?: Record<string, unknown>;
+    template?: string;
   },
 ): Capability {
   const caps = new Set(show.capabilities ?? []);
@@ -104,6 +163,8 @@ function showResponseToCapability(
     supportsThinkingMode: caps.has("thinking"),
     supportsStreamingToolCalls: caps.has("tools"),
     toolCallDialect: caps.has("tools") ? "native-fc" : "none",
+    parameterSizeBillions: parseParameterSizeBillions(show.details?.parameter_size),
+    toolTemplateEmitsTokens: detectToolTemplateEmission(show.template),
     source: "probe",
   };
 }
@@ -113,16 +174,14 @@ function showResponseToCapability(
 /**
  * Probe an Ollama-served model's capabilities via /api/show.
  *
+ *   - Read order: in-process Map → capability store (cross-process,
+ *     persistent — the S2.4 write-through) → live probe. A store hit is
+ *     promoted into the Map so repeats are free.
  *   - Returns null on any failure (network error, 404 model-not-pulled,
  *     malformed response). Callers fall back to the static table or the
  *     conservative fallback.
- *   - Module-scope cached: probing the same model twice in one process
- *     hits memory, not the network.
  *   - 5s timeout — local Ollama responds in <100ms typically; anything
  *     slower means trouble we don't want to wait on.
- *
- * Future: this result should also write through to CalibrationStore so
- * cross-process persistence skips the probe entirely (S2.4 proper).
  */
 export async function probeOllamaCapability(
   model: string,
@@ -132,6 +191,15 @@ export async function probeOllamaCapability(
   const key = probeKey(baseUrl, model);
   const cached = probeCache.get(key);
   if (cached) return cached;
+
+  // Store-first for cross-process persistence: a prior run's probe result
+  // (or an injected CalibrationStore row) serves without touching network.
+  const store = getCapabilityStore();
+  const fromStore = store.loadCapability("ollama", model);
+  if (fromStore) {
+    probeCache.set(key, fromStore);
+    return fromStore;
+  }
 
   try {
     const ctrl = new AbortController();
@@ -150,6 +218,8 @@ export async function probeOllamaCapability(
     const data = (await res.json()) as Parameters<typeof showResponseToCapability>[1];
     const cap = showResponseToCapability(model, data);
     probeCache.set(key, cap);
+    // S2.4 write-through — persist per model so future processes skip the probe.
+    store.saveCapability(cap);
     return cap;
   } catch {
     return null;

@@ -10,7 +10,7 @@ import { Schema, ParseResult } from "effect";
 import { Capability, CapabilitySchema, STATIC_CAPABILITIES } from "../src/capability.js";
 
 describe("Capability struct (Phase 1 S1.1)", () => {
-  it("schema exposes exactly the 12 documented fields", () => {
+  it("schema exposes exactly the documented field set", () => {
     // Pin the field set so adding/removing fields without updating callers
     // is caught at the schema level. Field order doesn't matter; presence does.
     const expected = new Set([
@@ -30,6 +30,10 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (2026-07-01): models whose API rejects `max_tokens` and
       // requires `max_completion_tokens` (OpenAI gpt-5.x / o-series).
       "requiresMaxCompletionTokens",
+      // Optional (Wave 2a, 2026-10-13): probe-ladder facts — parsed parameter
+      // size (billions) and tri-state chat-template tool-token emission.
+      "parameterSizeBillions",
+      "toolTemplateEmitsTokens",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

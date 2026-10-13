@@ -70,6 +70,12 @@ export type CapabilitySource = typeof CapabilitySourceSchema.Type;
  * `source` field carrying provenance for telemetry. `source` is mandatory
  * (the resolver always knows where the value came from) and isn't counted
  * against the documented "12 fields" count — it's plumbing, not capability.
+ *
+ * Wave 2a (2026-10-13) adds two OPTIONAL probe-ladder fields —
+ * `parameterSizeBillions` and `toolTemplateEmitsTokens` — that exist only to
+ * carry measured probe facts across the persistent store. They extend the
+ * documented surface rather than replacing it; static-table/fallback paths
+ * leave them undefined ("not measured"), never guessed.
  */
 export const CapabilitySchema = Schema.Struct({
   /** Provider identifier — matches the values accepted by `withProvider()`. */
@@ -118,6 +124,28 @@ export const CapabilitySchema = Schema.Struct({
 
   /** Tool-calling dialect — drives ToolCallingDriver selection. */
   toolCallDialect: ToolCallDialectSchema,
+
+  /**
+   * Model parameter count in billions, parsed from the probe's
+   * `details.parameter_size` ("1.7B" → 1.7, "120B" → 120). Probe-only:
+   * undefined when the descriptor did not come from a /api/show-style probe
+   * or the provider did not report a size. Drives tier classification and
+   * local-reliability diagnostics.
+   */
+  parameterSizeBillions: Schema.optional(Schema.Number),
+
+  /**
+   * Tri-state detection of whether the model's chat template renders
+   * tool-call tokens. `true` — template references tool-call constructs
+   * (measured, tool-capable rendering path exists). `false` — template was
+   * measured and emits NO tool tokens regardless of what `capabilities`
+   * advertises (the classic broken-tools local model). `undefined` — never
+   * measured (static-table entry, or a probe response lacking the template).
+   *
+   * Consumers MUST treat `undefined` as "unknown" (fail-permissive), never
+   * as "false" — see `deriveSupportsToolCalling` in providers/local.ts.
+   */
+  toolTemplateEmitsTokens: Schema.optional(Schema.Boolean),
 
   /** Where this capability came from (probe / static-table / fallback). */
   source: CapabilitySourceSchema,

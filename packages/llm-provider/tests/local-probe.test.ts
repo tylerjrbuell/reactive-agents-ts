@@ -4,11 +4,29 @@
 // first-use path. Pins the /api/show response → Capability translation
 // without depending on a live Ollama daemon (uses fetch mock).
 
-import { describe, it, expect, mock, afterEach } from "bun:test";
+import { describe, it, expect, mock, afterEach, beforeEach } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { _resetProbeCacheForTesting } from "../src/providers/local-probe.js";
+import { setCapabilityStoreDirForTesting } from "../src/capability-store.js";
+
+// Wave 2a: the probe now write-throughs to the persistent capability store.
+// Pin the store to a fresh temp dir per test so a fixture saved by one test
+// can't serve as a store hit for the next (the S2.4 cache test below must see
+// exactly one network probe), and so test fixtures never touch the real
+// ~/.reactive-agents directory.
+let storeDir: string;
+
+beforeEach(() => {
+  storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-local-probe-"));
+  setCapabilityStoreDirForTesting(storeDir);
+});
 
 afterEach(() => {
   _resetProbeCacheForTesting();
+  setCapabilityStoreDirForTesting(null);
+  fs.rmSync(storeDir, { recursive: true, force: true });
 });
 
 // Fixture mirrors the actual /api/show response from `gemma4:e4b` 2026-04-25
