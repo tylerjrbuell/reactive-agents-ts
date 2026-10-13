@@ -1142,3 +1142,11 @@ task: "W2c (plan 2.3): tokenizer-aware dense-JSON correction in estimateTokenCou
 result: completed, confidence 0.85
 outcome: "1 work commit (f8fae1d67). Measurement path = committed traces (0.97-1.02 llama traffic; FC-residual 1.245) + sanctioned live /api/chat probe (dense 1.032-1.157, prose 0.767-0.892 over-count). Plan seed 1.35 DISPROVED (probe-3 folklore, circular provenance); shipped llama dense factor 1.25, prose/mixed untouched (unsafe-direction guard), unknown=>1.0 zero behavior change. RED-first weak point disclosed (first RED was parse/module failure, not assertion-level). llm-provider 502/0, reasoning/context 95/0, runtime 1673/0, typecheck 10/10. think.ts:1034 + rate-limiter + prompt-manager flagged-not-threaded (census in w2c-report.md); W2e inherits the corrected helper. Concern: real overflow driver is the OMITTED FC-schema input, not the char ratio — 2.5 preflight must add the schema term."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2d: FC wire-payload honesty (2.4, names-and-types applied to tools[] via existing stripper semantics, frontier byte-pinned) + classifier-skip enforcement (2.6 at the measured strategy-evaluator firing site, harness-signal observable, runtime correctly untouched)"
+result: completed, confidence 0.95
+outcome: "accepted: review Approved 0C/2I -> #1 fixed round 1 (d5ecf6b77 >=3x pin per spec, measured 7x headroom), #2 residual adaptive/decompose classify sites -> GH #240. Independent trace verification of the classify-source finding (2/8 post-w1 fixtures carry strategy-evaluator classify exchanges) praised. W4.0 note: structural pin greps iterate-pass.ts source — will need re-pinning through the 4.0 refactor. Full reasoning 3,013/0 + runtime parity + typecheck 9/9."
+```
