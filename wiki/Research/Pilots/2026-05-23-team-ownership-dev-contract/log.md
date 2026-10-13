@@ -1302,3 +1302,11 @@ task: "Wave 4 close capture: detection (fixture-replay) + live termination + no-
 result: completed, confidence 0.9
 outcome: "accepted as measurement; WAVE 4 NOT VERIFIED: detection PASS (146/146 arbiter non-progress, (c)/(d)/(e) trip, FP guard green), no-regression PASS, tail-bloat CLEAN (-7%/+4% noise), termination PARTIAL with a LIVE HONESTY REGRESSION (3/3 early-stop runs minted fabricated success claims, 0 tool calls, verdict success - the program's core false-success class via a new route) -> kernel fix dispatched + w4-terminate re-run required. Integrity finding: commanded temperature never reached the wire (provider default 0.5/0.3 recorded) - all temp-0 labels truth-upped with era note; threading fix routed to provider-warden. Warden discipline note: refused to mark the wave verified and escalated instead."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden + provider-warden + runtime-warden
+task: "Wave-4 close-capture escalations: (1) kernel honesty fix db7c5e985 (dispatcher-early-stop missing from HARNESS_FORCED_TERMINALS + gate fenced to completed while route yields partial -> false success 3/3); (2) provider temp diagnosis + adapter pins 5fb652362 (wire-broken: commanded temperature never reached the wire; trace faithful); (3) runtime root fix 129fc70b (command-first precedence; the escalated one-liner was incomplete - reactive.ts:228 second drop found and fixed, disclosed)"
+result: completed (3 dispatches), confidence 0.9
+outcome: "accepted pending review: honesty RED-first pin + over-blocking guard + cut all green (reasoning 3105/0); temp RED (Expected 0/Received 0.5) -> GREEN with command-first precedence (runtime 1686/0, reasoning 3109/0). Program-wide consequence: every historical temp-0 capture was wire-wrong (era-labelled); substrate restored, harness re-run dispatched. Provider warden correctly BLOCKED on the out-of-authority runtime seam rather than crossing it - contract working as designed."
+```
