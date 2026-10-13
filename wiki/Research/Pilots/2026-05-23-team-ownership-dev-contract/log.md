@@ -1102,3 +1102,11 @@ task: "W1.5 re-capture: post-w1-fix S2 N=5 + S1 drift guard against fixed kernel
 result: completed, confidence 0.9
 outcome: "accepted (capture verification = its own review, per controller ruling): FINAL WAVE-1 VERDICT CONFIRMED — defect prose-tail 5/5->0/5 with per-run outputs quoted ('3052', end_turn), marker-clobber 0/5, thinkingChars 6.7-10.8K 5/5, S1 drift 2/2 shape-identical, zero packages/ edits range-verified. Honest residual recorded (S2 answer never changed at temp 0 => quality win = defect-free retention + rescue availability; accuracy lift provable only on thinking-only tasks, W1.3 unit arms). Methodology finding folded into Lift Protocol plan text: ~±17% token variance => N>5 for sub-15% deltas. Hot.md #38 amended per authorized contradiction clause."
 ```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 2a: capability probe ladder (size/thinking/tool-template capture + capability-store write-through), derived supportsToolCalling claim, D-2026-07-30-H budget-monotone fix + ratchet test"
+result: completed, confidence 0.85
+outcome: "3 commits (64a94a309, 57b06836a, d2c58d6a6). llm-provider 486/0, core+reasoning 3160/0, runtime 1673/0, typecheck 24/24. Cross-authority notes for parent: (1) CONTEXT_PROFILES lives in reasoning/core, not llm-provider — Area 3 executed per explicit dispatch instruction despite the 'packages/reasoning out of scope' line (interpreted as resolver-consumption exclusion), commit scoped fix(reasoning) honestly; (2) D-H fix had to move core TIER_TOOL_RESULT_PRESERVE mirror too or the live project() budget keeps the inversion; (3) as-unknown-as-ceiling TESTS_CEILING 237->240: pin was already red at 239 on arrival (pre-Wave-2a drift, verified at 64a94a309~1), +1 is sanctioned fetch-stub — guard option 3 used; (4) dispatch's 'monotone non-decreasing whole table' unsatisfiable literally for preserve budgets (designed shape descends) — ratchet encodes per-family direction + D-H guard, documented in test header + w2a-report."
+```
