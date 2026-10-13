@@ -1318,3 +1318,11 @@ task: "Wave-4 verdict re-run at TRUE temp 0 (80bdc50dd) + temp fix round 1 (e825
 result: completed, confidence 0.93
 outcome: "WAVE 4 VERIFIED: temp-0 substrate proven 9/9; honesty 0/5 fabricated (was 3/3); grounded S2 2/2 no over-block; detection/no-regression/tail-cost clean. Methodology: true-0 yields shape determinism (prior 'variance' was decoding temp). Temp threading now consistent at all THREE kernel seams (reasoning-think, reactive KernelInput, verification-retry); non-kernel strategies honestly scoped to GH #246. Residual filed for Wave 5: abstained output TEXT still ships success claims (verdict-level honest, content-level unscrubbed)."
 ```
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "temp fix round 1 (e8252af2): verification-retry third seam command-first + honest changeset scoping + over-block intent pin (controller ruling: abstain correct on zero grounding + harness-forced terminal)"
+result: completed, confidence 0.9
+outcome: "accepted: scoped re-review CLEAN - all 3 findings ADDRESSED (retry-route pin real, #246 claim verified by grep, intent pin revert-sensitive); no new breakage; unset-command path byte-identical. Temp threading consistent at all 3 kernel seams. WAVE 4 VERIFIED overall."
+```
