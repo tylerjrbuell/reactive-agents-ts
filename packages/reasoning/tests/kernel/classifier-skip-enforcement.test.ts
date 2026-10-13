@@ -17,22 +17,32 @@
  *    observable via a harness-signal event (rax-diagnose-visible).
  *  - trusted reliability (or absent) → LLM consulted exactly as before
  *    (no behavior change for reliable models).
- *  - structural pin: the iterate-pass call site THREADS
- *    currentInput.calibration?.classifierReliability into the evaluator.
+ *  - behavioral pin (W4.0 re-pin): a real kernel run whose loop detector
+ *    fires at the iterate-pass strategy-switch site, with
+ *    `calibration.classifierReliability:"low"` on the input, emits the
+ *    `strategy-switch/classifier-skip` harness-signal — and does NOT when the
+ *    calibration is absent. This observes the SITE's threading behaviorally
+ *    instead of by grepping iterate-pass.ts source text (which a refactor
+ *    would break without any behavior change).
  */
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type {
   CompletionRequest,
   CompletionResponse,
+  ModelCalibration,
   StructuredCompletionRequest,
 } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { evaluateStrategySwitch } from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
-import type { KernelState } from "../../src/kernel/state/kernel-state.js";
+import { runKernel } from "../../src/kernel/loop/runner.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
+import {
+  transitionState,
+  type KernelState,
+  type ThoughtKernel,
+} from "../../src/kernel/state/kernel-state.js";
 
 function makeState(): KernelState {
   return {
@@ -148,6 +158,81 @@ async function runEvaluation(
   );
 }
 
+// ── Behavioral pin for the iterate-pass loop-detector site (W4.0 re-pin) ─────
+
+/** A fully-specified calibration carrying the documented skip reliability. */
+const LOW_RELIABILITY_CALIBRATION: ModelCalibration = {
+  modelId: "classifier-skip-behavior-test",
+  calibratedAt: new Date(0).toISOString(),
+  probeVersion: 1,
+  runsAveraged: 1,
+  steeringCompliance: "hybrid",
+  parallelCallCapability: "sequential-only",
+  observationHandling: "uses-recall",
+  systemPromptAttention: "moderate",
+  optimalToolResultChars: 800,
+  classifierReliability: "low",
+};
+
+/** Identical repeated action — trips `detectLoop` at the iterate-pass switch site. */
+const LOOP_ACTION = JSON.stringify({ tool: "web-search", input: '{"query":"loop-trigger"}' });
+
+/**
+ * Drive a REAL kernel run whose loop detector fires at the iterate-pass
+ * strategy-switch site (identical repeated action + strategySwitching enabled
+ * with an alternative available, and NO fallbackStrategy so the evaluator — the
+ * classify round-trip — is the decision path). Returns the harness-signal origins
+ * emitted during the run and the terminal status.
+ */
+async function runLoopDetectorCycle(
+  calibration: ModelCalibration | undefined,
+): Promise<{ readonly origins: readonly string[]; readonly status: string }> {
+  const kernel: ThoughtKernel = (state) =>
+    Effect.succeed(
+      transitionState(state, {
+        status: "thinking",
+        iteration: state.iteration + 1,
+        steps: [...state.steps, makeStep("action", LOOP_ACTION)],
+      }),
+    );
+
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const signalSink = yield* Ref.make<AgentEvent[]>([]);
+      const bus = yield* EventBus;
+      yield* bus.on("HarnessSignalInjectedEmitted", (ev) =>
+        Ref.update(signalSink, (xs) => [...xs, ev]),
+      );
+      const result = yield* runKernel(
+        kernel,
+        { task: "loop-detector cycle", ...(calibration ? { calibration } : {}) },
+        {
+          maxIterations: 20,
+          strategy: "reactive",
+          kernelType: "react",
+          loopDetection: { maxSameToolCalls: 3 },
+          strategySwitching: {
+            enabled: true,
+            maxSwitches: 1,
+            availableStrategies: ["plan-execute-reflect"],
+          },
+        },
+      );
+      const origins = (yield* Ref.get(signalSink)).flatMap((ev) =>
+        ev._tag === "HarnessSignalInjectedEmitted" ? [ev.origin] : [],
+      );
+      return { origins, status: result.status };
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          TestLLMServiceLayer([{ match: ".*", text: "no valid strategy JSON here" }]),
+          EventBusLive,
+        ),
+      ),
+    ),
+  );
+}
+
 // ── Skip-eligible reliabilities: no round-trip, deterministic verdict ───────
 
 describe("W2d 2.6 — classifierReliability enforcement at the reasoning classify site", () => {
@@ -184,13 +269,18 @@ describe("W2d 2.6 — classifierReliability enforcement at the reasoning classif
     expect(out.shouldSwitch).toBe(true);
   }, 15000);
 
-  it("structural pin: the iterate-pass loop-detector site threads currentInput.calibration?.classifierReliability into the evaluator", () => {
-    const path = fileURLToPath(
-      new URL("../../src/kernel/loop/iterate-pass.ts", import.meta.url),
-    );
-    const src = readFileSync(path, "utf8");
-    expect(src).toContain(
-      "classifierReliability: currentInput.calibration?.classifierReliability",
-    );
+  it("behavioral pin (W4.0): a low-reliability kernel run emits the iterate-pass classifier-skip harness-signal", async () => {
+    const { origins } = await runLoopDetectorCycle(LOW_RELIABILITY_CALIBRATION);
+    // The skip is observable exactly where rax diagnose looks — proving the
+    // iterate-pass loop-detector site threaded calibration into the evaluator.
+    expect(origins).toContain("strategy-switch/classifier-skip");
+  }, 15000);
+
+  it("behavioral pin (W4.0): the same run WITHOUT calibration emits no classifier-skip signal (the evaluator is consulted)", async () => {
+    const { origins } = await runLoopDetectorCycle(undefined);
+    // Absent calibration → the classify round-trip runs → no skip signal.
+    // This is the discriminating half: it fails if the site stops threading the
+    // calibration field (both arms would then look alike).
+    expect(origins).not.toContain("strategy-switch/classifier-skip");
   }, 15000);
 });

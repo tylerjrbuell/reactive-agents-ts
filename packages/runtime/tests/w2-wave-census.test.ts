@@ -102,7 +102,7 @@ export const W2_FIELD_CENSUS: Readonly<Record<string, Census>> = {
   "classifier.skip-threading": {
     status: "PROVEN",
     test: "../../reasoning/tests/kernel/classifier-skip-enforcement.test.ts",
-    consumer: "classifierReliability: currentInput.calibration",
+    consumer: "strategy-switch/classifier-skip",
   },
 
   // ─── W2e head-truncation guard ────────────────────────────────────────────

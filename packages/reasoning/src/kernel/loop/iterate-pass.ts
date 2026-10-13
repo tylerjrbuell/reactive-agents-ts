@@ -31,11 +31,14 @@
  *   - `IterationCarrier`: a MUTABLE holder for the spine locals that survive
  *     across iterations (counters, currentInput/Options/Context, switchCount,
  *     triedStrategies, mutableScratchpad) or are read by post-loop code. The
- *     driver destructures it into locals at entry and `sync()`s them back before
- *     each return. CORRECTION 5 reduced — NOT removed — the carrier: the three
- *     extracted phase-steps no longer touch it, but the spine still threads its
- *     locals through `sync()`. Dissolving it fully would require changing the
- *     runner.ts boundary (the hottest code path) and is deferred (see follow-up).
+ *     driver destructures it into locals at entry; the iteration BODY then runs
+ *     as an inner generator that returns the control signal, and the driver
+ *     writes the locals back to the carrier EXACTLY ONCE after that inner effect
+ *     settles (W4.0 single-writer). There is no per-return `sync()` to forget:
+ *     every body exit path returns through the one unconditional write-back.
+ *     Dissolving the carrier fully would require changing the runner.ts boundary
+ *     (the hottest code path), which reads `carrier.*` after each pass, so it is
+ *     deferred.
  *   - Return `"continue"` | `"break"` — outer while honors the signal.
  *
  * INVARIANTS PRESERVED (do not violate)
@@ -67,6 +70,12 @@
  *     real cohesion — extracted the three F2-named coupling blocks (strategy
  *     switch, stall/deliverable, loop resolution) into named phase-steps with
  *     immutable state threading + explicit counter params. Carrier reduced.
+ *   - W4.0 (2026-10-13): single-writer refactor. The 18 manual per-return
+ *     `sync()` call sites + the `sync` closure were replaced by a generator
+ *     return-protocol: the body is one inner `Effect.gen` returning
+ *     `IterationSignal`, and the carrier write-back happens exactly once, after
+ *     it settles (unconditional — the inner effect's error channel is `never`).
+ *     "Forgot to sync" is now unrepresentable. Behavior byte-identical.
  *
  * Spec: wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md §3 line 468 + §5.5a.
  */
@@ -193,7 +202,9 @@ export type IterationSignal = "continue" | "break";
  *       currentOptions)
  *
  * Fields are mutated in-place; `runIterationPass` doesn't return a fresh
- * carrier. Keeps the call site in runner.ts tiny:
+ * carrier. The write-back happens ONCE per pass — after the inner body effect
+ * settles — so every exit path (each `"break"` / `"continue"`) observes the
+ * same up-to-date values. Keeps the call site in runner.ts tiny:
  *   `const signal = yield* runIterationPass(carrier, cfg); if (signal === "break") break;`
  */
 export interface IterationCarrier {
@@ -282,10 +293,11 @@ export interface IterationConfig {
  * Run one iteration of the kernel main loop — the DRIVER spine.
  *
  * Destructures the mutable {@link IterationCarrier} into spine locals at entry,
- * runs the phase chain in fixed order (see SHAPE in the file header), delegates
- * the three high-coupling blocks to `applyStrategySwitch` /
- * `runStallDeliverableStep` / `resolveDetectedLoop`, and `sync()`s the locals
- * back to the carrier before every return.
+ * runs the phase chain in fixed order (see SHAPE in the file header) as a single
+ * inner generator that returns the control signal, delegates the three
+ * high-coupling blocks to `applyStrategySwitch` / `runStallDeliverableStep` /
+ * `resolveDetectedLoop`, and writes the locals back to the carrier EXACTLY ONCE
+ * after that inner effect settles (W4.0 single-writer).
  *
  * Returns the outer-loop control signal:
  *   - `"break"`    — this iteration terminated (delivered or failed); exit loop.
@@ -293,8 +305,9 @@ export interface IterationConfig {
  *                    body fall-through at the end of a normal iteration).
  *
  * The extracted phase-steps thread immutable state through and take/return only
- * the specific counters they own; the carrier never reaches them. The spine
- * itself still uses the carrier/`sync()` mechanism for its remaining locals.
+ * the specific counters they own; the carrier never reaches them. The body's
+ * own `return` sites are the inner generator's natural exits — no `sync()` is
+ * paired with them (the single write-back below runs for all of them).
  */
 export function runIterationPass(
   carrier: IterationCarrier,
@@ -303,9 +316,10 @@ export function runIterationPass(
   return Effect.gen(function* () {
     // ── Destructure mutable carrier into locals ─────────────────────────────
     // The body below references these as plain identifiers (matching the
-    // pre-lift runner.ts identifiers exactly). `sync()` writes them back to
-    // the carrier before every return so the outer while-loop and post-loop
-    // finalization see the latest values.
+    // pre-lift runner.ts identifiers exactly). The body is an inner generator
+    // (below) that returns the control signal; the outer driver writes these
+    // locals back to the carrier exactly once, after it settles, so the outer
+    // while-loop and post-loop finalization see the latest values.
     let state = carrier.state;
     let currentInput = carrier.currentInput;
     let currentOptions = carrier.currentOptions;
@@ -364,30 +378,17 @@ export function runIterationPass(
     void maxFailureRecoveryRedirects; void verifier; void options; void context;
     void effectiveInput; void input; void emitLog; void eventBus; void horizon;
 
-    // ── Sync helper — write locals back to carrier ─────────────────────────
-    // Called immediately before every `return "break" | "continue"` so the
-    // outer while loop (which re-reads carrier on each pass) and the post-loop
-    // finalization (which reads carrier.{state,currentInput,currentOptions})
-    // see the up-to-date values.
-    const sync = () => {
-      carrier.state = state;
-      carrier.currentInput = currentInput;
-      carrier.currentOptions = currentOptions;
-      carrier.currentContext = currentContext;
-      carrier.prevActionCount = prevActionCount;
-      carrier.prevStepCount = prevStepCount;
-      carrier.prevStepCountForLearn = prevStepCountForLearn;
-      carrier.prevDecisionLogCountForLearn = prevDecisionLogCountForLearn;
-      carrier.prevArtifactCount = prevArtifactCount;
-      carrier.consecutiveStalled = consecutiveStalled;
-      carrier.requiredToolRedirects = requiredToolRedirects;
-      carrier.requiredToolNudgeCount = requiredToolNudgeCount;
-      carrier.failureRecoveryRedirects = failureRecoveryRedirects;
-      carrier.switchCount = switchCount;
-      carrier.autoCheckpointed = autoCheckpointed;
-    };
+    // ── Iteration body — inner generator, returns the control signal ────────
+    // W4.0 single-writer. The whole body runs as ONE inner Effect.gen that
+    // closes over the spine locals above and RETURNS "break"/"continue" at each
+    // exit. Its error channel is `never`, so the carrier write-back after it
+    // runs exactly once, unconditionally, for every exit path. A new `return`
+    // added anywhere in the body therefore auto-writes-back — there is no
+    // `sync()` to forget (the pre-W4.0 shape paired a manual `sync()` with all
+    // 18 return sites; a missed pairing silently stranded carrier mutations).
+    const signal: IterationSignal = yield* Effect.gen(function* () {
 
-    // ── ORIGINAL BODY VERBATIM (Phase 2 runner.ts lines 389-1285) ──────────
+    // ── ORIGINAL BODY (lifted from Phase 2 runner.ts lines 389-1285) ────────
       // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
       const _runCtl = yield* FiberRef.get(RunControllerRef);
       if (_runCtl) {
@@ -409,7 +410,7 @@ export function runIterationPass(
             reason: ctl.terminate ? "terminate_requested" : "stop_requested",
             deliverable: passthroughOutputDeliverable(state.output),
           });
-          sync(); return "break";
+          return "break";
         }
         // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
         // state to an optional durable controller. Observer must NEVER kill the
@@ -585,7 +586,6 @@ export function runIterationPass(
                 taskId: currentOptions.taskId ?? state.taskId,
                 emitLog,
               });
-              sync();
               return "break";
             }
             // triage (burnRatio ≥ 0.80): steer the model to the OUTSTANDING
@@ -745,7 +745,7 @@ export function runIterationPass(
         if (!aborted) {
           state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
         }
-        sync(); return "break";
+        return "break";
       }
 
       state = yield* kernel(state, currentContext);
@@ -852,7 +852,7 @@ export function runIterationPass(
         // iteration (same "next" pattern as the stall/loop recovery paths) so
         // the stall guard cannot stack a SECOND recovery signal onto the same
         // pass and the run stays capped at ONE grounding redirect end-to-end.
-        sync(); return "continue";
+        return "continue";
       }
 
       // ── Token-delta diminishing-returns guard ────────────────────────────
@@ -916,7 +916,7 @@ export function runIterationPass(
             reason: "low_delta_guard",
             deliverable: passthroughOutputDeliverable(state.output),
           });
-          sync(); return "break";
+          return "break";
         }
       }
 
@@ -984,7 +984,7 @@ export function runIterationPass(
               steps: [...state.steps, evidenceStep],
               meta: { ...state.meta, terminatedBy: undefined, evidenceGraceGiven: true },
             });
-            sync(); return "continue";
+            return "continue";
           }
         }
         const arbCtx = arbitrationContextFromState(state, {
@@ -1003,7 +1003,7 @@ export function runIterationPass(
           ctx: arbCtx,
           taskId: effectiveInput.taskId ?? "",
         });
-        sync(); return "break";
+        return "break";
       }
 
       // Apply temperature override dispatched by the intervention dispatcher
@@ -1045,14 +1045,14 @@ export function runIterationPass(
             prevArtifactCount,
             failureRecoveryRedirects,
           } = switchResult.resetCounters);
-          sync(); return "continue";
+          return "continue";
         }
         // Switching not enabled or exhausted — deliver what we have
         state = terminate(state, {
           reason: "switching_exhausted",
           deliverable: passthroughOutputDeliverable(state.output),
         });
-        sync(); return "break";
+        return "break";
       }
 
       // ── Iteration progress hook ──────────────────────────────────────────
@@ -1172,7 +1172,6 @@ export function runIterationPass(
                       abstention: { reason: forced.reason, missing: forced.missing },
                     },
                   });
-                  sync();
                   return "break";
                 }
               }
@@ -1216,7 +1215,7 @@ export function runIterationPass(
               },
               error: null,
             });
-            sync(); return "continue";
+            return "continue";
           }
         }
       }
@@ -1324,7 +1323,6 @@ export function runIterationPass(
                 abstention: { reason: forced.reason, missing: forced.missing },
               },
             });
-            sync();
             return "break";
           }
         }
@@ -1354,8 +1352,8 @@ export function runIterationPass(
         state = stallResult.state;
         requiredToolNudgeCount = stallResult.requiredToolNudgeCount;
         failureRecoveryRedirects = stallResult.failureRecoveryRedirects;
-        if (stallResult.outcome === "break") { sync(); return "break"; }
-        if (stallResult.outcome === "next") { sync(); return "continue"; }
+        if (stallResult.outcome === "break") { return "break"; }
+        if (stallResult.outcome === "next") { return "continue"; }
       }
 
       // ── Intelligent Context Synthesis (before thinking step) ──
@@ -1578,7 +1576,6 @@ export function runIterationPass(
                         abstention: { reason: forced.reason, missing: forced.missing },
                       },
                     });
-                    sync();
                     return "break";
                   }
                 }
@@ -1610,7 +1607,7 @@ export function runIterationPass(
               } = switchResult.resetCounters);
 
               // Continue the outer while loop with fresh state
-              sync(); return "continue";
+              return "continue";
             }
           }
 
@@ -1631,7 +1628,6 @@ export function runIterationPass(
           state = loopResult.state;
           failureRecoveryRedirects = loopResult.failureRecoveryRedirects;
           requiredToolNudgeCount = loopResult.requiredToolNudgeCount;
-          sync();
           return loopResult.outcome === "break" ? "break" : "continue";
         }
       } // end if (state.status !== "done" && state.status !== "failed")
@@ -1668,7 +1664,7 @@ export function runIterationPass(
                 `(2) Add a persona instruction: "You MUST call ${missingTools[0]} as the final step", ` +
                 `(3) Increase retries: .withReasoning({ maxRequiredToolRetries: 4 }).`,
             });
-            sync(); return "break";
+            return "break";
           }
           // Inject feedback and redirect back to thinking
           const feedbackStep = makeStep(
@@ -1733,7 +1729,30 @@ export function runIterationPass(
       }
 
     // Body fall-through — outer while loop should re-evaluate and call us again.
-    sync();
     return "continue";
+    });
+
+    // ── Single-writer write-back — the ONLY place locals reach the carrier ──
+    // Runs once per pass, unconditionally after the inner body settles (every
+    // exit path: both "break" and "continue"). The outer while loop re-reads
+    // the carrier on each pass and the post-loop finalization reads
+    // carrier.{state,currentInput,currentOptions}, so these must be current.
+    carrier.state = state;
+    carrier.currentInput = currentInput;
+    carrier.currentOptions = currentOptions;
+    carrier.currentContext = currentContext;
+    carrier.prevActionCount = prevActionCount;
+    carrier.prevStepCount = prevStepCount;
+    carrier.prevStepCountForLearn = prevStepCountForLearn;
+    carrier.prevDecisionLogCountForLearn = prevDecisionLogCountForLearn;
+    carrier.prevArtifactCount = prevArtifactCount;
+    carrier.consecutiveStalled = consecutiveStalled;
+    carrier.requiredToolRedirects = requiredToolRedirects;
+    carrier.requiredToolNudgeCount = requiredToolNudgeCount;
+    carrier.failureRecoveryRedirects = failureRecoveryRedirects;
+    carrier.switchCount = switchCount;
+    carrier.autoCheckpointed = autoCheckpointed;
+
+    return signal;
   });
 }
