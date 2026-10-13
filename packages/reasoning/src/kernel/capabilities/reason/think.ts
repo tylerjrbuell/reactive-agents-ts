@@ -79,7 +79,7 @@ import { authorityOf } from "../decide/authority.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
-import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
+import { extractThinking, isTruncatingStopReason, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
@@ -1359,8 +1359,17 @@ export function handleThinking(
     // Thinking models (e.g. cogito) may put the full answer in the thinking field
     // with only a tiny fragment in content. When content is deficient, extract
     // structured value (final answer, code, tool calls) from thinking.
+    // W1.5-defect gate: the UNLABELED-PROSE fallback inside rescueFromThinking
+    // may only overwrite a non-empty visible answer when generation was CUT
+    // before the model finished. Computed deterministically from the exchange
+    // stop reason (Golden Rule 5 — the provider reported it; no LLM judgment).
+    // Natural-stop exchanges (end_turn) keep their terse visible answer — the
+    // post-w1 S2 capture (909a1b98) proved the un-gated guard shipped a
+    // reasoning tail over the correct '3052' on 5/5 terse-answer runs.
     if (thought.trim().length < 50 && thinking && thinking.length > 100) {
-      const rescued = rescueFromThinking(thinking, thought.trim());
+      const rescued = rescueFromThinking(thinking, thought.trim(), {
+        exchangeTruncated: isTruncatingStopReason(thoughtResponse.stopReason),
+      });
       if (rescued) thought = rescued;
     }
 

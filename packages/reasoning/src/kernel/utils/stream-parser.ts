@@ -200,13 +200,28 @@ const CODE_BLOCK_RE = /```[\s\S]*?```/g;
  * 1. **FINAL ANSWER** — explicit answer marker in thinking
  * 2. **ACTION** — tool call the model intended to make
  * 3. **Code blocks** — code output that IS the answer
- * 4. **Last substantive paragraph** — the concluding analysis
+ * 4. **Last substantive paragraph** — the concluding analysis (GATED — see
+ *    `exchangeTruncated`; branches 1-3 act on model-emitted STRUCTURE and are
+ *    always allowed, branch 4 guesses from unlabeled prose)
  *
  * @param thinking - The model's thinking output
  * @param content - The deficient content (< 50 chars)
+ * @param options - Rescue-context flags
+ * @param options.exchangeTruncated - True when the exchange's stop reason
+ * indicates generation was CUT before the model finished (max_tokens /
+ * stop_sequence). W1.5-defect gate: a non-empty visible answer at a natural
+ * stop IS the deliverable — post-w1 S2 shipped 525-1,915-char branch-4
+ * reasoning tails over the model's correct terse '3052' (5/5 runs, commit
+ * 909a1b98). With this flag false/absent, the unlabeled prose fallback (branch
+ * 4) may only fire when visible content is EMPTY (the starved shape). With it
+ * true, the cut-off exchange's conclusion may still be rescued from prose.
  * @returns Rescued content, or null if thinking doesn't contain usable output
  */
-export function rescueFromThinking(thinking: string, content: string): string | null {
+export function rescueFromThinking(
+  thinking: string,
+  content: string,
+  options?: { readonly exchangeTruncated?: boolean },
+): string | null {
   if (!thinking || thinking.length === 0) return null;
 
   // 1. FINAL ANSWER in thinking — extract the answer portion
@@ -242,8 +257,17 @@ export function rescueFromThinking(thinking: string, content: string): string | 
     return parts.join("\n\n");
   }
 
-  // 4. Last substantive paragraph (> 80 chars) — likely the conclusion
-  const paragraphs = thinking.split(/\n\n/).filter(p => p.trim().length > 80);
+  // 4. Last substantive paragraph (> 80 chars) — likely the conclusion.
+  // W1.5-defect gate: this is the only branch that returns UNLABELED prose.
+  // When the exchange stopped naturally and the visible content is non-empty
+  // (even terse, even < 50 chars), that content IS the model's answer — do
+  // not overwrite it with reasoning prose. Prose fallback stays reachable
+  // for its design shapes: empty visible content (starved), or a truncated
+  // exchange whose conclusion never made it to the visible channel.
+  const proseFallbackAllowed = content.trim().length === 0 || options?.exchangeTruncated === true;
+  const paragraphs = proseFallbackAllowed
+    ? thinking.split(/\n\n/).filter(p => p.trim().length > 80)
+    : [];
   if (paragraphs.length > 0) {
     // Use the last 1-2 substantive paragraphs
     return paragraphs.slice(-2).join("\n\n");
@@ -251,4 +275,35 @@ export function rescueFromThinking(thinking: string, content: string): string | 
 
   // Nothing usable found
   return null;
+}
+
+/**
+ * Exchange stop reasons that indicate generation was CUT before the model
+ * finished (as opposed to a natural conclusion). The W1.5-defect prose-
+ * fallback gate in {@link rescueFromThinking} distinguishes the two: an
+ * `end_turn` exchange's short visible content is the model's FINISHED answer
+ * (keep it); a cut exchange's short visible content is a truncation artifact
+ * whose conclusion may still live in the thinking channel (allow the rescue).
+ *
+ * The provider union (llm-provider `StopReasonSchema`) has no `"length"`
+ * literal — Ollama-style length truncation is mapped to `"max_tokens"` at
+ * the adapter boundary (see the content_complete stopReason JSDoc). In the
+ * reactive kernel a `max_tokens` exchange normally diverts into the
+ * output-token recovery branch before reaching the rescue site; it is kept
+ * in this set so the predicate remains the honest "was this cut?" question
+ * rather than an accidental re-derivation of control flow.
+ */
+const TRUNCATING_STOP_REASONS: readonly string[] = ["max_tokens", "stop_sequence"];
+
+/**
+ * True when the given exchange stop reason indicates the response was
+ * truncated (cut) rather than concluded naturally. Unknown/absent stop
+ * reasons are treated as NOT truncated (safe side: a non-empty visible
+ * answer survives).
+ *
+ * @param stopReason - The exchange's stop reason, as recorded by the stream
+ * accumulator on the LLM response object.
+ */
+export function isTruncatingStopReason(stopReason: string | undefined): boolean {
+  return stopReason !== undefined && TRUNCATING_STOP_REASONS.includes(stopReason);
 }
