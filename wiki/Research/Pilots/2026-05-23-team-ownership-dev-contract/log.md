@@ -1166,3 +1166,11 @@ task: "Wave 2f (plan 2.7): prove-or-delete census of every Wave-2-touched field 
 result: completed, confidence 0.9
 outcome: "accepted pending census-design review: tally 29 PROVEN/1 dead-registered (recentObservationsLimit, public knob -> removal wave)/1 justified-keep (provisionalTier, W3 obligated consumer)/0 deleted. Ratchet self-corrected from instance-keys undercount to schema-fields after authoring - exactly the inert-green class it guards. Warden disclosed stale-tool-echo incident mid-dispatch, re-grounded shipped state from filesystem; reviewer spot-checking rows from ground truth. reasoning 3,025/0, provider 502/0, runtime 1,677/0 (+4 census), typecheck 23/23."
 ```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 2 close capture: 20 runs (S1/S2/S3 arms, three-point PRE->W1-fix->POST-W2), verdict per seam, payload + guard-signal counts, rax-visible signals"
+result: completed, confidence 0.88
+outcome: "accepted: WAVE-2 VERDICT MIXED recorded on scoreboard honestly. Guard 0/20 head-truncations (alive, 1 over-fire), classify delta explained (reliability=high arms), payload measured -51% llama tokensIn; caught Wave 2's OWN regression: stale dialect:none prior (runsAveraged 1) demotes capable qwen3:4b to text-mode with unparsable taught markup -> 5/5->0/5. GH #243 filed + provider fix dispatched. Wave-4 baseline-continuity finding (thrash phenotype no longer live-reproducible) ledged: W4 uses frozen fixture. Wave-3 gate set: post-fix S3 re-capture + 3.2 markup round-trip."
+```
