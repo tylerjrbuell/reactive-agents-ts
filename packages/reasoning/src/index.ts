@@ -283,6 +283,15 @@ export type {
 } from "./kernel/assessment/progress-arbiter.js";
 export { detectLoop } from "./kernel/capabilities/reflect/loop-detector.js";
 export type { LoopDetectorOptions } from "./kernel/capabilities/reflect/loop-detector.js";
+// W4.5 — the loop pattern id + the deterministic escalation ladder.
+export { detectLoopPattern } from "./kernel/capabilities/reflect/loop-detector.js";
+export type { LoopDetection, LoopPatternId } from "./kernel/capabilities/reflect/loop-detector.js";
+export {
+  KERNEL_STRATEGY_CANDIDATES,
+  DEFAULT_STRATEGY_LADDER,
+  isDefaultCandidateSet,
+  selectLadderStrategy,
+} from "./kernel/capabilities/reflect/strategy-ladder.js";
 
 // ─── HarnessPlan — the policy compiler (meta-loop Phase 6 / task G1) ──────────
 // The adaptive crown (convergence ruling C6). Compiles the per-run harness config

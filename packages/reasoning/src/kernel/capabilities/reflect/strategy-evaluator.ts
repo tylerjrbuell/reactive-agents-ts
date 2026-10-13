@@ -16,6 +16,13 @@ import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.j
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { HARNESS_PSEUDO_TOOLS, META_TOOLS } from "../../state/kernel-constants.js";
+
+/**
+ * W4.5 — max evidence-bearing observations carried into the handoff (widened
+ * from the previous fixed last-5).
+ */
+const MAX_KEY_OBSERVATIONS = 12;
 
 /**
  * W2d 2.6 — the reliability values at which the DOCUMENTED classifier skip
@@ -82,8 +89,12 @@ export interface StrategyEvaluation {
 /**
  * Build a StrategyHandoff from the current KernelState.
  *
- * Collects the last 5 observation steps as keyObservations and converts the
- * ReadonlySet<string> toolsUsed into a plain array.
+ * W4.5 — keyObservations widened from the last 5 observations to the
+ * REQUIREMENT-RELEVANT slice: evidence-bearing (successful, non-meta,
+ * non-pseudo) observations are preferred, since those are what a successor
+ * strategy needs to resume; when none exist it falls back to the recent
+ * observations. Capped at MAX_KEY_OBSERVATIONS. Converts the ReadonlySet of
+ * toolsUsed into a plain array.
  */
 export function buildHandoff(
   state: KernelState,
@@ -93,9 +104,16 @@ export function buildHandoff(
   switchNumber: number,
   requiredTools: readonly string[] = [],
 ): StrategyHandoff {
-  const observations = state.steps
-    .filter((s) => s.type === "observation")
-    .slice(-5)
+  const obsSteps = state.steps.filter((s) => s.type === "observation");
+  const evidenceBearing = obsSteps.filter((s) => {
+    const r = s.metadata?.observationResult;
+    if (r?.success !== true) return false;
+    const name = r.toolName;
+    return typeof name === "string" && name.length > 0 && !META_TOOLS.has(name) && !HARNESS_PSEUDO_TOOLS.has(name);
+  });
+  const chosen = evidenceBearing.length > 0 ? evidenceBearing : obsSteps;
+  const observations = chosen
+    .slice(-MAX_KEY_OBSERVATIONS)
     .map((s) => s.content ?? String(s));
 
   return {

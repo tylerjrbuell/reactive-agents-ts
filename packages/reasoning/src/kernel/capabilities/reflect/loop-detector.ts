@@ -13,9 +13,11 @@
  * no-op / failed call is NON-PROGRESS and cannot masquerade as progress. (c)
  * keeps its IC-1 "any action resets" rule (see its note).
  *
- * Also provides `checkAllToolsCalled` for the composite-step early-exit guard.
+ * `detectLoopPattern` returns the message + the ACTUAL pattern id (W4.5 — the
+ * strategy handoff carries the id, not just a free-text description).
+ * `detectLoop` is the message-only wrapper for existing callers.
  *
- * Returns a human-readable error message if a loop is detected, or null if clean.
+ * Also provides `checkAllToolsCalled` for the composite-step early-exit guard.
  *
  * Extracted from kernel-runner.ts to keep the main loop focused on control flow.
  */
@@ -77,6 +79,24 @@ export interface LoopDetectorOptions {
 
 const DEFAULT_EVIDENCE_STALE_THRESHOLD = 3;
 
+/** The stable loop-pattern id (W4.5 — carried into the strategy handoff). */
+export interface LoopPatternId {
+  readonly id: "a" | "b" | "c" | "d" | "e";
+  readonly name: string;
+}
+
+/** A detected loop: the human message + the ACTUAL pattern id that tripped. */
+export interface LoopDetection {
+  readonly message: string;
+  readonly pattern: LoopPatternId;
+}
+
+const PATTERN_A: LoopPatternId = { id: "a", name: "repeated-tool-call" };
+const PATTERN_B: LoopPatternId = { id: "b", name: "repeated-thought" };
+const PATTERN_C: LoopPatternId = { id: "c", name: "consecutive-thoughts" };
+const PATTERN_D: LoopPatternId = { id: "d", name: "no-new-evidence" };
+const PATTERN_E: LoopPatternId = { id: "e", name: "evidence-staleness" };
+
 /**
  * Detect loop patterns in the current step history.
  *
@@ -85,16 +105,16 @@ const DEFAULT_EVIDENCE_STALE_THRESHOLD = 3;
  * (a)/(c)/(d) stop being blind to the varied-args, success:true thrash that the
  * byte-shape guards missed. Pattern (e) fires on sustained `evidenceDelta == 0`.
  *
- * Returns a descriptive error message if a loop is detected, or null if none.
+ * Returns the message + the ACTUAL pattern id, or null if none.
  */
-export function detectLoop(
+export function detectLoopPattern(
   steps: readonly ReasoningStep[],
   maxSameTool: number,
   maxRepeatedThought: number,
   maxConsecutiveThoughts: number,
   opts?: LoopDetectorOptions,
-): string | null {
-  let loopMsg: string | null = null;
+): LoopDetection | null {
+  let loop: LoopDetection | null = null;
 
   // Observation lookup by toolCallId — the arbiter classifies each ACTION step
   // against the observation that answered it (law #5: one predicate).
@@ -124,9 +144,12 @@ export function detectLoop(
     const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
     if (allSame) {
       const metaRepeat = verdictOf(recentActions[0]!).reason === "meta-tool";
-      loopMsg =
-        `Loop detected: same tool call repeated ${maxSameTool} times` +
-        (metaRepeat ? ` (a meta-tool call is not progress)` : "");
+      loop = {
+        pattern: PATTERN_A,
+        message:
+          `Loop detected: same tool call repeated ${maxSameTool} times` +
+          (metaRepeat ? ` (a meta-tool call is not progress)` : ""),
+      };
     }
   }
 
@@ -140,7 +163,7 @@ export function detectLoop(
   //     no longer counts as progress. Floor of 3 so a local tier's
   //     maxSameTool=2 does not fire on a single legitimate retry (tool healing
   //     owns small retry bursts).
-  if (loopMsg === null) {
+  if (loop === null) {
     const threshold = Math.max(maxSameTool, 3);
     if (allActions.length >= threshold) {
       const recent = allActions.slice(-threshold);
@@ -151,10 +174,13 @@ export function detectLoop(
       if (sameName && allLinkable) {
         const anySubstantive = recent.some((a) => verdictOf(a).kind === "substantive");
         if (!anySubstantive) {
-          loopMsg =
-            `Loop detected: ${threshold} consecutive '${name0}' calls produced no successful result with new task evidence — ` +
-            `the tool keeps failing, is a harness helper, or returns nothing new. Change the approach ` +
-            `substantially or give your best answer with what you already have.`;
+          loop = {
+            pattern: PATTERN_D,
+            message:
+              `Loop detected: ${threshold} consecutive '${name0}' calls produced no successful result with new task evidence — ` +
+              `the tool keeps failing, is a harness helper, or returns nothing new. Change the approach ` +
+              `substantially or give your best answer with what you already have.`,
+          };
         }
       }
     }
@@ -165,7 +191,7 @@ export function detectLoop(
   //     making tool calls between identical thoughts, it is progressing
   //     (FC models often produce brief/identical reasoning text before each
   //     tool call; the real work is in the tool calls themselves).
-  if (loopMsg === null) {
+  if (loop === null) {
     const allThoughts = steps.filter((s) => s.type === "thought");
     if (allThoughts.length >= maxRepeatedThought) {
       const recentThoughts = allThoughts.slice(-maxRepeatedThought);
@@ -180,10 +206,14 @@ export function detectLoop(
             return idx >= firstThoughtIdx;
           });
         if (!hasRecentProgress) {
-          loopMsg = `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
-            `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
-            `(2) Use .withReasoning({ defaultStrategy: 'plan-execute-reflect' }) for multi-step tasks, ` +
-            `(3) Check that tool descriptions are clear and unambiguous.`;
+          loop = {
+            pattern: PATTERN_B,
+            message:
+              `Loop detected: the model repeated the same thought ${maxRepeatedThought} times without making progress.\n` +
+              `Fix: (1) Add a persona instruction like "Think step-by-step then call tools immediately", ` +
+              `(2) Use .withReasoning({ defaultStrategy: 'plan-execute-reflect' }) for multi-step tasks, ` +
+              `(3) Check that tool descriptions are clear and unambiguous.`,
+          };
         }
       }
     }
@@ -197,17 +227,21 @@ export function detectLoop(
   //     legitimate recall/find loops (runtime regression). The law-#5 thrash
   //     shape is caught by (d) (same-name, arbiter-gated) and (e) (variety-proof),
   //     so no false-positive-prone change is needed here.
-  if (loopMsg === null) {
+  if (loop === null) {
     let consecutiveThoughts = 0;
     for (let i = steps.length - 1; i >= 0; i--) {
       if (steps[i]!.type === "thought") consecutiveThoughts++;
       else if (steps[i]!.type === "action") break; // any real action resets the streak
     }
     if (consecutiveThoughts >= maxConsecutiveThoughts) {
-      loopMsg = `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
-        `Fix: (1) Verify the model supports function calling for your provider, ` +
-        `(2) Simplify the task description — the model may not know which tool to use, ` +
-        `(3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.`;
+      loop = {
+        pattern: PATTERN_C,
+        message:
+          `Loop detected: ${consecutiveThoughts} consecutive thinking steps with no tool calls.\n` +
+          `Fix: (1) Verify the model supports function calling for your provider, ` +
+          `(2) Simplify the task description — the model may not know which tool to use, ` +
+          `(3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.`,
+      };
     }
   }
 
@@ -216,7 +250,7 @@ export function detectLoop(
   //     while work remained. Fires REGARDLESS of tool variety / args — the
   //     variety-proof backstop for the thrash (a)/(d) still miss. The counter is
   //     fed in from the control plane (see LoopDetectorOptions), never held here.
-  if (loopMsg === null && opts?.evidenceStaleIterations !== undefined) {
+  if (loop === null && opts?.evidenceStaleIterations !== undefined) {
     const threshold = opts.evidenceStaleThreshold ?? DEFAULT_EVIDENCE_STALE_THRESHOLD;
     // Only meaningful once the model has ATTEMPTED a tool call: a run that never
     // calls a tool is a thought-stall (pattern c's domain), not evidence
@@ -225,14 +259,31 @@ export function detectLoop(
       (s) => s.type === "action" && actionToolName(s) !== undefined,
     );
     if (attemptedToolCall && opts.evidenceStaleIterations >= threshold) {
-      loopMsg =
-        `Loop detected: ${opts.evidenceStaleIterations} consecutive iterations produced no new task evidence ` +
-        `(evidenceDelta 0) while work remained — the model is not progressing regardless of tool variety. ` +
-        `Deliver your best answer with what you have, or change the approach substantially.`;
+      loop = {
+        pattern: PATTERN_E,
+        message:
+          `Loop detected: ${opts.evidenceStaleIterations} consecutive iterations produced no new task evidence ` +
+          `(evidenceDelta 0) while work remained — the model is not progressing regardless of tool variety. ` +
+          `Deliver your best answer with what you have, or change the approach substantially.`,
+      };
     }
   }
 
-  return loopMsg;
+  return loop;
+}
+
+/**
+ * Message-only wrapper over {@link detectLoopPattern} for existing callers.
+ * Returns a descriptive error message if a loop is detected, or null if none.
+ */
+export function detectLoop(
+  steps: readonly ReasoningStep[],
+  maxSameTool: number,
+  maxRepeatedThought: number,
+  maxConsecutiveThoughts: number,
+  opts?: LoopDetectorOptions,
+): string | null {
+  return detectLoopPattern(steps, maxSameTool, maxRepeatedThought, maxConsecutiveThoughts, opts)?.message ?? null;
 }
 
 /**

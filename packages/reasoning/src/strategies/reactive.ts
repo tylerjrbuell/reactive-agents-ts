@@ -13,6 +13,7 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
+import { KERNEL_STRATEGY_CANDIDATES } from "../kernel/capabilities/reflect/strategy-ladder.js";
 import {
   finalizeStrategyResult,
   type JudgedReasoningResult,
@@ -280,7 +281,11 @@ export const executeReactive = (
             enabled: input.strategySwitching.enabled,
             maxSwitches: input.strategySwitching.maxSwitches,
             fallbackStrategy: input.strategySwitching.fallbackStrategy,
-            availableStrategies: ["reactive", "plan-execute-reflect", "reflexion", "tree-of-thought"],
+            // W4.5 — the REAL registered kernel candidate set (single source:
+            // strategy-ladder). The kernel walks the deterministic ladder over
+            // these by default; the evaluator runs only for a custom
+            // (multi-candidate) set.
+            availableStrategies: KERNEL_STRATEGY_CANDIDATES,
           }
         : undefined,
     });

@@ -60,7 +60,7 @@ describe("evaluateStrategySwitch", () => {
 });
 
 describe("buildHandoff", () => {
-  it("extracts observation step content from state steps (last 5)", () => {
+  it("extracts observation step content from state steps (W4.5: widened cap)", () => {
     const mockState = {
       iteration: 6,
       steps: [
@@ -79,8 +79,12 @@ describe("buildHandoff", () => {
     } as any;
 
     const handoff = buildHandoff(mockState, "test task", "reactive", "loop detected", 1);
-    // Should have at most 5 observations
-    expect(handoff.keyObservations.length).toBeLessThanOrEqual(5);
+    // W4.5 — widened from the fixed last-5 to the requirement-relevant slice
+    // (up to MAX_KEY_OBSERVATIONS = 12). These observations carry no
+    // observationResult metadata, so the evidence-bearing preference falls back
+    // to all observations (6 here).
+    expect(handoff.keyObservations.length).toBeLessThanOrEqual(12);
+    expect(handoff.keyObservations.length).toBeGreaterThan(5);
     expect(handoff.toolsCalled).toContain("web-search");
     expect(handoff.switchNumber).toBe(1);
     expect(handoff.failureReason).toBe("loop detected");

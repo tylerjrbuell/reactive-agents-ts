@@ -128,7 +128,12 @@ import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
-import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+import { detectLoopPattern, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+import {
+  KERNEL_STRATEGY_CANDIDATES,
+  isDefaultCandidateSet,
+  selectLadderStrategy,
+} from "../../kernel/capabilities/reflect/strategy-ladder.js";
 import {
   arbitrateAndApplyWithBudgetEmit,
   arbitrationContextFromState,
@@ -1584,13 +1589,14 @@ export function runIterationPass(
       // Check the most recent steps for patterns that indicate a stuck loop.
       // Only fire if the loop hasn't already terminated (status still active).
       if (state.status !== "done" && state.status !== "failed") {
-        const loopMsg = detectLoop(
+        const detection = detectLoopPattern(
           state.steps,
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
           { evidenceStaleIterations },
         );
+        const loopMsg = detection?.message ?? null;
 
         // ── Strategy switching ────────────────────────────────────────────
         if (loopMsg !== null) {
@@ -1611,19 +1617,42 @@ export function runIterationPass(
                 reasoning: "fallback strategy configured",
               };
             } else {
-              // Ask the LLM evaluator to pick the best alternative
-              const available = switchCfg.availableStrategies ?? [];
-              evaluation = yield* evaluateStrategySwitch(
-                state,
-                currentInput.task ?? "",
-                available,
-                triedStrategies,
-                // W2d 2.6 — the runtime already threads calibration onto the
-                // kernel input; low/skip reliability must skip this
-                // round-trip (documented behavior, previously unenforced —
-                // the live post-w1 S1 traces prove it fired on local arms).
-                { classifierReliability: currentInput.calibration?.classifierReliability },
-              );
+              // W4.5 — deterministic ladder by DEFAULT (zero LLM). The LLM
+              // strategy-evaluator round-trip runs ONLY for a MULTI-CANDIDATE
+              // config: an explicitly-supplied candidate set that is not the
+              // canonical kernel set (the caller wants the model to choose among
+              // its own candidates). Otherwise walk reactive → plan-execute-reflect
+              // → reflexion deterministically.
+              const candidates = switchCfg.availableStrategies ?? KERNEL_STRATEGY_CANDIDATES;
+              const multiCandidate =
+                switchCfg.availableStrategies !== undefined &&
+                !isDefaultCandidateSet(switchCfg.availableStrategies);
+              if (multiCandidate) {
+                evaluation = yield* evaluateStrategySwitch(
+                  state,
+                  currentInput.task ?? "",
+                  candidates,
+                  triedStrategies,
+                  // W2d 2.6 — the runtime already threads calibration onto the
+                  // kernel input; low/skip reliability must skip this
+                  // round-trip (documented behavior, previously unenforced —
+                  // the live post-w1 S1 traces prove it fired on local arms).
+                  { classifierReliability: currentInput.calibration?.classifierReliability },
+                );
+              } else {
+                const next = selectLadderStrategy(triedStrategies, candidates);
+                evaluation = next
+                  ? {
+                      shouldSwitch: true,
+                      recommendedStrategy: next,
+                      reasoning: `deterministic ladder → ${next}`,
+                    }
+                  : {
+                      shouldSwitch: false,
+                      recommendedStrategy: "",
+                      reasoning: "no untried ladder strategy remains",
+                    };
+              }
             }
 
             // Fire evaluated hook regardless of whether switch will happen — observability
@@ -1697,7 +1726,10 @@ export function runIterationPass(
                 switchCount,
                 fromStrategy,
                 toStrategy: evaluation.recommendedStrategy,
-                failureReason: loopMsg,
+                failureReason:
+                  detection !== null
+                    ? `pattern=${detection.pattern.id} (${detection.pattern.name}); ${detection.message}`
+                    : loopMsg,
               });
               state = switchResult.state;
               currentInput = switchResult.currentInput;
