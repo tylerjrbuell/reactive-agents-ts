@@ -99,6 +99,49 @@ const run = <A>(effect: Effect.Effect<A, unknown, LLMServiceType>) => {
 // ─── Tests ───
 
 describe("OllamaProviderLive (ollama SDK)", () => {
+  // GH temp-threading (Wave-4 close capture): the temperature DEFECT was
+  // rooted upstream (packages/runtime reasoning-think.ts:336 drops the
+  // commanded config.temperature; think.ts then always stamps the tier
+  // PROFILE temperature onto request.temperature, shadowing every adapter's
+  // `request.temperature ?? config.defaultTemperature`). These pins certify
+  // the ADAPTER half of the contract is innocent — and guard the ?? (not ||)
+  // precedence so `temperature: 0` can never be swallowed into the default
+  // again by a future refactor.
+  describe("temperature threading — adapter contract pins", () => {
+    it("complete(): explicit request temperature 0 reaches SDK options verbatim", async () => {
+      mockChat.mockClear();
+      await run(
+        Effect.gen(function* () {
+          const llm = yield* LLMService;
+          return yield* llm.complete({
+            messages: [{ role: "user", content: "Hello" }],
+            temperature: 0,
+          });
+        }),
+      );
+      const call = mockChat.mock.calls.at(-1)?.[0] as
+        | { options?: Record<string, unknown> }
+        | undefined;
+      expect(call?.options?.temperature).toBe(0);
+    });
+
+    it("complete(): unset request temperature falls back to config defaultTemperature", async () => {
+      mockChat.mockClear();
+      await run(
+        Effect.gen(function* () {
+          const llm = yield* LLMService;
+          return yield* llm.complete({
+            messages: [{ role: "user", content: "Hello" }],
+          });
+        }),
+      );
+      const call = mockChat.mock.calls.at(-1)?.[0] as
+        | { options?: Record<string, unknown> }
+        | undefined;
+      expect(call?.options?.temperature).toBe(0.7);
+    });
+  });
+
   it("complete() returns mapped CompletionResponse", async () => {
     const result = await run(
       Effect.gen(function* () {
