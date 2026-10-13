@@ -12,9 +12,12 @@
  * Back-compat arm (green before AND after): a trace recorded BEFORE the fix
  * carries `run-started.task === ""` (the normalize default) and must still
  * load without throwing: `raw.task ?? ""` keeps the old-format shape valid.
- * The legacy line set below is byte-copied from the pre-regeneration
- * committed golden (`tests/fixtures/ci-lane-run.jsonl` run-started line),
- * the exact old format the brief names.
+ * The two lines below are the run-started + run-completed bookends BYTE-COPIED
+ * from the pre-regeneration committed golden
+ * (`git show cf59fa62:packages/replay/tests/fixtures/ci-lane-run.jsonl`,
+ * first + last line), the exact old wire format, with middle events omitted
+ * because the loader only consumes the bookends. The strict surviving-event
+ * count proves both lines pass `isTraceEvent` (nothing silently dropped).
  */
 import { afterAll, describe, expect, test } from "bun:test"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -68,12 +71,12 @@ describe("run-started.task stamping (GH #236)", () => {
     }, 15000)
 
     test("back-compat: pre-fix trace (run-started.task === \"\") still loads", async () => {
-        // The exact old-format run-started line as the pre-#236 recorder wrote
-        // it (task hardcoded ""), plus a minimal exchange so the loader has a
-        // non-empty event stream.
+        // The real pre-fix bookends, byte-copied from the committed golden
+        // (see module header): run-started with the hardcoded task "" and the
+        // wire-format run-completed the recorder actually emitted.
         const legacy = [
             '{"kind":"run-started","runId":"01M4STQ18D3Z3D7Y49PTEZAB2K","rootRunId":"01M4STQ18D3Z3D7Y49PTEZAB2K","depth":0,"timestamp":1791868241166,"iter":-1,"seq":0,"task":"","model":"test-model","provider":"test","config":{}}',
-            '{"kind":"run-completed","runId":"01M4STQ18D3Z3D7Y49PTEZAB2K","rootRunId":"01M4STQ18D3Z3D7Y49PTEZAB2K","depth":0,"timestamp":1791868241999,"iter":1,"seq":1,"success":true,"tokensUsed":10,"iterations":1}',
+            '{"kind":"run-completed","runId":"01M4STQ18D3Z3D7Y49PTEZAB2K","rootRunId":"01M4STQ18D3Z3D7Y49PTEZAB2K","depth":0,"timestamp":1791868241404,"iter":-1,"seq":36,"status":"success","output":"deterministic replay works.","terminatedBy":"final_answer","totalTokens":73,"totalCostUsd":0,"durationMs":238}',
         ].join("\n") + "\n"
         const path = join(TMP, "legacy-run-started.jsonl")
         writeFileSync(path, legacy)
@@ -81,5 +84,7 @@ describe("run-started.task stamping (GH #236)", () => {
         const run = await loadRecordedRun(path)
         expect(run.task).toBe("")
         expect(run.runId).toBe("01M4STQ18D3Z3D7Y49PTEZAB2K")
+        // Both lines are real wire format: nothing dropped by isTraceEvent.
+        expect(run.trace.events.length).toBe(2)
     }, 15000)
 })
