@@ -596,16 +596,13 @@ export function emitLLMExchange(args: {
         : {}),
     };
 
-    // Core's `LLMExchangeEmitted` transit type does not (yet) declare the two
-    // W1.4 forensics fields — the canonical recording schema does
-    // (trace/src/events.ts LLMExchangeEvent.response), and the trace bridge
-    // (`normalize.ts` toTraceEvent) copies `response` VERBATIM, so the fields
-    // ride end-to-end without any core edit. Passing the named local above
-    // (non-fresh, all REQUIRED target props present) keeps TypeScript's
-    // structural typing happy without widening core. Recommended follow-up
-    // for the parent: a 2-line additive-optional declaration in
-    // packages/core/src/services/event-bus.ts:LLMExchangeEmitted to make the
-    // transit type explicit (out of this dispatch's authority).
+    // The two W1.4 forensics fields are declared on BOTH sides of the wire:
+    // the canonical recording schema (trace/src/events.ts
+    // LLMExchangeEvent.response) and, since the parent's core integration
+    // commit 91e8d6006, the core `LLMExchangeEmitted` transit type. The
+    // trace bridge (`normalize.ts` toTraceEvent) still copies `response`
+    // VERBATIM, and the payload stays a named local so the derivation above
+    // is one reviewable expression.
     yield* busOpt.value
       .publish({
         _tag: "LLMExchangeEmitted",

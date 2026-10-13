@@ -49,10 +49,10 @@ describe("W1.4 thinking-forensics back-compat", () => {
   }, 15000);
 
   it("toTraceEvent copies thinking forensics verbatim from the bus event", () => {
-    // The W1.4 publisher passes the forensics through the core transit type
-    // (which lags by these two optional fields — disclosed in
-    // w1-34-report); normalize copies `response` wholesale, so the fields
-    // arrive on the recorded event untouched.
+    // Both sides of the wire now DECLARE the forensics fields (core transit
+    // type since 91e8d6006, canonical trace schema in events.ts); normalize
+    // copies `response` wholesale, so they arrive on the recorded event
+    // untouched.
     const responsePayload = {
       content: "Sure",
       tokensIn: 100,
@@ -60,7 +60,7 @@ describe("W1.4 thinking-forensics back-compat", () => {
       thinkingChars: 1800,
       thinkingPreview: "reasoning prefix",
     };
-    const raw: Record<string, unknown> = {
+    const raw: AgentEvent = {
       _tag: "LLMExchangeEmitted",
       taskId: "run-1",
       timestamp: 1000,
@@ -73,7 +73,7 @@ describe("W1.4 thinking-forensics back-compat", () => {
       toolSchemaNames: [],
       response: responsePayload,
     };
-    const ev = toTraceEvent(raw as unknown as AgentEvent, 3);
+    const ev = toTraceEvent(raw, 3);
     expect(ev?.kind).toBe("llm-exchange");
     const resp = (ev as { response?: Record<string, unknown> }).response ?? {};
     expect(resp.thinkingChars).toBe(1800);

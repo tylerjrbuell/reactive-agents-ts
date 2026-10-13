@@ -27,9 +27,10 @@ import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { makeObservableLLM } from "../../src/kernel/observable-llm.js";
 
 // ── Forensics accessor (typed structural read, no cast) ──────────────────────
-// The canonical recording schema (trace/src/events.ts LLMExchangeEvent)
-// declares these optional fields; the core transit type lags by the same two
-// fields (disclosed in w1-34-report). A structural read is all a test needs.
+// These optional fields are declared on the canonical recording schema
+// (trace/src/events.ts LLMExchangeEvent) and, since the core integration
+// commit 91e8d6006, on the core transit type too. A structural read is all a
+// test needs.
 
 interface ThinkingForensics {
   readonly thinkingChars?: number;
