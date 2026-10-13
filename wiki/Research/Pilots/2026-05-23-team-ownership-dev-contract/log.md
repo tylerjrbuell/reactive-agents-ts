@@ -1222,3 +1222,11 @@ task: "W3c Stage-B promotion data: shadow-soak (coder:14b N=5, phi4-mini N=3) + 
 result: completed, confidence 0.88 (resumed after a mid-close-out crash; incremental writes preserved all arms)
 outcome: "rung-3 PARTIAL, plan-3.5 NOT declarable: shadow seam PROVEN (phi4 clean-run 3/3 tier-1 taught-grammar parses; placeholder-arg caveat) but coder:14b markup hits a parser-coverage gap (would-have-executed 0/5) and act end-to-end is unmeasured (coder parse-gap + phi4 2/2 hung on box stalls 6/8 attempts). Safety watch clean: no double-dispatch/budget-bypass/parse-loops in 12 completed runs; fail-safe legacy path byte-identical. File-ready follow-ups routed: wrapper-tolerant tier-1 (tools-warden, preserve #243 grammar pin), ParamNameHealer proof (kernel), quiet-box act-phi4 re-run (harness). Zero packages/** edits."
 ```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c parser-coverage fix (Stage-B blocker): make TextParseDriver tier-1 wrapper-tolerant so the SHAPES real no-FC models emit parse. Diagnosed verbatim from committed traces (fixtures/post-w3) - coder:14b emits bare `tool: <name>` + param lines, drops both wrapper tags; blocks split by prose/---; file-write content as YAML block scalar `content: |`. Extended tier-1 with a bare-block scanner (same taught grammar minus wrapper; #243 pin preserved) + block-scalar handling; wrapped path unchanged and still wins."
+result: completed, confidence 0.9
+outcome: "accepted-pending-controller: measured 0/10 -> 10/10 coder:14b runs parse (all names in callable surface [file-read,file-write]; 8x3 calls, 2x2 calls faithful to emission). RED->GREEN: 6 new tests fail on the pre-change driver, pass after; wrapped-tier tests unchanged. GH #243 grammar pin preserved via builder-derived test (taught block with wrapper lines stripped parses). Authority: packages/tools/** only (parser + tests + changeset) - reasoning-side markerPresent stays wrapped-only but is now moot for coder (parsed>0 drives both shadow and act); noted as residual for kernel-warden, not edited. tools drivers 61/0, healing+tool-calling 125/0, reasoning kernel 736/0, reasoning strategies/kernel 549/0, text-parse-transition 16/0, tools typecheck+build clean."
+```
