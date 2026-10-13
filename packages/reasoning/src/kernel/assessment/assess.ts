@@ -398,13 +398,6 @@ export function assess(
   // work remains. Zero deterministic outstanding → green regardless of burn
   // (the answer-floor self-critique requirement stays outstanding but does not
   // create pace pressure — it is not gather/produce work to economize toward).
-  //
-  // W4.1 — band FROM EVIDENCE, not token volume: while deterministic work
-  // remains AND this iteration produced NO new substantive evidence
-  // (evidenceDelta == 0), the run is not "on pace" — "green" is impossible.
-  // Guarded on iteration > 0 (iteration 0 has no history to judge). The
-  // ratio-driven escalation above is preserved; this only lifts a would-be
-  // "green" to "economize".
   const ratioBand: PaceBand =
     burnRatio >= PACE_TERMINAL
       ? "terminal"
@@ -413,11 +406,26 @@ export function assess(
         : burnRatio >= PACE_ECONOMIZE
           ? "economize"
           : "green";
-  const evidenceStalled =
-    detOutstandingCount > 0 && evidenceDelta === 0 && currentIter > 0;
+  //
+  // W4.1 — band FROM EVIDENCE, not token volume: while work remains AND this
+  // iteration produced NO new substantive evidence (evidenceDelta == 0), the run
+  // is not "on pace" — "green" is impossible. Guarded on iteration > 0
+  // (iteration 0 has no history to judge).
+  //
+  // W4-live fix: the stall check keys on TOTAL outstanding (the answer floor
+  // INCLUDED), not `detOutstandingCount`. The live impossible-task shape (no
+  // capable tool) has ONLY the non-deterministic self-critique answer floor
+  // outstanding — `detOutstandingCount === 0` — so keying on the deterministic
+  // count short-circuited the band to "green" and the rule never fired despite
+  // its stated condition (`evidenceDelta==0 ∧ requirementsOutstanding>0`)
+  // holding on every assessment. Any outstanding requirement with no new
+  // evidence is a non-green state.
+  const evidenceStalled = outstanding.length > 0 && evidenceDelta === 0 && currentIter > 0;
   const band: PaceBand =
     detOutstandingCount === 0
-      ? "green"
+      ? evidenceStalled
+        ? "economize"
+        : "green"
       : evidenceStalled && ratioBand === "green"
         ? "economize"
         : ratioBand;

@@ -18,6 +18,8 @@ import {
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
+import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
+import { toolCalled } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 
 // A failed tool observation — the concrete evidence the veto requires
 // (Sprint 3.3 corpus run 1 refinement: prevents false-positive vetoes
@@ -127,6 +129,70 @@ describe("arbitrate — controller-early-stop", () => {
       expect(v.terminatedBy).toContain("controller_early_stop");
       expect(v.terminatedBy).toContain("entropy_converged");
     }
+  });
+
+  // W4.3 — a controller early-stop must not preempt contract coverage.
+  it("refuses success when the frozen contract still has unsatisfied requirements", () => {
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "tool:web-search",
+          kind: "tool-coverage",
+          spec: { description: "call web-search", condition: toolCalled("web-search"), acceptance: "deterministic" },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "short",
+      postConditions: [toolCalled("web-search")],
+    };
+    const v = arbitrate(
+      { kind: "controller-early-stop", output: "giving up", reason: "flat_trajectory" },
+      { ...baseCtx, steps: [], runContract: contract },
+    );
+    expect(v.action).toBe("exit-failure");
+    if (v.action === "exit-failure") {
+      expect(v.terminatedBy).toBe("controller_early_stop_ungrounded");
+      expect(v.error).toContain("controller_early_stop_ungrounded");
+    }
+  });
+
+  it("still terminates (exit-success) when the contract is satisfied — no over-blocking", () => {
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "tool:web-search",
+          kind: "tool-coverage",
+          spec: { description: "call web-search", condition: toolCalled("web-search"), acceptance: "deterministic" },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "short",
+      postConditions: [toolCalled("web-search")],
+    };
+    const satisfied: ReasoningStep = {
+      id: "s-ok" as ReasoningStep["id"],
+      type: "observation",
+      content: "results",
+      timestamp: new Date(),
+      metadata: {
+        observationResult: {
+          success: true,
+          toolName: "web-search",
+          displayText: "results",
+          category: "web-search",
+          resultKind: "success",
+          preserveOnCompaction: false,
+          trustLevel: "untrusted",
+        } as ObservationResult,
+      },
+    };
+    const v = arbitrate(
+      { kind: "controller-early-stop", output: "done", reason: "flat_trajectory" },
+      { ...baseCtx, steps: [satisfied], runContract: contract },
+    );
+    expect(v.action).toBe("exit-success");
   });
 });
 

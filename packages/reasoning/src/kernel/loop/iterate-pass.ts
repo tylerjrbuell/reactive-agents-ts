@@ -174,12 +174,22 @@ import {
   getLastErrors,
 } from "./runner-helpers/state-queries.js";
 import {
+  countArtifacts,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
   commitDeliverable,
   passthroughOutputDeliverable,
   unproducedDeliverables,
 } from "./runner-helpers/deliverable.js";
+import { actionToolName } from "../../kernel/assessment/progress-arbiter.js";
+
+/**
+ * W4-live — the default-on zero-evidence stand-down threshold. Consecutive
+ * iterations with no new substantive evidence while work remains, past which an
+ * impossible/zero-progress task terminates honestly instead of grinding. 2 =
+ * the live impossible-task shape terminates within two iterations.
+ */
+const EVIDENCE_STALE_TERMINATE_THRESHOLD = 2;
 
 /**
  * Outer-loop control signal returned by `runIterationPass`.
@@ -532,6 +542,61 @@ export function runIterationPass(
           evidenceStaleIterations = workRemaining
             ? assessment.health.iterationsSinceEvidence
             : 0;
+
+          // ── W4-live: default-on zero-evidence stand-down ────────────────────
+          // An impossible / zero-progress task (no capable tool, no deliverable,
+          // no substantive evidence) must terminate efficiently by DEFAULT — not
+          // grind to maxIterations or a graceful loop. Reuses the assessment's
+          // ledger-derived staleness signal (the SAME currency as the band rule
+          // and pattern (e)) and the honest-abstain single-owner path. NOT gated
+          // behind `.withLongHorizon()`: the plan (4.2) ruled this reconciliation
+          // arm default-on as behavior-ordering over already-computed signals.
+          //
+          // Operator-tuning guard: an EXPLICIT `loopDetection` config is the
+          // operator's override of the loop-machinery family — defer to it (the
+          // live default path passes none, so the actuator is armed there).
+          //
+          // False-positive guard: any tool ATTEMPT at all (substantive OR meta,
+          // even one still in flight) stands the actuator down. A run that is
+          // actively calling tools — a legitimate recall/brief/find workflow, a
+          // gather in flight — is owned by the loop/recovery guards, not this
+          // stand-down. Only a trajectory that calls NO tool at all (the live
+          // `builtins:false` impossible shape: zero tool-call events) is
+          // zero-progress here. A declared required tool also defers (the
+          // required-tool/stall guards own that stall).
+          const zeroEvidenceActuatorArmed = currentOptions.loopDetection === undefined;
+          const noRequiredTools = requiredTools.length === 0;
+          const attemptedAnyTool = state.steps.some(
+            (s) => s.type === "action" && actionToolName(s) !== undefined,
+          );
+          if (
+            zeroEvidenceActuatorArmed &&
+            noRequiredTools &&
+            state.tokens > 0 &&
+            evidenceStaleIterations >= EVIDENCE_STALE_TERMINATE_THRESHOLD &&
+            assessment.requirements.outstanding.length > 0 &&
+            !attemptedAnyTool &&
+            countArtifacts(state) === 0 &&
+            countDeliverableCandidates(state) === 0
+          ) {
+            const reason =
+              `no new task evidence for ${evidenceStaleIterations} iteration(s) while ` +
+              `${assessment.requirements.outstanding.length} requirement(s) remain outstanding — ` +
+              `the task cannot be grounded with the available tools`;
+            state = terminate(state, {
+              reason: "abstained",
+              deliverable: sentinelDeliverable("no_substantive_output", reason),
+              extraMeta: {
+                abstention: { reason, missing: [] },
+                // The output is a harness-authored sentinel, not a model answer:
+                // mark it so resolveCompletionStatus does not report "completed"
+                // for an abstention (honest partial at the strategy boundary; the
+                // engine maps terminatedBy:"abstained" → failure regardless).
+                harnessAuthoredOutput: true,
+              },
+            });
+            return "break";
+          }
 
           // ── HarnessPlan mid-run recompile (meta-loop Phase 6 / task G1) ──────
           // The adaptive lever: on a cadence, recompile the run's HarnessPlan from

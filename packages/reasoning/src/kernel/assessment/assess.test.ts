@@ -194,12 +194,13 @@ describe("assess — pace bands", () => {
     expect(p.burnRatio).toBeCloseTo(0.9, 5); // cost ratio 0.9 > token ratio 0.7
   });
 
-  it("no deterministic outstanding → green regardless of burn (coupling proof)", () => {
+  it("no deterministic outstanding + new evidence → green regardless of burn (coupling proof)", () => {
     const contract = toolContract("web-search");
-    // web-search invoked → its requirement satisfied → zero deterministic outstanding
+    // web-search invoked IN THIS iteration → its requirement satisfied (zero
+    // deterministic outstanding) AND evidenceDelta > 0 → green at high burn.
     const ledger = appendEntries(undefined, [
-      { kind: "tool-invocation", iteration: 1, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
-      { kind: "tool-result", iteration: 1, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 2, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
     ]);
     const p = assess(contract, ledger, budget({ iteration: 2, tokensUsed: 990, tokenLimit: 1000 })).pace;
     expect(p.band).toBe("green");
@@ -237,14 +238,38 @@ describe("assess — W4.1 evidence-based banding", () => {
     expect(assess(contract, ledger, budget({ iteration: 1, tokensUsed: 500, tokenLimit: 1000 })).pace.band).toBe("green");
   });
 
-  it("zero deterministic outstanding stays green regardless of evidence (coupling preserved)", () => {
+  it("no deterministic outstanding + NEW evidence → green (progressing pure-synthesis)", () => {
     const contract = toolContract("web-search");
     const ledger = appendEntries(undefined, [
-      { kind: "tool-invocation", iteration: 1, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
-      { kind: "tool-result", iteration: 1, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 2, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
     ]);
-    // iteration 2: evidenceDelta 0, but nothing deterministic outstanding → green
+    // iteration 2 produced new substantive evidence → not stalled → green
     expect(assess(contract, ledger, budget({ iteration: 2, tokensUsed: 500, tokenLimit: 1000 })).pace.band).toBe("green");
+  });
+
+  it("impossible-task shape: only the answer floor outstanding + no evidence → NOT green", () => {
+    // The live shape: a contract whose ONLY outstanding requirement is the
+    // non-deterministic self-critique answer floor (no deterministic condition),
+    // with no evidence ever. Pre-fix this reported "green" (detOutstandingCount
+    // === 0 short-circuited the band). W4-live fix: any outstanding + no new
+    // evidence is non-green.
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "answer",
+          kind: "question-answered",
+          spec: { description: "answer the task", acceptance: "self-critique" },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "short",
+      postConditions: [],
+    };
+    expect(assess(contract, [], budget({ iteration: 2 })).pace.band).not.toBe("green");
+    // ...and the same shape at iteration 0 (no history) may stay green.
+    expect(assess(contract, [], budget({ iteration: 0 })).pace.band).toBe("green");
   });
 });
 

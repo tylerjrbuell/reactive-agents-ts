@@ -49,7 +49,10 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(result.success).toBe(false);
     expect(typeof result.output).toBe("string");
     expect(result.output.length).toBeGreaterThan(0);
-    expect(result.output).toContain("Could not complete the task within the available budget.");
+    // W4-live: the default-on zero-evidence stand-down owns this terminal
+    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
+    // abstention; both honest-abstention sentinels share this prefix.
+    expect(result.output).toContain("Could not complete the task");
     expect(result.metadata.harnessAuthoredOutput).toBe(true);
     await agent.dispose();
   }, 20000);
@@ -66,7 +69,10 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(result.success).toBe(false);
     // The rejected continuation itself must never ship as the answer.
     expect(result.output).not.toContain("one more attempt");
-    expect(result.output).toContain("Could not complete the task within the available budget.");
+    // W4-live: the default-on zero-evidence stand-down owns this terminal
+    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
+    // abstention; both honest-abstention sentinels share this prefix.
+    expect(result.output).toContain("Could not complete the task");
     await agent.dispose();
   }, 20000);
 
@@ -117,7 +123,9 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
         expect(r.success).toBe(false);
         expect(typeof r.output).toBe("string");
         expect(r.output.trim().length).toBeGreaterThan(0);
-        expect(r.output).toContain("Could not complete the task within the available budget.");
+        // W4-live: the default-on zero-evidence stand-down owns this terminal
+        // earlier; both honest-abstention sentinels share this prefix.
+        expect(r.output).toContain("Could not complete the task");
         console.log(`[live #206] model=${model} output=${JSON.stringify(r.output)}`);
       } finally {
         await agent.dispose();

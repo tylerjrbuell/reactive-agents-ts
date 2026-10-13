@@ -855,6 +855,13 @@ export interface ArbitrationContext {
    * `arbitrationContextFromState`, so no call site can forget it.
    */
   readonly ledger?: import("../../ledger/run-ledger.js").RunLedger;
+  /**
+   * W4.3 — the run's compiled RunContract (from `state.meta.runContract`), so the
+   * controller-early-stop branch can consult terminal-gate COVERAGE exactly like
+   * every other exit (a flat-trajectory early-stop must not preempt an
+   * unsatisfied contract). Absent → the coverage consult is skipped.
+   */
+  readonly runContract?: import("../../contract/run-contract.js").RunContract;
   readonly toolsUsed: ReadonlySet<string>;
   readonly requiredTools: readonly string[];
   /** Run-wide controller decision history (state.controllerDecisionLog). */
@@ -1369,6 +1376,43 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
           terminatedBy: "controller_signal_veto",
           output: intent.output,
         };
+      }
+      // W4.3 (plan 4.3) — a controller early-stop may NOT preempt contract
+      // coverage. A flat-trajectory verdict (the RI dispatcher early-stop at
+      // confidence 0 while still acting) used to ship exit-success regardless of
+      // outstanding contract requirements. Route it through the SAME terminal
+      // gate every other exit uses: an unsatisfied deterministic requirement (or
+      // declared-but-ungrounded required tools) refuses success and surfaces an
+      // honest failure the runner's §7.5 abstention path converts. A SATISFIED
+      // contract (or no contract) keeps the early-stop as success — no
+      // over-blocking.
+      if (ctx.runContract !== undefined) {
+        const gate = evaluateTerminalGate({
+          terminatedBy: "end_turn",
+          requiredTools: ctx.requiredTools,
+          coveredTools: deriveRequirementEvidence(ctx.steps, ctx.requiredTools, ctx.ledger)
+            .coveredTools,
+          hasSubstantiveGrounding: hasSuccessfulSubstantiveToolCall(ctx.steps),
+          redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },
+          // No redirect at an early-stop: the honest terminal is refusal, not
+          // another loop turn.
+          redirectBudget: 0,
+          coverageExhaustionPolicy: "abstain",
+          contract: ctx.runContract,
+          evidence: { steps: ctx.steps, output: intent.output, ledger: ctx.ledger },
+          buildGroundingGuidance: () => "",
+          buildCoverageGuidance: (m) => m.join(", "),
+        });
+        if (gate.decision === "abstain" || gate.decision === "redirect") {
+          return {
+            action: "exit-failure",
+            error:
+              `controller_early_stop_ungrounded: ${gate.check}` +
+              ("missing" in gate && gate.missing.length > 0 ? ` (${gate.missing.join(", ")})` : ""),
+            terminatedBy: "controller_early_stop_ungrounded",
+            output: intent.output,
+          };
+        }
       }
       return {
         action: "exit-success",
@@ -1893,6 +1937,7 @@ export function arbitrationContextFromState(
     // arbitration call site goes through) rather than at each caller, so a new
     // call site cannot silently drop the delegated-work evidence.
     ledger: state.ledger,
+    runContract: state.meta.runContract,
     toolsUsed: state.toolsUsed,
     requiredTools: input.requiredTools ?? [],
     controllerDecisionLog: state.controllerDecisionLog,

@@ -61,7 +61,13 @@ export type TerminateReason =
   // passes it through (a partial-but-real answer ships instead of being nulled),
   // and `deriveTerminatedBy` narrows it to `end_turn` → honest `goalAchieved`
   // unknown (never a false success). Set only under the long-horizon profile.
-  | "budget_terminal";
+  | "budget_terminal"
+  // W4.3 (plan 4.3): a controller early-stop (RI dispatcher, flat trajectory at
+  // confidence 0) was refused as success because the frozen contract still had
+  // unsatisfied requirements / ungrounded required tools. The runner's §7.5
+  // abstention path converts it to the honest terminal; the raw reason records
+  // WHY the early-stop was not allowed to preempt coverage.
+  | "controller_early_stop_ungrounded";
 
 /**
  * The two templated reason families (Phase 3 vocabulary closure). Producers:
