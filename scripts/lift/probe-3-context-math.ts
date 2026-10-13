@@ -7,8 +7,8 @@
  *
  * Run: bun run scripts/probe-3-context-math.ts
  */
-import { builtinTools } from "../packages/tools/src/skills/builtin.js"
-import { resolveProfile, CONTEXT_PROFILES } from "../packages/reasoning/src/context/index.js"
+import { builtinTools } from "../../packages/tools/src/skills/builtin.js"
+import { resolveProfile, CONTEXT_PROFILES } from "../../packages/reasoning/src/context/index.js"
 
 // ── (a) replicate think.ts llmTools mapping ──
 const toWire = (def: (typeof builtinTools)[number]["definition"]) => ({

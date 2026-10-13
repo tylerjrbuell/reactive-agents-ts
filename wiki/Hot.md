@@ -10,6 +10,21 @@ updated: 2026-10-05
 
 ---
 
+## 2026-10-13 — Measurement freeze (Local Tier Reliability Program, Task 0)
+
+**MEASUREMENT FREEZE (Doctrine #4):** the rung-0 baseline for every ⚡ wave's lift verdict is now
+pinned at `wiki/Research/Harness-Reports/2026-10-12-program-scoreboard.md` with raw per-run traces +
+`fixtures/baseline-metrics.jsonl` under `.../2026-10-12-live-probe-audit-results/` (captured at
+Wave-0-close HEAD, temp 0: S1 qwen3:4b + qwen3.5, S2 qwen3:4b, S3 qwen3:4b + llama3.2, S4
+phi4-mini-reasoning; N=5, S4 N=3; S1 replay-determinism gate PASS byte-identical). Headline baseline
+facts: S1 arms abstain honestly at temp 0 (evidenceDelta=0 stall intact, 0/5 success), while the
+canonical discover-tools ×146 false-success thrash reproduced on the S3/llama3.2 arm; haiku rung-2
+arms deferred on an Anthropic credit blocker (named in scoreboard). Until the freeze is lifted by a
+later wave's plan, treat harness behavior on these paths as read-only for measurement purposes — any
+`packages/**` change to emitters, guards, or termination on these paths invalidates the diff.
+
+---
+
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
 
 Executed `execute-backlog` on `priority:p1` → singleton #231 (canonical run-level

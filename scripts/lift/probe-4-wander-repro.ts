@@ -16,7 +16,7 @@
  *
  * Run: bun run scripts/probe-4-wander-repro.ts   (ollama running; ~1-2 min)
  */
-import { ReactiveAgents } from "../packages/runtime/src/index.js"
+import { ReactiveAgents } from "../../packages/runtime/src/index.js"
 
 const MODEL = process.env.PROBE_MODEL ?? "qwen3.5:latest"
 
