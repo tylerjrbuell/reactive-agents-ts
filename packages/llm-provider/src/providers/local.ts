@@ -20,6 +20,8 @@ import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
+import { getCapabilityStore } from '../capability-store.js'
+import { loadCalibration } from '../calibration.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
@@ -99,6 +101,88 @@ function resolveOllamaNumCtx(
         capability.recommendedNumCtx ??
         config.defaultNumCtx
     )
+}
+
+/**
+ * The verdict of {@link deriveSupportsToolCalling}, with provenance.
+ */
+export interface ToolCallingClaim {
+    /** The boolean to publish as `supportsToolCalling`. */
+    readonly supported: boolean
+    /**
+     * True when `supported` is a PERMISSIVE default rather than a measured
+     * verdict — the model's template emission has never been probed.
+     * Consumers may down-rank certainty (e.g. telemetry, bench preflight)
+     * but must NOT treat provisional claims as measured facts.
+     */
+    readonly provisional: boolean
+    /** Human-readable why — surfaced in tests/telemetry, never silent. */
+    readonly reason: string
+}
+
+/**
+ * Derive the per-model `supportsToolCalling` claim — replacing the old
+ * hardcoded `true` (Wave 2a, 2026-10-13; was `local.ts:1150`).
+ *
+ * The claim is a conjunction: the chat template must actually emit tool-call
+ * tokens (measured via /api/show `template` scan → `toolTemplateEmitsTokens`)
+ * AND the dialect signal must not contradict it (the empirical calibration
+ * posterior when one exists, else the capability record's own dialect).
+ *
+ * Fail-safe ordering (Review Focus #2 spirit — a wrong-true costs a failed
+ * tool round-trip, a wrong-false silently strips tools from a capable
+ * model, which is the worse failure):
+ *   1. Template NEVER MEASURED (`toolTemplateEmitsTokens === undefined` —
+ *      static-table entry, fallback, or probe response without a template)
+ *      → `true`, PROVISIONAL. Permissive: an unmeasured model keeps the
+ *      behavior it had before this derivation existed.
+ *   2. Template MEASURED with NO tool-token emission → `false`, STRICT.
+ *      This is the cogito/qwen3-class lie detector: `capabilities` may
+ *      advertise "tools", but a template with no emission path means the
+ *      model structurally cannot be told about tools.
+ *   3. Template EMITS tool tokens:
+ *        - dialect posterior (calibration file, if measured) "none" →
+ *          `false` with reason (measured empirics override template theory).
+ *        - otherwise → `true` (emission ∧ dialect ok). Provisional only when
+ *          no calibration posterior exists yet.
+ *
+ * @internal exported for unit testing only.
+ */
+export function deriveSupportsToolCalling(capability: Capability): ToolCallingClaim {
+    const emits = capability.toolTemplateEmitsTokens
+    if (emits === undefined) {
+        return {
+            supported: true,
+            provisional: true,
+            reason: 'tool-template emission unmeasured — permissive default',
+        }
+    }
+    if (!emits) {
+        return {
+            supported: false,
+            provisional: false,
+            reason: 'chat template emits no tool-call tokens (measured)',
+        }
+    }
+    // Emission measured true — consult the empirical dialect posterior first.
+    const calibration = loadCalibration(capability.model)
+    const dialect = calibration?.toolCallDialect ?? capability.toolCallDialect
+    if (dialect === 'none') {
+        return {
+            supported: false,
+            provisional: false,
+            reason: calibration?.toolCallDialect === 'none'
+                ? 'template emits tool tokens but measured dialect posterior is none'
+                : 'template emits tool tokens but capability dialect is none',
+        }
+    }
+    return {
+        supported: true,
+        provisional: calibration === undefined,
+        reason: calibration === undefined
+            ? 'template emits tool tokens; no dialect posterior yet'
+            : 'template emits tool tokens; dialect posterior ok',
+    }
 }
 
 // ─── Ollama SDK types (from the `ollama` npm package) ───
@@ -223,25 +307,46 @@ const parseToolCalls = (
 
 // ─── Thinking Auto-Detect ───
 
-/** Cache for model thinking capability checks (avoids repeated /api/show calls) */
+/**
+ * Fallback cache for model thinking-capability checks (avoids repeated
+ * /api/show calls).
+ *
+ * Wave 2a: absorbed onto the capability-probe path — when callers have a
+ * resolved `Capability` (probe / static-table / store-backed), that record's
+ * `supportsThinkingMode` answers the question and this Map is skipped. The
+ * Map remains only for legacy call sites without a capability in scope.
+ */
 const thinkingCapabilityCache = new Map<string, boolean>()
 
 /**
- * Check if an Ollama model supports thinking mode via /api/show.
+ * Check if an Ollama model supports thinking mode.
  *
- * Uses the canonical `capabilities` array which Ollama populates from the
- * model card. The previous template-string heuristic (checking for the word
- * "think") false-positived on models that mention "think" generically in
- * their chat template — granite3.3 is the smoking-gun case: the template
- * contains "think" but the model lacks the thinking capability, and sending
+ * Preferred path (Wave 2a): when a resolved `capability` is supplied, read
+ * `supportsThinkingMode` off it — that value came from the store-backed
+ * /api/show probe (`capabilities` array), so one probe serves size, thinking,
+ * and template-emission claims instead of three separate caches.
+ *
+ * Fallback path: bare /api/show via the SDK client. Uses the canonical
+ * `capabilities` array which Ollama populates from the model card. The
+ * previous template-string heuristic (checking for the word "think")
+ * false-positived on models that mention "think" generically in their chat
+ * template — granite3.3 is the smoking-gun case: the template contains
+ * "think" but the model lacks the thinking capability, and sending
  * `think: true` causes "does not support thinking" errors that abort the
  * whole agent run.
  */
 async function supportsThinking(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     client: { show: (opts: { model: string }) => Promise<any> },
-    model: string
+    model: string,
+    capability?: Capability
 ): Promise<boolean> {
+    // A resolver FALLBACK carries no measured facts (supportsThinkingMode is
+    // its schema default) — it must not short-circuit the probe fallback.
+    if (capability && capability.source !== 'fallback') {
+        return capability.supportsThinkingMode
+    }
+
     const cached = thinkingCapabilityCache.get(model)
     if (cached !== undefined) return cached
 
@@ -274,10 +379,11 @@ export async function resolveThinking(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     client: { show: (opts: { model: string }) => Promise<any> },
     model: string,
-    configThinking: boolean | undefined
+    configThinking: boolean | undefined,
+    capability?: Capability
 ): Promise<boolean | undefined> {
     if (configThinking !== true) return undefined // undefined/false → off (opt-in)
-    const capable = await supportsThinking(client, model)
+    const capable = await supportsThinking(client, model, capability)
     // Shared resolver applies the identical opt-in + warn-once discipline.
     return resolveThinkingEnabled('ollama', model, true, capable) ? true : undefined
 }
@@ -480,7 +586,8 @@ export const LocalProviderLive = Layer.effect(
                             const think = await resolveThinking(
                                 client,
                                 model,
-                                config.thinking
+                                config.thinking,
+                                capability
                             )
 
                             return client.chat({
@@ -723,12 +830,9 @@ export const LocalProviderLive = Layer.effect(
                                     })
                                 }
 
-                                const think = await resolveThinking(
-                                    client,
-                                    model,
-                                    config.thinking
-                                )
-
+                                // Wave 2a: resolve capability BEFORE thinking so
+                                // supportsThinkingMode comes off the store-backed
+                                // probe record instead of a second /api/show call.
                                 const wantLogprobs = request.logprobs ?? false
                                 // Phase 1 S2.4 — probe-aware capability (see complete() path)
                                 const capability =
@@ -738,6 +842,13 @@ export const LocalProviderLive = Layer.effect(
                                         config.ollamaApiKey
                                     )
                                 const numCtx = resolveOllamaNumCtx(request, config, capability)
+
+                                const think = await resolveThinking(
+                                    client,
+                                    model,
+                                    config.thinking,
+                                    capability
+                                )
 
                                 // M12 Hook 1/7 — adapter selection for the
                                 // streaming tool-call normalization site.
@@ -1196,12 +1307,30 @@ export const LocalProviderLive = Layer.effect(
                 }),
 
             capabilities: () =>
-                Effect.succeed({
-                    supportsToolCalling: true,
-                    supportsStreaming: true,
-                    supportsStructuredOutput: true,
-                    supportsLogprobs: false,
-                } satisfies ProviderCapabilities),
+                // Wave 2a — derived, not constant. `deriveSupportsToolCalling`
+                // encodes the fail-safe ordering (unmeasured → permissive
+                // provisional; measured-no-emission → strict false). Prefer
+                // the store's cross-process probe row over a static-table/
+                // fallback resolver hit so a prior process's template
+                // measurement is not lost; a live-probed registry hit (source
+                // "probe") always wins. Effect.sync (not succeed) because the
+                // derivation reads the store/calibration files.
+                Effect.sync(() => {
+                    const fromResolver = resolveCapability('ollama', defaultModel)
+                    const cap =
+                        fromResolver.source === 'static-table' ||
+                        fromResolver.source === 'fallback'
+                            ? (getCapabilityStore().loadCapability('ollama', defaultModel) ??
+                              fromResolver)
+                            : fromResolver
+                    const claim = deriveSupportsToolCalling(cap)
+                    return {
+                        supportsToolCalling: claim.supported,
+                        supportsStreaming: true,
+                        supportsStructuredOutput: true,
+                        supportsLogprobs: false,
+                    } satisfies ProviderCapabilities
+                }),
         })
     })
 )
