@@ -1126,3 +1126,11 @@ task: "W2a review fix loop round 1: function_call template markers, endpoint-sco
 result: completed, confidence 0.9
 outcome: "accepted-pending-review: 1 commit (a298ba7e). RED 5 -> GREEN. llm-provider 492/0, typecheck llm-provider+core+reasoning+runtime 24/24, RI+testing 23/23 (duck-type back-compat), RI+testing tests 125/0, cast-ceiling guard 2/0 (239<240, one stub cast designed out). Deviation surfaced: fix 2 needed optional endpoint args on CapabilityCache (3 files, not 1) because the store cannot learn baseUrl from (provider,model) alone; legacy rows self-heal per controller preference."
 ```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2b (plan 2.1): registry-first tiering in resolveProfileWithWindow; ollama size-regex branch deleted; provisionalTier mark + 17-arm classification matrix; test-provider carve-out with data-bug escalation"
+result: completed, confidence 0.93
+outcome: "accepted: verifier green (matrix 17/17 re-run by parent). Review Approved 0C — carve-out judged acceptable (case-safe, exact-keyed registry, pinned arm) with the underlying stub-row data bug escalated correctly (-> GH #239, parent-filed); both modified existing test files verified UPDATE-TO-TRUTH (net coverage up); fail-safe registry-miss semantics confirmed (fallback source never poses as verdict, no throw path). Infra discovery: runtime suite tests reasoning SRC via tsconfig paths (dist irrelevant to bun test)."
+```
