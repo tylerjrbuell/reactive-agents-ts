@@ -217,8 +217,15 @@ function contractCoverageEnvelope(
   const detOutstanding = contract.requirements
     .filter((r) => {
       if (r.spec.condition === undefined) return false; // answer floor: not deterministic
+      // Ledger-verified satisfaction EXEMPTS from the cap. `assess()` cannot
+      // mark an OutputContains (`output:*`) requirement satisfied — it hard-
+      // falses that shape — so it is ALWAYS in the assessment's `outstanding`
+      // partition even when the answer contains the section. The ledger path
+      // (`conditionMetByLedger`) is authoritative there, so the cap intersects
+      // with it rather than trusting the partition alone.
+      if (conditionMetByLedger(r.spec.condition, ledger ?? [], output)) return false;
       if (assessment !== undefined) return outstandingSet.has(r.id);
-      return !conditionMetByLedger(r.spec.condition, ledger ?? [], output);
+      return true;
     })
     .map((r) => r.id);
   return detOutstanding.length > 0
@@ -475,7 +482,9 @@ export function finalizeStrategyResult(
     // the existing worst-of join rather than a new scorer. An abstention is not
     // capped (its claim is already honest).
     const coverage = contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText);
-    const abstained = (gated.metadata as Record<string, unknown>).terminatedBy === "abstained";
+    // An abstention is never capped. Agree with the gate boolean (a run the gate
+    // just flipped) AND a run that was ALREADY abstained before the gate.
+    const abstained = gateFires || rawTerminatedBy === "abstained";
     const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
     const finalResult =
       cappedStatus === gated.status

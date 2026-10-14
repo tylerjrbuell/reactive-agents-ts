@@ -9,9 +9,9 @@ import { Effect } from "effect";
 import type { ReasoningStep } from "../../../../src/types/step.js";
 import { finalizeStrategyResult } from "../../../../src/kernel/capabilities/sense/finalize-result.js";
 import { provideTestEnvelope } from "../../../../src/kernel/envelope/run-envelope.js";
-import { artifactProduced } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
-import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
+import { artifactProduced, outputContains } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 import type { RunAssessment } from "../../../../src/kernel/assessment/assess.js";
+import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
 
 let seq = 0;
 function step(
@@ -370,5 +370,49 @@ describe("finalizeStrategyResult: 5.2 judgment-entry citation", () => {
     const result = await mint({ output: "The answer is 42.", status: "completed" });
     const verdict = (result.metadata as Record<string, unknown>).verdict as Record<string, unknown>;
     expect(verdict.judgmentRef).toBeUndefined();
+  });
+});
+
+// ── Important 1: ledger-satisfied `output:*` requirements exempt from the cap ─
+const OUTPUT_CONTRACT: RunContract = {
+  requirements: [
+    {
+      id: "output:Summary",
+      kind: "question-answered",
+      spec: { description: 'include "Summary" in the answer', condition: outputContains("Summary"), acceptance: "deterministic" },
+    },
+    { id: "answer", kind: "question-answered", spec: { description: "answer the task", acceptance: "self-critique" } },
+  ],
+  deliverables: [],
+  constraints: [],
+  horizon: "short",
+  postConditions: [outputContains("Summary")],
+};
+
+describe("finalizeStrategyResult: coverage cap exempts ledger-satisfied output requirements", () => {
+  it("RED-FIRST: an answer that DOES contain every mustInclude item does NOT cap to partial", async () => {
+    // assess() hard-false for the OutputContains shape, so the requirement is
+    // ALWAYS in the assessment's `outstanding` partition even when the answer
+    // contains the section. The ledger path (`conditionMetByLedger`) is the
+    // authority; the cap must intersect with it.
+    const result = await mint({
+      output: "## Summary\nThe quarterly totals rose across both products.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: { runContract: OUTPUT_CONTRACT, assessment: assessmentWith(["output:Summary", "answer"]) },
+    });
+    expect(result.status).toBe("completed");
+  });
+
+  it("regression: a run MISSING a required section still caps to partial", async () => {
+    const result = await mint({
+      output: "The quarterly totals rose across both products.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: { runContract: OUTPUT_CONTRACT, assessment: assessmentWith(["output:Summary", "answer"]) },
+    });
+    expect(result.status).toBe("partial");
   });
 });
