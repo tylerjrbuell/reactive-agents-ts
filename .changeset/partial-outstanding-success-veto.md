@@ -1,0 +1,5 @@
+---
+"@reactive-agents/runtime": minor
+---
+
+Wave 5 fold (kernel review Important 2): honest success bit for contract-outstanding terminals. A terminal whose evidence partition still names outstanding/blocked contract requirements (`metadata.outstandingCriteria`, minted by the W5.1 coverage cap) no longer maps to `success: true` on the coarse bit — the engine's partial+substantive tolerance lane is vetoed by the outstanding partition, mirroring the abstention veto. Resolved invariant: envelope-authority (success requires nothing outstanding), NOT blanket partial=>false — an uncapped partial with nothing outstanding keeps the documented tolerance behavior, `completed` unchanged. The envelope honesty markers (outstandingCriteria, budgetTerminalPartial, envelope verificationWarning) were also being dropped at the normalizeReasoningResult whitelist boundary on every pass; they are now preserved and forwarded onto AgentResult.metadata (verificationWarning: engine-boundary value still takes precedence).

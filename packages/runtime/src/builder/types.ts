@@ -1116,6 +1116,17 @@ export interface AgentResultMetadata {
     readonly harnessAuthoredOutput?: boolean
     readonly verificationWarning?: string
     /**
+     * W5 fold: contract requirement ids the terminal evidence partition still
+     * names OUTSTANDING or BLOCKED (W5.1 coverage cap). When present and
+     * non-empty, the run's `success` bit is false regardless of output
+     * substance: a terminal that cannot point at its remaining requirements
+     * has no warrant to claim completion. Absent = nothing outstanding (or no
+     * contract declared).
+     */
+    readonly outstandingCriteria?: readonly string[]
+    /** True when the terminal was capped by the run budget, not by evidence. */
+    readonly budgetTerminalPartial?: boolean
+    /**
      * W0.5 result→trace linkage. The run's ULID id, equal to the engine
      * `taskId`, the `runId` stamped on every trace event, and the base name
      * of the run's JSONL trace file. Present ONLY when the trace file was

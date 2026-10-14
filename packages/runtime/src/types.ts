@@ -277,6 +277,16 @@ export interface ExecutionContextMetadata {
        */
       harnessAuthoredOutput?: boolean;
       /**
+       * W5 fold (kernel review Important 2): completion-envelope honesty
+       * markers from `honestEnvelopeMetadata` (W5.1 contract-coverage cap +
+       * honest-partial lanes). Mirror of `ExecutionReasoningResult.metadata`
+       * in `engine/util.ts`: the engine reads `outstandingCriteria` to veto
+       * the coarse success bit and forwards it onto `AgentResult.metadata`.
+       */
+      outstandingCriteria?: readonly string[];
+      budgetTerminalPartial?: boolean;
+      verificationWarning?: string;
+      /**
        * Open-string channel preserving raw kernel `state.meta.terminatedBy`
        * BEFORE narrowing to the closed TerminatedBy 5-value enum. Carries
        * dynamic killswitch reasons (e.g. "budget-limit:tokens:1/0") and the

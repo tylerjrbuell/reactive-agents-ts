@@ -306,6 +306,18 @@ export type ExecutionReasoningResult = {
   error?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
   metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; /** #40 honesty channel (Task 3): the kernel's own harness-authorship flag, present iff `onlyHarnessAuthorshipFailed` fired at the terminal verifier gate. */ harnessAuthoredOutput?: boolean; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] };
+    /**
+     * W5 fold (kernel review Important 2): the completion-envelope honesty
+     * markers minted by `honestEnvelopeMetadata` (W5.1 contract-coverage cap +
+     * honest-partial lanes). They must cross the normalize boundary on EVERY
+     * pass (primary, retry, hooks), same whitelist-drop class DEBT-REGISTER
+     * §3 tracks for runLedger/verdict/abstention. The engine's
+     * outstanding-partition success veto and the result.metadata forwarding
+     * read these.
+     */
+    outstandingCriteria?: readonly string[];
+    budgetTerminalPartial?: boolean;
+    verificationWarning?: string;
     /** Cross-cutting cascade Task 9: terminal judgment record, preserved through normalization so the engine can forward it onto `TaskResult.metadata.verdict`. */
     verdict?: { enforced: boolean; groundedOnRequired?: boolean; contractSatisfied?: boolean; failed: readonly string[]; auxiliaryPass?: boolean; repairGaps?: readonly string[] };
     /** Cross-cutting cascade Task 9: the typed extension slot (DEBT-REGISTER §3), preserved through normalization so the engine can forward it onto `TaskResult.metadata.extensions` verbatim. */
@@ -418,6 +430,19 @@ export function normalizeReasoningResult(
         typeof md.abstention === "object" && md.abstention !== null
           ? (md.abstention as { reason: string; missing: readonly string[] })
           : undefined,
+      // W5 fold (kernel review Important 2): preserve the completion-envelope
+      // honesty markers (W5.1 `honestEnvelopeMetadata`) through the rebuild.
+      // Without this the contract-coverage cap's `outstandingCriteria` was
+      // dropped at the normalize boundary on every pass, so the engine could
+      // not veto success on the coarse bit and the evidence never reached
+      // `AgentResult.metadata`. Same whitelist-drop class as §3 above.
+      outstandingCriteria: Array.isArray(md.outstandingCriteria)
+        ? (md.outstandingCriteria as readonly string[])
+        : undefined,
+      budgetTerminalPartial:
+        typeof md.budgetTerminalPartial === "boolean" ? md.budgetTerminalPartial : undefined,
+      verificationWarning:
+        typeof md.verificationWarning === "string" ? md.verificationWarning : undefined,
       // Cross-cutting cascade Task 9: preserve the terminal judgment record
       // through normalization so it reaches `TaskResult.metadata.verdict`.
       // Without this the whitelist rebuild silently drops it, same failure

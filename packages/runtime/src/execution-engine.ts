@@ -1147,6 +1147,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx.metadata.abstainedNotSuccess = true;
                 }
 
+                // W5 fold (kernel review Important 2): an OUTSTANDING contract
+                // requirement is not a success, whatever the coarse status bit
+                // says. The W5.1 coverage cap caps the terminal STATUS at
+                // `partial` + stamps `metadata.outstandingCriteria`, but the
+                // pre-existing partial+substantive TOLERANCE lane above maps
+                // that partial to `success: true`, so the S3 false-success
+                // survived on the user-visible bit ("S3 false-success -> 0"
+                // was only true on the verdict lane). Resolved invariant
+                // (envelope-authority, NOT blanket partial=>false): a terminal
+                // whose evidence partition still names outstanding/blocked
+                // requirements cannot claim success; an uncapped partial with
+                // nothing outstanding keeps the documented tolerance lane
+                // byte-identical, and `completed` is unchanged. Mirrors the
+                // abstention veto above: same lane, one bit over.
+                const outstandingAtTerminal = rr?.metadata?.outstandingCriteria;
+                if (
+                  executionSucceeded &&
+                  Array.isArray(outstandingAtTerminal) &&
+                  outstandingAtTerminal.length > 0
+                ) {
+                  executionSucceeded = false;
+                  ctx.metadata.outstandingContractNotSuccess = true;
+                }
+
                 // ── Engine-boundary output/success invariant (M7's engine
                 // mirror, 2026-07-11 probe fleet). The inline path derived
                 // success from isComplete alone, shipping success:true with
@@ -1461,6 +1485,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // invariant.test.ts, Move 1 merge triage 2026-08-13).
                     ...(ctx.metadata.harnessAuthoredOutput === true || rr?.metadata?.harnessAuthoredOutput === true
                       ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
+                      : {}),
+                    // W5 fold: the envelope honesty markers ride to the user.
+                    // Before this they were dropped at the normalize boundary
+                    // (whitelist rebuild), so the cap's evidence never reached
+                    // AgentResult.metadata on any pass. Envelope-sourced
+                    // verificationWarning rides FIRST; the engine's own
+                    // result-boundary warning below keeps authority when both
+                    // exist (later spread wins).
+                    ...(rr?.metadata?.outstandingCriteria !== undefined
+                      ? ({ outstandingCriteria: rr.metadata.outstandingCriteria } as Record<string, unknown>)
+                      : {}),
+                    ...(rr?.metadata?.budgetTerminalPartial === true
+                      ? ({ budgetTerminalPartial: true } as Record<string, unknown>)
+                      : {}),
+                    ...(rr?.metadata?.verificationWarning !== undefined
+                      ? ({ verificationWarning: rr.metadata.verificationWarning } as Record<string, unknown>)
                       : {}),
                     // Result-boundary verification: the verdict rides to the
                     // receipt sites (run() + stream) via metadata, so BOTH
