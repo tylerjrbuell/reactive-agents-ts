@@ -225,7 +225,7 @@ const result = await agent.run("Compare the GDP growth of the top 5 economies ov
 |--------|---------|-------------|
 | `maxRefinements` | 2 | Max plan revision cycles |
 | `reflectionDepth` | "deep" | "shallow" or "deep" reflection |
-| `stepKernelMaxIterations` | 2 | Max ReAct tool-call iterations per plan step |
+| `stepKernelMaxIterations` | derived | Max ReAct tool-call iterations per plan step — defaults to `max(5, ceil(runMaxIterations / planLength))` (floor 5) unless set explicitly |
 
 ### Tree-of-Thought
 
@@ -624,7 +624,7 @@ Configure the Plan-Execute strategy via `withReasoning()`. All fields live under
 | `maxRefinements` | `number` | `2` | Max plan revision cycles after reflection |
 | `reflectionDepth` | `"shallow" \| "deep"` | `"deep"` | Controls reflection prompt token budget (1500 vs 2500 tokens) |
 | `stepRetries` | `number` | `1` | Retry attempts per step before falling back to patch |
-| `stepKernelMaxIterations` | `number` | `3` | Max ReAct iterations for `composite`-type steps |
+| `stepKernelMaxIterations` | `number` | derived: `max(5, ceil(runMaxIterations / planLength))` | Max ReAct iterations for `composite`-type steps (an explicit value still wins) |
 | `planMode` | `"linear" \| "dag"` | `"linear"` | Execution mode — `linear` runs steps sequentially |
 | `patchStrategy` | `"in-place" \| "replan-remaining"` | — | How failed steps are repaired |
 

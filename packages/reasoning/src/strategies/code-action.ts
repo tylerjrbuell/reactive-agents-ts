@@ -520,6 +520,13 @@ export const executeCodeAction = (
         break;
       }
 
+      // W5.5 strategy-tier honesty: the required-tools post-check is enforced
+      // at the terminal mint (finalizeStrategyResult receives requiredTools +
+      // runLedger below), not here. An in-loop gate would need kernel tool-
+      // call observations that this sandbox loop never produces — checking
+      // would misfire on every grounded run. The mint's groundedOnRequired
+      // verdict + 5.1 coverage cap are the minimum, with zero new machinery.
+
       // ── Retry — regenerate code with verifier feedback ────────────────────
       yield* appendStep(
         makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`),

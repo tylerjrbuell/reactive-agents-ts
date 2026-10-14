@@ -208,7 +208,12 @@ export const executePlanExecute = (
     const maxRefinements = planConfig.maxRefinements;
     const reflectionDepth = planConfig.reflectionDepth;
     const stepRetries = planConfig.stepRetries ?? 1;
-    const stepKernelMaxIterations = planConfig.stepKernelMaxIterations ?? 3;
+    // W5.5 strategy-tier honesty: the per-step sub-kernel budget derives from
+    // the run's own iteration budget spread over the plan (floor 5), computed
+    // at the use site once `plan` exists — see the `derivedStepBudget` below.
+    // An explicit `stepKernelMaxIterations` still wins (deliberate tuning
+    // beats derivation).
+    const stepKernelMaxIterations = planConfig.stepKernelMaxIterations;
     const planMode = planConfig.planMode ?? "linear";
 
     const steps: ReasoningStep[] = [];
@@ -800,6 +805,13 @@ export const executePlanExecute = (
             let stepSucceeded = false;
             let stepResult = "";
             let lastError: string | undefined;
+            // W5.5: derive the per-step slice here, where `plan` exists: the
+            // run's own iteration budget spread over the plan (floor 5).
+            const derivedStepBudget =
+              stepKernelMaxIterations ??
+              (plan.steps.length > 0
+                ? Math.max(5, Math.ceil(input.config.strategies.reactive.maxIterations / plan.steps.length))
+                : 5);
 
             for (let attempt = 0; attempt <= stepRetries; attempt++) {
               if (attempt > 0) {
@@ -823,7 +835,7 @@ export const executePlanExecute = (
                   waveInput,
                   toolSummaries,
                   services,
-                  stepKernelMaxIterations,
+                  derivedStepBudget,
                   attempt > 0 ? lastError : undefined,
                   emitLog,
                 ),
