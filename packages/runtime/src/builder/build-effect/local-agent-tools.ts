@@ -49,6 +49,7 @@ import {
   type SpawnHandlers,
 } from "./spawn-handlers.js";
 import type { SubAgentTaskArgs } from "./sub-agent-executor.js";
+import { childCompletionEnvelope } from "./sub-agent-executor.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -223,6 +224,7 @@ export const createLocalAgentToolRegistration = (
               output: String(result.output ?? ""),
               success: result.success,
               tokensUsed: result.metadata.tokensUsed,
+              completionEnvelope: childCompletionEnvelope(result),
             },
           );
         }

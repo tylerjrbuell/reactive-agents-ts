@@ -46,6 +46,7 @@ import {
 import {
   capStatusToEnvelope,
   honestEnvelopeMetadata,
+  joinEnvelopes,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
@@ -496,9 +497,55 @@ export function finalizeStrategyResult(
             extraMetadata: { ...params.extraMetadata, ...honestEnvelopeMetadata(coverage) },
           });
 
+    // ── 5.3 delegation-laundering arm (worst-of join over child envelopes) ──
+    // A partial child caps a completed parent claim — same envelope law as the
+    // coverage arm, one ordering, no new scorer. Child envelopes ride the
+    // delegation-tool observations (stamped by the executors, extracted in
+    // act/tool-execution.ts), never the display text. Abstentions are never
+    // capped (same fence as coverage). No delegation observations ⇒ the join
+    // is the identity (`joinEnvelopes([])` is completed) and this arm is a
+    // no-op by construction.
+    const childEnvelopes: CompletionEnvelope[] = [];
+    for (const step of params.steps) {
+      const stamped = step.metadata?.observationResult?.childEnvelopes;
+      if (!stamped) continue;
+      for (const e of stamped) {
+        childEnvelopes.push({
+          completionStatus: e.completionStatus,
+          ...(e.harnessAuthoredOutput !== undefined
+            ? { harnessAuthoredOutput: e.harnessAuthoredOutput }
+            : {}),
+          ...(e.budgetTerminalPartial !== undefined
+            ? { budgetTerminalPartial: e.budgetTerminalPartial }
+            : {}),
+          ...(e.verificationWarning !== undefined ? { verificationWarning: e.verificationWarning } : {}),
+        });
+      }
+    }
+    const delegation = joinEnvelopes(childEnvelopes);
+    const delegationCappedStatus = abstained ? finalResult.status : capStatusToEnvelope(finalResult.status, delegation);
+    const delegationResult =
+      delegationCappedStatus === finalResult.status
+        ? finalResult
+        : buildStrategyResult({
+            ...params,
+            output: finalResult.output,
+            status: delegationCappedStatus,
+            // Recompute the envelope metadata from BOTH arms: extraMetadata
+            // carries only strategy-declared fields, so the coverage arm's
+            // fields (already merged into finalResult.metadata) are re-derived
+            // here rather than spread wholesale (which would also drag stale
+            // duration/cost/confidence over the fresh values).
+            extraMetadata: {
+              ...params.extraMetadata,
+              ...honestEnvelopeMetadata(coverage),
+              ...honestEnvelopeMetadata(delegation),
+            },
+          });
+
     const judged: ReasoningResult = {
-      ...finalResult,
-      metadata: { ...finalResult.metadata, verdict },
+      ...delegationResult,
+      metadata: { ...delegationResult.metadata, verdict },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

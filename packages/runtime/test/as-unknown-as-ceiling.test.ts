@@ -305,7 +305,13 @@ function countAsUnknownAs(file: string): Hit[] {
 //   as the 2026-06-06 capability-prime bump precedent above; bun's
 //   `typeof fetch` carries static members a plain stub can't structurally
 //   satisfy (documented 2026-08-20).
-const TESTS_CEILING = 242;
+// - 2026-10-14 (Wave 5, local-tier-reliability program): 242 → 243. The
+//   child-envelope derivation test needs one fixture-widening helper: the
+//   child engine result carries FOLD-forwarded honesty markers as unknown
+//   keys that core's `ResultMetadata` schema does not declare, so literals
+//   narrow through a single `as unknown as TaskResult` site. Test-fixture
+//   widening only; no production-site casts added.
+const TESTS_CEILING = 243;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

@@ -284,6 +284,47 @@ const extractChildRunLedger = (result: TaskResult): RunLedger | undefined => {
 };
 
 /**
+ * The child's completion envelope off its engine result (Wave 5.3 delegation-
+ * laundering join). Guarded, not cast: reads the top-level `terminatedBy` /
+ * `success` the engine stamps plus the FOLD-forwarded honesty markers on
+ * metadata (`outstandingCriteria`, `harnessAuthoredOutput`,
+ * `budgetTerminalPartial` — cast through as unknown keys since core's
+ * `ResultMetadata` schema does not declare them). A shape drift degrades to
+ * "completed"/"failed" off the success bit alone, never to a forged partial.
+ *
+ * Always returns an envelope (the parent join needs completed envelopes too —
+ * `joinEnvelopes` over all children, not just the unhappy ones).
+ */
+export const childCompletionEnvelope = (
+  result: TaskResult,
+): NonNullable<SubAgentRawResult["completionEnvelope"]> => {
+  const md = result.metadata as unknown as Record<string, unknown>;
+  const outstanding = md.outstandingCriteria;
+  const partialMarkers =
+    (Array.isArray(outstanding) && outstanding.length > 0) ||
+    md.harnessAuthoredOutput === true ||
+    md.budgetTerminalPartial === true;
+  const terminatedBy: unknown = (result as unknown as Record<string, unknown>).terminatedBy;
+  // Order matters: a partial-capped child arrives with success:false AND
+  // markers (the FOLD veto flips the bit), so the markers must be read before
+  // the success bit — otherwise every honest partial degrades to "failed".
+  const completionStatus =
+    terminatedBy === "abstained"
+      ? ("abstained" as const)
+      : partialMarkers
+        ? ("partial" as const)
+        : !result.success
+          ? ("failed" as const)
+          : ("completed" as const);
+  return {
+    completionStatus,
+    ...(md.harnessAuthoredOutput === true ? { harnessAuthoredOutput: true as const } : {}),
+    ...(md.budgetTerminalPartial === true ? { budgetTerminalPartial: true as const } : {}),
+    ...(typeof md.verificationWarning === "string" ? { verificationWarning: md.verificationWarning } : {}),
+  };
+};
+
+/**
  * Build and execute a single sub-agent task, forked into the parent's fiber
  * tree. Shared by spawnHandler (singular) and spawnAgentsHandler (batch).
  *
@@ -669,12 +710,14 @@ export const buildSubAgentTask = (
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
           ...(stampedChildLedger ? { childRunLedger: stampedChildLedger } : {}),
+          completionEnvelope: childCompletionEnvelope(result),
           // NOTE: `childDashboard` deliberately does NOT ride on `raw` — the
           // registry `record()` above is its ONLY transport. `raw` becomes the
           // `SubAgentResult` the model sees serialized in its observation, so a
           // DashboardData blob here would leak phases/tools/alerts/entropyTrace
           // straight into the LLM's context (and the tool cache) for free.
         };
+
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }
 

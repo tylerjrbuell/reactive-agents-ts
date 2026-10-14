@@ -250,13 +250,14 @@ export {
   finalizeSubAgentResult,
   subAgentResultForDisplay,
   subAgentChildLedgerEntries,
+  subAgentChildEnvelopes,
   resolveMaxRecursionDepth,
   SUB_AGENT_DIRECTIVE,
   MAX_RECURSION_DEPTH,
   MAX_PARENT_CONTEXT_CHARS,
   ALWAYS_INCLUDE_TOOLS,
 } from "./adapters/agent-tool-adapter.js";
-export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, SubAgentChildEnvelope, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
 export { fetchJsonTool, HttpToolError } from "./adapters/http-tool-adapter.js";
 export type { HttpToolOptions } from "./adapters/http-tool-adapter.js";

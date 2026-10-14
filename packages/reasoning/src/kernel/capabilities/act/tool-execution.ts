@@ -28,6 +28,7 @@ import {
   ToolNotFoundError,
   subAgentResultForDisplay,
   subAgentChildLedgerEntries,
+  subAgentChildEnvelopes,
   setScratchpadBounded,
 } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -591,6 +592,10 @@ export function executeToolCall(
               : stringifyToolResultSafe(toolRequest.tool, r.result, r.success === false);
           const resultOk = r.success !== false && stringified.ok;
           const normalized = normalizeObservation(toolRequest.tool, stringified.content);
+          // Wave 5.3: child completion envelopes ride the observation (NOT the
+          // display text) so the parent terminal can join them worst-of. Empty
+          // for non-delegation results — no special-casing by callers.
+          const childEnvelopes = subAgentChildEnvelopes(r.result);
 
           // Pipe transform — evaluate in-process, inject only transformed result
           if (toolRequest.transform && (compressionConfig?.codeTransform ?? true)) {
@@ -610,6 +615,7 @@ export function executeToolCall(
               content: transformed,
               observationResult: makeObservationResult(toolRequest.tool, isSuccess, transformed, {
                 delegatedToolsUsed,
+                ...(childEnvelopes.length > 0 ? { childEnvelopes } : {}),
               }),
               delegatedToolsUsed,
             } satisfies ToolExecutionResult;
@@ -633,6 +639,7 @@ export function executeToolCall(
             content,
             observationResult: makeObservationResult(toolRequest.tool, resultOk, content, {
               delegatedToolsUsed,
+              ...(childEnvelopes.length > 0 ? { childEnvelopes } : {}),
             }),
             delegatedToolsUsed,
             storedKey: compressed.stored?.key,

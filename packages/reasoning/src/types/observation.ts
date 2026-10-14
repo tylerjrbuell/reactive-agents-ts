@@ -89,6 +89,24 @@ export const ObservationResultSchema = Schema.Struct({
    * grandfather placeholder.
    */
   trustJustification: Schema.optional(Schema.String),
+  /**
+   * Child completion envelopes (Wave 5.3 delegation-laundering join). Stamped
+   * only on delegation-tool observations (`spawn-agent` / `spawn-agents`,
+   * single or batch — one entry per child). The parent terminal joins these
+   * worst-of via `joinEnvelopes`, so a partial child caps a completed parent
+   * claim. Structural (not the kernel `CompletionEnvelope` type) to keep
+   * `types/` free of `kernel/` imports; the terminal narrows each entry.
+   */
+  childEnvelopes: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        completionStatus: Schema.Literal("completed", "partial", "abstained", "failed"),
+        harnessAuthoredOutput: Schema.optional(Schema.Boolean),
+        budgetTerminalPartial: Schema.optional(Schema.Boolean),
+        verificationWarning: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
 });
 export type ObservationResult = typeof ObservationResultSchema.Type;
 

@@ -163,6 +163,14 @@ export interface SubAgentResult {
    * `RunLedger` (`kernel/ledger/step-projection.ts`). It never reads this field.
    */
   readonly childRunLedger?: unknown;
+  /** The child's completion verdict (Wave 5.3), used to prevent delegation laundering. */
+  readonly completionStatus?: "completed" | "partial" | "abstained" | "failed";
+  /** Marker that the child's deliverable was synthesized by the harness. */
+  readonly harnessAuthoredOutput?: boolean;
+  /** Marker that the child was terminated by budget. */
+  readonly budgetTerminalPartial?: boolean;
+  /** Advisory warning from the child's terminal verification. */
+  readonly verificationWarning?: string;
 }
 
 /** Drop the `childRunLedger` carrier from one result object (no-op if absent). */
@@ -226,6 +234,59 @@ export const subAgentChildLedgerEntries = (result: unknown): readonly unknown[] 
 };
 
 /**
+ * A child's completion envelope as it crosses the tools boundary (Wave 5.3).
+ * Structural (not the reasoning `CompletionEnvelope` type) because tools must
+ * not depend on `@reactive-agents/reasoning` — the kernel narrows these into a
+ * real envelope at the parent terminal join. Only present when the executor
+ * stamped a verdict; absent = pre-envelope result, never treated as evidence.
+ */
+export interface SubAgentChildEnvelope {
+  readonly completionStatus: "completed" | "partial" | "abstained" | "failed";
+  readonly harnessAuthoredOutput?: boolean;
+  readonly budgetTerminalPartial?: boolean;
+  readonly verificationWarning?: string;
+}
+
+const ENVELOPE_STATUSES: ReadonlySet<unknown> = new Set([
+  "completed",
+  "partial",
+  "abstained",
+  "failed",
+]);
+
+/**
+ * Every child completion envelope a delegation tool result carries, flattened
+ * (Wave 5.3 — the delegation-laundering join). Mirrors
+ * `subAgentChildLedgerEntries`: handles `spawn-agent`'s single
+ * `SubAgentResult` AND `spawn-agents`' batch `{ results: [...] }`, so a
+ * parallel dispatch's partial child still caps the parent. Returns `[]` for a
+ * non-delegation result or a result with no stamped verdict.
+ */
+export const subAgentChildEnvelopes = (result: unknown): readonly SubAgentChildEnvelope[] => {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) return [];
+  const obj = result as Record<string, unknown>;
+  if (Array.isArray(obj.results)) {
+    return (obj.results as unknown[]).flatMap((r) => subAgentChildEnvelopes(r));
+  }
+  if (!ENVELOPE_STATUSES.has(obj.completionStatus)) return [];
+  const envelope: SubAgentChildEnvelope = {
+    completionStatus: obj.completionStatus as SubAgentChildEnvelope["completionStatus"],
+  };
+  return [
+    {
+      ...envelope,
+      ...(typeof obj.harnessAuthoredOutput === "boolean"
+        ? { harnessAuthoredOutput: obj.harnessAuthoredOutput }
+        : {}),
+      ...(typeof obj.budgetTerminalPartial === "boolean"
+        ? { budgetTerminalPartial: obj.budgetTerminalPartial }
+        : {}),
+      ...(typeof obj.verificationWarning === "string" ? { verificationWarning: obj.verificationWarning } : {}),
+    },
+  ];
+};
+
+/**
  * Directive prefix prepended to every sub-agent's system prompt to orient it as
  * a focused, tool-using worker that returns a complete final answer.
  *
@@ -249,6 +310,13 @@ export interface SubAgentRawResult {
   readonly scratchpadEntries?: ReadonlyMap<string, string> | Map<string, string>;
   /** The child's run-scoped, provenance-stamped RunLedger. See {@link SubAgentResult.childRunLedger}. */
   readonly childRunLedger?: unknown;
+  /** The child's completion envelope (Wave 5.3) — passed from executor to finalizer. */
+  readonly completionEnvelope?: {
+    readonly completionStatus: "completed" | "partial" | "abstained" | "failed";
+    readonly harnessAuthoredOutput?: boolean;
+    readonly budgetTerminalPartial?: boolean;
+    readonly verificationWarning?: string;
+  };
 }
 
 /**
@@ -329,6 +397,14 @@ export const finalizeSubAgentResult = (
     delegatedToolsUsed: raw.delegatedToolsUsed,
     forwardedScratchpadKeys: forwardedKeys.length > 0 ? forwardedKeys : undefined,
     ...(raw.childRunLedger !== undefined ? { childRunLedger: raw.childRunLedger } : {}),
+    ...(raw.completionEnvelope !== undefined
+      ? {
+          completionStatus: raw.completionEnvelope.completionStatus,
+          harnessAuthoredOutput: raw.completionEnvelope.harnessAuthoredOutput,
+          budgetTerminalPartial: raw.completionEnvelope.budgetTerminalPartial,
+          verificationWarning: raw.completionEnvelope.verificationWarning,
+        }
+      : {}),
   };
 };
 
