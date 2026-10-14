@@ -68,6 +68,7 @@ import type {
   RunLedger,
 } from "@reactive-agents/reasoning";
 import { mergePassLedger } from "@reactive-agents/reasoning";
+import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
@@ -614,6 +615,24 @@ export const buildSubAgentTask = (
 
       if (Exit.isSuccess(exit)) {
         const { execResult: result, childDashboard } = exit.value;
+        // W5.4 budget inheritance: a delegated child's LLM spend folds into
+        // the PARENT's ambient run-scoped meter. The child executes on a light
+        // runtime whose LLM path never calls `addRunSpend`, so without this
+        // fold the run meter under-counts by the full child spend (measured:
+        // parent-only 508 while the child added 224) and `.withBudget()`
+        // silently under-enforces on any delegating run: the double-spend
+        // the Wave-5 lift metric targets. `FiberRef.get` reads the ambient
+        // meter the parent's `armRunBudget` armed; null when the run carries
+        // no budget, in which case there is nothing to fold (byte-identical).
+        // NOTE: child FAILURE paths do not fold (no structured result to read)
+        //, disclosed in w5-runtime-report.md alongside the killswitch gap.
+        const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
+        if (ambientMeter !== null && typeof result?.metadata?.tokensUsed === "number") {
+          ambientMeter.tokens += result.metadata.tokensUsed;
+          if (typeof result.metadata.cost === "number") {
+            ambientMeter.cost += result.metadata.cost;
+          }
+        }
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
         // Wave C.2 — carry the child's run-scoped ledger back to the parent,
         // stamped `sub-agent:<name>` so the parent's kernel merges it under this

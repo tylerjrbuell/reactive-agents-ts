@@ -1127,6 +1127,14 @@ export interface AgentResultMetadata {
     /** True when the terminal was capped by the run budget, not by evidence. */
     readonly budgetTerminalPartial?: boolean
     /**
+     * W5.4: the run-scoped budget meter's live total at terminal: every LLM
+     * call this run made INCLUDING folded delegated-child spend, measured
+     * against `.withBudget()`'s limits. Present only when a budget was armed;
+     * absent on un-budgeted runs. `tokensUsed` above counts THIS agent's own
+     * calls; this field is the true run spend the budget gates on.
+     */
+    readonly runBudgetSpend?: { readonly tokens: number; readonly cost: number }
+    /**
      * W0.5 result→trace linkage. The run's ULID id, equal to the engine
      * `taskId`, the `runId` stamped on every trace event, and the base name
      * of the run's JSONL trace file. Present ONLY when the trace file was

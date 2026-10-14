@@ -27,6 +27,7 @@ import {
   classifyToolRelevance,
   filterToolsByRelevance,
   ReasoningService,
+  CurrentRunBudget,
   VERIFIER_REJECTION_PREFIX,
   VERIFIER_ESCALATION_PREFIX,
 } from "@reactive-agents/reasoning";
@@ -1358,6 +1359,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // file (<traceDir>/<taskId>.jsonl, taskId IS the trace runId)
                 // exists. null when tracing disabled/unrecorded; fields stay
                 // honestly absent (wire-or-delete; never a phantom path).
+                // W5.4 observability seam: the run-scoped budget meter's LIVE
+                // total at terminal. When a budget is armed (`armRunBudget`
+                // wrapped this run's execute), the ambient FiberRef carries the
+                // meter every call AND every delegated child's folded spend
+                // feed; expose it so cost/claim consumers can see true run
+                // spend, and so budget-inheritance is directly assertable from
+                // the result. Absent (wire-or-delete) on un-budgeted runs.
+                const ambientRunMeter = yield* FiberRef.get(CurrentRunBudget);
                 const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
 
                 const result: TaskResult & {
@@ -1525,6 +1534,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // the trace file was flushed and verified to exist at mint.
                     ...(traceLinkage !== null
                       ? ({ runId: traceLinkage.runId, tracePath: traceLinkage.tracePath } as Record<string, unknown>)
+                      : {}),
+                    // W5.4: the live run-meter total (parent calls + folded
+                    // delegated-child spend). Present ONLY when a budget was
+                    // armed for this run; absent on un-budgeted runs
+                    // (wire-or-delete honesty).
+                    ...(ambientRunMeter !== null
+                      ? ({ runBudgetSpend: { tokens: ambientRunMeter.tokens, cost: ambientRunMeter.cost } } as Record<string, unknown>)
                       : {}),
                   },
                   completedAt: new Date(),
