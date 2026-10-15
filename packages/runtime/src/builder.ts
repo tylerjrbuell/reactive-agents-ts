@@ -20,6 +20,7 @@ import {
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
 import { serializeBuilder } from './builder/to-config.js'
+import { probeAutoShadow } from './judgment-autoshadow.js'
 import type { HarnessProfilePatch } from './capabilities/profile.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
@@ -2558,6 +2559,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent<TOut>> {
+        // Wave 7.1 auto-shadow: shadow sites sample nothing without a wired
+        // JudgmentService, so a default-off world never accumulates inversion
+        // traffic. When the user did not opt into judgment AND did not opt
+        // out (REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
+        // Ollama backend: shadow events fire, decisions are never consumed.
+        // Keyless-safe: unreachable server or any error = no service, build
+        // proceeds unchanged. Explicit `.withJudgment()` always wins (this
+        // branch only runs when it was never called).
+        if (!this._enableJudgment) {
+            const auto = await probeAutoShadow()
+            if (auto !== undefined) {
+                this._enableJudgment = true
+                this._judgmentOptions = { backend: auto.backend, baseUrl: auto.baseUrl }
+            }
+        }
         // Wave 6.1: gateway-declared approvals join the kernel approval
         // policy HERE (not in withGateway/withApprovalPolicy) so the merge is
         // order-independent — whichever wither runs last must not silently
