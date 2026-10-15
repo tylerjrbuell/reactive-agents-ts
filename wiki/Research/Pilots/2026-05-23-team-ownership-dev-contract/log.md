@@ -1366,3 +1366,11 @@ task: "GH #244 preflight (93a1a27ee, review Approved) + #246 remainder (e07dbc84
 result: completed, confidence 0.85
 outcome: "preflight live-verified 0 iters/0 tokens with capability reason (was 4-5/~1980). #245 CLOSED with live evidence (train problem now success:true). #246: all non-kernel strategies threaded + blueprint patch seam fixed per review; pipeline repair-retry filed as #250 (needs determinism sign-off). Open: #244 follow-ups #249, #246-follow-up #250, W3 promotion (owner), branch finish."
 ```
+
+```yaml
+date: 2026-10-15
+warden: controller-inline + branch-reviewer
+task: "Rung-2 on gemini (credit-block bypass) + rung-3 refix + branch-wide review response"
+result: completed, confidence 0.85
+outcome: "Rung-2: gemini FC-disabled shadow/act 3/3 each — taught grammar ignored (<tool_code> invented, deterministic); promotion NOT recommended (no end-to-end text-parse execution anywhere). Rung-3 refix: coder parses 9/9 (was 0/5), uses native FC, finals honestly failed; phi4 still hangs. Branch review must-fix all closed (3 changesets, plan hygiene, 4 issues closed, doc-truth one-liners); full suite 10369/20fail with 18 environmental-Docker + 2 fixed here (feature-matrix, ceiling 251 with rationale). Open trackers: #235,#237,#238,#240,#241,#242,#248,#249,#250 (+#234 backlog)."
+```
