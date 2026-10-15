@@ -2,11 +2,71 @@ import { section, kv, muted, fail, info, hint } from '../ui.js'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const EXAMPLES_DIR = resolve(__dirname, '../../../examples')
+// src layout: apps/cli/src/commands -> apps/examples
+// dist layout (single-file bundle): apps/cli/dist -> apps/examples
+const EXAMPLES_DIR_CANDIDATES = [
+  resolve(__dirname, '../../../examples'),
+  resolve(__dirname, '../../examples'),
+]
+const EXAMPLES_DIR = EXAMPLES_DIR_CANDIDATES.find((dir) => existsSync(join(dir, 'index.ts')))
+  ?? EXAMPLES_DIR_CANDIDATES[0]!
 const DEMOS_DIR = join(EXAMPLES_DIR, 'src/demos')
+
+/**
+ * Resolve the JS runtime capable of running a demo .ts file.
+ * Under Bun, process.execPath is the absolute bun binary (no PATH lookup).
+ * Otherwise fall back to a `bun` on PATH.
+ */
+function resolveDemoRuntime(): string {
+  const versions = (process as unknown as { versions?: Record<string, string> }).versions
+  if (typeof versions?.bun === 'string') return process.execPath
+  return 'bun'
+}
+
+const MINDS_MODES = ['scripted', 'judgment', 'llm'] as const
+type MindsMode = (typeof MINDS_MODES)[number]
+
+/**
+ * Extract `--minds <mode>` / `--minds=<mode>` from demo passthrough args.
+ * Returns the selected mode, whether the flag was explicitly passed, and the
+ * remaining args to forward to the demo process.
+ */
+function takeMinds(args: string[]): { mode: MindsMode; explicit: boolean; rest: string[] } {
+  const rest: string[] = []
+  let found: string | undefined
+  let explicit = false
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === '--minds') {
+      const value = args[i + 1]
+      if (value === undefined || value.startsWith('-')) {
+        console.error(fail(`Missing value for --minds (expected: ${MINDS_MODES.join('|')})`))
+        process.exit(1)
+      }
+      found = value
+      explicit = true
+      i++
+      continue
+    }
+    if (arg.startsWith('--minds=')) {
+      found = arg.slice('--minds='.length)
+      explicit = true
+      continue
+    }
+    rest.push(arg)
+  }
+  if (!explicit) return { mode: 'scripted', explicit, rest }
+  if (!(MINDS_MODES as readonly string[]).includes(found!)) {
+    console.error(fail(`Invalid --minds mode: ${found} (expected: ${MINDS_MODES.join('|')})`))
+    process.exit(1)
+  }
+  return { mode: found as MindsMode, explicit, rest }
+}
 
 const HELP = `
   Usage: rax examples <subcommand> [options]
@@ -28,6 +88,8 @@ const HELP = `
     --port <n>          Port for server-based demos (default: auto)
     --provider <name>   LLM provider for demos that accept one (e.g. island-sim blueprint/narrator)
     --model <name>      Model for demos that accept one (e.g. ISLAND_SIM_MODEL)
+    --minds <mode>      island-sim survivor minds: scripted (default), judgment, llm
+                        (judgment/llm are high latency/expense; need a live provider)
 
   Examples:
     rax examples suite                           # Run all examples
@@ -36,6 +98,7 @@ const HELP = `
     rax examples suite 01 05 12                  # Run specific examples
     rax examples demo island-sim                 # Run island simulation (starts server)
     rax examples demo island-sim --provider ollama --model cogito:14b --port 3007
+    rax examples demo island-sim --minds judgment # Model-driven survivor decisions
     rax examples demo halopedia-agent            # Run Halopedia agent (interactive CLI)
     rax examples demo durable-resume             # Run durable execution demo
     rax examples list                            # List available demos
@@ -99,17 +162,30 @@ function printDemos() {
 }
 
 export async function runExamples(args: string[]): Promise<void> {
-  if (args.includes('--help') || args.includes('-h')) {
+  const subcommand = args[0]
+  const subArgs = args.slice(1)
+
+  // `--help` prints the examples help, unless it targets a known demo —
+  // `rax examples demo island-sim --help` forwards to the demo process,
+  // which prints its own usage.
+  const demoTarget = subcommand === 'demo' ? subArgs[0] : undefined
+  const forwardsHelp = demoTarget !== undefined
+    && demoTarget !== 'list'
+    && DEMOS.some((d) => d.name === demoTarget)
+  if ((args.includes('--help') || args.includes('-h')) && !forwardsHelp) {
     console.log(HELP)
     return
   }
 
-  const subcommand = args[0]
-  const subArgs = args.slice(1)
-
   switch (subcommand) {
     case 'suite': {
       // Run the example suite in-process by importing the examples module
+      const suiteEntry = join(EXAMPLES_DIR, 'index.ts')
+      if (!existsSync(suiteEntry)) {
+        console.error(fail(`Example suite not found: ${suiteEntry}`))
+        console.error(info('The published CLI does not ship apps/examples. Run from a repo checkout, or: bun run apps/examples/index.ts --offline'))
+        process.exit(1)
+      }
       console.log(info(`Running example suite from ${EXAMPLES_DIR}`))
       console.log()
       // Import the examples module and call its runExamples function
@@ -145,26 +221,48 @@ export async function runExamples(args: string[]): Promise<void> {
       }
 
       const demoPath = join(DEMOS_DIR, demo.file)
+      if (!existsSync(demoPath)) {
+        console.error(fail(`Demo file not found: ${demoPath}`))
+        console.error(info('The published CLI does not ship apps/examples. Run from a repo checkout, or: bun run apps/examples/src/demos/island-sim/index.ts'))
+        process.exit(1)
+      }
+
+      const { mode: minds, explicit: mindsExplicit, rest: demoArgs } = takeMinds(subArgs.slice(1))
+      if (mindsExplicit && demo.name !== 'island-sim') {
+        console.error(fail('--minds is only supported for the island-sim demo'))
+        process.exit(1)
+      }
+      // An explicit --minds wins over ambient env; otherwise inherit env untouched.
+      const mindsEnv: Record<string, string> = !mindsExplicit ? {} : {
+        ISLAND_SIM_JUDGMENT: minds === 'judgment' ? '1' : '0',
+        ISLAND_SIM_LLM_DECISIONS: minds === 'llm' ? '1' : '0',
+      }
       console.log(info(`Running demo: ${demo.name} (${demo.type})`))
       console.log(kv('File', demo.file))
+      if (demo.name === 'island-sim') console.log(kv('Minds', mindsExplicit ? minds : 'scripted (default)'))
       console.log()
 
-      // For demos, we still need to spawn since they may be interactive or servers
-      // Use Bun.spawn which works in the CLI source context
-      const fullCmd = ['bun', 'run', demoPath, ...subArgs.slice(1)]
-      return new Promise((resolve, reject) => {
-        const child = Bun.spawn({
-          cmd: fullCmd,
-          cwd: DEMOS_DIR,
-          env: process.env,
-          stdout: 'inherit',
-          stderr: 'inherit',
-          stdin: 'inherit',
+      // Spawn via node:child_process so this works under both Bun and Node.
+      // Use the absolute bun binary when running under Bun to avoid PATH lookup
+      // failures; a missing cwd previously surfaced as `posix_spawn 'bun'` ENOENT.
+      const runtime = resolveDemoRuntime()
+      const fullArgs = ['run', demoPath, ...demoArgs]
+      const cwd = existsSync(DEMOS_DIR) ? DEMOS_DIR : process.cwd()
+      return new Promise<void>((resolvePromise, reject) => {
+        const child = spawn(runtime, fullArgs, {
+          cwd,
+          env: { ...process.env, ...mindsEnv },
+          stdio: 'inherit',
         })
-        child.exited.then((code) => {
-          if (code === 0) resolve()
+        child.on('error', (err) => {
+          reject(new Error(
+            `Failed to launch demo with ${runtime}: ${err instanceof Error ? err.message : String(err)}`
+          ))
+        })
+        child.on('close', (code) => {
+          if (code === 0) resolvePromise()
           else reject(new Error(`Process exited with code ${code}`))
-        }).catch(reject)
+        })
       })
     }
 

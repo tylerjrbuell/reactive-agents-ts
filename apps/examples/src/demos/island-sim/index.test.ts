@@ -428,12 +428,15 @@ describe("server", () => {
   }, 15000);
 
   it("parses provider, model, and port flags for the rax demo runner", () => {
-    expect(parseDemoArgs([])).toEqual({ provider: "ollama", model: "cogito:14b", port: 3007 });
+    expect(parseDemoArgs([])).toEqual({ provider: "ollama", model: "cogito:14b", port: 3007, minds: "scripted" });
     expect(parseDemoArgs(["--provider", "anthropic", "--model", "claude-haiku-4-5-20251001", "--port", "4001"]))
-      .toEqual({ provider: "anthropic", model: "claude-haiku-4-5-20251001", port: 4001 });
+      .toEqual({ provider: "anthropic", model: "claude-haiku-4-5-20251001", port: 4001, minds: "scripted" });
     expect(parseDemoArgs(["--model=cogito:32b"])).toMatchObject({ model: "cogito:32b" });
     expect(parseDemoArgs(["--port", "not-a-port"])).toMatchObject({ port: 3007 });
     expect(parseDemoArgs(["--provider", "nope"])).toMatchObject({ provider: "ollama" });
+    expect(parseDemoArgs(["--minds", "judgment"])).toMatchObject({ minds: "judgment" });
+    expect(parseDemoArgs(["--minds=llm"])).toMatchObject({ minds: "llm" });
+    expect(parseDemoArgs(["--minds", "bogus"])).toMatchObject({ minds: "scripted" });
   }, 15000);
 
   it("serves the page and /api/state without hidden facts", async () => {

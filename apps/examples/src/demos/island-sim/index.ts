@@ -367,7 +367,15 @@ export type DemoArgs = {
   provider: DemoProvider;
   model: string;
   port: number;
+  minds: MindsMode;
 };
+
+export const MINDS_MODES = ["scripted", "judgment", "llm"] as const;
+export type MindsMode = (typeof MINDS_MODES)[number];
+
+function asMinds(raw: string | undefined): MindsMode | undefined {
+  return (MINDS_MODES as readonly string[]).includes(raw ?? "") ? (raw as MindsMode) : undefined;
+}
 
 const KNOWN_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "groq", "xai", "test"] as const;
 export type DemoProvider = typeof KNOWN_PROVIDERS[number];
@@ -377,9 +385,10 @@ function asProvider(raw: string | undefined): DemoProvider {
 }
 
 /**
- * Parse `rax examples demo island-sim [--provider p] [--model m] [--port n]`
+ * Parse `rax examples demo island-sim [--provider p] [--model m] [--port n] [--minds mode]`
  * passthrough args. Explicit flags win, then `ISLAND_SIM_PROVIDER`,
- * `ISLAND_SIM_MODEL`, and `PORT`, then built-in defaults.
+ * `ISLAND_SIM_MODEL`, `PORT`, `ISLAND_SIM_JUDGMENT` / `ISLAND_SIM_LLM_DECISIONS`,
+ * then built-in defaults.
  */
 export function parseDemoArgs(argv: readonly string[] = []): DemoArgs {
   const take = (name: string): string | undefined => {
@@ -391,10 +400,15 @@ export function parseDemoArgs(argv: readonly string[] = []): DemoArgs {
     return undefined;
   };
   const port = Number(take("port") ?? process.env.PORT);
+  const minds = asMinds(take("minds"))
+    ?? (process.env.ISLAND_SIM_JUDGMENT === "1" ? "judgment" : undefined)
+    ?? (process.env.ISLAND_SIM_LLM_DECISIONS === "1" ? "llm" : undefined)
+    ?? "scripted";
   return {
     provider: asProvider(take("provider") ?? process.env.ISLAND_SIM_PROVIDER),
     model: take("model") ?? process.env.ISLAND_SIM_MODEL ?? "cogito:14b",
     port: Number.isSafeInteger(port) && port > 0 ? port : 3007,
+    minds,
   };
 }
 
@@ -470,17 +484,20 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
     console.info([
       "Island survival demo server.",
       "",
-      "Usage: bun run island-sim/index.ts [--provider <name>] [--model <name>] [--port <n>]",
-      "   or: rax examples demo island-sim [--provider <name>] [--model <name>] [--port <n>]",
+      "Usage: bun run island-sim/index.ts [--provider <name>] [--model <name>] [--port <n>] [--minds <mode>]",
+      "   or: rax examples demo island-sim [--provider <name>] [--model <name>] [--port <n>] [--minds <mode>]",
       "",
       "  --provider <name>  LLM provider for the blueprint, narrator, and optional minds (default: ollama; ISLAND_SIM_PROVIDER)",
       "  --model <name>     Model for those agents (default: cogito:14b; ISLAND_SIM_MODEL)",
       "  --port <n>         HTTP port (default: 3007; PORT)",
-      "  ISLAND_SIM_JUDGMENT=1 / ISLAND_SIM_LLM_DECISIONS=1 opt into model-driven survivor minds.",
+      "  --minds <mode>     Survivor minds: scripted (default), judgment, llm",
+      "                     judgment/llm are high latency/expense and need a live provider.",
+      "                     Explicit --minds wins; otherwise ISLAND_SIM_JUDGMENT=1 opts into",
+      "                     judgment minds and ISLAND_SIM_LLM_DECISIONS=1 into LLM minds.",
     ].join("\n"));
     return;
   }
-  const { provider, model, port } = parseDemoArgs(argv);
+  const { provider, model, port, minds } = parseDemoArgs(argv);
   let worldGenerator: WorldGenerator = {
     generate: async (seed) => ({ world: makeFallbackWorld(seed), source: "fallback", attempts: 0 }),
   };
@@ -539,7 +556,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
   // Survivor minds wire independently: a worldgen or narrator failure must
   // never silently cancel the judgment path (or vice versa).
   let mindLabel = "scripted";
-  if (process.env.ISLAND_SIM_JUDGMENT === "1") {
+  if (minds === "judgment") {
     try {
       const backend = process.env.TYPESAFE_API_KEY ? "jev" as const : "ollama" as const;
       const survivorAgent = await ReactiveAgents.create()
@@ -567,7 +584,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
       mindLabel = "scripted";
       console.info(`Judgment survivor decisions unavailable; using scripted minds: ${error instanceof Error ? error.message : String(error)}`);
     }
-  } else if (process.env.ISLAND_SIM_LLM_DECISIONS === "1") {
+  } else if (minds === "llm") {
     try {
       const survivorAgent = await ReactiveAgents.create()
         .withName("island-survivor-mind")
