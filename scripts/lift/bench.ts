@@ -322,6 +322,82 @@ export const ARMS: readonly ArmSpec[] = [
 
 const HANG_MS = 8 * 60_000
 
+// ─── Wave 7.3: standing panel — auto-detect pulled Ollama models ─────────────
+// `bun run scripts/lift/bench.ts --panel`: enumerate /api/tags (keyless-safe
+// skip when Ollama is unreachable — prints the skip and exits 0, never fails)
+// and run the fast-tool-caller panel (S1+S2, n=2) on each reachable model.
+// Models over 16B parameters are skipped with a note (panel stays fast;
+// full-size models run via named arms). Embed-only models skipped.
+async function listPulledModels(): Promise<{ name: string; sizeB: number }[]> {
+  const endpoint =
+    process.env.OLLAMA_ENDPOINT ?? process.env.OLLAMA_HOST ?? "http://localhost:11434";
+  try {
+    const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) {
+      console.error(`[bench] panel: tags API ${res.status} at ${endpoint} — skipping panel`);
+      return [];
+    }
+    const body = (await res.json()) as { models?: { name?: string; size?: number }[] };
+    const out: { name: string; sizeB: number }[] = [];
+    for (const m of body.models ?? []) {
+      if (typeof m.name !== "string") continue;
+      if (/embed/i.test(m.name)) continue;
+      let sizeB = typeof m.size === "number" ? m.size : 0;
+      if (sizeB === 0) {
+        try {
+          const show = await fetch(`${endpoint}/api/show`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: m.name }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (show.ok) {
+            const detail = (await show.json()) as { size?: number };
+            if (typeof detail.size === "number") sizeB = detail.size;
+          }
+        } catch {
+          /* unknown size → include (fast default) */
+        }
+      }
+      out.push({ name: m.name, sizeB });
+    }
+    return out;
+  } catch {
+    console.error(`[bench] panel: Ollama unreachable at ${endpoint} — skipping panel`);
+    return [];
+  }
+}
+
+async function runPanel(outDir: string): Promise<void> {
+  const models = await listPulledModels();
+  if (models.length === 0) return;
+  mkdirSync(outDir, { recursive: true });
+  for (const m of models) {
+    if (m.sizeB > 16_000_000_000) {
+      console.error(`[bench] panel: skipping ${m.name} (${(m.sizeB / 1e9).toFixed(1)}B > 16B cap)`);
+      continue;
+    }
+    for (const [scenario, task, fileTools] of [
+      ["S1", S1_TASK, false],
+      ["S2", S2_TASK, false],
+    ] as const) {
+      const arm: ArmSpec = {
+        id: `panel-${m.name.replace(/[^a-z0-9]+/gi, "-")}-${scenario.toLowerCase()}`,
+        scenario,
+        provider: "ollama",
+        model: m.name,
+        task,
+        n: 2,
+        fileTools,
+      };
+      for (let k = 1; k <= 2; k++) {
+        console.error(`[bench] ${arm.id} run ${k}/2 start`);
+        await runScenario({ arm, runIndex: k, temperature: 0, traceDir: outDir });
+      }
+    }
+  }
+}
+
 // ─── runScenario ──────────────────────────────────────────────────────────────
 
 function freshTraceFile(traceDir: string, afterMs: number): string | null {
@@ -452,6 +528,10 @@ async function main(): Promise<void> {
   }
   if (ids.length === 0 || ids[0] === "list") {
     for (const a of ARMS) console.log(`${a.id}\t${a.scenario}\t${a.provider}\t${a.model}\tn=${a.n}`)
+    return
+  }
+  if (ids[0] === "--panel") {
+    await runPanel(outDir)
     return
   }
   mkdirSync(outDir, { recursive: true })
