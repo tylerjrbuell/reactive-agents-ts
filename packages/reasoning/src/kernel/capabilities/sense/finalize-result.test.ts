@@ -829,7 +829,8 @@ describe("5.3 delegation-laundering join (worst-of over child envelopes)", () =>
       ),
     );
     expect(r.status).toBe("partial");
-    expect(r.metadata.budgetTerminalPartial).toBe(true);
+    const meta = r.metadata as { budgetTerminalPartial?: boolean };
+    expect(meta.budgetTerminalPartial).toBe(true);
   });
 
   it("completed children leave a completed parent unchanged", async () => {
@@ -845,7 +846,8 @@ describe("5.3 delegation-laundering join (worst-of over child envelopes)", () =>
       ),
     );
     expect(r.status).toBe("completed");
-    expect(r.metadata.budgetTerminalPartial).toBeUndefined();
+    const meta = r.metadata as { budgetTerminalPartial?: boolean };
+    expect(meta.budgetTerminalPartial).toBeUndefined();
   });
 
   it("no delegation observations: join is the identity (no-op)", async () => {
@@ -875,6 +877,7 @@ describe("5.3 delegation-laundering join (worst-of over child envelopes)", () =>
     );
     // The give-up arm fires on harness-forced/abstained with no grounded
     // evidence; the join must not downgrade the honest abstention further.
-    expect(r.metadata.terminatedBy === "abstained" || r.status !== "completed").toBe(true);
+    const meta = r.metadata as { terminatedBy?: string };
+    expect(meta.terminatedBy === "abstained" || r.status !== "completed").toBe(true);
   });
 });

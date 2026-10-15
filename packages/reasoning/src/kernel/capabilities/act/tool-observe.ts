@@ -593,6 +593,10 @@ export function executeToolAndObserve(
     // ── 9. Build the observation step — metadata guaranteed ──────────────────
     const obsResult = makeObservationResult(toolName, exec.success, displayContent, {
       ...(exec.delegatedToolsUsed ? { delegatedToolsUsed: exec.delegatedToolsUsed } : {}),
+      // Wave 5.3 — child completion envelopes ride the observation (NOT the
+      // display text) so the parent terminal can join them worst-of. Set only
+      // on delegation-tool results; every other tool is byte-identical.
+      ...(exec.childEnvelopes && exec.childEnvelopes.length > 0 ? { childEnvelopes: [...exec.childEnvelopes] } : {}),
     });
     // Attach a structured VerificationResult when the caller passes a
     // verifier + context (the kernel's batch path always does; the single

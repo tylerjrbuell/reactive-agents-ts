@@ -31,7 +31,7 @@ import {
   subAgentChildEnvelopes,
   setScratchpadBounded,
 } from "@reactive-agents/tools";
-import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { ResultCompressionConfig, SubAgentChildEnvelope } from "@reactive-agents/tools";
 import { evaluateTransform } from "../../utils/tool-parsing.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
@@ -733,7 +733,7 @@ export function executeNativeToolCall(
      */
     preprocess?: (raw: string) => string;
   },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; extractedFact?: string; fullContent?: string }, never> {
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; childEnvelopes?: readonly SubAgentChildEnvelope[]; extractedFact?: string; fullContent?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -748,6 +748,10 @@ export function executeNativeToolCall(
         // pull it before the result is stringified so the parent's kernel can
         // merge it into its own ledger under `sub-agent:<name>`.
         const subAgentLedger = extractSubAgentLedger(r.result);
+        // Wave 5.3 — same pull for the child's completion envelope(s): single
+        // or batch, flattened by subAgentChildEnvelopes. Empty for
+        // non-delegation results.
+        const childEnvelopes = subAgentChildEnvelopes(r.result);
         // The child ledger crossed on `r.result`, but the MODEL must not see it
         // (large, noise); serialize the display-trimmed result instead.
         const stringified =
@@ -812,7 +816,7 @@ export function executeNativeToolCall(
             .trim();
         }
 
-        return { content, success, storedKey, delegatedToolsUsed, ...(subAgentLedger ? { subAgentLedger } : {}), extractedFact, fullContent };
+        return { content, success, storedKey, delegatedToolsUsed, ...(subAgentLedger ? { subAgentLedger } : {}), ...(childEnvelopes.length > 0 ? { childEnvelopes } : {}), extractedFact, fullContent };
       }),
       Effect.catchAll((e) => {
         const msg = e instanceof Error ? e.message : String(e);
