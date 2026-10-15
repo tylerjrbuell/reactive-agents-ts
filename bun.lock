@@ -670,6 +670,7 @@
         "@reactive-agents/compose": "0.17.0",
         "@reactive-agents/core": "0.17.0",
         "@reactive-agents/cost": "0.17.0",
+        "@reactive-agents/eval": "0.17.0",
         "@reactive-agents/gateway": "0.17.0",
         "@reactive-agents/guardrails": "0.17.0",
         "@reactive-agents/health": "0.17.0",

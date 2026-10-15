@@ -34,7 +34,10 @@ const loopTool = (name: string, onCall: () => void) => ({
   ],
 });
 
-async function runArm(opts: { gatewayGated?: readonly string[]; explicitTools?: readonly string[] }): Promise<number> {
+async function runArm(opts: {
+  gatewayGated?: readonly string[];
+  explicitTools?: readonly string[];
+}): Promise<{ executed: number; output: string }> {
   let executed = 0;
   let b = ReactiveAgents.create()
     .withName("gateway-approval")
@@ -48,8 +51,8 @@ async function runArm(opts: { gatewayGated?: readonly string[]; explicitTools?: 
   if (opts.explicitTools) b = b.withApprovalPolicy({ tools: [...opts.explicitTools] });
   const agent = await b.build();
   try {
-    await agent.run("loop forever");
-    return executed;
+    const r = await agent.run("loop forever");
+    return { executed, output: String(r.output ?? "") };
   } finally {
     await agent.dispose();
   }
@@ -57,11 +60,17 @@ async function runArm(opts: { gatewayGated?: readonly string[]; explicitTools?: 
 
 describe("6.1 gateway requireApprovalFor wire", () => {
   it("control: ungated tool dispatches (baseline proves the probe)", async () => {
-    expect(await runArm({})).toBeGreaterThan(0);
+    expect((await runArm({})).executed).toBeGreaterThan(0);
   });
 
   it("gateway list gates the tool (refused, never executes)", async () => {
-    expect(await runArm({ gatewayGated: ["danger_tool"] })).toBe(0);
+    const r = await runArm({ gatewayGated: ["danger_tool"] });
+    expect(r.executed).toBe(0);
+    // Refusal signal, not a silent skip: the run reports the gated attempt
+    // by name with zero successes (the denial observation itself lives in
+    // the steps; the harness-authored summary carries the count).
+    expect(r.output).toContain("danger_tool");
+    expect(r.output).toContain("0 succeeded");
   });
 
   it("explicit policy + gateway list union (neither order drops the other)", async () => {

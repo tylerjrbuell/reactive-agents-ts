@@ -3036,6 +3036,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 name: self._name,
                 a2aDefaultPort: self._a2aOptions?.port,
                 a2aDefaultBasePath: self._a2aOptions?.basePath,
+                judgmentAutoShadow: self._judgmentShadowDbPath !== undefined,
                 mcpServerNames: mcpServers.map((s) => s.name),
                 gatewayOptions,
                 streamDensity,
