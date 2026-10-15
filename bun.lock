@@ -246,7 +246,7 @@
       "name": "@reactive-agents/compose",
       "version": "0.17.0",
       "dependencies": {
-        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/core": "0.17.0",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -667,6 +667,7 @@
       "dependencies": {
         "@reactive-agents/a2a": "0.17.0",
         "@reactive-agents/channels": "0.17.0",
+        "@reactive-agents/compose": "0.17.0",
         "@reactive-agents/core": "0.17.0",
         "@reactive-agents/cost": "0.17.0",
         "@reactive-agents/gateway": "0.17.0",
@@ -4380,7 +4381,7 @@
 
     "@reactive-agents/cli/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
-    "@reactive-agents/compose/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+    "@reactive-agents/compose/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "@reactive-agents/core/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 

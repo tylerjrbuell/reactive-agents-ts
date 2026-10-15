@@ -13,13 +13,19 @@ export function requireApprovalFor(options: RequireApprovalForOptions): (harness
   const toolSet = new Set(tools);
   return (harness: Harness) => {
     harness.before('act', (ctx) => {
-      // Pending provider-parsed tool calls live at state.meta.pendingNativeToolCalls
-      // (kernel-state.ts). The previous code read a non-existent
-      // state.pendingToolCalls, so this safety gate silently approved every
-      // call. Tests encoded the same wrong shape and false-passed.
-      const pendingTools =
-        (ctx.state as { meta?: { pendingNativeToolCalls?: ReadonlyArray<{ name?: string }> } })
-          .meta?.pendingNativeToolCalls ?? [];
+      // Wave 6.3: read the NORMALIZED pending calls (native + text-extracted),
+      // stashed by act.ts immediately before this hook runs. The previous code
+      // read only `pendingNativeToolCalls`, which is empty on text-parse runs —
+      // so this safety gate silently approved every call on non-native models
+      // (the exact silent-approval class DEBT-REGISTER §3 tracks). Native-only
+      // kept as fallback for producers that set just that field.
+      const meta = (ctx.state as {
+        meta?: {
+          pendingToolCalls?: ReadonlyArray<{ name?: string }>;
+          pendingNativeToolCalls?: ReadonlyArray<{ name?: string }>;
+        };
+      }).meta;
+      const pendingTools = [...(meta?.pendingToolCalls ?? []), ...(meta?.pendingNativeToolCalls ?? [])];
       for (const call of pendingTools) {
         if (call.name && toolSet.has(call.name)) {
           const approved = approver({ toolName: call.name, iteration: ctx.iteration });

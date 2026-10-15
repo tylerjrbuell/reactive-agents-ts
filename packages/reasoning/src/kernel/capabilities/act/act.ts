@@ -831,6 +831,33 @@ export function handleActing(
           continue;
         }
 
+        // ── before-act hooks on the single-call path (Wave 6.3) ──────────
+        // The batch path runs these per turn; the single path never did, so
+        // `requireApprovalFor`-class killswitches silently approved every
+        // single-dispatched call (the common reactive path). Same abort
+        // semantics as the batch site: stop the turn with the killswitch's
+        // terminatedBy. Stash this call normalized (same shape as the batch
+        // site) — scoped to the hook call, never persisted.
+        {
+          const singleHookedState = {
+            ...state,
+            meta: { ...state.meta, pendingToolCalls: [tc] },
+          };
+          const singleCtrl = yield* Effect.promise(() =>
+            runPhaseHooks(pipeline, 'before', 'act', state.iteration, singleHookedState)
+          );
+          if (singleCtrl) {
+            return {
+              ...state,
+              status: singleCtrl.abort === 'terminate' ? 'failed' : 'done',
+              meta: {
+                ...state.meta,
+                terminatedBy: killswitchTerminatedBy(singleCtrl),
+              },
+            };
+          }
+        }
+
         // ── Execute the tool via ToolService ──────────────────────────────────
         const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
           toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
@@ -972,10 +999,18 @@ export function handleActing(
 
       let newConversationHistory = conversationAssembly.messages;
 
-      // 'before act' hooks — may abort iteration
+      // 'before act' hooks — may abort iteration. They observe the state
+      // WITH the normalized pending calls stashed (Wave 6.3): hooks such as
+      // `requireApprovalFor` must see text-extracted calls too, not just
+      // native-FC `pendingNativeToolCalls`. Scoped to this call — the stash
+      // is not persisted into the loop state (no stale reads next pass).
       {
+        const hookedState = {
+          ...state,
+          meta: { ...state.meta, pendingToolCalls: normalizedPendingCalls },
+        };
         const ctrl = yield* Effect.promise(() =>
-          runPhaseHooks(pipeline, 'before', 'act', state.iteration, state)
+          runPhaseHooks(pipeline, 'before', 'act', state.iteration, hookedState)
         );
         if (ctrl) {
           return {

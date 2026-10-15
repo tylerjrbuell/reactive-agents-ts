@@ -13,6 +13,7 @@
   "dependencies": {
     "@reactive-agents/a2a": "0.17.0",
     "@reactive-agents/channels": "0.17.0",
+    "@reactive-agents/compose": "0.17.0",
     "@reactive-agents/core": "0.17.0",
     "@reactive-agents/cost": "0.17.0",
     "@reactive-agents/gateway": "0.17.0",
@@ -59,7 +60,7 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Runtime for Reactive Agents — ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
+  "description": "Runtime for Reactive Agents \u2014 ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
   "keywords": [
     "ai",
     "agents",
