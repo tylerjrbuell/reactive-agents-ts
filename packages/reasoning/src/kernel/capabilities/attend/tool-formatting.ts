@@ -238,7 +238,18 @@ export function nextToolResultKey(): string {
   return `_tool_result_${++_toolResultCounter}`;
 }
 
-/** Replace blind truncation with structured preview + optional scratchpad storage. */
+/** Replace blind truncation with structured preview + optional scratchpad storage.
+ *
+ * Wave 6.2 decision (recorded, not deferred): NO per-call content scan rides
+ * this choke point. Injection/PII detectors live in `@reactive-agents/
+ * guardrails`, which the kernel must not import (layering), and a forked
+ * kernel-side regex would create a two-detector drift class plus per-call
+ * latency and web-content false-positive breakage. Tool-result containment
+ * stays STRUCTURAL (trust-level quarantine blocks) with screening at the
+ * boundaries: task ingress (GUARDRAIL phase) and final-answer egress (engine
+ * post-arm output screen). Revisit only with a dependency-inversion seam
+ * (runtime-provided scanner), not an inline fork.
+ */
 export function compressToolResult(
   result: string,
   toolName: string,

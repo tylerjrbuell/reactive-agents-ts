@@ -1089,6 +1089,75 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Guardrail final-output screen (PII / toxicity) ──────────
+                // Wave 6.2: `GuardrailService.checkOutput` had no caller
+                // anywhere — the GUARDRAIL phase screens only the INPUT, so a
+                // run could exfiltrate PII it legitimately retrieved and ship
+                // it as its answer. Runs ONCE here, next to the behavioral
+                // contract output check, in the shared post-arm code that sees
+                // the final output regardless of arm. Policy (explicit):
+                // violations fail CLOSED (block + event, mirroring the input
+                // phase); service errors fail OPEN but EMIT (never silent).
+                if (config.enableGuardrails) {
+                  const goutOpt = yield* Effect.serviceOption(GuardrailService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (goutOpt._tag === "Some") {
+                    const outputCheck = yield* goutOpt.value.checkOutput(outputForSuccess).pipe(
+                      Effect.catchAll((err) =>
+                        Effect.gen(function* () {
+                          if (obs) {
+                            yield* obs
+                              .info(
+                                `⚠ [guardrail] output screen unavailable, failing open: ${String(err)}`,
+                              )
+                              .pipe(
+                                Effect.catchAll((swallow) =>
+                                  emitErrorSwallowed({
+                                    site: "runtime/src/execution-engine.ts:guardrail-output-screen-unavailable",
+                                    tag: errorTag(swallow),
+                                  }),
+                                ),
+                              );
+                          }
+                          return null;
+                        }),
+                      ),
+                    );
+                    if (outputCheck !== null && !outputCheck.passed) {
+                      const outputViolationSummary = outputCheck.violations
+                        .map((v: { type: unknown; message: unknown }) => `${String(v.type)}: ${String(v.message)}`)
+                        .join("; ");
+                      if (eb) {
+                        yield* eb
+                          .publish({
+                            _tag: "GuardrailViolationDetected",
+                            taskId: ctx.taskId,
+                            violations: outputCheck.violations.map((v: { type: unknown; message: unknown }) =>
+                              `${String(v.type)}: ${String(v.message)}`),
+                            score: outputCheck.score,
+                            blocked: true,
+                          })
+                          .pipe(
+                            Effect.catchAll((swallow) =>
+                              emitErrorSwallowed({
+                                site: "runtime/src/execution-engine.ts:guardrail-output-violation-publish",
+                                tag: errorTag(swallow),
+                              }),
+                            ),
+                          );
+                      }
+                      return yield* Effect.fail(
+                        new GuardrailViolationError({
+                          message: `Output guardrail check failed: ${outputViolationSummary}`,
+                          taskId: ctx.taskId,
+                          violation: outputViolationSummary,
+                        }),
+                      );
+                    }
+                  }
+                }
+
                 // Extract terminatedBy from reasoning metadata, with fallback inference.
                 //
                 // DEBT-REGISTER §3 (2026-07-23): this cast used to name a
