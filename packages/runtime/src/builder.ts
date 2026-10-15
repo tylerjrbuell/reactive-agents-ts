@@ -2531,6 +2531,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent<TOut>> {
+        // Wave 6.1: gateway-declared approvals join the kernel approval
+        // policy HERE (not in withGateway/withApprovalPolicy) so the merge is
+        // order-independent — whichever wither runs last must not silently
+        // drop a safety list. Gateway only ADDS tools (union); an explicit
+        // policy keeps its mode/decider, and gateway-only runs get block mode
+        // via the existing default below. Before this the gateway
+        // `policies.requireApprovalFor` field had zero consumers.
+        const gatewayGated = this._gatewayOptions?.policies?.requireApprovalFor ?? []
+        if (gatewayGated.length > 0) {
+            const prior = this._approvalPolicy?.tools ?? []
+            this._approvalPolicy = {
+                ...this._approvalPolicy,
+                tools: [...new Set([...prior, ...gatewayGated])],
+            }
+        }
         // Durable HITL (Phase D): a detached approval pause needs a durable store
         // to persist it. Guard early so misconfiguration fails fast.
         if (this._approvalPolicy) {
