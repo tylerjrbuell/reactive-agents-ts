@@ -84,6 +84,7 @@ export const WITHER_PROOF: Readonly<Record<string, Proof>> = {
   withModel: { status: "PROVEN", test: "model-routing-e2e.test.ts" },
   withModelRouting: { status: "PROVEN", test: "model-routing-e2e.test.ts" },
   withObservability: { status: "PROVEN", test: "observability-verbosity.test.ts" },
+  withOpenInference: { status: "PROVEN", test: "open-inference-seam.test.ts" },
   withProfile: { status: "PROVEN", test: "harness-profile.test.ts" },
   withReceiptSigning: { status: "PROVEN", test: "trust-event-stream.test.ts" },
   withSkillPersistence: { status: "PROVEN", test: "../src/__tests__/builder-with-skill-persistence.test.ts" },

@@ -677,6 +677,7 @@
         "@reactive-agents/llm-provider": "0.17.0",
         "@reactive-agents/memory": "0.17.0",
         "@reactive-agents/observability": "0.17.0",
+        "@reactive-agents/observe": "0.17.0",
         "@reactive-agents/prompts": "0.17.0",
         "@reactive-agents/reactive-intelligence": "0.17.0",
         "@reactive-agents/reasoning": "0.17.0",
@@ -687,6 +688,9 @@
         "@standard-schema/spec": "^1.0.0",
       },
       "devDependencies": {
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/sdk-trace-base": "^1.30.1",
+        "@opentelemetry/sdk-trace-node": "^1.30.1",
         "@reactive-agents/ui-core": "0.17.0",
         "bun-types": "latest",
         "effect": "^3.10.0",

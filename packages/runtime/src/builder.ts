@@ -87,6 +87,7 @@ import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { StreamDensity } from './stream-types.js'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
+import { OpenInferenceTracerLayer } from '@reactive-agents/observe'
 import type { DocumentSpec } from './context-ingestion.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import { Schema } from 'effect'
@@ -2459,6 +2460,32 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withLayers(layers: Layer.Layer<never, unknown, unknown>): this {
         this._extraLayers = layers
+        return this
+    }
+
+    /**
+     * Export OpenInference spans for this agent's runs (Wave 6.7).
+     *
+     * One glue over the existing `OpenInferenceTracerLayer`: subscribes the
+     * agent's EventBus to an OpenTelemetry tracer with OpenInference semantic
+     * attributes (agent/LLM/tool spans). Merges with any `.withLayers()` layers
+     * rather than replacing them.
+     *
+     * Destination is configured once per process, NOT per agent — via
+     * `setupOpenInferenceExporter()` or the standard
+     * `OTEL_EXPORTER_OTLP_ENDPOINT` env var (see `@reactive-agents/observe`).
+     * There is deliberately no `endpoint` option here: exporter setup
+     * registers a process-global provider, so per-agent endpoints would stack
+     * providers and leak exporters. Without a configured exporter the spans
+     * still build against the global tracer (observable via any registered
+     * provider, e.g. an in-memory exporter in tests).
+     *
+     * @returns `this` for chaining
+     */
+    withOpenInference(): this {
+        this._extraLayers = this._extraLayers
+            ? Layer.mergeAll(this._extraLayers, OpenInferenceTracerLayer)
+            : OpenInferenceTracerLayer
         return this
     }
 
