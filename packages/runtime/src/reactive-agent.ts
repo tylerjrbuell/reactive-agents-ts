@@ -326,7 +326,19 @@ export class ReactiveAgent<TOut = unknown> {
          * Prefixes all three A2A routes (JSON-RPC, `/agent/card`,
          * `/.well-known/agent.json`) — see `http-server.ts`'s `normalizeBasePath`.
          */
-        private readonly _a2aDefaultBasePath?: string
+        private readonly _a2aDefaultBasePath?: string,
+        /**
+         * @internal Wave 7.1 auto-shadow marker: the wired JudgmentService
+         * came from build-time auto-detection (local Ollama), not explicit
+         * `.withJudgment()`. The public judge primitives (`judge()`,
+         * `listJudgmentModels()`, `judgeRank()`) still require the explicit
+         * opt-in and reject on auto-shadowed agents — auto-shadow exists for
+         * sampling, not as a free judge backend. Edge case (documented):
+         * hand-injecting a JudgmentService via `.withLayers()` while Ollama
+         * is reachable also trips this guard — use `.withJudgment()` for a
+         * usable judge backend; the error message says so.
+         */
+        private readonly _judgmentAutoShadow: boolean = false
     ) {}
 
     /**
@@ -637,8 +649,16 @@ export class ReactiveAgent<TOut = unknown> {
             mergedState = input.state
         }
         const agentId = this.agentId
+        const autoShadowed = this._judgmentAutoShadow
         return this.runtime.runPromise(
             Effect.gen(function* () {
+                if (autoShadowed) {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.judge() requires .withJudgment() to be called during build() — this agent only carries auto-shadow sampling, not an explicit judge backend.'
+                        )
+                    )
+                }
                 const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
                 if (judgmentOpt._tag !== 'Some') {
                     return yield* Effect.fail(
@@ -705,8 +725,16 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
+        const autoShadowed = this._judgmentAutoShadow
         return this.runtime.runPromise(
             Effect.gen(function* () {
+                if (autoShadowed) {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                        )
+                    )
+                }
                 const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
                 if (judgmentOpt._tag !== 'Some') {
                     return yield* Effect.fail(
@@ -766,8 +794,16 @@ export class ReactiveAgent<TOut = unknown> {
         question: JudgeRankQuestion,
         opts: JudgeRankOptions = {}
     ): Promise<ReadonlyArray<JudgeRankResult>> {
+        const autoShadowed = this._judgmentAutoShadow
         return this.runtime.runPromise(
             Effect.gen(function* () {
+                if (autoShadowed) {
+                    return yield* Effect.fail(
+                        new Error(
+                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                        )
+                    )
+                }
                 const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
                 if (judgmentOpt._tag !== 'Some') {
                     return yield* Effect.fail(

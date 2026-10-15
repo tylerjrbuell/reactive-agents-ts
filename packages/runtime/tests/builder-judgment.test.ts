@@ -78,13 +78,23 @@ describe(".withJudgment() — Task 8 builder wiring", () => {
   });
 
   it("ABSENCE: bare builder never resolves JudgmentService", async () => {
-    const agent = await ReactiveAgents.create()
-      .withName("no-judgment-agent")
-      .withProvider("test")
-      .withTestScenario([{ text: "FINAL ANSWER: done" }])
-      .withReasoning({ defaultStrategy: "reactive" })
-      .build();
-    agentsToDispose.push(agent);
+    // Wave 7.1: auto-shadow would wire a local service when Ollama is
+    // reachable, so explicit absence is pinned under the opt-out (the
+    // pre-auto-shadow contract: no explicit opt-in ⇒ genuinely absent).
+    process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW = "1";
+    let agent: Awaited<ReturnType<ReturnType<typeof ReactiveAgents.create>["build"]>> | undefined;
+    try {
+      agent = await ReactiveAgents.create()
+        .withName("no-judgment-agent")
+        .withProvider("test")
+        .withTestScenario([{ text: "FINAL ANSWER: done" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      agentsToDispose.push(agent);
+    } finally {
+      delete process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW;
+    }
+    if (agent === undefined) throw new Error("build failed");
 
     // The layer requirement is genuinely absent — Effect.serviceOption
     // resolves to None, not a dummy backend silently answering.
@@ -101,6 +111,30 @@ describe(".withJudgment() — Task 8 builder wiring", () => {
     // Existing runtime behavior is byte-identical without the call.
     const result = await agent.run("simple task");
     expect(result.success).toBe(true);
+  });
+
+  it("AUTO-SHADOW: service resolves for sampling but judge() still requires explicit opt-in", async () => {
+    // Live-gated: needs a reachable Ollama (the auto-shadow backend).
+    if (process.env.REACTIVE_AGENTS_RUN_LIVE_OLLAMA_TESTS !== "1") return;
+    const agent = await ReactiveAgents.create()
+      .withName("autoshadow-judge-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .build();
+    agentsToDispose.push(agent);
+
+    // The service IS present (sampling substrate)...
+    const svcOpt = await agent.runtime.runPromise(
+      Effect.serviceOption(JudgmentService)
+    );
+    expect(svcOpt._tag).toBe("Some");
+
+    // ...but the public primitive still demands the explicit opt-in:
+    // auto-shadow is sampling, not a free judge backend.
+    await expect(
+      agent.judge({ state: { x: 1 }, questions: noulQuestion })
+    ).rejects.toThrow(/withJudgment/);
   });
 
   it("PRESENCE: .withJudgment() resolves the layer; agent.judge() answers via a fake LLM backend", async () => {

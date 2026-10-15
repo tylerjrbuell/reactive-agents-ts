@@ -42,7 +42,14 @@ describe("agent.listJudgmentModels() - Phase E Task 5", () => {
   });
 
   it("(a) listJudgmentModels() with a JudgmentService wired returns model list from the catalog", async () => {
-    const agent = await ReactiveAgents.create()
+    // Wave 7.1: opt out of auto-shadow — this test pins withLayers-provided
+    // service plumbing, and an auto-detected local backend would trip the
+    // explicit-opt-in guard (which exists so sampling never becomes a free
+    // judge backend).
+    process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW = "1";
+    let agent;
+    try {
+      agent = await ReactiveAgents.create()
       .withName("list-models-agent")
       .withProvider("test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
@@ -59,7 +66,10 @@ describe("agent.listJudgmentModels() - Phase E Task 5", () => {
       // live TypeSafe network round trip.
       .withLayers(Layer.succeed(JudgmentService, fakeJudgmentService))
       .build();
-    agentsToDispose.push(agent);
+      agentsToDispose.push(agent);
+    } finally {
+      delete process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW;
+    }
 
     const models = await agent.listJudgmentModels();
 
