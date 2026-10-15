@@ -179,4 +179,23 @@ describe("config-field census (6.4)", () => {
       expect(proof.link.startsWith("https://github.com/tylerjrbuell/reactive-agents-ts/issues/"), name).toBe(true);
     }
   });
+
+  it("no stale proof rows (every row names a live field)", () => {
+    const gatewayFields = new Set(policiesOf(GatewayConfigSchema, "policies"));
+    const gatewayPkgFields = new Set(fieldNames(PolicyConfigSchema));
+    const planExecuteFields = new Set(fieldNames(PlanExecuteConfigSchema));
+    for (const name of Object.keys(FIELD_PROOF)) {
+      if (name.startsWith("gateway.policies.")) {
+        expect(gatewayFields.has(name.slice("gateway.policies.".length)), `stale row ${name}`).toBe(true);
+      } else if (name.startsWith("gateway-pkg.policies.")) {
+        expect(gatewayPkgFields.has(name.slice("gateway-pkg.policies.".length)), `stale row ${name}`).toBe(true);
+      } else if (name.startsWith("planExecute.")) {
+        expect(planExecuteFields.has(name.slice("planExecute.".length)), `stale row ${name}`).toBe(true);
+      } else {
+        throw new Error(`proof row ${name} has no schema home — extend the reverse arm`);
+      }
+    }
+    // verifierTier has no row by design — dead config is removed, not allowlisted.
+    expect("verifierTier" in FIELD_PROOF).toBe(false);
+  });
 });

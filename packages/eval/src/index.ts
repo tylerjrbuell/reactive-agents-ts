@@ -49,7 +49,7 @@ export type { EvalStore } from "./services/eval-store.js";
 
 // Judgment-shadow sink (Wave 7.1) — EvalStore-shaped SQLite recorder for the
 // existing shadow-site events + per-site agreement analytics.
-export { createJudgmentShadowSink } from "./services/judgment-shadow-sink.js";
+export { createJudgmentShadowSink, subscribeJudgmentShadowSink } from "./services/judgment-shadow-sink.js";
 export type { JudgmentShadowSink, ShadowAgreement } from "./services/judgment-shadow-sink.js";
 
 // Runtime factory

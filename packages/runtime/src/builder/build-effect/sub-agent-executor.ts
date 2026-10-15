@@ -722,6 +722,10 @@ export const buildSubAgentTask = (
       }
 
       // Failure or interruption — contained, never rethrown to the parent.
+      // Wave 5.3 review fix: a crashed child must still stamp an envelope
+      // (failed), or the parent join sees nothing and can claim `completed`
+      // over the hardest failures — the exact laundering the join exists to
+      // prevent.
       const cause = exit.cause;
       const summary = Exit.isInterrupted(exit)
         ? "Sub-agent was interrupted before completion"
@@ -732,6 +736,7 @@ export const buildSubAgentTask = (
         summary,
         tokensUsed: 0,
         stepsCompleted: 0,
+        completionStatus: "failed",
       } satisfies SubAgentResult;
     }),
   );

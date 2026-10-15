@@ -49,3 +49,17 @@ describe("SubAgentResult completion envelope (Wave 5.3)", () => {
     expect(subAgentChildEnvelopes("plain string")).toEqual([]);
   });
 });
+
+describe("crash-path envelopes (Wave 5.3 review fix)", () => {
+  it("a crashed child result (failed, no finalize) still yields an envelope", () => {
+    expect(
+      subAgentChildEnvelopes({
+        subAgentName: "crashed",
+        success: false,
+        summary: "Sub-agent failed: boom",
+        tokensUsed: 0,
+        completionStatus: "failed",
+      }),
+    ).toEqual([{ completionStatus: "failed" }]);
+  });
+});

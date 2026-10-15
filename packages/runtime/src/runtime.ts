@@ -730,10 +730,16 @@ export const createRuntime = (options: RuntimeOptions) => {
   // called — `JudgmentService` is genuinely not in the runtime's Layer graph in
   // that case, not a dummy/no-op stand-in (Task 8, judgment-layer plan).
   const judgmentOptLayer = options.enableJudgment
-    ? buildJudgmentLayer(options.judgmentOptions, {
-        llmLayer: observableLlmLayer as Layer.Layer<LLMService>,
-        eventBusLayer,
-      })
+    ? buildJudgmentLayer(
+        options.judgmentOptions,
+        {
+          llmLayer: observableLlmLayer as Layer.Layer<LLMService>,
+          eventBusLayer,
+        },
+        options.judgmentShadowDbPath !== undefined
+          ? { dbPath: options.judgmentShadowDbPath }
+          : undefined,
+      )
     : Layer.empty;
 
   // ── Cost tracking ──
@@ -1450,7 +1456,13 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   // ── Judgment (mirrors the root runtime's judgmentOptLayer above, minus
   // observability wrapping — a light runtime has no `observableLlmLayer`) ──
   const lightJudgmentOptLayer = options.enableJudgment
-    ? buildJudgmentLayer(options.judgmentOptions, { llmLayer, eventBusLayer })
+    ? buildJudgmentLayer(
+        options.judgmentOptions,
+        { llmLayer, eventBusLayer },
+        options.judgmentShadowDbPath !== undefined
+          ? { dbPath: options.judgmentShadowDbPath }
+          : undefined,
+      )
     : Layer.empty;
 
   const lightCostTrackingOptLayer = options.enableCostTracking

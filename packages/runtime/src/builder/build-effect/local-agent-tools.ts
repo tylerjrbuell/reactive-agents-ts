@@ -236,6 +236,8 @@ export const createLocalAgentToolRegistration = (
           success: false,
           summary,
           tokensUsed: 0,
+          // Wave 5.3 review fix: stamp the crash (see sub-agent-executor.ts).
+          completionStatus: "failed",
         } satisfies SubAgentResult;
       }),
     );

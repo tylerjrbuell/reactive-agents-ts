@@ -138,6 +138,8 @@ export interface BuilderRuntimeStateView {
   readonly _enableVerification: boolean;
   /** `.withJudgment()` — opts the runtime into a resolvable `JudgmentService`. */
   readonly _enableJudgment: boolean;
+  /** Wave 7.1 auto-shadow sink path (present iff auto-shadow activated). */
+  readonly _judgmentShadowDbPath?: string;
   readonly _enableCostTracking: boolean;
   readonly _enableAudit: boolean;
   readonly _enableReasoning: boolean;
@@ -522,6 +524,9 @@ export const buildBaseRuntimeAndEngine = (
       verificationOptions: state._verificationOptions,
       enableJudgment: state._enableJudgment,
       judgmentOptions: state._judgmentOptions,
+      ...(state._judgmentShadowDbPath !== undefined
+        ? { judgmentShadowDbPath: state._judgmentShadowDbPath }
+        : {}),
       costTrackingOptions: state._costTrackingOptions,
       circuitBreakerConfig: state._circuitBreakerConfig,
       rateLimiterConfig: state._rateLimiterConfig,

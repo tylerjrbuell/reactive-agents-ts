@@ -535,11 +535,20 @@ export function finalizeStrategyResult(
             // carries only strategy-declared fields, so the coverage arm's
             // fields (already merged into finalResult.metadata) are re-derived
             // here rather than spread wholesale (which would also drag stale
-            // duration/cost/confidence over the fresh values).
+            // duration/cost/confidence over the fresh values). Warnings
+            // CONCATENATE (review fix): two arms firing must not drop each
+            // other's reason — the receipt names every unmet requirement.
             extraMetadata: {
               ...params.extraMetadata,
               ...honestEnvelopeMetadata(coverage),
               ...honestEnvelopeMetadata(delegation),
+              ...(coverage.verificationWarning !== undefined &&
+              delegation.verificationWarning !== undefined &&
+              coverage.verificationWarning !== delegation.verificationWarning
+                ? {
+                    verificationWarning: `${coverage.verificationWarning}; ${delegation.verificationWarning}`,
+                  }
+                : {}),
             },
           });
 

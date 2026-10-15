@@ -17,6 +17,10 @@ import {
 } from "@reactive-agents/judgment";
 import type { JudgmentBackend } from "@reactive-agents/judgment";
 import { EventBus } from "@reactive-agents/core";
+import {
+  createJudgmentShadowSink,
+  subscribeJudgmentShadowSink,
+} from "@reactive-agents/eval";
 import type { JudgmentBuilderOptions, JudgmentBackendName } from "./builder/types.js";
 
 export type { JudgmentBackendName } from "./builder/types.js";
@@ -28,6 +32,17 @@ export type { JudgmentBackendName } from "./builder/types.js";
 export interface JudgmentLayerDeps {
   readonly llmLayer: LayerType.Layer<LLMService>;
   readonly eventBusLayer: LayerType.Layer<EventBus>;
+}
+
+/**
+ * Wave 7.1 review fix: when set, `JudgmentShadow` bus events are recorded
+ * into the sink at this SQLite path (the sink otherwise has no producer).
+ * Only passed for auto-shadow activations — explicit `.withJudgment()` users
+ * get the service without unsolicited disk writes (the subscriber helper is
+ * exported for anyone who wants it).
+ */
+export interface JudgmentShadowOptions {
+  readonly dbPath: string;
 }
 
 /**
@@ -81,13 +96,28 @@ const BACKENDS = {
 export const buildJudgmentLayer = (
   jc: JudgmentBuilderOptions | undefined,
   deps: JudgmentLayerDeps,
+  shadow?: JudgmentShadowOptions,
 ): Layer.Layer<JudgmentService, never, never> => {
   const backendName = resolveBackendName(jc);
   const serviceLayer: Layer.Layer<JudgmentService, never, never> = Layer.unwrapEffect(
     Effect.map(BACKENDS[backendName](jc), makeJudgmentServiceLive),
   ).pipe(Layer.provide(deps.llmLayer));
 
-  return withEvents("agent.judge", backendName).pipe(
+  const withEventsLayer = withEvents("agent.judge", backendName).pipe(
     Layer.provide(Layer.merge(serviceLayer, deps.eventBusLayer)),
   );
+
+  if (shadow === undefined) return withEventsLayer;
+
+  // Shadow subscription: tag-filtered bus → sink, released with the layer.
+  // Best-effort by sink design (a full disk must never break a run).
+  const sinkLayer: Layer.Layer<never, never, never> = Layer.scopedDiscard(
+    Effect.gen(function* () {
+      const bus = yield* EventBus;
+      const unsub = yield* subscribeJudgmentShadowSink(bus, createJudgmentShadowSink(shadow.dbPath));
+      yield* Effect.addFinalizer(() => Effect.sync(unsub));
+    }),
+  ).pipe(Layer.provide(deps.eventBusLayer));
+
+  return Layer.merge(withEventsLayer, sinkLayer);
 };

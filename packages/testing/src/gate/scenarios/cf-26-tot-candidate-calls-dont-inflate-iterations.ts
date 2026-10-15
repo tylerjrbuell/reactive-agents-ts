@@ -63,8 +63,10 @@ export const scenario: ScenarioModule = {
       "tot.llm-exchanges": llmExchanges,
       "tot.bfs-ran": llmExchanges >= 5 ? true : false,
       // ...but stayed out of the iteration counter (engine passes bounded).
+      // Bound is tight (<=2 vs observed 0): a 1-2 iteration leak — the actual
+      // failure mode — fails instead of hiding in headroom.
       "tot.max-assessed-iter": iterations,
-      "tot.iterations-bounded": iterations <= 4 ? true : false,
+      "tot.iterations-bounded": iterations <= 2 ? true : false,
     };
   },
 };

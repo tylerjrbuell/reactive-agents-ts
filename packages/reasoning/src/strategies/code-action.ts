@@ -37,7 +37,7 @@ import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
-import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
+import { subAgentResultForDisplay, subAgentChildLedgerEntries, subAgentChildEnvelopes } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep } from "../kernel/utils/service-utils.js";
 
@@ -398,6 +398,10 @@ export const executeCodeAction = (
               : JSON.stringify(subAgentResultForDisplay(tc.result)) ?? "";
           const obsContent = `[${tc.name} result]\n${resultText}`;
           const subAgentLedger = childRunLedgerOf(tc.result);
+          // Wave 5.3 review fix: the sandbox dispatch path stamps child
+          // envelopes like every other delegation route (same extractor the
+          // kernel primitive uses) so the terminal join sees them.
+          const childEnvelopes = subAgentChildEnvelopes(tc.result);
           yield* appendStep(
             makeStep("action", `[CODE-ACTION] ${tc.name}`, {
               toolCall: {
@@ -410,7 +414,9 @@ export const executeCodeAction = (
           );
           const obsStep = makeStep("observation", obsContent, {
             toolCallId: callId,
-            observationResult: makeObservationResult(tc.name, true, obsContent),
+            observationResult: makeObservationResult(tc.name, true, obsContent, {
+              ...(childEnvelopes.length > 0 ? { childEnvelopes: [...childEnvelopes] } : {}),
+            }),
             ...(subAgentLedger ? { subAgentLedger } : {}),
           } as ReasoningStep["metadata"]);
           yield* appendStep(obsStep, `code-action:execute:${iteration}`);

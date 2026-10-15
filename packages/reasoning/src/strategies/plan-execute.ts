@@ -806,7 +806,12 @@ export const executePlanExecute = (
             let stepResult = "";
             let lastError: string | undefined;
             // W5.5: derive the per-step slice here, where `plan` exists: the
-            // run's own iteration budget spread over the plan (floor 5).
+            // run's configured iteration budget spread over the plan (floor
+            // 5). Sourced from `strategies.reactive.maxIterations` — the
+            // canonical store for the run budget even on non-reactive runs
+            // (review note: mislabeled as "run's own" before; the value is
+            // the configured default, and an explicit stepKernelMaxIterations
+            // still wins over it).
             const derivedStepBudget =
               stepKernelMaxIterations ??
               (plan.steps.length > 0

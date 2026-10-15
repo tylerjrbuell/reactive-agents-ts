@@ -11,9 +11,17 @@
  * Shadow mode never consumes a decision — `judged` is recorded next to the
  * actually-used `current`, never substituted. This sink only stores that
  * pairing durably.
+ *
+ * Loss direction (review note): every method degrades to empty on error, so
+ * a full disk or locked DB silently UNDER-samples. That fail direction is
+ * safe for the sink's purpose — missing traffic blocks inversion (the gate
+ * needs n≥30), it can never fabricate agreement. Measured auto-shadow cost
+ * (2026-10-15, qwen3:4b trivial task): ~+6s wall (+3x) from serialized local
+ * shadow calls; real multi-step runs dilute it. Opt out with
+ * REACTIVE_AGENTS_NO_AUTO_SHADOW=1.
  */
-import { Effect } from "effect";
-import type { JudgmentShadow } from "@reactive-agents/core";
+import { Context, Effect } from "effect";
+import type { EventBus, JudgmentShadow } from "@reactive-agents/core";
 
 export interface ShadowAgreement {
   readonly site: string;
@@ -132,3 +140,16 @@ export const createJudgmentShadowSink = (dbPath: string = "judgment-shadow.db"):
       }),
   };
 };
+
+/**
+ * Subscribe a bus to a sink: every `JudgmentShadow` event is recorded
+ * durably (Wave 7.1 review fix — the sink had no producer). Tag-filtered
+ * (`bus.on`, not catch-all) so non-shadow traffic never touches the sink.
+ * Returns the unsubscribe function; callers own release (layers: release in
+ * a finalizer, mirroring `OpenInferenceTracerLayer`).
+ */
+export const subscribeJudgmentShadowSink = (
+  bus: Context.Tag.Service<typeof EventBus>,
+  sink: JudgmentShadowSink,
+): Effect.Effect<() => void, never> =>
+  bus.on("JudgmentShadow", (event) => sink.record(event));

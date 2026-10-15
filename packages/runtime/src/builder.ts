@@ -378,6 +378,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableVerification: boolean = false
     /** `.withJudgment()` — opts the runtime into a resolvable `JudgmentService`. Off by default. */
     private _enableJudgment: boolean = false
+    private _judgmentShadowDbPath?: string
     private _enableCostTracking: boolean = false
     private _enableAudit: boolean = false
     private _enableReasoning: boolean = false
@@ -404,6 +405,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     // layer (see withLayers() below for why `any` was replaced with this
     // rather than `unknown`).
     private _extraLayers?: Layer.Layer<never, unknown, unknown>
+    private _openInferenceAdded?: boolean
     // Exact target type: this is force-cast to `Layer.Layer<LLMService>` at
     // the sole consumption site (runtime-construction.ts, RuntimeOptions
     // .llmOverrideLayer). Typing it precisely here removes that cast.
@@ -2481,9 +2483,18 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * still build against the global tracer (observable via any registered
      * provider, e.g. an in-memory exporter in tests).
      *
+     * Ordering vs `.withLayers()`: this wither MERGES into any existing
+     * extra layers, but `.withLayers()` ASSIGNS (replaces). Call
+     * `.withOpenInference()` AFTER `.withLayers()` to keep both; the reverse
+     * order drops the tracer layer. Idempotent — calling twice subscribes once.
+     *
      * @returns `this` for chaining
      */
     withOpenInference(): this {
+        // Idempotent: a second call is a no-op (merging the same layer twice
+        // would double-subscribe EventBus → duplicate spans).
+        if (this._openInferenceAdded === true) return this
+        this._openInferenceAdded = true
         this._extraLayers = this._extraLayers
             ? Layer.mergeAll(this._extraLayers, OpenInferenceTracerLayer)
             : OpenInferenceTracerLayer
@@ -2572,6 +2583,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             if (auto !== undefined) {
                 this._enableJudgment = true
                 this._judgmentOptions = { backend: auto.backend, baseUrl: auto.baseUrl }
+                this._judgmentShadowDbPath =
+                    process.env.REACTIVE_AGENTS_SHADOW_DB ??
+                    join(homedir(), ".reactive-agents", "judgment-shadow.db")
             }
         }
         // Wave 6.1: gateway-declared approvals join the kernel approval
@@ -3126,6 +3140,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _enableGuardrails: self._enableGuardrails,
         _enableHealthCheck: self._enableHealthCheck,
         _enableJudgment: self._enableJudgment,
+        _judgmentShadowDbPath: self._judgmentShadowDbPath,
         _enableKillSwitch: self._enableKillSwitch,
         _enableMemory: self._enableMemory,
         _enableMemoryConsolidation: self._enableMemoryConsolidation,
