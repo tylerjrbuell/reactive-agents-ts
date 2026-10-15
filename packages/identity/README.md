@@ -20,7 +20,12 @@ bun add @reactive-agents/identity
 - **Delegation chains** — signed proof that agent A is acting on behalf of user U
 - **Default roles** — `DefaultRoles` constant exports a baseline role set
 
-## Quick Example (builder integration)
+## Quick Example (direct service usage)
+
+> **Builder integration note:** there is no `.withIdentity()` builder wither
+> (removed as a provide-and-forget layer; the ratchet test pins its absence).
+> Use this package directly via its Effect `Layer`, and `.withApprovalPolicy()`
+> for enforced run gates.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -28,10 +33,6 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("privileged-agent")
   .withProvider("anthropic")
-  .withIdentity({
-    roles: ["reader", "writer"],
-    issuer: "my-org",
-  })
   .build();
 ```
 

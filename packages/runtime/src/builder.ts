@@ -1253,7 +1253,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * compiles a single `HarnessPlan` at run-start from what the run KNOWS about
      * itself (the model's capability tier + calibration, the compiled contract's
      * horizon, and the task classification): strategy, budget class, guard/horizon
-     * profile, tool surface, verifier tier, memory posture. The plan supplies the
+     * profile, tool surface, memory posture. The plan supplies the
      * DEFAULTS; any explicit wither you set (`.withStrategy`, `.withLongHorizon`,
      * budget withers, …) OVERRIDES the corresponding plan field. Mid-run, the plan
      * is recompiled on live progress evidence — DEEPENING scaffolding when the run

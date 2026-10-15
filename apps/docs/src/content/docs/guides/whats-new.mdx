@@ -618,7 +618,7 @@ The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four 
 #### Local models that actually work
 
 - **Healing Pipeline** — 4-stage closed-loop recovery on every tool call (tool-name fuzzy match → parameter-name aliasing → path resolution → type coercion). Deterministic repairs instead of an LLM reprompt. Ships on by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
-- **Adaptive tool calling** — Each model gets fingerprinted on first run; native FC capable models route through the JSON path, weaker ones through a 3-tier text-parse cascade (XML → JSON → pseudo-code). The framework learns each model's dialect after 5 runs and stops asking it to do things it can't.
+- **Adaptive tool calling** — Each model gets fingerprinted on first run; native FC capable models route through the JSON path, others through a 3-tier text-parse cascade (XML → JSON → pseudo-code) with capability-gated opt-in act-mode (`REACTIVE_AGENTS_TEXT_PARSE=act`; default-off). The framework learns each model's dialect after 5 runs and stops asking it to do things it can't.
 - **Calibration system** — Per-model observations (parallel-call capability, classifier reliability, tool-call dialect) adapt empirically. Auto-enabled when `.withReasoning()` is on.
 - **Cross-tier verification** — the same agent loop exercised across frontier models (`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, `gemini-2.5-pro`) and local models (`gemma4:e4b` at 4 GB, `cogito:14b` at 9 GB) during development.
 

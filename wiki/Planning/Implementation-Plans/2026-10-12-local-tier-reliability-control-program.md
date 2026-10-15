@@ -69,7 +69,7 @@ Input/condition classes no happy-path test covers — each line's pin is added t
       **S3 multi-step file task** — read 2 small input files → transform → write 3-section report; builtins `file` toolset; 8K num_ctx (qwen3:4b, llama3.2). Signature: schema tokens ≈ 4-5K/req, false-success possible, outstanding-never-satisfied loop.
       **S4 no-FC loop** — builtin `file` toolset against a model whose template probe reports no tool emission (verify candidate via `/api/show` on llama3.1/phi4-mini first; SLM-fallback arm). Signature: markup emitted, nothing acts, maxIterations burn.
 - [x] 0.3 Capture S1-S3 N=5 each into fixtures/ + MANIFEST; probe-2/probe-3 outputs recorded as unit-style fixture rows.
-- [x] 0.4 Rung-2 (BLOCKED: Anthropic credit; one-command rerun documented in scoreboard) (haiku) equivalents of S1/S3 via existing bench harness (`getVariant("ra-full")`), stored alongside.
+- [x] 0.4 Rung-2 (haiku equivalents; Anthropic credit-block bypassed 2026-10-15 via gemini-2.5-flash + new REACTIVE_AGENTS_FORCE_TEXT_PARSE mechanism, fixtures/post-w3-rung2) via existing bench harness, stored alongside.
 - [x] 0.5 Initialize scoreboard with baseline values; declare measurement freeze (Doctrine #4) in Hot.md; commit `test(lift): baseline fixtures + scoreboard for reliability program`.
 
 **Gate:** scoreboard has baseline values for every ⚡ metric column; S1 fixture replays deterministically via the replay lane.
@@ -195,9 +195,9 @@ Input/condition classes no happy-path test covers — each line's pin is added t
 
 **Owners:** judgment/eval (7.1-7.2), benchmarks (7.3), verification (7.4). **Depends:** W4-5 shipped (there is finally stable behavior to measure).
 
-- [ ] 7.1 **JudgmentShadow sink + auto-shadow mode:** EvalStore-shaped SQLite recorder consuming the 6 existing shadow-site events (no new emitters); shadow mode auto-enables with a cheap local backend (System One/Ollama — merged, shipped) INDEPENDENT of user `.withJudgment()` (current default-off means sites sample nothing); agreement analytics query per site against recorded ground-truth protocol (the n=30-32 gate methodology from 2026-09-23, now automated). THEN invert task-comprehension (98.5%) behind ablation-warden + rung agreement; inverted decisions append judgment ledger entries (auditable, replayable — the unique-value differentiator, no other TS harness does this).
-- [ ] 7.2 **CI evidence lanes:** root-cause + re-enable `eval.yml` ("always failing" — likely the same keyless-CI wall as regression-gate; if secrets needed, use repo vars + nightly), scheduled nightly regression-gate, τ-bench on a schedule (loader/adapter/pass-k exist unscheduled), implement the remaining `cf-TODO` scenario (ToT call-inflation; 4.1 shipped the loop-detect one). Feed deltas into capability-registry `liftEvidence` fields (schema exists: `registry.ts:62-72`) — future default-on promotions read measurements, not probe-campaign folklore.
-- [ ] 7.3 **Rung-3 standing panel:** bench session auto-detects pulled Ollama models via tags API (keyless-safe skip, the `abstention-synthesis-206` pattern) and includes the fast-tool-caller panel where reachable; ship ≥5 calibration runs per shipped SLM prior (current priors n=1-3 across 8 models); probe-cache persistence from 3.1 feeds the posterior.
+- [x] 7.1 **JudgmentShadow sink + auto-shadow mode (shipped; inversion explicitly gated, not flipped — see gate comment at judgment-classification.ts):** EvalStore-shaped SQLite recorder consuming the 6 existing shadow-site events (no new emitters); shadow mode auto-enables with a cheap local backend (System One/Ollama — merged, shipped) INDEPENDENT of user `.withJudgment()` (current default-off means sites sample nothing); agreement analytics query per site against recorded ground-truth protocol (the n=30-32 gate methodology from 2026-09-23, now automated). THEN invert task-comprehension (98.5%) behind ablation-warden + rung agreement; inverted decisions append judgment ledger entries (auditable, replayable — the unique-value differentiator, no other TS harness does this).
+- [x] 7.2 **CI evidence lanes (shipped; τ-bench live scheduling deferred with rationale — entry points throw without the Python env bridge):** root-cause + re-enable `eval.yml` ("always failing" — likely the same keyless-CI wall as regression-gate; if secrets needed, use repo vars + nightly), scheduled nightly regression-gate, τ-bench on a schedule (loader/adapter/pass-k exist unscheduled), implement the remaining `cf-TODO` scenario (ToT call-inflation; 4.1 shipped the loop-detect one). Feed deltas into capability-registry `liftEvidence` fields (schema exists: `registry.ts:62-72`) — future default-on promotions read measurements, not probe-campaign folklore.
+- [x] 7.3 **Rung-3 standing panel (shipped; all priors n=5, qwen3:4b n=10):** bench session auto-detects pulled Ollama models via tags API (keyless-safe skip, the `abstention-synthesis-206` pattern) and includes the fast-tool-caller panel where reachable; ship ≥5 calibration runs per shipped SLM prior (current priors n=1-3 across 8 models); probe-cache persistence from 3.1 feeds the posterior.
 - [x] 7.4 **Verification collapse + verifierTier decision:** wire `verification`'s pure-compute Tier-1 (entropy/NLI) as an ADDITIONAL CHECK inside the kernel's terminal gate (shadow → enforce per lift rule) — kills the two-verifier drift class by making the package serve the one gate rather than a parallel stack; `verifierTier` ladder gets its one consumer (policy actuation: deepen verification on amber/red band) or is deleted — decide on 7.2 evidence. Update features docs to ONE verification story either way.
 
 **Gate:** first measured inversion ships with before/after outcome delta; eval CI green on main; scoreboard fully post-fixed. **Changeset:** `minor`.
@@ -268,6 +268,11 @@ Impact-per-effort ordering rationale: W1 = per-run quality on the largest local 
 ## Explicit non-goals (tracked elsewhere)
 
 - Proactive mid-window compaction redesign (Wave-5 bench item; 2.3/2.5 make thresholds honest first).
+
+## Post-program follow-ups (filed, triaged — not merge-blockers)
+
+- #249: preflight follow-ups (widen ACTION_RULES coverage; floor the relevance substring expansion). Both fail-safe; the #244 win stands without them.
+- #250: structured-output repair-retry drops commanded temp to fixed 0.1 (needs retry-determinism sign-off before touching).
 - code-action full kernel-hosting (design pass 5.5-minimum shipped here).
 - `numCtxPolicy` default flip (measured reload penalty stands: 33-49s/switch).
 - Agent-orchestration product work (a2a/channels maturity), UI bindings beyond 1.1 parity, new providers.
