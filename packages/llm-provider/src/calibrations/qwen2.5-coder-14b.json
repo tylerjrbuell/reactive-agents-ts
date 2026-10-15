@@ -1,8 +1,8 @@
 {
   "modelId": "qwen2.5-coder:14b",
-  "calibratedAt": "2026-10-13T13:26:07.970Z",
+  "calibratedAt": "2026-10-15T01:18:02.097Z",
   "probeVersion": 2,
-  "runsAveraged": 3,
+  "runsAveraged": 5,
   "steeringCompliance": "hybrid",
   "parallelCallCapability": "sequential-only",
   "observationHandling": "needs-inline-facts",

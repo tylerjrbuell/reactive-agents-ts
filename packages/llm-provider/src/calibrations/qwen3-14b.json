@@ -1,8 +1,8 @@
 {
   "modelId": "qwen3:14b",
-  "calibratedAt": "2026-10-13T13:24:52.521Z",
+  "calibratedAt": "2026-10-15T01:21:46.246Z",
   "probeVersion": 2,
-  "runsAveraged": 3,
+  "runsAveraged": 5,
   "steeringCompliance": "hybrid",
   "parallelCallCapability": "reliable",
   "observationHandling": "uses-recall",

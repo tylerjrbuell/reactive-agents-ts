@@ -1,11 +1,12 @@
 {
   "modelId": "llama3.2:3b",
-  "calibratedAt": "2026-04-14T20:48:22.490Z",
-  "probeVersion": 1,
-  "runsAveraged": 3,
+  "calibratedAt": "2026-10-15T01:24:09.183Z",
+  "probeVersion": 2,
+  "runsAveraged": 5,
   "steeringCompliance": "hybrid",
   "parallelCallCapability": "sequential-only",
-  "observationHandling": "uses-recall",
+  "observationHandling": "needs-inline-facts",
   "systemPromptAttention": "strong",
-  "optimalToolResultChars": 2000
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "native-fc"
 }

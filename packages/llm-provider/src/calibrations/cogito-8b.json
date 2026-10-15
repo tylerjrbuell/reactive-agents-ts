@@ -1,19 +1,12 @@
 {
   "modelId": "cogito:8b",
-  "calibratedAt": "2026-04-22T00:00:00.000Z",
-  "probeVersion": 1,
-  "runsAveraged": 3,
+  "calibratedAt": "2026-10-15T01:17:14.666Z",
+  "probeVersion": 2,
+  "runsAveraged": 5,
   "steeringCompliance": "hybrid",
-  "parallelCallCapability": "partial",
-  "observationHandling": "needs-inline-facts",
-  "systemPromptAttention": "moderate",
-  "optimalToolResultChars": 1200,
-  "toolCallDialect": "native-fc",
-  "knownParamAliases": {
-    "code-execute": {
-      "input": "code",
-      "command": "code",
-      "script": "code"
-    }
-  }
+  "parallelCallCapability": "sequential-only",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "native-fc"
 }
