@@ -231,6 +231,31 @@ act-mode end-to-end execution UNMEASURED — phi4 box-blocked, coder parser-gap-
 rung-2 BLOCKED-NOTED (Anthropic credit). Plan-3.5 rung agreement cannot be declared on this data.
 Safety watch: no double-dispatch, no budget bypass, no parse-failure loops across 12 completed runs.**
 
+## Post-W3 rung-2 + refix capture (2026-10-15 — SUPERSEDES the line above)
+
+Rung-2 run on gemini-2.5-flash via GOOGLE_API_KEY (replaces credit-blocked haiku) with new
+`REACTIVE_AGENTS_FORCE_TEXT_PARSE=1` mechanism (runner.ts single reader; resolver keyed on the
+effective value, no 482c11e4 divergence; pinned in tool-routing-triad.test.ts). Rung-3
+re-captured post parser-fix chain. Full tables: `fixtures/post-w3-rung2/MANIFEST.md`,
+`fixtures/post-w3-refix/MANIFEST.md`.
+
+| rung | measured |
+|---|---|
+| rung-2 shadow gemini (N=3) | 0 shadow signals, 0 parsed — model emits `<tool_code>` pseudo-code, never the taught `<tool_use>` (deterministic 3/3 at temp 0); shadow correctly silent |
+| rung-2 act gemini (N=3) | parsed 0/3, legacy fallback, honest failure — nothing to act on |
+| rung-3 shadow coder (N=3) | **parsed 3/3, would-execute 3/3** (was 0/5) — parser coverage FIXED |
+| rung-3 act coder (N=5) | parsed 0/5 — model used NATIVE FC instead (6 calls/run); finals honestly failed on empty report (model quality) |
+| rung-3 act phi4 (N=1) | hung — box-instability finding persists |
+
+**PROMOTION RECOMMENDATION (controller): DO NOT PROMOTE to default act-mode.**
+Parser coverage is fixed and measured, safety watch holds across 17 new runs,
+but no run on any model has completed a text-parse execution end to end
+(gemini ignores the grammar, coder prefers native FC, phi4 hangs). Keep
+default-off with explicit opt-in (`REACTIVE_AGENTS_TEXT_PARSE=act`); the
+value of act-mode is for genuinely no-FC situations, which remain unproven.
+The taught-grammar compliance finding (≈zero voluntary compliance even on a
+frontier model) argues against chasing model-invented dialects (`<tool_code>`).
+
 ## Post-W4 close capture (2026-10-13, HEAD 482cbef47, 11 live runs + deterministic detection lane)
 
 Rows/details: `fixtures/post-w4/MANIFEST.md` + `detection-results.jsonl` + `post-w4-metrics.jsonl`.

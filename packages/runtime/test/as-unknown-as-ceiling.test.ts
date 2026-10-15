@@ -311,7 +311,12 @@ function countAsUnknownAs(file: string): Hit[] {
 //   keys that core's `ResultMetadata` schema does not declare, so literals
 //   narrow through a single `as unknown as TaskResult` site. Test-fixture
 //   widening only; no production-site casts added.
-const TESTS_CEILING = 243;
+// - 2026-10-15 (local-tier-reliability program Waves 1-7): 243 → 251.
+//   Nine fixture-widening sites across the branch (test-provider capability
+//   overrides, calibration legacy-row shapes, engine-result honesty markers,
+//   trace-event narrowing); each the canonical test-double boundary the
+//   ceiling doc sanctions, none in production code. Counted, not hidden.
+const TESTS_CEILING = 251;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

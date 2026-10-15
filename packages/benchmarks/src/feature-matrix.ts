@@ -127,6 +127,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withModelPricing: { featureClass: "plumbing" },
   withName: { featureClass: "plumbing" },
   withObservability: { featureClass: "plumbing" },
+  withOpenInference: { featureClass: "plumbing" },
   withoutCircuitBreaker: { featureClass: "plumbing" },
   withoutObservability: { featureClass: "plumbing" },
   withPersona: { featureClass: "plumbing" },
