@@ -287,7 +287,7 @@ const S3_TASK =
 interface ArmSpec {
   readonly id: string
   readonly scenario: "S1" | "S2" | "S3" | "S4"
-  readonly provider: "ollama" | "anthropic"
+  readonly provider: "ollama" | "anthropic" | "gemini"
   readonly model: string
   readonly task: string
   readonly n: number
@@ -299,6 +299,8 @@ interface ArmSpec {
   readonly parseMode?: "shadow" | "act"
   /** W4: enable the tools layer with NO builtins in the base schema (user scratch.ts shape). */
   readonly toolsLayer?: boolean
+  /** Wave 3 rung-2: force the text-parse driver (FC disabled) for the run. */
+  readonly forceTextParse?: boolean
 }
 
 export const ARMS: readonly ArmSpec[] = [
@@ -318,6 +320,11 @@ export const ARMS: readonly ArmSpec[] = [
   // W4 close-out: the user-reported impossible-task shape (same task + builtins:false as the
   // controller's scratch.ts live verification; stand-down should end it in <=2-3 iterations).
   { id: "w4-terminate", scenario: "S1", provider: "ollama", model: "qwen3:4b", task: S1_TASK, n: 3, fileTools: false, toolsLayer: true },
+  // Wave 3 rung-2 (replaces credit-blocked haiku): frontier model with FC
+  // disabled exercises the taught text-parse grammar on a strong model.
+  // gemini-2.5-flash via GOOGLE_API_KEY; S4 file task mirrors the rung-3 arms.
+  { id: "w3-shadow-gemini", scenario: "S4", provider: "gemini", model: "gemini-2.5-flash", task: S3_TASK, n: 3, fileTools: true, parseMode: "shadow", forceTextParse: true },
+  { id: "w3-act-gemini", scenario: "S4", provider: "gemini", model: "gemini-2.5-flash", task: S3_TASK, n: 3, fileTools: true, parseMode: "act", forceTextParse: true },
 ]
 
 const HANG_MS = 8 * 60_000
@@ -472,6 +479,9 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
   const parseEnvKey = "REACTIVE_AGENTS_TEXT_PARSE"
   const prevParseEnv = process.env[parseEnvKey]
   if (arm.parseMode !== undefined) process.env[parseEnvKey] = arm.parseMode
+  const forceKey = "REACTIVE_AGENTS_FORCE_TEXT_PARSE"
+  const prevForceEnv = process.env[forceKey]
+  if (arm.forceTextParse === true) process.env[forceKey] = "1"
   try {
     const exec = arm.fileTools
       ? withFileRoot(prepareWorkspace(traceDir, arm, runIndex), () => agent.run(arm.task))
@@ -496,6 +506,8 @@ export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics>
     if (disposeTimer !== undefined) clearTimeout(disposeTimer)
     if (prevParseEnv === undefined) delete process.env[parseEnvKey]
     else process.env[parseEnvKey] = prevParseEnv
+    if (prevForceEnv === undefined) delete process.env[forceKey]
+    else process.env[forceKey] = prevForceEnv
   }
 
   const wallClockMs = Date.now() - startTs

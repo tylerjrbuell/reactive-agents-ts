@@ -36,7 +36,7 @@
 //   §3: "Source-tagged provenance — … so a wrong route is *visible* in
 //   telemetry, not silent."
 
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { Effect, Layer, Option, Stream } from "effect";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -356,5 +356,41 @@ describe("W3b sentinel pin: meta-tool sentinels STAY in the tools array for text
     const names = (req.tools ?? []).map((t) => t.name);
     expect(names).toContain("web-search");
     expect(names).not.toContain("context-status");
+  });
+});
+
+describe("W3 rung-2: REACTIVE_AGENTS_FORCE_TEXT_PARSE forces the text-parse route on a capable model", () => {
+  const KEY = "REACTIVE_AGENTS_FORCE_TEXT_PARSE";
+  let prev: string | undefined;
+
+  beforeEach(() => {
+    prev = process.env[KEY];
+  });
+
+  afterEach(() => {
+    if (prev === undefined) delete process.env[KEY];
+    else process.env[KEY] = prev;
+  });
+
+  it("capable provider + flag=1 ⇒ TEXT-PARSE driver + NO native resolver (no 482c11e4 divergence)", async () => {
+    process.env[KEY] = "1";
+    withDialectPrior("native-fc", 5);
+    const { context } = await captureRunnerContext(
+      { task: "Find the BTC price", availableToolSchemas: [WEB_SEARCH_SCHEMA], modelId: MODEL_ID },
+      true,
+    );
+    expect(context.toolCallingDriver.mode).toBe("text-parse");
+    expect(context.input.toolCallResolver).toBeUndefined();
+  });
+
+  it("capable provider + flag unset ⇒ NATIVE driver + resolver (default unchanged)", async () => {
+    delete process.env[KEY];
+    withDialectPrior("native-fc", 5);
+    const { context } = await captureRunnerContext(
+      { task: "Find the BTC price", availableToolSchemas: [WEB_SEARCH_SCHEMA], modelId: MODEL_ID },
+      true,
+    );
+    expect(context.toolCallingDriver.mode).toBe("native-fc");
+    expect(context.input.toolCallResolver).toBeDefined();
   });
 });

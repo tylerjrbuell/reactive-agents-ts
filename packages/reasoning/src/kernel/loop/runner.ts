@@ -217,7 +217,16 @@ export function runKernel(
           Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
         );
         providerSupportsToolCalling = caps.supportsToolCalling;
-        if (caps.supportsToolCalling && !mergedInput.toolCallResolver) {
+        // Wave 3 rung-2 (frontier model, FC disabled): `REACTIVE_AGENTS_FORCE_TEXT_PARSE=1`
+        // forces the text-parse driver so the taught grammar is exercised on a
+        // strong model (house env pattern, cf. REACTIVE_AGENTS_TEXT_PARSE).
+        // Single reader; unset/invalid = capability decides (unchanged default).
+        // The resolver keys on the EFFECTIVE value (never native-resolver +
+        // text-parse-driver — the 482c11e4 divergence class).
+        if (process.env.REACTIVE_AGENTS_FORCE_TEXT_PARSE === "1") {
+          providerSupportsToolCalling = false;
+        }
+        if (providerSupportsToolCalling && !mergedInput.toolCallResolver) {
           const resolver = createToolCallResolver(caps);
           effectiveInput = { ...mergedInput, toolCallResolver: resolver };
         }
