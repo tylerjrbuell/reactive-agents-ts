@@ -7,9 +7,11 @@
 // removed field with a stale row fails CI.
 //
 // Scope (bounded, plan-named): gateway policy fields (both mirrors),
-// plan-execute strategy fields, verifierTier, RunLedger entry kinds. The
-// docs-phantom `patchStrategy` row (documented, never declared) was deleted
-// from reasoning.mdx in the same commit — docs drift is a census casualty.
+// plan-execute strategy fields, RunLedger entry kinds. The docs-phantom
+// `patchStrategy` row (documented, never declared) was deleted from
+// reasoning.mdx in 6.4, and `verifierTier` was deleted outright in 7.4
+// (ladder with no consumer) — docs drift and dead config are census
+// casualties, not allowlist entries.
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -107,13 +109,6 @@ const FIELD_PROOF: Readonly<Record<string, Proof>> = {
   "planExecute.stepRetries": {
     status: "PROVEN",
     consumer: "packages/reasoning/src/strategies/plan-execute.ts (per-step retry)",
-  },
-  // ─── verifierTier (decision deferred to 7.4 by plan authority) ───
-  verifierTier: {
-    status: "ALLOWLIST",
-    justification:
-      "written by harness-plan, read nowhere; fate belongs to the 7.4 verification-collapse decision (wire Tier-1 into the terminal gate or delete); no ad-hoc consumers before then",
-    link: "https://github.com/tylerjrbuell/reactive-agents-ts/issues/247",
   },
 };
 

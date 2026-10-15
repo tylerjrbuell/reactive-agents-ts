@@ -7,7 +7,21 @@ sidebar:
   order: 5
 ---
 
-The verification layer fact-checks agent outputs before they reach the user. It decomposes responses into claims, measures confidence, and flags unreliable content.
+The verification layer fact-checks agent outputs before they reach the user.
+
+## One gate, two depths
+
+Every run passes through a **single result boundary** that grades the shipped
+answer — there is one verifier verdict per run (`receipt.verifierVerdict`,
+visible in traces as the terminal `verdict-emitted` event), not a stack of
+parallel judges:
+
+- **Always on (no opt-in):** the kernel's structural checks plus the Tier-1
+  heuristic checks (semantic entropy, NLI) run on every final answer in
+  *shadow mode* — recorded in the trace, never enforced. They annotate; they
+  cannot flip a verdict.
+- **Opt-in (`.withVerification()`):** the full 6-layer stack below
+  (embeddings, LLM paraphrase, multi-source) for high-stakes outputs.
 
 ## How It Works
 
@@ -172,7 +186,12 @@ const verificationLayer = createVerificationLayer({
 
 ## Integration with Execution Engine
 
-Verification runs during **Phase 6 (Verify)** of the 12-phase execution lifecycle. When the verification score and risk level are computed, they're stored in the execution context metadata — accessible via lifecycle hooks:
+Verification runs at the **result boundary** — the single gate every run
+passes through after the Think/Act/Observe loop completes. When the
+verification score and risk level are computed, they're stored in the execution context metadata — accessible via lifecycle hooks (note: engine-level `verify`
+phase hooks fire; kernel harness-pipeline `verify` hooks have no emit site —
+no killswitch registers them — so pipeline-level verify hooks silently never
+run):
 
 ```typescript
 import { Effect } from "effect";

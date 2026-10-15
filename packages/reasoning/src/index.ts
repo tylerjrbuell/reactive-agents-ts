@@ -311,7 +311,6 @@ export type {
   PlanOverrides,
   PlanStrategy,
   PlanBudgetClass,
-  VerifierTier,
   MemoryPosture,
   PlanSource,
   RecompileResult,

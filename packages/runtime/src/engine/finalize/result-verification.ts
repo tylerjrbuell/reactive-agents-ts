@@ -30,6 +30,10 @@ import {
   type ReasoningStep,
   type VerificationResult,
 } from "@reactive-agents/reasoning";
+import {
+  checkSemanticEntropy,
+  checkNli,
+} from "@reactive-agents/verification";
 import type { ReactiveAgentsConfig } from "../../types.js";
 
 export interface ResultVerificationArgs {
@@ -126,6 +130,34 @@ export const verifyResultBoundary = (
         : {}),
     });
 
+    // Wave 7.4: verification-package Tier-1 pure-compute checks (semantic
+    // entropy + NLI, heuristic — no LLM, no I/O) run as ADDITIONAL advisory
+    // checks here, at the single result boundary every run passes through.
+    // This makes the package SERVE the one gate rather than a parallel stack
+    // (the two-verifier drift class dies by construction). SHADOW mode per the
+    // lift rule: recorded in the trace event's checks, NEVER enforced — they
+    // cannot flip the verdict, only annotate. Enforcement rides a future
+    // ablation with measured lift, not this commit.
+    const [entropyResult, nliResult] = yield* Effect.all(
+      [
+        checkSemanticEntropy(args.output, args.task),
+        checkNli(args.output, args.task),
+      ],
+      { concurrency: 2 },
+    );
+    const tier1Checks = [
+      {
+        name: "tier1-semantic-entropy",
+        passed: entropyResult.passed,
+        ...(entropyResult.details !== undefined ? { reason: entropyResult.details } : {}),
+      },
+      {
+        name: "tier1-nli",
+        passed: nliResult.passed,
+        ...(nliResult.details !== undefined ? { reason: nliResult.details } : {}),
+      },
+    ];
+
     // Trace: this is the event that was missing from every strategy trace.
     yield* emitVerifierVerdict({
       taskId: args.taskId,
@@ -134,11 +166,14 @@ export const verifyResultBoundary = (
       terminal: true,
       verified: result.verified,
       summary: result.summary,
-      checks: result.checks.map((c) => ({
-        name: c.name,
-        passed: c.passed,
-        ...(c.reason !== undefined ? { reason: c.reason } : {}),
-      })),
+      checks: [
+        ...result.checks.map((c) => ({
+          name: c.name,
+          passed: c.passed,
+          ...(c.reason !== undefined ? { reason: c.reason } : {}),
+        })),
+        ...tier1Checks,
+      ],
     });
 
     const verdict = result.severity ?? (result.verified ? "pass" : "reject");

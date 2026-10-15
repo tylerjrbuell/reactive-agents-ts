@@ -16,6 +16,7 @@
 //     mirrors the deliverable cap, e247e6b8);
 //   - the VerifierVerdictEmitted event → trace → rax:diagnose.
 import { describe, it, expect } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { ReactiveAgents } from "../src/index.js";
 
 describe("result-boundary verification", () => {
@@ -87,6 +88,46 @@ describe("result-boundary verification", () => {
       const r = await agent.run("Summarize the findings.");
       expect(r.receipt?.verifierVerdict).toBeDefined();
       expect(r.receipt?.verifierVerdict).toBe("reject");
+    } finally {
+      await agent.dispose();
+    }
+  }, 20000);
+});
+
+describe("7.4 Tier-1 shadow checks (verification package serves the one gate)", () => {
+  it("tier1 entropy+NLI checks ride the terminal trace event without flipping the verdict", async () => {
+    const agent = await ReactiveAgents.create()
+      .withTestScenario([{ text: "Maybe the capital is possibly Paris, I think, roughly speaking." }])
+      .build();
+    try {
+      const r = await agent.run("What is the capital of France?");
+      // SHADOW: hedgy prose is recorded, never enforced — success untouched.
+      expect(r.success).toBe(true);
+      const tracePath = (r.metadata as { tracePath?: string }).tracePath;
+      expect(tracePath).toBeDefined();
+      const text = await readFile(tracePath as string, "utf8");
+      const names: string[] = [];
+      for (const line of text.trim().split("\n")) {
+        let e: unknown;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          continue; // skip non-JSON lines
+        }
+        if (typeof e !== "object" || e === null) continue;
+        const rec = e as Record<string, unknown>;
+        const checks = Array.isArray(rec.checks)
+          ? rec.checks.flatMap((c) =>
+              typeof c === "object" && c !== null && typeof (c as Record<string, unknown>).name === "string"
+                ? [String((c as Record<string, unknown>).name)]
+                : [],
+            )
+          : [];
+        if (rec.kind === "verdict-emitted" || rec.kind === "verifier-verdict") names.push(...checks);
+        if (rec._tag === "VerifierVerdictEmitted" && rec.terminal !== false) names.push(...checks);
+      }
+      expect(names).toContain("tier1-semantic-entropy");
+      expect(names).toContain("tier1-nli");
     } finally {
       await agent.dispose();
     }
