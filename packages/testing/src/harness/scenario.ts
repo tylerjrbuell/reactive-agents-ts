@@ -16,6 +16,13 @@ export interface ScenarioConfig {
   readonly maxIterations?: number
   /** Test scenario turns for the mock LLM (used when no provider is set). */
   readonly testTurns?: import("@reactive-agents/llm-provider").TestTurn[]
+  /**
+   * Wave 7.2: reasoning strategy for the run (default: reactive). Strategy-
+   * specific gate scenarios (e.g. tree-of-thought accounting guards) need to
+   * drive a non-default strategy; previously every scenario silently ran
+   * reactive regardless of what it claimed to pin.
+   */
+  readonly strategy?: import("@reactive-agents/core").ReasoningStrategy;
 }
 
 export interface ScenarioResult {
@@ -57,6 +64,10 @@ export async function runScenario(config: ScenarioConfig): Promise<ScenarioResul
 
   if (config.withReactiveIntelligence) {
     builder = builder.withReactiveIntelligence()
+  }
+
+  if (config.strategy !== undefined) {
+    builder = builder.withReasoning({ defaultStrategy: config.strategy })
   }
 
   if (config.maxIterations !== undefined) {
