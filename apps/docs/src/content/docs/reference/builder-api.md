@@ -116,6 +116,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withModelRouting` | _overlay — cost-aware routing capability with no config representation (G4)_ | overlay | Cost-aware model routing. |
 | `withName` | `name` | config | Agent name. |
 | `withObservability` | `observability`, `features.observability` | config | Observability umbrella (verbosity/live/cortex/tracing/logging/costs/…). |
+| `withOpenInference` | _overlay — code-only_ | overlay | Configure open inference. |
 | `withOutputSchema` | `outputSchemaOptions` | config | Typed structured output (schema object is code-only; options serialize). |
 | `withOutputValidator` | _overlay — carries a validator function (folds into withVerification)_ | overlay | Custom output validator. |
 | `withPersona` | `persona` | config | Role/tone/instructions persona. |

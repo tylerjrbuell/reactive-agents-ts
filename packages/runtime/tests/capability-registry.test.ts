@@ -53,7 +53,7 @@ describe("CapabilityRegistry — service tag CRUD (M2.1)", () => {
         return yield* reg.defaultOnEntries();
       }).pipe(Effect.provide(CapabilityRegistryLive)),
     );
-    expect(entries.length).toBe(4); // all 4 bootstrap entries are default-on
+    expect(entries.length).toBe(3); // Wave 6.5: memory flipped to default-off (stateless default); 3 remain default-on
     for (const e of entries) {
       expect(e.defaultOn).toBe(true);
     }
@@ -132,7 +132,7 @@ describe("CapabilityRegistry — audit() report (M2.1)", () => {
       }).pipe(Effect.provide(CapabilityRegistryLive)),
     );
     expect(report.totalEntries).toBe(4);
-    expect(report.defaultOnCount).toBe(4);
+    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
   });
 
   it("groups entries by warden", async () => {
@@ -214,7 +214,7 @@ describe("agent.capabilities.audit() — runtime integration (M2.2 in same commi
 
     // 4 bootstrap entries present, all default-on
     expect(report.totalEntries).toBe(4);
-    expect(report.defaultOnCount).toBe(4);
+    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
 
     // strategy-switching violation surfaces
     expect(report.violations.length).toBe(1);
