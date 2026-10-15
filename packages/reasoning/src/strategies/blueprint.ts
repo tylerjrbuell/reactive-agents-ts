@@ -461,6 +461,10 @@ export const executeBlueprint = (
           firstFailedIdx,
           {
             taskDescription: input.taskDescription,
+            // Wave 7 fix round (review): thread the commanded temperature —
+            // plan rewrite is generation, not judgment; dropping it here fell
+            // back to the 0.3 default on execution-failure recovery.
+            ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
             // Enrich the recovery prompt with the FULL tool catalog so the patch
             // isn't tool-blind (else it re-invents tool names/arg shapes — the
             // same root cause the retry exists to fix).
