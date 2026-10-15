@@ -1,0 +1,4 @@
+Q2 sales by product (USD)
+Widget: 900
+Gadget: 1100
+Gizmo: 400

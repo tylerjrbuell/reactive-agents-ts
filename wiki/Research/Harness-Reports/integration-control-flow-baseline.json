@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-09-19T19:35:16.048Z",
+  "capturedAt": "2026-10-15T01:45:45.478Z",
   "bunVersion": "1.3.10",
   "scenarios": {
     "cf-04-goal-achieved-from-end-turn": {
@@ -271,6 +271,22 @@
         "registry.entry.reactive_intelligence.has_evidence": true,
         "registry.entry.verifier.has_evidence": true,
         "registry.entry.strategy_switching.is_the_deliberate_gap": true
+      }
+    },
+    "cf-26-tot-candidate-calls-dont-inflate-iterations": {
+      "status": "success",
+      "iterations": 1,
+      "terminatedBy": "final_answer",
+      "goalAchieved": true,
+      "toolCallsObserved": [],
+      "interventionsDispatched": [],
+      "errorSwallowedSites": [],
+      "redactorsTriggered": [],
+      "customAssertions": {
+        "tot.llm-exchanges": 21,
+        "tot.bfs-ran": true,
+        "tot.max-assessed-iter": 0,
+        "tot.iterations-bounded": true
       }
     }
   }

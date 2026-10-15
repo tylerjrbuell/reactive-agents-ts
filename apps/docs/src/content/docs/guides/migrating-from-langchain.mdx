@@ -273,7 +273,7 @@ The `semantic` layer supports vector similarity search via SQLite + embeddings (
 
 - **Effect-TS composition** — services, hooks, and layers are composed using [Effect-TS](https://effect.website/) for typed errors and dependency injection. LangChain uses Promise chains and class inheritance.
 
-- **5 built-in reasoning strategies** — ReAct, Plan-Execute-Reflect, Reflexion, Tree-of-Thought, and Adaptive are available via `.withReasoning({ strategy: "..." })`. LangChain requires separate agent type constructors for different reasoning patterns.
+- **8 built-in reasoning strategies** — ReAct, Blueprint, Reflexion, Plan-Execute-Reflect, Tree-of-Thought, Adaptive, Direct, and Code-Action are available via `.withReasoning({ strategy: "..." })`. LangChain requires separate agent type constructors for different reasoning patterns.
 
 - **Built-in cost tracking, guardrails, and verification** — add `.withCostTracking()`, `.withGuardrails()`, or `.withVerification()` to the builder. No third-party plugins or manual wiring required.
 

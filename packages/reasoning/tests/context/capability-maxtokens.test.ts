@@ -50,11 +50,19 @@ describe("resolveProfileWithWindow — builder auto-resolution binds the MODEL w
     expect(out.maxTokens).not.toBe(CONTEXT_PROFILES.mid.maxTokens); // not the 32768 placeholder
   });
 
-  it("an ollama model resolves to its recommendedNumCtx (tier detection unchanged)", () => {
+  it("an ollama model resolves to its recommendedNumCtx (tier now registry-first)", () => {
     const out = resolveProfileWithWindow("cogito:14b", "ollama");
     expect(out.maxTokens).toBe(resolveCapability("ollama", "cogito:14b").recommendedNumCtx);
-    // tier is still whatever resolveProfile picks — the window bind doesn't alter it.
-    expect(out.tier).toBe(resolveProfile("cogito:14b", undefined, "ollama").tier);
+    // W2b (plan 2.1): the WINDOW seam also tiers by the Capability registry
+    // BEFORE any name regex — the old parity with the regex-only
+    // resolveProfile is intentionally gone (the registry says local; the
+    // deleted size-regex had been forcing mid).
+    expect(out.tier).toBe(resolveCapability("ollama", "cogito:14b").tier);
+    expect(out.tier).toBe("local");
+    // The regex-only resolveProfile still says mid for this tag — the two
+    // paths are INTENTIONALLY decoupled now (registry is the arbiter).
+    expect(resolveProfile("cogito:14b", undefined, "ollama").tier).toBe("mid");
+    expect(out.provisionalTier).toBeUndefined();
   });
 
   it("preserves the intentional ollama-safe fallback for unknown models (2048)", () => {

@@ -1,0 +1,22 @@
+(a) 12 builtin tools: 11838 chars | chars/4=2960 tok | BPE-adjusted ~3996 tok
+    per-tool top5: code-execute:1652, file-edit:1413, grep:1187, web-search:1149, file-write:1144
+    vs num_ctx=8192 => schema alone = 49% of window
+    description-text share: 9416 chars (80% of payload) — "names-and-types" would cut the payload to ~2422 chars
+
+(b) profile-resolver classification (provider=ollama):
+    qwen3:4b             tier=mid
+    qwen3:1.7b           tier=mid
+    llama3.2:3b          tier=local
+    llama3.1:8b          tier=mid
+    granite4:latest      tier=mid
+    cogito:8b            tier=mid
+    gemma4:e4b           tier=mid
+    qwen2.5-coder:14b    tier=mid
+    phi4-mini-reasoning  tier=mid
+
+(c) tool-result budget inversion (D-2026-07-30-H):
+    local.toolResultMaxChars = 4000
+    mid.toolResultMaxChars   = 1200
+    => a 4B model classified 'mid' keeps 1200 chars; a real 'local' keeps 4000 — classification decides the opposite of the intent
+    local.toolSchemaDetail=names-and-types mid.toolSchemaDetail=full
+    local.maxTokens=32768 mid.maxTokens=32768

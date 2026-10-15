@@ -187,6 +187,39 @@ console.log(result.success);      // true
 console.log(result.metadata);     // { duration, cost, tokensUsed, stepsCount }
 ```
 
+## Reading the result
+
+`run()` resolves to a result for nearly every failure mode — it throws only
+when the run is interrupted (`agent.terminate()` / a kill-switch), plus one
+legacy asymmetry noted at the end. Read the fields in this order:
+
+1. **`result.status`** — `"awaiting-approval"` / `"awaiting-interaction"` means
+   the run **paused**, not finished. Handle the gate (`approveRun()` /
+   `denyRun()` / `respondToInteraction()`, or pass `onApproval` to `run()`);
+   `"failed"` means the run ended without an accepted outcome.
+2. **`result.success`** — whether the run terminated with an accepted outcome.
+   `false` is not an exception: read `result.error` and `result.terminatedBy`
+   off the result.
+3. **`result.terminatedBy`** — how the loop ended: `final_answer_tool`,
+   `final_answer`, `max_iterations`, `end_turn`, `llm_error`, or `abstained`.
+   When `abstained`, `result.abstention` carries the reason and what was missing.
+4. **`result.goalAchieved`** — the semantic readout: `true` delivered a final
+   answer, `false` exhausted/errored/declined, `null` ambiguous (the model
+   stopped its turn without signaling — treat as "maybe").
+5. **`result.receipt?.verdict`** — an evidence grade for *how* the answer was
+   produced (`"tool-grounded"` … `"failed"`), not a truth certificate for the
+   answer itself.
+
+The one asymmetry: a **bare builder** — an agent created without enabling
+reasoning (no `.withReasoning()`, no declarative `reasoning` config) — **throws**
+instead of returning a result when a run hits `llm_error` or `max_iterations`.
+The same faults on a reasoning-enabled builder return
+`{ success: false, status: "failed" }`. Unifying the two contracts is deferred
+to a future breaking release; until then, wrap `run()` in `try/catch` whenever
+the builder might be bare. The full ordered procedure, with code anchors for
+every field, is in the
+[Builder API reference](/reference/builder-api/#how-to-tell-what-happened-the-decision-procedure).
+
 ## Using the Effect API
 
 For advanced use cases, use the Effect-based API (builder-only):

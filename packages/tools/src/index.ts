@@ -250,13 +250,14 @@ export {
   finalizeSubAgentResult,
   subAgentResultForDisplay,
   subAgentChildLedgerEntries,
+  subAgentChildEnvelopes,
   resolveMaxRecursionDepth,
   SUB_AGENT_DIRECTIVE,
   MAX_RECURSION_DEPTH,
   MAX_PARENT_CONTEXT_CHARS,
   ALWAYS_INCLUDE_TOOLS,
 } from "./adapters/agent-tool-adapter.js";
-export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
+export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, SubAgentRawResult, SubAgentChildEnvelope, ParentContext, ParentContextItem } from "./adapters/agent-tool-adapter.js";
 
 export { fetchJsonTool, HttpToolError } from "./adapters/http-tool-adapter.js";
 export type { HttpToolOptions } from "./adapters/http-tool-adapter.js";
@@ -266,7 +267,7 @@ export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
 export { selectToolCallingDriver } from "./drivers/select-driver.js"
 export { extractRationale, parseRationaleBlocks, stripRationaleBlocks } from "./drivers/rationale-parser.js"
-export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallObservation } from "./drivers/tool-calling-driver.js"
+export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallDialectClaim, ToolCallObservation } from "./drivers/tool-calling-driver.js"
 
 // ─── Healing Pipeline ───
 export { runHealingPipeline } from "./healing/healing-pipeline.js"

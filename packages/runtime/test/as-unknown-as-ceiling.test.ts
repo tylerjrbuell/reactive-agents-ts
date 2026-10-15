@@ -289,7 +289,34 @@ function countAsUnknownAs(file: string): Hit[] {
 // hiding — 233 was the count immediately before them. Like the `src`
 // ceiling, this may only shrink going forward; a package growing its cast
 // count without a bump fails loudly instead of silently.
-const TESTS_CEILING = 237;
+// - 2026-10-13 (Wave 2 local-tier-reliability follow-ups): 240 → 242. The
+//   capability-store version-gate test needs two `plantRow(... as unknown as
+//   Record<string, unknown>)` fixture widenings to feed legacy-shaped rows to
+//   the gate; typed test-double helpers do not cover the raw-store seam. Test-
+//   fixture widening only; no production-site casts added.
+// - 2026-10-13 (Wave 2a, local-tier-reliability program): 237 → 240. The
+//   recorded pin had ALREADY drifted to 239 on this branch before the Wave 2a
+//   dispatch (verified at 64a94a309~1 — carried debt from prior wave commits
+//   landing sites without a bump, the same failure mode documented on
+//   2026-07-08; re-syncing rather than leaving the guard silently red).
+//   Wave 2a adds exactly ONE site: a global-`fetch` test-double stub in
+//   packages/llm-provider/tests/capability-ladder.test.ts (`… as unknown as
+//   typeof globalThis.fetch`) — canonical test-double widening, same category
+//   as the 2026-06-06 capability-prime bump precedent above; bun's
+//   `typeof fetch` carries static members a plain stub can't structurally
+//   satisfy (documented 2026-08-20).
+// - 2026-10-14 (Wave 5, local-tier-reliability program): 242 → 243. The
+//   child-envelope derivation test needs one fixture-widening helper: the
+//   child engine result carries FOLD-forwarded honesty markers as unknown
+//   keys that core's `ResultMetadata` schema does not declare, so literals
+//   narrow through a single `as unknown as TaskResult` site. Test-fixture
+//   widening only; no production-site casts added.
+// - 2026-10-15 (local-tier-reliability program Waves 1-7): 243 → 251.
+//   Nine fixture-widening sites across the branch (test-provider capability
+//   overrides, calibration legacy-row shapes, engine-result honesty markers,
+//   trace-event narrowing); each the canonical test-double boundary the
+//   ceiling doc sanctions, none in production code. Counted, not hidden.
+const TESTS_CEILING = 251;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

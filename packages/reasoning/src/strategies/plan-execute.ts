@@ -208,7 +208,12 @@ export const executePlanExecute = (
     const maxRefinements = planConfig.maxRefinements;
     const reflectionDepth = planConfig.reflectionDepth;
     const stepRetries = planConfig.stepRetries ?? 1;
-    const stepKernelMaxIterations = planConfig.stepKernelMaxIterations ?? 3;
+    // W5.5 strategy-tier honesty: the per-step sub-kernel budget derives from
+    // the run's own iteration budget spread over the plan (floor 5), computed
+    // at the use site once `plan` exists — see the `derivedStepBudget` below.
+    // An explicit `stepKernelMaxIterations` still wins (deliberate tuning
+    // beats derivation).
+    const stepKernelMaxIterations = planConfig.stepKernelMaxIterations;
     const planMode = planConfig.planMode ?? "linear";
 
     const steps: ReasoningStep[] = [];
@@ -341,7 +346,8 @@ export const executePlanExecute = (
         ? `${input.systemPrompt}\n${PLANNER_PERSONA}`
         : PLANNER_PERSONA,
       maxRetries: 2,
-      temperature: 0.5,
+      // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+      temperature: input.temperature ?? 0.5,
       maxTokens: 4096,
       ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     }).pipe(
@@ -393,7 +399,8 @@ export const executePlanExecute = (
           ? `${input.systemPrompt}\n${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`
           : "You are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.",
         maxRetries: 1,
-        temperature: 0.3,
+        // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+        temperature: input.temperature ?? 0.3,
         maxTokens: 4096,
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }).pipe(
@@ -561,7 +568,8 @@ export const executePlanExecute = (
             input.systemPrompt ??
               "You are a precise task executor. Produce the complete, well-structured final answer directly. Never ask questions or offer to do something — just output the finished result.",
           ),
-          temperature: 0.5,
+          // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+          temperature: input.temperature ?? 0.5,
           ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
         })
         .pipe(
@@ -800,6 +808,18 @@ export const executePlanExecute = (
             let stepSucceeded = false;
             let stepResult = "";
             let lastError: string | undefined;
+            // W5.5: derive the per-step slice here, where `plan` exists: the
+            // run's configured iteration budget spread over the plan (floor
+            // 5). Sourced from `strategies.reactive.maxIterations` — the
+            // canonical store for the run budget even on non-reactive runs
+            // (review note: mislabeled as "run's own" before; the value is
+            // the configured default, and an explicit stepKernelMaxIterations
+            // still wins over it).
+            const derivedStepBudget =
+              stepKernelMaxIterations ??
+              (plan.steps.length > 0
+                ? Math.max(5, Math.ceil(input.config.strategies.reactive.maxIterations / plan.steps.length))
+                : 5);
 
             for (let attempt = 0; attempt <= stepRetries; attempt++) {
               if (attempt > 0) {
@@ -823,7 +843,7 @@ export const executePlanExecute = (
                   waveInput,
                   toolSummaries,
                   services,
-                  stepKernelMaxIterations,
+                  derivedStepBudget,
                   attempt > 0 ? lastError : undefined,
                   emitLog,
                 ),
@@ -1379,7 +1399,8 @@ export const executePlanExecute = (
                 ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
                 : SYNTHESIZER_PERSONA,
             ),
-            temperature: 0.3,
+            // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+            temperature: input.temperature ?? 0.3,
             ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
           })
           .pipe(

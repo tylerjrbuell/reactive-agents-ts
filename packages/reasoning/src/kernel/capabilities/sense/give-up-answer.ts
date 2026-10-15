@@ -60,6 +60,14 @@ const HARNESS_FORCED_TERMINALS: ReadonlySet<string> = new Set([
   "loop_detected_with_veto",
   "controller_signal_veto",
   "budget_exceeded",
+  // W4-live honesty regression (post-W4 close capture, MANIFEST §2): the RI
+  // dispatcher early-stop is a HARNESS-forced end (flat trajectory / approaching
+  // maxIterations), exactly like the entries above. It was OMITTED, so the
+  // give-up gate stayed silent on it and a zero-evidence run whose prose CLAIMED
+  // completion ("has been successfully completed") shipped as `success:true`.
+  // The gate's other arm (`isGiveUpAnswer`) cannot catch a success-claim, so the
+  // terminal-class arm is the only net for this fabrication shape.
+  "dispatcher-early-stop",
 ]);
 
 /** True when the raw kernel terminal names a HARNESS-forced end. */
@@ -85,6 +93,29 @@ export function isGiveUpAnswer(text: string): boolean {
   if (trimmed.length === 0) return false;
   if (!looksSubstantive(trimmed)) return true;
   return CAPABILITY_GIVEUP_PATTERNS.some((p) => p.test(trimmed));
+}
+
+/**
+ * W5.1 (b) — the INVERSE of the give-up detector: does `text` CLAIM the task was
+ * completed / the action performed? On a HARNESS-FORCED, UNGROUNDED terminal
+ * such a claim is a fabrication (the run ground nothing), so the terminal mint
+ * replaces it with the honest abstention sentinel rather than shipping the lie.
+ * Deliberately NARROW (completion/delivery assertions only) so a neutral
+ * substantive answer is never scrubbed.
+ */
+const SUCCESS_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
+  /\bhas been successfully completed\b/i,
+  /\b(?:successfully|has been|was|is now)\s+(?:sent|delivered|completed|executed|performed|carried out|done)\b/i,
+  /\b(?:message|task|request|action)\s+(?:has been|was|is)\s+(?:sent|delivered|completed|done|executed)\b/i,
+  /\bno further action (?:is\s+)?required\b/i,
+  /\btool result confirmation\b/i,
+];
+
+/** Does `text` assert the task/action was completed (a success claim)? */
+export function looksLikeSuccessClaim(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  return SUCCESS_CLAIM_PATTERNS.some((p) => p.test(trimmed));
 }
 
 /**

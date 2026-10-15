@@ -1,0 +1,561 @@
+#!/usr/bin/env bun
+/**
+ * Lift Protocol rung-0 baseline runner (Task 0, 2026-10-12 program).
+ *
+ * Captures the canonical defect scenarios (S1-S4) at temp 0 against the
+ * harness AS SHIPPED at Wave 0 close. ZERO framework behavior changes: this
+ * file only composes the public builder (`@reactive-agents/runtime`) and the
+ * public file-root seam (`@reactive-agents/tools`), then parses the trace
+ * JSONL the recorder writes into `fixtures/` via
+ * `.withObservability({ tracing: { dir } })`.
+ *
+ * Interface (per plan): runScenario({id, model, task, config, n, temperature,
+ * traceDir}) → per-run metric rows extracted from trace events by kind:
+ *   assessment.evidenceDelta, llm-exchange (purpose/content/toolCalls/tokens),
+ *   guard-fired, tool-call-start, run-completed.
+ *
+ * Metrics append to `fixtures/baseline-metrics.jsonl` (one JSON object per
+ * run, crash-safe incremental) — the scoreboard/MANIFEST rows are derived
+ * from that file + the per-run trace JSONL (committed alongside).
+ *
+ * Usage:
+ *   bun run scripts/lift/bench.ts list
+ *   bun run scripts/lift/bench.ts <arm-id> [<arm-id> ...]
+ */
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { basename, join, resolve } from "node:path"
+import { ReactiveAgents } from "@reactive-agents/runtime"
+import { withFileRoot } from "@reactive-agents/tools"
+
+// ─── Extractor (pure over JSONL text; unit-tested against a committed fixture) ───
+
+export interface AssessmentRow {
+  readonly iter: number
+  readonly evidenceDelta: number
+  readonly band: string
+  readonly requirementsOutstanding: number
+  readonly deliverablesMissing: number
+}
+
+export interface RunMetrics {
+  readonly arm: string
+  readonly runIndex: number
+  readonly runId: string
+  readonly traceFile: string
+  readonly capturedAt: string
+  readonly wallClockMs: number
+  readonly hung: boolean
+  readonly success: boolean | null
+  readonly runStatus: string | null
+  readonly terminatedBy: string | null
+  readonly totalTokens: number | null
+  readonly totalCostUsd: number | null
+  readonly durationMs: number | null
+  readonly llmCalls: number
+  readonly thinkCalls: number
+  readonly classifyCalls: number
+  readonly tokensInSum: number
+  readonly tokensOutSum: number
+  readonly assessments: readonly AssessmentRow[]
+  readonly evidenceDeltaAllZero: boolean
+  readonly emptyContentThinkExchanges: number
+  readonly emptyContentRate: number | null
+  readonly firstActingIter: number | null
+  readonly toolCallCounts: Readonly<Record<string, number>>
+  readonly loopDetectorEvents: number
+  readonly guardFired: ReadonlyArray<{ readonly guard: string; readonly outcome: string; readonly iter: number }>
+  readonly decisionEvaluated: Readonly<Record<string, number>>
+  readonly falseSuccess: boolean
+  readonly finalRequirementsOutstanding: number | null
+  readonly finalDeliverablesMissing: number | null
+  readonly maxToolSchemaNamesPerCall: number
+  readonly schemaNamesPerCall: readonly number[]
+  /** W1.5 additions (post-W1 forensics; absent on baseline rows by construction). */
+  readonly thinkingCharsSum: number
+  readonly thinkingExchangeCount: number
+  readonly maxThinkContentChars: number
+  readonly traceBytes: number
+  /** W3c additions: text-parse Stage-B parse-diff observability. */
+  readonly parseMode: string | null
+  readonly shadowSignals: number
+  readonly markupTurns: number
+  readonly parsedCallsTotal: number
+  readonly parsedCallNames: Readonly<Record<string, number>>
+  readonly wouldHaveExecutedCalls: number
+  readonly parseFailureSignals: number
+  readonly callableSurface: readonly string[]
+}
+
+type Json = Record<string, unknown>
+
+const asNum = (v: unknown, dflt = 0): number => (typeof v === "number" ? v : dflt)
+const asStr = (v: unknown, dflt = ""): string => (typeof v === "string" ? v : dflt)
+const asArr = (v: unknown): readonly unknown[] => (Array.isArray(v) ? v : [])
+
+/** Parse a trace JSONL (tolerating partial flushes / bad lines) into metrics. */
+export function extractRunMetrics(jsonl: string, arm: string, runIndex: number): RunMetrics {
+  const events: Json[] = []
+  for (const line of jsonl.split("\n")) {
+    const t = line.trim()
+    if (!t) continue
+    try {
+      const obj: unknown = JSON.parse(t)
+      if (obj && typeof obj === "object") events.push(obj as Json)
+    } catch {
+      /* partial line (flush mid-write) — skip, keep the rest */
+    }
+  }
+  const byKind = (kind: string): Json[] => events.filter((e) => e.kind === kind)
+  const runId = asStr(events[0]?.runId)
+
+  const assessments: AssessmentRow[] = byKind("assessment").map((e) => ({
+    iter: asNum(e.iter, -1),
+    evidenceDelta: asNum(e.evidenceDelta),
+    band: asStr(e.band),
+    requirementsOutstanding: asNum(e.requirementsOutstanding),
+    deliverablesMissing: asNum(e.deliverablesMissing),
+  }))
+  const evidenceDeltaAllZero = assessments.length > 0 && assessments.every((a) => a.evidenceDelta === 0)
+
+  const exchanges = byKind("llm-exchange")
+  let thinkCalls = 0
+  let classifyCalls = 0
+  let tokensInSum = 0
+  let tokensOutSum = 0
+  let emptyContentThinkExchanges = 0
+  let thinkingCharsSum = 0
+  let thinkingExchangeCount = 0
+  let maxThinkContentChars = 0
+  const schemaNamesPerCall: number[] = []
+  for (const e of exchanges) {
+    const purpose = asStr(e.purpose, "unknown")
+    if (purpose === "think") thinkCalls++
+    if (purpose === "classify") classifyCalls++
+    const resp = (e.response ?? {}) as Json
+    tokensInSum += asNum(resp.tokensIn)
+    tokensOutSum += asNum(resp.tokensOut)
+    const content = asStr(resp.content)
+    const toolCalls = asArr(resp.toolCalls)
+    if (purpose === "think" && content.trim() === "" && toolCalls.length === 0) emptyContentThinkExchanges++
+    if (purpose === "think" && content.length > maxThinkContentChars) maxThinkContentChars = content.length
+    // W1.4 forensics (additive optional fields; absent = 0 on pre-W1 traces)
+    const tc = resp.thinkingChars
+    if (typeof tc === "number" && tc > 0) {
+      thinkingCharsSum += tc
+      thinkingExchangeCount++
+    } else if (typeof resp.thinkingPreview === "string" && resp.thinkingPreview.length > 0) {
+      thinkingExchangeCount++
+    }
+    const names = asArr(e.toolSchemaNames)
+    schemaNamesPerCall.push(names.length)
+  }
+
+  const toolCallCounts: Record<string, number> = {}
+  let firstActingIter: number | null = null
+  for (const e of byKind("tool-call-start")) {
+    const name = asStr(e.toolName, "?")
+    toolCallCounts[name] = (toolCallCounts[name] ?? 0) + 1
+    const iter = asNum(e.iter, -1)
+    if (firstActingIter === null || iter < firstActingIter) firstActingIter = iter
+  }
+
+  const guards = byKind("guard-fired").map((e) => ({
+    guard: asStr(e.guard),
+    outcome: asStr(e.outcome),
+    iter: asNum(e.iter, -1),
+  }))
+  const loopDetectorEvents = guards.filter((g) => g.guard.toLowerCase().includes("loop")).length
+
+  // W3c Stage-B parse-diff: harness-signal-injected events from the text-parse
+  // transition (origin text-parse-shadow / text-parse-parse-failure) + the
+  // compiled callable surface (tool-surface-resolved) for would-have-executed
+  // matching (parsed name ∈ callable ⇒ the shadow parse would have hit a
+  // REGISTERED tool schema in act mode).
+  const signals = byKind("harness-signal-injected")
+  let shadowSignals = 0
+  let markupTurns = 0
+  let parsedCallsTotal = 0
+  let wouldHaveExecutedCalls = 0
+  let parseFailureSignals = 0
+  const parsedCallNames: Record<string, number> = {}
+  const callableSet = new Set<string>()
+  for (const e of byKind("tool-surface-resolved")) for (const t of asArr(e.callable)) if (typeof t === "string") callableSet.add(t)
+  for (const s of signals) {
+    const origin = asStr(s.origin)
+    if (origin === "text-parse-shadow") {
+      shadowSignals++
+      const md = (s.metadata ?? {}) as Json
+      if (md.markerPresent === true) markupTurns++
+      for (const c of asArr(md.parsedCalls)) {
+        const call = (c ?? {}) as Json
+        const name = asStr(call.name, "?")
+        parsedCallsTotal++
+        parsedCallNames[name] = (parsedCallNames[name] ?? 0) + 1
+        if (callableSet.has(name)) wouldHaveExecutedCalls++
+      }
+    } else if (origin === "text-parse-parse-failure") {
+      parseFailureSignals++
+    }
+  }
+
+  const decisionEvaluated: Record<string, number> = {}
+  for (const e of byKind("decision-evaluated")) {
+    const dt = asStr(e.decisionType, "?")
+    decisionEvaluated[dt] = (decisionEvaluated[dt] ?? 0) + 1
+  }
+
+  const completed = byKind("run-completed")[0] as Json | undefined
+  const runStatus = completed ? asStr(completed.status) : null
+  const terminatedBy = completed?.terminatedBy !== undefined ? asStr(completed.terminatedBy, "undefined") : null
+  const lastAssessment = assessments.length > 0 ? assessments[assessments.length - 1] : null
+  const outstanding = lastAssessment ? lastAssessment.requirementsOutstanding : null
+  const missing = lastAssessment ? lastAssessment.deliverablesMissing : null
+  const success = runStatus !== null ? runStatus === "success" : null
+  const falseSuccess =
+    success === true &&
+    ((outstanding !== null && outstanding > 0) ||
+      (missing !== null && missing > 0) ||
+      (terminatedBy !== null && terminatedBy !== "final_answer" && terminatedBy !== "final_answer_tool"))
+
+  return {
+    arm,
+    runIndex,
+    runId,
+    traceFile: "",
+    capturedAt: new Date().toISOString(),
+    wallClockMs: 0,
+    hung: false,
+    success,
+    runStatus,
+    terminatedBy,
+    totalTokens: completed ? asNum(completed.totalTokens, -1) : null,
+    totalCostUsd: completed ? asNum(completed.totalCostUsd, -1) : null,
+    durationMs: completed ? asNum(completed.durationMs, -1) : null,
+    llmCalls: exchanges.length,
+    thinkCalls,
+    classifyCalls,
+    tokensInSum,
+    tokensOutSum,
+    assessments,
+    evidenceDeltaAllZero,
+    emptyContentThinkExchanges,
+    emptyContentRate: thinkCalls > 0 ? emptyContentThinkExchanges / thinkCalls : null,
+    firstActingIter,
+    toolCallCounts,
+    loopDetectorEvents,
+    guardFired: guards,
+    decisionEvaluated,
+    falseSuccess,
+    finalRequirementsOutstanding: outstanding,
+    finalDeliverablesMissing: missing,
+    maxToolSchemaNamesPerCall: schemaNamesPerCall.reduce((m, x) => Math.max(m, x), 0),
+    schemaNamesPerCall,
+    thinkingCharsSum,
+    thinkingExchangeCount,
+    maxThinkContentChars,
+    traceBytes: new TextEncoder().encode(jsonl).length,
+    parseMode: null,
+    shadowSignals,
+    markupTurns,
+    parsedCallsTotal,
+    parsedCallNames,
+    wouldHaveExecutedCalls,
+    parseFailureSignals,
+    callableSurface: [...callableSet],
+  }
+}
+
+// ─── Scenario definitions (temp 0) ───
+
+export const FIXTURES_DIR = join(
+  import.meta.dir,
+  "../../wiki/Research/Harness-Reports/2026-10-12-live-probe-audit-results/fixtures",
+)
+const METRICS_LOG = join(FIXTURES_DIR, "baseline-metrics.jsonl")
+
+const S1_TASK =
+  'Send a slack message to the #general channel saying "Hello, team! This is a test message from our Reactive Agent."'
+
+// Arithmetic word problem sized so thinking ≫ visible content (single-number answer).
+const S2_TASK =
+  "Solve this carefully, step by step, then reply with ONLY the final number. A warehouse has 143 crates, each holding 12 kg of grain. On Monday they ship out 9 full crates but 3 crates are damaged and the grain from those is discarded. On Tuesday they receive 4 new crates of grain plus 1 half-empty crate holding 6 kg. On Wednesday a customer buys half of ALL remaining grain at $4 per kg, paying $200 up front and the rest on delivery. On Thursday they pay the rest. How many dollars did the customer pay on Thursday?"
+
+// Multi-step file task (S3 + S4 share it): read 2 inputs → transform → 3-section report.
+const S3_TASK =
+  "In the current directory there are two files, sales-q1.txt and sales-q2.txt, each listing per-product revenue for one quarter. Read both files. Then write a file named report.md containing exactly three markdown sections, with these headings: ## Summary, ## Totals, ## Recommendation. Under Totals, list each product's combined revenue across both quarters and the grand total. Under Recommendation, write one sentence about which product is declining."
+
+interface ArmSpec {
+  readonly id: string
+  readonly scenario: "S1" | "S2" | "S3" | "S4"
+  readonly provider: "ollama" | "anthropic" | "gemini"
+  readonly model: string
+  readonly task: string
+  readonly n: number
+  readonly fileTools: boolean
+  readonly numCtx?: number
+  /** Mirror the benchmarks ra-full variant (tools+reasoning+RI+memory) — rung-2 arms. */
+  readonly fullHarness?: boolean
+  /** W3c: REACTIVE_AGENTS_TEXT_PARSE transition mode for the run (text-parse arms only). */
+  readonly parseMode?: "shadow" | "act"
+  /** W4: enable the tools layer with NO builtins in the base schema (user scratch.ts shape). */
+  readonly toolsLayer?: boolean
+  /** Wave 3 rung-2: force the text-parse driver (FC disabled) for the run. */
+  readonly forceTextParse?: boolean
+}
+
+export const ARMS: readonly ArmSpec[] = [
+  { id: "s1-qwen34b", scenario: "S1", provider: "ollama", model: "qwen3:4b", task: S1_TASK, n: 5, fileTools: false },
+  { id: "s2-qwen34b", scenario: "S2", provider: "ollama", model: "qwen3:4b", task: S2_TASK, n: 5, fileTools: false },
+  { id: "s3-qwen34b", scenario: "S3", provider: "ollama", model: "qwen3:4b", task: S3_TASK, n: 5, fileTools: true, numCtx: 8192 },
+  { id: "s3-llama32", scenario: "S3", provider: "ollama", model: "llama3.2:latest", task: S3_TASK, n: 5, fileTools: true, numCtx: 8192 },
+  { id: "s1-qwen35", scenario: "S1", provider: "ollama", model: "qwen3.5:latest", task: S1_TASK, n: 5, fileTools: false },
+  { id: "s4-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 3, fileTools: true },
+  { id: "haiku-s1", scenario: "S1", provider: "anthropic", model: "claude-haiku-4-5-20251001", task: S1_TASK, n: 3, fileTools: false, fullHarness: true },
+  { id: "haiku-s3", scenario: "S3", provider: "anthropic", model: "claude-haiku-4-5-20251001", task: S3_TASK, n: 3, fileTools: true, fullHarness: true },
+  // W3c Stage-B promotion-data arms (REACTIVE_AGENTS_TEXT_PARSE; text-parse-driver models only)
+  { id: "w3-shadow-coder14b", scenario: "S4", provider: "ollama", model: "qwen2.5-coder:14b", task: S3_TASK, n: 5, fileTools: true, parseMode: "shadow" },
+  { id: "w3-shadow-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 3, fileTools: true, parseMode: "shadow" },
+  { id: "w3-act-coder14b", scenario: "S4", provider: "ollama", model: "qwen2.5-coder:14b", task: S3_TASK, n: 5, fileTools: true, parseMode: "act" },
+  { id: "w3-act-phi4mini", scenario: "S4", provider: "ollama", model: "phi4-mini-reasoning:latest", task: S3_TASK, n: 2, fileTools: true, parseMode: "act" },
+  // W4 close-out: the user-reported impossible-task shape (same task + builtins:false as the
+  // controller's scratch.ts live verification; stand-down should end it in <=2-3 iterations).
+  { id: "w4-terminate", scenario: "S1", provider: "ollama", model: "qwen3:4b", task: S1_TASK, n: 3, fileTools: false, toolsLayer: true },
+  // Wave 3 rung-2 (replaces credit-blocked haiku): frontier model with FC
+  // disabled exercises the taught text-parse grammar on a strong model.
+  // gemini-2.5-flash via GOOGLE_API_KEY; S4 file task mirrors the rung-3 arms.
+  { id: "w3-shadow-gemini", scenario: "S4", provider: "gemini", model: "gemini-2.5-flash", task: S3_TASK, n: 3, fileTools: true, parseMode: "shadow", forceTextParse: true },
+  { id: "w3-act-gemini", scenario: "S4", provider: "gemini", model: "gemini-2.5-flash", task: S3_TASK, n: 3, fileTools: true, parseMode: "act", forceTextParse: true },
+]
+
+const HANG_MS = 8 * 60_000
+
+// ─── Wave 7.3: standing panel — auto-detect pulled Ollama models ─────────────
+// `bun run scripts/lift/bench.ts --panel`: enumerate /api/tags (keyless-safe
+// skip when Ollama is unreachable — prints the skip and exits 0, never fails)
+// and run the fast-tool-caller panel (S1+S2, n=2) on each reachable model.
+// Models over 16B parameters are skipped with a note (panel stays fast;
+// full-size models run via named arms). Embed-only models skipped.
+async function listPulledModels(): Promise<{ name: string; sizeB: number }[]> {
+  const endpoint =
+    process.env.OLLAMA_ENDPOINT ?? process.env.OLLAMA_HOST ?? "http://localhost:11434";
+  try {
+    const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) {
+      console.error(`[bench] panel: tags API ${res.status} at ${endpoint} — skipping panel`);
+      return [];
+    }
+    const body = (await res.json()) as { models?: { name?: string; size?: number }[] };
+    const out: { name: string; sizeB: number }[] = [];
+    for (const m of body.models ?? []) {
+      if (typeof m.name !== "string") continue;
+      if (/embed/i.test(m.name)) continue;
+      let sizeB = typeof m.size === "number" ? m.size : 0;
+      if (sizeB === 0) {
+        try {
+          const show = await fetch(`${endpoint}/api/show`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: m.name }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (show.ok) {
+            const detail = (await show.json()) as { size?: number };
+            if (typeof detail.size === "number") sizeB = detail.size;
+          }
+        } catch {
+          /* unknown size → include (fast default) */
+        }
+      }
+      out.push({ name: m.name, sizeB });
+    }
+    return out;
+  } catch {
+    console.error(`[bench] panel: Ollama unreachable at ${endpoint} — skipping panel`);
+    return [];
+  }
+}
+
+async function runPanel(outDir: string): Promise<void> {
+  const models = await listPulledModels();
+  if (models.length === 0) return;
+  mkdirSync(outDir, { recursive: true });
+  for (const m of models) {
+    if (m.sizeB > 16_000_000_000) {
+      console.error(`[bench] panel: skipping ${m.name} (${(m.sizeB / 1e9).toFixed(1)}B > 16B cap)`);
+      continue;
+    }
+    for (const [scenario, task, fileTools] of [
+      ["S1", S1_TASK, false],
+      ["S2", S2_TASK, false],
+    ] as const) {
+      const arm: ArmSpec = {
+        id: `panel-${m.name.replace(/[^a-z0-9]+/gi, "-")}-${scenario.toLowerCase()}`,
+        scenario,
+        provider: "ollama",
+        model: m.name,
+        task,
+        n: 2,
+        fileTools,
+      };
+      for (let k = 1; k <= 2; k++) {
+        console.error(`[bench] ${arm.id} run ${k}/2 start`);
+        await runScenario({ arm, runIndex: k, temperature: 0, traceDir: outDir });
+      }
+    }
+  }
+}
+
+// ─── runScenario ──────────────────────────────────────────────────────────────
+
+function freshTraceFile(traceDir: string, afterMs: number): string | null {
+  // Recorder writes <runId>.jsonl; on a hang we take the newest file created
+  // after the run started (partial flush is still baseline data).
+  let best: string | null = null
+  let bestM = afterMs
+  for (const f of readdirSync(traceDir)) {
+    if (!f.endsWith(".jsonl")) continue
+    const p = join(traceDir, f)
+    const m = statSync(p).mtimeMs
+    if (m > bestM) { bestM = m; best = p }
+  }
+  return best
+}
+
+function prepareWorkspace(traceDir: string, arm: ArmSpec, runIndex: number): string {
+  const ws = join(traceDir, "workspaces", `${arm.id}-run${runIndex}`)
+  mkdirSync(ws, { recursive: true })
+  writeFileSync(join(ws, "sales-q1.txt"), "Q1 sales by product (USD)\nWidget: 1200\nGadget: 800\nGizmo: 500\n")
+  writeFileSync(join(ws, "sales-q2.txt"), "Q2 sales by product (USD)\nWidget: 900\nGadget: 1100\nGizmo: 400\n")
+  return ws
+}
+
+export interface ScenarioRunOptions {
+  readonly arm: ArmSpec
+  readonly runIndex: number
+  readonly temperature: number
+  readonly traceDir: string
+  readonly metricsLog?: string
+}
+
+/** One scenario run: build → run (with hang guard) → extract → append metric line. */
+export async function runScenario(opts: ScenarioRunOptions): Promise<RunMetrics> {
+  const { arm, runIndex, temperature, traceDir } = opts
+  mkdirSync(traceDir, { recursive: true })
+
+  let builder = ReactiveAgents.create()
+    .withName(`lift-${arm.id}-r${runIndex}`)
+    .withProvider(arm.provider)
+    .withModel(
+      arm.numCtx !== undefined
+        ? { model: arm.model, temperature, numCtx: arm.numCtx }
+        : { model: arm.model, temperature },
+    )
+    .withObservability({ tracing: { dir: traceDir } })
+
+  if (arm.fullHarness) {
+    // Mirrors packages/benchmarks/src/runner.ts ra-full mapping
+    // ({tools,reasoning,reactiveIntelligence,memory} → these withers).
+    builder = arm.fileTools
+      ? builder.withTools({ builtins: ["file-read", "file-write"] })
+      : builder.withTools()
+    builder = builder
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withReactiveIntelligence()
+      .withMemory()
+  } else {
+    if (arm.fileTools) builder = builder.withTools({ builtins: ["file-read", "file-write"] })
+    else if (arm.toolsLayer) builder = builder.withTools({ builtins: false })
+    builder = builder
+      .withoutMemory()
+      .withReasoning({ strategies: { reactive: { maxIterations: 10 } } })
+  }
+
+  const agent = await builder.build()
+  const startTs = Date.now()
+  let hung = false
+  let result: Awaited<ReturnType<typeof agent.run>> | null = null
+  // W3c: the transition mode is env-read per think-turn (text-parse-mode.ts is the
+  // single reader); arms that set parseMode pin it for the duration of the run.
+  const parseEnvKey = "REACTIVE_AGENTS_TEXT_PARSE"
+  const prevParseEnv = process.env[parseEnvKey]
+  if (arm.parseMode !== undefined) process.env[parseEnvKey] = arm.parseMode
+  const forceKey = "REACTIVE_AGENTS_FORCE_TEXT_PARSE"
+  const prevForceEnv = process.env[forceKey]
+  if (arm.forceTextParse === true) process.env[forceKey] = "1"
+  try {
+    const exec = arm.fileTools
+      ? withFileRoot(prepareWorkspace(traceDir, arm, runIndex), () => agent.run(arm.task))
+      : agent.run(arm.task)
+    let guardTimer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const guard = new Promise<"hung">((res) => { guardTimer = setTimeout(() => res("hung"), HANG_MS) })
+      const raced = await Promise.race([exec.then((r) => ({ r })), guard])
+      if (raced === "hung") hung = true
+      else result = raced.r
+    } finally {
+      if (guardTimer !== undefined) clearTimeout(guardTimer)
+    }
+  } finally {
+    let disposeTimer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        agent.dispose().finally(() => { if (disposeTimer !== undefined) clearTimeout(disposeTimer) }),
+        new Promise<void>((res) => { disposeTimer = setTimeout(res, 15_000) }),
+      ])
+    } catch { /* dispose failure is not capture-fatal */ }
+    if (disposeTimer !== undefined) clearTimeout(disposeTimer)
+    if (prevParseEnv === undefined) delete process.env[parseEnvKey]
+    else process.env[parseEnvKey] = prevParseEnv
+    if (prevForceEnv === undefined) delete process.env[forceKey]
+    else process.env[forceKey] = prevForceEnv
+  }
+
+  const wallClockMs = Date.now() - startTs
+  const meta = (result?.metadata ?? {}) as Record<string, unknown>
+  let tracePath = typeof meta.tracePath === "string" ? meta.tracePath : null
+  if (!tracePath) tracePath = freshTraceFile(traceDir, startTs - 5_000)
+  const traceFile = tracePath ?? ""
+  const base = traceFile && existsSync(traceFile) ? extractRunMetrics(readFileSync(traceFile, "utf8"), arm.id, runIndex) : extractRunMetrics("", arm.id, runIndex)
+  const metrics: RunMetrics = { ...base, traceFile, wallClockMs, hung, parseMode: arm.parseMode ?? null, ...(hung ? { success: null } : {}) }
+  appendFileSync(
+    opts.metricsLog ??
+      join(traceDir, traceDir === FIXTURES_DIR ? "baseline-metrics.jsonl" : `${basename(traceDir)}-metrics.jsonl`),
+    JSON.stringify(metrics) + "\n",
+  )
+  console.log(JSON.stringify(metrics))
+  return metrics
+}
+
+// ─── CLI ──────────────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const raw = process.argv.slice(2)
+  let outDir = FIXTURES_DIR
+  let nOverride: number | null = null
+  const ids: string[] = []
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === "--out") { outDir = resolve(raw[++i]!); continue }
+    if (raw[i] === "--n") { nOverride = Number(raw[++i]); continue }
+    ids.push(raw[i]!)
+  }
+  if (ids.length === 0 || ids[0] === "list") {
+    for (const a of ARMS) console.log(`${a.id}\t${a.scenario}\t${a.provider}\t${a.model}\tn=${a.n}`)
+    return
+  }
+  if (ids[0] === "--panel") {
+    await runPanel(outDir)
+    return
+  }
+  mkdirSync(outDir, { recursive: true })
+  for (const id of ids) {
+    const arm = ARMS.find((a) => a.id === id)
+    if (!arm) { console.error(`unknown arm: ${id}`); process.exit(1) }
+    const n = nOverride ?? arm.n
+    for (let k = 1; k <= n; k++) {
+      console.error(`[bench] ${arm.id} run ${k}/${n} start`)
+      await runScenario({ arm, runIndex: k, temperature: 0, traceDir: outDir })
+    }
+  }
+}
+
+if (import.meta.main) await main()

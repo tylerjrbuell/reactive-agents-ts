@@ -13,7 +13,7 @@
 //      false) rejects non-empty images with JudgmentUnsupported at the service
 //      guard, not by silently dropping them.
 
-import { describe, it, expect, afterEach } from "bun:test";
+import { describe, it, expect, afterEach, beforeEach } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, DEFAULT_CAPABILITIES } from "@reactive-agents/llm-provider";
 import type { ModelConfig, StructuredOutputCapabilities } from "@reactive-agents/llm-provider";
@@ -74,7 +74,15 @@ const makeFakeLLMLayer = (): Layer.Layer<LLMService> =>
 
 describe("agent.judge() - optional images channel", () => {
   const agentsToDispose: Array<{ dispose: () => Promise<void> }> = [];
+  // Wave 7.1: these tests hand-provide JudgmentService via withLayers to pin
+  // images plumbing — opt out of auto-shadow so the explicit-opt-in guard
+  // (which exists so sampling never becomes a free judge backend) doesn't
+  // trip on the auto-detected local backend.
+  beforeEach(() => {
+    process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW = "1";
+  });
   afterEach(async () => {
+    delete process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW;
     while (agentsToDispose.length > 0) {
       await agentsToDispose.pop()!.dispose();
     }

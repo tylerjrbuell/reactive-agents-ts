@@ -1,5 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
+import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
+import { renderEnvGuard } from "./shared.js";
 
 export const withMemoryTemplate: Template = {
   name: "with-memory",
@@ -11,17 +12,10 @@ export const withMemoryTemplate: Template = {
 
 function renderIndex(opts: ScaffoldOptions): string {
   const model = providerDefaultModel(opts.provider);
-  const envVar = providerEnvVar(opts.provider);
-  const envCheck = envVar
-    ? `if (!process.env.${envVar}) {
-  console.error("Missing ${envVar} in environment. See .env.example.");
-  process.exit(1);
-}`
-    : `// Ollama is local — no API key required.`;
 
   return `import { ReactiveAgents } from "reactive-agents";
 
-${envCheck}
+${renderEnvGuard(opts)}
 
 // Memory is OFF by default. .withMemory() enables tier-1 working memory plus a
 // cross-session SQLite store under ~/.reactive-agents/memory/<agentId>/memory.db. Give

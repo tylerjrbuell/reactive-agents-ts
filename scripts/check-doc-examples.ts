@@ -45,7 +45,13 @@ const SKIP_MARKER = "docs-skip-typecheck";
 // fragments rewritten as complete, typechecking examples; net -11 skips. Builder
 // methods lacking declarative config keys are tracked in
 // wiki/Planning/Implementation-Plans/2026-10-02-declarative-config-parity-register.md)
-const SKIP_CEILING = 235;
+// → 223 (2026-10-12, W0.4b: composable-kernel.md rewritten against the W0.4a
+// published surface — all 12 skip markers on that page cleared: 10 fragments
+// converted to compiling `@reactive-agents/reasoning` examples (several pinning
+// the real type shapes via Pick/assignability), 1 internal runKernel signature
+// display moved to a non-`ts` fence (nothing public to compile against), 1
+// noopHooks import block folded into prose. -12 skips.)
+const SKIP_CEILING = 223;
 
 interface Block {
   sourceFile: string; // repo-relative

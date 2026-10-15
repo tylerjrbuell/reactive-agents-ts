@@ -121,18 +121,28 @@ describe("standing frame — outstanding must reflect what the run ACTUALLY fini
     expect(refs).toEqual(["r1"]);
   });
 
-  it("no assessment → no outstanding section (the profile that shows it is assessment-selected)", () => {
-    // `selectProfile` keys off `assessment.phase`; absent an assessment the
-    // default profile applies and the section is not rendered at all. So the
-    // fix cannot regress a run that has no assessment — there is nothing to
-    // render for it.
+  it("no assessment → falls back to contract-minus-satisfied (all requirements recited)", () => {
+    // W4.4: with a contract present the DEFAULT profile now shows the frame
+    // (default-on). Absent an assessment, the outstanding set falls back to the
+    // contract's requirements minus ledger-satisfied — here, all of them.
     const frame = renderStandingFrame({ contract: C, longHorizon: true });
-    expect(outstandingText(frame)).toBeUndefined();
+    const text = outstandingText(frame) ?? "";
+    expect(text).toContain("gather the six sources");
+    expect(text).toContain("write report.md");
   });
 
-  it("without the long-horizon profile there is no outstanding section (default path unchanged)", () => {
+  it("W4.4: the contract-present DEFAULT path renders outstanding (no longer long-horizon-gated)", () => {
     const frame = renderStandingFrame({
       contract: C,
+      assessment: assessment({ satisfied: ["r2"], outstanding: ["r1"] }),
+    });
+    const text = outstandingText(frame) ?? "";
+    expect(text).toContain("gather the six sources");
+    expect(text).not.toContain("write report.md");
+  });
+
+  it("W4.4 parity: NO contract → no outstanding section (byte-identical)", () => {
+    const frame = renderStandingFrame({
       assessment: assessment({ satisfied: ["r2"], outstanding: ["r1"] }),
     });
     expect(outstandingText(frame)).toBeUndefined();

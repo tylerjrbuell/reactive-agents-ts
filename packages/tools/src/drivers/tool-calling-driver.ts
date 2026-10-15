@@ -22,6 +22,14 @@ export interface ToolSchema {
 
 export type ParseMode = "native-fc" | "tier-1" | "tier-2" | "tier-3" | "reprompt"
 
+/**
+ * Closed vocabulary of tool-calling dialect CLAIMS (W3b, plan 3.3). Mirrors the
+ * calibration `toolCallDialect` literals and llm-provider's `DialectPriorClaim`
+ * — a string outside this vocabulary is NOT a claim and must never be defaulted
+ * into one (GH #243: never teach/parse/default on a guessed format).
+ */
+export type ToolCallDialectClaim = "native-fc" | "text-parse" | "none"
+
 // ── Core types ────────────────────────────────────────────────────────────────
 
 export interface ExtractedCall {
@@ -64,6 +72,16 @@ export interface ToolCallObservation {
 
 export interface ToolCallingDriver {
   readonly mode: "native-fc" | "text-parse"
+  /**
+   * Source-tagged provenance (W3b, spec 2026-06-03 §3: "surface the observed
+   * parse mode / dialect … so a wrong route is *visible* in telemetry, not
+   * silent"). The explicit dialect claim that informed this driver's
+   * selection, or `undefined` when there was no claim. It NEVER selects the
+   * mode — the capability claim is the sole routing arbiter (design law #1;
+   * `dialectClaim: "none"` on a native driver is exactly the 482c11e4 class
+   * the Stage-A triple pins against).
+   */
+  readonly dialectClaim?: ToolCallDialectClaim
   /** Returns "" for native-fc. Returns format guide + tool list for text-parse. */
   buildPromptInstructions(tools: readonly ToolSchema[]): string
   /** native-fc: pass through pendingNativeToolCalls. text-parse: run parse pipeline. */

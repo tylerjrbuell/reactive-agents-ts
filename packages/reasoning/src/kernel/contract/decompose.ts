@@ -43,7 +43,7 @@ const DECOMPOSE_SYSTEM =
   "You are a task-requirement decomposer. Given a task, list the discrete, " +
   "independently-verifiable requirements that must ALL be satisfied for the task " +
   "to count as complete. Respond with ONLY a JSON array; each element is " +
-  '{"id": string, "kind": "question-answered"|"artifact-produced"|"constraint-held"|"tool-coverage", ' +
+  '{"id": string, "kind": "question-answered"|"artifact-produced"|"constraint-held"|"tool-coverage"|"action-required", ' +
   '"description": string}. No prose, no code fences.';
 
 const VALID_KINDS: ReadonlySet<string> = new Set<RequirementKind>([
@@ -51,6 +51,7 @@ const VALID_KINDS: ReadonlySet<string> = new Set<RequirementKind>([
   "artifact-produced",
   "constraint-held",
   "tool-coverage",
+  "action-required",
 ]);
 
 interface RawRequirement {

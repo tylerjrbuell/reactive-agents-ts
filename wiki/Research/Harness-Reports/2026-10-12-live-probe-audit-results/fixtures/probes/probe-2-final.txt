@@ -1,0 +1,6 @@
+complete(): content="10" thinking surfaced? YES len=1289
+stream(): 4 events, kinds = text_delta, content_complete, usage
+stream(): events carrying a 'thinking' field = 0
+raw Ollama stream control: 398 chunks carried thinking (1229 chars); visible content only 0 chars
+
+VERDICT: finding #2 CONFIRMED live — thinking channel exists, framework stream path drops it

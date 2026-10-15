@@ -74,6 +74,39 @@ describe("mapProviderError — permanent errors stay fatal (not retried)", () =>
   });
 });
 
+// ─── Stream-drop EOF (GH trace 01M4V5GH4H43KJDCA3EC0JGVZW) ──────────────────
+// A live run died at iteration 0 with `ollama request failed: EOF` inside the
+// W3c capture window — the same window where 6/8 phi4 attempts died to box
+// stream-stalls. Ollama/Go surfaces a dropped response body as a bare
+// `EOF` / `unexpected EOF` read error: the request never reached a verdict,
+// exactly the NETWORK_FAULT contract. The tokens were missing from the
+// vocabulary, so the classifier fell to the generic PERMANENT branch and the
+// correctly-designed pre-first-emission stream retry never engaged.
+// Deliberately NOT included: "context canceled" / "aborted" — user-initiated
+// termination must never auto-retry.
+describe("mapProviderError — stream-drop EOF is transient/retryable", () => {
+  for (const message of [
+    "EOF", // bare read error on a dropped body (what the trace showed)
+    "unexpected EOF", // Go http/JSON decoder variant on a mid-body cut
+    "read stream: EOF", // wrapped Go transport phrasing
+  ]) {
+    it(`"${message}" → LLMRateLimitError (retryable)`, () => {
+      const e = mapProviderError(new Error(message), "ollama", "qwen3.5");
+      expect(e._tag).toBe("LLMRateLimitError");
+      expect(isRetried(e)).toBe(true);
+    });
+  }
+
+  it("EOF inside a longer 400-style reason does NOT become transient via status-free fluke — 400 stays permanent", () => {
+    // Guard the word-boundary + precedence design: an explicit 400 status is
+    // a verdict from the server, even if the body text happens to contain
+    // the EOF substring.
+    const e = map({ status: 400, message: "400 bad request: xEOFy token" });
+    expect(e._tag).toBe("LLMError");
+    expect(isRetried(e)).toBe(false);
+  });
+});
+
 // retryPolicy is a real Schedule — sanity that it exists and is a Schedule.
 describe("retryPolicy wiring", () => {
   it("is defined", () => {

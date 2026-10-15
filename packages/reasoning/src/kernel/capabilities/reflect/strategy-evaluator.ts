@@ -15,6 +15,36 @@ import type { KernelState } from "../../../kernel/state/kernel-state.js";
 import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.js";
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
+import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { HARNESS_PSEUDO_TOOLS, META_TOOLS } from "../../state/kernel-constants.js";
+
+/**
+ * W4.5 — max evidence-bearing observations carried into the handoff (widened
+ * from the previous fixed last-5).
+ */
+const MAX_KEY_OBSERVATIONS = 12;
+
+/**
+ * W2d 2.6 — the reliability values at which the DOCUMENTED classifier skip
+ * applies (AGENTS.md: "When classifier reliability is 'low', the LLM
+ * classifier call is skipped entirely (saves a round-trip)"). Vocabulary
+ * mirrors the runtime's tool-relevance gate
+ * (`packages/runtime/.../setup/classifier.ts`: "low" AND "skip" bypass).
+ * Before this, the reasoning-side strategy evaluator — the classify
+ * round-trip that ACTUALLY fires on local arms per the live post-w1 S1
+ * traces — never consulted reliability at all.
+ */
+export const CLASSIFIER_SKIP_RELIABILITIES: readonly string[] = ["low", "skip"];
+
+/** True when the model's classifier reliability mandates skipping the LLM classify round-trip. */
+export function shouldSkipClassifierEvaluation(
+  classifierReliability: string | undefined,
+): boolean {
+  return (
+    classifierReliability !== undefined &&
+    CLASSIFIER_SKIP_RELIABILITIES.includes(classifierReliability)
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,8 +89,12 @@ export interface StrategyEvaluation {
 /**
  * Build a StrategyHandoff from the current KernelState.
  *
- * Collects the last 5 observation steps as keyObservations and converts the
- * ReadonlySet<string> toolsUsed into a plain array.
+ * W4.5 — keyObservations widened from the last 5 observations to the
+ * REQUIREMENT-RELEVANT slice: evidence-bearing (successful, non-meta,
+ * non-pseudo) observations are preferred, since those are what a successor
+ * strategy needs to resume; when none exist it falls back to the recent
+ * observations. Capped at MAX_KEY_OBSERVATIONS. Converts the ReadonlySet of
+ * toolsUsed into a plain array.
  */
 export function buildHandoff(
   state: KernelState,
@@ -70,9 +104,16 @@ export function buildHandoff(
   switchNumber: number,
   requiredTools: readonly string[] = [],
 ): StrategyHandoff {
-  const observations = state.steps
-    .filter((s) => s.type === "observation")
-    .slice(-5)
+  const obsSteps = state.steps.filter((s) => s.type === "observation");
+  const evidenceBearing = obsSteps.filter((s) => {
+    const r = s.metadata?.observationResult;
+    if (r?.success !== true) return false;
+    const name = r.toolName;
+    return typeof name === "string" && name.length > 0 && !META_TOOLS.has(name) && !HARNESS_PSEUDO_TOOLS.has(name);
+  });
+  const chosen = evidenceBearing.length > 0 ? evidenceBearing : obsSteps;
+  const observations = chosen
+    .slice(-MAX_KEY_OBSERVATIONS)
     .map((s) => s.content ?? String(s));
 
   return {
@@ -105,6 +146,15 @@ export function evaluateStrategySwitch(
   task: string,
   availableStrategies: readonly string[],
   triedStrategies: readonly string[],
+  options?: {
+    /**
+     * W2d 2.6 — `calibration.classifierReliability` threaded from the kernel
+     * input at the loop-detector call site. "low"/"skip" ENFORCE the
+     * documented classifier bypass: no classify round-trip, deterministic
+     * decline verdict, observable via a harness-signal note.
+     */
+    readonly classifierReliability?: string;
+  },
 ): Effect.Effect<StrategyEvaluation, never, LLMService> {
   const alternatives = availableStrategies.filter((s) => !triedStrategies.includes(s));
 
@@ -114,6 +164,36 @@ export function evaluateStrategySwitch(
       shouldSwitch: false,
       recommendedStrategy: "",
       reasoning: "No alternative strategies available",
+    });
+  }
+
+  // W2d 2.6 — documented-skip enforcement. When this model's classifier
+  // reliability is measured low (or explicitly skipped), the LLM strategy
+  // evaluation must NOT run — the AGENTS.md promise ("skipped entirely,
+  // saves a round-trip") becomes real at the site that actually fired on
+  // local arms. Deterministic decline: the loop detector's existing paths
+  // (recovery / deliver / fail tree, iteration budget) keep governing the
+  // run; callers wanting a deterministic switch configure
+  // `strategySwitching.fallbackStrategy` (the adjacent pre-existing seam).
+  if (shouldSkipClassifierEvaluation(options?.classifierReliability)) {
+    const skipReason =
+      `classifier-skip: classifierReliability=${options?.classifierReliability} — ` +
+      `LLM strategy evaluation skipped (documented low-reliability bypass, W2d 2.6)`;
+    return Effect.gen(function* () {
+      // Observable where rax diagnose looks: the harness-signal channel.
+      yield* emitHarnessSignalInjected({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        signalKind: "other",
+        origin: "strategy-switch/classifier-skip",
+        content: skipReason,
+        metadata: { classifierReliability: options?.classifierReliability },
+      });
+      return {
+        shouldSwitch: false,
+        recommendedStrategy: "",
+        reasoning: skipReason,
+      };
     });
   }
 

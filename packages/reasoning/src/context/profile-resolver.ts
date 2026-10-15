@@ -1,6 +1,7 @@
 // File: src/context/profile-resolver.ts
 import type { ContextProfile, ModelTier } from "./context-profile.js";
 import { CONTEXT_PROFILES, mergeProfile, applyCapabilityMaxTokens } from "./context-profile.js";
+import { resolveCapability } from "@reactive-agents/llm-provider";
 
 // ─── Model Name → Tier Heuristics ───
 
@@ -91,14 +92,15 @@ function tierFromModelName(model: string, provider?: string): ModelTier {
   const lower = model.toLowerCase();
 
   // Ollama models are always local/mid — never match cloud model pattern terms like "flash" or "mini".
-  // Use size hints only; skip all global pattern matching.
+  // W2b: the `/(\d+)b/` SIZE-REGEX branch is DELETED (plan 2.1, design law
+  // #1 — one capability arbiter). It overrode the registry for every Ollama
+  // model ("qwen3:1.7b" hit "7b"; "qwen3:4b" and every >=4B tag became mid
+  // regardless of the Capability row saying local). This path now runs ONLY
+  // on a registry miss (see `resolveProfileWithWindow`), where the truly-
+  // small name list is the sole defensible signal left; anything else takes
+  // the conservative mid default the old branch also fell through to.
   if (provider === "ollama" || lower.startsWith("ollama:")) {
     if (LOCAL_PATTERNS.some((p) => lower.includes(p))) return "local";
-    const sizeMatch = lower.match(/(\d+)b/);
-    if (sizeMatch) {
-      const size = parseInt(sizeMatch[1], 10);
-      if (size <= 3) return "local";
-    }
     return "mid";
   }
 
@@ -153,6 +155,65 @@ function tierFromQuality(quality: number): ModelTier {
   return "local";
 }
 
+// ─── W2b Registry-First Tiering (plan 2.1, design law #1) ───────────────────
+
+/**
+ * Normalize a model string for the Capability registry key. The static
+ * table is keyed `${provider}/${model}`, and model strings arrive in three
+ * shapes: bare tag ("qwen3:4b" + provider="ollama"), LiteLLM slash form
+ * ("ollama/qwen3:4b"), or the `ollama:` prefix form. Returns the
+ * (providerKey, modelKey) pair, or null when no provider can be determined
+ * — without a provider the registry is unconsultable and only the
+ * provisional name-regex path remains.
+ */
+function registryLookupKey(
+  model: string,
+  provider?: string,
+): { readonly providerKey: string; readonly modelKey: string } | null {
+  const lower = model.toLowerCase();
+  // Infer ollama from the prefix form when no provider was passed.
+  const providerKey = provider ?? (lower.startsWith("ollama:") ? "ollama" : undefined);
+  if (providerKey === undefined) return null;
+  let modelKey = model;
+  if (lower.startsWith(`${providerKey}/`)) {
+    modelKey = model.slice(providerKey.length + 1);
+  } else if (providerKey === "ollama" && lower.startsWith("ollama:")) {
+    modelKey = model.slice("ollama:".length);
+  }
+  return { providerKey, modelKey };
+}
+
+/**
+ * Tier from the Capability registry — the single arbiter (law #1). Consults
+ * the synchronous three-tier `resolveCapability` lookup (explicit cache →
+ * process-wide probed registry → static table → conservative fallback),
+ * mirroring `applyCapabilityMaxTokens`, the existing sync capability read on
+ * this same seam. Persisted probe rows reach the probed registry through
+ * the builder's `primeCapability` step (store-first, endpoint-scoped —
+ * see llm-provider/src/providers/local-probe.ts), which runs BEFORE this
+ * resolution.
+ *
+ * A resolved Capability with `source: "fallback"` is a registry MISS: the
+ * fallback row's tier is a window-safety default, not a verdict about the
+ * model, so tiering must not trust it — the caller falls to the
+ * provisional name-regex path.
+ *
+ * @returns The registry tier, or null on miss / unconsultable provider.
+ */
+export function tierFromRegistry(model: string, provider?: string): ModelTier | null {
+  const key = registryLookupKey(model, provider);
+  if (key === null) return null;
+  // GH #239 (replaces the W2b provider-name carve-out): stub truth is
+  // registry-owned. The `test/test` static row marks itself `nominal` —
+  // its tier is a placeholder for the bench window contract, not a verdict
+  // about a model — so ANY consumer consulting the registry read path gets
+  // "do not arbitrate" for free, instead of duplicating a provider-string
+  // special case per call site (which Wave 3b was about to become).
+  const cap = resolveCapability(key.providerKey, key.modelKey);
+  if (cap.nominal === true) return null;
+  return cap.source === "fallback" ? null : cap.tier;
+}
+
 /**
  * Resolve a ContextProfile from either a model name, a quality score, or a tier.
  * Accepts optional overrides to customize specific fields.
@@ -204,13 +265,29 @@ export function resolveProfile(
  * truth and matching the createRuntime/runner path. Per-model resolution keeps
  * the intentional ollama-safe fallbacks (e.g. unknown ollama → 2048) intact.
  *
- * Used by the builder's auto-resolution (no explicit caller profile). Pure /
- * synchronous.
+ * Used by the builder's auto-resolution (no explicit caller profile — the
+ * builder only reaches this seam when one is unset, which is the "explicit
+ * caller profile wins" tier of the W2b precedence). Pure / synchronous.
+ *
+ * W2b (plan 2.1) — precedence inside this seam: Capability registry tier
+ * (static-table row OR probe row, incl. persisted rows re-injected by the
+ * builder prime) consulted BEFORE any name regex; registry miss falls to the
+ * provisional name-regex path and marks the returned profile
+ * `provisionalTier: true`. Window binding is unchanged (already
+ * registry-fed via `applyCapabilityMaxTokens`).
  */
 export function resolveProfileWithWindow(
   model: string,
   provider?: string,
 ): ContextProfile {
-  const base = resolveProfile(model, undefined, provider);
+  const registryTier = tierFromRegistry(model, provider);
+  const base =
+    registryTier !== null
+      ? CONTEXT_PROFILES[registryTier]
+      : // Registry miss — the name regex is a provisional guess; copy the
+        // tier profile and mark it so downstream consumers (Wave 3 driver
+        // routing) can tell an unverified tier from an arbiter verdict.
+        // Registry-hit profiles keep CONTEXT_PROFILES identity (no spread).
+        { ...resolveProfile(model, undefined, provider), provisionalTier: true };
   return applyCapabilityMaxTokens(base, provider, model, undefined);
 }

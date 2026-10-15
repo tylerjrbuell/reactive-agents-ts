@@ -289,7 +289,8 @@ export const executeTreeOfThought = (
           systemPrompt: input.systemPrompt,
           availableToolSchemas: capabilitySnapshot.availableToolSchemas,
           allToolSchemas: capabilitySnapshot.allToolSchemas,
-          temperature: 0.7,
+          // GH #246: commanded temperature wins; unset keeps the 0.7 default.
+          temperature: input.temperature ?? 0.7,
         }),
       }, {
         maxIterations: tierLimitsForSkip.maxPhase2Iterations,
@@ -300,7 +301,8 @@ export const executeTreeOfThought = (
         modelId: input.modelId,
         providerName: input.providerName,
         taskDescription: input.taskDescription,
-        temperature: 0.7,
+        // GH #246: commanded temperature wins; unset keeps the 0.7 default.
+        temperature: input.temperature ?? 0.7,
         ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
       });
 
@@ -497,7 +499,8 @@ export const executeTreeOfThought = (
                   : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
               ),
             ),
-            temperature: 0.8,
+            // GH #246: commanded temperature wins; unset keeps the 0.8 default.
+            temperature: input.temperature ?? 0.8,
           })
           .pipe(
             Effect.mapError(
@@ -553,6 +556,9 @@ export const executeTreeOfThought = (
                 { role: "user", content: buildBatchScoringPrompt(input.taskDescription, candidates, ancestorPath) },
               ],
               systemPrompt: scoringSystemPrompt,
+              // GH #246: intentionally fixed at 0.2 — candidate scoring is a
+              // determinism-sensitive judgment pass, not task generation, so a
+              // commanded temperature must NOT leak in here.
               temperature: 0.2,
             })
             .pipe(
@@ -587,6 +593,9 @@ export const executeTreeOfThought = (
                     { role: "user", content: buildBatchScoringPrompt(input.taskDescription, [candidates[ci]!], ancestorPath) },
                   ],
                   systemPrompt: scoringSystemPrompt,
+                  // GH #246: intentionally fixed at 0.2 — single-candidate
+                  // fallback scoring is the same determinism-sensitive judgment
+                  // pass as the batch scorer above; commanded temperature stays out.
                   temperature: 0.2,
                 })
                 .pipe(
@@ -830,7 +839,8 @@ export const executeTreeOfThought = (
         availableToolSchemas: capabilitySnapshot.availableToolSchemas,
         allToolSchemas: capabilitySnapshot.allToolSchemas,
         priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
-        temperature: 0.7,
+        // GH #246: commanded temperature wins; unset keeps the 0.7 default.
+        temperature: input.temperature ?? 0.7,
       }),
     }, {
       maxIterations: tierLimits.maxPhase2Iterations,
@@ -841,7 +851,8 @@ export const executeTreeOfThought = (
       modelId: input.modelId,
       providerName: input.providerName,
       taskDescription: input.taskDescription,
-      temperature: 0.7,
+      // GH #246: commanded temperature wins; unset keeps the 0.7 default.
+      temperature: input.temperature ?? 0.7,
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
 

@@ -65,8 +65,7 @@ describe("compileHarnessPlan", () => {
     const weak = compileHarnessPlan(inputs({ capability: { tier: "local" } }));
     const strong = compileHarnessPlan(inputs({ capability: { tier: "frontier" } }));
     expect(weak.guard.scaffoldingLevel).toBeGreaterThan(strong.guard.scaffoldingLevel);
-    expect(weak.verifierTier).toBe("checker");
-    expect(strong.verifierTier).toBe("none");
+    // Wave 7.4: verifierTier deleted (no consumer) — scaffolding still differentiates.
   });
 
   it("a strong model on a simple task is lean", () => {
@@ -74,7 +73,6 @@ describe("compileHarnessPlan", () => {
       inputs({ capability: { tier: "frontier" }, horizon: "short", task: "What is 2 + 2?" }),
     );
     expect(plan.guard.scaffoldingLevel).toBe(0);
-    expect(plan.verifierTier).toBe("none");
     expect(plan.budget.budgetClass).toBe("lean");
     expect(plan.strategy).toBe("direct");
     expect(plan.toolSurface).toBe("full");
@@ -101,7 +99,6 @@ describe("compileHarnessPlan", () => {
       }),
     );
     expect(deepened.guard.scaffoldingLevel).toBeGreaterThan(baseline.guard.scaffoldingLevel);
-    expect(deepened.verifierTier).toBe("checker");
   });
 
   it("scaffolding never exceeds MAX_SCAFFOLDING", () => {
@@ -156,7 +153,6 @@ describe("applyExplicitOverrides", () => {
     const same = applyExplicitOverrides(plan, {});
     expect(same.strategy).toBe(plan.strategy);
     expect(same.guard.horizonProfile).toBe("long");
-    expect(same.verifierTier).toBe(plan.verifierTier);
   });
 
   it("horizonProfile override subsumes A2's flag — .withLongHorizon() forces 'long' on a short task", () => {

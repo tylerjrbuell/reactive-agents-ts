@@ -78,6 +78,16 @@ export interface ProjectionProfile {
 /** The DEFAULT profile — byte-identical to pre-D1 assembly (no outstanding frame). */
 export const DEFAULT_PROFILE: ProjectionProfile = { phase: "default", showOutstanding: false };
 
+/**
+ * W4.4 — the CONTRACT profile: the default render when a compiled RunContract
+ * exists. Content only (no phase emphasis): the outstanding requirements are
+ * recited into the F10 volatile tail every iteration so the model always sees
+ * what remains. `showOutstanding: true` here is the "true-when-contract" half of
+ * `DEFAULT_PROFILE.showOutstanding` — a contractless run keeps the historical
+ * DEFAULT_PROFILE and is byte-identical.
+ */
+export const CONTRACT_PROFILE: ProjectionProfile = { phase: "default", showOutstanding: true };
+
 /** Phase-keyed profiles applied ONLY under the long-horizon profile. */
 export const PHASE_PROFILES: Readonly<Record<RunPhase, ProjectionProfile>> = {
   orient: {
@@ -115,10 +125,22 @@ export const PHASE_PROFILES: Readonly<Record<RunPhase, ProjectionProfile>> = {
  */
 export function selectProfile(input: StandingFrameInput): ProjectionProfile {
   if (input.longHorizon && input.assessment) return PHASE_PROFILES[input.assessment.phase];
+  // W4.4 — outstanding recitation default-on: a compiled RunContract present
+  // (every run by default) shows the outstanding frame even without the
+  // long-horizon profile. No contract → the historical DEFAULT_PROFILE
+  // (byte-identical parity).
+  if (input.contract) return CONTRACT_PROFILE;
   return DEFAULT_PROFILE;
 }
 
 // ─── Ledger reads (inline; RunLedger is a plain readonly array) ────────────────
+
+/**
+ * W4.4 — max outstanding items recited into the volatile tail before the
+ * `(+K more)` overflow marker (precedent: compaction.ts `buildStub`). Bounds the
+ * tail-bloat regression the plan's scoreboard tokens/run guard watches.
+ */
+const MAX_OUTSTANDING_ITEMS = 8;
 
 function handoffEntries(ledger: RunLedger | undefined): readonly HandoffEntry[] {
   return (ledger ?? []).filter((e): e is HandoffEntry => e.kind === "handoff");
@@ -147,6 +169,34 @@ function satisfiedRequirementIds(
     if (e.kind === "requirement" && e.status === "satisfied") ids.add(e.requirementId);
   }
   return ids;
+}
+
+/**
+ * W4.4 — the ordered, DEDUPED outstanding requirement ids to recite.
+ *
+ * The RunAssessment's `requirements.outstanding` is authoritative when present
+ * (it is the same partition every other consumer reads); otherwise fall back to
+ * contract-minus-satisfied. Satisfied ids (already recited-and-done) are
+ * excluded and duplicate ids collapse to one entry, so the tail never re-lists
+ * finished work or repeats an item.
+ */
+function outstandingRequirementIds(
+  contract: RunContract,
+  ledger: RunLedger | undefined,
+  assessment: RunAssessment | undefined,
+): readonly string[] {
+  const satisfied = satisfiedRequirementIds(ledger, assessment);
+  const source =
+    assessment?.requirements.outstanding ??
+    contract.requirements.map((r) => r.id).filter((id) => !satisfied.has(id));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of source) {
+    if (satisfied.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
 }
 
 // ─── The render (pure) ─────────────────────────────────────────────────────────
@@ -186,19 +236,27 @@ export function renderStandingFrame(input: StandingFrameInput): StandingFrame {
     });
   }
 
-  // 3. outstanding — contract.outstanding as the standing goal frame. Gated by
-  //    the selected profile (default profile → not shown → byte-identical).
+  // 3. outstanding — the contract's outstanding requirements as the standing
+  //    goal frame. W4.4: shown whenever a contract exists (CONTRACT_PROFILE);
+  //    phase emphasis still only under the long-horizon profile. Bounded to
+  //    MAX_OUTSTANDING_ITEMS with a `(+K more)` overflow marker.
   const profile = selectProfile(input);
   if (profile.showOutstanding && input.contract) {
-    const satisfied = satisfiedRequirementIds(input.ledger, input.assessment);
-    const outstanding = input.contract.requirements.filter((r) => !satisfied.has(r.id));
-    if (outstanding.length > 0) {
-      const lines = outstanding.map((r) => `- [${r.id}] ${r.spec.description}`).join("\n");
+    const ids = outstandingRequirementIds(input.contract, input.ledger, input.assessment);
+    const byId = new Map(input.contract.requirements.map((r) => [r.id, r]));
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> => r !== undefined);
+    if (items.length > 0) {
+      const shown = items.slice(0, MAX_OUTSTANDING_ITEMS);
+      const more = items.length - shown.length;
+      const lines = shown.map((r) => `- [${r.id}] ${r.spec.description}`).join("\n");
+      const moreLine = more > 0 ? `\n(+${more} more)` : "";
       const head = profile.emphasis ? `${profile.emphasis}\n` : "";
       sections.push({
         name: "outstanding",
-        text: `\n${head}Outstanding requirements:\n${lines}`,
-        refs: outstanding.map((r) => r.id),
+        text: `\n${head}Outstanding requirements:\n${lines}${moreLine}`,
+        refs: items.map((r) => r.id),
       });
     }
   }

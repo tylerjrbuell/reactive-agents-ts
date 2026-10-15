@@ -20,6 +20,7 @@ import {
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
 import { serializeBuilder } from './builder/to-config.js'
+import { probeAutoShadow } from './judgment-autoshadow.js'
 import type { HarnessProfilePatch } from './capabilities/profile.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
@@ -87,6 +88,7 @@ import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { StreamDensity } from './stream-types.js'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
+import { OpenInferenceTracerLayer } from '@reactive-agents/observe'
 import type { DocumentSpec } from './context-ingestion.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import { Schema } from 'effect'
@@ -324,6 +326,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
+    /**
+     * True once the user has expressed an explicit provider intent, via
+     * `.withProvider(...)` or the dedicated test-scaffolding arm
+     * `.withTestScenario(...)`. `build()` uses this to warn when the provider
+     * would silently resolve to the `"test"` default (W0.3 front-door truth:
+     * canned output reporting success without ever calling a model).
+     */
+    private _providerExplicit: boolean = false
     private _providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }
     private _model?: string
     private _thinking?: boolean
@@ -368,6 +378,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableVerification: boolean = false
     /** `.withJudgment()` — opts the runtime into a resolvable `JudgmentService`. Off by default. */
     private _enableJudgment: boolean = false
+    private _judgmentShadowDbPath?: string
     private _enableCostTracking: boolean = false
     private _enableAudit: boolean = false
     private _enableReasoning: boolean = false
@@ -394,6 +405,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     // layer (see withLayers() below for why `any` was replaced with this
     // rather than `unknown`).
     private _extraLayers?: Layer.Layer<never, unknown, unknown>
+    private _openInferenceAdded?: boolean
     // Exact target type: this is force-cast to `Layer.Layer<LLMService>` at
     // the sole consumption site (runtime-construction.ts, RuntimeOptions
     // .llmOverrideLayer). Typing it precisely here removes that cast.
@@ -887,6 +899,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withProvider(provider: ProviderName, config?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }): this {
         this._provider = provider
+        this._providerExplicit = true
         this._providerConfig = config
         return this
     }
@@ -1240,7 +1253,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * compiles a single `HarnessPlan` at run-start from what the run KNOWS about
      * itself (the model's capability tier + calibration, the compiled contract's
      * horizon, and the task classification): strategy, budget class, guard/horizon
-     * profile, tool surface, verifier tier, memory posture. The plan supplies the
+     * profile, tool surface, memory posture. The plan supplies the
      * DEFAULTS; any explicit wither you set (`.withStrategy`, `.withLongHorizon`,
      * budget withers, …) OVERRIDES the corresponding plan field. Mid-run, the plan
      * is recompiled on live progress evidence — DEEPENING scaffolding when the run
@@ -2062,6 +2075,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     withTestScenario(turns: TestTurn[]): this {
         this._testScenario = turns
         this._provider = 'test'
+        this._providerExplicit = true
         return this
     }
 
@@ -2453,6 +2467,41 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Export OpenInference spans for this agent's runs (Wave 6.7).
+     *
+     * One glue over the existing `OpenInferenceTracerLayer`: subscribes the
+     * agent's EventBus to an OpenTelemetry tracer with OpenInference semantic
+     * attributes (agent/LLM/tool spans). Merges with any `.withLayers()` layers
+     * rather than replacing them.
+     *
+     * Destination is configured once per process, NOT per agent — via
+     * `setupOpenInferenceExporter()` or the standard
+     * `OTEL_EXPORTER_OTLP_ENDPOINT` env var (see `@reactive-agents/observe`).
+     * There is deliberately no `endpoint` option here: exporter setup
+     * registers a process-global provider, so per-agent endpoints would stack
+     * providers and leak exporters. Without a configured exporter the spans
+     * still build against the global tracer (observable via any registered
+     * provider, e.g. an in-memory exporter in tests).
+     *
+     * Ordering vs `.withLayers()`: this wither MERGES into any existing
+     * extra layers, but `.withLayers()` ASSIGNS (replaces). Call
+     * `.withOpenInference()` AFTER `.withLayers()` to keep both; the reverse
+     * order drops the tracer layer. Idempotent — calling twice subscribes once.
+     *
+     * @returns `this` for chaining
+     */
+    withOpenInference(): this {
+        // Idempotent: a second call is a no-op (merging the same layer twice
+        // would double-subscribe EventBus → duplicate spans).
+        if (this._openInferenceAdded === true) return this
+        this._openInferenceAdded = true
+        this._extraLayers = this._extraLayers
+            ? Layer.mergeAll(this._extraLayers, OpenInferenceTracerLayer)
+            : OpenInferenceTracerLayer
+        return this
+    }
+
+    /**
      * Replace the base LLMService the whole runtime builds on (reasoning,
      * engine, memory) with a custom layer — the deterministic-replay keystone.
      *
@@ -2521,6 +2570,39 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent<TOut>> {
+        // Wave 7.1 auto-shadow: shadow sites sample nothing without a wired
+        // JudgmentService, so a default-off world never accumulates inversion
+        // traffic. When the user did not opt into judgment AND did not opt
+        // out (REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
+        // Ollama backend: shadow events fire, decisions are never consumed.
+        // Keyless-safe: unreachable server or any error = no service, build
+        // proceeds unchanged. Explicit `.withJudgment()` always wins (this
+        // branch only runs when it was never called).
+        if (!this._enableJudgment) {
+            const auto = await probeAutoShadow()
+            if (auto !== undefined) {
+                this._enableJudgment = true
+                this._judgmentOptions = { backend: auto.backend, baseUrl: auto.baseUrl }
+                this._judgmentShadowDbPath =
+                    process.env.REACTIVE_AGENTS_SHADOW_DB ??
+                    join(homedir(), ".reactive-agents", "judgment-shadow.db")
+            }
+        }
+        // Wave 6.1: gateway-declared approvals join the kernel approval
+        // policy HERE (not in withGateway/withApprovalPolicy) so the merge is
+        // order-independent — whichever wither runs last must not silently
+        // drop a safety list. Gateway only ADDS tools (union); an explicit
+        // policy keeps its mode/decider, and gateway-only runs get block mode
+        // via the existing default below. Before this the gateway
+        // `policies.requireApprovalFor` field had zero consumers.
+        const gatewayGated = this._gatewayOptions?.policies?.requireApprovalFor ?? []
+        if (gatewayGated.length > 0) {
+            const prior = this._approvalPolicy?.tools ?? []
+            this._approvalPolicy = {
+                ...this._approvalPolicy,
+                tools: [...new Set([...prior, ...gatewayGated])],
+            }
+        }
         // Durable HITL (Phase D): a detached approval pause needs a durable store
         // to persist it. Guard early so misconfiguration fails fast.
         if (this._approvalPolicy) {
@@ -2558,6 +2640,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 "(The run row and approval rails still work.)",
             )
         }
+
+        // Implicit-test-provider warning lives in `warnIfImplicitTestProvider()`,
+        // invoked from `buildEffect()`'s Effect.gen. `build()` is covered
+        // transitively: it runs this very effect at
+        // `Effect.runPromise(this.buildEffect())` below, so a single call site
+        // keeps the "exactly once per build" guarantee on both public terminals
+        // (class JSDoc advertises `.build()` AND `.buildEffect()`).
 
         // MCP toolkit resolution (2026-09-19): resolve any pending
         // `.withMCP(catalogName)` requests via their registry BEFORE anything
@@ -2715,6 +2804,36 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Warn when the provider silently resolves to `"test"` without expressed
+     * user intent (W0.3, Local-Tier Reliability program). The builder's
+     * `_provider` default is `"test"`, so a user who never chooses a provider
+     * gets canned output that reports success with no model ever called (the
+     * program's named "fake green" trap at the framework's front door). Signal
+     * only: no throw, no default flip.
+     *
+     * Explicit arms stay silent: `.withProvider(...)` (also used by `quick()`
+     * and `fromConfig()`), `.withTestScenario(...)`, and `.withReplayLLM(...)`:
+     * with a replay LLM override the `_provider` field is irrelevant, so
+     * warning about canned test output would be a false positive.
+     *
+     * Called from `buildEffect()`'s Effect.gen, which `build()` runs at
+     * `Effect.runPromise(this.buildEffect())`: one call site covers both
+     * public terminals with exactly one warning per build. Not per run():
+     * emitting here (build time) keeps the cost at one line per agent
+     * construction.
+     */
+    private warnIfImplicitTestProvider(): void {
+        if (this._provider === 'test' && !this._providerExplicit && this._llmOverrideLayer === undefined) {
+            console.warn(
+                "[reactive-agents] ⚠ No provider was chosen: this agent silently defaults to the \"test\" provider, " +
+                "which returns canned output and reports success without ever calling a model. " +
+                "Choose one explicitly with .withProvider(\"anthropic\"|\"openai\"|\"ollama\"|...), " +
+                "or make the test provider intentional with .withProvider(\"test\") / .withTestScenario(...).",
+            )
+        }
+    }
+
+    /**
      * Build the agent as an Effect (advanced async version).
      *
      * Returns an Effect that, when run, instantiates the agent.
@@ -2726,6 +2845,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         const self = this
 
         return Effect.gen(function* () {
+            // Implicit-test-provider warning (W0.3): runs on BOTH public build
+            // terminals. `build()` delegates to this effect, so a single call
+            // site here satisfies the file's own duplication convention
+            // ("buildEffect() is also a public entry point", see the strict-
+            // validation block below) without double-warning on the Promise
+            // path.
+            self.warnIfImplicitTestProvider()
+
             // Under strict validation, fail fast on a missing API key. `build()`
             // already ran the full validateBuild gate before reaching here, but
             // buildEffect() is also a public entry point, so it independently
@@ -2909,6 +3036,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 name: self._name,
                 a2aDefaultPort: self._a2aOptions?.port,
                 a2aDefaultBasePath: self._a2aOptions?.basePath,
+                judgmentAutoShadow: self._judgmentShadowDbPath !== undefined,
                 mcpServerNames: mcpServers.map((s) => s.name),
                 gatewayOptions,
                 streamDensity,
@@ -3013,6 +3141,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _enableGuardrails: self._enableGuardrails,
         _enableHealthCheck: self._enableHealthCheck,
         _enableJudgment: self._enableJudgment,
+        _judgmentShadowDbPath: self._judgmentShadowDbPath,
         _enableKillSwitch: self._enableKillSwitch,
         _enableMemory: self._enableMemory,
         _enableMemoryConsolidation: self._enableMemoryConsolidation,
@@ -3074,6 +3203,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _thinking: self._thinking,
         _thinkingOptions: self._thinkingOptions,
         _toolsOptions: self._toolsOptions,
+        _tracingConfig: self._tracingConfig,
         _userInteraction: self._userInteraction,
         _verificationOptions: self._verificationOptions,
         _verificationStep: self._verificationStep,

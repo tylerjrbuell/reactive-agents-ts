@@ -412,6 +412,13 @@ export interface RuntimeOptions {
   enableJudgment?: boolean;
 
   /**
+   * Wave 7.1 auto-shadow sink path. Present iff the builder auto-enabled a
+   * local judgment backend (never for explicit `.withJudgment()`); the
+   * judgment layer subscribes `JudgmentShadow` events into this SQLite file.
+   */
+  judgmentShadowDbPath?: string;
+
+  /**
    * Enable cost tracking (token counting, USD estimation).
    *
    * Default: `false`
@@ -944,6 +951,15 @@ export interface RuntimeOptions {
    * `runtime-construction.ts` when `.withHarness()` registrations are present.
    */
   harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+
+  /**
+   * Absolute directory the TraceRecorder writes per-run JSONL files to, or
+   * null when tracing is disabled. Sourced from the builder's resolved
+   * `_tracingConfig.dir` (W0.5 result→trace linkage); reaches
+   * `ReactiveAgentsConfig.traceDir` so the finalize seam can mint honest
+   * `metadata.runId`/`metadata.tracePath`.
+   */
+  traceDir?: string | null;
 }
 
 /**
@@ -1039,6 +1055,8 @@ export interface LightRuntimeOptions {
    */
   enableJudgment?: boolean;
   judgmentOptions?: import("./builder/types.js").JudgmentBuilderOptions;
+  /** Wave 7.1 auto-shadow sink path (light runtimes mirror the root rule). */
+  judgmentShadowDbPath?: string;
 
   // ── Cross-cutting inheritance (2026-07-23) — a sub-agent operates under the
   //    parent's judgment + safety constraints, not rubber-stamped. These four

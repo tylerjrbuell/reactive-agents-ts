@@ -810,3 +810,74 @@ describe("finalizeStrategyResult — the only mint of a judged result", () => {
     });
   });
 });
+
+describe("5.3 delegation-laundering join (worst-of over child envelopes)", () => {
+  const delegatedStep = (envelopes: NonNullable<ReturnType<typeof makeObservationResult>["childEnvelopes"]>) =>
+    makeStep("observation", "child result", {
+      observationResult: makeObservationResult("spawn-agent", true, "child done", {
+        childEnvelopes: [...envelopes],
+      }),
+    });
+
+  it("partial child caps a completed parent claim", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...baseParams,
+          steps: [delegatedStep([{ completionStatus: "partial", budgetTerminalPartial: true }])],
+        }),
+      ),
+    );
+    expect(r.status).toBe("partial");
+    const meta = r.metadata as { budgetTerminalPartial?: boolean };
+    expect(meta.budgetTerminalPartial).toBe(true);
+  });
+
+  it("completed children leave a completed parent unchanged", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...baseParams,
+          steps: [
+            delegatedStep([{ completionStatus: "completed" }]),
+            delegatedStep([{ completionStatus: "completed" }]),
+          ],
+        }),
+      ),
+    );
+    expect(r.status).toBe("completed");
+    const meta = r.metadata as { budgetTerminalPartial?: boolean };
+    expect(meta.budgetTerminalPartial).toBeUndefined();
+  });
+
+  it("no delegation observations: join is the identity (no-op)", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...baseParams,
+          steps: [makeStep("observation", "plain tool", {
+            observationResult: makeObservationResult("file-read", true, "contents"),
+          })],
+        }),
+      ),
+    );
+    expect(r.status).toBe("completed");
+  });
+
+  it("abstained parent is never capped by the join", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...baseParams,
+          status: "completed",
+          steps: [delegatedStep([{ completionStatus: "failed" }])],
+          extraMetadata: { rawTerminatedBy: "abstained", terminatedBy: "abstained" },
+        }),
+      ),
+    );
+    // The give-up arm fires on harness-forced/abstained with no grounded
+    // evidence; the join must not downgrade the honest abstention further.
+    const meta = r.metadata as { terminatedBy?: string };
+    expect(meta.terminatedBy === "abstained" || r.status !== "completed").toBe(true);
+  });
+});

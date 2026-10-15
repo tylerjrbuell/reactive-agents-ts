@@ -10,6 +10,66 @@ updated: 2026-10-05
 
 ---
 
+## 2026-10-15 — W567 live verdict captured (W5 PASS / W6 PASS / W7 PASS+gap)
+
+Second true-0 capture (`fixtures/post-w567/`, 11 live + 5 spots, scoreboard
+POST-W567 section): W5 honesty 0/11 fabricated (S1 3/3 abstain, S2 3/3 '3052',
+terminate 3/3 abstain; S3 r2 under-claim filed — correct report.md on disk but
+final-answer success=false on stale read tallies — safe direction, N=2, no
+regression claimed); W6 spots 3/3 (gateway 0 exec, guardrail clean, timeoutAfter
+386 ms); W7 tier1 checks present, shadow 0 events live (structural — site behind
+unwired InteractionService; suites 8/8 green; non-gating). No-regression vs
+post-w4-fixed HOLDS. Spot runner `scripts/lift/w567-spots.ts`. Report:
+`.superpowers/sdd/.../w567-verdict-report.md`.
+
+---
+
+## 2026-10-13 — Measurement freeze (Local Tier Reliability Program, Task 0)
+
+**MEASUREMENT FREEZE (Doctrine #4):** the rung-0 baseline for every ⚡ wave's lift verdict is now
+pinned at `wiki/Research/Harness-Reports/2026-10-12-program-scoreboard.md` with raw per-run traces +
+`fixtures/baseline-metrics.jsonl` under `.../2026-10-12-live-probe-audit-results/` (captured at
+Wave-0-close HEAD, temp 0: S1 qwen3:4b + qwen3.5, S2 qwen3:4b, S3 qwen3:4b + llama3.2, S4
+phi4-mini-reasoning; N=5, S4 N=3; S1 replay-determinism gate PASS byte-identical). Headline baseline
+facts: S1 arms abstain honestly at temp 0 (evidenceDelta=0 stall intact, 0/5 success), while the
+canonical discover-tools ×146 false-success thrash reproduced on the S3/llama3.2 arm; haiku rung-2
+arms deferred on an Anthropic credit blocker (named in scoreboard). Until the freeze is lifted by a
+later wave's plan, treat harness behavior on these paths as read-only for measurement purposes — any
+`packages/**` change to emitters, guards, or termination on these paths invalidates the diff.
+
+**W1.5 post-fix lift (2026-10-13): #38 thought-continuity unblocked (was void on local by
+construction).** The frozen S2 re-capture (N=5, temp 0, `fixtures/post-w1/`) shows the thinking
+channel now flowing provider→kernel→trace on 5/5 runs (6.0–9.5K thinkingChars/run vs 0 baseline —
+channel was dropped upstream pre-W1). Verdict MIXED: mechanism CONFIRMED, quality lift NOT
+CONFIRMED — the W1-supplied input makes the pre-existing `think.ts` terse-answer rescue guard fire
+on correct 4-char answers, replacing the spec-compliant '3052' deliverable with 525–1,915 chars of
+reasoning prose in 5/5 runs (file-ready defect, kernel-warden scope; S1 drift guard 2/2
+shape-identical). PRE/POST rows + defect: scoreboard post-W1 section.
+**AMENDED 2026-10-13 (recapture at fix af7d1b45f): verdict is now CONFIRMED (channel + quality)**
+— post-w1-fix re-capture measured the defect signature 5/5 → 0/5 (delivered output '3052' ×5,
+marker-clobber 0/5, thinking retained 6.7–10.8K/run ×5, S1 drift guard clean). Wave 1 settled;
+every Wave 4+ S2 number inherits the post-w1-fix rows (scoreboard RE-CAPTURE section).
+
+**Wave-2 close capture (2026-10-13, HEAD 471d7ed8d): verdict MIXED — cost seams hold honestly, one
+live regression.** S1/S2 shape-stable (0/5 abstention and 5/5 '3052' quality intact; llmCalls
+delta-0 on classify is CORRECT — both capture models carry classifier=high so W2d skip properly
+never fires; 0 head-truncation incidents / 20 runs, W2e guard observable with conservative over-fire).
+W2d >=3x compaction NOT live-exercisable: qwen3:4b/llama3.2 resolve tier=mid (registry stub-row gap
+= GH #239). **Regression filed (not fixed here)**: S3 qwen3:4b 5/5→0/5 — W2a probe-derived
+supportsToolCalling + a stale 1-run May prior (`toolCallDialect:"none"`) demoted the arm to
+text-parse whose parser rejects the harness's own taught markup; Wave 3 must not build local-FC
+claims on top of it. Rows: scoreboard Post-W2 section + `fixtures/post-w2/MANIFEST.md`.
+
+**Wave-3 gate (R1 re-capture 2026-10-13): PASS** — S3 qwen3:4b 0/5→5/5 (+2 bonus 7/7) at fix 354b6aef8+674b6c4f8; tool execution restored, 5/5 report.md content-correct, markup-unparsed signature 0/5 (`fixtures/post-243/`).
+
+**Wave-3c Stage-B promotion data (2026-10-13, `fixtures/post-w3/`): rung-3 PARTIAL, rung-2 BLOCKED-credit — plan-3.5 rung agreement NOT declarable yet.** Shadow soak proved the seam (phi4 clean run: 3 tier-1 parses, would-have-executed 3/3, shadow correctly non-acting); act-mode end-to-end execution unmeasured: coder drops wrapper tags (parser-coverage gap, file-ready for tools-warden) and phi4 stream-stalled 6/8 attempts on this box. No safety anomalies in 12 completed runs.
+
+**Wave-4 close capture (2026-10-13, `fixtures/post-w4/`): detection PASS (frozen-fixture replay lane: 146/146 arbiter non-progress, loop trips, (e) precondition holds, FP guard green on substantive fixture), band demotes live (green→economize in 9/9 stall runs), tail-bloat guard clean (S1 tokensIn −7%). TERMINATION SEAM OPEN: impossible-task+tools-layer arms (N=3) early-stop at iter 3–4 (wall −37%) but 3/3 shipped FABRICATED success claims with verdict success (inverse of GH #245; controller's honest-abstain ad-hoc did NOT reproduce). Wave 4 must NOT be marked verified on the termination seam — controller decision needed.** Also surfaced a program-wide integrity fact: "temp 0" was never threaded to the wire (recorded provider default 0.5 through post-w1-fix, 0.3 from post-w2 on) — rows comparable within era; threading is provider-warden scope (`fixtures/post-w4/MANIFEST.md` disclosure).
+
+**Wave-4 verdict re-run at TRUE temp 0 (`fixtures/post-w4-fixed/`, 2026-10-13): VERDICT PASS — Wave 4 markable VERIFIED.** Substrate proven (temperature=0 on every new wire exchange, first time in program); honesty gate 5/5 on the exact fabrication config (success:true→abstained; no over-blocking on grounded S2); true-0 reveals shape determinism (prior "variance" was decoding-temp); residual FILED for Wave 5: abstained runs still ship the model's "successfully sent" claim in OUTPUT TEXT (verdict-level fixed, content-level unscrubbed).
+
+---
+
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
 
 Executed `execute-backlog` on `priority:p1` → singleton #231 (canonical run-level

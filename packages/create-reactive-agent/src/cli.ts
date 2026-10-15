@@ -14,8 +14,8 @@
 //   --help, --version
 
 import * as path from "node:path";
-import { readFileSync } from "node:fs";
 import { scaffold } from "./lib/scaffold.js";
+import { ownPackageVersion } from "./lib/own-version.js";
 import { listTemplates } from "./templates/index.js";
 import {
   promptSelect,
@@ -26,18 +26,10 @@ import {
 } from "./lib/prompts.js";
 import type { PackageManager, Provider, TemplateName } from "./types.js";
 
-// Read the real version from this package's own package.json (one level above
-// both src/ and dist/) — a hardcoded literal drifts from the lockstep release
+// Read the real version from this package's own package.json (see
+// lib/own-version.ts) - a hardcoded literal drifts from the lockstep release
 // stamp and makes `--version` lie.
-const VERSION: string = (() => {
-  try {
-    const raw = readFileSync(new URL("../package.json", import.meta.url), "utf8");
-    const parsed = JSON.parse(raw) as { version?: unknown };
-    return typeof parsed.version === "string" ? parsed.version : "unknown";
-  } catch {
-    return "unknown";
-  }
-})();
+const VERSION: string = ownPackageVersion();
 
 interface ParsedArgs {
   readonly positional: readonly string[];

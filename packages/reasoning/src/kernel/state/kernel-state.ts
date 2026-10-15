@@ -207,6 +207,15 @@ export interface KernelMeta {
 
   // ── Native FC handoff between think → act ──
   readonly pendingNativeToolCalls?: readonly ToolCallSpec[];
+  /**
+   * Wave 6.3: the NORMALIZED pending calls for THIS act pass (native +
+   * text-extracted, args normalized) — set by act.ts immediately before the
+   * before-act hooks run so `requireApprovalFor`-class killswitches see every
+   * call regardless of tool-call dialect. `pendingNativeToolCalls` above is
+   * native-FC-only; a text-parse run leaves it empty and a hook reading only
+   * it silently approves everything.
+   */
+  readonly pendingToolCalls?: readonly ToolCallSpec[];
   readonly lastThought?: string;
   readonly lastThinking?: string | null;
 
@@ -553,6 +562,14 @@ export interface KernelMeta {
    * is type-checked and the read path is discoverable.
    */
   readonly harnessAuthoredOutput?: boolean;
+  /**
+   * W5.2 — the completion-judgment entry reference (`judgment://completion-
+   * satisfied`) stamped when the Phase-D completion shadow FIRES (i.e. a
+   * `JudgmentService` is present). The terminal verdict CITES it (ledger-side
+   * plumbing); the verdict is never inverted on it. Absent when the shadow did
+   * not fire (no `.withJudgment()`), so the verdict is unchanged.
+   */
+  readonly completionJudgmentRef?: string;
   // ── B4/§5.3 (2026-07-20) — REMOVED: `verifierVerdict` + `verifierRejected` ──
   // Both were write-only in `runner.ts` and DROPPED at the kernel→strategy
   // boundary (`react-kernel.ts` never projected them). `receipt.verifierVerdict`

@@ -25,7 +25,10 @@ export function makeObservationResult(
   toolName: string,
   success: boolean,
   displayText: string,
-  options?: { readonly delegatedToolsUsed?: readonly string[] },
+  options?: {
+    readonly delegatedToolsUsed?: readonly string[];
+    readonly childEnvelopes?: readonly NonNullable<ObservationResult["childEnvelopes"]>[number][];
+  },
 ): ObservationResult {
   const category = categorizeToolName(toolName);
   const resultKind = deriveResultKind(category, success);
@@ -43,6 +46,9 @@ export function makeObservationResult(
     preserveOnCompaction,
     ...(options?.delegatedToolsUsed && options.delegatedToolsUsed.length > 0
       ? { delegatedToolsUsed: [...new Set(options.delegatedToolsUsed)] }
+      : {}),
+    ...(options?.childEnvelopes && options.childEnvelopes.length > 0
+      ? { childEnvelopes: [...options.childEnvelopes] }
       : {}),
     trustLevel: isTrusted ? "trusted" : "untrusted",
     ...(isTrusted ? { trustJustification: GRANDFATHER_TRUST_JUSTIFICATION } : {}),

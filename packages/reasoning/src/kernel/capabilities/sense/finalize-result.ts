@@ -41,7 +41,15 @@ import {
   hasGroundedEvidence,
   isGiveUpAnswer,
   isHarnessForcedTerminal,
+  looksLikeSuccessClaim,
 } from "./give-up-answer.js";
+import {
+  capStatusToEnvelope,
+  honestEnvelopeMetadata,
+  joinEnvelopes,
+  type CompletionEnvelope,
+} from "../../state/completion-envelope.js";
+import type { KernelMeta } from "../../state/kernel-state.js";
 
 declare const Judged: unique symbol;
 export type JudgedReasoningResult = ReasoningResult & { readonly [Judged]: true };
@@ -178,6 +186,58 @@ function enforcedTerminalMetadata(
   };
 }
 
+/**
+ * 5.1 — the CONTRACT-COVERAGE envelope (the deterministic EVIDENCE net at the
+ * terminal mint).
+ *
+ * `envelopeFromKernelState` carries `outstandingCriteria` from the assessment's
+ * outstanding+blocked partition — but that partition includes the
+ * non-deterministic `answer` (self-critique) floor, which is ALWAYS outstanding
+ * (assess() cannot verify it). Capping on the raw partition would degrade every
+ * run to `partial`, so this arm keys on the DETERMINISTIC requirements only: a
+ * requirement with a `spec.condition` that the run's evidence left unmet. Those
+ * are exactly the S1/S3 false-success shapes (artifacts/tools never produced
+ * while the run claimed success).
+ *
+ * When the assessment is present it is authoritative (it already partitions
+ * every iteration); otherwise the condition is checked directly against the
+ * ledger/output. Reuses the envelope law — no new scorer.
+ */
+function contractCoverageEnvelope(
+  meta: KernelMeta | undefined,
+  ledger: RunLedger | undefined,
+  output: string,
+): CompletionEnvelope {
+  const contract = meta?.runContract;
+  if (!contract) return { completionStatus: "completed" };
+  const assessment = meta?.assessment;
+  const outstandingSet = new Set<string>([
+    ...(assessment?.requirements.outstanding ?? []),
+    ...(assessment?.requirements.blocked ?? []),
+  ]);
+  const detOutstanding = contract.requirements
+    .filter((r) => {
+      if (r.spec.condition === undefined) return false; // answer floor: not deterministic
+      // Ledger-verified satisfaction EXEMPTS from the cap. `assess()` cannot
+      // mark an OutputContains (`output:*`) requirement satisfied — it hard-
+      // falses that shape — so it is ALWAYS in the assessment's `outstanding`
+      // partition even when the answer contains the section. The ledger path
+      // (`conditionMetByLedger`) is authoritative there, so the cap intersects
+      // with it rather than trusting the partition alone.
+      if (conditionMetByLedger(r.spec.condition, ledger ?? [], output)) return false;
+      if (assessment !== undefined) return outstandingSet.has(r.id);
+      return true;
+    })
+    .map((r) => r.id);
+  return detOutstanding.length > 0
+    ? {
+        completionStatus: "partial",
+        outstandingCriteria: detOutstanding,
+        verificationWarning: `contract requirements outstanding: ${detOutstanding.join(", ")}`,
+      }
+    : { completionStatus: "completed" };
+}
+
 export interface FinalizeExtras {
   /** Required tools for the grounding verdict (strategy already holds these). */
   readonly requiredTools?: readonly string[];
@@ -298,6 +358,11 @@ export function finalizeStrategyResult(
       failed,
       ...(auxiliary ? { auxiliaryPass: true } : {}),
       ...(repairGaps ? { repairGaps } : {}),
+      // W5.2 — cite the completion-judgment entry when the Phase-D shadow fired
+      // (ledger-side plumbing; the verdict is NOT inverted on it).
+      ...(typeof params.kernelMeta?.completionJudgmentRef === "string"
+        ? { judgmentRef: params.kernelMeta.completionJudgmentRef }
+        : {}),
     };
 
     // Re-mint through `buildStrategyResult` rather than patching `base`, so the
@@ -353,17 +418,25 @@ export function finalizeStrategyResult(
           })
         : finalBase;
 
-    // Give-up honesty gate: a COMPLETED result whose output is a give-up /
-    // incapability statement, with nothing grounded behind it, is not a
-    // success. `resolveCompletionStatus` maps any non-failed `done` state to
-    // `completed`, and the terminal verifier's give-up check requires unused
-    // available tools (so a zero-tool run never trips it), together these let
-    // a loop_graceful / exhaustion give-up ship as `success:true`. Downgrade to
-    // the honest `abstained` terminal (the engine maps terminatedBy:"abstained"
-    // to success:false), keeping the model's own explanation as the output.
-    // Fenced to COMPLETED so failed/abstained/paused results are byte-identical,
-    // and to no-grounded-evidence so a run that DID gather data is never
-    // downgraded.
+    // Give-up / fabrication honesty gate: a result whose output is a give-up /
+    // incapability statement OR whose terminal is HARNESS-FORCED, with nothing
+    // grounded behind it, is not a success. `resolveCompletionStatus` maps any
+    // non-failed `done` state to `completed`, and the terminal verifier's
+    // give-up check requires unused available tools (so a zero-tool run never
+    // trips it), together these let a loop_graceful / exhaustion give-up ship as
+    // `success:true`. Downgrade to the honest `abstained` terminal (the engine
+    // maps terminatedBy:"abstained" to success:false), keeping the model's own
+    // explanation as the output.
+    //
+    // Fence W4-live: NOT-failed (completed OR partial). The engine treats
+    // `partial` + substantive output as success (`execution-engine.ts`), so a
+    // harness-forced terminal that leaves the kernel `thinking` (e.g. the RI
+    // dispatcher early-stop) mints a `partial` result — and fencing to
+    // `completed` left that route unguarded. A harness-forced terminal with ZERO
+    // grounded evidence is not a success under EITHER status. Failed/abstained/
+    // paused results stay byte-identical (failed excluded here; abstained by the
+    // rawTerminatedBy guard; paused terminals are never harness-forced), and a
+    // run that DID gather data is never downgraded.
     const resolvedText = typeof resolved.output === "string" ? resolved.output : "";
     const metaRawTerminal = params.extraMetadata?.["rawTerminatedBy"];
     const rawTerminal =
@@ -372,27 +445,116 @@ export function finalizeStrategyResult(
         : typeof metaRawTerminal === "string"
           ? metaRawTerminal
           : undefined;
-    const finalResult =
-      resolved.status === "completed" &&
+    const giveUpArm = isGiveUpAnswer(resolvedText);
+    const gateFires =
+      resolved.status !== "failed" &&
       rawTerminatedBy !== "abstained" &&
       !hasGroundedEvidence(params.steps) &&
-      (isHarnessForcedTerminal(rawTerminal) || isGiveUpAnswer(resolvedText))
-        ? buildStrategyResult({
+      (isHarnessForcedTerminal(rawTerminal) || giveUpArm);
+    // (b) content-scrub: on the HARNESS-FORCED arm, ungrounded prose that CLAIMS
+    // the task/action was completed (a fabricated success claim, e.g.
+    // "successfully sent … 🚀") would ship the lie on an abstained verdict, so it
+    // is replaced with the honest abstention sentinel. A neutral substantive
+    // answer (not a success claim) and the give-up-phrasing arm keep the model's
+    // own prose.
+    const scrubOutput = gateFires && !giveUpArm && looksLikeSuccessClaim(resolvedText);
+    const gateOutput = scrubOutput ? ENFORCED_ABSTENTION_OUTPUT : resolvedText;
+    const gated = gateFires
+      ? buildStrategyResult({
+          ...params,
+          output: gateOutput,
+          extraMetadata: {
+            ...params.extraMetadata,
+            terminatedBy: "abstained",
+            ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
+              ? { rawTerminatedBy: "abstained" }
+              : {}),
+            abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
+            ...(scrubOutput ? { harnessAuthoredOutput: true } : {}),
+          },
+        })
+      : resolved;
+
+    // ── 5.1 contract-coverage arm (the deterministic EVIDENCE net) ────────────
+    // Composes AFTER the give-up gate: the give-up gate is the phrasing/harness
+    // net (→ abstained); this is the evidence net — a run whose DETERMINISTIC
+    // contract requirements are still unmet cannot claim `completed`; the claim
+    // is capped at `partial` via the envelope law (capStatusToEnvelope), reusing
+    // the existing worst-of join rather than a new scorer. An abstention is not
+    // capped (its claim is already honest).
+    const coverage = contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText);
+    // An abstention is never capped. Agree with the gate boolean (a run the gate
+    // just flipped) AND a run that was ALREADY abstained before the gate.
+    const abstained = gateFires || rawTerminatedBy === "abstained";
+    const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
+    const finalResult =
+      cappedStatus === gated.status
+        ? gated
+        : buildStrategyResult({
             ...params,
+            output: gated.output,
+            status: cappedStatus,
+            extraMetadata: { ...params.extraMetadata, ...honestEnvelopeMetadata(coverage) },
+          });
+
+    // ── 5.3 delegation-laundering arm (worst-of join over child envelopes) ──
+    // A partial child caps a completed parent claim — same envelope law as the
+    // coverage arm, one ordering, no new scorer. Child envelopes ride the
+    // delegation-tool observations (stamped by the executors, extracted in
+    // act/tool-execution.ts), never the display text. Abstentions are never
+    // capped (same fence as coverage). No delegation observations ⇒ the join
+    // is the identity (`joinEnvelopes([])` is completed) and this arm is a
+    // no-op by construction.
+    const childEnvelopes: CompletionEnvelope[] = [];
+    for (const step of params.steps) {
+      const stamped = step.metadata?.observationResult?.childEnvelopes;
+      if (!stamped) continue;
+      for (const e of stamped) {
+        childEnvelopes.push({
+          completionStatus: e.completionStatus,
+          ...(e.harnessAuthoredOutput !== undefined
+            ? { harnessAuthoredOutput: e.harnessAuthoredOutput }
+            : {}),
+          ...(e.budgetTerminalPartial !== undefined
+            ? { budgetTerminalPartial: e.budgetTerminalPartial }
+            : {}),
+          ...(e.verificationWarning !== undefined ? { verificationWarning: e.verificationWarning } : {}),
+        });
+      }
+    }
+    const delegation = joinEnvelopes(childEnvelopes);
+    const delegationCappedStatus = abstained ? finalResult.status : capStatusToEnvelope(finalResult.status, delegation);
+    const delegationResult =
+      delegationCappedStatus === finalResult.status
+        ? finalResult
+        : buildStrategyResult({
+            ...params,
+            output: finalResult.output,
+            status: delegationCappedStatus,
+            // Recompute the envelope metadata from BOTH arms: extraMetadata
+            // carries only strategy-declared fields, so the coverage arm's
+            // fields (already merged into finalResult.metadata) are re-derived
+            // here rather than spread wholesale (which would also drag stale
+            // duration/cost/confidence over the fresh values). Warnings
+            // CONCATENATE (review fix): two arms firing must not drop each
+            // other's reason — the receipt names every unmet requirement.
             extraMetadata: {
               ...params.extraMetadata,
-              terminatedBy: "abstained",
-              ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
-                ? { rawTerminatedBy: "abstained" }
+              ...honestEnvelopeMetadata(coverage),
+              ...honestEnvelopeMetadata(delegation),
+              ...(coverage.verificationWarning !== undefined &&
+              delegation.verificationWarning !== undefined &&
+              coverage.verificationWarning !== delegation.verificationWarning
+                ? {
+                    verificationWarning: `${coverage.verificationWarning}; ${delegation.verificationWarning}`,
+                  }
                 : {}),
-              abstention: { reason: resolvedText.slice(0, 200), missing: [] as string[] },
             },
-          })
-        : resolved;
+          });
 
     const judged: ReasoningResult = {
-      ...finalResult,
-      metadata: { ...finalResult.metadata, verdict },
+      ...delegationResult,
+      metadata: { ...delegationResult.metadata, verdict },
     };
     // The single sanctioned brand cast in the codebase (module-private symbol).
     return judged as JudgedReasoningResult;

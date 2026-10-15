@@ -155,6 +155,14 @@ export interface JudgmentComprehendShadowInput {
  * actually used by the rest of the kernel, produced by the existing
  * regex-only `classifyTask()` / `nominateRequiredTools()` path).
  *
+ * Wave 7.1 inversion gate (recorded, not implemented): consuming these
+ * answers (replacing the regex path) requires (1) sink-measured agreement
+ * ≥0.985 on site "task-comprehension" over ≥30 samples
+ * (`createJudgmentShadowSink().agreementBySite`), (2) explicit
+ * `sites: {"task-comprehension": true}` opt-in, and (3) judgment ledger
+ * entries on every inverted decision (auditability). The historical 98.5%
+ * figure is gate-methodology data, not a license — do not flip on folklore.
+ *
  * `buildInput` is a thunk, not a value — `JudgmentService` is checked FIRST,
  * so the caller's `classifyTask()` re-run + tool-roster `Set`/`.map()` (real,
  * non-trivial work for a large tool roster) is only paid when the feature is

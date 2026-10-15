@@ -37,7 +37,7 @@ import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { growRunLedger, ledgerSinkTarget } from "../kernel/ledger/ledger-sink.js";
-import { subAgentResultForDisplay, subAgentChildLedgerEntries } from "@reactive-agents/tools";
+import { subAgentResultForDisplay, subAgentChildLedgerEntries, subAgentChildEnvelopes } from "@reactive-agents/tools";
 import type { RunLedger } from "../kernel/ledger/run-ledger.js";
 import { emitPhaseEnd, makeStrategyEmitLog, publishReasoningStep } from "../kernel/utils/service-utils.js";
 
@@ -84,6 +84,9 @@ export interface CodeActionInput {
   // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
+  /** Commanded LLM sampling temperature — wins over each pass default (GH #246).
+   *  Threaded from the runtime command-first merge via ReasoningService params. */
+  readonly temperature?: number;
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
   readonly verifier?: Verifier;
   /**
@@ -229,7 +232,8 @@ export const executeCodeAction = (
       gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
         messages: [{ role: "user", content: user }],
         systemPrompt: withEnvContext(system),
-        temperature: 0,
+        // GH #246: commanded temperature wins; unset keeps the 0 default.
+        temperature: input.temperature ?? 0,
       }),
       (cause) =>
         new ExecutionError({
@@ -344,7 +348,9 @@ export const executeCodeAction = (
               { role: "user", content: repairUser },
             ],
             systemPrompt: withEnvContext(system),
-            temperature: 0.1 * iteration,
+            // GH #246: commanded temperature wins verbatim over the 0.1*iteration
+            // retry-diversity ramp; unset keeps the ramp exactly.
+            temperature: input.temperature ?? 0.1 * iteration,
           }),
           (cause) =>
             new ExecutionError({
@@ -398,6 +404,10 @@ export const executeCodeAction = (
               : JSON.stringify(subAgentResultForDisplay(tc.result)) ?? "";
           const obsContent = `[${tc.name} result]\n${resultText}`;
           const subAgentLedger = childRunLedgerOf(tc.result);
+          // Wave 5.3 review fix: the sandbox dispatch path stamps child
+          // envelopes like every other delegation route (same extractor the
+          // kernel primitive uses) so the terminal join sees them.
+          const childEnvelopes = subAgentChildEnvelopes(tc.result);
           yield* appendStep(
             makeStep("action", `[CODE-ACTION] ${tc.name}`, {
               toolCall: {
@@ -410,7 +420,9 @@ export const executeCodeAction = (
           );
           const obsStep = makeStep("observation", obsContent, {
             toolCallId: callId,
-            observationResult: makeObservationResult(tc.name, true, obsContent),
+            observationResult: makeObservationResult(tc.name, true, obsContent, {
+              ...(childEnvelopes.length > 0 ? { childEnvelopes: [...childEnvelopes] } : {}),
+            }),
             ...(subAgentLedger ? { subAgentLedger } : {}),
           } as ReasoningStep["metadata"]);
           yield* appendStep(obsStep, `code-action:execute:${iteration}`);
@@ -520,6 +532,13 @@ export const executeCodeAction = (
         break;
       }
 
+      // W5.5 strategy-tier honesty: the required-tools post-check is enforced
+      // at the terminal mint (finalizeStrategyResult receives requiredTools +
+      // runLedger below), not here. An in-loop gate would need kernel tool-
+      // call observations that this sandbox loop never produces — checking
+      // would misfire on every grounded run. The mint's groundedOnRequired
+      // verdict + 5.1 coverage cap are the minimum, with zero new machinery.
+
       // ── Retry — regenerate code with verifier feedback ────────────────────
       yield* appendStep(
         makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`),
@@ -547,7 +566,9 @@ export const executeCodeAction = (
             { role: "user", content: retryUser },
           ],
           systemPrompt: withEnvContext(system),
-          temperature: 0.1 * iteration,
+          // GH #246: commanded temperature wins verbatim over the 0.1*iteration
+          // retry-diversity ramp; unset keeps the ramp exactly.
+          temperature: input.temperature ?? 0.1 * iteration,
         }),
         (cause) =>
           new ExecutionError({

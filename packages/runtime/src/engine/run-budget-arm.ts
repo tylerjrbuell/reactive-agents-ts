@@ -9,7 +9,10 @@
 // unbudgeted — a run could exceed its cap by a full auxiliary pass.
 //
 // The runtime's `ExecutionEngine.execute` is the true once-per-run boundary
-// (`agent.run()` → one `execute(task)`; sub-agents get their own), so the meter
+// (`agent.run()` → one `execute(task)`; a delegated child runs INSIDE the
+// parent's fiber tree and its spend folds into the parent's meter via
+// `sub-agent-executor.ts` (W5.4): there is ONE meter per ROOT run, never a
+// private child meter the parent would under-count), so the meter
 // is armed HERE. Every LLM call the run makes — the main reasoning pass AND
 // every auxiliary pass — flows through the observable wrapper and feeds this
 // one accumulator, and the kernel runner seeds `state.meta.runBudgetLimits`

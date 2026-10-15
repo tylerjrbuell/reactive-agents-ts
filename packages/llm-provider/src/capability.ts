@@ -61,6 +61,29 @@ export type ToolCallDialect = typeof ToolCallDialectSchema.Type;
 export const CapabilitySourceSchema = Schema.Literal("probe", "static-table", "user", "fallback");
 export type CapabilitySource = typeof CapabilitySourceSchema.Type;
 
+/**
+ * Producer version of the Ollama capability probe (local-probe.ts). Rows in
+ * the persistent capability store are trusted for ROUTING only when their
+ * `probeVersion` equals this constant; absent (legacy) or non-current rows
+ * are treated as a cache MISS and trigger a live re-probe, whose
+ * write-through overwrites them (self-heal — legacy files are never
+ * deleted). Rationale (2026-10-13 user bug): a pre-stub-guard probe
+ * persisted `toolTemplateEmitsTokens:false` for qwen3.5 measured off a
+ * 13-char plugin stub; the #243 guard changed what that scan MEANS, but the
+ * store outlived the change and pinned a native-capable model (2/2 live
+ * tool_calls) to text-parse. Same discipline as #243's calibration-prior
+ * versioning: persisted measurements stop being trusted when the producer
+ * evolves.
+ *
+ * v1 = W2a probe (size/thinking/template scan, NO stub guard).
+ * v2 = #243 probe (plugin-stub templates measure UNMEASURED, not false).
+ *
+ * Lives in the schema module (not the probe module) because BOTH the probe
+ * (stamp) and the store (gate) import it — placing it in local-probe.ts
+ * would cycle store ← probe (the store is imported BY the probe).
+ */
+export const CURRENT_PROBE_VERSION = 2
+
 // ─── Capability struct ───────────────────────────────────────────────────────
 
 /**
@@ -70,6 +93,12 @@ export type CapabilitySource = typeof CapabilitySourceSchema.Type;
  * `source` field carrying provenance for telemetry. `source` is mandatory
  * (the resolver always knows where the value came from) and isn't counted
  * against the documented "12 fields" count — it's plumbing, not capability.
+ *
+ * Wave 2a (2026-10-13) adds two OPTIONAL probe-ladder fields —
+ * `parameterSizeBillions` and `toolTemplateEmitsTokens` — that exist only to
+ * carry measured probe facts across the persistent store. They extend the
+ * documented surface rather than replacing it; static-table/fallback paths
+ * leave them undefined ("not measured"), never guessed.
  */
 export const CapabilitySchema = Schema.Struct({
   /** Provider identifier — matches the values accepted by `withProvider()`. */
@@ -119,8 +148,66 @@ export const CapabilitySchema = Schema.Struct({
   /** Tool-calling dialect — drives ToolCallingDriver selection. */
   toolCallDialect: ToolCallDialectSchema,
 
+  /**
+   * Model parameter count in billions, parsed from the probe's
+   * `details.parameter_size` ("1.7B" → 1.7, "120B" → 120). Probe-only:
+   * undefined when the descriptor did not come from a /api/show-style probe
+   * or the provider did not report a size. Drives tier classification and
+   * local-reliability diagnostics.
+   */
+  parameterSizeBillions: Schema.optional(Schema.Number),
+
+  /**
+   * Tri-state detection of whether the model's chat template renders
+   * tool-call tokens. `true` — template references tool-call constructs
+   * (measured, tool-capable rendering path exists). `false` — template was
+   * measured and emits NO tool tokens regardless of what `capabilities`
+   * advertises (the classic broken-tools local model). `undefined` — never
+   * measured (static-table entry, or a probe response lacking the template).
+   *
+   * Consumers MUST treat `undefined` as "unknown" (fail-permissive), never
+   * as "false" — see `deriveSupportsToolCalling` in providers/local.ts.
+   */
+  toolTemplateEmitsTokens: Schema.optional(Schema.Boolean),
+
+  /**
+   * Marks a row that describes harness SCAFFOLDING, not a real model —
+   * e.g. the `test/test` bench-window stub whose window/tier values exist
+   * only so capability preflight sees a resolvable row. A nominal row's
+   * `tier` is a placeholder, NOT an arbiter verdict (GH #239): tier/budget
+   * consumers MUST check this marker before letting the row classify
+   * anything, so stub truth never escapes the registry as a per-consumer
+   * name carve-out (the W2b `providerKey === "test"` special case it
+   * replaced was duplication waiting for Wave 3b to add a second one).
+   *
+   * Registry-level by design: the marker travels on the data, so any
+   * consumer gets the correct behavior for free from `resolveCapability` /
+   * `registerProbedCapability` / the store round-trip.
+   */
+  nominal: Schema.optional(Schema.Boolean),
+
   /** Where this capability came from (probe / static-table / fallback). */
   source: CapabilitySourceSchema,
+
+  /**
+   * Producer version of the CAPABILITY PROBE that wrote this row — stamped
+   * by `probeOllamaCapability` (local-probe.ts), NOT the calibration-suite
+   * PROBE_VERSION in calibration-runner.ts (different producer, different
+   * lifecycle; see CURRENT_PROBE_VERSION below).
+   *
+   * Consumers that TRUST a persisted probe row for routing MUST compare
+   * against `CURRENT_PROBE_VERSION`: absent (legacy) or non-current rows
+   * carry measurement semantics the current probe no longer endorses, and
+   * must be treated as a cache MISS (re-probe; write-through self-heals).
+   * Motivation (2026-10-13 user bug): a W2a-era row persisted
+   * `toolTemplateEmitsTokens: false` measured off qwen3.5's 13-char
+   * plugin-stub template; the #243 stub guard changed what that scan MEANS
+   * (stubs now measure UNMEASURED), but the store outlived the guard — the
+   * stale false pinned a capable model onto text-parse. Same class as #243's
+   * stale calibration priors: persisted measurement data must carry a
+   * version and stop being trusted when the producer changes.
+   */
+  probeVersion: Schema.optional(Schema.Number),
 });
 
 export type Capability = typeof CapabilitySchema.Type;
@@ -154,6 +241,10 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "test/test": {
     provider: "test",
     model: "test",
+    // GH #239: nominal stub row — its tier/window describe the harness stub,
+    // not a model. Tier consumers must NOT arbitrate from it (the registry
+    // read path checks this marker; see profile-resolver.tierFromRegistry).
+    nominal: true,
     tier: "local",
     maxContextTokens: 32_768,
     recommendedNumCtx: 32_768,
@@ -476,10 +567,12 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: false,
     supportsStreamingToolCalls: true,
-    // Reconciled 2026-07-30 to match calibrations/cogito-14b.json (3 runs
-    // averaged, "none") — see the qwen3:14b entry below for why this is a
-    // data-correctness fix with no current routing effect.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc: the May "none"
+    // claim traced to the calibration-runner's hardcoded stub (never a
+    // measurement). Today's behavioral probe: 3/3 parseable tool_calls.
+    // See calibrations/cogito-14b.json (probeVersion 2) +
+    // calibration-static-consistency.test.ts for the drift guard.
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   "ollama/qwen3:14b": {
@@ -494,17 +587,12 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    // Was "native-fc" (a hand-authored guess), contradicting this model's own
-    // empirical calibration file (calibrations/qwen3-14b.json, 3 runs
-    // averaged, toolCallDialect: "none") — reconciled 2026-07-30 in favor of
-    // the measured value (2026-07-29 systems audit, root cause #4). Currently
-    // has NO behavioral effect: select-driver.ts's `_dialect` param is
-    // unused (Stage A, text-parse routing not yet built) and every provider
-    // hardcodes `supportsToolCalling: true` regardless of dialect — this is
-    // a data-correctness fix, not a routing change. See
-    // calibration-static-consistency.test.ts for the guard against this
-    // recurring silently.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc. History: "native-fc"
+    // (hand guess) -> "none" (2026-07-30, matching the calibration file —
+    // which was the runner's hardcoded stub, never a measurement) -> today's
+    // behavioral probe 6/6 tool_calls at honest num_predict (the earlier
+    // "empty" reads were the W1 thinking-starvation artifact at low budgets).
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   // Smaller local-tier siblings used by the public `local-models` bench
@@ -524,10 +612,13 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsVision: false,
     supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
-    // Reconciled 2026-07-30 to match calibrations/qwen3-4b.json (measured
-    // "none") — see the qwen3:14b entry above for why this is a
-    // data-correctness fix with no current routing effect.
-    toolCallDialect: "none",
+    // Re-reconciled 2026-10-13 (GH #243) to native-fc: the 2026-07-30
+    // "none" alignment inherited a runsAveraged:1 prior that was the
+    // calibration-runner's hardcoded stub, and W2a's floor-less derivation
+    // then regressed S3 5/5 -> 0/5 on it. Today's probes: template emits,
+    // card declares tools, 6/6 behavioral tool_calls. See refreshed
+    // calibrations/qwen3-4b.json (probeVersion 2).
+    toolCallDialect: "native-fc",
     source: "static-table",
   },
   "ollama/cogito:8b": {

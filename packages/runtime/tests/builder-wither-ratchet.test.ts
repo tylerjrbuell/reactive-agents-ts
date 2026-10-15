@@ -39,7 +39,12 @@ import { ReactiveAgents } from "../src/index.js";
 // (`JudgmentService`) into the runtime + a public `agent.judge()`
 // primitive" — this is a new capability, not a variant of one already
 // exposed. CEILING raised to 86.
-const WITHER_CEILING = 86;
+// 2026-10-14 (Wave 6.7, local-tier-reliability program): `.withOpenInference()`
+// added — explicitly directed by the ratified program plan (Wave 6 task 6.7),
+// same new-capability justification as `.withJudgment()` above (no existing
+// wither composes the OpenInference tracer layer into the runtime).
+// CEILING raised to 87.
+const WITHER_CEILING = 87;
 
 function witherNames(): string[] {
   const proto = Object.getPrototypeOf(ReactiveAgents.create());

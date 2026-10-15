@@ -47,4 +47,40 @@ describe("resolveCanonical — single source-tagged Capability resolver", () => 
     // 200K claimed → ~520K chars effective (65% × 4 chars/token).
     expect(cap.effectiveWindowChars).toBe(Math.floor(200_000 * 0.65 * 4));
   });
+
+  // W3b item 5 (plan 3.3): the GH #239 nominal marker (llm-provider
+  // CapabilitySchema.nominal, 265ec7001) must survive the canonical round
+  // trip. Dropped, a nominal stub row re-enters tier arbitration as registry
+  // truth — the exact second-arbiter class design law #1 forbids.
+  it("nominal survives toCanonical (static-table stub row → canonical shape)", () => {
+    const cap = resolveCanonical("test", "test");
+    expect(cap.tier).toBe("local");
+    expect(cap.nominal).toBe(true);
+  });
+
+  it("nominal survives the CapabilityCache round trip (adaptCache load path)", () => {
+    const stub = resolveCanonical("test", "test");
+    // Seed a model with NO static-table row so only the cache tier can serve
+    // it — otherwise a static-table hit would make the assertion vacuous.
+    const cached = { ...stub, provider: "ollama", model: "nominal-roundtrip-x", source: "cache" as const };
+    const rows = new Map<string, typeof stub>();
+    rows.set("ollama/nominal-roundtrip-x", cached);
+    const cache = {
+      get: (provider: string, model: string) => rows.get(`${provider}/${model}`),
+      put: (cap: typeof stub) => {
+        rows.set(`${cap.provider}/${cap.model}`, cap);
+      },
+    };
+    // Resolver tier-1 reads through adaptCache's loadCapability (canonical →
+    // provider shape). The marker must ride; a "cache" source maps to "probe"
+    // (existing adapter semantics).
+    const cap = resolveCanonical("ollama", "nominal-roundtrip-x", { cache });
+    expect(cap.source).toBe("probe");
+    expect(cap.nominal).toBe(true);
+  });
+
+  it("real-model rows carry no nominal marker (undefined, not false-defaulted)", () => {
+    const cap = resolveCanonical("ollama", "qwen3.5:latest");
+    expect(cap.nominal).toBeUndefined();
+  });
 });

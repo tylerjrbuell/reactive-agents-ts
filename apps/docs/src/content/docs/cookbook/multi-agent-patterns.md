@@ -129,7 +129,15 @@ const result = await parent.run("Analyze this CSV and write a report.");
 ```
 
 Sub-agents spawn with a clean context window and inherit the parent's tool
-configuration. Recursion depth is limited to 3 by default (`MAX_RECURSION_DEPTH`).
+configuration. Recursion depth is limited to 3 by default (`MAX_RECURSION_DEPTH`),
+so a sub-agent can itself delegate (depth 2+) under the same cap.
+
+Delegation is honest by construction: a child's completion envelope crosses
+back on its result, and the parent terminal joins children worst-of — a child
+that finished `partial` (budget stop, unmet requirements, harness-authored
+output) caps a `completed` parent claim at `partial` rather than laundering it
+into a success. Child spend also folds into the parent's `.withBudget()` meter,
+so the run total the budget gates on includes delegation.
 
 Sub-agent persona can be specified via the `spawn-agent` tool parameters:
 - `role`: string — e.g., "Data Analyst", "Code Reviewer"

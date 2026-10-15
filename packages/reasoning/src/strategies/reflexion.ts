@@ -250,7 +250,9 @@ export const executeReflexion = (
         priorContext: genPriorContext,
         availableToolSchemas: capabilitySnapshot.availableToolSchemas,
         allToolSchemas: capabilitySnapshot.allToolSchemas,
-        temperature: 0.7,
+        // GH #246: commanded temperature wins (`input.temperature` already
+        // carries the runtime's command-first merge); unset keeps the 0.7 default.
+        temperature: input.temperature ?? 0.7,
       }),
     }, {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
@@ -261,7 +263,7 @@ export const executeReflexion = (
       modelId: input.modelId,
       providerName: input.providerName,
       taskDescription: input.taskDescription,
-      temperature: 0.7,
+      temperature: input.temperature ?? 0.7,
       // #40: arm the A2 long-horizon pace bands in the generate sub-kernel.
       ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
     });
@@ -336,7 +338,8 @@ export const executeReflexion = (
           systemPrompt:
             input.systemPrompt ??
             "You are completing a task. Produce the complete, final answer directly — no preamble, no offers.",
-          temperature: 0.7,
+          // GH #246: commanded temperature wins; unset keeps the 0.7 default.
+          temperature: input.temperature ?? 0.7,
         })
         .pipe(
           Effect.mapError(
@@ -635,7 +638,8 @@ export const executeReflexion = (
               initialMessages: s.runningMessages,
               availableToolSchemas: capabilitySnapshot.availableToolSchemas,
               allToolSchemas: capabilitySnapshot.allToolSchemas,
-              temperature: 0.6,
+              // GH #246: commanded temperature wins; unset keeps the 0.6 default.
+              temperature: input.temperature ?? 0.6,
             }),
             // Per-pass extra outside the cross-cutting/per-pass Picks; spread
             // AFTER the builder (not cross-cutting, so no drop risk).
@@ -649,7 +653,8 @@ export const executeReflexion = (
             modelId: input.modelId,
             providerName: input.providerName,
             taskDescription: input.taskDescription,
-            temperature: 0.6,
+            // GH #246: commanded temperature wins; unset keeps the 0.6 default.
+            temperature: input.temperature ?? 0.6,
             // #40: arm the A2 long-horizon pace bands in improve sub-kernels.
             ...(input.horizonProfile ? { horizonProfile: input.horizonProfile } : {}),
           });

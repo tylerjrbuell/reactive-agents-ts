@@ -135,6 +135,10 @@ export interface StepExecutorInput {
   readonly builtinFloorTools?: readonly string[];
   readonly maxRequiredToolRetries?: number;
   readonly modelId?: string;
+  /** Commanded LLM sampling temperature — `input.temperature ?? <pass default>`
+   *  at every generation seam (GH #246). Rides `...input` spread from
+   *  plan-execute's own input, which already carries the runtime command-first merge. */
+  readonly temperature?: number;
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
   readonly skillsContext?: import("../../kernel/state/kernel-state.js").SkillsContext;
   // FM-I (#195): cross-cutting fields forwarded to each per-step ReAct kernel.
@@ -399,7 +403,8 @@ export function executeStep(
           input.systemPrompt ??
             "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
         ),
-        temperature: 0.5,
+        // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+        temperature: input.temperature ?? 0.5,
         // Correlate this direct (non-kernel) analysis call so the observable-LLM
         // chokepoint emits a ContextPressure keyed to the real run — analysis
         // steps bypass the kernel hooks, so without this the Cortex gauge stays
@@ -470,7 +475,8 @@ export function executeStep(
       "You are a precise task executor. Complete the given step.",
     availableToolSchemas: kernelToolSchemas,
     maxIterations: maxKernelIter,
-    temperature: 0.5,
+    // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+    temperature: input.temperature ?? 0.5,
     taskId: input.taskId,
     parentStrategy: "plan-execute",
     kernelPass: `plan-execute:step-${stepIndex + 1}`,

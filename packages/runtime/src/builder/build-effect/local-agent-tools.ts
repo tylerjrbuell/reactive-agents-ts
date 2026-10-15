@@ -34,6 +34,7 @@ import {
   rootContext,
   childContext,
 } from "@reactive-agents/core";
+import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
   SubAgentResult,
@@ -48,6 +49,7 @@ import {
   type SpawnHandlers,
 } from "./spawn-handlers.js";
 import type { SubAgentTaskArgs } from "./sub-agent-executor.js";
+import { childCompletionEnvelope } from "./sub-agent-executor.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -204,12 +206,25 @@ export const createLocalAgentToolRegistration = (
 
         if (Exit.isSuccess(exit)) {
           const result = exit.value;
+          // W5.4 budget inheritance (mirror of sub-agent-executor.ts): the
+          // local-agent child runs on a light runtime whose LLM path never
+          // feeds the ambient run meter; fold its spend into the parent's
+          // meter so `.withBudget()` sees the true run total. No-op when the
+          // run carries no budget (meter null).
+          const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
+          if (ambientMeter !== null && typeof result.metadata.tokensUsed === "number") {
+            ambientMeter.tokens += result.metadata.tokensUsed;
+            if (typeof result.metadata.cost === "number") {
+              ambientMeter.cost += result.metadata.cost;
+            }
+          }
           return finalizeSubAgentResult(
             { name: subName },
             {
               output: String(result.output ?? ""),
               success: result.success,
               tokensUsed: result.metadata.tokensUsed,
+              completionEnvelope: childCompletionEnvelope(result),
             },
           );
         }
@@ -221,6 +236,8 @@ export const createLocalAgentToolRegistration = (
           success: false,
           summary,
           tokensUsed: 0,
+          // Wave 5.3 review fix: stamp the crash (see sub-agent-executor.ts).
+          completionStatus: "failed",
         } satisfies SubAgentResult;
       }),
     );

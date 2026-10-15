@@ -53,6 +53,9 @@ function toCanonical(c: ProviderCapability): ContractCapability {
       vision: c.supportsVision,
     },
     source: c.source,
+    // GH #239: the marker travels with the row — dropping it here would let a
+    // nominal stub's tier re-enter arbitration as registry truth (W3b item 5).
+    nominal: c.nominal,
   };
 }
 
@@ -84,6 +87,10 @@ function adaptCache(cache: CapabilityCache | undefined) {
         supportsStreamingToolCalls: c.supports.streamingToolCalls,
         toolCallDialect: c.dialect,
         source: c.source === "cache" ? "probe" : c.source,
+        // W3b item 5: nominal survives the canonical-cache round trip both
+        // ways — a stub row loaded from the cache must not masquerade as a
+        // real-model row to the resolver tier-1 path.
+        nominal: c.nominal,
       };
     },
     saveCapability: (_cap: ProviderCapability) => {

@@ -31,7 +31,7 @@ describe("ReactiveStrategy", () => {
     expect(result.metadata.tokensUsed).toBeGreaterThan(0);
   });
 
-  it("should return partial result when max iterations reached", async () => {
+  it("W4-live: an impossible task abstains efficiently (honest partial), not a max-iterations grind", async () => {
     // This layer returns responses that never contain "FINAL ANSWER"
     const layer = TestLLMServiceLayer();
     // Default TestLLMService returns "Test response" which has no FINAL ANSWER
@@ -54,11 +54,12 @@ describe("ReactiveStrategy", () => {
       program.pipe(Effect.provide(layer)),
     ));
 
-    // Mock returns empty text each turn → no FINAL ANSWER, no tools → loop detection
-    // fires on consecutive thought steps. Post-W4 (single-owner Arbitrator), an
-    // unresolved loop with no progress is reported as "failed" rather than papered
-    // over as "completed" — see AUDIT-overhaul-2026.md FIX-18 / W4.
-    expect(result.status).toBe("failed");
+    // W4-live default-on zero-evidence stand-down: no tools, no evidence, and an
+    // outstanding requirement → the harness abstains within <=2 iterations with a
+    // harness-authored output, reported as an honest `partial` (never a false
+    // `completed`; the engine maps terminatedBy:"abstained" → failure). It no
+    // longer grinds to max iterations.
+    expect(result.status).toBe("partial");
     expect(result.steps.length).toBeGreaterThan(0);
   });
 

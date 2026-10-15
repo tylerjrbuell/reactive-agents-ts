@@ -1,0 +1,7 @@
+{"check":"frozen: arbiter classifies all discover-tools results non-progress/meta-tool","expected":"all","observed":"146 verdicts, all=true","pass":true}
+{"check":"frozen: loop detector trips ((c)/(d) actuation)","expected":"trip","observed":"trip","pass":true}
+{"check":"frozen: pattern-(e) precondition on EVERY assessment (delta=0 ∧ outstanding>0)","expected":"all","observed":"n=2, all=true","pass":true}
+{"check":"FP-guard: substantive file ops classify substantive/credit-evidence","expected":"all","observed":"3 ops, all=true","pass":true}
+{"check":"FP-guard: loop detector SILENT on substantive run","expected":"silent","observed":"silent","pass":true}
+{"check":"FP-guard: run produces non-zero evidenceDelta turns (band-refusal premise absent)","expected":">=1","observed":"n=3","pass":true}
+{"check":"FP-guard: flail signature does NOT arm (stand-down requires it)","expected":"flailing=false","observed":"flailing=false refusal=false repetition=false","pass":true}

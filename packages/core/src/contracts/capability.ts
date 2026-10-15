@@ -63,6 +63,19 @@ export interface Capability {
   readonly maxOutputTokens: number;
   readonly supports: CapabilitySupports;
   readonly source: CapabilitySource;
+  /**
+   * GH #239 mirror (additive, optional): marks a row that describes harness
+   * SCAFFOLDING, not a real model — e.g. the `test/test` bench stub whose
+   * tier/window exist only so preflight sees a resolvable row. A nominal row's
+   * `tier` is a placeholder, NOT an arbiter verdict: tier/budget consumers must
+   * check this marker before letting the row classify anything.
+   *
+   * Mirrors `CapabilitySchema.nominal` in `@reactive-agents/llm-provider`
+   * (265ec7001). The canonical round-trip (`toCanonical` + `adaptCache`) must
+   * carry it both ways so a cached nominal row cannot silently re-enter
+   * arbitration as registry truth (W3b, plan 3.3 item 5).
+   */
+  readonly nominal?: boolean;
 }
 
 /**
@@ -115,9 +128,15 @@ export interface CapabilityResolver {
  * Tier-aware default per-result preservation budget (chars). Mirrors the
  * legacy `CONTEXT_PROFILES[tier].toolResultMaxChars` empirical table.
  * Exposed for callers building capabilities from probe/cache data.
+ *
+ * D-2026-07-30-H (Wave 2a, 2026-10-13): local was 4000 while mid was 1200 —
+ * a tiny tier preserving MORE than a capable one. Fixed to 1200 so the
+ * ladder is monotone at the local/mid boundary. This mirror MUST be updated
+ * together with CONTEXT_PROFILES; packages/reasoning/tests/context/
+ * context-profile-ratchet.test.ts pins both copies against each other.
  */
 export const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
-  local: 4000,
+  local: 1200,
   mid: 1200,
   large: 800,
   frontier: 600,

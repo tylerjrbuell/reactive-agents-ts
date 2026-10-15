@@ -33,7 +33,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/cost          — Complexity router, budget enforcer, semantic cache
 │   └── depends on: core, judgment, llm-provider, memory
 │
-├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail
+├── @reactive-agents/identity      — Ed25519 certs, RBAC, delegation, audit trail (direct use; no builder wither, full AuditLogger wiring deferred)
 │   └── depends on: core
 │
 ├── @reactive-agents/judgment      : Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted JudgmentBackend (TypeSafe/Jev + LLM-emulation + Ollama System One backend)

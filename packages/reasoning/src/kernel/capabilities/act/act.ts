@@ -83,17 +83,6 @@ export const FILE_TOOL_NAMES = new Set([
   "shell-execute",
 ]);
 
-/** Extract the text content of the last assistant message from the conversation history. */
-function getLastAssistantText(messages: readonly KernelMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg && msg.role === "assistant") {
-      return typeof msg.content === "string" ? msg.content : "";
-    }
-  }
-  return "";
-}
-
 const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
   Effect.serviceOption(ObservableLogger).pipe(
     Effect.flatMap((opt) =>
@@ -222,8 +211,27 @@ export function handleActing(
 
     let pendingCalls: readonly ToolCallSpec[];
     if (context.toolCallingDriver.mode === "text-parse") {
-      const lastAssistantText = getLastAssistantText(state.messages);
-      const extracted = context.toolCallingDriver.extractCalls(lastAssistantText, filteredToolSchemas);
+      // W3a review r1#1/#3 dispatch semantics, pinned by
+      // tests/kernel/text-parse-transition.test.ts:
+      //  1. The GATED set wins. think.ts's act-mode transition applied the
+      //     same required-tools/budget/dep-chain gate the native branch uses
+      //     and stored the survivors on meta.pendingNativeToolCalls —
+      //     re-extracting the raw markup ahead of it would silently bypass
+      //     budget drops (the gate only bites if dispatch consumes it).
+      //  2. When NO gated set rides the checkpoint, re-extract THIS turn's
+      //     text from meta.lastThought (set alongside the native branch's
+      //     convention) — the legacy/resume fallback that keeps the driver's
+      //     extractCalls seam reached.
+      //  3. The conversation THREAD is never an extraction source. When
+      //     acting is entered, the last assistant message is the PREVIOUS
+      //     turn's already-executed markup (assistant entries land in
+      //     state.messages only at end-of-acting via conversation-assembly)
+      //     — parsing it re-dispatched stale calls.
+      const gatedPresent = pendingNativeCalls !== undefined && pendingNativeCalls.length > 0;
+      const fallbackText = gatedPresent ? "" : state.meta.lastThought ?? "";
+      const extracted = fallbackText.length > 0
+        ? context.toolCallingDriver.extractCalls(fallbackText, filteredToolSchemas)
+        : [];
       const textParsedCalls: readonly ToolCallSpec[] = extracted.map((e, i) => ({
         id: `text-parse-${state.iteration}-${i}`,
         name: e.name,
@@ -823,6 +831,33 @@ export function handleActing(
           continue;
         }
 
+        // ── before-act hooks on the single-call path (Wave 6.3) ──────────
+        // The batch path runs these per turn; the single path never did, so
+        // `requireApprovalFor`-class killswitches silently approved every
+        // single-dispatched call (the common reactive path). Same abort
+        // semantics as the batch site: stop the turn with the killswitch's
+        // terminatedBy. Stash this call normalized (same shape as the batch
+        // site) — scoped to the hook call, never persisted.
+        {
+          const singleHookedState = {
+            ...state,
+            meta: { ...state.meta, pendingToolCalls: [tc] },
+          };
+          const singleCtrl = yield* Effect.promise(() =>
+            runPhaseHooks(pipeline, 'before', 'act', state.iteration, singleHookedState)
+          );
+          if (singleCtrl) {
+            return {
+              ...state,
+              status: singleCtrl.abort === 'terminate' ? 'failed' : 'done',
+              meta: {
+                ...state.meta,
+                terminatedBy: killswitchTerminatedBy(singleCtrl),
+              },
+            };
+          }
+        }
+
         // ── Execute the tool via ToolService ──────────────────────────────────
         const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
           toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
@@ -964,10 +999,18 @@ export function handleActing(
 
       let newConversationHistory = conversationAssembly.messages;
 
-      // 'before act' hooks — may abort iteration
+      // 'before act' hooks — may abort iteration. They observe the state
+      // WITH the normalized pending calls stashed (Wave 6.3): hooks such as
+      // `requireApprovalFor` must see text-extracted calls too, not just
+      // native-FC `pendingNativeToolCalls`. Scoped to this call — the stash
+      // is not persisted into the loop state (no stale reads next pass).
       {
+        const hookedState = {
+          ...state,
+          meta: { ...state.meta, pendingToolCalls: normalizedPendingCalls },
+        };
         const ctrl = yield* Effect.promise(() =>
-          runPhaseHooks(pipeline, 'before', 'act', state.iteration, state)
+          runPhaseHooks(pipeline, 'before', 'act', state.iteration, hookedState)
         );
         if (ctrl) {
           return {
@@ -1166,7 +1209,23 @@ export function handleActing(
       });
     }
 
-    // No pending native tool calls — shouldn't happen, transition back to thinking
+    // No pending native tool calls — shouldn't happen, transition back to thinking.
+    // W3a r1#3 (safe resume semantics, pinned by test): a text-parse acting
+    // entry with NEITHER a gated set NOR meta.lastThought cannot know which
+    // turn any markup belongs to, so it dispatches NOTHING — never a
+    // stale-thread re-parse — and records the degenerate resume as a
+    // harness_signal step (existing ledger kind) instead of staying silent.
+    if (context.toolCallingDriver.mode === "text-parse") {
+      const resumeSignal =
+        "text-parse: acting entered without a gated call set or this turn's text " +
+        "(resume edge) — dispatch skipped; stale-thread re-parse is never attempted.";
+      return transitionState(state, {
+        status: "thinking",
+        steps: [...state.steps, makeStep("harness_signal", resumeSignal)],
+        pendingGuidance: undefined,
+        iteration: state.iteration + 1,
+      });
+    }
     return transitionState(state, {
       status: "thinking",
       pendingGuidance: undefined,

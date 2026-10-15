@@ -5,6 +5,7 @@ export type {
   ToolCallObservation,
   ToolCallingDriver,
   ParseMode,
+  ToolCallDialectClaim,
   ToolSchema,
   ToolParamSchema,
 } from "./tool-calling-driver.js"

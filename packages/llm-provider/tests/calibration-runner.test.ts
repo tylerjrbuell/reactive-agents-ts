@@ -64,7 +64,13 @@ describe("calibration runner with mock Ollama", () => {
     const result = await runCalibrationProbes("test-model", 1);
     expect(result.modelId).toBe("test-model");
     expect(result.runsAveraged).toBe(1);
-    expect(result.probeVersion).toBe(1);
+    // probeVersion 2 (GH #243, 2026-10-13): the suite gained the REAL
+    // behavioral dialect probe (probe 6) replacing v1's hardcoded
+    // `toolCallDialect: "none"` stub — priors produced by v1 carry a
+    // non-measured dialect claim and are treated accordingly by the
+    // confidence floor. Mock here returns no tool_calls ⇒ dialect "none".
+    expect(result.probeVersion).toBe(2);
+    expect(result.toolCallDialect).toBe("none");
     expect(typeof result.calibratedAt).toBe("string");
     expect(typeof result.optimalToolResultChars).toBe("number");
   });

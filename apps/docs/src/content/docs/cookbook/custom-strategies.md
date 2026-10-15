@@ -7,7 +7,7 @@ sidebar:
   order: 5
 ---
 
-While the 5 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.
+While the 8 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.
 
 ## Strategy Interface
 

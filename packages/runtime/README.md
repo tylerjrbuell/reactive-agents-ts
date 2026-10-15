@@ -147,9 +147,7 @@ The full set of `.with*()` methods on `ReactiveAgentBuilder`:
 | `.withMaxIterations(n)` | Cap kernel loop iterations |
 | `.withCustomTermination(fn)` | Custom termination predicate |
 | `.withHook(hook)` | Lifecycle hook (`phase × timing` → fn) |
-| `.withLayers(layer)` | Inject extra Effect layers |
-| `.withIdentity()` | Identity service |
-| `.withInteraction()` | Human-in-the-loop interaction service |
+| `.withLayers(layer)` | Inject extra Effect layers (e.g. `@reactive-agents/identity` / `/interaction` services directly — there is no `.withIdentity()` / `.withInteraction()`; both were removed as provide-and-forget layers, use `.withApprovalPolicy()` / `.withUserInteraction()` for enforced gates) |
 | `.withPrompts(opts?)` | Prompt manager |
 | `.withCortex(url?)` | Cortex telemetry endpoint |
 | `.withStreaming({density?})` | Stream events back to caller |

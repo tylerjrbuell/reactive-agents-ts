@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, readFile, readdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { scaffold } from "../src/lib/scaffold.js";
@@ -109,9 +109,14 @@ describe("renderTemplate", () => {
     const pkg = files.find((f) => f.path === "package.json")!;
     const parsed = JSON.parse(pkg.content) as Record<string, unknown>;
     expect(parsed.name).toBe("demo-app");
-    // Fallback must track the current release major/minor — templates use
-    // >=0.14 APIs (withOutputSchema / withDurableRuns / withApprovalPolicy).
-    expect((parsed.dependencies as Record<string, string>)["reactive-agents"]).toBe("^0.14.0");
+    // The pin must track THIS package's own package.json version (the lockstep
+    // release stamps it) - templates use >=0.14 APIs (withOutputSchema /
+    // withDurableRuns / withApprovalPolicy), so a stale literal scaffolds
+    // projects that cannot compile. See tests/scaffold-version.test.ts.
+    const ownVersion = (JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version: string }).version;
+    expect((parsed.dependencies as Record<string, string>)["reactive-agents"]).toBe(`^${ownVersion}`);
     expect((parsed.engines as Record<string, string>).node).toBe(">=22.5");
   });
 

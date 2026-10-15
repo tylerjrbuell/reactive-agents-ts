@@ -291,6 +291,7 @@ export {
 export {
   ModelCalibrationSchema,
   loadCalibration,
+  loadDialectPriorClaim,
   normalizeModelId,
   clearCalibrationCache,
   buildCalibratedAdapter,

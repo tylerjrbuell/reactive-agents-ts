@@ -109,7 +109,7 @@ describe("withProfile(balanced()) — today's defaults (MOVE-6)", () => {
     expect(result.success).toBe(true);
 
     const report = await balancedAgent.capabilities.audit();
-    expect(report.defaultOnCount).toBe(4);
+    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
 
     await balancedAgent.dispose();
   });

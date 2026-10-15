@@ -9,6 +9,9 @@ import { Effect } from "effect";
 import type { ReasoningStep } from "../../../../src/types/step.js";
 import { finalizeStrategyResult } from "../../../../src/kernel/capabilities/sense/finalize-result.js";
 import { provideTestEnvelope } from "../../../../src/kernel/envelope/run-envelope.js";
+import { artifactProduced, outputContains } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
+import type { RunAssessment } from "../../../../src/kernel/assessment/assess.js";
+import type { RunContract } from "../../../../src/kernel/contract/run-contract.js";
 
 let seq = 0;
 function step(
@@ -48,6 +51,7 @@ function mint(params: {
   terminatedBy?: string;
   rawTerminatedBy?: string;
   steps?: readonly ReasoningStep[];
+  kernelMeta?: Record<string, unknown>;
 }) {
   return Effect.runPromise(
     provideTestEnvelope(
@@ -59,6 +63,7 @@ function mint(params: {
         start: Date.now(),
         totalTokens: 10,
         totalCost: 0,
+        ...(params.kernelMeta !== undefined ? { kernelMeta: params.kernelMeta as never } : {}),
         extraMetadata: {
           ...(params.terminatedBy !== undefined ? { terminatedBy: params.terminatedBy } : {}),
           ...(params.rawTerminatedBy !== undefined ? { rawTerminatedBy: params.rawTerminatedBy } : {}),
@@ -172,5 +177,242 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     });
     expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
     expect((result.metadata as Record<string, unknown>).abstention).toBeUndefined();
+  });
+
+  // ── W4-live honesty regression: the tools-layer dispatcher-early-stop path ──
+  //
+  // The live post-W4 close capture (fixtures/post-w4/MANIFEST §2) shipped 3/3
+  // runs with FABRICATED success claims through the RI dispatcher early-stop:
+  // zero substantive evidence (only `recall`, a META tool), an unsatisfied
+  // `answer` requirement, and model prose claiming completion
+  // ("has been successfully completed" / "successfully sent … 🚀"). The
+  // terminal was `dispatcher-early-stop`, which the give-up gate did NOT
+  // recognize as a harness-forced terminal, and the phrasing is not a give-up —
+  // so the gate was silent and the fabrication shipped as success.
+  const FABRICATED =
+    'The task "Send a slack message to the #general channel saying \'Hello, team!\'" has been ' +
+    "successfully completed. Tool result confirmation: Key: #general, Bytes saved: 60. " +
+    "No further action required. The message was delivered as requested. 🚀";
+
+  it("RED-FIRST: downgrades a dispatcher-early-stop FABRICATION (success-claim, zero grounding)", async () => {
+    // The live shape: the kernel ends `thinking` (RI dispatcher early-stop) →
+    // the strategy result is `partial` with substantive prose → the engine maps
+    // partial+substantive to success. Status `partial` is the real one.
+    const result = await mint({
+      output: FABRICATED,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect((result.metadata as Record<string, unknown>).abstention).toBeDefined();
+  });
+
+  it("downgrades the same fabrication when the strategy reports `completed`", async () => {
+    const result = await mint({
+      output: FABRICATED,
+      status: "completed",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+  });
+
+  it("downgrades a max_iterations FABRICATION (partial + zero grounding + success-claim)", async () => {
+    const result = await mint({
+      output: FABRICATED,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+  });
+
+  it("does NOT downgrade a dispatcher-early-stop run that grounded real evidence", async () => {
+    const result = await mint({
+      output: "Widget: 1200, Gadget: 800, Gizmo: 500 — here is the summary.",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [obsStep("web-search")],
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("end_turn");
+  });
+
+  // CONTROLLER RULING (round-1 review, minor #3): the widened fence's
+  // over-block shape is INTENDED, not a bug. A `partial` result on a
+  // HARNESS-FORCED terminal with zero successful real-tool observations
+  // abstains even when the prose is substantive and is neither a give-up nor
+  // a success-claim: the honesty thesis says a run that ground NOTHING under
+  // a harness-forced end has no warrant for a success verdict, whatever the
+  // answer reads like. The over-block cost (an occasional ungrounded-but-correct
+  // answer demoted) is accepted; the escape hatch for real work is evidence,
+  // pinned by the grounded-run test above.
+  it("INTENDED (ruling): substantive, non-give-up answer ALSO abstains on a harness-forced terminal with zero grounding", async () => {
+    const result = await mint({
+      output: "Sales breakdown by item: Widget 1200 units, Gadget 800 units, Gizmo 500 units; total 2500 units.",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    const md = result.metadata as Record<string, unknown>;
+    expect(md.terminatedBy).toBe("abstained");
+    expect(md.abstention).toBeDefined();
+    // The model's prose is kept; only the verdict changes (wire-or-delete honesty).
+    expect(String(result.output).startsWith("Sales breakdown by item")).toBe(true);
+  });
+});
+
+// ── 5.1 contract-coverage arm (the deterministic EVIDENCE net) ────────────────
+const COVERAGE_CONTRACT: RunContract = {
+  requirements: [
+    {
+      id: "artifact:./report.md",
+      kind: "artifact-produced",
+      spec: { description: "produce report.md", condition: artifactProduced("./report.md"), acceptance: "deterministic" },
+    },
+    { id: "answer", kind: "question-answered", spec: { description: "answer the task", acceptance: "self-critique" } },
+  ],
+  deliverables: [],
+  constraints: [],
+  horizon: "short",
+  postConditions: [artifactProduced("./report.md")],
+};
+
+function assessmentWith(outstanding: readonly string[]): RunAssessment {
+  return {
+    requirements: { satisfied: [], outstanding, blocked: [] },
+    deliverables: { produced: [], missing: [] },
+    evidenceDelta: 0,
+    phase: "gather",
+    pace: { burnRatio: 0.1, band: "green" },
+    health: { recentFailures: 0, consecutiveFailures: 0, stuckSignals: 0, iterationsSinceEvidence: 0, failureArgVariety: 0 },
+  };
+}
+
+const coverageMeta = (outstanding: readonly string[]): Record<string, unknown> => ({
+  runContract: COVERAGE_CONTRACT,
+  assessment: assessmentWith(outstanding),
+});
+
+describe("finalizeStrategyResult: 5.1 contract-coverage arm", () => {
+  it("(ii) S3-shape: a deterministic requirement outstanding caps the claim at partial", async () => {
+    const result = await mint({
+      output: "Here is the report.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")], // grounded
+      kernelMeta: coverageMeta(["artifact:./report.md", "answer"]),
+    });
+    expect(result.status).toBe("partial");
+    expect((result.metadata as Record<string, unknown>).outstandingCriteria).toContain("artifact:./report.md");
+  });
+
+  it("(iii) grounded + satisfied (only the answer floor outstanding) => completed unchanged", async () => {
+    const result = await mint({
+      output: "Here is the report.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: coverageMeta(["answer"]),
+    });
+    expect(result.status).toBe("completed");
+  });
+
+  it("(iv) an abstained verdict is not capped", async () => {
+    const result = await mint({
+      output: "Could not complete the task: no grounded answer could be produced from the available tools.",
+      status: "completed",
+      terminatedBy: "abstained",
+      steps: [obsStep("recall")],
+      kernelMeta: coverageMeta(["artifact:./report.md", "answer"]),
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect(result.status).toBe("completed");
+  });
+
+  it("(i) S1-shape: success-claim prose, 0 tool calls, harness-forced terminal => abstained + output scrubbed", async () => {
+    const FAB = "The task has been successfully completed. The message was successfully sent. 🚀";
+    const result = await mint({
+      output: FAB,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "dispatcher-early-stop",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+      kernelMeta: coverageMeta(["answer"]),
+    });
+    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    expect(String(result.output)).not.toContain("successfully sent");
+    expect(String(result.output)).toContain("Could not complete the task");
+  });
+});
+
+// ── 5.2 judgment-entry citation (ledger-side plumbing; NO inversion) ─────────
+describe("finalizeStrategyResult: 5.2 judgment-entry citation", () => {
+  it("cites the completion-judgment entry when present, WITHOUT inverting the verdict", async () => {
+    const result = await mint({
+      output: "The answer is 42.",
+      status: "completed",
+      kernelMeta: { completionJudgmentRef: "judgment://completion-satisfied" },
+    });
+    const verdict = (result.metadata as Record<string, unknown>).verdict as Record<string, unknown>;
+    expect(verdict.judgmentRef).toBe("judgment://completion-satisfied");
+    // Plumbing only — the citation never changes the status or enforces.
+    expect(result.status).toBe("completed");
+    expect(verdict.enforced).toBe(false);
+  });
+
+  it("omits the citation when the shadow did not fire (no judgment service)", async () => {
+    const result = await mint({ output: "The answer is 42.", status: "completed" });
+    const verdict = (result.metadata as Record<string, unknown>).verdict as Record<string, unknown>;
+    expect(verdict.judgmentRef).toBeUndefined();
+  });
+});
+
+// ── Important 1: ledger-satisfied `output:*` requirements exempt from the cap ─
+const OUTPUT_CONTRACT: RunContract = {
+  requirements: [
+    {
+      id: "output:Summary",
+      kind: "question-answered",
+      spec: { description: 'include "Summary" in the answer', condition: outputContains("Summary"), acceptance: "deterministic" },
+    },
+    { id: "answer", kind: "question-answered", spec: { description: "answer the task", acceptance: "self-critique" } },
+  ],
+  deliverables: [],
+  constraints: [],
+  horizon: "short",
+  postConditions: [outputContains("Summary")],
+};
+
+describe("finalizeStrategyResult: coverage cap exempts ledger-satisfied output requirements", () => {
+  it("RED-FIRST: an answer that DOES contain every mustInclude item does NOT cap to partial", async () => {
+    // assess() hard-false for the OutputContains shape, so the requirement is
+    // ALWAYS in the assessment's `outstanding` partition even when the answer
+    // contains the section. The ledger path (`conditionMetByLedger`) is the
+    // authority; the cap must intersect with it.
+    const result = await mint({
+      output: "## Summary\nThe quarterly totals rose across both products.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: { runContract: OUTPUT_CONTRACT, assessment: assessmentWith(["output:Summary", "answer"]) },
+    });
+    expect(result.status).toBe("completed");
+  });
+
+  it("regression: a run MISSING a required section still caps to partial", async () => {
+    const result = await mint({
+      output: "The quarterly totals rose across both products.",
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [obsStep("file-write")],
+      kernelMeta: { runContract: OUTPUT_CONTRACT, assessment: assessmentWith(["output:Summary", "answer"]) },
+    });
+    expect(result.status).toBe("partial");
   });
 });

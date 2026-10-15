@@ -105,7 +105,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 ### 🔌 Providers & Models
 - **8 LLM providers**: Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
 - **Model-adaptive context**: 4 tiers (local, mid, large, frontier) with tier-aware prompts and compaction; this is what makes 4B+ Ollama models viable for tool-calling agents
-- **Adaptive tool calling**: an FC dialect probe routes to a native function-calling driver or a 3-tier text-parse driver (XML, JSON, pseudo-code)
+- **Adaptive tool calling**: an FC dialect probe routes to a native function-calling driver or a 3-tier text-parse driver (XML, JSON, pseudo-code); text-parse execution is currently opt-in behind `REACTIVE_AGENTS_TEXT_PARSE` (`shadow` = record would-have-executed, `act` = execute) while the Stage-B rollout completes
 - **Healing pipeline**: normalizes tool-name aliases, parameter aliases, paths, and type coercion before every execution, so malformed calls from smaller models get repaired instead of failing
 - **Fallback chains**: `withFallbacks()` for graceful degradation across providers and models
 - **Native thinking mode**: `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning; `.withModel({ thinking: true })` is the quick boolean
@@ -114,7 +114,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 ### 🛡️ Production Safety
 - **Judgment layer** *(opt-in)*: `.withJudgment()` + `agent.judge()` : calibrated typed Choice/Score/Noul judgments over TypeSafe/Jev, an LLM-emulation fallback, or a local Ollama System One backend (`backend: "ollama"`, no API key); `agent.listJudgmentModels()` lists the judgment backend's available models, `agent.judgeRank()` batch-ranks candidates by Score without a call per candidate; the guardrails battery, autonomy-confidence, and tool-healing sites can opt into the same primitive
 - **Guardrails**: pre-LLM injection detection, PII filtering, toxicity blocking, an opt-in judgment battery (`enableJudgmentBattery`) running parallel to the regex detectors, kill switch, behavioral contracts
-- **Ed25519 identity**: cryptographic agent certificates, RBAC, delegation chains, audit trails
+- **Ed25519 identity** *(direct service use; no builder wither — `.withIdentity()` was removed as a provide-and-forget layer)*: cryptographic agent certificates, RBAC, delegation chains, audit trails (full `AuditLogger` wiring is a future wave; use `@reactive-agents/identity` directly)
 - **Verification**: semantic entropy, fact decomposition, NLI hallucination detection
 - **Fabrication guard**: on by default; rejects invented empirical measurements (benchmark timings, speedups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
 - **Stall policy**: `.withStallPolicy()` fast-escalates after N ignored tool nudges instead of looping to the full iteration cap
@@ -157,7 +157,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **10,001 tests** across 1317 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
+- **10,001 tests** across 1323 files. Latest full run: 10,001 pass / 0 fail / 28 skip / 4 todo (2026-10-12)
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -174,7 +174,7 @@ bun add reactive-agents
 npm install reactive-agents
 ```
 
-> **Note:** `effect` ships as a dependency of `reactive-agents` and installs automatically. If you import from `effect` directly in your own code, add it explicitly: `bun add effect` (or `npm install effect`).
+> **Note:** `reactive-agents` declares `effect` as a **peer dependency** (`^3.10.0`), and so do most framework packages. A few — e.g. `@reactive-agents/core` — *additionally* declare it as a regular dependency (a dual declaration), so `effect` arrives in your install tree transitively via the framework regardless, while the peer declaration is how the packages ask your app to share one `effect` version with them. If you import from `effect` directly in your own code, declare it explicitly: `bun add effect` (or `npm install effect`).
 
 Set your provider key first (each provider's variable is listed in [Environment Variables](#environment-variables) below):
 
@@ -590,10 +590,10 @@ Provider applicability: honored by providers that expose a context-window knob (
 | [`@reactive-agents/guardrails`](packages/guardrails)                       | Pre-LLM safety: injection detection, PII filtering, toxicity blocking                                                                                                                     |
 | [`@reactive-agents/verification`](packages/verification)                   | Post-LLM quality: semantic entropy, fact decomposition, NLI hallucination detection                                                                                                       |
 | [`@reactive-agents/cost`](packages/cost)                                   | Multi-factor complexity routing, per-execution budget enforcement, semantic cache                                                                                                         |
-| [`@reactive-agents/identity`](packages/identity)                           | Ed25519 agent certificates, RBAC policies, delegation chains, audit logging                                                                                                               |
+| [`@reactive-agents/identity`](packages/identity)                           | Ed25519 agent certificates, RBAC policies, delegation chains, audit logging *(direct use; no builder wither — full AuditLogger wiring deferred)* |
 | [`@reactive-agents/observability`](packages/observability)                 | Distributed tracing (OTLP), MetricsCollector, structured logging, console and JSON exporters                                                                                              |
 | [`@reactive-agents/trace`](packages/trace)                                 | Structured execution traces: `TraceEvent` schema, recorders, span helpers, backing replay and diagnose                                                                                    |
-| [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning                                                                                                                  |
+| [`@reactive-agents/interaction`](packages/interaction)                     | 5 autonomy modes, checkpoint/resume, approval gates, preference learning *(direct service use; no builder wither — enforced run gates live in `.withApprovalPolicy()` / `.withUserInteraction()`)* |
 | [`@reactive-agents/prompts`](packages/prompts)                             | Version-controlled template engine with variable interpolation and a prompt library                                                                                                       |
 | [`@reactive-agents/eval`](packages/eval)                                   | Evaluation framework: Jev-judge (default) + LLM-as-judge scoring, EvalStore persistence, comparison reports, repeat-run variance                                                          |
 | [`@reactive-agents/judgment`](packages/judgment)                           | Calibrated typed judgment primitive (Choice/Score/Noul) over a provider-abstracted backend: TypeSafe/Jev, or an LLM-emulation fallback needing no TypeSafe key                            |
@@ -649,7 +649,7 @@ Includes per-phase timing, tool-call summary, cost estimate, and smart alerts, a
 ## CLI (`rax`)
 
 ```bash
-rax init my-project --template full              # Scaffold a project
+rax init my-project --template with-tools        # Scaffold a project
 rax create agent researcher --recipe researcher   # Generate an agent from recipe
 rax create agent my-agent --interactive           # Interactive scaffolding (readline prompts)
 rax demo                                           # Run the live demo with a detected provider, or recorded output
@@ -897,7 +897,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (10,001 tests / 1317 files, ~3m)
+bun test                 # Run full test suite (10,001 tests / 1323 files, ~3m)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

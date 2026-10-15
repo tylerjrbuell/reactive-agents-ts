@@ -965,7 +965,10 @@ export type CompletionResponse = Schema.Schema.Type<
 /**
  * Events streamed during an LLM response.
  * Used when streaming responses rather than waiting for full completion.
- * Events arrive in sequence: text_delta(s), then tool_use_start/delta(s) if applicable, then content_complete, then usage.
+ * Events arrive in sequence: thinking_delta(s) then text_delta(s) for thinking
+ * models (thinking_delta is only emitted when the provider's thinking-capability
+ * seam is on for the model), then tool_use_start/delta(s) if applicable, then
+ * content_complete (optionally carrying the accumulated `thinking`), then usage.
  *
  * @example
  * ```typescript
@@ -986,6 +989,22 @@ export type StreamEvent =
       readonly text: string;
     }
   | {
+      /**
+       * Internal-reasoning chunk from a thinking model (e.g. qwen3's
+       * `message.thinking` stream under Ollama, Anthropic extended-thinking
+       * blocks). Wave 1 (Local-Tier Reliability): this is the streaming
+       * counterpart of the `thinking` field `complete()` already returns on
+       * `CompletionResponse` — the kernel's `providerThinking` /
+       * `rescueFromThinking` paths consume it. Emitted ONLY when the
+       * provider's thinking-capability seam is on for the model; non-thinking
+       * models produce zero of these. Additive variant — consumers that do
+       * not handle it simply ignore it (rollback-tolerant by construction).
+       */
+      readonly type: "thinking_delta";
+      /** Reasoning chunk content */
+      readonly thinking: string;
+    }
+  | {
       /** Tool invocation starting */
       readonly type: "tool_use_start";
       /** Unique tool call ID */
@@ -1004,6 +1023,15 @@ export type StreamEvent =
       readonly type: "content_complete";
       /** Full accumulated response content */
       readonly content: string;
+      /**
+       * Full accumulated internal reasoning for this response, when the
+       * provider's thinking-capability seam was on and the model actually
+       * emitted thinking (Wave 1 streaming symmetry with
+       * `CompletionResponse.thinking`). Absent otherwise — additive optional
+       * field, rollback-tolerant: consumers that ignore it behave exactly as
+       * before.
+       */
+      readonly thinking?: string;
       /**
        * Stop reason for the completed response when the provider reports one
        * at stream end (e.g. Ollama done_reason "length" → "max_tokens").

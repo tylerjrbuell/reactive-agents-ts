@@ -95,6 +95,7 @@ export type ModelCalibration = typeof ModelCalibrationSchema.Type;
 // ── Loader ────────────────────────────────────────────────────────────────────
 
 const calibrationCache = new Map<string, ModelCalibration | null>();
+const dialectClaimCache = new Map<string, DialectPriorClaim | null>();
 
 /**
  * Normalize a model ID for filename matching.
@@ -102,6 +103,81 @@ const calibrationCache = new Map<string, ModelCalibration | null>();
  */
 export function normalizeModelId(modelId: string): string {
   return modelId.toLowerCase().replace(/:/g, "-").replace(/\s+/g, "-");
+}
+
+/**
+ * Candidate file paths for a model's calibration JSON, in precedence order:
+ * pre-baked (from src or dist module dir) then the user cache. Shared by
+ * {@link loadCalibration} and {@link loadDialectPriorClaim} so both read the
+ * exact same file.
+ */
+function calibrationCandidatePaths(modelId: string): string[] {
+  const key = normalizeModelId(modelId);
+  const prebakedCandidates: string[] = [];
+  // Try pre-baked calibrations shipped with framework.
+  // When running from source, import.meta.url resolves to src/calibration.ts → src/calibrations/<key>.json.
+  // When running from dist, it resolves to dist/index.js → dist/calibrations/ (populated by build) or
+  // ../src/calibrations/ as a fallback (for test/dev scenarios where dist was produced without copying).
+  // import.meta.url is undefined on some bundled edge runtimes (e.g. workerd),
+  // so this must not throw — fall through to just the user cache path there.
+  try {
+    const moduleDir = path.dirname(new URL(import.meta.url).pathname);
+    prebakedCandidates.push(
+      path.join(moduleDir, "calibrations", `${key}.json`),
+      path.join(moduleDir, "..", "src", "calibrations", `${key}.json`),
+    );
+  } catch {
+    // no resolvable module URL — skip pre-baked lookup
+  }
+
+  // Try user cache
+  const userHome = process.env.HOME ?? "~";
+  prebakedCandidates.push(path.join(userHome, ".reactive-agents", "calibrations", `${key}.json`));
+  return prebakedCandidates;
+}
+
+/**
+ * An EXPLICIT dialect claim from a calibration prior. GH #243: the schema
+ * default (`toolCallDialect` absent → `"none"`) turned every pre-May prior
+ * into a phantom "none" claim that could strand a tool-capable model. A prior
+ * may influence routing ONLY when the field is literally present in the file.
+ */
+export interface DialectPriorClaim {
+  readonly dialect: "native-fc" | "text-parse" | "none";
+  readonly runsAveraged: number;
+}
+
+/**
+ * Read the raw calibration JSON for an explicit `toolCallDialect` claim.
+ * Returns undefined when no file exists OR the file omits the field — the
+ * schema default is NOT treated as a claim (see {@link DialectPriorClaim}).
+ * `runsAveraged` defaults to 0 when absent/non-numeric (zero confidence).
+ */
+export function loadDialectPriorClaim(modelId: string): DialectPriorClaim | undefined {
+  const key = normalizeModelId(modelId);
+  if (dialectClaimCache.has(key)) return dialectClaimCache.get(key) ?? undefined;
+  let claim: DialectPriorClaim | null = null;
+  for (const candidatePath of calibrationCandidatePaths(modelId)) {
+    try {
+      if (!fs.existsSync(candidatePath)) continue;
+      const data = JSON.parse(fs.readFileSync(candidatePath, "utf-8")) as Record<string, unknown>;
+      const dialect = data.toolCallDialect;
+      if (dialect === "native-fc" || dialect === "text-parse" || dialect === "none") {
+        const runs = data.runsAveraged;
+        claim = {
+          dialect,
+          runsAveraged: typeof runs === "number" && Number.isFinite(runs) ? runs : 0,
+        };
+      }
+      // First existing file wins (explicit or not) — same precedence as
+      // loadCalibration, which also stops at the first readable file.
+      break;
+    } catch {
+      // Ignore parse errors, try next path
+    }
+  }
+  dialectClaimCache.set(key, claim);
+  return claim ?? undefined;
 }
 
 /**
@@ -117,28 +193,7 @@ export function loadCalibration(modelId: string): ModelCalibration | undefined {
   const key = normalizeModelId(modelId);
   if (calibrationCache.has(key)) return calibrationCache.get(key) ?? undefined;
 
-  // Try pre-baked calibrations shipped with framework.
-  // When running from source, import.meta.url resolves to src/calibration.ts → src/calibrations/<key>.json.
-  // When running from dist, it resolves to dist/index.js → dist/calibrations/ (populated by build) or
-  // ../src/calibrations/ as a fallback (for test/dev scenarios where dist was produced without copying).
-  // import.meta.url is undefined on some bundled edge runtimes (e.g. workerd),
-  // so this must not throw — fall through to just the user cache path there.
-  const prebakedCandidates: string[] = [];
-  try {
-    const moduleDir = path.dirname(new URL(import.meta.url).pathname);
-    prebakedCandidates.push(
-      path.join(moduleDir, "calibrations", `${key}.json`),
-      path.join(moduleDir, "..", "src", "calibrations", `${key}.json`),
-    );
-  } catch {
-    // no resolvable module URL — skip pre-baked lookup
-  }
-
-  // Try user cache
-  const userHome = process.env.HOME ?? "~";
-  const userPath = path.join(userHome, ".reactive-agents", "calibrations", `${key}.json`);
-
-  for (const candidatePath of [...prebakedCandidates, userPath]) {
+  for (const candidatePath of calibrationCandidatePaths(modelId)) {
     try {
       if (!fs.existsSync(candidatePath)) continue;
       const data = JSON.parse(fs.readFileSync(candidatePath, "utf-8"));
@@ -159,6 +214,7 @@ export function loadCalibration(modelId: string): ModelCalibration | undefined {
  */
 export function clearCalibrationCache(): void {
   calibrationCache.clear();
+  dialectClaimCache.clear();
 }
 
 // ── Compile calibration to adapter + profile overrides ───────────────────────

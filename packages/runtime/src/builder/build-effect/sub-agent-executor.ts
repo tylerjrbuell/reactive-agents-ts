@@ -68,6 +68,7 @@ import type {
   RunLedger,
 } from "@reactive-agents/reasoning";
 import { mergePassLedger } from "@reactive-agents/reasoning";
+import { CurrentRunBudget } from "@reactive-agents/reasoning";
 import { makeSpawnHandlers } from "./spawn-handlers.js";
 
 // ─── Sub-agent meta-tool blacklist for delegated-tools-used computation ───
@@ -280,6 +281,47 @@ const extractDelegatedToolsUsed = (result: TaskResult): string[] => {
 const extractChildRunLedger = (result: TaskResult): RunLedger | undefined => {
   const ledger = (result.metadata as { runLedger?: unknown }).runLedger;
   return Array.isArray(ledger) ? (ledger as RunLedger) : undefined;
+};
+
+/**
+ * The child's completion envelope off its engine result (Wave 5.3 delegation-
+ * laundering join). Guarded, not cast: reads the top-level `terminatedBy` /
+ * `success` the engine stamps plus the FOLD-forwarded honesty markers on
+ * metadata (`outstandingCriteria`, `harnessAuthoredOutput`,
+ * `budgetTerminalPartial` — cast through as unknown keys since core's
+ * `ResultMetadata` schema does not declare them). A shape drift degrades to
+ * "completed"/"failed" off the success bit alone, never to a forged partial.
+ *
+ * Always returns an envelope (the parent join needs completed envelopes too —
+ * `joinEnvelopes` over all children, not just the unhappy ones).
+ */
+export const childCompletionEnvelope = (
+  result: TaskResult,
+): NonNullable<SubAgentRawResult["completionEnvelope"]> => {
+  const md = result.metadata as unknown as Record<string, unknown>;
+  const outstanding = md.outstandingCriteria;
+  const partialMarkers =
+    (Array.isArray(outstanding) && outstanding.length > 0) ||
+    md.harnessAuthoredOutput === true ||
+    md.budgetTerminalPartial === true;
+  const terminatedBy: unknown = (result as unknown as Record<string, unknown>).terminatedBy;
+  // Order matters: a partial-capped child arrives with success:false AND
+  // markers (the FOLD veto flips the bit), so the markers must be read before
+  // the success bit — otherwise every honest partial degrades to "failed".
+  const completionStatus =
+    terminatedBy === "abstained"
+      ? ("abstained" as const)
+      : partialMarkers
+        ? ("partial" as const)
+        : !result.success
+          ? ("failed" as const)
+          : ("completed" as const);
+  return {
+    completionStatus,
+    ...(md.harnessAuthoredOutput === true ? { harnessAuthoredOutput: true as const } : {}),
+    ...(md.budgetTerminalPartial === true ? { budgetTerminalPartial: true as const } : {}),
+    ...(typeof md.verificationWarning === "string" ? { verificationWarning: md.verificationWarning } : {}),
+  };
 };
 
 /**
@@ -614,6 +656,24 @@ export const buildSubAgentTask = (
 
       if (Exit.isSuccess(exit)) {
         const { execResult: result, childDashboard } = exit.value;
+        // W5.4 budget inheritance: a delegated child's LLM spend folds into
+        // the PARENT's ambient run-scoped meter. The child executes on a light
+        // runtime whose LLM path never calls `addRunSpend`, so without this
+        // fold the run meter under-counts by the full child spend (measured:
+        // parent-only 508 while the child added 224) and `.withBudget()`
+        // silently under-enforces on any delegating run: the double-spend
+        // the Wave-5 lift metric targets. `FiberRef.get` reads the ambient
+        // meter the parent's `armRunBudget` armed; null when the run carries
+        // no budget, in which case there is nothing to fold (byte-identical).
+        // NOTE: child FAILURE paths do not fold (no structured result to read)
+        //, disclosed in w5-runtime-report.md alongside the killswitch gap.
+        const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
+        if (ambientMeter !== null && typeof result?.metadata?.tokensUsed === "number") {
+          ambientMeter.tokens += result.metadata.tokensUsed;
+          if (typeof result.metadata.cost === "number") {
+            ambientMeter.cost += result.metadata.cost;
+          }
+        }
         const delegatedToolsUsed = extractDelegatedToolsUsed(result);
         // Wave C.2 — carry the child's run-scoped ledger back to the parent,
         // stamped `sub-agent:<name>` so the parent's kernel merges it under this
@@ -650,16 +710,22 @@ export const buildSubAgentTask = (
           delegatedToolsUsed:
             delegatedToolsUsed.length > 0 ? delegatedToolsUsed : undefined,
           ...(stampedChildLedger ? { childRunLedger: stampedChildLedger } : {}),
+          completionEnvelope: childCompletionEnvelope(result),
           // NOTE: `childDashboard` deliberately does NOT ride on `raw` — the
           // registry `record()` above is its ONLY transport. `raw` becomes the
           // `SubAgentResult` the model sees serialized in its observation, so a
           // DashboardData blob here would leak phases/tools/alerts/entropyTrace
           // straight into the LLM's context (and the tool cache) for free.
         };
+
         return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
       }
 
       // Failure or interruption — contained, never rethrown to the parent.
+      // Wave 5.3 review fix: a crashed child must still stamp an envelope
+      // (failed), or the parent join sees nothing and can claim `completed`
+      // over the hardest failures — the exact laundering the join exists to
+      // prevent.
       const cause = exit.cause;
       const summary = Exit.isInterrupted(exit)
         ? "Sub-agent was interrupted before completion"
@@ -670,6 +736,7 @@ export const buildSubAgentTask = (
         summary,
         tokensUsed: 0,
         stepsCompleted: 0,
+        completionStatus: "failed",
       } satisfies SubAgentResult;
     }),
   );

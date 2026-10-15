@@ -25,7 +25,7 @@
 // per-run harness config. What is LIVE-wired today by G1 is the guard
 // `horizonProfile` (runner.ts consumes it at run-start, and the recompile
 // escalates it on struggle). The remaining fields — `strategy` (Phase 7
-// Strategy→Policy), `verifierTier` / `budgetClass` / `toolSurface` /
+// Strategy→Policy), `budgetClass` / `toolSurface` /
 // `memoryPosture`, and purpose→tier routing (G2) — are the policy the later
 // waves consume; they are computed + recorded on `state.meta.harnessPlan` now
 // so those waves read ONE object instead of re-deriving.
@@ -52,9 +52,10 @@ export type PlanStrategy =
 /** Budget posture — how generous the run's iteration/token envelope should be. */
 export type PlanBudgetClass = "lean" | "standard" | "generous";
 
-/** Verification depth, weakest → strongest (mirrors the contract's AcceptanceTier order). */
-export type VerifierTier = "none" | "self-critique" | "checker" | "deterministic";
-
+/** Wave 7.4: `VerifierTier` deleted — the ladder had no consumer (no band
+ * concept exists for the planned "deepen on amber/red" actuation, and no
+ * reader outside this module). Tier-1 verification now serves the single
+ * result-boundary gate instead (see runtime result-verification.ts). */
 /** Memory participation posture. Default-off matches the framework default. */
 export type MemoryPosture = "off" | "read" | "read-write";
 
@@ -90,7 +91,6 @@ export interface HarnessPlan {
   readonly budget: HarnessBudgetPlan;
   readonly guard: HarnessGuardPlan;
   readonly toolSurface: "focused" | "full";
-  readonly verifierTier: VerifierTier;
   readonly memoryPosture: MemoryPosture;
   /** Provenance. */
   readonly source: PlanSource;
@@ -103,12 +103,6 @@ export interface HarnessPlan {
 /** Scaffolding depth is bounded so the mid-run recompile can never runaway. */
 export const MAX_SCAFFOLDING = 3;
 
-const VERIFIER_LADDER: readonly VerifierTier[] = [
-  "none",
-  "self-critique",
-  "checker",
-  "deterministic",
-];
 const BUDGET_LADDER: readonly PlanBudgetClass[] = ["lean", "standard", "generous"];
 
 const clamp = (n: number, lo: number, hi: number): number =>
@@ -121,8 +115,6 @@ function step<T>(ladder: readonly T[], value: T, delta: number): T {
   return ladder[clamp(i + delta, 0, ladder.length - 1)] as T;
 }
 
-const bumpVerifierTo = (v: VerifierTier, floor: VerifierTier): VerifierTier =>
-  VERIFIER_LADDER.indexOf(v) >= VERIFIER_LADDER.indexOf(floor) ? v : floor;
 
 // ─── Compiler inputs ─────────────────────────────────────────────────────────
 
@@ -147,17 +139,16 @@ export interface HarnessPlanInputs {
 
 interface TierBase {
   readonly scaffolding: number;
-  readonly verifier: VerifierTier;
   readonly toolSurface: "focused" | "full";
 }
 
 const TIER_BASE: Record<ModelTier, TierBase> = {
-  // Weak local models get the most scaffolding + a deterministic-leaning checker.
-  local: { scaffolding: 2, verifier: "checker", toolSurface: "focused" },
-  mid: { scaffolding: 1, verifier: "self-critique", toolSurface: "focused" },
-  large: { scaffolding: 1, verifier: "self-critique", toolSurface: "full" },
+  // Weak local models get the most scaffolding.
+  local: { scaffolding: 2, toolSurface: "focused" },
+  mid: { scaffolding: 1, toolSurface: "focused" },
+  large: { scaffolding: 1, toolSurface: "full" },
   // Strong frontier models run leanest — trusted to self-direct.
-  frontier: { scaffolding: 0, verifier: "none", toolSurface: "full" },
+  frontier: { scaffolding: 0, toolSurface: "full" },
 };
 
 /** Advisory iteration ceiling per complexity (05-#9: the plan owns the number). */
@@ -192,14 +183,9 @@ export function compileHarnessPlan(inputs: HarnessPlanInputs): HarnessPlan {
     reasons.push("long:+scaffold");
   }
 
-  // ── Verifier tier ──────────────────────────────────────────────────────────
-  let verifier = base.verifier;
-  if (isLong) {
-    // Long deliverables warrant at least a self-critique pass.
-    verifier = bumpVerifierTo(verifier, "self-critique");
-  }
-
   // ── Calibration-driven deepening (only when calibration is present) ─────────
+  // (Wave 7.4: the verifier-tier half of this deepening is gone with the
+  // ladder — hallucinate-risk still raises scaffolding, which IS consumed.)
   if (calibration) {
     if (calibration.systemPromptAttention === "weak") {
       scaffolding += 1;
@@ -207,8 +193,7 @@ export function compileHarnessPlan(inputs: HarnessPlanInputs): HarnessPlan {
     }
     if (calibration.observationHandling === "hallucinate-risk") {
       scaffolding += 1;
-      verifier = bumpVerifierTo(verifier, "checker");
-      reasons.push("cal:hallucinate-risk:+scaffold+verify");
+      reasons.push("cal:hallucinate-risk:+scaffold");
     }
   }
   scaffolding = clamp(scaffolding, 0, MAX_SCAFFOLDING);
@@ -245,7 +230,6 @@ export function compileHarnessPlan(inputs: HarnessPlanInputs): HarnessPlan {
       scaffoldingLevel: scaffolding,
     },
     toolSurface: base.toolSurface,
-    verifierTier: verifier,
     memoryPosture,
     source: "compiled",
     rationale: reasons.join(" "),
@@ -268,7 +252,6 @@ export interface PlanOverrides {
   readonly budgetClass?: PlanBudgetClass;
   readonly maxIterations?: number;
   readonly toolSurface?: "focused" | "full";
-  readonly verifierTier?: VerifierTier;
   readonly memoryPosture?: MemoryPosture;
 }
 
@@ -297,7 +280,6 @@ export function applyExplicitOverrides(
     },
     guard,
     toolSurface: overrides.toolSurface ?? plan.toolSurface,
-    verifierTier: overrides.verifierTier ?? plan.verifierTier,
     memoryPosture: overrides.memoryPosture ?? plan.memoryPosture,
     source: plan.source,
     rationale: plan.rationale,
@@ -339,9 +321,9 @@ const DEFAULT_RECOMPILE: Required<RecompileOptions> = {
  * assessment (no ledger mutation, no assessment recompute — DAG law). Bounded:
  * at most ONE step per call, scaffolding clamped to [0, MAX_SCAFFOLDING].
  *
- *  - DEEPEN (raise scaffolding, bump verifier, force horizonProfile "long") when
+ *  - DEEPEN (raise scaffolding, force horizonProfile "long") when
  *    the run is STRUGGLING: repeated failures, stuck signals, or no new evidence.
- *  - LEAN (lower scaffolding, ease verifier) when the run is FLOWING cleanly and
+ *  - LEAN (lower scaffolding) when the run is FLOWING cleanly and
  *    there is scaffolding to shed.
  *  - none when neither holds, or when a step would exceed the bounds.
  */
@@ -366,11 +348,9 @@ export function recompileOnAssessment(
 
   if (struggling) {
     const nextScaffold = clamp(plan.guard.scaffoldingLevel + 1, 0, MAX_SCAFFOLDING);
-    const nextVerifier = step(VERIFIER_LADDER, plan.verifierTier, 1);
     const nextBudget = step(BUDGET_LADDER, plan.budget.budgetClass, 1);
     const changed =
       nextScaffold !== plan.guard.scaffoldingLevel ||
-      nextVerifier !== plan.verifierTier ||
       nextBudget !== plan.budget.budgetClass;
     if (!changed) {
       return { plan, changed: false, direction: "none", reason: "already at max scaffolding" };
@@ -385,7 +365,6 @@ export function recompileOnAssessment(
         // tolerances (arbitrator veto window, terminal-gate redirect budget)
         // on short tasks precisely when the guards were needed most.
         guard: { ...plan.guard, scaffoldingLevel: nextScaffold },
-        verifierTier: nextVerifier,
         budget: { ...plan.budget, budgetClass: nextBudget },
         source: "recompiled",
         rationale: reason,
@@ -398,8 +377,7 @@ export function recompileOnAssessment(
 
   if (flowing) {
     const nextScaffold = clamp(plan.guard.scaffoldingLevel - 1, 0, MAX_SCAFFOLDING);
-    const nextVerifier = step(VERIFIER_LADDER, plan.verifierTier, -1);
-    const changed = nextScaffold !== plan.guard.scaffoldingLevel || nextVerifier !== plan.verifierTier;
+    const changed = nextScaffold !== plan.guard.scaffoldingLevel;
     if (!changed) {
       return { plan, changed: false, direction: "none", reason: "already lean" };
     }
@@ -408,7 +386,6 @@ export function recompileOnAssessment(
       plan: freezePlan({
         ...plan,
         guard: { ...plan.guard, scaffoldingLevel: nextScaffold },
-        verifierTier: nextVerifier,
         source: "recompiled",
         rationale: reason,
       }),

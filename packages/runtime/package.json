@@ -13,8 +13,10 @@
   "dependencies": {
     "@reactive-agents/a2a": "0.17.0",
     "@reactive-agents/channels": "0.17.0",
+    "@reactive-agents/compose": "0.17.0",
     "@reactive-agents/core": "0.17.0",
     "@reactive-agents/cost": "0.17.0",
+    "@reactive-agents/eval": "0.17.0",
     "@reactive-agents/gateway": "0.17.0",
     "@reactive-agents/guardrails": "0.17.0",
     "@reactive-agents/health": "0.17.0",
@@ -22,6 +24,7 @@
     "@reactive-agents/llm-provider": "0.17.0",
     "@reactive-agents/memory": "0.17.0",
     "@reactive-agents/observability": "0.17.0",
+    "@reactive-agents/observe": "0.17.0",
     "@reactive-agents/prompts": "0.17.0",
     "@reactive-agents/reactive-intelligence": "0.17.0",
     "@reactive-agents/reasoning": "0.17.0",
@@ -32,10 +35,13 @@
     "@standard-schema/spec": "^1.0.0"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.1",
+    "@opentelemetry/sdk-trace-node": "^1.30.1",
     "@reactive-agents/ui-core": "0.17.0",
-    "typescript": "^6.0.3",
     "bun-types": "latest",
-    "effect": "^3.10.0"
+    "effect": "^3.10.0",
+    "typescript": "^6.0.3"
   },
   "license": "MIT",
   "repository": {
@@ -59,7 +65,7 @@
       "default": "./dist/index.js"
     }
   },
-  "description": "Runtime for Reactive Agents — ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
+  "description": "Runtime for Reactive Agents \u2014 ExecutionEngine, ReactiveAgentBuilder, and createRuntime",
   "keywords": [
     "ai",
     "agents",

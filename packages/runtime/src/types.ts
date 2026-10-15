@@ -277,6 +277,16 @@ export interface ExecutionContextMetadata {
        */
       harnessAuthoredOutput?: boolean;
       /**
+       * W5 fold (kernel review Important 2): completion-envelope honesty
+       * markers from `honestEnvelopeMetadata` (W5.1 contract-coverage cap +
+       * honest-partial lanes). Mirror of `ExecutionReasoningResult.metadata`
+       * in `engine/util.ts`: the engine reads `outstandingCriteria` to veto
+       * the coarse success bit and forwards it onto `AgentResult.metadata`.
+       */
+      outstandingCriteria?: readonly string[];
+      budgetTerminalPartial?: boolean;
+      verificationWarning?: string;
+      /**
        * Open-string channel preserving raw kernel `state.meta.terminatedBy`
        * BEFORE narrowing to the closed TerminatedBy 5-value enum. Carries
        * dynamic killswitch reasons (e.g. "budget-limit:tokens:1/0") and the
@@ -847,6 +857,15 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
   readonly outputValidator?: (output: string) => { valid: boolean; feedback?: string };
   /** Options for `outputValidator` — controls retry count. */
   readonly outputValidatorOptions?: { maxRetries?: number };
+  /**
+   * Absolute directory the TraceRecorder writes per-run JSONL files to
+   * (`<traceDir>/<runId>.jsonl`), or `null`/absent when tracing is disabled.
+   * Threaded from the builder's resolved `_tracingConfig.dir` through
+   * `RuntimeOptions` so the finalize seam can mint honest
+   * `metadata.runId`/`metadata.tracePath` linkage (W0.5) without knowing the
+   * builder. Runtime-only (not Schema-serialised); derived, never user-authored.
+   */
+  readonly traceDir?: string | null;
   /**
    * Allowlist of tool names. When set, only these tools appear in the LLM prompt AND
    * execution of any non-listed (non-meta) tool is blocked. Use for hard agent restrictions.

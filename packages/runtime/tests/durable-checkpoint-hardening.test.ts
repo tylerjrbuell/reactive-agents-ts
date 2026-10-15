@@ -102,9 +102,15 @@ describe("inert durable-config warning", () => {
     } finally {
       console.warn = original;
     }
-    expect(calls.length).toBe(1);
-    expect(String(calls[0]?.[0])).toContain(".withDurableRuns() is configured but the run will NOT checkpoint");
-    expect(String(calls[0]?.[0])).toContain(".withReasoning()");
+    // Filter to the durable-run warning: builds without an explicit provider
+    // also emit the W0.3 implicit-test-provider warning (a different message),
+    // so exact-count assertions on all console.warn calls are too brittle here.
+    const inertWarnings = calls.filter((args) =>
+      String(args[0]).includes(".withDurableRuns() is configured but the run will NOT checkpoint"),
+    );
+    expect(inertWarnings.length).toBe(1);
+    expect(String(inertWarnings[0]?.[0])).toContain(".withDurableRuns() is configured but the run will NOT checkpoint");
+    expect(String(inertWarnings[0]?.[0])).toContain(".withReasoning()");
   });
 
   test("does not warn when .withDurableRuns() is paired with .withReasoning()", async () => {

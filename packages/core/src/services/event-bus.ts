@@ -412,6 +412,19 @@ export type AgentEvent =
       /** B8-T3b: delegation depth (RunContext.depth). 0 at the root, 1 for a
        *  directly-delegated sub-agent, etc. */
       readonly depth?: number;
+      /**
+       * GH #236: the run's prompt/task text, stamped at the emission site
+       * so `run-started` trace events (and therefore `RecordedRun.task`)
+       * carry the real task instead of "". Optional for backward-compat
+       * with older emitters and hand-rolled test events; consumers fall
+       * back to "" when absent. Capped at 64KB by the publisher
+       * (execution-engine.ts) under the same payload budget convention as
+       * `AgentCompleted.output` (see run-finalize.ts `RUN_OUTPUT_CAP`);
+       * `taskTruncated` marks a clip.
+       */
+      readonly task?: string;
+      /** True iff `task` was clipped to the 64KB publisher cap. */
+      readonly taskTruncated?: boolean;
     }
   | {
       /**
@@ -1241,6 +1254,14 @@ export type AgentEvent =
         readonly cacheReadTokensIn?: number;
         readonly costUsd?: number;
         readonly durationMs?: number;
+        /**
+         * Thinking forensics (W1.4): chars of thinking the model produced this
+         * exchange (absent = channel produced none). Pair with `thinkingPreview`
+         * so rax diagnose shows what the model actually reasoned.
+         */
+        readonly thinkingChars?: number;
+        /** W1.4 forensics: capped preview of the thinking text (same budget as other trace payloads). */
+        readonly thinkingPreview?: string;
       };
       readonly timestamp: number;
     }

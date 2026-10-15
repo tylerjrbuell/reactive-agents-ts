@@ -46,6 +46,15 @@ agent:my-agent              ← AGENT span
 
 Tool calls made from generated code go through the same tool-policy gate as every other strategy (v0.14): `allowedTools` and the `.withContract()` forbidden-tools deny-list are enforced per call inside the sandbox — a blocked tool is recorded as a failed call and never executes, even when the code names it directly.
 
+Reliability note: unlike the kernel-hosted strategies, `code-action` runs a coarse
+plan/execute/verify loop with no per-iteration repair hook and no kernel (no
+thought ledger, no loop detector). Its honesty guarantees come from the shared
+terminal mint it exits through: declared `requiredTools` are checked
+post-run (`groundedOnRequired` verdict), the contract-coverage cap applies, and
+a failing verifier verdict ships `partial`, never `completed`. Prefer a
+kernel-hosted strategy when you need mid-run steering, progress arbitration, or
+delegation composition.
+
 ## Stability
 
 `@experimental` — v0.11.1

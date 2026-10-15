@@ -8,9 +8,10 @@
 import { describe, it, expect } from "bun:test";
 import { Schema, ParseResult } from "effect";
 import { Capability, CapabilitySchema, STATIC_CAPABILITIES } from "../src/capability.js";
+import { resolveCapability } from "../src/capability-resolver.js";
 
 describe("Capability struct (Phase 1 S1.1)", () => {
-  it("schema exposes exactly the 12 documented fields", () => {
+  it("schema exposes exactly the documented field set", () => {
     // Pin the field set so adding/removing fields without updating callers
     // is caught at the schema level. Field order doesn't matter; presence does.
     const expected = new Set([
@@ -30,6 +31,16 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (2026-07-01): models whose API rejects `max_tokens` and
       // requires `max_completion_tokens` (OpenAI gpt-5.x / o-series).
       "requiresMaxCompletionTokens",
+      // Optional (Wave 2a, 2026-10-13): probe-ladder facts — parsed parameter
+      // size (billions) and tri-state chat-template tool-token emission.
+      "parameterSizeBillions",
+      "toolTemplateEmitsTokens",
+      // Optional (2026-10-13, qwen3.5 stale-row fix): producer version of
+      // the probe; the capability store refuses non-current probe rows.
+      "probeVersion",
+      // Optional (GH #239): marks harness-stub rows whose tier may not
+      // arbitrate for any consumer (test/test bench-window row).
+      "nominal",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count
@@ -37,6 +48,20 @@ describe("Capability struct (Phase 1 S1.1)", () => {
     const ast = (CapabilitySchema as unknown as { ast: { propertySignatures: { name: string }[] } }).ast;
     const actual = new Set(ast.propertySignatures.map((p) => p.name));
     expect(actual).toEqual(expected);
+  });
+
+  it("the test/test static row is marked nominal, and resolveCapability carries the marker (GH #239)", () => {
+    // Stub truth is registry-owned: consumers read the marker off the data,
+    // they do NOT special-case the provider name per call site.
+    expect(STATIC_CAPABILITIES["test/test"]?.nominal).toBe(true);
+    const resolved = resolveCapability("test", "test");
+    expect(resolved.nominal).toBe(true);
+    // Every OTHER real-model row must NOT carry the marker — the exemption
+    // is per-row, not per-provider-table.
+    for (const [key, cap] of Object.entries(STATIC_CAPABILITIES)) {
+      if (key === "test/test") continue;
+      expect(cap.nominal, key).not.toBe(true);
+    }
   });
 
   it("decodes a valid capability without error", () => {

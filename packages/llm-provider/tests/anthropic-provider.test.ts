@@ -299,3 +299,63 @@ describe("Anthropic thinking OFF path (byte-identical to pre-thinking)", () => {
     15000,
   );
 });
+
+// ─── Temperature threading — adapter contract pins (GH temp-threading) ──────
+//
+// Root of the Wave-4 defect is upstream (runtime reasoning-think.ts:336 drops
+// the commanded config.temperature; the kernel's tier-profile stamp then
+// shadows every adapter's `request.temperature ?? config.defaultTemperature`).
+// These pins certify the adapter half — including Anthropic's distinct
+// thinking-body builder — carries an explicit temperature (incl. 0) verbatim
+// and falls back to config.defaultTemperature when unset.
+describe("Anthropic temperature threading — adapter pin", () => {
+  async function captureTempBody(temperature?: number): Promise<Record<string, unknown>> {
+    capturedCreateOpts = null;
+    mockCreate.mockImplementationOnce(async (body: unknown) => {
+      capturedCreateOpts = body as Record<string, unknown>;
+      return {
+        id: "1",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        model: "claude-opus-4-8",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      };
+    });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.complete({
+          model: "claude-opus-4-8",
+          messages: [{ role: "user", content: "hello" }],
+          maxTokens: 100,
+          ...(temperature !== undefined ? { temperature } : {}),
+        });
+      }).pipe(
+        Effect.provide(
+          makeLayer({ model: "claude-opus-4-8", maxTokens: 100 }),
+        ),
+      ),
+    );
+    return capturedCreateOpts!;
+  }
+
+  it(
+    "explicit temperature 0 reaches the messages body verbatim (thinking off)",
+    async () => {
+      const body = await captureTempBody(0);
+      expect(body.temperature).toBe(0);
+    },
+    15000,
+  );
+
+  it(
+    "unset temperature falls back to config.defaultTemperature (0.7)",
+    async () => {
+      const body = await captureTempBody();
+      expect(body.temperature).toBe(0.7);
+    },
+    15000,
+  );
+});

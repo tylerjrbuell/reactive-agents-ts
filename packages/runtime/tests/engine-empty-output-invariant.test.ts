@@ -72,14 +72,13 @@ describe("engine empty-output invariant", () => {
     try {
       const r = await agent.run("Summarize the plot of Hamlet in one sentence.");
       expect(r.success).toBe(false);
-      // GH #206 (2026-10-12): an exhausted run with no verified answer now
-      // ships a deterministic honest abstention as its OUTPUT instead of
-      // silence. Pre-#206 this run shipped empty output and the engine's
-      // generic "no output" error; both were honest but unusable. The failure
-      // cause is still real and non-empty (the engine surfaces the abstention
-      // as the cause too).
+      // GH #206 (2026-10-12): an exhausted run with no verified answer ships a
+      // deterministic honest abstention as its OUTPUT instead of silence.
+      // W4-live: the default-on zero-evidence stand-down now owns this terminal
+      // earlier (<=2 iterations); both honest-abstention sentinels share this
+      // prefix. The failure cause is still real and non-empty.
       expect(String(r.output ?? "")).toContain(
-        "Could not complete the task within the available budget.",
+        "Could not complete the task",
       );
       expect(String((r as { error?: string }).error ?? "").length).toBeGreaterThan(0);
     } finally {

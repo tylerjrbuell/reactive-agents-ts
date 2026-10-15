@@ -260,6 +260,39 @@ export type {
 } from "./kernel/assessment/assess.js";
 export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
 
+// ─── Progress arbiter (design law #5 / W4.7) ─────────────────────────────────
+// The ONE SUBSTANTIVE vs NON-PROGRESS predicate every progress consumer derives
+// from (loop-detector patterns a/c/d/e, assess() evidenceDelta). Exported so the
+// replay-lane fixture pin can assert the thrash classification against the frozen
+// trace. `detectLoop` is exported for the same fixture pin.
+export {
+  classifyToolResult,
+  classifyActionStep,
+  classifyOutput,
+  creditsEvidence,
+  contentIsNoOp,
+  isMetaTool,
+  isPseudoTool,
+  actionToolName,
+} from "./kernel/assessment/progress-arbiter.js";
+export type {
+  ProgressClass,
+  NonProgressKind,
+  ProgressVerdict,
+  ObservationLike,
+} from "./kernel/assessment/progress-arbiter.js";
+export { detectLoop } from "./kernel/capabilities/reflect/loop-detector.js";
+export type { LoopDetectorOptions } from "./kernel/capabilities/reflect/loop-detector.js";
+// W4.5 — the loop pattern id + the deterministic escalation ladder.
+export { detectLoopPattern } from "./kernel/capabilities/reflect/loop-detector.js";
+export type { LoopDetection, LoopPatternId } from "./kernel/capabilities/reflect/loop-detector.js";
+export {
+  KERNEL_STRATEGY_CANDIDATES,
+  DEFAULT_STRATEGY_LADDER,
+  isDefaultCandidateSet,
+  selectLadderStrategy,
+} from "./kernel/capabilities/reflect/strategy-ladder.js";
+
 // ─── HarnessPlan — the policy compiler (meta-loop Phase 6 / task G1) ──────────
 // The adaptive crown (convergence ruling C6). Compiles the per-run harness config
 // from capability + calibration + contract.horizon + task classification; withers
@@ -278,7 +311,6 @@ export type {
   PlanOverrides,
   PlanStrategy,
   PlanBudgetClass,
-  VerifierTier,
   MemoryPosture,
   PlanSource,
   RecompileResult,
@@ -438,8 +470,25 @@ export { parsePartial } from "./structured-output/partial-parse.js";
 export { stripThinking } from "./kernel/utils/stream-parser.js";
 
 // ─── React Kernel (public entrypoint for callers that drive the kernel directly) ───
-export { executeReActKernel, reactKernel } from "./kernel/loop/react-kernel.js";
-export type { KernelInput, ReActKernelInput, ReActKernelResult, SkillsContext } from "./kernel/state/kernel-state.js";
+/**
+ * Public composable-kernel extension surface (W0.4a): `makeKernel` builds a
+ * `ThoughtKernel` from a substitutable `Phase` pipeline; `Guard` and
+ * `MetaToolHandler` type the act-stage interception and meta-tool dispatch
+ * hooks; `KernelContext` is what every phase/handler receives. These were
+ * previously reachable only through the docs' repo-relative imports.
+ */
+export { executeReActKernel, reactKernel, makeKernel } from "./kernel/loop/react-kernel.js";
+export type {
+  KernelInput,
+  ReActKernelInput,
+  ReActKernelResult,
+  SkillsContext,
+  KernelContext,
+  Phase,
+  ThoughtKernel,
+} from "./kernel/state/kernel-state.js";
+export type { Guard } from "./kernel/capabilities/act/guard.js";
+export type { MetaToolHandler } from "./kernel/capabilities/act/meta-tool-handlers.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

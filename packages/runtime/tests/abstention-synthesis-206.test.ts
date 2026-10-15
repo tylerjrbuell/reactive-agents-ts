@@ -49,7 +49,10 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(result.success).toBe(false);
     expect(typeof result.output).toBe("string");
     expect(result.output.length).toBeGreaterThan(0);
-    expect(result.output).toContain("Could not complete the task within the available budget.");
+    // W4-live: the default-on zero-evidence stand-down owns this terminal
+    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
+    // abstention; both honest-abstention sentinels share this prefix.
+    expect(result.output).toContain("Could not complete the task");
     expect(result.metadata.harnessAuthoredOutput).toBe(true);
     await agent.dispose();
   }, 20000);
@@ -66,7 +69,32 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(result.success).toBe(false);
     // The rejected continuation itself must never ship as the answer.
     expect(result.output).not.toContain("one more attempt");
+    // W4-live: the default-on zero-evidence stand-down owns this terminal
+    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
+    // abstention; both honest-abstention sentinels share this prefix.
+    expect(result.output).toContain("Could not complete the task");
+    await agent.dispose();
+  }, 20000);
+
+  // W4-live (round-1 fix, Important 3): the stand-down pre-empts the
+  // budget-exhaustion terminal on the default path, so the #206
+  // budget_exhausted_no_output e2e arm is exercised with `.withLongHorizon()` —
+  // the stand-down's escape hatch defers it, the run exhausts, and the exact
+  // #206 sentinel text ships. This keeps that path e2e-tested (not just the
+  // unit-pinned string).
+  it("long-horizon deferred: budget-exhaustion still ships the exact #206 sentinel", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("abstention-206-budget-longhorizon")
+      .withTestScenario([{ text: "" }])
+      .withReasoning({ strategies: { reactive: { maxIterations: 8, temperature: 0.7 } } })
+      .withLongHorizon()
+      .build();
+
+    const result = await agent.run("Test task");
+
+    expect(result.success).toBe(false);
     expect(result.output).toContain("Could not complete the task within the available budget.");
+    expect(result.metadata.harnessAuthoredOutput).toBe(true);
     await agent.dispose();
   }, 20000);
 
@@ -117,7 +145,9 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
         expect(r.success).toBe(false);
         expect(typeof r.output).toBe("string");
         expect(r.output.trim().length).toBeGreaterThan(0);
-        expect(r.output).toContain("Could not complete the task within the available budget.");
+        // W4-live: the default-on zero-evidence stand-down owns this terminal
+        // earlier; both honest-abstention sentinels share this prefix.
+        expect(r.output).toContain("Could not complete the task");
         console.log(`[live #206] model=${model} output=${JSON.stringify(r.output)}`);
       } finally {
         await agent.dispose();

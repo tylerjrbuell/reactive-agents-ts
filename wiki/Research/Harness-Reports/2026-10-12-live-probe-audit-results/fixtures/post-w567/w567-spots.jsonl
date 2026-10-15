@@ -1,0 +1,5 @@
+{"spot":"w6-gateway","executed":0,"expectExecuted":0,"pass":true,"terminatedBy":"max_iterations","wallMs":423,"trace":"01M4YK57S43PRGV73MMNZY27CB.jsonl"}
+{"spot":"w6-guard","success":true,"violations":0,"expectViolations":0,"pass":true,"wallMs":170,"trace":"01M4YK587DAN9YJ743ZDMGP7R2.jsonl"}
+{"spot":"w6-kill","calls":1,"terminal":"timeout-after:50ms","wallMs":386,"wallBoundedMs":60000,"pass":true,"trace":"01M4YK58BCBDY2N6H14VKXYQJN.jsonl"}
+{"spot":"w7-tier1","success":true,"checks":["action-success","non-empty-content","output-not-harness-parrot","output-not-shallow-giveup","output-not-continuation-intent","completion-claim","scaffold-leak","output-not-fabricated-measurement","output-not-contradicted-test-claim","output-not-fabricated-listed-entities","tier1-semantic-entropy","tier1-nli"],"hasEntropy":true,"hasNli":true,"pass":true,"wallMs":129,"trace":"01M4YK58QE4XP5NJ99V7YEMGMP.jsonl"}
+{"spot":"w7-shadow","success":true,"shadowEvents":0,"sites":[],"wallMs":150,"note":"presence only, non-gating","trace":"01M4YK58W0Y908DV4RA3WQ32P9.jsonl"}

@@ -13,8 +13,8 @@
 import { Effect, Stream, FiberRef, Either, Ref, Option } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
-import { LLMService, selectAdapter, estimateTokenCount } from "@reactive-agents/llm-provider";
-import { gatewayStream } from "../../llm-gateway.js";
+import { LLMService, selectAdapter, resolveCapability } from "@reactive-agents/llm-provider";
+import { gatewayStream, type LlmCallIntent } from "../../llm-gateway.js";
 import { downshiftBudgetBand } from "../../assessment/pace-actions.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
@@ -24,7 +24,8 @@ import {
 } from "../attend/context-utils.js";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
-import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitHarnessSignalInjected } from "../../utils/diagnostics.js";
+import { readTaughtCallShape, readTextParseTransitionMode } from "../../utils/text-parse-mode.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
@@ -76,10 +77,15 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { authorityOf } from "../decide/authority.js";
+import {
+  estimateWireTokens,
+  guardOutputReserve,
+  preflightHeadTruncation,
+} from "./head-truncation-guard.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
-import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
+import { extractThinking, isTruncatingStopReason, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
@@ -574,9 +580,12 @@ export function handleThinking(
     // ContextCurator (S2.5): sole authority for the per-iteration prompt.
     // - Slice A: port + default wrapper (byte-identical with ContextManager).
     // - Slice B: curator owns the trust-aware "Recent tool observations" section.
-    // - Slice C: profile.recentObservationsLimit threads through here so agents
-    //   can opt-in via profileOverrides without touching kernel internals.
-    //   Defaults to 0 across all tiers → off by default, preserves prior shape.
+    // - Slice C (HISTORICAL): profile.recentObservationsLimit once threaded
+    //   through here. W2f census grep: it now has ZERO code readers — the
+    //   field + its all-tier default 0 survive as a public profileOverrides
+    //   surface whose effect died in a later curator refactor. Truth law:
+    //   do not claim a thread that is not there. Removal (or re-wiring)
+    //   is filed as DEBT D-2026-10-13-W2F-1.
     // Canonical context-assembly seam: systemPrompt+messages come from
     // project(), the SOLE assembler. (The legacy `curate()` fallback and its
     // `RA_ASSEMBLY` env gate were deleted in Sprint-1 A2, 2026-06-02 — see
@@ -979,7 +988,17 @@ export function handleThinking(
         ];
     const llmTools = wireToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
-      description: ts.description,
+      // W2d 2.4 (FC payload honesty): on compact profiles
+      // ("names-only"/"names-and-types" — the local tier) the profile has
+      // ALREADY declared this model cannot afford description prose, yet the
+      // wire `tools:` array kept shipping it — measured ~4,000 corrected
+      // tokens ≈49% of an 8K window, ~80% of that descriptions. The wire
+      // array now honors the SAME semantics as the prompt-text stripper
+      // above (description cleared, not a second stripper): name, types,
+      // required list and enum values are KEPT; description strings are
+      // dropped. Full-detail profiles (mid/large/frontier) are
+      // byte-unchanged — big models keep tool fidelity.
+      description: compactProfile ? "" : ts.description,
       inputSchema: {
         type: "object" as const,
         properties: Object.fromEntries(
@@ -987,7 +1006,7 @@ export function handleThinking(
             p.name,
             {
               type: p.type ?? "string",
-              description: p.description,
+              ...(compactProfile ? {} : { description: p.description }),
               // Gemini requires `items` on every array-type parameter
               ...(p.type === "array" ? { items: p.items ?? { type: "string" } } : {}),
               ...(p.enum ? { enum: p.enum } : {}),
@@ -1017,6 +1036,98 @@ export function handleThinking(
       state.meta.assessment,
     );
 
+    // ── W2e head-truncation guard (plan 2.5) ────────────────────────────────
+    // Deterministic pre-request preflight: corrected prompt tokens (system +
+    // history + the schema term — fed for the first time here) + the gateway's
+    // own output budget, against the model's num_ctx ceiling. On overflow the
+    // ladder shrinks TOOL SURFACE first (required + classifier-relevant
+    // protected), then HISTORY oldest-first. The system-prompt HEAD is never
+    // the sacrifice: Ollama head-truncates silently when the real prompt
+    // overflows (the chars/4 undercount + never-estimated tools array made
+    // every gate read green while the agent ran without its identity). Fires
+    // only when a window ceiling is resolvable (profile.maxTokens, bound to
+    // recommendedNumCtx by resolveProfileWithWindow/applyCapabilityMaxTokens);
+    // identity-preserving no-op on fit. Pure arithmetic — no LLM call.
+    const thinkIntent: LlmCallIntent = {
+      purpose: "think",
+      tier: profile.tier,
+      thinkingModel: profile.thinkingModel === true,
+      ...(economizeBand ? { paceBand: economizeBand } : {}),
+      ...(state.maxOutputTokensOverride !== undefined
+        ? { budgetTokens: state.maxOutputTokensOverride }
+        : {}),
+    };
+    // Schema term reflects ONLY what actually ships: text-parse mode sends no
+    // `tools:` param at all, so charging it would over-fire on a phantom cost.
+    const shippedWireTools =
+      context.toolCallingDriver.mode !== "text-parse" ? llmTools : [];
+    // Fires ONLY on the provider whose wire actually enforces num_ctx by
+    // head-truncating (Ollama/local.ts resolveOllamaNumCtx): cloud providers
+    // take no numCtx param and reject/handle long prompts server-side, and
+    // nominal capability rows (fallback 2048 for unrecognized/test models)
+    // would otherwise starve surfaces that never needed the window. Same
+    // provider-scoping rationale as the demand-num_ctx policy below
+    // (D-2026-07-30-I: `tier: "local"` is the generic fallback and the test
+    // stub's row — tier alone would misfire here too).
+    // One tokenizer-family resolution shared by the guard bill AND the
+    // demand-num_ctx sizing (W2e review #2: both must see the SAME
+    // schema-inclusive, family-corrected arithmetic — no drift).
+    const wireTokenizerFamily = resolveCapability(
+      input.providerName ?? "",
+      input.modelId ?? "",
+    ).tokenizerFamily;
+    // W2e review #3: provider-default budget (resolveOutputBudget → undefined,
+    // maxTokens omitted = output bounded only by the window) reserves the
+    // documented thinking-safe minimum via the guard module, never 0.
+    const guardWire =
+      input.providerName === "ollama" && profile.maxTokens !== undefined
+        ? yield* preflightHeadTruncation({
+            systemPrompt: systemPromptWithDriver,
+            messages: messagesForRequest,
+            wireTools: shippedWireTools,
+            // The reserve is the gateway's OWN arithmetic for this exact
+            // intent — one definition of the budget, no drift between the
+            // guard and what gatewayStream will allocate.
+            outputBudget: guardOutputReserve(thinkIntent),
+            numCtx: profile.maxTokens,
+            tokenizerFamily: wireTokenizerFamily,
+            requiredTools: input.requiredTools ?? [],
+            relevantTools: input.relevantTools ?? [],
+          })
+        : null;
+    const wireMessages = guardWire?.messages ?? messagesForRequest;
+    const wireTools = guardWire?.wireTools ?? shippedWireTools;
+    if (guardWire !== null && guardWire.fired) {
+      const guardMessage =
+        `⚠️ head-truncation-guard: corrected prompt (${guardWire.correctedTokensBefore} tok) ` +
+        `+ output budget exceeded num_ctx ${profile.maxTokens}; shrank tool surface ` +
+        `(dropped ${guardWire.droppedToolNames.length > 0 ? guardWire.droppedToolNames.join(", ") : "none"})` +
+        ` then history (${guardWire.droppedMessageCount} oldest message(s)) to ` +
+        `${guardWire.correctedTokensAfter} tok. System prompt head untouched` +
+        `${guardWire.stillOverflowing ? " — STILL OVERFLOWS after both ladders; provider-side truncation risk remains" : ""}.`;
+      // The step is the LEDGER fact: step-projection maps harness_signal
+      // steps to the existing `harness-signal` kind through growRunLedger
+      // at the pass boundary (no new kinds — wire-or-delete honored by reuse).
+      state = transitionState(state, {
+        steps: [...state.steps, makeStep("harness_signal", guardMessage)],
+      });
+      yield* emitHarnessSignalInjected({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        signalKind: "other",
+        origin: "head-truncation-guard",
+        content: guardMessage,
+        metadata: {
+          correctedTokensBefore: guardWire.correctedTokensBefore,
+          correctedTokensAfter: guardWire.correctedTokensAfter,
+          numCtx: profile.maxTokens,
+          droppedToolNames: guardWire.droppedToolNames,
+          droppedMessageCount: guardWire.droppedMessageCount,
+          stillOverflowing: guardWire.stillOverflowing,
+        },
+      });
+    }
+
     // D-2026-07-30-I: demand-driven num_ctx (opt-in). Only the local Ollama
     // provider reads request.numCtx (local.ts resolveOllamaNumCtx — request
     // wins over capability/config defaults), so this is a no-op elsewhere.
@@ -1031,10 +1142,16 @@ export function handleThinking(
     const demandNumCtx =
       h.numCtxPolicy === "demand" && input.providerName === "ollama"
         ? nextNumCtx(
-            yield* estimateTokenCount([
-              { role: "system" as const, content: systemPromptWithDriver },
-              ...messagesForRequest,
-            ]),
+            // W2e review #2 (demand-policy leak): size from the guard's OWN
+            // schema-inclusive, family-corrected arithmetic — a bucket that
+            // ignored the FC tools array under-provisioned num_ctx while the
+            // guard (capped at the same ceiling) read green.
+            yield* estimateWireTokens(
+              systemPromptWithDriver,
+              wireMessages,
+              wireTools,
+              wireTokenizerFamily,
+            ),
             2000,
             state.meta.numCtxHighWater,
             profile.maxTokens,
@@ -1046,16 +1163,8 @@ export function handleThinking(
       });
     }
 
-    const llmStreamEffect = gatewayStream(llm, {
-      purpose: "think",
-      tier: profile.tier,
-      thinkingModel: profile.thinkingModel === true,
-      ...(economizeBand ? { paceBand: economizeBand } : {}),
-      ...(state.maxOutputTokensOverride !== undefined
-        ? { budgetTokens: state.maxOutputTokensOverride }
-        : {}),
-    }, {
-      messages: messagesForRequest,
+    const llmStreamEffect = gatewayStream(llm, thinkIntent, {
+      messages: wireMessages,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
       temperature: temp,
@@ -1066,7 +1175,9 @@ export function handleThinking(
       ...(demandNumCtx !== undefined ? { numCtx: demandNumCtx } : {}),
       // TextParseDriver: pass empty tools array — constrained providers (Anthropic/OpenAI)
       // enforce FC when tools are present, which breaks text-parse mode for local models.
-      ...(llmTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: llmTools } : {}),
+      // W2e: `wireTools` is the head-truncation-guard output (== llmTools when the
+      // request fits — identity-preserving).
+      ...(wireTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: wireTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
     });
 
@@ -1110,6 +1221,15 @@ export function handleThinking(
 
     // Accumulate content + emit text deltas via FiberRef callback
     let accumulatedContent = "";
+    // W1.3 thinking-channel consumption: accumulate the provider's internal
+    // reasoning (StreamEvent `thinking_delta` chunks, or the full accumulated
+    // text reported once on `content_complete.thinking`). Presence is NOT
+    // consent (W1.2 ruling): on thinking-capable models this channel flows
+    // even with no thinking config, so it is always-possible input here.
+    // Zero new parsing — the value is handed untouched to
+    // `thoughtResponse.thinking`, where the existing providerThinking /
+    // rescueFromThinking / lastThinking machinery below consumes it.
+    let accumulatedThinking = "";
     let accumulatedUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -1131,8 +1251,20 @@ export function handleThinking(
           if (textDeltaCb) {
             yield* textDeltaCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reason/think.ts:342", tag: errorTag(err) })));
           }
+        } else if (event.type === "thinking_delta") {
+          // W1.3 — internal-reasoning chunk (qwen3 `thinking` stream under
+          // Ollama, Anthropic extended-thinking blocks). Accumulated verbatim;
+          // never forwarded to the user-facing textDeltaCb.
+          accumulatedThinking += event.thinking;
         } else if (event.type === "content_complete") {
           accumulatedContent = event.content;
+          // Providers that report the full accumulated thinking once here
+          // (streaming symmetry with CompletionResponse.thinking) overwrite
+          // the delta-sum — they are the authoritative copy. Absent → keep
+          // whatever the deltas accumulated.
+          if (event.thinking !== undefined && event.thinking.length > 0) {
+            accumulatedThinking = event.thinking;
+          }
           // Extract stop reason from content_complete event if present
           if ("stopReason" in event && typeof (event as Record<string, unknown>).stopReason === "string") {
             accumulatedStopReason = (event as Record<string, unknown>).stopReason as string;
@@ -1251,6 +1383,12 @@ export function handleThinking(
       stopReason: accumulatedStopReason as StopReason,
       usage: accumulatedUsage,
       model: input.modelId ?? "unknown",
+      // W1.3 — mirror CompletionResponse.thinking (llm-provider types.ts): the
+      // provider's internal reasoning, when the model produced any. Set ONLY
+      // when non-empty so the no-thinking object shape is byte-identical to
+      // HEAD (arm-2 regression pin). Consumed below by the pre-existing
+      // providerThinking → rescueFromThinking → lastThinking machinery.
+      ...(accumulatedThinking.length > 0 ? { thinking: accumulatedThinking } : {}),
     };
 
     // Increment LLM call counter
@@ -1326,14 +1464,23 @@ export function handleThinking(
 
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
-    const providerThinking = (thoughtResponse as Record<string, unknown>).thinking as string | undefined;
+    const providerThinking = thoughtResponse.thinking;
     const thinking = extractedThinking || providerThinking || null;
     let thought = cleanContent || providerThinking || rawThought;
     // Thinking models (e.g. cogito) may put the full answer in the thinking field
     // with only a tiny fragment in content. When content is deficient, extract
     // structured value (final answer, code, tool calls) from thinking.
+    // W1.5-defect gate: the UNLABELED-PROSE fallback inside rescueFromThinking
+    // may only overwrite a non-empty visible answer when generation was CUT
+    // before the model finished. Computed deterministically from the exchange
+    // stop reason (Golden Rule 5 — the provider reported it; no LLM judgment).
+    // Natural-stop exchanges (end_turn) keep their terse visible answer — the
+    // post-w1 S2 capture (909a1b98) proved the un-gated guard shipped a
+    // reasoning tail over the correct '3052' on 5/5 terse-answer runs.
     if (thought.trim().length < 50 && thinking && thinking.length > 100) {
-      const rescued = rescueFromThinking(thinking, thought.trim());
+      const rescued = rescueFromThinking(thinking, thought.trim(), {
+        exchangeTruncated: isTruncatingStopReason(thoughtResponse.stopReason),
+      });
       if (rescued) thought = rescued;
     }
 
@@ -1427,6 +1574,161 @@ export function handleThinking(
       messages: messagesForTrace,
       rawResponse: rawThought,
     });
+
+    // ── W3a Stage B: text-parse think→acting transition ──────────────────────
+    // (spec 2026-06-03-driver-redesign Stage B; flag-gated, default `off` =
+    // byte-unchanged). The driver already TEACHES the markup format and
+    // PARSES it (`buildPromptInstructions` + `extractCalls`) — what was
+    // missing was the TRANSITION: nothing moved a text-parse loop to
+    // `acting`, so act.ts's text-parse `extractCalls` seam was unreachable
+    // and a dialect-`none` model burned maxIterations emitting markup
+    // (the S4 defect class). This block only DECIDES; dispatch stays
+    // single-sourced in act.ts's existing pipeline (guards, policy choke
+    // point, HealingPipeline, ledger seam — no second executor).
+    //
+    // TEACH/PARSE SINGLE SOURCE (GH #243): parsed against `driverSchemas`,
+    // the same schema set the prompt's tool instructions were built from —
+    // one grammar, builder is truth.
+    if (context.toolCallingDriver.mode === "text-parse") {
+      const textParseMode = readTextParseTransitionMode();
+      if (textParseMode !== "off") {
+        const parsed = context.toolCallingDriver.extractCalls(thought, driverSchemas);
+        // GH #243 pin (review r1#2): the markup marker we detect AND the
+        // format we re-teach on failure are READ from `driverInstructions` —
+        // the same taught string this run's prompt was built from — never
+        // hand-typed here. No structurally-readable block ⇒ no markup claim
+        // (fail safe to today's path rather than guess a grammar).
+        const taughtShape = readTaughtCallShape(driverInstructions);
+        const markerPresent = taughtShape !== undefined && thought.includes(taughtShape.open);
+        if (textParseMode === "shadow") {
+          const parsedSummaries = parsed.map((c) => ({
+            name: c.name,
+            argumentKeys: Object.keys(c.arguments),
+            parseMode: c.parseMode,
+          }));
+          // Observe-only promotion preflight: record the parse-diff (what
+          // the parser saw vs. what the loop did — nothing) WITHOUT
+          // touching the transition; falls through to today's exact path.
+          if (parsed.length > 0 || markerPresent) {
+            yield* emitHarnessSignalInjected({
+              taskId: state.taskId,
+              iteration: state.iteration,
+              signalKind: "other",
+              origin: "text-parse-shadow",
+              content: `text-parse shadow: driver parsed ${parsed.length} call(s) from this turn's markup; loop acted on 0 (shadow mode).`,
+              metadata: {
+                textParseMode,
+                parsedCalls: parsedSummaries,
+                markerPresent,
+                acted: false,
+              },
+            });
+          }
+        } else if (parsed.length > 0) {
+          // act mode: map to the SAME acting flow. Ids mirror act.ts's own
+          // text-parse mapping so the gated set and any legacy re-extraction
+          // agree.
+          const textParsedCalls: ToolCallSpec[] = parsed.map((e, i) => ({
+            id: `text-parse-${state.iteration}-${i}`,
+            name: e.name,
+            arguments: e.arguments,
+            ...(e.rationale ? { rationale: e.rationale } : {}),
+          }));
+          // Review r1#1 (controller ruling: mirror, not comment): run the
+          // parsed batch through the SAME pure gate the native resolver
+          // branch uses — per-tool budget prefilter (maxCallsPerTool Layer
+          // 3, its only enforcement point), dependency-chain optional-batch
+          // blocking, relevantTools pass-through, single-step mode
+          // (nextMovesPlanning disabled ⇒ one call per step), and the
+          // quotaBudgetConflict fail-fast via guardRequiredToolsBlock. No
+          // remaining gate delta vs native is known at the decision point.
+          const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
+          const { effective, blockedOptionalBatch } = gateNativeToolCallsForRequiredTools(
+            textParsedCalls,
+            input.requiredTools ?? [],
+            state.toolsUsed,
+            input.relevantTools,
+            toolCallCounts,
+            input.maxCallsPerTool,
+            input.requiredToolQuantities,
+            input.strictToolDependencyChain,
+            input.nextMovesPlanning,
+          );
+          if (blockedOptionalBatch) {
+            const redirect = guardRequiredToolsBlock(
+              textParsedCalls,
+              input,
+              state,
+              profile,
+              hooks,
+              newSteps,
+              newTokens,
+              newCost,
+              thought,
+              thinking,
+            );
+            if (redirect) return redirect;
+          }
+          if (effective.length > 0) {
+            // The native branch's exact transition shape: status acting +
+            // the GATED set on pendingNativeToolCalls (act.ts dispatches it
+            // ahead of any re-extraction) + meta.lastThought (this turn's
+            // text) for the resume/legacy extraction fallback.
+            return transitionState(state, {
+              steps: newSteps,
+              tokens: newTokens,
+              inputTokens: newInputTokens,
+              outputTokens: newOutputTokens,
+              cost: newCost,
+              status: "acting",
+              meta: {
+                ...state.meta,
+                pendingNativeToolCalls: effective,
+                lastThought: thought,
+                lastThinking: thinking,
+              },
+            });
+          }
+          // Parsed calls all gated out (budget/dep-chain) — fall through,
+          // exactly as the native branch does on an emptied batch.
+        } else if (markerPresent && taughtShape !== undefined) {
+          // act mode + markup + zero parsed: NEVER silent. Deterministic,
+          // observation-shaped message back into the loop (same house
+          // pattern as the required-tools nudge), ledger-visible via the
+          // existing observation → tool-result projection, retry
+          // instruction on the guidance channel (no stray USER message).
+          // The retry text QUOTES the live taught block (r1#2) — the nudge
+          // itself speaks builder truth, so it cannot drift from the grammar.
+          const failMsg =
+            "text-parse: your reply contained " + taughtShape.open + " markup but no tool call " +
+            "could be parsed. Re-emit exactly one call block in the taught format:\n" +
+            taughtShape.block;
+          const failStep = makeStep("observation", failMsg, {
+            observationResult: makeObservationResult("system", false, failMsg),
+          });
+          yield* hooks.onObservation(state, failMsg, false);
+          yield* emitHarnessSignalInjected({
+            taskId: state.taskId,
+            iteration: state.iteration,
+            signalKind: "other",
+            origin: "text-parse-parse-failure",
+            content: failMsg,
+            metadata: { textParseMode, parsedCalls: [], markerPresent: true, acted: false },
+          });
+          return transitionState(state, {
+            steps: [...newSteps, failStep],
+            tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            priorThought: thought.trim(),
+            pendingGuidance: { errorRecovery: failMsg },
+          });
+        }
+        // act mode, no markup, nothing parsed → today's path (answer/loop).
+      }
+    }
 
     // ── FAST-PATH: trivial task exit ─────────────────────────────────────────
     // If the model produced no tool call, no FINAL ANSWER prefix (handled by

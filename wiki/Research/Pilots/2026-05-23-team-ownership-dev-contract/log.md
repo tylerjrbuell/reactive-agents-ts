@@ -1015,3 +1015,362 @@ task: "System One decision backends Task 7 kernel half: chunkQuestions(toolNames
 result: completed, confidence 0.95
 outcome: "accepted: working tree already contained the implementation (residue of an interrupted funds-killed attempt); warden verified rather than re-implemented (red via HEAD-src restore 2-vs-5 ask calls, green 31/0 comprehend, typecheck 9/9, zero new casts). Parent re-verified (comprehend + kernel loop 133/0, zero casts) and integrated per warden no-commit contract. Independent Task 7 review covers both halves."
 ```
+
+```yaml
+date: 2026-10-12
+warden: runtime-warden
+task: "Wave 0 W0.3: implicit-test-provider warning — builder tracks _providerExplicit; build/buildEffect emit actionable once-per-build warning when provider silently defaults to 'test' (fake-green front door); explicit arms (.withProvider('test'), .withTestScenario, .withReplayLLM override) silent"
+result: completed, confidence 0.85 (round 2; round 1 was 0.7)
+outcome: "accepted: parent verifier green (builder-test-provider-warning + durable-checkpoint 10/0 scoped; runtime suite 1670/0/6; turbo typecheck filter=@reactive-agents/runtime 21/21). Independent task review Approved with 1 Important (buildEffect terminal uncovered, violating the file's own public-entry-duplication precedent); fix round 1 (commits 29a06365..2379ef22) deviated from prescribed dual-call-site to single call in buildEffect because build() delegates via Effect.runPromise(this.buildEffect()) (:2704) — re-review verified deviation correct (warn-once preserved, no-double-warn regression pin added). Authority note: brief manifest under-listed packages/runtime/tests/**; contract table governs — durable-checkpoint test edit accepted as in-domain. Deviations + findings all disclosed by warden."
+```
+
+```yaml
+date: 2026-10-12
+warden: kernel-warden
+task: "Wave 0 W0.4a: export composable-kernel extension surface from @reactive-agents/reasoning index (makeKernel value; Phase/Guard/KernelContext/MetaToolHandler/ThoughtKernel types; KernelState untouched) + public-entry pin test + minor changeset"
+result: completed, confidence 0.95
+outcome: "accepted: parent verifier green (focused pin test 4/4, turbo typecheck filter=@reactive-agents/reasoning; warden runs: RED 3-fail runtime + 10 TS2339/TS2694 compile, GREEN 4/4, reasoning suite 2968/0/4todo, typecheck --force 9/9). Independent task review Approved, 0 Critical/0 Important-for-task; diff surgically exports-only; collision + type-pin-elision named risks checked. Disclosed gap ledged as parent follow-up: tests/** excluded from package tsconfig, so type-pins do not compile-fail in CI (runtime pins compensate). Warden correctly escalated the pilot-log obligation instead of widening authority."
+```
+
+```yaml
+date: 2026-10-12
+warden: kernel-warden
+task: "Wave 0 W0.4b: composable-kernel.md rewritten against published package imports; all skip markers cleared (12, not 11); SKIP_CEILING ratchet 235->223 with dated history; stale prose fixed honestly (onError event, KernelHooks arity, codec type, removed guard mechanism)"
+result: completed, confidence 0.92
+outcome: "pending task-review; parent verifier: full doc gate re-run at HEAD. Warden declined export-widening (runKernel/transitionState/KernelHooks/KernelStatus/KernelRunOptions stay internal) — correctly routed to parent. Ruling: out of W0.4 scope; revisit only if Wave 4 kernel work needs a public seam."
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "Wave 0 W0.5: result->trace linkage — runId + tracePath minted on AgentResultMetadata at single finalize seam (engine/finalize/trace-linkage.ts), settle-flush + existsSync honest-absence gate, traceDir threaded builder->RuntimeOptions->config single-sourced"
+result: completed, confidence 0.9 (round 2)
+outcome: "accepted: task review 'Needs fixes' on 1 Important (test hand-parse weaker than rax contract — loadTrace drops invalid lines silently, loadRecordedRun throws without run-started); fix round 1/5 (42175a34..4c99fb04, test-only) asserted via the CLI's own loadTrace barrel export + run-started/every-event pins; scoped re-review: ADDRESSED, no new breakage. Parent verifier green (focused 3/3, runtime typecheck). Production code clean on all 3 named risks at first review. Deferred minors ledged (Option.isSome idiom, absolute-path JSDoc wording, join duplication recorder<->mint). Cross-task ⚠️: streaming/light-sub-agent results lack linkage — follow-up if Wave-1 lift captures need them."
+```
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "GH #236 cross-domain bundle: AgentStarted gains task/taskTruncated (core), execution-engine stamps real prompt with 64KB publisher cap (runtime), normalize run-started branch consumes raw.task ?? '' (trace), replay workaround removed + golden regenerated via real recorder + fresh-task/orchestrator/back-compat pins (replay)"
+result: completed, confidence 0.9 (round 2)
+outcome: "accepted: review Approved (single-emission-site verified by repo-wide grep; regeneration signature proves genuine fixture regen; authority discipline praised — resisted out-of-manifest events.ts edit, disclosed consequence -> GH #237 filed by parent). Fix round 1/5 (fa6b39dc): back-compat pin's fabricated run-completed line replaced byte-for-byte with real pre-fix golden (re-reviewer verified provenance against git show), events.length===2 strict pin added. Parent verifier: focused test green, replay 34/0. W0.5 TS2769 type-only ride-along accepted as bundle-gate hygiene (disclosed)."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Task 0 baseline capture: scripts/lift/ bench + extractor + replay-gate, S1/S2/S3/S4 temp-0 N=5 live captures (34 traces + workspaces + MANIFEST + scoreboard + Hot.md freeze), zero framework edits"
+result: completed, confidence 0.88
+outcome: "accepted: parent verifier green (extractor 6/6, scoreboard columns all populated-or-named-gap, zero packages/ diff range-verified). First dispatch died mid-recon (budget, zero artifacts) -- status-check resume recovered cleanly. Task review Approved: S3-llama3.2 run-4 canonical false-success verified field-for-field from raw trace (146 discover-tools, empty-headings report.md artifact), S2 starve confirmed, redaction limited to disclosed dummy strings (structurally cannot false-pass the gate), replay gate asserts real string equality. Interface deviation ruled against plan text (amended). rung-2 haiku deferred on account credit (one-command rerun recorded)."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 1.1+1.2 thinking channel on streaming wire protocol: StreamEvent +thinking_delta/content_complete.thinking (additive), local.ts same-loop-pass forwarding gated by existing capability seam, anthropic routed, gemini/openai/litellm audited+recorded, ui-core drop-with-reason + react/svelte/vue parity tripwire"
+result: completed, confidence 0.9
+outcome: "pending task review; parent verifier: focused stream test + llm-provider typecheck at HEAD de369f77. NOTE for 1.3 dispatch (warden-disclosed semantics): on thinking-capable models thinking flows even with config.thinking:false (Ollama cannot opt out) — kernel must treat thinking as always-possible on capable models. First dispatch of this mission died with zero disk artifacts; retry directive (incremental report writes + commit-as-soon-green) delivered."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 1.3+1.4: think.ts accumulator consumes thinking_delta/content_complete.thinking -> existing providerThinking/rescueFromThinking activate (zero new parse logic); llm-exchange forensics thinkingChars + PREVIEW_MAX-capped preview (additive-optional, REQUIRED_FIELDS_BY_KIND untouched)"
+result: completed, confidence 0.92
+outcome: "accepted: parent verifier pending task review; warden evidence: 3-arm consumption RED->GREEN + cut-arm + byte-identical no-thinking golden; reasoning 2977/0, trace 88/0, replay+diagnose 72/0, typechecks clean. Escalation (2-line core transit gap) APPROVED + integrated by parent at 91e8d6006 (precedent: #236 core stamp; typed subscribers now see the fields). Consent ruling honored: thinking presence never gated by config.thinking. Next: 1.5 harness lift capture unblocked."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 1.5: first program LIFT capture — post-w1 S2 N=5 + S1 drift guard, scoreboard PRE/POST section, Hot.md #38"
+result: completed, confidence 085
+outcome: "accepted (review folded with re-capture per controller ruling): verdict MIXED — channel lift CONFIRMED 5/5 (0 -> 6.0-9.5K thinkingChars/run), quality lift NOT — surfaced the terse-answer rescue-guard DEFECT (file-ready, in-authority declined, correctly escalated to kernel-warden). Lift Protocol doing its job: measurement caught W1's own activation-reachable regression before Wave 2 could lean on contaminated S2 numbers. Also disclosed dist-rebuild need (checked-out dist predated kernel commit)."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W1.5-defect fix: gate stream-parser branch-4 prose fallback on (empty content OR exchange truncated); terse correct answers survive end_turn, marker rescues (branches 1-3) and empty-content rescue untouched; TRUNCATING_STOP_REASONS + exchangeTruncated from existing accumulator"
+result: completed, confidence 0.95
+outcome: "accepted: review Approved 0C/0I. Deviation (branch-4-only, pre-authorized) verified SOUND — gate default-safe, single production caller, zero new plumbing (accumulatedStopReason pre-existing), W1.3 suite byte-unchanged. RED 2/6->GREEN 6/6 + cut-test + reasoning 2983/0. 4 latent-hardening minors ledged for final-review triage (stop_sequence reachability, marker-clobber inherited paths -> re-capture counts, changeset wording, set typing)."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "W1.5 re-capture: post-w1-fix S2 N=5 + S1 drift guard against fixed kernel (af7d1b45), marker-clobber count, FINAL Wave-1 verdict"
+result: completed, confidence 0.9
+outcome: "accepted (capture verification = its own review, per controller ruling): FINAL WAVE-1 VERDICT CONFIRMED — defect prose-tail 5/5->0/5 with per-run outputs quoted ('3052', end_turn), marker-clobber 0/5, thinkingChars 6.7-10.8K 5/5, S1 drift 2/2 shape-identical, zero packages/ edits range-verified. Honest residual recorded (S2 answer never changed at temp 0 => quality win = defect-free retention + rescue availability; accuracy lift provable only on thinking-only tasks, W1.3 unit arms). Methodology finding folded into Lift Protocol plan text: ~±17% token variance => N>5 for sub-15% deltas. Hot.md #38 amended per authorized contradiction clause."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 2a: capability probe ladder (size/thinking/tool-template capture + capability-store write-through), derived supportsToolCalling claim, D-2026-07-30-H budget-monotone fix + ratchet test"
+result: completed, confidence 0.85
+outcome: "3 commits (64a94a309, 57b06836a, d2c58d6a6). llm-provider 486/0, core+reasoning 3160/0, runtime 1673/0, typecheck 24/24. Cross-authority notes for parent: (1) CONTEXT_PROFILES lives in reasoning/core, not llm-provider — Area 3 executed per explicit dispatch instruction despite the 'packages/reasoning out of scope' line (interpreted as resolver-consumption exclusion), commit scoped fix(reasoning) honestly; (2) D-H fix had to move core TIER_TOOL_RESULT_PRESERVE mirror too or the live project() budget keeps the inversion; (3) as-unknown-as-ceiling TESTS_CEILING 237->240: pin was already red at 239 on arrival (pre-Wave-2a drift, verified at 64a94a309~1), +1 is sanctioned fetch-stub — guard option 3 used; (4) dispatch's 'monotone non-decreasing whole table' unsatisfiable literally for preserve budgets (designed shape descends) — ratchet encodes per-family direction + D-H guard, documented in test header + w2a-report."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "Wave 2a: probe ladder (parameter_size decimals + thinking + tool-template emission) + CapabilityStore write-through persistence replacing process-Maps + supportsToolCalling derived (fail-safe permissive-provisional / strict-false only measured-no-emission) + D-2026-07-30-H ladder inversion fixed with per-family ratchet test (cross-package hunks dispatch-driven, controller-adjudicated)"
+result: completed, confidence 0.85
+outcome: "accepted after review (first reviewer dispatch died empty; resume-extract delivered full verdict): Approved 0C/3I. Adversarial checks passed: store-first genuinely shadows nothing (cold-Map decoy test), no reachable stranding for unmeasured models, cross-package hunks minimal+load-bearing (core test UPDATE not weakening), cast-ceiling bump verified as sanctioned test-double (src adds zero casts), pre-existing 239>237 drift confirmed. Importants -> W2a-fixup dispatch (function_call/.functioncall markers, store-key baseUrl, test-disable seam). YAGNI-deflect on tier-from-size accepted (plan's own clause). First dispatch of this mission had died zero-output (third such); lean-retry-with-commit-per-area pattern again delivered."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "W2a review fix loop round 1: function_call template markers, endpoint-scoped store rows, CAPABILITY_STORE_DISABLE seam + key-sanitize/atomic-write minors"
+result: completed, confidence 0.9
+outcome: "accepted-pending-review: 1 commit (a298ba7e). RED 5 -> GREEN. llm-provider 492/0, typecheck llm-provider+core+reasoning+runtime 24/24, RI+testing 23/23 (duck-type back-compat), RI+testing tests 125/0, cast-ceiling guard 2/0 (239<240, one stub cast designed out). Deviation surfaced: fix 2 needed optional endpoint args on CapabilityCache (3 files, not 1) because the store cannot learn baseUrl from (provider,model) alone; legacy rows self-heal per controller preference."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2b (plan 2.1): registry-first tiering in resolveProfileWithWindow; ollama size-regex branch deleted; provisionalTier mark + 17-arm classification matrix; test-provider carve-out with data-bug escalation"
+result: completed, confidence 0.93
+outcome: "accepted: verifier green (matrix 17/17 re-run by parent). Review Approved 0C — carve-out judged acceptable (case-safe, exact-keyed registry, pinned arm) with the underlying stub-row data bug escalated correctly (-> GH #239, parent-filed); both modified existing test files verified UPDATE-TO-TRUTH (net coverage up); fail-safe registry-miss semantics confirmed (fallback source never poses as verdict, no throw path). Infra discovery: runtime suite tests reasoning SRC via tsconfig paths (dist irrelevant to bun test)."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "W2c (plan 2.3): tokenizer-aware dense-JSON correction in estimateTokenCount, measured per-family factors beside calibrations, registry tokenizerFamily gets first consumer"
+result: completed, confidence 0.85
+outcome: "1 work commit (f8fae1d67). Measurement path = committed traces (0.97-1.02 llama traffic; FC-residual 1.245) + sanctioned live /api/chat probe (dense 1.032-1.157, prose 0.767-0.892 over-count). Plan seed 1.35 DISPROVED (probe-3 folklore, circular provenance); shipped llama dense factor 1.25, prose/mixed untouched (unsafe-direction guard), unknown=>1.0 zero behavior change. RED-first weak point disclosed (first RED was parse/module failure, not assertion-level). llm-provider 502/0, reasoning/context 95/0, runtime 1673/0, typecheck 10/10. think.ts:1034 + rate-limiter + prompt-manager flagged-not-threaded (census in w2c-report.md); W2e inherits the corrected helper. Concern: real overflow driver is the OMITTED FC-schema input, not the char ratio — 2.5 preflight must add the schema term."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2d: FC wire-payload honesty (2.4, names-and-types applied to tools[] via existing stripper semantics, frontier byte-pinned) + classifier-skip enforcement (2.6 at the measured strategy-evaluator firing site, harness-signal observable, runtime correctly untouched)"
+result: completed, confidence 0.95
+outcome: "accepted: review Approved 0C/2I -> #1 fixed round 1 (d5ecf6b77 >=3x pin per spec, measured 7x headroom), #2 residual adaptive/decompose classify sites -> GH #240. Independent trace verification of the classify-source finding (2/8 post-w1 fixtures carry strategy-evaluator classify exchanges) praised. W4.0 note: structural pin greps iterate-pass.ts source — will need re-pinning through the 4.0 refactor. Full reasoning 3,013/0 + runtime parity + typecheck 9/9."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2e+fix: head-truncation guard (2.5) — ollama-scoped preflight (wire-truthful num_ctx), schemas->pair-safe-history ladder, system head never sacrificed, harness-signal + ledger fact, demand sizing schema-inclusive, conservative reserve; W2c reconciliation documented (option a)"
+result: completed, confidence 0.96
+outcome: "accepted: review Approved 0C + 4I; #1 rung-2 fork/#2 demand leak/#3 reserve fixed round 1 (05a944e28, RED->GREEN + discriminating cuts, re-review all ADDRESSED, pairing algorithm verified against live projection invariants); #4 explicitNumCtx cross-authority -> GH #241 filed by parent. Full reasoning 3,025/0, runtime parity, typechecks clean. Ollama-scoping judged honest decision with shipped precedent + indirect regression cover (reviewer: tests were correctly scoped, guard was mis-scoped)."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 2f (plan 2.7): prove-or-delete census of every Wave-2-touched field - w2-wave-census.test.ts ratchet on ContextProfileSchema.fields, 31-row register, 12 mutation-cuts, CONTEXT_PROFILES unreachable sweep, DEBT rows W2F-1/2 (+ D-30-I kept)"
+result: completed, confidence 0.9
+outcome: "accepted pending census-design review: tally 29 PROVEN/1 dead-registered (recentObservationsLimit, public knob -> removal wave)/1 justified-keep (provisionalTier, W3 obligated consumer)/0 deleted. Ratchet self-corrected from instance-keys undercount to schema-fields after authoring - exactly the inert-green class it guards. Warden disclosed stale-tool-echo incident mid-dispatch, re-grounded shipped state from filesystem; reviewer spot-checking rows from ground truth. reasoning 3,025/0, provider 502/0, runtime 1,677/0 (+4 census), typecheck 23/23."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 2 close capture: 20 runs (S1/S2/S3 arms, three-point PRE->W1-fix->POST-W2), verdict per seam, payload + guard-signal counts, rax-visible signals"
+result: completed, confidence 0.88
+outcome: "accepted: WAVE-2 VERDICT MIXED recorded on scoreboard honestly. Guard 0/20 head-truncations (alive, 1 over-fire), classify delta explained (reliability=high arms), payload measured -51% llama tokensIn; caught Wave 2's OWN regression: stale dialect:none prior (runsAveraged 1) demotes capable qwen3:4b to text-mode with unparsable taught markup -> 5/5->0/5. GH #243 filed + provider fix dispatched. Wave-4 baseline-continuity finding (thrash phenotype no longer live-reproducible) ledged: W4 uses frozen fixture. Wave-3 gate set: post-fix S3 re-capture + 3.2 markup round-trip."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "GH #243 root fix: DIALECT_PRIOR_CONFIDENCE_FLOOR=2 + explicit-presence phantom-kill in deriveSupportsToolCalling; calibration-runner v2 genuine dialect probe (v1 stub deleted); 8/8 shipped-prior audit vs live /api/show + behavioral evidence, 3 refuted none-claims refreshed via probe seam with provenance; gemma4 stub-template guard found mid-audit; coder:14b flagged-not-fabricated"
+result: completed, confidence 0.9
+outcome: "accepted: review Approved 0C/1I(next-wave chore: full v2 suite re-commit for truthful metadata + coder:14b measurement). Precedence traced: no ra=1 demotion path survives; absent-vs-schema-default indistinguishable. Static entries re-reconciled to evidence w/ dated history comments. RED->GREEN + floor-before-refresh discrimination recorded. llm-provider 510/0, typecheck 4/4. Deeper-than-brief root cause (hardcoded dialect stub, never a measurement) self-discovered - the bricking class was folklore-circular by construction; program's first self-caused P1 fully closed pending S3 re-capture gate."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden
+task: "#243-review Important #1 discharge: full-suite v2 calibration-runner --commit refresh of 4 priors (qwen3:4b/qwen3:14b/cogito:14b/coder:14b) via shipped probe seam - hand-merged metadata replaced by uniform v2 measurements; coder:14b dialect measured 3/3 none"
+result: completed, confidence 0.9
+outcome: "accepted (controller direct verification, ruling: data-only artifact of an already-reviewed seam - diff = 4 JSON + changeset exactly; field moves match claims incl. the disclosed 2000-censor cap). Wave-2 provenance sin-class fully closed. New true fact: coder:14b is genuinely text-dialect by measurement -> Wave 3 S4-grade target; two priors tightened optimalToolResultChars 4000->2000 (censored ladder cap, ledged as runner design note). S3 re-capture gate (R1) dispatched next."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "R1 WAVE-3 GATE: post-#243 S3-qwen34b re-capture N=5 (+bonus 2) three-point row, signature clearance (schemas-on-wire, tool-call-start, workspace deliverable, no-unparsed-markup), S2 sanity"
+result: completed, confidence 0.92
+outcome: "accepted: GATE PASS measured 0/5 -> 5/5 canonical (7/7), deliverable-correct 5/5, all four #243 signatures zero, thinking retention 6-12K intact, S2 2/2 stable. Wave-2's MIXED regression component CLOSED with live proof; floor+truthful-priors compose correctly end-to-end. Disclosed slips kept honest: global --n flag semantics (bonus rows kept), terminatedBy label churn flagged for docs truth-up, box-contention wall times annotated not hidden. #243 verification comment posted; close at merge with the branch."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 3a: Stage-B think->acting transition behind default-off REACTIVE_AGENTS_TEXT_PARSE=off|shadow|act - orphaned act.ts extractCalls reached via same dispatch pipeline (guards/policy/healing/ledger, growRunLedger untouched); builder-derived teach/parse single grammar (#243 binding); parse-diff observability for promotion measurement"
+result: completed, confidence 0.92 (round 2)
+outcome: "accepted: review Approved 0C/3I -> fix round 1/5 all ADDRESSED, re-review clean. Warden's disclosed extra (gate-mirror alone bypassable via act re-extraction -> dispatch flipped to consume GATED set, RED arm proved 2-raw-1-gated=1-execution) verified true by re-reviewer - enforcement now argument-for-argument identical to native incl budget Layer-3/single-step/quota-conflict. failMsg now reads the live taught block structurally, fail-safe-unreadable (never teaches guessed grammar). Stale-thread: thread deleted as dispatch source, skip-and-record + both pins. reasoning 3,041/0, runtime parity 1,677/0 (default-off proven)."
+```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "Wave 3b (plan 3.3 + triad): dialect-live routing per spec end-state (capability sole arbiter, claim=provenance never downgrades), phantom rule at runner caller via loadDialectPriorClaim, provisionalTier keep-obligation pinned, sentinel exemption verified, RF2 triad mutation-pin (sever any leg -> red), core nominal carriers survive toCanonical/adaptCache"
+result: completed, confidence 0.9
+outcome: "accepted: review Approved 0C/0I. Reviewer independently opened the spec - shipped mapping faithful to §4/§5 as written (the 'fuses' ambiguity resolved by the spec's own 'at the source' clause), danger cell (caps=false + native-fc claim) routes text-parse never native. Cross-domain ratifications: 2 additive llm-provider hunks + core carriers (mandate-bound, item 6 of brief). Triad arms verified as true mutation pins incl phantom-re-entry kill arm. reasoning 3053/0, runtime parity 1683/0, tools drivers 53/0 (15 pre-existing Docker arms noted)."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "W3c Stage-B promotion data: shadow-soak (coder:14b N=5, phi4-mini N=3) + act-mode (coder N=5, phi4 N=2) - would-have-executed rate, first-acting, deliverable outcome, safety watch"
+result: completed, confidence 0.88 (resumed after a mid-close-out crash; incremental writes preserved all arms)
+outcome: "rung-3 PARTIAL, plan-3.5 NOT declarable: shadow seam PROVEN (phi4 clean-run 3/3 tier-1 taught-grammar parses; placeholder-arg caveat) but coder:14b markup hits a parser-coverage gap (would-have-executed 0/5) and act end-to-end is unmeasured (coder parse-gap + phi4 2/2 hung on box stalls 6/8 attempts). Safety watch clean: no double-dispatch/budget-bypass/parse-loops in 12 completed runs; fail-safe legacy path byte-identical. File-ready follow-ups routed: wrapper-tolerant tier-1 (tools-warden, preserve #243 grammar pin), ParamNameHealer proof (kernel), quiet-box act-phi4 re-run (harness). Zero packages/** edits."
+```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c parser-coverage fix (Stage-B blocker): make TextParseDriver tier-1 wrapper-tolerant so the SHAPES real no-FC models emit parse. Diagnosed verbatim from committed traces (fixtures/post-w3) - coder:14b emits bare `tool: <name>` + param lines, drops both wrapper tags; blocks split by prose/---; file-write content as YAML block scalar `content: |`. Extended tier-1 with a bare-block scanner (same taught grammar minus wrapper; #243 pin preserved) + block-scalar handling; wrapped path unchanged and still wins."
+result: completed, confidence 0.9
+outcome: "accepted-pending-controller: measured 0/10 -> 10/10 coder:14b runs parse (all names in callable surface [file-read,file-write]; 8x3 calls, 2x2 calls faithful to emission). RED->GREEN: 6 new tests fail on the pre-change driver, pass after; wrapped-tier tests unchanged. GH #243 grammar pin preserved via builder-derived test (taught block with wrapper lines stripped parses). Authority: packages/tools/** only (parser + tests + changeset) - reasoning-side markerPresent stays wrapped-only but is now moot for coder (parsed>0 drives both shadow and act); noted as residual for kernel-warden, not edited. tools drivers 61/0, healing+tool-calling 125/0, reasoning kernel 736/0, reasoning strategies/kernel 549/0, text-parse-transition 16/0, tools typecheck+build clean."
+```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c review fix round 1/5: harden bare-block parse against three real corruption paths - (1) indent asymmetry (indented block opened with {} args), (2) mid-param prose truncation, (3) `>`/chomp block-scalar syntax accepted but not interpreted"
+result: completed, confidence 0.9
+outcome: "ADDRESSED: (1) tool+param indent now symmetric w/ per-param indent captured and used as the block-scalar base, so a following param at block indent is not swallowed; bare block now requires >=1 param, killing the empty-args dispatch class. (2) in-list prose tolerance REJECTED on measured FP evidence - coder runs embed `ProductA: 100` data lines between blocks; tolerance scoped BETWEEN blocks, mid-param prose ends the list loudly (required-param validation rejects), docstring corrected to match + pinning test. (3) `>` folding + `-`/`+`/clip chomping implemented to exact values, per-form value tests added. RED 8 fail -> GREEN 70/0 (tools/tests/drivers); empirical 0/10 -> 10/10 over committed coder traces, zero empty-args. reasoning kernel+strategies 1285/0, healing+tool-calling 125/0, tools typecheck+build+eslint clean. Authority packages/tools/** only."
+```
+
+```yaml
+date: 2026-10-13
+warden: tools-warden
+task: "W3c round 2 (live user-facing bug): text-parse taught delimiter `<tool_call>` collided with Ollama's own qwen tool-call parser (stream poisoned -> EOF at iter 0). Move taught wrapper to `<tool_use>`; keep legacy + bare acceptance."
+result: completed, confidence 0.9
+outcome: "Trigger evidence: journal qwen35.go:115 + qwen3coder.go:87 'tool call parsing failed' error=EOF on the text-parse run; binary strings show <tool_call> x15 / </tool_call> x14, <tool_use> x0. Chose <tool_use>: absent from both parsers' vocabulary AND stays a lone <name> tag so reasoning readTaughtCallShape (GH #243 pin) is untouched - no reasoning source edit. Additive: regex accepts tool_use|tool_call; bare/JSON/scalar paths unchanged. RED 3 -> GREEN tools/tests/drivers 72/0; reasoning kernel+strategies 1285/0; coder fixtures 10/10; builder scan shows all Ollama trigger literals absent (only benign `<tool` substring remains, prefix-match ruled out). tools typecheck/build/eslint clean. File-ready: stale comment driver-instructions.test.ts:3 (kernel-warden)."
+```
+
+```yaml
+date: 2026-10-13
+warden: provider-warden + tools-warden
+task: "Live user-bug fix chain: qwen3.5 scratch.ts EOF at iter 0 - (a) provider: NETWORK_FAULT += EOF (pre-first-emission retry engages) + capability-store CURRENT_PROBE_VERSION gate (stale probe rows self-heal); (b) tools: taught delimiter <tool_call> -> <tool_use> (Ollama parser trigger collision; binary-strings evidence 15/14 vs 0/0), legacy form still accepted"
+result: completed, confidence 0.9
+outcome: "accepted pending delimiter re-review; END-TO-END VERIFIED by controller live: scratch.ts success (4 steps, 6.4s, native route 12 schemas), ollama journal parser-failure count 0 (was universal), tool-sourced final answer. Provider pair reviewed APPROVED (minors ledged: Tier-0 cache seam ungated-latent, future-version demotion, EOF-vs-model-name edge, 400-arm comment). New root-cause law ledged for debrief: version-gate persisted measurement data."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4.0 iterate-pass refactor-first: generator return-protocol single-writer (18 sync sites + closure -> 0 + one unconditional write-back); W2d source-grep pin replaced by a behavior test (real runKernel, discriminating classifier-skip presence/absence)"
+result: completed, confidence 0.85 (warden self-rated; review upgraded)
+outcome: "accepted: review APPROVED 0C/0I. Byte-identical claim independently verified: all 19 base exit paths had adjacent sync(); carrier referenced in exactly 2 places (entry destructure + write-back) so nothing observes mid-pass staleness; same 15 fields; error channel never. reasoning 3,050/0, runtime parity, typecheck 22/22. Out-of-authority census consumer-string edit (1 line) parent-accepted as the re-pin's consequence. Parent also bumped both guard ratchets with dated rationale (as-unknown-as 240->242, console-ceiling 11->12) - the W0.3 test-provider warning is the console site (sync build() context, ceiling's own exception)."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4 control plane (4.1+4.6+4.7: ONE progress arbiter, pattern-(e) zero-evidence staleness, evidenceDelta crediting, band rule) then LIVE-GAP fix e0c6a456f (band keyed on deterministic outstanding short-circuited green; actuator horizon-gated -> default-on 2-stale-iteration stand-down + 4.3 gate routing)"
+result: completed, confidence 0.8
+outcome: "accepted pending review; END-TO-END LIVE VERIFIED by controller: impossible task 4-5 iters/23.4s/~1980tok -> 2 iters/9.1s/857tok with honest abstain reason + band green->economize; hard reasoning-only task unaffected (1 iter, success). Warden disclosed the trade-off (no-tool 3rd-pass tasks stand down) - review targets it. User-reported defect (inefficient termination) closed at root: detection now actuates by default."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4-live fix round 1 (a77dd5c13): stand-down requires a flail signature (canonical give-up refusal OR near-duplicate thoughts >0.85 Levenshtein) so no-tool REASONING survives; long-horizon escape hatch; NO_OP marker hardening; #206 budget e2e restored"
+result: completed, confidence 0.82
+outcome: "accepted pending scoped re-review; LIVE VERIFIED by controller both directions: impossible task 2 iters/6.6s/835tok honest abstain (was 4-5/23.4s/~1980tok); qwen3:4b no-tool reasoning task NOT stood down (correct derivation produced). Review's Critical (bare staleness aborted deriving runs at pass 3, no escape hatch) closed with RED-first FP pin + two cut arms. reasoning 3086/0, runtime 1678/0, replay 37/0. Surfaced a PRE-EXISTING defect (GH filed): fabrication guard hard-fails correct reasoning answers on derived durations - routed to Wave 5 verdict honesty."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4-live fix rounds 1+2: flail-signature precision (MIN_REPETITION_LENGTH=100 mirroring contentStabilityEvaluator; thoughtRefusal = canonical isGiveUpAnswer + task-level/no-capability gate + step-narration exclusion)"
+result: completed, confidence 0.85
+outcome: "accepted: scoped re-reviews rounds 1+2 -> round 2 All findings ADDRESSED, no new Critical/Important breakage; one narrow residual disclosed (deriving preamble 'don't have access' can still arm). Controller live-verified both directions: impossible 2 iters/10.3s/842tok honest abstain; qwen3:4b multi-step reasoning survives with correct answer. reasoning 3090/0, runtime 1678/0, replay 37/0. User-reported inefficient-termination defect CLOSED with measured lift."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "W4 remainder: 4.4 outstanding recitation default-on (CONTRACT_PROFILE showOutstanding, F10 volatile tail, dedupe+satisfied-exclusion, cap 8 + (+K more), no-contract parity) + 4.5 deterministic escalation (strategy-ladder.ts, zero-LLM default path outcome-pinned, availableStrategies from KERNEL_STRATEGY_CANDIDATES, pattern-id handoff reason, keyObservations cap 12)"
+result: completed, confidence 0.85
+outcome: "accepted: review APPROVED 0C/1I/4M. Cache-safety verified STRUCTURAL (volatile-tail seam after compaction); parity pin genuine; zero-LLM claim outcome-proven (scripted evaluator ignored on default path); pattern-id reason real. Important #1: the plan's 4.4 tail-bloat guard (tokens/run) UNRUN -> parent measurement lane at wave close (always-outstanding floor makes the tail non-empty every contract run; bounded by cap). Minors: within-turn-only dedupe (intent clarification), 'requirement-relevant' wording vs evidence-bearing slice, candidate-naming comment, ladder-ignores-fit (bounded by maxSwitches=1 + carried iteration cap). GH #240 stays open (separate adaptive/decompose seam). reasoning 3101/0, runtime 1678/0, replay 37/0."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden
+task: "Wave 4 close capture: detection (fixture-replay) + live termination + no-regression + tail-bloat guard + temperature-integrity check"
+result: completed, confidence 0.9
+outcome: "accepted as measurement; WAVE 4 NOT VERIFIED: detection PASS (146/146 arbiter non-progress, (c)/(d)/(e) trip, FP guard green), no-regression PASS, tail-bloat CLEAN (-7%/+4% noise), termination PARTIAL with a LIVE HONESTY REGRESSION (3/3 early-stop runs minted fabricated success claims, 0 tool calls, verdict success - the program's core false-success class via a new route) -> kernel fix dispatched + w4-terminate re-run required. Integrity finding: commanded temperature never reached the wire (provider default 0.5/0.3 recorded) - all temp-0 labels truth-upped with era note; threading fix routed to provider-warden. Warden discipline note: refused to mark the wave verified and escalated instead."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden + provider-warden + runtime-warden
+task: "Wave-4 close-capture escalations: (1) kernel honesty fix db7c5e985 (dispatcher-early-stop missing from HARNESS_FORCED_TERMINALS + gate fenced to completed while route yields partial -> false success 3/3); (2) provider temp diagnosis + adapter pins 5fb652362 (wire-broken: commanded temperature never reached the wire; trace faithful); (3) runtime root fix 129fc70b (command-first precedence; the escalated one-liner was incomplete - reactive.ts:228 second drop found and fixed, disclosed)"
+result: completed (3 dispatches), confidence 0.9
+outcome: "accepted pending review: honesty RED-first pin + over-blocking guard + cut all green (reasoning 3105/0); temp RED (Expected 0/Received 0.5) -> GREEN with command-first precedence (runtime 1686/0, reasoning 3109/0). Program-wide consequence: every historical temp-0 capture was wire-wrong (era-labelled); substrate restored, harness re-run dispatched. Provider warden correctly BLOCKED on the out-of-authority runtime seam rather than crossing it - contract working as designed."
+```
+
+```yaml
+date: 2026-10-13
+warden: harness-warden + runtime-warden
+task: "Wave-4 verdict re-run at TRUE temp 0 (80bdc50dd) + temp fix round 1 (e8252af2: verification-retry third seam, changeset honesty, over-block intent pin)"
+result: completed, confidence 0.93
+outcome: "WAVE 4 VERIFIED: temp-0 substrate proven 9/9; honesty 0/5 fabricated (was 3/3); grounded S2 2/2 no over-block; detection/no-regression/tail-cost clean. Methodology: true-0 yields shape determinism (prior 'variance' was decoding temp). Temp threading now consistent at all THREE kernel seams (reasoning-think, reactive KernelInput, verification-retry); non-kernel strategies honestly scoped to GH #246. Residual filed for Wave 5: abstained output TEXT still ships success claims (verdict-level honest, content-level unscrubbed)."
+```
+
+```yaml
+date: 2026-10-13
+warden: runtime-warden
+task: "temp fix round 1 (e8252af2): verification-retry third seam command-first + honest changeset scoping + over-block intent pin (controller ruling: abstain correct on zero grounding + harness-forced terminal)"
+result: completed, confidence 0.9
+outcome: "accepted: scoped re-review CLEAN - all 3 findings ADDRESSED (retry-route pin real, #246 claim verified by grep, intent pin revert-sensitive); no new breakage; unset-command path byte-identical. Temp threading consistent at all 3 kernel seams. WAVE 4 VERIFIED overall."
+```
+
+```yaml
+date: 2026-10-13
+warden: kernel-warden
+task: "Wave 5 kernel lane: 5.1 contract coverage into verdict (outstanding>0 AND status!=abstention => cap at partial; S1/S3 as gate scenarios; cut RED) + 5.2 judgment citation plumbing; folds GH #245 (no-tool derived value => warn not hard-fail, benchmark fabrication still rejects) + close-capture content-scrub residual (abstained output no longer ships success claims)"
+result: completed, confidence 0.85
+outcome: "accepted pending review; S1-shape => abstained + scrubbed, S3-shape => partial + outstandingCriteria, grounded+satisfied unchanged, abstained unaffected. reasoning 3114/0, runtime 1682/0, replay 37/0. Concern routed to runtime lane: AgentResult.success coarse bit (execution-engine maps partial+substantive -> true) - runtime-warden 5.3/5.4 scope."
+```
+
+```yaml
+date: 2026-10-14
+warden: runtime-warden (stalled; controller-finished)
+task: "Wave 5 runtime lane finish: 5.3 delegation composition (2ef324ec0) + 5.5 strategy-tier honesty (36739c89f)"
+result: completed, confidence 0.8
+outcome: "controller finished quota-blocked lane inline from warden drafts; fixed 3 draft defects (phantom metadata read, undefined function + invented shapes, decorative budget rire). Pins: delegation join RED->GREEN (severed), derivation 5/5, tools envelope 3/3. reasoning 3120/0, runtime 1693/0, replay 37/0. INDEPENDENT REVIEW OWED - subagent dispatch blocked on account usage limit. No live claim yet (harness capture still to run)."
+```
+
+```yaml
+date: 2026-10-15
+warden: controller-inline-review (subagents quota-blocked)
+task: "Independent program review: code soundness + completed/remains accounting"
+result: completed, confidence 0.8
+outcome: "CRITICAL found+fixed in review: 5.3 join wired to dead executeToolCall (no production callers); live path is executeNativeToolCall->tool-observe. Fixed 7bba37606 with live-path pins (RED verified). 5.1/5.2 boxes corrected to [x]. Wave 5 code complete. Recommended: fresh-eyes reviewer pass + harness Wave-5 capture when quota returns."
+```
+
+```yaml
+date: 2026-10-15
+warden: controller-inline (subagents quota-blocked, recovered later)
+task: "Review fix rounds: W5 crash envelopes + code-action route + mint-shape pin; W6 census reverse-arm + openInference order/idempotence + changeset + 6.3 remainder GH #248 + gateway refusal pin; W7 sink subscription wiring + autoshadow-loop live test + contention measured (+6s trivial-task) + cf-26 bound <=2; auto-shadow judge-contract preservation"
+result: completed, confidence 0.85
+outcome: "all review findings addressed with RED-verified pins; full suites green (runtime 1722/0, reasoning 3122/0, replay 37/0); W5/W6/W7 code complete pending independent re-review of fix rounds + harness verdict."
+```
+
+```yaml
+date: 2026-10-15
+warden: kernel-warden + reviewer + controller
+task: "GH #244 preflight (93a1a27ee, review Approved) + #246 remainder (e07dbc848, review 1 Important) + blueprint patch-seam fix + #245 closure + #249/#250 follow-ups"
+result: completed, confidence 0.85
+outcome: "preflight live-verified 0 iters/0 tokens with capability reason (was 4-5/~1980). #245 CLOSED with live evidence (train problem now success:true). #246: all non-kernel strategies threaded + blueprint patch seam fixed per review; pipeline repair-retry filed as #250 (needs determinism sign-off). Open: #244 follow-ups #249, #246-follow-up #250, W3 promotion (owner), branch finish."
+```
+
+```yaml
+date: 2026-10-15
+warden: controller-inline + branch-reviewer
+task: "Rung-2 on gemini (credit-block bypass) + rung-3 refix + branch-wide review response"
+result: completed, confidence 0.85
+outcome: "Rung-2: gemini FC-disabled shadow/act 3/3 each — taught grammar ignored (<tool_code> invented, deterministic); promotion NOT recommended (no end-to-end text-parse execution anywhere). Rung-3 refix: coder parses 9/9 (was 0/5), uses native FC, finals honestly failed; phi4 still hangs. Branch review must-fix all closed (3 changesets, plan hygiene, 4 issues closed, doc-truth one-liners); full suite 10369/20fail with 18 environmental-Docker + 2 fixed here (feature-matrix, ceiling 251 with rationale). Open trackers: #235,#237,#238,#240,#241,#242,#248,#249,#250 (+#234 backlog)."
+```

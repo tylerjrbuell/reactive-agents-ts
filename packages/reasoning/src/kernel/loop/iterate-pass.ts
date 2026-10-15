@@ -31,11 +31,14 @@
  *   - `IterationCarrier`: a MUTABLE holder for the spine locals that survive
  *     across iterations (counters, currentInput/Options/Context, switchCount,
  *     triedStrategies, mutableScratchpad) or are read by post-loop code. The
- *     driver destructures it into locals at entry and `sync()`s them back before
- *     each return. CORRECTION 5 reduced — NOT removed — the carrier: the three
- *     extracted phase-steps no longer touch it, but the spine still threads its
- *     locals through `sync()`. Dissolving it fully would require changing the
- *     runner.ts boundary (the hottest code path) and is deferred (see follow-up).
+ *     driver destructures it into locals at entry; the iteration BODY then runs
+ *     as an inner generator that returns the control signal, and the driver
+ *     writes the locals back to the carrier EXACTLY ONCE after that inner effect
+ *     settles (W4.0 single-writer). There is no per-return `sync()` to forget:
+ *     every body exit path returns through the one unconditional write-back.
+ *     Dissolving the carrier fully would require changing the runner.ts boundary
+ *     (the hottest code path), which reads `carrier.*` after each pass, so it is
+ *     deferred.
  *   - Return `"continue"` | `"break"` — outer while honors the signal.
  *
  * INVARIANTS PRESERVED (do not violate)
@@ -67,6 +70,12 @@
  *     real cohesion — extracted the three F2-named coupling blocks (strategy
  *     switch, stall/deliverable, loop resolution) into named phase-steps with
  *     immutable state threading + explicit counter params. Carrier reduced.
+ *   - W4.0 (2026-10-13): single-writer refactor. The 18 manual per-return
+ *     `sync()` call sites + the `sync` closure were replaced by a generator
+ *     return-protocol: the body is one inner `Effect.gen` returning
+ *     `IterationSignal`, and the carrier write-back happens exactly once, after
+ *     it settles (unconditional — the inner effect's error channel is `never`).
+ *     "Forgot to sync" is now unrepresentable. Behavior byte-identical.
  *
  * Spec: wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md §3 line 468 + §5.5a.
  */
@@ -119,7 +128,12 @@ import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
-import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+import { detectLoopPattern, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+import {
+  KERNEL_STRATEGY_CANDIDATES,
+  isDefaultCandidateSet,
+  selectLadderStrategy,
+} from "../../kernel/capabilities/reflect/strategy-ladder.js";
 import {
   arbitrateAndApplyWithBudgetEmit,
   arbitrationContextFromState,
@@ -165,12 +179,23 @@ import {
   getLastErrors,
 } from "./runner-helpers/state-queries.js";
 import {
+  countArtifacts,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
   commitDeliverable,
   passthroughOutputDeliverable,
   unproducedDeliverables,
 } from "./runner-helpers/deliverable.js";
+import { actionToolName } from "../../kernel/assessment/progress-arbiter.js";
+import { detectFlailSignature } from "./runner-helpers/flail-signature.js";
+
+/**
+ * W4-live — the default-on zero-evidence stand-down threshold. Consecutive
+ * iterations with no new substantive evidence while work remains, past which an
+ * impossible/zero-progress task terminates honestly instead of grinding. 2 =
+ * the live impossible-task shape terminates within two iterations.
+ */
+const EVIDENCE_STALE_TERMINATE_THRESHOLD = 2;
 
 /**
  * Outer-loop control signal returned by `runIterationPass`.
@@ -193,7 +218,9 @@ export type IterationSignal = "continue" | "break";
  *       currentOptions)
  *
  * Fields are mutated in-place; `runIterationPass` doesn't return a fresh
- * carrier. Keeps the call site in runner.ts tiny:
+ * carrier. The write-back happens ONCE per pass — after the inner body effect
+ * settles — so every exit path (each `"break"` / `"continue"`) observes the
+ * same up-to-date values. Keeps the call site in runner.ts tiny:
  *   `const signal = yield* runIterationPass(carrier, cfg); if (signal === "break") break;`
  */
 export interface IterationCarrier {
@@ -282,10 +309,11 @@ export interface IterationConfig {
  * Run one iteration of the kernel main loop — the DRIVER spine.
  *
  * Destructures the mutable {@link IterationCarrier} into spine locals at entry,
- * runs the phase chain in fixed order (see SHAPE in the file header), delegates
- * the three high-coupling blocks to `applyStrategySwitch` /
- * `runStallDeliverableStep` / `resolveDetectedLoop`, and `sync()`s the locals
- * back to the carrier before every return.
+ * runs the phase chain in fixed order (see SHAPE in the file header) as a single
+ * inner generator that returns the control signal, delegates the three
+ * high-coupling blocks to `applyStrategySwitch` / `runStallDeliverableStep` /
+ * `resolveDetectedLoop`, and writes the locals back to the carrier EXACTLY ONCE
+ * after that inner effect settles (W4.0 single-writer).
  *
  * Returns the outer-loop control signal:
  *   - `"break"`    — this iteration terminated (delivered or failed); exit loop.
@@ -293,8 +321,9 @@ export interface IterationConfig {
  *                    body fall-through at the end of a normal iteration).
  *
  * The extracted phase-steps thread immutable state through and take/return only
- * the specific counters they own; the carrier never reaches them. The spine
- * itself still uses the carrier/`sync()` mechanism for its remaining locals.
+ * the specific counters they own; the carrier never reaches them. The body's
+ * own `return` sites are the inner generator's natural exits — no `sync()` is
+ * paired with them (the single write-back below runs for all of them).
  */
 export function runIterationPass(
   carrier: IterationCarrier,
@@ -303,9 +332,10 @@ export function runIterationPass(
   return Effect.gen(function* () {
     // ── Destructure mutable carrier into locals ─────────────────────────────
     // The body below references these as plain identifiers (matching the
-    // pre-lift runner.ts identifiers exactly). `sync()` writes them back to
-    // the carrier before every return so the outer while-loop and post-loop
-    // finalization see the latest values.
+    // pre-lift runner.ts identifiers exactly). The body is an inner generator
+    // (below) that returns the control signal; the outer driver writes these
+    // locals back to the carrier exactly once, after it settles, so the outer
+    // while-loop and post-loop finalization see the latest values.
     let state = carrier.state;
     let currentInput = carrier.currentInput;
     let currentOptions = carrier.currentOptions;
@@ -316,6 +346,11 @@ export function runIterationPass(
     let prevDecisionLogCountForLearn = carrier.prevDecisionLogCountForLearn;
     let prevArtifactCount = carrier.prevArtifactCount;
     let consecutiveStalled = carrier.consecutiveStalled;
+    // W4.1 (e) — evidence-staleness iterations, read from the current pass's
+    // assessment (health.iterationsSinceEvidence). A local, not a carrier field:
+    // it is recomputed from the ledger each pass, so multiple assessments per
+    // iteration cannot over-count it.
+    let evidenceStaleIterations = 0;
     let requiredToolRedirects = carrier.requiredToolRedirects;
     let requiredToolNudgeCount = carrier.requiredToolNudgeCount;
     let failureRecoveryRedirects = carrier.failureRecoveryRedirects;
@@ -364,30 +399,17 @@ export function runIterationPass(
     void maxFailureRecoveryRedirects; void verifier; void options; void context;
     void effectiveInput; void input; void emitLog; void eventBus; void horizon;
 
-    // ── Sync helper — write locals back to carrier ─────────────────────────
-    // Called immediately before every `return "break" | "continue"` so the
-    // outer while loop (which re-reads carrier on each pass) and the post-loop
-    // finalization (which reads carrier.{state,currentInput,currentOptions})
-    // see the up-to-date values.
-    const sync = () => {
-      carrier.state = state;
-      carrier.currentInput = currentInput;
-      carrier.currentOptions = currentOptions;
-      carrier.currentContext = currentContext;
-      carrier.prevActionCount = prevActionCount;
-      carrier.prevStepCount = prevStepCount;
-      carrier.prevStepCountForLearn = prevStepCountForLearn;
-      carrier.prevDecisionLogCountForLearn = prevDecisionLogCountForLearn;
-      carrier.prevArtifactCount = prevArtifactCount;
-      carrier.consecutiveStalled = consecutiveStalled;
-      carrier.requiredToolRedirects = requiredToolRedirects;
-      carrier.requiredToolNudgeCount = requiredToolNudgeCount;
-      carrier.failureRecoveryRedirects = failureRecoveryRedirects;
-      carrier.switchCount = switchCount;
-      carrier.autoCheckpointed = autoCheckpointed;
-    };
+    // ── Iteration body — inner generator, returns the control signal ────────
+    // W4.0 single-writer. The whole body runs as ONE inner Effect.gen that
+    // closes over the spine locals above and RETURNS "break"/"continue" at each
+    // exit. Its error channel is `never`, so the carrier write-back after it
+    // runs exactly once, unconditionally, for every exit path. A new `return`
+    // added anywhere in the body therefore auto-writes-back — there is no
+    // `sync()` to forget (the pre-W4.0 shape paired a manual `sync()` with all
+    // 18 return sites; a missed pairing silently stranded carrier mutations).
+    const signal: IterationSignal = yield* Effect.gen(function* () {
 
-    // ── ORIGINAL BODY VERBATIM (Phase 2 runner.ts lines 389-1285) ──────────
+    // ── ORIGINAL BODY (lifted from Phase 2 runner.ts lines 389-1285) ────────
       // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
       const _runCtl = yield* FiberRef.get(RunControllerRef);
       if (_runCtl) {
@@ -409,7 +431,7 @@ export function runIterationPass(
             reason: ctl.terminate ? "terminate_requested" : "stop_requested",
             deliverable: passthroughOutputDeliverable(state.output),
           });
-          sync(); return "break";
+          return "break";
         }
         // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
         // state to an optional durable controller. Observer must NEVER kill the
@@ -517,6 +539,95 @@ export function runIterationPass(
             burnRatio: assessment.pace.burnRatio,
           });
 
+          // W4.1 (e) — evidence-staleness iterations. Read from the assessment's
+          // already-computed `health.iterationsSinceEvidence` (ledger-derived, so
+          // it cannot over-count when a pass assesses more than once). Gated to
+          // the working phases (synthesize/verify are not "still gathering").
+          const workRemaining =
+            assessment.phase !== "synthesize" && assessment.phase !== "verify";
+          evidenceStaleIterations = workRemaining
+            ? assessment.health.iterationsSinceEvidence
+            : 0;
+
+          // ── W4-live: default-on zero-evidence stand-down ────────────────────
+          // An impossible / zero-progress task (no capable tool, no deliverable,
+          // no substantive evidence) must terminate efficiently by DEFAULT — not
+          // grind to maxIterations or a graceful loop. Reuses the assessment's
+          // ledger-derived staleness signal (the SAME currency as the band rule
+          // and pattern (e)) and the honest-abstain single-owner path. Default-on
+          // as behavior-ordering over already-computed signals (plan 4.2), with a
+          // `.withLongHorizon()` escape hatch (see below).
+          //
+          // FLAIL REQUIREMENT (round-1 fix): bare staleness is ALSO true of a
+          // legitimate no-tool reasoning trajectory (no tools ⇒
+          // iterationsSinceEvidence == the iteration index). The stand-down fires
+          // only when the trajectory shows a flail signature — REFUSAL (canonical
+          // `isGiveUpAnswer`) or REPETITION (near-duplicate thoughts) — so a weak
+          // model deriving a multi-step answer across turns is never aborted
+          // mid-derivation. See runner-helpers/flail-signature.ts.
+          //
+          // Operator-tuning guard: an EXPLICIT `loopDetection` config is the
+          // operator's override of the loop-machinery family — defer to it (the
+          // live default path passes none, so the actuator is armed there).
+          //
+          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
+          // classified horizon is "long") defers the stand-down.
+          //
+          // Tool guard: any tool ATTEMPT at all (substantive OR meta, even one
+          // still in flight) stands the actuator down. A run that is actively
+          // calling tools — a legitimate recall/brief/find workflow, a gather in
+          // flight — is owned by the loop/recovery guards. Only a trajectory that
+          // calls NO tool at all (the live `builtins:false` impossible shape) is
+          // zero-progress here. A declared required tool also defers.
+          const zeroEvidenceActuatorArmed = currentOptions.loopDetection === undefined;
+          const noRequiredTools = requiredTools.length === 0;
+          const attemptedAnyTool = state.steps.some(
+            (s) => s.type === "action" && actionToolName(s) !== undefined,
+          );
+          // W4-live fix (round 1) — FLAIL discriminator. Bare staleness is also
+          // true of a legitimate no-tool REASONING trajectory (a weak model
+          // deriving across turns: no tools ⇒ iterationsSinceEvidence == the
+          // iteration index). Fire only on a flail signature — REFUSAL
+          // (canonical isGiveUpAnswer) OR REPETITION (near-duplicate thoughts).
+          // A deriving run's thoughts change each pass → no signature → survives.
+          const flail = detectFlailSignature(state.steps, evidenceStaleIterations);
+          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
+          // classified horizon is "long") defers the stand-down — long runs are
+          // expected to spend many turns without evidence.
+          const longHorizonDeferred =
+            horizon !== undefined || state.meta.runContract?.horizon === "long";
+          if (
+            zeroEvidenceActuatorArmed &&
+            noRequiredTools &&
+            !longHorizonDeferred &&
+            state.tokens > 0 &&
+            evidenceStaleIterations >= EVIDENCE_STALE_TERMINATE_THRESHOLD &&
+            assessment.requirements.outstanding.length > 0 &&
+            !attemptedAnyTool &&
+            flail.flailing &&
+            countArtifacts(state) === 0 &&
+            countDeliverableCandidates(state) === 0
+          ) {
+            const signal = flail.refusal ? "refused to proceed" : "repeated itself without progress";
+            const reason =
+              `no new task evidence for ${evidenceStaleIterations} iteration(s) while ` +
+              `${assessment.requirements.outstanding.length} requirement(s) remain outstanding ` +
+              `(the model ${signal}) — the task cannot be grounded with the available tools`;
+            state = terminate(state, {
+              reason: "abstained",
+              deliverable: sentinelDeliverable("no_substantive_output", reason),
+              extraMeta: {
+                abstention: { reason, missing: [] },
+                // The output is a harness-authored sentinel, not a model answer:
+                // mark it so resolveCompletionStatus does not report "completed"
+                // for an abstention (honest partial at the strategy boundary; the
+                // engine maps terminatedBy:"abstained" → failure regardless).
+                harnessAuthoredOutput: true,
+              },
+            });
+            return "break";
+          }
+
           // ── HarnessPlan mid-run recompile (meta-loop Phase 6 / task G1) ──────
           // The adaptive lever: on a cadence, recompile the run's HarnessPlan from
           // the just-computed assessment — DEEPEN scaffolding when the run is
@@ -585,7 +696,6 @@ export function runIterationPass(
                 taskId: currentOptions.taskId ?? state.taskId,
                 emitLog,
               });
-              sync();
               return "break";
             }
             // triage (burnRatio ≥ 0.80): steer the model to the OUTSTANDING
@@ -745,7 +855,7 @@ export function runIterationPass(
         if (!aborted) {
           state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
         }
-        sync(); return "break";
+        return "break";
       }
 
       state = yield* kernel(state, currentContext);
@@ -852,7 +962,7 @@ export function runIterationPass(
         // iteration (same "next" pattern as the stall/loop recovery paths) so
         // the stall guard cannot stack a SECOND recovery signal onto the same
         // pass and the run stays capped at ONE grounding redirect end-to-end.
-        sync(); return "continue";
+        return "continue";
       }
 
       // ── Token-delta diminishing-returns guard ────────────────────────────
@@ -916,7 +1026,7 @@ export function runIterationPass(
             reason: "low_delta_guard",
             deliverable: passthroughOutputDeliverable(state.output),
           });
-          sync(); return "break";
+          return "break";
         }
       }
 
@@ -984,7 +1094,7 @@ export function runIterationPass(
               steps: [...state.steps, evidenceStep],
               meta: { ...state.meta, terminatedBy: undefined, evidenceGraceGiven: true },
             });
-            sync(); return "continue";
+            return "continue";
           }
         }
         const arbCtx = arbitrationContextFromState(state, {
@@ -1003,7 +1113,7 @@ export function runIterationPass(
           ctx: arbCtx,
           taskId: effectiveInput.taskId ?? "",
         });
-        sync(); return "break";
+        return "break";
       }
 
       // Apply temperature override dispatched by the intervention dispatcher
@@ -1045,14 +1155,14 @@ export function runIterationPass(
             prevArtifactCount,
             failureRecoveryRedirects,
           } = switchResult.resetCounters);
-          sync(); return "continue";
+          return "continue";
         }
         // Switching not enabled or exhausted — deliver what we have
         state = terminate(state, {
           reason: "switching_exhausted",
           deliverable: passthroughOutputDeliverable(state.output),
         });
-        sync(); return "break";
+        return "break";
       }
 
       // ── Iteration progress hook ──────────────────────────────────────────
@@ -1172,7 +1282,6 @@ export function runIterationPass(
                       abstention: { reason: forced.reason, missing: forced.missing },
                     },
                   });
-                  sync();
                   return "break";
                 }
               }
@@ -1216,7 +1325,7 @@ export function runIterationPass(
               },
               error: null,
             });
-            sync(); return "continue";
+            return "continue";
           }
         }
       }
@@ -1324,7 +1433,6 @@ export function runIterationPass(
                 abstention: { reason: forced.reason, missing: forced.missing },
               },
             });
-            sync();
             return "break";
           }
         }
@@ -1354,8 +1462,8 @@ export function runIterationPass(
         state = stallResult.state;
         requiredToolNudgeCount = stallResult.requiredToolNudgeCount;
         failureRecoveryRedirects = stallResult.failureRecoveryRedirects;
-        if (stallResult.outcome === "break") { sync(); return "break"; }
-        if (stallResult.outcome === "next") { sync(); return "continue"; }
+        if (stallResult.outcome === "break") { return "break"; }
+        if (stallResult.outcome === "next") { return "continue"; }
       }
 
       // ── Intelligent Context Synthesis (before thinking step) ──
@@ -1481,12 +1589,14 @@ export function runIterationPass(
       // Check the most recent steps for patterns that indicate a stuck loop.
       // Only fire if the loop hasn't already terminated (status still active).
       if (state.status !== "done" && state.status !== "failed") {
-        const loopMsg = detectLoop(
+        const detection = detectLoopPattern(
           state.steps,
           maxSameTool,
           maxRepeatedThought,
           maxConsecutiveThoughts,
+          { evidenceStaleIterations },
         );
+        const loopMsg = detection?.message ?? null;
 
         // ── Strategy switching ────────────────────────────────────────────
         if (loopMsg !== null) {
@@ -1507,14 +1617,42 @@ export function runIterationPass(
                 reasoning: "fallback strategy configured",
               };
             } else {
-              // Ask the LLM evaluator to pick the best alternative
-              const available = switchCfg.availableStrategies ?? [];
-              evaluation = yield* evaluateStrategySwitch(
-                state,
-                currentInput.task ?? "",
-                available,
-                triedStrategies,
-              );
+              // W4.5 — deterministic ladder by DEFAULT (zero LLM). The LLM
+              // strategy-evaluator round-trip runs ONLY for a MULTI-CANDIDATE
+              // config: an explicitly-supplied candidate set that is not the
+              // canonical kernel set (the caller wants the model to choose among
+              // its own candidates). Otherwise walk reactive → plan-execute-reflect
+              // → reflexion deterministically.
+              const candidates = switchCfg.availableStrategies ?? KERNEL_STRATEGY_CANDIDATES;
+              const multiCandidate =
+                switchCfg.availableStrategies !== undefined &&
+                !isDefaultCandidateSet(switchCfg.availableStrategies);
+              if (multiCandidate) {
+                evaluation = yield* evaluateStrategySwitch(
+                  state,
+                  currentInput.task ?? "",
+                  candidates,
+                  triedStrategies,
+                  // W2d 2.6 — the runtime already threads calibration onto the
+                  // kernel input; low/skip reliability must skip this
+                  // round-trip (documented behavior, previously unenforced —
+                  // the live post-w1 S1 traces prove it fired on local arms).
+                  { classifierReliability: currentInput.calibration?.classifierReliability },
+                );
+              } else {
+                const next = selectLadderStrategy(triedStrategies, candidates);
+                evaluation = next
+                  ? {
+                      shouldSwitch: true,
+                      recommendedStrategy: next,
+                      reasoning: `deterministic ladder → ${next}`,
+                    }
+                  : {
+                      shouldSwitch: false,
+                      recommendedStrategy: "",
+                      reasoning: "no untried ladder strategy remains",
+                    };
+              }
             }
 
             // Fire evaluated hook regardless of whether switch will happen — observability
@@ -1573,7 +1711,6 @@ export function runIterationPass(
                         abstention: { reason: forced.reason, missing: forced.missing },
                       },
                     });
-                    sync();
                     return "break";
                   }
                 }
@@ -1589,7 +1726,10 @@ export function runIterationPass(
                 switchCount,
                 fromStrategy,
                 toStrategy: evaluation.recommendedStrategy,
-                failureReason: loopMsg,
+                failureReason:
+                  detection !== null
+                    ? `pattern=${detection.pattern.id} (${detection.pattern.name}); ${detection.message}`
+                    : loopMsg,
               });
               state = switchResult.state;
               currentInput = switchResult.currentInput;
@@ -1605,7 +1745,7 @@ export function runIterationPass(
               } = switchResult.resetCounters);
 
               // Continue the outer while loop with fresh state
-              sync(); return "continue";
+              return "continue";
             }
           }
 
@@ -1626,7 +1766,6 @@ export function runIterationPass(
           state = loopResult.state;
           failureRecoveryRedirects = loopResult.failureRecoveryRedirects;
           requiredToolNudgeCount = loopResult.requiredToolNudgeCount;
-          sync();
           return loopResult.outcome === "break" ? "break" : "continue";
         }
       } // end if (state.status !== "done" && state.status !== "failed")
@@ -1663,7 +1802,7 @@ export function runIterationPass(
                 `(2) Add a persona instruction: "You MUST call ${missingTools[0]} as the final step", ` +
                 `(3) Increase retries: .withReasoning({ maxRequiredToolRetries: 4 }).`,
             });
-            sync(); return "break";
+            return "break";
           }
           // Inject feedback and redirect back to thinking
           const feedbackStep = makeStep(
@@ -1728,7 +1867,30 @@ export function runIterationPass(
       }
 
     // Body fall-through — outer while loop should re-evaluate and call us again.
-    sync();
     return "continue";
+    });
+
+    // ── Single-writer write-back — the ONLY place locals reach the carrier ──
+    // Runs once per pass, unconditionally after the inner body settles (every
+    // exit path: both "break" and "continue"). The outer while loop re-reads
+    // the carrier on each pass and the post-loop finalization reads
+    // carrier.{state,currentInput,currentOptions}, so these must be current.
+    carrier.state = state;
+    carrier.currentInput = currentInput;
+    carrier.currentOptions = currentOptions;
+    carrier.currentContext = currentContext;
+    carrier.prevActionCount = prevActionCount;
+    carrier.prevStepCount = prevStepCount;
+    carrier.prevStepCountForLearn = prevStepCountForLearn;
+    carrier.prevDecisionLogCountForLearn = prevDecisionLogCountForLearn;
+    carrier.prevArtifactCount = prevArtifactCount;
+    carrier.consecutiveStalled = consecutiveStalled;
+    carrier.requiredToolRedirects = requiredToolRedirects;
+    carrier.requiredToolNudgeCount = requiredToolNudgeCount;
+    carrier.failureRecoveryRedirects = failureRecoveryRedirects;
+    carrier.switchCount = switchCount;
+    carrier.autoCheckpointed = autoCheckpointed;
+
+    return signal;
   });
 }

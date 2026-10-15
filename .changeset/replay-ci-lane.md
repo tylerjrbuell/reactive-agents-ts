@@ -1,0 +1,5 @@
+---
+"@reactive-agents/replay": patch
+---
+
+W0.8 Replay-as-CI surfaced. New `tests/replay-ci-lane.test.ts` executes the cookbook's "Deterministic testing" flow end-to-end against a committed fixture recorded by the real trace recorder (`tests/fixtures/ci-lane-run.jsonl`, regenerable via `tests/fixtures/regenerate-fixture.ts`): record → commit → `loadRecordedRun` + `buildSequentialLLMTable` + `makeReplayLLMLayer` → `.withReplayLLM` → byte-identical output with no API keys. No `src/` behavior changed; the patch bump carries the test lane + fixture that pin the documented surface, alongside the cookbook section and the snapshot-replay page's badge correction (experimental → stable, matching `reference/stability.md`'s own v0.12 list and the page's existing @stable claim). Known quirk surfaced by the lane, not fixed here: the live recorder stamps `run-started.task` as `""` (packages/trace normalize), so the CI lane passes the task explicitly and the `replay()` orchestrator replays an empty task on fresh recordings.

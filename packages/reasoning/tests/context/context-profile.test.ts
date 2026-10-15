@@ -14,9 +14,16 @@ describe("CONTEXT_PROFILES", () => {
     expect(CONTEXT_PROFILES.frontier).toBeDefined();
   });
 
-  it("local tier has largest tool result budgets (more context for weaker models)", () => {
+  it("local preserve budget matches mid after the D-2026-07-30-H fix (was an inversion)", () => {
+    // Pre-Wave-2a this asserted local.toolResultMaxChars > mid (4000 vs 1200)
+    // — the exact shape D-2026-07-30-H filed as an inverted budget ("capable
+    // model preserves LESS than a tiny one"). Dispatched fix (2026-10-13)
+    // chose local ≤ mid; the ratchet test owns the full ladder now. The
+    // preview-items budget keeps its sanctioned local exception (8) for
+    // filter tasks — see the 2026-05-28 comment in context-profile.ts.
     const local = CONTEXT_PROFILES.local;
-    expect(local.toolResultMaxChars).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultMaxChars);
+    expect(local.toolResultMaxChars).toBeLessThanOrEqual(CONTEXT_PROFILES.mid.toolResultMaxChars);
+    expect(local.toolResultPreviewItems).toBeGreaterThan(CONTEXT_PROFILES.mid.toolResultPreviewItems);
   });
 
   it("frontier tier is tuned for efficiency (tighter than default)", () => {
@@ -204,10 +211,17 @@ describe("resolveProfile — provider-scoped tier resolution", () => {
     expect(resolveProfile("llama-flash-mini", undefined, "ollama").tier).toBe("mid");
   });
 
-  it("ollama: routes small models (<=3B) to local", () => {
+  // W2b: the ollama `/(\d+)b/` size heuristic is DELETED (plan 2.1 — the
+  // Capability registry is the single tier arbiter; the regex overriding it
+  // for every >=4B tag and mis-reading "1.7b" as "7b" was the bug). On the
+  // regex-only resolveProfile path, unregistered ollama tags now take the
+  // conservative mid default (LOCAL_PATTERNS still names truly-small models);
+  // real builder flows get the measured tier from the probe row via
+  // resolveProfileWithWindow (see registry-first-tiering.test.ts).
+  it("ollama: unregistered tags default to mid — size-regex (<=3B → local) is gone", () => {
     expect(resolveProfile("tinyllama:1b", undefined, "ollama").tier).toBe("local");
-    expect(resolveProfile("qwen:2b", undefined, "ollama").tier).toBe("local");
-    expect(resolveProfile("qwen:3b", undefined, "ollama").tier).toBe("local");
+    expect(resolveProfile("qwen:2b", undefined, "ollama").tier).toBe("mid");
+    expect(resolveProfile("qwen:3b", undefined, "ollama").tier).toBe("mid");
   });
 
   it("unknown provider falls through to global patterns unchanged", () => {

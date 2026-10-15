@@ -1116,6 +1116,42 @@ export interface AgentResultMetadata {
     readonly harnessAuthoredOutput?: boolean
     readonly verificationWarning?: string
     /**
+     * W5 fold: contract requirement ids the terminal evidence partition still
+     * names OUTSTANDING or BLOCKED (W5.1 coverage cap). When present and
+     * non-empty, the run's `success` bit is false regardless of output
+     * substance: a terminal that cannot point at its remaining requirements
+     * has no warrant to claim completion. Absent = nothing outstanding (or no
+     * contract declared).
+     */
+    readonly outstandingCriteria?: readonly string[]
+    /** True when the terminal was capped by the run budget, not by evidence. */
+    readonly budgetTerminalPartial?: boolean
+    /**
+     * W5.4: the run-scoped budget meter's live total at terminal: every LLM
+     * call this run made INCLUDING folded delegated-child spend, measured
+     * against `.withBudget()`'s limits. Present only when a budget was armed;
+     * absent on un-budgeted runs. `tokensUsed` above counts THIS agent's own
+     * calls; this field is the true run spend the budget gates on.
+     */
+    readonly runBudgetSpend?: { readonly tokens: number; readonly cost: number }
+    /**
+     * W0.5 result→trace linkage. The run's ULID id, equal to the engine
+     * `taskId`, the `runId` stamped on every trace event, and the base name
+     * of the run's JSONL trace file. Present ONLY when the trace file was
+     * recorded and flushed before this result was minted (paired with
+     * {@link tracePath}); absent (not null, not a phantom) when tracing was
+     * disabled or nothing was recorded. Consumed by Lift-Protocol captures
+     * and `rax diagnose replay`.
+     */
+    readonly runId?: string
+    /**
+     * Absolute path to the run's JSONL trace file (`<traceDir>/<runId>.jsonl`,
+     * recorder.ts flush convention), verified to exist on disk when the result
+     * was minted. Together with {@link runId} this is the supported way to feed
+     * a run's output into `rax diagnose replay <tracePath>`.
+     */
+    readonly tracePath?: string
+    /**
      * Namespaced extension slot (cross-cutting cascade Task 9). Strategy-authored
      * metadata with no dedicated top-level field rides here and is forwarded
      * verbatim, one level deep. Declared on the public surface so a consumer can

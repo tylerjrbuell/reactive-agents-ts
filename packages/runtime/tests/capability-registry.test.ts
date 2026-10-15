@@ -53,7 +53,7 @@ describe("CapabilityRegistry — service tag CRUD (M2.1)", () => {
         return yield* reg.defaultOnEntries();
       }).pipe(Effect.provide(CapabilityRegistryLive)),
     );
-    expect(entries.length).toBe(4); // all 4 bootstrap entries are default-on
+    expect(entries.length).toBe(3); // Wave 6.5: memory flipped to default-off (stateless default); 3 remain default-on
     for (const e of entries) {
       expect(e.defaultOn).toBe(true);
     }
@@ -132,7 +132,7 @@ describe("CapabilityRegistry — audit() report (M2.1)", () => {
       }).pipe(Effect.provide(CapabilityRegistryLive)),
     );
     expect(report.totalEntries).toBe(4);
-    expect(report.defaultOnCount).toBe(4);
+    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
   });
 
   it("groups entries by warden", async () => {
@@ -214,7 +214,7 @@ describe("agent.capabilities.audit() — runtime integration (M2.2 in same commi
 
     // 4 bootstrap entries present, all default-on
     expect(report.totalEntries).toBe(4);
-    expect(report.defaultOnCount).toBe(4);
+    expect(report.defaultOnCount).toBe(3); // Wave 6.5: memory stateless-default
 
     // strategy-switching violation surfaces
     expect(report.violations.length).toBe(1);
@@ -242,5 +242,49 @@ describe("agent.capabilities.audit() — runtime integration (M2.2 in same commi
     expect(r1.violations.length).toBe(r2.violations.length);
 
     await agent.dispose();
+  });
+});
+
+describe("CapabilityRegistry — recordLiftEvidence (Wave 7.2 feed)", () => {
+  it("writes measured evidence onto an entry and clears its violation", async () => {
+    const after = await Effect.runPromise(
+      Effect.gen(function* () {
+        const reg = yield* CapabilityRegistry;
+        yield* reg.recordLiftEvidence(
+          "strategy-switching",
+          {
+            measuredOn: ["local", "mid"],
+            averageDelta: "+testpp measured",
+            evidence: "wiki/Research/Harness-Reports/2026-10-12-program-scoreboard.md",
+            measuredAt: "2026-10-14",
+          },
+          new Date("2026-10-14T00:00:00Z"),
+        );
+        return yield* reg.get("strategy-switching");
+      }).pipe(Effect.provide(CapabilityRegistryLive)),
+    );
+    expect(after.liftEvidence?.averageDelta).toBe("+testpp measured");
+    expect(after.liftEvidence?.measuredOn).toEqual(["local", "mid"]);
+    expect(after.lastAblation).toBe("2026-10-14");
+    // Untouched fields survive the read-modify-write.
+    expect(after.defaultOn).toBe(true);
+    expect(after.description.length).toBeGreaterThan(0);
+  });
+
+  it("fails CapabilityNotFoundError on unknown names (no evidence for nothing)", async () => {
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const reg = yield* CapabilityRegistry;
+        return yield* reg
+          .recordLiftEvidence("no-such-capability", {
+            measuredOn: ["local"],
+            averageDelta: "x",
+            evidence: "y",
+            measuredAt: "2026-10-14",
+          })
+          .pipe(Effect.either);
+      }).pipe(Effect.provide(CapabilityRegistryLive)),
+    );
+    expect(result._tag).toBe("Left");
   });
 });

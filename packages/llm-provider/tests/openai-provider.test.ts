@@ -239,3 +239,69 @@ describe("gpt-5.x token field — max_completion_tokens required (no thinking)",
     15000,
   );
 });
+
+// ─── Temperature threading — adapter contract pins (GH temp-threading) ──────
+//
+// The Wave-4 close-capture defect was rooted UPSTREAM of this adapter
+// (packages/runtime/src/engine/phases/agent-loop/reasoning-think.ts:336
+// drops the commanded config.temperature; the kernel then always stamps
+// request.temperature, shadowing `request.temperature ?? defaultTemperature`
+// in every provider). These pins certify the adapter half is correct and
+// guard the ?? precedence: an explicit temperature 0 must reach the wire
+// verbatim, never swallowed into the 0.7 default (a `||` refactor bug).
+describe("OpenAI temperature threading — adapter pin", () => {
+  async function captureTempBody(temperature?: number): Promise<Record<string, unknown>> {
+    capturedCreateOpts = null;
+    mockCreate.mockImplementationOnce(async (body: unknown) => {
+      capturedCreateOpts = body as Record<string, unknown>;
+      return {
+        choices: [
+          {
+            message: { content: "ok", role: "assistant", tool_calls: undefined },
+            finish_reason: "stop",
+            logprobs: null,
+          },
+        ],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+        model: "gpt-4o",
+      };
+    });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        yield* llm.complete({
+          model: "gpt-4o",
+          messages: [{ role: "user", content: "hello" }],
+          maxTokens: 100,
+          ...(temperature !== undefined ? { temperature } : {}),
+        });
+      }).pipe(
+        Effect.provide(
+          makeLayer({
+            model: "gpt-4o",
+            maxTokens: 100,
+          }),
+        ),
+      ),
+    );
+    return capturedCreateOpts!;
+  }
+
+  it(
+    "explicit request temperature 0 reaches body.temperature verbatim",
+    async () => {
+      const body = await captureTempBody(0);
+      expect(body.temperature).toBe(0);
+    },
+    15000,
+  );
+
+  it(
+    "unset request temperature resolves to config.defaultTemperature (0.7)",
+    async () => {
+      const body = await captureTempBody();
+      expect(body.temperature).toBe(0.7);
+    },
+    15000,
+  );
+});

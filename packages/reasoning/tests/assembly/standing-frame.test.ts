@@ -3,6 +3,7 @@ import {
   renderStandingFrame,
   selectProfile,
   DEFAULT_PROFILE,
+  CONTRACT_PROFILE,
   PHASE_PROFILES,
   type StandingFrameInput,
 } from "../../src/assembly/standing-frame.js";
@@ -89,13 +90,52 @@ describe("standing-frame — handoff renders FROM the ledger (audit 03-F5)", () 
 
 // ── contract.outstanding: gated behind the long-horizon profile ──────────────
 
-describe("standing-frame — contract.outstanding goal frame (profile-gated)", () => {
-  it("DEFAULT profile does NOT render outstanding (byte-identical)", () => {
+describe("standing-frame — contract.outstanding goal frame (W4.4 default-on)", () => {
+  it("W4.4: contract-present DEFAULT profile renders the outstanding frame (default-on)", () => {
     const input: StandingFrameInput = { contract, assessment: assessment("gather"), longHorizon: false };
-    expect(renderStandingFrame(input).sections.find((s) => s.name === "outstanding")).toBeUndefined();
+    const out = renderStandingFrame(input).sections.find((s) => s.name === "outstanding");
+    expect(out).toBeDefined();
+    expect(out!.text).toContain("Outstanding requirements:");
+    expect(out!.text).toContain("[r1] Answer Q1");
+    expect(out!.text).toContain("[r2] Write report.md");
+    expect(out!.refs).toEqual(["r1", "r2"]);
   });
 
-  it("long-horizon profile renders outstanding requirements as the standing frame", () => {
+  it("W4.4 parity: NO contract → no outstanding section (byte-identical)", () => {
+    expect(renderStandingFrame({ assessment: assessment("gather") }).sections).toHaveLength(0);
+    expect(renderStandingFrame({ priorContext: "carry me forward" }).sections).toHaveLength(1);
+    expect(selectProfile({ assessment: assessment("gather") })).toBe(DEFAULT_PROFILE);
+  });
+
+  it("W4.4: caps at MAX items with the (+K more) overflow marker", () => {
+    const many: RunContract = {
+      requirements: Array.from({ length: 12 }, (_, i) => ({
+        id: `r${i}`,
+        kind: "question-answered" as const,
+        spec: { description: `Requirement ${i}`, acceptance: "self-critique" as const },
+      })),
+      deliverables: [],
+      constraints: [],
+      horizon: "short",
+      postConditions: [],
+    };
+    const out = renderStandingFrame({ contract: many }).sections.find((s) => s.name === "outstanding");
+    expect(out).toBeDefined();
+    expect((out!.text.match(/^- \[/gm) ?? []).length).toBe(8);
+    expect(out!.text).toContain("(+4 more)");
+  });
+
+  it("W4.4: dedupes duplicate ids and excludes already-satisfied items", () => {
+    const a: RunAssessment = {
+      ...assessment("gather"),
+      requirements: { satisfied: ["r1"], outstanding: ["r2", "r2", "r1"], blocked: [] },
+    };
+    const out = renderStandingFrame({ contract, assessment: a }).sections.find((s) => s.name === "outstanding");
+    expect(out!.refs).toEqual(["r2"]);
+    expect(out!.text).not.toContain("[r1]");
+  });
+
+  it("long-horizon profile renders outstanding requirements with phase emphasis", () => {
     const input: StandingFrameInput = { contract, assessment: assessment("gather"), longHorizon: true };
     const out = renderStandingFrame(input).sections.find((s) => s.name === "outstanding");
     expect(out).toBeDefined();
@@ -130,6 +170,10 @@ describe("standing-frame — selectProfile", () => {
   it("default profile without the long-horizon flag", () => {
     expect(selectProfile({ assessment: assessment("gather"), longHorizon: false })).toBe(DEFAULT_PROFILE);
     expect(selectProfile({ assessment: assessment("gather") })).toBe(DEFAULT_PROFILE);
+  });
+  it("W4.4: contract present → CONTRACT_PROFILE (showOutstanding true)", () => {
+    expect(selectProfile({ contract })).toBe(CONTRACT_PROFILE);
+    expect(selectProfile({ contract }).showOutstanding).toBe(true);
   });
   it("phase profile under the long-horizon flag", () => {
     expect(selectProfile({ assessment: assessment("verify"), longHorizon: true })).toBe(PHASE_PROFILES.verify);

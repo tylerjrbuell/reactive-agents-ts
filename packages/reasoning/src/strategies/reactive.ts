@@ -13,6 +13,7 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
+import { KERNEL_STRATEGY_CANDIDATES } from "../kernel/capabilities/reflect/strategy-ladder.js";
 import {
   finalizeStrategyResult,
   type JudgedReasoningResult,
@@ -224,7 +225,15 @@ export const executeReactive = (
       contextProfile: input.contextProfile,
       providerName: input.providerName,
       resultCompression: input.resultCompression,
+      // GH temp-threading (Wave-4): `input.temperature` (the runtime's
+      // command-first merge `config.temperature ?? config.contextProfile
+      // ?.temperature`, reasoning-think.ts) must ride the KernelInput.
+      // Before this, the commanded `.withModel({temperature})` was dropped
+      // HERE even when the runtime forwarded it, so think.ts:339 always
+      // stamped the tier/profile value. Precedence preserved where no
+      // command exists: contextProfile above the strategy-config default.
       temperature:
+        input.temperature ??
         input.contextProfile?.temperature ??
         input.config.strategies.reactive.temperature,
       agentId: input.agentId,
@@ -280,7 +289,11 @@ export const executeReactive = (
             enabled: input.strategySwitching.enabled,
             maxSwitches: input.strategySwitching.maxSwitches,
             fallbackStrategy: input.strategySwitching.fallbackStrategy,
-            availableStrategies: ["reactive", "plan-execute-reflect", "reflexion", "tree-of-thought"],
+            // W4.5 — the REAL registered kernel candidate set (single source:
+            // strategy-ladder). The kernel walks the deterministic ladder over
+            // these by default; the evaluator runs only for a custom
+            // (multi-candidate) set.
+            availableStrategies: KERNEL_STRATEGY_CANDIDATES,
           }
         : undefined,
     });

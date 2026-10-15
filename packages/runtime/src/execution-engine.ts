@@ -27,6 +27,7 @@ import {
   classifyToolRelevance,
   filterToolsByRelevance,
   ReasoningService,
+  CurrentRunBudget,
   VERIFIER_REJECTION_PREFIX,
   VERIFIER_ESCALATION_PREFIX,
 } from "@reactive-agents/reasoning";
@@ -88,6 +89,7 @@ import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/deb
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
+import { mintTraceLinkage } from "./engine/finalize/trace-linkage.js";
 
 // ─── Narrow service types for optional deps ───
 // ObsLike + asObsLike are canonical at engine/runtime-context.ts — reused here
@@ -135,6 +137,14 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 // `.withReactiveIntelligence({ notice: false })` (config) — see the
 // TELEMETRY_ENABLED gate below.
 const _noticesManager = makeNoticesManager();
+
+/**
+ * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
+ * Same 64KB budget convention as the `AgentCompleted.output` cap applied by
+ * `engine/finalize/run-finalize.ts` (`RUN_OUTPUT_CAP`); clipped emissions
+ * set `taskTruncated: true`.
+ */
+const STARTED_TASK_CAP = 64 * 1024;
 
 import { armRunBudget } from "./engine/run-budget-arm.js";
 
@@ -697,6 +707,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       | undefined) ??
                     rootContext(ctx.taskId, config.agentId);
                   yield* FiberRef.set(CurrentRunContextRef, ambientRunContext);
+                  // GH #236: stamp the real task text into AgentStarted so
+                  // normalize's run-started (and RecordedRun.task downstream)
+                  // carries the prompt instead of "". Payload budget: capped
+                  // at 64KB here at the publisher, the same convention as
+                  // AgentCompleted.output (engine/finalize/run-finalize.ts
+                  // RUN_OUTPUT_CAP); taskTruncated marks a clip.
+                  const startedTaskText = extractTaskText(task.input);
+                  const startedTaskClipped = startedTaskText.length > STARTED_TASK_CAP;
                   yield* eb.publish({
                     _tag: "AgentStarted",
                     taskId: ctx.taskId,
@@ -704,6 +722,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     provider: String(ctx.provider ?? "unknown"),
                     model: String(ctx.selectedModel ?? "unknown"),
                     timestamp: executionStartMs,
+                    task: startedTaskClipped
+                      ? startedTaskText.slice(0, STARTED_TASK_CAP)
+                      : startedTaskText,
+                    ...(startedTaskClipped ? { taskTruncated: true } : {}),
                     ...(task.metadata?.context?.["parentAgentId"]
                       ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
                       : {}),
@@ -1067,6 +1089,75 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
                 }
 
+                // ── Guardrail final-output screen (PII / toxicity) ──────────
+                // Wave 6.2: `GuardrailService.checkOutput` had no caller
+                // anywhere — the GUARDRAIL phase screens only the INPUT, so a
+                // run could exfiltrate PII it legitimately retrieved and ship
+                // it as its answer. Runs ONCE here, next to the behavioral
+                // contract output check, in the shared post-arm code that sees
+                // the final output regardless of arm. Policy (explicit):
+                // violations fail CLOSED (block + event, mirroring the input
+                // phase); service errors fail OPEN but EMIT (never silent).
+                if (config.enableGuardrails) {
+                  const goutOpt = yield* Effect.serviceOption(GuardrailService).pipe(
+                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+                  );
+                  if (goutOpt._tag === "Some") {
+                    const outputCheck = yield* goutOpt.value.checkOutput(outputForSuccess).pipe(
+                      Effect.catchAll((err) =>
+                        Effect.gen(function* () {
+                          if (obs) {
+                            yield* obs
+                              .info(
+                                `⚠ [guardrail] output screen unavailable, failing open: ${String(err)}`,
+                              )
+                              .pipe(
+                                Effect.catchAll((swallow) =>
+                                  emitErrorSwallowed({
+                                    site: "runtime/src/execution-engine.ts:guardrail-output-screen-unavailable",
+                                    tag: errorTag(swallow),
+                                  }),
+                                ),
+                              );
+                          }
+                          return null;
+                        }),
+                      ),
+                    );
+                    if (outputCheck !== null && !outputCheck.passed) {
+                      const outputViolationSummary = outputCheck.violations
+                        .map((v: { type: unknown; message: unknown }) => `${String(v.type)}: ${String(v.message)}`)
+                        .join("; ");
+                      if (eb) {
+                        yield* eb
+                          .publish({
+                            _tag: "GuardrailViolationDetected",
+                            taskId: ctx.taskId,
+                            violations: outputCheck.violations.map((v: { type: unknown; message: unknown }) =>
+                              `${String(v.type)}: ${String(v.message)}`),
+                            score: outputCheck.score,
+                            blocked: true,
+                          })
+                          .pipe(
+                            Effect.catchAll((swallow) =>
+                              emitErrorSwallowed({
+                                site: "runtime/src/execution-engine.ts:guardrail-output-violation-publish",
+                                tag: errorTag(swallow),
+                              }),
+                            ),
+                          );
+                      }
+                      return yield* Effect.fail(
+                        new GuardrailViolationError({
+                          message: `Output guardrail check failed: ${outputViolationSummary}`,
+                          taskId: ctx.taskId,
+                          violation: outputViolationSummary,
+                        }),
+                      );
+                    }
+                  }
+                }
+
                 // Extract terminatedBy from reasoning metadata, with fallback inference.
                 //
                 // DEBT-REGISTER §3 (2026-07-23): this cast used to name a
@@ -1124,6 +1215,30 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (executionSucceeded && terminatedByRaw === "abstained") {
                   executionSucceeded = false;
                   ctx.metadata.abstainedNotSuccess = true;
+                }
+
+                // W5 fold (kernel review Important 2): an OUTSTANDING contract
+                // requirement is not a success, whatever the coarse status bit
+                // says. The W5.1 coverage cap caps the terminal STATUS at
+                // `partial` + stamps `metadata.outstandingCriteria`, but the
+                // pre-existing partial+substantive TOLERANCE lane above maps
+                // that partial to `success: true`, so the S3 false-success
+                // survived on the user-visible bit ("S3 false-success -> 0"
+                // was only true on the verdict lane). Resolved invariant
+                // (envelope-authority, NOT blanket partial=>false): a terminal
+                // whose evidence partition still names outstanding/blocked
+                // requirements cannot claim success; an uncapped partial with
+                // nothing outstanding keeps the documented tolerance lane
+                // byte-identical, and `completed` is unchanged. Mirrors the
+                // abstention veto above: same lane, one bit over.
+                const outstandingAtTerminal = rr?.metadata?.outstandingCriteria;
+                if (
+                  executionSucceeded &&
+                  Array.isArray(outstandingAtTerminal) &&
+                  outstandingAtTerminal.length > 0
+                ) {
+                  executionSucceeded = false;
+                  ctx.metadata.outstandingContractNotSuccess = true;
                 }
 
                 // ── Engine-boundary output/success invariant (M7's engine
@@ -1308,6 +1423,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     : {}),
                 });
 
+                // W0.5 result→trace linkage: settle-flush this run's buffered
+                // trace events, then mint {runId, tracePath} iff the recorder's
+                // file (<traceDir>/<taskId>.jsonl, taskId IS the trace runId)
+                // exists. null when tracing disabled/unrecorded; fields stay
+                // honestly absent (wire-or-delete; never a phantom path).
+                // W5.4 observability seam: the run-scoped budget meter's LIVE
+                // total at terminal. When a budget is armed (`armRunBudget`
+                // wrapped this run's execute), the ambient FiberRef carries the
+                // meter every call AND every delegated child's folded spend
+                // feed; expose it so cost/claim consumers can see true run
+                // spend, and so budget-inheritance is directly assertable from
+                // the result. Absent (wire-or-delete) on un-budgeted runs.
+                const ambientRunMeter = yield* FiberRef.get(CurrentRunBudget);
+                const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
+
                 const result: TaskResult & {
                   format?: string;
                   terminatedBy?: string;
@@ -1434,6 +1564,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     ...(ctx.metadata.harnessAuthoredOutput === true || rr?.metadata?.harnessAuthoredOutput === true
                       ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
                       : {}),
+                    // W5 fold: the envelope honesty markers ride to the user.
+                    // Before this they were dropped at the normalize boundary
+                    // (whitelist rebuild), so the cap's evidence never reached
+                    // AgentResult.metadata on any pass. Envelope-sourced
+                    // verificationWarning rides FIRST; the engine's own
+                    // result-boundary warning below keeps authority when both
+                    // exist (later spread wins).
+                    ...(rr?.metadata?.outstandingCriteria !== undefined
+                      ? ({ outstandingCriteria: rr.metadata.outstandingCriteria } as Record<string, unknown>)
+                      : {}),
+                    ...(rr?.metadata?.budgetTerminalPartial === true
+                      ? ({ budgetTerminalPartial: true } as Record<string, unknown>)
+                      : {}),
+                    ...(rr?.metadata?.verificationWarning !== undefined
+                      ? ({ verificationWarning: rr.metadata.verificationWarning } as Record<string, unknown>)
+                      : {}),
                     // Result-boundary verification: the verdict rides to the
                     // receipt sites (run() + stream) via metadata, so BOTH
                     // paths stamp receipt.verifierVerdict from one source.
@@ -1451,6 +1597,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // now, exactly as the boundary verdict above does.
                     ...(ctx.metadata.cacheHit === true
                       ? ({ cacheHit: true } as Record<string, unknown>)
+                      : {}),
+                    // W0.5: run→trace linkage (Lift Protocol plumbing). Enumerated
+                    // by name like harnessAuthoredOutput above; present ONLY when
+                    // the trace file was flushed and verified to exist at mint.
+                    ...(traceLinkage !== null
+                      ? ({ runId: traceLinkage.runId, tracePath: traceLinkage.tracePath } as Record<string, unknown>)
+                      : {}),
+                    // W5.4: the live run-meter total (parent calls + folded
+                    // delegated-child spend). Present ONLY when a budget was
+                    // armed for this run; absent on un-budgeted runs
+                    // (wire-or-delete honesty).
+                    ...(ambientRunMeter !== null
+                      ? ({ runBudgetSpend: { tokens: ambientRunMeter.tokens, cost: ambientRunMeter.cost } } as Record<string, unknown>)
                       : {}),
                   },
                   completedAt: new Date(),

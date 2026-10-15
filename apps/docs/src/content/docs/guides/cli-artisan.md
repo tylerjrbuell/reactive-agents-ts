@@ -24,7 +24,7 @@ The framework gives you composable layers and a powerful runtime. The CLI turns 
 
 ```bash
 # 1) Scaffold a project
-bunx reactive-agents init my-agent --template standard   # (installed? the short alias works: rax init)
+bunx reactive-agents init my-agent --template with-tools   # (installed? the short alias works: rax init)
 cd my-agent
 bun install
 
@@ -43,7 +43,7 @@ rax inspect researcher
 
 ## Command Surface at a Glance
 
--   `rax init`: create a project with minimal, standard, or full templates.
+-   `rax init`: create a project from the create-reactive-agent templates (minimal, with-tools, streaming, with-structured-output, with-approval-gates, with-memory, cloudflare-worker).
 -   `rax create agent`: scaffold role-specific agent starters.
 -   `rax run`: execute prompts with provider/model/capability flags. Pair with `--cortex` to stream events to a locally-running Cortex studio (public package — see below).
 -   `rax playground`: interactive loop with tool and thought streaming.

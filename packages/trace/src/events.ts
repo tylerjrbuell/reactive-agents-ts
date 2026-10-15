@@ -332,6 +332,23 @@ export interface LLMExchangeEvent extends TraceEventBase {
     readonly cacheReadTokensIn?: number
     readonly costUsd?: number
     readonly durationMs?: number
+    /**
+     * W1.4 forensics (Local-Tier Reliability): FULL character length of the
+     * provider's internal reasoning for this exchange — 0/absent when the
+     * model emitted no thinking. Pair with `thinkingPreview` so `rax diagnose
+     * replay` can show that a starved visible channel was outcompeted by
+     * reasoning tokens (the S2 baseline: 4-char content vs 1.8-2.6K thinking
+     * tokens per run). Additive optional — traces recorded before this field
+     * load unchanged (REQUIRED_FIELDS_BY_KIND did not grow).
+     */
+    readonly thinkingChars?: number
+    /**
+     * Prefix of the thinking text, capped at the existing trace-budgeting
+     * constant PREVIEW_MAX (see reasoning/src/kernel/utils/diagnostics.ts —
+     * the same cap every other exchange preview uses). Never carries the full
+     * reasoning: trace payload growth is bounded by construction.
+     */
+    readonly thinkingPreview?: string
   }
 }
 

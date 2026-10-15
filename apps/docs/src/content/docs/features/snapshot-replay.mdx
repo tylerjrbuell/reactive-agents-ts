@@ -1,6 +1,6 @@
 ---
 title: Snapshot & Replay
-stability: experimental
+stability: stable
 description: >-
   Deterministically re-run a recorded agent run with prompt or model overrides —
   tool results held constant.
@@ -120,7 +120,7 @@ What's verified:
 - **End-to-end determinism** — `e2e.test.ts` runs the full builder path and asserts byte-identical output on replay; a corrupted tool result is proven to diverge at exactly the expected point.
 
 <Aside type="note">
-Replay re-uses recorded tool results but does **not** mock the LLM. Provider calls are live. For full determinism, override the model to the `test` provider with a fixed scenario, or pin temperature to 0 on a real provider. Provider-side nondeterminism is logged when detected.
+The `replay()` flow above re-uses recorded tool results but does **not** mock the LLM — provider calls are live. For a fully keyless, byte-deterministic lane (the model stream itself dispensed from the recording), build with `.withReplayLLM(makeReplayLLMLayer(buildSequentialLLMTable(run.trace.events)))` — the recipe, pinning caveats, and a committed-fixture CI test are in [Testing Agents → Deterministic testing](/cookbook/testing-agents/#deterministic-testing-replaying-recorded-runs). Provider-side nondeterminism is logged when detected.
 </Aside>
 
 ## When replay isn't enough

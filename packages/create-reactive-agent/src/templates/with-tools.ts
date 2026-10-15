@@ -1,5 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerDefaultModel, providerEnvVar, providerRuntimeName } from "../lib/provider-config.js";
+import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
+import { renderEnvGuard } from "./shared.js";
 
 export const withToolsTemplate: Template = {
   name: "with-tools",
@@ -11,17 +12,10 @@ export const withToolsTemplate: Template = {
 
 function renderIndex(opts: ScaffoldOptions): string {
   const model = providerDefaultModel(opts.provider);
-  const envVar = providerEnvVar(opts.provider);
-  const envCheck = envVar
-    ? `if (!process.env.${envVar}) {
-  console.error("Missing ${envVar} in environment. See .env.example.");
-  process.exit(1);
-}`
-    : `// Ollama is local — no API key required.`;
 
   return `import { ReactiveAgents } from "reactive-agents";
 
-${envCheck}
+${renderEnvGuard(opts)}
 
 // withTools({ builtins: true }) opts in to the built-in tool layer:
 // web-search, http-get, file-read/file-write, code-execute, and more.

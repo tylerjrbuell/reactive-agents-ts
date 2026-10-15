@@ -19,7 +19,7 @@ import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifi
 import { Effect, FiberRef, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME, scratchpadStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
@@ -46,6 +46,7 @@ import { defaultVerifier, resolveResultSeverity, verifyAndEmit, humanizeVerifier
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
 import { judgmentComprehendShadow } from "../../kernel/capabilities/comprehend/judgment-classification.js";
@@ -216,7 +217,16 @@ export function runKernel(
           Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
         );
         providerSupportsToolCalling = caps.supportsToolCalling;
-        if (caps.supportsToolCalling && !mergedInput.toolCallResolver) {
+        // Wave 3 rung-2 (frontier model, FC disabled): `REACTIVE_AGENTS_FORCE_TEXT_PARSE=1`
+        // forces the text-parse driver so the taught grammar is exercised on a
+        // strong model (house env pattern, cf. REACTIVE_AGENTS_TEXT_PARSE).
+        // Single reader; unset/invalid = capability decides (unchanged default).
+        // The resolver keys on the EFFECTIVE value (never native-resolver +
+        // text-parse-driver — the 482c11e4 divergence class).
+        if (process.env.REACTIVE_AGENTS_FORCE_TEXT_PARSE === "1") {
+          providerSupportsToolCalling = false;
+        }
+        if (providerSupportsToolCalling && !mergedInput.toolCallResolver) {
           const resolver = createToolCallResolver(caps);
           effectiveInput = { ...mergedInput, toolCallResolver: resolver };
         }
@@ -265,8 +275,23 @@ export function runKernel(
     // injection above. Capable (or unknown) ⇒ native driver (resolver present,
     // tools attached — the coherent triple). Only a provider that explicitly
     // reports `supportsToolCalling === false` gets the text-parse driver.
+    //
+    // W3b (plan 3.3): the dialect argument is the EXPLICIT-CLAIM reader
+    // `loadDialectPriorClaim` (GH #243 phantom rule). It is never sourced from
+    // `effectiveInput.calibration?.toolCallDialect` — that schema field defaults
+    // absent→"none" (ModelCalibrationSchema) and re-enters the phantom-claim
+    // class #243 removed. Per the spec's Stage-B end state the claim NEVER picks
+    // the route (capability is the sole arbiter, design law #1); it rides on the
+    // selected driver as source-tagged provenance (spec §3) so a wrong route
+    // is visible on the run context, not silent. A registry-provisional tier
+    // (`profile.provisionalTier === true`, W2b) is NOT a routing input either:
+    // the degraded text-parse route fires only on a strict capability verdict
+    // — pinned end-to-end in tests/kernel/loop/tool-routing-triad.test.ts.
+    const dialectClaim = effectiveInput.modelId
+      ? loadDialectPriorClaim(effectiveInput.modelId)
+      : undefined;
     const toolCallingDriver = selectToolCallingDriver(
-      effectiveInput.calibration?.toolCallDialect,
+      dialectClaim?.dialect,
       providerSupportsToolCalling,
     );
 
@@ -620,6 +645,48 @@ export function runKernel(
             `required=[${requiredTools.join(", ")}]\n` +
             `available=[${allKnownTools.join(", ")}]\n` +
             `visible=[${visibleTools.join(", ")}]`,
+        });
+      }
+    }
+
+    // ── GH #244 satisfiability preflight — the fast path for impossible tasks ──
+    // When the contract carries an `action-required` requirement (the task
+    // needs an external action) AND the tool surface resolves zero relevant
+    // tools for it AND no other path exists (no declared required tools, no
+    // nominated plausible tool), the run is unsatisfiable: abstain HERE at
+    // iteration 0 with a named capability reason instead of looping until
+    // the zero-evidence stand-down fires at iteration 2. Conservative by
+    // construction — assessActionSatisfiability returns null on every unknown
+    // (schemas undefined, declared tools, nominations, any relevant tool), so
+    // a viable run can never be killed here; the worst miss falls back to the
+    // stand-down (status quo). Routes through terminate() (single-owner
+    // gateway) like the §7.5 forced-abstention path; the post-condition gate
+    // passes "abstained" through, and the post-loop blocks skip it via
+    // isAbstained.
+    if (state.status !== "failed") {
+      const preflight = assessActionSatisfiability({
+        contract: state.meta.runContract,
+        task: effectiveInput.task,
+        availableSchemas,
+        requiredTools,
+        nominatedNames: nominatedTools.map((t) => t.name),
+      });
+      if (preflight !== null) {
+        yield* emitGuardFired({
+          taskId: options.taskId ?? state.taskId,
+          iteration: state.iteration,
+          guard: "satisfiability-preflight",
+          outcome: "terminate",
+          reason: preflight.reason,
+          metadata: { missing: preflight.missing },
+        });
+        state = transitionState(state, { error: null });
+        state = terminate(state, {
+          reason: "abstained",
+          deliverable: sentinelDeliverable("no_substantive_output", preflight.reason),
+          extraMeta: {
+            abstention: { reason: preflight.reason, missing: preflight.missing },
+          },
         });
       }
     }
@@ -1326,6 +1393,10 @@ export function runKernel(
         context: buildTerminalVerifyContext(state.output),
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
+        // W5.2 — stamp the completion-judgment entry ref when the shadow fires.
+        onJudgmentRef: (ref) => {
+          state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+        },
       });
 
       // ── Phase D1 — block-mode evidence-grounding: cap-then-degrade ─────────
@@ -1397,6 +1468,9 @@ export function runKernel(
           context: buildTerminalVerifyContext(correctedContent),
           taskId: currentOptions.taskId ?? state.taskId,
           iteration: state.iteration,
+          onJudgmentRef: (ref) => {
+            state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+          },
         });
       }
 
@@ -1471,6 +1545,9 @@ export function runKernel(
               context: buildTerminalVerifyContext(repairedContent),
               taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
+              onJudgmentRef: (ref) => {
+                state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
+              },
             });
             yield* emitLog({
               _tag: "warning",

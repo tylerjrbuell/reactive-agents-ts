@@ -553,9 +553,21 @@ conversation-assembly) patched these superseded/dead paths — its
 budget helpers + their tests (§4 dead-code move), OR wire it and prove lift —
 but ResultStore already owns this seam, so deletion is the honest move.
 
-### D-2026-07-30-H — tuning inversion: `mid` old-result preserve budget (1200) < `local` (4000)
+### D-2026-07-30-H — ✅ RESOLVED (2026-10-13, Wave 2a) — tuning inversion: `mid` old-result preserve budget (1200) < `local` (4000)
 
 **Class:** tuning smell — NOT a bug. Filed to prevent a wrong-layer spot-fix.
+
+**Resolution (Wave 2a, local-tier-reliability program, 2026-10-13):** dispatched
+fix chose `local ≤ mid`: `CONTEXT_PROFILES.local.toolResultMaxChars` 4000 →
+1200, plus the `core` mirror `TIER_TOOL_RESULT_PRESERVE.local` 4000 → 1200 so
+both live consumers (legacy profile path + canonical `project()` budget) move
+together. `local.toolResultPreviewItems` keeps its sanctioned 8 (filter-task
+exception — item COUNT visibility was the 2026-05-28 concern, not char budget).
+Regression guard: `packages/reasoning/tests/context/context-profile-ratchet.test.ts`
+— whole-table monotone ladder + D-H guard (local ≤ mid on the char budget) +
+core-mirror lockstep pin. Harm question ("UNMEASURED") stays unmeasured; this
+discharge is a ladder-consistency fix under the program's authority, not a
+lift claim.
 
 **First read (WRONG, corrected here):** "profile tier resolves `mid` while the
 Ollama probe says `local` — a divergence like the window bug." **Checked:** it
@@ -775,3 +787,32 @@ Prose findings do not discharge debt. Only gates do.
 liveness, public claims), each verdict re-verified against primary evidence by the main session before
 landing here. Two agent claims were rejected on verification (`packages/testing/src/gate/` is wired — CI
 runs `gate:check` at `ci.yml:88`; `.withAdaptiveHarness()` has drifted to PROVEN for `plan.strategy`).*
+
+
+### D-2026-10-13-W2F-1 — `ContextProfile.recentObservationsLimit` is a dead public knob — OPEN (filed by W2f census)
+
+**Class:** INERT-DATA.
+
+Zero code readers repo-wide (W2f grep: only the schema field, the four
+all-zero tier defaults, and a now-corrected think.ts comment that claimed it
+"threads through"). A user setting `.withReasoning({ profileOverrides: {
+recentObservationsLimit: 5 } })` gets silence. Disposition: re-wire the S2.5
+curator section or delete the key (public-API removal — needs a minor bump
+note); census row DEAD-DEBT-REGISTERED in
+`packages/runtime/tests/w2-wave-census.test.ts` ratchets the field's
+classification either way.
+
+### D-2026-10-13-W2F-2 — `parameterSizeBillions` persisted but decision-side unwired — OPEN (filed by W2f census)
+
+**Class:** ORPHAN-FACT (persistence-tested).
+
+The /api/show probe parses + stores the measured parameter size
+(decimal-capable), and the store round-trip is pinned (capability-ladder
+tests — mutation-cut C8: removing the write goes 5 arms red). But
+`tierFromParameterSize` still consumes the RAW string and returns "local"
+unconditionally, and no tier/profile consumer reads the parsed field.
+Disposition: Wave 3 either feeds the measured size into tier/VRAM decisions
+or drops the field; census row PROVEN (persistence) + this debt row keeps the
+unwired decision-side loud. `D-2026-07-30-I` (demand num_ctx) is explicitly
+NOT touched by this census — its Wave-2e schema-inclusive sizing shipped but
+the row's ablation verdict remains the harness's call.

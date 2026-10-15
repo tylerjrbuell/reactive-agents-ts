@@ -182,7 +182,7 @@ describe("assess — pace bands", () => {
     const mk = (used: number) =>
       assess(contract, [], budget({ iteration: 5, tokensUsed: used, tokenLimit: 1000 })).pace;
 
-    expect(mk(500).band).toBe("green");
+    expect(mk(500).band).toBe("economize"); // W4.1: no evidence yet → never "green"
     expect(mk(600).band).toBe("economize");
     expect(mk(800).band).toBe("triage");
     expect(mk(950).band).toBe("terminal");
@@ -194,12 +194,13 @@ describe("assess — pace bands", () => {
     expect(p.burnRatio).toBeCloseTo(0.9, 5); // cost ratio 0.9 > token ratio 0.7
   });
 
-  it("no deterministic outstanding → green regardless of burn (coupling proof)", () => {
+  it("no deterministic outstanding + new evidence → green regardless of burn (coupling proof)", () => {
     const contract = toolContract("web-search");
-    // web-search invoked → its requirement satisfied → zero deterministic outstanding
+    // web-search invoked IN THIS iteration → its requirement satisfied (zero
+    // deterministic outstanding) AND evidenceDelta > 0 → green at high burn.
     const ledger = appendEntries(undefined, [
-      { kind: "tool-invocation", iteration: 1, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
-      { kind: "tool-result", iteration: 1, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 2, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
     ]);
     const p = assess(contract, ledger, budget({ iteration: 2, tokensUsed: 990, tokenLimit: 1000 })).pace;
     expect(p.band).toBe("green");
@@ -210,6 +211,94 @@ describe("assess — pace bands", () => {
     const p = assess(contract, [], budget({ iteration: 48, maxIterations: 50 })).pace;
     expect(p.burnRatio).toBeCloseTo(0.96, 5);
     expect(p.band).toBe("terminal");
+  });
+});
+
+// ── W4.1 band rule + W4.6 evidenceDelta arbiter crediting ────────────────────
+
+describe("assess — W4.1 evidence-based banding", () => {
+  it("green is impossible while evidenceDelta==0 and deterministic work is outstanding", () => {
+    const contract = toolContract(); // 1 deterministic req, empty ledger → outstanding
+    const band = (iteration: number) =>
+      assess(contract, [], budget({ iteration, tokensUsed: 500, tokenLimit: 1000 })).pace.band;
+    // iteration > 0 with no evidence → never green (band from evidence, not burn)
+    expect(band(1)).toBe("economize");
+    expect(band(5)).toBe("economize");
+    // iteration 0 has no history to judge → neutral green
+    expect(band(0)).toBe("green");
+  });
+
+  it("new evidence restores green at low burn", () => {
+    const contract = toolContract();
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 1, toolName: "web-search", success: true, preview: "fresh", toolCallId: "c1" },
+    ]);
+    // iteration 1 produced new substantive evidence → not stalled → green at 0.5 burn
+    expect(assess(contract, ledger, budget({ iteration: 1, tokensUsed: 500, tokenLimit: 1000 })).pace.band).toBe("green");
+  });
+
+  it("no deterministic outstanding + NEW evidence → green (progressing pure-synthesis)", () => {
+    const contract = toolContract("web-search");
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 2, toolName: "web-search", args: { q: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 2, toolName: "web-search", success: true, preview: "r", toolCallId: "c1" },
+    ]);
+    // iteration 2 produced new substantive evidence → not stalled → green
+    expect(assess(contract, ledger, budget({ iteration: 2, tokensUsed: 500, tokenLimit: 1000 })).pace.band).toBe("green");
+  });
+
+  it("impossible-task shape: only the answer floor outstanding + no evidence → NOT green", () => {
+    // The live shape: a contract whose ONLY outstanding requirement is the
+    // non-deterministic self-critique answer floor (no deterministic condition),
+    // with no evidence ever. Pre-fix this reported "green" (detOutstandingCount
+    // === 0 short-circuited the band). W4-live fix: any outstanding + no new
+    // evidence is non-green.
+    const contract: RunContract = {
+      requirements: [
+        {
+          id: "answer",
+          kind: "question-answered",
+          spec: { description: "answer the task", acceptance: "self-critique" },
+        },
+      ],
+      deliverables: [],
+      constraints: [],
+      horizon: "short",
+      postConditions: [],
+    };
+    expect(assess(contract, [], budget({ iteration: 2 })).pace.band).not.toBe("green");
+    // ...and the same shape at iteration 0 (no history) may stay green.
+    expect(assess(contract, [], budget({ iteration: 0 })).pace.band).toBe("green");
+  });
+});
+
+describe("assess — W4.6 evidenceDelta arbiter crediting (law #5)", () => {
+  it("a success:true HARNESS pseudo-tool result does NOT credit evidenceDelta", () => {
+    const contract = toolContract();
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "system", args: {}, toolCallId: "p1" },
+      { kind: "tool-result", iteration: 1, toolName: "system", success: true, preview: "quality nudge", toolCallId: "p1" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 1 })).evidenceDelta).toBe(0);
+  });
+
+  it("a success:true NO-OP result from a non-meta tool does NOT credit evidenceDelta", () => {
+    const contract = toolContract();
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "http-get", args: { url: "x" }, toolCallId: "n1" },
+      { kind: "tool-result", iteration: 1, toolName: "http-get", success: true, preview: "No tools registered.", toolCallId: "n1" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 1 })).evidenceDelta).toBe(0);
+  });
+
+  it("a substantive non-meta result with new content DOES credit evidenceDelta", () => {
+    const contract = toolContract();
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-read", args: { path: "./a" }, toolCallId: "s1" },
+      { kind: "tool-result", iteration: 1, toolName: "file-read", success: true, preview: "Widget: 1200", toolCallId: "s1" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 1 })).evidenceDelta).toBe(1);
   });
 });
 

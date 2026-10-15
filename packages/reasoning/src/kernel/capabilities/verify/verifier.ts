@@ -611,12 +611,30 @@ export const defaultVerifier: Verifier = {
       const fabMode: FabricationGuardMode = resolveFabricationGuardMode(ctx.fabricationGuard);
       if (fabMode !== "off") {
         const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
+        // GH #245 — a run whose tool surface produced NO evidence cannot ground
+        // (or refute) a measurement claim. When the corpus is empty AND the
+        // answer is not an explicit BENCHMARK claim (before/after, faster/vs,
+        // %-improvement, optimization), the perf-shaped number is more likely a
+        // DERIVED value in reasoning prose than an invented benchmark: record
+        // the finding (advisory) and let the answer stand — the receipt stays
+        // ungrounded. A genuine benchmark fabrication (benchmark-shaped) still
+        // rejects, so the W2 over-action failure mode stays guarded.
+        const corpusEmpty = corpus.trim().length === 0;
+        const benchmarkShaped =
+          /\bfaster\b|\bslower\b|speed-?up|\bimprove|\breduc|\boptimiz|\bversus\b|\bvs\.?\b|benchmark|before.{0,24}after/i.test(
+            ctx.content,
+          );
         const fab = detectFabricatedMeasurement(ctx.content, corpus);
         checks.push({
           name: "output-not-fabricated-measurement",
           passed: fab.ok,
-          severity: fab.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
-          reason: fab.ok ? undefined : fab.violations.join("; "),
+          severity:
+            fab.ok ? "pass" : fabMode === "block" && !(corpusEmpty && !benchmarkShaped) ? "reject" : "warn",
+          reason: fab.ok
+            ? undefined
+            : corpusEmpty && !benchmarkShaped
+              ? `no tool evidence to ground against (advisory, not enforced): ${fab.violations.join("; ")}`
+              : fab.violations.join("; "),
         });
 
         // Check 4d: contradicted-test-claim guard. Same fabrication-guard
@@ -775,8 +793,16 @@ export function verifyAndEmit(args: {
   readonly context: VerificationContext;
   readonly taskId: string;
   readonly iteration: number;
+  /**
+   * W5.2 — invoked with the completion-judgment entry reference when the shadow
+   * fires (i.e. a JudgmentService is present). The kernel uses it to stamp
+   * `state.meta.completionJudgmentRef` so the terminal verdict can CITE the
+   * judgment entry (ledger-side plumbing only — the verdict is never inverted
+   * on it).
+   */
+  readonly onJudgmentRef?: (ref: string) => void;
 }): Effect.Effect<VerificationResult, never> {
-  const { verifier, context, taskId, iteration } = args;
+  const { verifier, context, taskId, iteration, onJudgmentRef } = args;
   return Effect.gen(function* () {
     const verdict = verifier.verify(context);
     yield* emitVerifierVerdict({
@@ -797,7 +823,7 @@ export function verifyAndEmit(args: {
     // `verdict.verified`). Fire-and-forget; `verdict` above is already final
     // and is returned unchanged below — this never alters it.
     if (context.terminal === true) {
-      yield* judgmentCompletionShadow({
+      const judgmentRef = yield* judgmentCompletionShadow({
         task: context.task,
         candidateOutput: context.content,
         // Fix round (final review #1/#2): observation `content` can be
@@ -814,6 +840,7 @@ export function verifyAndEmit(args: {
           .map((s) => sanitizeForJudgment(s.content)),
         heuristicVerified: verdict.verified,
       });
+      if (judgmentRef !== null) onJudgmentRef?.(judgmentRef);
     }
 
     return verdict;

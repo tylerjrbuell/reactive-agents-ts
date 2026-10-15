@@ -1,9 +1,10 @@
-import type { ToolCallingDriver } from "./tool-calling-driver.js"
+import type { ToolCallingDriver, ToolCallDialectClaim } from "./tool-calling-driver.js"
 import { NativeFCDriver } from "./native-fc-driver.js"
 import { TextParseDriver } from "./text-parse-driver.js"
 
 /**
- * Choose the tool-calling driver. **Capability is the master signal.**
+ * Choose the tool-calling driver. **Capability is the master signal — and the
+ * ONLY routing signal.**
  *
  * The driver, the `ToolCallResolver` injection (`runner.ts`, keyed on
  * `capabilities.supportsToolCalling`), and the native-`tools` attachment
@@ -22,21 +23,35 @@ import { TextParseDriver } from "./text-parse-driver.js"
  * providers that EXPLICITLY report no native tool-calling
  * (`supportsToolCalling === false`).
  *
- * NOTE (Stage A): text-parse is a not-yet-completed path — `think.ts` has no
- * transition that turns `<tool_call>` markup into `status: "acting"`, so
- * `act.ts`'s text-parse `extractCalls` is unreachable. Routing a capable model
- * there strands it. Stage B builds the text-parse think→acting transition AND
- * narrows the Ollama capability claim (per-model `/api/show` probe) so
- * genuinely-incapable ("none") models route here honestly. `_dialect` is
- * retained for that stage (it will gate which completed text dialect is used);
- * it is intentionally unused in Stage A.
+ * **`dialect` is consumed (W3b, plan 3.3) as CONFIRM + PROVENANCE, never as a
+ * route selector.** Per the Stage-B design's end state
+ * (wiki/Architecture/Design-Specs/2026-06-03-tool-calling-driver-redesign.md):
+ * - §4: "Calibration *refines within* native … it does not *downgrade*. Text-parse
+ *   is reserved for `supportsToolCalling === false`." — a `"none"` / `"text-parse"`
+ *   claim never moves a capable model to text-parse (the 482c11e4 class; pinned in
+ *   `tests/drivers/driver-selection.test.ts` + the reasoning triad test).
+ * - §5 Stage B: dialect priors collapse INTO the capability claim at the source
+ *   (`deriveSupportsToolCalling`, llm-provider — W2a). Re-arbitrating the floor
+ *   here would re-create the second signal design law #1 forbids.
+ * - §3: "surface the observed parse mode / dialect … so a wrong route is *visible*
+ *   in telemetry, not silent." — the validated claim rides on the selected driver
+ *   as `dialectClaim`. `"native-fc"` + capable CONFIRMS native (claim visible,
+ *   route unchanged).
  *
- * See wiki/Architecture/Design-Specs/2026-06-03-tool-calling-driver-redesign.md.
+ * Phantom rule (GH #243): callers must pass the claim from
+ * `loadDialectPriorClaim` (explicit-presence reader). The schema-defaulted
+ * `ModelCalibration.toolCallDialect` (absent → `"none"`) is NOT a claim — do not
+ * feed it here. Input outside the closed claim vocabulary is treated as NO
+ * claim (`undefined` on the driver), never defaulted into one.
  */
 export function selectToolCallingDriver(
-  _dialect: string | undefined,
+  dialect: string | undefined,
   supportsToolCalling = true,
 ): ToolCallingDriver {
-  if (supportsToolCalling === false) return new TextParseDriver()
-  return new NativeFCDriver()
+  const claim: ToolCallDialectClaim | undefined =
+    dialect === "native-fc" || dialect === "text-parse" || dialect === "none"
+      ? dialect
+      : undefined
+  if (supportsToolCalling === false) return new TextParseDriver(claim)
+  return new NativeFCDriver(claim)
 }

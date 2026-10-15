@@ -30,23 +30,23 @@ Modes transition automatically based on `ModeTransitionRule`s and `EscalationCon
 
 ## Quick Example
 
+> **Builder integration (Wave 6.6 honesty note):** there is no
+> `.withInteraction()` builder wither — the example below previously called
+> one, which never existed. The 5 modes are standalone Effect services
+> (composed directly, as below). For gates the *builder* enforces on runs,
+> use `.withApprovalPolicy()` (per-tool approval, block or detach mode) and
+> `.withUserInteraction()` (durable `request_user_input` pauses) — those ride
+> the kernel approval gate; the mode services here do not intercept tool calls.
+
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("assistant")
   .withProvider("anthropic", { model: "claude-sonnet-4-6" })
-  .withInteraction({
-    defaultMode: "supervised",
-    onCheckpoint: async (ctx) => {
-      console.log("Agent wants to:", ctx.proposedAction);
-      const ok = await askHuman(ctx);
-      return { approved: ok };
-    },
-    escalation: [
-      { type: "cost-threshold", thresholdUsd: 0.50, toMode: "consultative" },
-      { type: "low-confidence", threshold: 0.4, toMode: "collaborative" },
-    ],
+  .withApprovalPolicy({
+    tools: ["file-write", "file-delete"],
+    onApprove: async ({ toolName }) => ({ approved: await askHuman(toolName) }),
   })
   .build();
 ```

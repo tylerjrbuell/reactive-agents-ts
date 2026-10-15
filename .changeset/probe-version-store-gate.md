@@ -1,0 +1,5 @@
+---
+"@reactive-agents/llm-provider": patch
+---
+
+Probe-version staleness gate on the capability store (qwen3.5 user bug, 2026-10-13). `Capability` gains an optional `probeVersion`; the Ollama probe stamps it with `CURRENT_PROBE_VERSION` (2; rows from the pre-stub-guard era carry none = v1). The store's read choke (`getCapabilityStore`, used by both the probe path and the provider's capabilities()) now reports any persisted `source:"probe"` row whose probeVersion is absent or non-current as a MISS — driving a live re-probe whose write-through self-heals the file (no deletes, no TTL). Motivation: a stale `toolTemplateEmitsTokens:false` row (measured off qwen3.5's 13-char plugin-stub template by a probe predating the #243 stub guard) permanently pinned the native-capable model (live-verified 2/2 parsed tool_calls) onto text-parse. Same discipline as #243's calibration-prior versioning: persisted measurement data stops being trusted when the producer evolves. Injected stores (CalibrationStore) pass through the same gate.

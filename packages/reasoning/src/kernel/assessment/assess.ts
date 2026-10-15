@@ -31,6 +31,7 @@ import type { DeliverableSpec, RunContract, TaskRequirement } from "../contract/
 import { artifacts } from "../ledger/artifact-projection.js";
 import { entriesOfKind, type RunLedger } from "../ledger/run-ledger.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
+import { classifyToolResult } from "./progress-arbiter.js";
 
 // ─── Output vocabulary ───────────────────────────────────────────────────────
 
@@ -305,10 +306,15 @@ export function assess(
   }
 
   // ── evidenceDelta — NEW substantive evidence THIS iteration ───────────────
-  // Substantive = successful, non-meta tool-result. "New" = identity (reusing
-  // C3's normalized (tool, args)) not seen in any EARLIER iteration.
+  // Substantive = the ONE progress arbiter says so (design law #5, W4.6): a
+  // successful result that is a META tool, a HARNESS pseudo tool, or a no-op
+  // ("No tools registered.", empty/degenerate content) is NOT task evidence.
+  // "New" = identity (reusing C3's normalized (tool, args)) not seen in any
+  // EARLIER iteration. Routing through the arbiter is why a success:true
+  // discover-tools/final-answer/recall no-op can no longer defeat pattern (e).
   const substantive = (r: (typeof results)[number]): r is typeof r & { toolName: string } =>
-    r.success && typeof r.toolName === "string" && !META_TOOLS.has(r.toolName);
+    typeof r.toolName === "string" &&
+    classifyToolResult(r.toolName, r.success, r.preview).kind === "substantive";
 
   const priorIdentities = new Set<string>();
   for (const r of results) {
@@ -392,16 +398,37 @@ export function assess(
   // work remains. Zero deterministic outstanding → green regardless of burn
   // (the answer-floor self-critique requirement stays outstanding but does not
   // create pace pressure — it is not gather/produce work to economize toward).
+  const ratioBand: PaceBand =
+    burnRatio >= PACE_TERMINAL
+      ? "terminal"
+      : burnRatio >= PACE_TRIAGE
+        ? "triage"
+        : burnRatio >= PACE_ECONOMIZE
+          ? "economize"
+          : "green";
+  //
+  // W4.1 — band FROM EVIDENCE, not token volume: while work remains AND this
+  // iteration produced NO new substantive evidence (evidenceDelta == 0), the run
+  // is not "on pace" — "green" is impossible. Guarded on iteration > 0
+  // (iteration 0 has no history to judge).
+  //
+  // W4-live fix: the stall check keys on TOTAL outstanding (the answer floor
+  // INCLUDED), not `detOutstandingCount`. The live impossible-task shape (no
+  // capable tool) has ONLY the non-deterministic self-critique answer floor
+  // outstanding — `detOutstandingCount === 0` — so keying on the deterministic
+  // count short-circuited the band to "green" and the rule never fired despite
+  // its stated condition (`evidenceDelta==0 ∧ requirementsOutstanding>0`)
+  // holding on every assessment. Any outstanding requirement with no new
+  // evidence is a non-green state.
+  const evidenceStalled = outstanding.length > 0 && evidenceDelta === 0 && currentIter > 0;
   const band: PaceBand =
     detOutstandingCount === 0
-      ? "green"
-      : burnRatio >= PACE_TERMINAL
-        ? "terminal"
-        : burnRatio >= PACE_TRIAGE
-          ? "triage"
-          : burnRatio >= PACE_ECONOMIZE
-            ? "economize"
-            : "green";
+      ? evidenceStalled
+        ? "economize"
+        : "green"
+      : evidenceStalled && ratioBand === "green"
+        ? "economize"
+        : ratioBand;
 
   // ── Health (windowed) ─────────────────────────────────────────────────────
   const windowFloor = currentIter - HEALTH_WINDOW;

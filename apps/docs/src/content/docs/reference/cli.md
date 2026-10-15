@@ -19,18 +19,22 @@ For workflow-first onboarding, start with [Rax CLI](/guides/cli-artisan/).
 Create a new Reactive Agents project.
 
 ```bash
-rax init <name> [--template minimal|standard|full]
+rax init <name> [--template minimal|with-tools|streaming|with-structured-output|with-approval-gates|with-memory|cloudflare-worker]
 ```
 
 **Templates:**
 
-All templates install the single unified `reactive-agents` package — no need to install individual `@reactive-agents/*` packages separately.
+`rax init` delegates to the `create-reactive-agent` template engine. All templates install the single unified `reactive-agents` package — no need to install individual `@reactive-agents/*` packages separately.
 
-| Template   | What's scaffolded                                                          |
-|------------|----------------------------------------------------------------------------|
-| `minimal`  | `reactive-agents` + bare agent that answers questions                      |
-| `standard` | `reactive-agents` + adaptive reasoning, tools, observability dashboard     |
-| `full`     | `reactive-agents` + reasoning, tools, memory, guardrails, cost, health check |
+| Template                  | What's scaffolded                                                          |
+|---------------------------|----------------------------------------------------------------------------|
+| `minimal` (default)       | `reactive-agents` + single-file agent. No tools. Best starting point.       |
+| `with-tools`              | Agent with built-in tools (web-search, http-get, file I/O, code-execute)    |
+| `streaming`               | Token-by-token streaming via `agent.runStream()`                            |
+| `with-structured-output`  | Typed structured output - declare a schema, read `result.object`            |
+| `with-approval-gates`     | Human-in-the-loop - pause on sensitive tool calls for approval              |
+| `with-memory`             | Cross-session memory (SQLite) - the agent remembers across runs             |
+| `cloudflare-worker`       | Deployable Cloudflare Worker (edge) agent on OpenAI, with wrangler config   |
 
 Generated `src/index.ts` imports from `"reactive-agents"` and is runnable immediately after `bun install && cp .env.example .env`.
 
