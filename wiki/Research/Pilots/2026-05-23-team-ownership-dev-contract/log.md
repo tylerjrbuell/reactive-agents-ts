@@ -1416,3 +1416,11 @@ task: "GH #235 release.ts stamps versions without bun.lock resync"
 result: completed, confidence 0.9
 outcome: "Added stamp -> bun install -> git add bun.lock after the version-stamp block (scripts/release.ts:280-286). Verified end-to-end with `bun scripts/release.ts 99.99.99 --no-publish` (exit 0, full build 38/38, lock resynced + staged). Then fully reverted test mutation, re-applied fix. Final: bun install --frozen-lockfile exit 0, build 38/38, typecheck 69/69, dry-run parses. No changeset (internal tooling, not a published package)."
 bypass-reason: none
+
+```yaml
+date: 2026-10-15
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "GH #251 contract compiler mints task input files as deliverables (deriveDeliverablePaths listMode fallback)"
+result: completed, confidence 0.9
+outcome: "No-verb branch requires write-verb-before-token + no existential framing + no forward read veto (FORWARD_READ_WINDOW=80, WRITE_ADJACENT_WINDOW=30); S3 task now yields ['./report.md'] only, genuine multi-deliverable lists intact. TDD: 3 new tests failed-before/passed-after. Reasoning 3150/0 (baseline 3148+2 new-test fails), typecheck 69/69, 0 new as-any. Parent verifier: targeted 35/0, repro confirmed, multi-list intact."
+bypass-reason: none

@@ -229,8 +229,13 @@ function deriveDeliverablePath(task: string): string | undefined {
 //   2. it classifies each candidate by its NEAREST preceding action verb: a
 //      write verb (write/create/save/…) anchors a deliverable; a read verb
 //      (read/analyze/fetch/given/…) marks a task INPUT that must never derive an
-//      artifact. Paths with no nearby verb are admitted only when the task has a
-//      "produce these files:" deliverable-list intro (lh-1's shape).
+//      artifact. Paths with no nearby verb are admitted only in genuine
+//      produce-these-files shape: the task has a deliverable-list intro
+//      (lh-1's shape) AND a write verb anywhere before the token, AND the
+//      token is neither existentially framed ("there are N files, ...") nor
+//      consumed by a forward read verb (GH #251). A forward read verb also
+//      vetoes a DISTANT write anchor; only an adjacent write ("write X")
+//      directly governs its token.
 //
 // Consumed by the RunContract compiler (kernel/contract/) — the deterministic
 // floor that guarantees every declared deliverable becomes a typed requirement.
@@ -250,6 +255,33 @@ const DELIVERABLE_LIST_INTRO =
 
 /** How far back from a path token we look for its anchoring verb. */
 const ANCHOR_BACK_WINDOW = 80;
+
+/**
+ * How far ahead of a path token we look for a consuming read verb (GH #251).
+ * A path the task is about to READ ("Read both files") is an input, never a
+ * deliverable. Symmetric with ANCHOR_BACK_WINDOW.
+ */
+const FORWARD_READ_WINDOW = 80;
+
+/**
+ * A write verb this close before a path token directly governs it
+ * ("write X", "write a file named X" — the token is the verb's direct
+ * object). A later "read it back to verify" must not veto such a
+ * deliverable, so the forward read-verb veto applies only to write anchors
+ * farther away than this (GH #251).
+ */
+const WRITE_ADJACENT_WINDOW = 30;
+
+/**
+ * Inventory phrasing that frames listed paths as pre-existing task INPUTS,
+ * never deliverables (GH #251: "there are two files, sales-q1.txt and
+ * sales-q2.txt ..."). Tested against the backward anchor window.
+ */
+const EXISTENTIAL_LIST_RE = /\bthere\s+(are|is)\b[^.]{0,60}\bfiles?\b/i;
+
+/** Stateless (non-global) tests reusing the exact anchor vocabularies. */
+const WRITE_VERB_TEST = new RegExp(WRITE_VERB.source, "i");
+const READ_VERB_TEST = new RegExp(READ_VERB_RE.source, "i");
 
 /**
  * Does `candidate` pass the same precision gates the single-path deriver uses?
@@ -307,14 +339,45 @@ export function deriveDeliverablePaths(task: string): string[] {
     if (typeof candidate !== "string" || candidate.length === 0) continue;
     if (!passesPathPrecision(candidate, task)) continue;
 
-    const back = task.slice(Math.max(0, start - ANCHOR_BACK_WINDOW), start);
+    const backStart = Math.max(0, start - ANCHOR_BACK_WINDOW);
+    const back = task.slice(backStart, start);
     const writeEnd = lastVerbEnd(back, new RegExp(WRITE_VERB.source, "gi"));
     const readEnd = lastVerbEnd(back, READ_VERB_RE);
+    const end = start + candidate.length;
+
+    /**
+     * Forward read-verb veto (GH #251): a path the task goes on to READ is
+     * an input, never a deliverable.
+     */
+    const forwardReadVeto = (): boolean =>
+      READ_VERB_TEST.test(task.slice(end, end + FORWARD_READ_WINDOW));
 
     // Nearest preceding verb decides. Read-anchored => input, never a deliverable.
     let admit: boolean;
-    if (writeEnd === -1 && readEnd === -1) admit = listMode;
-    else admit = writeEnd >= readEnd;
+    if (writeEnd === -1 && readEnd === -1) {
+      // List-mode fallback (no anchoring verb nearby): NEVER admit on the
+      // list intro alone (GH #251 — a singular "write a file named X" trips
+      // DELIVERABLE_LIST_INTRO and would mint every listed input). Require a
+      // write verb ANYWHERE before the token (genuine lists like lh-1's
+      // "Produce THREE deliverable files ..." satisfy this; S3's inputs,
+      // named before any write verb exists, do not), plus no existential
+      // inventory framing and no forward read consuming the token.
+      admit =
+        listMode &&
+        WRITE_VERB_TEST.test(task.slice(0, start)) &&
+        !EXISTENTIAL_LIST_RE.test(back) &&
+        !forwardReadVeto();
+    } else if (writeEnd >= readEnd) {
+      // Write-anchored: admit, except a DISTANT write anchor loses to a
+      // forward read ("Write a summary ... data-a.txt must be read first").
+      // An adjacent write directly governs the token ("write X then read it
+      // back to verify") and is never vetoed.
+      const writeDistance = start - (backStart + writeEnd);
+      admit =
+        writeDistance <= WRITE_ADJACENT_WINDOW || !forwardReadVeto();
+    } else {
+      admit = false;
+    }
     if (!admit) continue;
 
     const normalized = `./${candidate.replace(/^\.\//, "")}`;
