@@ -46,6 +46,7 @@ import { defaultVerifier, resolveResultSeverity, verifyAndEmit, humanizeVerifier
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
 import { judgmentComprehendShadow } from "../../kernel/capabilities/comprehend/judgment-classification.js";
@@ -635,6 +636,48 @@ export function runKernel(
             `required=[${requiredTools.join(", ")}]\n` +
             `available=[${allKnownTools.join(", ")}]\n` +
             `visible=[${visibleTools.join(", ")}]`,
+        });
+      }
+    }
+
+    // ── GH #244 satisfiability preflight — the fast path for impossible tasks ──
+    // When the contract carries an `action-required` requirement (the task
+    // needs an external action) AND the tool surface resolves zero relevant
+    // tools for it AND no other path exists (no declared required tools, no
+    // nominated plausible tool), the run is unsatisfiable: abstain HERE at
+    // iteration 0 with a named capability reason instead of looping until
+    // the zero-evidence stand-down fires at iteration 2. Conservative by
+    // construction — assessActionSatisfiability returns null on every unknown
+    // (schemas undefined, declared tools, nominations, any relevant tool), so
+    // a viable run can never be killed here; the worst miss falls back to the
+    // stand-down (status quo). Routes through terminate() (single-owner
+    // gateway) like the §7.5 forced-abstention path; the post-condition gate
+    // passes "abstained" through, and the post-loop blocks skip it via
+    // isAbstained.
+    if (state.status !== "failed") {
+      const preflight = assessActionSatisfiability({
+        contract: state.meta.runContract,
+        task: effectiveInput.task,
+        availableSchemas,
+        requiredTools,
+        nominatedNames: nominatedTools.map((t) => t.name),
+      });
+      if (preflight !== null) {
+        yield* emitGuardFired({
+          taskId: options.taskId ?? state.taskId,
+          iteration: state.iteration,
+          guard: "satisfiability-preflight",
+          outcome: "terminate",
+          reason: preflight.reason,
+          metadata: { missing: preflight.missing },
+        });
+        state = transitionState(state, { error: null });
+        state = terminate(state, {
+          reason: "abstained",
+          deliverable: sentinelDeliverable("no_substantive_output", preflight.reason),
+          extraMeta: {
+            abstention: { reason: preflight.reason, missing: preflight.missing },
+          },
         });
       }
     }

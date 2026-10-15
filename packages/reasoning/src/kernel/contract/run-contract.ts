@@ -39,12 +39,13 @@ import {
 /** How strongly a requirement / deliverable can be verified (stakes-tiered). */
 export type AcceptanceTier = "deterministic" | "checker" | "self-critique";
 
-/** The four requirement families the contract can express. */
+/** The five requirement families the contract can express. */
 export type RequirementKind =
   | "question-answered"
   | "artifact-produced"
   | "constraint-held"
-  | "tool-coverage";
+  | "tool-coverage"
+  | "action-required";
 
 /** How many distinct items a `question-answered` enumeration requirement expects. */
 export interface EnumerationHint {
@@ -69,6 +70,14 @@ export interface RequirementSpec {
   readonly acceptance: AcceptanceTier;
   /** Present only on enumeration-shaped `question-answered` requirements (FM-16). */
   readonly enumeration?: EnumerationHint;
+  /**
+   * Present only on `action-required` requirements (GH #244): the external
+   * capability the task needs (e.g. "send-message"). The satisfiability
+   * preflight (contract/satisfiability.ts) checks it against the tool surface
+   * at iteration 0; it carries no PostCondition because the compiler cannot
+   * know WHICH tool will serve it.
+   */
+  readonly capability?: ActionCapability;
 }
 
 /** One thing that must be true for the run to count as DONE. */
@@ -219,6 +228,84 @@ function classifyEnumeration(task: string): EnumerationHint | undefined {
   return { expectedCount: n ?? "unknown", itemShape };
 }
 
+// ─── Action-need detection (GH #244) ─────────────────────────────────────────
+// External-effect verbs only: a task that needs the world CHANGED (a message
+// sent, a ticket opened, an event scheduled) compiles an `action-required`
+// requirement carrying the capability it needs, so the satisfiability
+// preflight can fail fast when no tool serves it. Information verbs
+// (search/read/fetch/summarize/analyze) are DELIBERATELY excluded: the model
+// can answer those from weights, so there is no capability to be missing and
+// a bare question must never trip the preflight.
+
+/** External capabilities an action-requiring task can need. */
+export type ActionCapability = "send-message" | "create-ticket" | "schedule-event";
+
+/** A task-side action need: WHAT external effect the task requires. */
+export interface ActionNeed {
+  readonly capability: ActionCapability;
+  /** Short human phrase for requirement descriptions + abstention reasons. */
+  readonly description: string;
+}
+
+interface ActionRule {
+  readonly capability: ActionCapability;
+  /** External-effect verb present in the task. */
+  readonly verb: RegExp;
+  /** Target noun/context the verb acts on. */
+  readonly object: RegExp;
+}
+
+const ACTION_RULES: readonly ActionRule[] = [
+  {
+    capability: "send-message",
+    verb: /\b(send|sends|sent|post|posts|posted|publish|notify|notifies|email|emails|dm|tweet|announce|alert|broadcast)\b/i,
+    object: /\b(message|messages|slack|channel|#\w+|email|notification|tweet|dm|announcement|alert|team)\b/i,
+  },
+  {
+    capability: "create-ticket",
+    verb: /\b(create|creates|open|opens|file|files|raise|raises|submit|submits)\b/i,
+    object: /\b(issue|issues|ticket|tickets|bug|bugs|pull request|merge request)\b/i,
+  },
+  {
+    capability: "schedule-event",
+    verb: /\b(schedule|schedules|book|books|invite|invites|set up)\b/i,
+    object: /\b(meeting|event|appointment|calendar|call|interview|reminder)\b/i,
+  },
+];
+
+/**
+ * Tasks that ASK (a question, an explanation, a summary) are never action
+ * needs — even when they mention action words ("How do I send a slack
+ * message?"). Conservative: an imperative-seasoned request misread as a
+ * question merely falls back to the stand-down path (status quo), while a
+ * question misread as an action would wrongly abstain at iteration 0.
+ */
+const QUESTION_START =
+  /^\s*(what|why|how|when|who|which|whom|whose|where|is|are|was|were|can|could|do|does|did|would|should|will|have|has|explain|describe|summarize|summarise|tell me|give me|list|show me)\b/i;
+
+/**
+ * Detect whether a task needs an external action, independent of the tool
+ * surface (the surface may have NOTHING relevant — that is exactly the
+ * unsatisfiable shape). Pure, deterministic, no LLM. Returns undefined for
+ * questions and information tasks.
+ */
+export function detectActionNeed(task: string): ActionNeed | undefined {
+  if (!task || task.trim().length === 0) return undefined;
+  if (QUESTION_START.test(task)) return undefined;
+  for (const rule of ACTION_RULES) {
+    const verbMatch = task.match(rule.verb);
+    if (!verbMatch) continue;
+    const objectMatch = task.match(rule.object);
+    if (!objectMatch) continue;
+    return {
+      capability: rule.capability,
+      description:
+        `task requires a "${rule.capability}" action ("${verbMatch[0].toLowerCase()} … ${objectMatch[0].toLowerCase()}")`,
+    };
+  }
+  return undefined;
+}
+
 /**
  * Compile the RunContract from task inputs. Deterministic, pure, NO LLM, NO fs —
  * this is the FLOOR that guarantees a non-empty contract without any model call.
@@ -295,6 +382,24 @@ export function compileRunContract(
       });
       pushCondition(writerCond);
     }
+  }
+
+  // 2b. Action-required (GH #244) — an external-effect task compiles ONE
+  // requirement carrying the capability it needs. No PostCondition: the
+  // compiler cannot know which tool will serve it, so verification is
+  // checker-tier and the satisfiability preflight (satisfiability.ts) owns
+  // the iteration-0 fast path. Id is stable (`action:<capability>`).
+  const actionNeed = detectActionNeed(task);
+  if (actionNeed !== undefined) {
+    requirements.push({
+      id: `action:${actionNeed.capability}`,
+      kind: "action-required",
+      spec: {
+        description: actionNeed.description,
+        acceptance: "checker",
+        capability: actionNeed.capability,
+      },
+    });
   }
 
   // 3. Output-format sections — declared TaskContract mustInclude → deterministic
