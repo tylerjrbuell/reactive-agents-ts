@@ -10,19 +10,19 @@
 // are exported (the collector stays empty).
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import {
+  BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import * as otelApi from "@opentelemetry/api";
 import { ReactiveAgents } from "../src/index.js";
 
 let exporter: InMemorySpanExporter;
-let provider: NodeTracerProvider;
+let provider: BasicTracerProvider;
 
 beforeEach(() => {
   exporter = new InMemorySpanExporter();
-  provider = new NodeTracerProvider({
+  provider = new BasicTracerProvider({
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
   provider.register();
