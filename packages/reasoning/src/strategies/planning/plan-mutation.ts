@@ -44,6 +44,8 @@ export interface PatchInput {
   readonly taskDescription: string;
   /** Tool schemas so the recovery prompt isn't tool-blind (see buildPatchPrompt). */
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Commanded LLM sampling temperature — wins over the 0.3 default (GH #246). */
+  readonly temperature?: number;
 }
 
 /** Map a tool schema to the enriched ToolSummary the prompts render. */
@@ -66,6 +68,8 @@ const toToolSummary = (t: ToolSchema): ToolSummary => ({
 /** Minimal input shape consumed by `augmentPlan`. */
 export interface AugmentInput {
   readonly availableToolSchemas?: readonly ToolSchema[];
+  /** Commanded LLM sampling temperature — wins over the 0.3 default (GH #246). */
+  readonly temperature?: number;
 }
 
 /**
@@ -96,7 +100,8 @@ export function patchPlan(
     systemPrompt:
       "You are a planning agent. Rewrite the failed and pending steps to recover.",
     maxRetries: 1,
-    temperature: 0.3,
+    // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+    temperature: input.temperature ?? 0.3,
     maxTokens: 4096,
     ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(
@@ -169,7 +174,8 @@ export function augmentPlan(
     systemPrompt:
       "You are a planning agent. Generate supplementary steps to fill gaps in an incomplete plan.",
     maxRetries: 1,
-    temperature: 0.3,
+    // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+    temperature: input.temperature ?? 0.3,
     maxTokens: 4096,
     ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(

@@ -264,7 +264,8 @@ export const executeBlueprint = (
         ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into a structured tool plan.`
         : "You are a planning agent. Decompose the goal into a structured tool plan.",
       maxRetries: 2,
-      temperature: 0.4,
+      // GH #246: commanded temperature wins; unset keeps the 0.4 default.
+      temperature: input.temperature ?? 0.4,
       maxTokens: 4096,
       ...(input.taskId ? { traceContext: { taskId } } : {}),
     }).pipe(
@@ -410,6 +411,9 @@ export const executeBlueprint = (
         ? { resultCompression: input.resultCompression }
         : {}),
       ...(input.harnessPipeline ? { harnessPipeline: input.harnessPipeline } : {}),
+      // GH #246: commanded temperature reaches the worker's inline analysis
+      // calls; unset leaves the worker default (0.5) untouched.
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
       emitLog,
       // P0-4 + C8 — tool-policy gate + ledger sink inherited by every dispatch.
       forbiddenTools: forbiddenToolList,
@@ -634,7 +638,8 @@ export const executeBlueprint = (
               ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
               : SYNTHESIZER_PERSONA,
           ),
-          temperature: 0.3,
+          // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+          temperature: input.temperature ?? 0.3,
           ...(input.taskId ? { traceContext: { taskId } } : {}),
         })
         .pipe(

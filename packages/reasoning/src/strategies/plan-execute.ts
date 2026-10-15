@@ -346,7 +346,8 @@ export const executePlanExecute = (
         ? `${input.systemPrompt}\n${PLANNER_PERSONA}`
         : PLANNER_PERSONA,
       maxRetries: 2,
-      temperature: 0.5,
+      // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+      temperature: input.temperature ?? 0.5,
       maxTokens: 4096,
       ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     }).pipe(
@@ -398,7 +399,8 @@ export const executePlanExecute = (
           ? `${input.systemPrompt}\n${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`
           : "You are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.",
         maxRetries: 1,
-        temperature: 0.3,
+        // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+        temperature: input.temperature ?? 0.3,
         maxTokens: 4096,
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }).pipe(
@@ -566,7 +568,8 @@ export const executePlanExecute = (
             input.systemPrompt ??
               "You are a precise task executor. Produce the complete, well-structured final answer directly. Never ask questions or offer to do something — just output the finished result.",
           ),
-          temperature: 0.5,
+          // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+          temperature: input.temperature ?? 0.5,
           ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
         })
         .pipe(
@@ -1396,7 +1399,8 @@ export const executePlanExecute = (
                 ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
                 : SYNTHESIZER_PERSONA,
             ),
-            temperature: 0.3,
+            // GH #246: commanded temperature wins; unset keeps the 0.3 default.
+            temperature: input.temperature ?? 0.3,
             ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
           })
           .pipe(

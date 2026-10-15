@@ -224,7 +224,8 @@ export const executeAdaptive = (
           },
         ],
         systemPrompt: classifySystemPrompt,
-        temperature: 0.2,
+        // GH #246: commanded temperature wins; unset keeps the 0.2 default.
+        temperature: input.temperature ?? 0.2,
       })
       .pipe(
         Effect.mapError(

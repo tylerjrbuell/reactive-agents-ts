@@ -84,6 +84,9 @@ export interface CodeActionInput {
   // any more — they ride the RunEnvelope. See `envelope.policy.taskContract`.
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
+  /** Commanded LLM sampling temperature — wins over each pass default (GH #246).
+   *  Threaded from the runtime command-first merge via ReasoningService params. */
+  readonly temperature?: number;
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
   readonly verifier?: Verifier;
   /**
@@ -229,7 +232,8 @@ export const executeCodeAction = (
       gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
         messages: [{ role: "user", content: user }],
         systemPrompt: withEnvContext(system),
-        temperature: 0,
+        // GH #246: commanded temperature wins; unset keeps the 0 default.
+        temperature: input.temperature ?? 0,
       }),
       (cause) =>
         new ExecutionError({
@@ -344,7 +348,9 @@ export const executeCodeAction = (
               { role: "user", content: repairUser },
             ],
             systemPrompt: withEnvContext(system),
-            temperature: 0.1 * iteration,
+            // GH #246: commanded temperature wins verbatim over the 0.1*iteration
+            // retry-diversity ramp; unset keeps the ramp exactly.
+            temperature: input.temperature ?? 0.1 * iteration,
           }),
           (cause) =>
             new ExecutionError({
@@ -560,7 +566,9 @@ export const executeCodeAction = (
             { role: "user", content: retryUser },
           ],
           systemPrompt: withEnvContext(system),
-          temperature: 0.1 * iteration,
+          // GH #246: commanded temperature wins verbatim over the 0.1*iteration
+          // retry-diversity ramp; unset keeps the ramp exactly.
+          temperature: input.temperature ?? 0.1 * iteration,
         }),
         (cause) =>
           new ExecutionError({

@@ -80,6 +80,8 @@ export interface BlueprintWorkerContext {
   readonly taskDescription?: string;
   /** System prompt forwarded to inline analysis-step LLM calls. */
   readonly systemPrompt?: string;
+  /** Commanded LLM sampling temperature — wins over the 0.5 default (GH #246). */
+  readonly temperature?: number;
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
   /** P0-4 — tool-policy forwarded into the canonical primitive so a forbidden /
    *  non-allowed planned tool is blocked before dispatch. */
@@ -365,7 +367,8 @@ function executeAnalysisStep(
           ctx.systemPrompt ??
             "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
         ),
-        temperature: 0.5,
+        // GH #246: commanded temperature wins; unset keeps the 0.5 default.
+        temperature: ctx.temperature ?? 0.5,
         ...(ctx.taskId ? { traceContext: { taskId: ctx.taskId } } : {}),
       })
       // An LLM failure fails the step (not the whole worker) — downstream
