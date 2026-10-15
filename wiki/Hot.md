@@ -10,6 +10,20 @@ updated: 2026-10-05
 
 ---
 
+## 2026-10-15 — W567 live verdict captured (W5 PASS / W6 PASS / W7 PASS+gap)
+
+Second true-0 capture (`fixtures/post-w567/`, 11 live + 5 spots, scoreboard
+POST-W567 section): W5 honesty 0/11 fabricated (S1 3/3 abstain, S2 3/3 '3052',
+terminate 3/3 abstain; S3 r2 under-claim filed — correct report.md on disk but
+final-answer success=false on stale read tallies — safe direction, N=2, no
+regression claimed); W6 spots 3/3 (gateway 0 exec, guardrail clean, timeoutAfter
+386 ms); W7 tier1 checks present, shadow 0 events live (structural — site behind
+unwired InteractionService; suites 8/8 green; non-gating). No-regression vs
+post-w4-fixed HOLDS. Spot runner `scripts/lift/w567-spots.ts`. Report:
+`.superpowers/sdd/.../w567-verdict-report.md`.
+
+---
+
 ## 2026-10-13 — Measurement freeze (Local Tier Reliability Program, Task 0)
 
 **MEASUREMENT FREEZE (Doctrine #4):** the rung-0 baseline for every ⚡ wave's lift verdict is now
