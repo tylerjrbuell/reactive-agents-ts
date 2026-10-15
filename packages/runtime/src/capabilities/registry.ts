@@ -108,6 +108,19 @@ export class CapabilityRegistry extends Context.Tag("CapabilityRegistry")<
   {
     /** Register or replace an entry by `name`. */
     readonly register: (entry: CapabilityEntry) => Effect.Effect<void>;
+    /**
+     * Wave 7.2: record harness-measured lift evidence onto an entry (the
+     * feed future default-on promotions read instead of probe-campaign
+     * folklore). Read-modify-write over `register`: preserves every other
+     * field, stamps `lastAblation` to today. Fails
+     * `CapabilityNotFoundError` on unknown names — evidence for nothing is
+     * not evidence.
+     */
+    readonly recordLiftEvidence: (
+      name: string,
+      evidence: LiftEvidence,
+      now?: Date,
+    ) => Effect.Effect<void, CapabilityNotFoundError>;
     /** Look up an entry by name. */
     readonly get: (
       name: string,
@@ -290,6 +303,22 @@ export const CapabilityRegistryLive = Layer.effect(
           next.set(entry.name, entry);
           return next;
         }),
+      recordLiftEvidence: (name, evidence, now) =>
+        Ref.get(ref).pipe(
+          Effect.flatMap((m) => {
+            const found = m.get(name);
+            if (found === undefined) {
+              return Effect.fail(new CapabilityNotFoundError({ name }));
+            }
+            const next = new Map(m);
+            next.set(name, {
+              ...found,
+              liftEvidence: evidence,
+              lastAblation: (now ?? new Date()).toISOString().slice(0, 10),
+            });
+            return Ref.set(ref, next);
+          }),
+        ),
       get: (name) =>
         Ref.get(ref).pipe(
           Effect.flatMap((m) => {

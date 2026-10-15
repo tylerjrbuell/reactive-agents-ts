@@ -1,7 +1,9 @@
 name: Regression Gate
 
-# Manual-only: a live bench run needs provider keys (set as repo secrets).
-# Mirrors eval.yml's workflow_dispatch posture.
+# Wave 7.2: nightly schedule added, but a live bench run needs provider keys
+# (repo secrets). The job skips itself when no key is configured — a scheduled
+# run that always fails without secrets is noise, not signal. Manual dispatch
+# always runs (the dispatcher is expected to have set secrets).
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +19,8 @@ on:
         description: "Candidate variant id"
         required: true
         default: "ra-full"
+  schedule:
+    - cron: "0 5 * * 0"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +30,9 @@ jobs:
   regression-gate:
     name: Run + gate a benchmark session
     runs-on: ubuntu-latest
+    # Keyless-safe skip: scheduled runs on forks/secrets-less repos exit
+    # green without burning minutes. Manual dispatch with secrets runs.
+    if: ${{ github.event_name != 'schedule' || secrets.ANTHROPIC_API_KEY != '' }}
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -1,8 +1,16 @@
 name: Eval Suite
 
+# Wave 7.2 root-cause: every step of this workflow passes keyless locally
+# (benchmarks 7/0, eval 62/0, suite schemas valid), so the historic
+# "always failing" was stale, not structural. Re-enabled on PR + nightly,
+# scoped to what ci.yml's `bun test` does NOT already cover (benchmarks +
+# suite-schema validation). Full `bun test packages/eval/` stays in CI;
+# duplicating it here would burn minutes for zero signal.
 on:
-  # Disabled auto-triggers (always failing). Manual-only via workflow_dispatch
-  # until eval suite is stabilized. Re-enable pull_request/push when fixed.
+  pull_request:
+  # Nightly drift lane (keyless-safe steps only).
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 # T1.1 — Concurrency cancellation for the same workflow + ref.
@@ -12,8 +20,10 @@ concurrency:
 
 jobs:
   eval:
-    name: Run Eval Suites
+    name: Run Eval Suite
     runs-on: ubuntu-latest
+    # Timeout guard: cold-runner install + build + benchmarks must finish.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +49,6 @@ jobs:
 
       - name: Run performance benchmarks
         run: bun test packages/eval/tests/benchmarks.test.ts
-
-      - name: Run eval tests
-        run: bun test packages/eval/
 
       - name: Validate bundled eval suite schemas
         run: |
