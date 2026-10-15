@@ -1358,3 +1358,11 @@ task: "Review fix rounds: W5 crash envelopes + code-action route + mint-shape pi
 result: completed, confidence 0.85
 outcome: "all review findings addressed with RED-verified pins; full suites green (runtime 1722/0, reasoning 3122/0, replay 37/0); W5/W6/W7 code complete pending independent re-review of fix rounds + harness verdict."
 ```
+
+```yaml
+date: 2026-10-15
+warden: kernel-warden + reviewer + controller
+task: "GH #244 preflight (93a1a27ee, review Approved) + #246 remainder (e07dbc848, review 1 Important) + blueprint patch-seam fix + #245 closure + #249/#250 follow-ups"
+result: completed, confidence 0.85
+outcome: "preflight live-verified 0 iters/0 tokens with capability reason (was 4-5/~1980). #245 CLOSED with live evidence (train problem now success:true). #246: all non-kernel strategies threaded + blueprint patch seam fixed per review; pipeline repair-retry filed as #250 (needs determinism sign-off). Open: #244 follow-ups #249, #246-follow-up #250, W3 promotion (owner), branch finish."
+```
