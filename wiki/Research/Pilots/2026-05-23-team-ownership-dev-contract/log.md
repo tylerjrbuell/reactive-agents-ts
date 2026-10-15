@@ -1350,3 +1350,11 @@ task: "Independent program review: code soundness + completed/remains accounting
 result: completed, confidence 0.8
 outcome: "CRITICAL found+fixed in review: 5.3 join wired to dead executeToolCall (no production callers); live path is executeNativeToolCall->tool-observe. Fixed 7bba37606 with live-path pins (RED verified). 5.1/5.2 boxes corrected to [x]. Wave 5 code complete. Recommended: fresh-eyes reviewer pass + harness Wave-5 capture when quota returns."
 ```
+
+```yaml
+date: 2026-10-15
+warden: controller-inline (subagents quota-blocked, recovered later)
+task: "Review fix rounds: W5 crash envelopes + code-action route + mint-shape pin; W6 census reverse-arm + openInference order/idempotence + changeset + 6.3 remainder GH #248 + gateway refusal pin; W7 sink subscription wiring + autoshadow-loop live test + contention measured (+6s trivial-task) + cf-26 bound <=2; auto-shadow judge-contract preservation"
+result: completed, confidence 0.85
+outcome: "all review findings addressed with RED-verified pins; full suites green (runtime 1722/0, reasoning 3122/0, replay 37/0); W5/W6/W7 code complete pending independent re-review of fix rounds + harness verdict."
+```
