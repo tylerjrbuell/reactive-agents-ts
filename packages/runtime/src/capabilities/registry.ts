@@ -134,7 +134,13 @@ export const bootstrapEntries: readonly CapabilityEntry[] = [
     name: "memory",
     description:
       "Cross-session episodic + semantic + procedural memory layers (4-tier).",
-    defaultOn: true, // GH #122
+    // Wave 6.5 posture truth: stateless UNLESS opted in. GH #122 graduated
+    // this to default-on and it was backed out (see whats-new v0.12 entry) —
+    // the builder default (`_enableMemory: false`) is the behavioral truth
+    // and this row must agree with it, not with the #122 history. Opt in via
+    // `.withMemory()` / `.withLearning()` / `HarnessProfile.balanced()` /
+    // `.intelligent()` (all explicit). Pinned by memory-posture-truth.test.ts.
+    defaultOn: false,
     costSignature: {
       tokensPerRun: 0,
       latencyPerRunMs: 5,
@@ -150,7 +156,7 @@ export const bootstrapEntries: readonly CapabilityEntry[] = [
     riskNotes:
       "SQLite file IO; bootstrap can fail with permission errors in restricted envs (mitigated by graceful fallback at memory-flush.ts).",
     rationale:
-      "GH #122 graduated memory from opt-in to default-on after benchmark evidence showed compounding-intelligence gains across sessions.",
+      "GH #122 graduated memory from opt-in to default-on after benchmark evidence showed compounding-intelligence gains across sessions; v0.12 backed the default out again (stateless bare builds, predictable CI) — the opt-in paths carry the gains now.",
     ownerWarden: "memory",
     lastAblation: "2026-05-22",
   },
