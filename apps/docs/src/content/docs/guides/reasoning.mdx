@@ -626,7 +626,6 @@ Configure the Plan-Execute strategy via `withReasoning()`. All fields live under
 | `stepRetries` | `number` | `1` | Retry attempts per step before falling back to patch |
 | `stepKernelMaxIterations` | `number` | derived: `max(5, ceil(runMaxIterations / planLength))` | Max ReAct iterations for `composite`-type steps (an explicit value still wins) |
 | `planMode` | `"linear" \| "dag"` | `"linear"` | Execution mode — `linear` runs steps sequentially |
-| `patchStrategy` | `"in-place" \| "replan-remaining"` | — | How failed steps are repaired |
 
 ```typescript
 const agent = await ReactiveAgents.create()
