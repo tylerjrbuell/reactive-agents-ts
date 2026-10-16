@@ -1440,3 +1440,11 @@ task: "GH #237 RunStartedEvent lacks taskTruncated marker"
 result: completed, confidence 0.9
 outcome: "Added readonly taskTruncated?: boolean to RunStartedEvent (events.ts:88-95), mirroring RunCompletedEvent.outputTruncated. normalize.ts AgentStarted case carries raw.taskTruncated via ...(raw.taskTruncated === true ? { taskTruncated: true } : {}). New tests: taskTruncated:true flows through; absent stays absent (historical traces byte-identical). trace suite 174/0 (baseline 172), typecheck green, 0 new as unknown as."
 bypass-reason: none
+
+```yaml
+date: 2026-10-16
+warden: none (parent-direct; packages/compose not in warden table)
+task: "GH #248 part 2: watchdog resets no-progress timer on llm-exchange (after('think'))"
+result: completed, confidence 0.9
+outcome: "Added harness.after('think', () => { lastProgress = Date.now(); }) to watchdog.ts after the existing after('act') reset. A slow-but-progressing LLM exchange during think no longer triggers a false watchdog abort at the next before('think') boundary. New test proves reset on after('think'). compose test suite 30/0 (baseline 29 + 1 new), typecheck green, 0 new as unknown as. Part 1 (shared computeBudgetSignal) not addressed — separate design pass needed."
+bypass-reason: none

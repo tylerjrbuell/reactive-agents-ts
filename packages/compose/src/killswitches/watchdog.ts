@@ -30,6 +30,13 @@ export function watchdog(options: WatchdogOptions): (harness: Harness) => void {
       lastProgress = Date.now();
     });
 
+    // An LLM exchange (think phase) is also progress — a slow-but-completing
+    // model must not be wrongly aborted at the next before('think') boundary.
+    // GH #248 part 2.
+    harness.after('think', () => {
+      lastProgress = Date.now();
+    });
+
     harness.before('think', () => {
       const elapsed = Date.now() - lastProgress;
       if (elapsed >= ms) {

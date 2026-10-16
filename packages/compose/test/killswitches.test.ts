@@ -262,6 +262,23 @@ describe('watchdog', () => {
     expect(checkResult).toBeUndefined(); // timer reset → no abort
   });
 
+  it('resets the no-progress timer on after(think) — an LLM exchange is progress', async () => {
+    // A slow-but-progressing model spends time in think (LLM exchange) without
+    // executing a tool batch. Without an after('think') reset, the watchdog
+    // timer frozen at the last after('act') would fire at the next before('think'),
+    // wrongly aborting a healthy run. GH #248 part 2.
+    const pipeline = buildPipeline(watchdog({ noProgressFor: 50 }));
+    const progressHooks = pipeline.collectPhaseHooks('after', 'think');
+    expect(progressHooks.length).toBe(1);
+    // Advance past the threshold WITHOUT an act — simulating a slow LLM exchange.
+    await new Promise(r => setTimeout(r, 60));
+    // Reset the timer as if a think phase just completed.
+    await progressHooks[0]!({ phase: 'think', iteration: 1, state: mockState });
+    const checkHooks = pipeline.collectPhaseHooks('before', 'think');
+    const checkResult = await checkHooks[0]!({ phase: 'think', iteration: 2, state: mockState });
+    expect(checkResult).toBeUndefined(); // timer reset by after('think') → no abort
+  });
+
   it('supports onTrigger option', async () => {
     const pipeline = buildPipeline(watchdog({ noProgressFor: 1, onTrigger: 'terminate' }));
     const result = await pollUntilAbort(pipeline, 'think');
