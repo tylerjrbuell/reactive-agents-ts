@@ -498,4 +498,29 @@ Picked #237: highest shippable score after #251/#241/#234/#235/#226 closures —
 
 Parent-direct execution (packages/trace not in warden table). Added `readonly taskTruncated?: boolean` to `RunStartedEvent` mirroring `RunCompletedEvent.outputTruncated`; normalize.ts AgentStarted case carries `raw.taskTruncated` via `...(raw.taskTruncated === true ? { taskTruncated: true } : {})`. New tests prove taskTruncated:true flows through and absent stays absent (historical traces byte-identical). trace suite 174/0 (baseline 172), typecheck green, 0 new `as unknown as`. #237 closed with file:line evidence.
 
-**Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (RESOLVED — closed this session). No code-ready singleton remains above score ~3 without a design pass.
+---
+
+## 2026-10-16 sweep — #248 watchdog think-reset executed (part 2)
+
+**Sources:** #248 body re-read + code-grounded (`packages/compose/src/killswitches/watchdog.ts:16-41` resets timer only on after('act'); `packages/core/src/services/harness-types.ts:12-22` Phase includes `think`; `packages/core/src/services/harness-pipeline.ts:264-274` Harness `before`/`after` accept any Phase).
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#248 watchdog llm-exchange reset (part 2)** | 2 (every run with a watchdog + slow model) | 3 (every watchdog-protected run) | 3 (one line + test) | **18** | VERIFIED, executed + closed part 2 this pass |
+
+Picked #248 part 2: highest shippable score after #251/#241/#234/#235/#226/#237 closures — and it directly prevents wrongful run termination on slow LLM calls.
+
+### Executed (bundle `compose-watchdog-think-reset`, plan `2026-10-16-watchdog-think-reset.md`)
+
+Parent-direct execution (packages/compose not in warden table). Added `harness.after('think', () => { lastProgress = Date.now(); })` to watchdog.ts after the existing `after('act')` reset. A slow-but-progressing LLM exchange during `think` no longer triggers a false watchdog abort at the next `before('think')` boundary — an LLM exchange is progress. New test proves `after('think')` reset prevents the false abort. compose suite 30/0 (baseline 29 + 1 new), typecheck green, 0 new `as unknown as`. #248 part 2 closed; part 1 (shared computeBudgetSignal cost-semantics collapse) remains open and needs its own design pass.
+
+**Remaining carried items:**
+- #206 abstention synthesis — **RESOLVED** (already implemented: `abstention-synthesis.ts` + wiring in `finalize-result.ts`, tests green)
+- #214 cast ceiling — **RESOLVED** (ceilings pass: src CEILING=78, TESTS_CEILING=251 with rationale)
+- #248 part 1 shared computeBudgetSignal — needs design pass, deferred
+- #240 classify reliability skip — latent, score 3
+- #206 design pass note in the old table is stale — the feature is already shipped
+
+No code-ready singleton remains above score ~3 without a design pass.
