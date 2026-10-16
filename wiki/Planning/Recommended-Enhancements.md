@@ -480,4 +480,22 @@ Picked #226: highest shippable score after #251/#241/#234/#235 closures.
 
 Parent-direct execution (packages/tools not in warden table). Replaced 4 wall-clock `setTimeout(r, N)` calls (N∈{5,10-50}) with deterministic `Promise.resolve()` microtask yield (`yieldOnce`). `boundedMap` implementation already order-guaranteeing via index-based slots; `active++` is synchronous so `maxActive` is deterministic (no implementation change needed). bounded-parallel.test.ts 4/4 green, typecheck 6/6 green, `setTimeout` count in test → 0, 0 new `as unknown as`. #226 closed with file:line evidence.
 
-**Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (premise drifted, re-ground before bundling). No code-ready singleton remains above score ~3 without a design pass.
+---
+
+## 2026-10-16 sweep — #237 RunStartedEvent taskTruncated executed
+
+**Sources:** #237 body re-read + code-grounded (`packages/trace/src/events.ts:88-95` RunStartedEvent lacks taskTruncated; `packages/trace/src/normalize.ts:47-64` AgentStarted drops raw.taskTruncated; `packages/core/src/services/event-bus.ts:427` AgentStarted.taskTruncated exists; `packages/trace/src/events.ts:103` RunCompletedEvent.outputTruncated is the exact precedent).
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#237 RunStartedEvent taskTruncated** | 2 (trace consumers / rax-diagnose forensics) | 3 (every >64KB task run) | 3 (one field + one normalize line + test) | **18** | VERIFIED, executed + closed this pass |
+
+Picked #237: highest shippable score after #251/#241/#234/#235/#226 closures — and it outscores all remaining carried items.
+
+### Executed (bundle `trace-run-started-tasktruncated`, plan `2026-10-16-trace-tasktruncated.md`)
+
+Parent-direct execution (packages/trace not in warden table). Added `readonly taskTruncated?: boolean` to `RunStartedEvent` mirroring `RunCompletedEvent.outputTruncated`; normalize.ts AgentStarted case carries `raw.taskTruncated` via `...(raw.taskTruncated === true ? { taskTruncated: true } : {})`. New tests prove taskTruncated:true flows through and absent stays absent (historical traces byte-identical). trace suite 174/0 (baseline 172), typecheck green, 0 new `as unknown as`. #237 closed with file:line evidence.
+
+**Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (RESOLVED — closed this session). No code-ready singleton remains above score ~3 without a design pass.
