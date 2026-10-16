@@ -61,6 +61,7 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         model: raw.model,
         provider: raw.provider,
         config: {},
+        ...(raw.taskTruncated === true ? { taskTruncated: true } : {}),
       }
       return ev
     }

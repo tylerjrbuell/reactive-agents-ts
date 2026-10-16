@@ -1432,3 +1432,11 @@ task: "GH #226 bounded-parallel.test.ts real setTimeout flake risk"
 result: completed, confidence 0.9
 outcome: "Replaced 4 wall-clock setTimeout(r, N) calls (N∈{5,10-50}) with deterministic Promise.resolve() microtask yield (yieldOnce). boundedMap implementation already order-guaranteeing via index-based slots; active++ is synchronous so maxActive is deterministic. No implementation change needed. bounded-parallel.test.ts 4/4 green, typecheck 6/6 green, setTimeout count in test → 0, 0 new as unknown as."
 bypass-reason: none
+
+```yaml
+date: 2026-10-16
+warden: none (parent-direct; packages/trace not in warden table)
+task: "GH #237 RunStartedEvent lacks taskTruncated marker"
+result: completed, confidence 0.9
+outcome: "Added readonly taskTruncated?: boolean to RunStartedEvent (events.ts:88-95), mirroring RunCompletedEvent.outputTruncated. normalize.ts AgentStarted case carries raw.taskTruncated via ...(raw.taskTruncated === true ? { taskTruncated: true } : {}). New tests: taskTruncated:true flows through; absent stays absent (historical traces byte-identical). trace suite 174/0 (baseline 172), typecheck green, 0 new as unknown as."
+bypass-reason: none

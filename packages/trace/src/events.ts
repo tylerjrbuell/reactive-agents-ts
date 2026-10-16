@@ -91,6 +91,8 @@ export interface RunStartedEvent extends TraceEventBase {
   readonly model: string
   readonly provider: string
   readonly seed?: number
+  /** True iff `task` was clipped to the 64KB publisher cap (GH #237). */
+  readonly taskTruncated?: boolean
   readonly config: Record<string, unknown>
 }
 

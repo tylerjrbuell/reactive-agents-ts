@@ -19,6 +19,29 @@ describe("toTraceEvent", () => {
     expect((ev as { provider: string }).provider).toBe("ollama");
     expect((ev as { iter: number }).iter).toBe(2);
   });
+  it("AgentStarted carries taskTruncated when the raw task was clipped", () => {
+    const raw = {
+      _tag: "AgentStarted", ...base,
+      task: "a long prompt",
+      model: "qwen3.5",
+      provider: "ollama",
+      taskTruncated: true,
+    } as unknown as AgentEvent;
+    const ev = toTraceEvent(raw, 1);
+    expect(ev?.kind).toBe("run-started");
+    expect((ev as { taskTruncated?: boolean }).taskTruncated).toBe(true);
+  });
+  it("AgentStarted omits taskTruncated when the raw task was not clipped", () => {
+    const raw = {
+      _tag: "AgentStarted", ...base,
+      task: "short prompt",
+      model: "qwen3.5",
+      provider: "ollama",
+    } as unknown as AgentEvent;
+    const ev = toTraceEvent(raw, 1);
+    expect(ev?.kind).toBe("run-started");
+    expect("taskTruncated" in (ev as Record<string, unknown>)).toBe(false);
+  });
   it("maps StrategySwitched → strategy-switched", () => {
     const raw = { _tag: "StrategySwitched", ...base, from: "reactive", to: "plan-execute", reason: "stuck" } as unknown as AgentEvent;
     const ev = toTraceEvent(raw, 3);
