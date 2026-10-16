@@ -2,8 +2,10 @@ import type { TrustReceipt, TerminatedBy } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
 
 /** How many event types the stream emits.
- * - "tokens": TextDelta + StreamCompleted + StreamError only (minimal overhead)
- * - "full": all phase/tool/thought events too
+ * - `"tokens"`: TextDelta + StreamCompleted + StreamError only (minimal overhead)
+ * - `"full"`: all phase/tool/thought events too (richer UI, more events)
+ *
+ * Default: `"tokens"` when `.withStreaming()` is called without options.
  */
 export type StreamDensity = "tokens" | "full";
 

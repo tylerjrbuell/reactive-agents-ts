@@ -245,9 +245,8 @@ type OllamaTool = {
 type OllamaMessage = {
     role: 'system' | 'user' | 'assistant' | 'tool'
     content: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tool_calls?: Array<{
-        function: { name: string; arguments: Record<string, any> }
+        function: { name: string; arguments: Record<string, unknown> }
     }>
 }
 

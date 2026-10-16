@@ -818,7 +818,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Recursion depth is capped at 3; spawned agents do NOT inherit the spawn-agent tool
      * unless explicitly given it.
      *
-     * @param options - Optional configuration (maxIterations for spawned agents)
+     * @param options - Optional configuration
+     * @param options.maxIterations - Max iterations for spawned agents (default: inherits parent's cap)
+     * @param options.maxRecursionDepth - Max recursion depth for nested spawning (default: 3)
      * @returns `this` for chaining
      */
     withDynamicSubAgents(options?: {
@@ -989,6 +991,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * even when the user wants to be explicit about it.
      *
      * @param opts - Memory tier + path overrides
+     * @param opts.tier - `"standard"` (FTS5 keyword search) or `"enhanced"` (FTS5 + vector search). Default: `"standard"`
+     * @param opts.dbPath - Custom SQLite database path. Default: `.reactive-agents/memory/{agentId}/memory.db`
      * @returns `this` for chaining
      * @see {@link HarnessProfile.intelligent} — composable preset that
      *   bundles memory + skill persistence + reactive intelligence. For
@@ -1047,7 +1051,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Hooks can inspect/modify execution context before or after phases, or handle errors.
      * Multiple hooks can be registered; they execute in registration order.
      *
-     * @param hook - Lifecycle hook configuration
+     * @param hook - Lifecycle hook configuration (`phase`, `timing`, `handler`)
+     * @param hook.phase - Lifecycle phase to hook into (e.g. `"act"`, `"think"`, `"finalize"`)
+     * @param hook.timing - When to invoke: `"before"` or `"after"` the phase
+     * @param hook.handler - Receives the execution context; return a modified context or nothing to observe. Plain values, Promises, and Effects are all accepted.
      * @returns `this` for chaining
      * Composable equivalent: `.compose(h => h.before(phase, fn) /
      *   h.after(phase, fn))` — lifecycle phase chokepoints are also
@@ -2353,7 +2360,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             | (Partial<
                   import('@reactive-agents/reactive-intelligence').ReactiveIntelligenceConfig
               > &
-                  Record<string, any>)
+                  RiHooks)
     ): this {
         applyReactiveIntelligenceOptions(this, arg)
         return this
@@ -2431,6 +2438,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * supported here — configure distinct providers instead.
      *
      * @param config - `{ providers }`: ordered provider names (primary first).
+     * @param config.providers - Ordered provider names to try on failure (primary first).
      * @returns `this` for chaining
      * Fallback order also resolves from `CapabilityRegistry` provider tiers;
      * use this explicit override to pin a multi-provider deployment chain.

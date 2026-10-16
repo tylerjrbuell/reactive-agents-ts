@@ -12,6 +12,7 @@
  */
 import type { ReactiveAgentBuilder } from "../builder.js";
 import type { LifecycleHook } from "../types.js";
+import type { RiHooks } from "./ri-wiring.js";
 import type { MemoryOptions } from "./types.js";
 import { invokeUserHookSafely } from "./api-surface.js";
 import { asBuilderState } from "./withers/_state.js";
@@ -42,7 +43,7 @@ export const applyReactiveIntelligenceOptions = (
     | (Partial<
         import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
       > &
-        Record<string, any>),
+        RiHooks),
 ): void => {
   const state = asState(builder);
   if (typeof arg === "boolean") {
