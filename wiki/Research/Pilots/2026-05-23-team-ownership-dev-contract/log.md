@@ -1424,3 +1424,11 @@ task: "GH #251 contract compiler mints task input files as deliverables (deriveD
 result: completed, confidence 0.9
 outcome: "No-verb branch requires write-verb-before-token + no existential framing + no forward read veto (FORWARD_READ_WINDOW=80, WRITE_ADJACENT_WINDOW=30); S3 task now yields ['./report.md'] only, genuine multi-deliverable lists intact. TDD: 3 new tests failed-before/passed-after. Reasoning 3150/0 (baseline 3148+2 new-test fails), typecheck 69/69, 0 new as-any. Parent verifier: targeted 35/0, repro confirmed, multi-list intact."
 bypass-reason: none
+
+```yaml
+date: 2026-10-16
+warden: none (parent-direct; packages/tools not in warden table)
+task: "GH #226 bounded-parallel.test.ts real setTimeout flake risk"
+result: completed, confidence 0.9
+outcome: "Replaced 4 wall-clock setTimeout(r, N) calls (N∈{5,10-50}) with deterministic Promise.resolve() microtask yield (yieldOnce). boundedMap implementation already order-guaranteeing via index-based slots; active++ is synchronous so maxActive is deterministic. No implementation change needed. bounded-parallel.test.ts 4/4 green, typecheck 6/6 green, setTimeout count in test → 0, 0 new as unknown as."
+bypass-reason: none
