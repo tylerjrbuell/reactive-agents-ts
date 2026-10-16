@@ -419,3 +419,25 @@ Picked #241: highest shippable score. Higher raw scores both need design passes;
 
 ### Executed (bundle `reasoning-numctx-guard-override`, plan `2026-10-16-numctx-guard-override.md`)
 Kernel-warden (consumer) + runtime-warden (producer), parent-verified end-to-end. #241 closed.
+
+---
+
+## 2026-10-16 sweep — post-#241 next-item triage + #234 verify-and-close
+
+**Sources:** `gh issue list --state open` (full, 35 open); bodies re-read for #235/#234/#240/#248; code-grounded #234 (`plan-execute.ts:769-786`, `blueprint.ts:617-622`, `strategies/budget/` layer) and #240 (`adaptive.ts:219` + `decompose.ts:118` ungated `gatewayComplete classify` — VERIFIED present but latent, zero baseline firings). DISCOVER-minimum: `as unknown as` raw grep now 99 src / 290 tests vs #214's claimed 80/265 — premise drifted, needs re-grounding before any execution bundle. **Sampled out:** full FM catalog re-read, closed-issue history, fresh `bun run build`.
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#234 retire budget gates** | 2 (plan-execute + blueprint paths) | 2 (budget-limited runs) | 3 (verify + close, no code) | **12** | VERIFIED, executed + closed this pass (premise-falsified) |
+| #235 release.ts lock resync | 2 (every release breaks frozen-lockfile CI) | 1 (release-time only) | 3 (scripts/release.ts + CI) | 6 | Carried — next candidate |
+| #206 abstention synthesis | 2 | 3 | 2 (×0.5 executability, needs design) | 6 eff. | Carried, needs design pass — not executed |
+| #248 shared budget signal + watchdog reset | 2 | 2 | 1 (behavior changes needing pins) | 4 | Carried |
+| #240 classify reliability skip | 1 (adaptive + decompose only) | 1 (latent, zero baseline firings) | 3 (mirror existing gate) | 3 | Carried — honest score is low, latent only |
+| #214 cast ceiling | — | — | — | — | Premise drifted (99/290 vs 80/265); re-ground before bundling, not scored |
+
+Picked #234: highest shippable score, fits budget, continues the #231 canonical-meter story.
+
+### Executed (bundle `reasoning-retire-strategy-gates-verify`, plan `2026-10-16-retire-gates-verify.md`)
+Parent-direct verification, no warden (no domain edits — team-ownership contract needs no warden when nothing is edited). Named tests 24/24 green, reasoning 3162/0. Removal premise falsified with current-code evidence (gates enforce direct-call spend the Arbitrator never sees; both already read the shared meter). #234 closed with file:line evidence; blocks a future wrongful deletion.

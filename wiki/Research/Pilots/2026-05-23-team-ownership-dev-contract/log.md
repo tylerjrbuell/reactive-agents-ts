@@ -1400,3 +1400,11 @@ task: "GH #241 producer half: seed explicitNumCtx at createRuntime + light confi
 result: completed, confidence 0.9
 outcome: "Both seed sites thread options.numCtx unless caller-explicit; 5 tests RED-proven; w2-wave-census ratchet green (was 1 pre-existing fail). Runtime 1727/0, typecheck green. Builder path traced read-only. Residual: reasoning dist rebuild needed for DTS (gitignored, done); createRuntime path pinned by code-identity+grep."
 bypass-reason: none
+
+```yaml
+date: 2026-10-16
+warden: none (parent-direct verification; zero domain edits, contract needs no warden)
+task: "GH #234 verify-and-close: are per-strategy budget gates redundant post-#231?"
+result: completed, confidence 0.9
+outcome: "Premise FALSIFIED with current-code evidence: wave gate (plan-execute.ts:769-771) + reflect/self-correct gates + blueprint overBudget (:619-622) enforce direct-call spend the per-kernel Arbitrator never sees; both already read the shared meter via resolveRunSpend. Named tests 24/24, reasoning 3162/0. Closed with file:line evidence; no code change (correct per stale-premise rule)."
+bypass-reason: none
