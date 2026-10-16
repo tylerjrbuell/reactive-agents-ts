@@ -461,3 +461,23 @@ Picked #235: highest shippable score after #251/#241/#234 closures.
 Main-thread edit (release-warden refuses scripts/release.ts per its authority manifest). Added `bun install` + `git add bun.lock` after the version-stamp block (release.ts:280-286). End-to-end `bun scripts/release.ts 99.99.99 --no-publish` exit 0 (full build 38/38, lock resynced + staged); test mutation fully reverted, fix re-applied. Final: frozen-lockfile exit 0, build 38/38, typecheck 69/69, release:dry parses. #235 closed with file:line evidence.
 
 **Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (premise drifted, re-ground before bundling). No code-ready singleton remains above score ~3 without a design pass.
+
+---
+
+## 2026-10-16 sweep — #226 bounded-parallel deterministic test executed
+
+**Sources:** #226 body re-read + code-grounded (`packages/tools/tests/bounded-parallel.test.ts:12,37,49` real setTimeout; `packages/tools/src/research/bounded-parallel.ts` index-based slots already order-guaranteeing).
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#226 bounded-parallel flaky test** | 1 (tools package test suite) | 3 (every CI tools run) | 3 (one test file, 4 lines) | **9** | VERIFIED, executed + closed this pass |
+
+Picked #226: highest shippable score after #251/#241/#234/#235 closures.
+
+### Executed (bundle `tools-bounded-parallel-deterministic`, plan `2026-10-16-bounded-parallel-deterministic.md`)
+
+Parent-direct execution (packages/tools not in warden table). Replaced 4 wall-clock `setTimeout(r, N)` calls (N∈{5,10-50}) with deterministic `Promise.resolve()` microtask yield (`yieldOnce`). `boundedMap` implementation already order-guaranteeing via index-based slots; `active++` is synchronous so `maxActive` is deterministic (no implementation change needed). bounded-parallel.test.ts 4/4 green, typecheck 6/6 green, `setTimeout` count in test → 0, 0 new `as unknown as`. #226 closed with file:line evidence.
+
+**Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (premise drifted, re-ground before bundling). No code-ready singleton remains above score ~3 without a design pass.
