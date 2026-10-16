@@ -277,6 +277,14 @@ console.log(
   }
 }
 
+// ── Resync the lockfile after stamping (GH #235) ─────────────────────────────
+// Stamping rewrites workspace:* / exact ranges to the literal version, leaving
+// bun.lock stale against package.json. Regenerate it here so the release commit
+// ships a consistent lock and frozen-lockfile CI stays green.
+const install = await $`bun install`.nothrow();
+if (install.exitCode !== 0) fail("bun install failed after stamping versions — aborting before publish");
+await $`git add bun.lock`.nothrow();
+
 // ── Build once (turbo cache) ─────────────────────────────────────────────────
 
 const build = await $`bun run build`.nothrow();
