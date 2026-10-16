@@ -441,3 +441,23 @@ Picked #234: highest shippable score, fits budget, continues the #231 canonical-
 
 ### Executed (bundle `reasoning-retire-strategy-gates-verify`, plan `2026-10-16-retire-gates-verify.md`)
 Parent-direct verification, no warden (no domain edits — team-ownership contract needs no warden when nothing is edited). Named tests 24/24 green, reasoning 3162/0. Removal premise falsified with current-code evidence (gates enforce direct-call spend the Arbitrator never sees; both already read the shared meter). #234 closed with file:line evidence; blocks a future wrongful deletion.
+
+---
+
+## 2026-10-16 sweep — #235 release lockfile resync executed
+
+**Sources:** #235 body re-read + code-grounded (`scripts/release.ts` stamp block, no `bun install`; `bun.lock` 97 `workspace:` entries; CI `bun install --frozen-lockfile` at `publish.yml:95`, `ci.yml`, `docs.yml`, `eval.yml`, `regression-gate.yml`). RED: single-package version mismatch makes frozen-lockfile exit 1 ("lockfile had changes, but lockfile is frozen"). release-warden.md line 29 hard-refuses edits to scripts/release.ts → fix landed on main thread.
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#235 release.ts lock resync** | 2 (every release breaks frozen-lockfile CI) | 1 (release-time only) | 3 (scripts/release.ts + CI) | **6** | VERIFIED, executed + closed this pass |
+
+Picked #235: highest shippable score after #251/#241/#234 closures.
+
+### Executed (bundle `release-lockfile-resync`, plan `2026-10-16-release-lockfile-resync.md`)
+
+Main-thread edit (release-warden refuses scripts/release.ts per its authority manifest). Added `bun install` + `git add bun.lock` after the version-stamp block (release.ts:280-286). End-to-end `bun scripts/release.ts 99.99.99 --no-publish` exit 0 (full build 38/38, lock resynced + staged); test mutation fully reverted, fix re-applied. Final: frozen-lockfile exit 0, build 38/38, typecheck 69/69, release:dry parses. #235 closed with file:line evidence.
+
+**Remaining carried items all need design passes or are latent/low-score:** #206 abstention synthesis (needs design pass), #248 shared budget signal + watchdog reset (needs design pass), #240 classify reliability skip (latent, score 3), #214 cast ceiling (premise drifted, re-ground before bundling). No code-ready singleton remains above score ~3 without a design pass.

@@ -1408,3 +1408,11 @@ task: "GH #234 verify-and-close: are per-strategy budget gates redundant post-#2
 result: completed, confidence 0.9
 outcome: "Premise FALSIFIED with current-code evidence: wave gate (plan-execute.ts:769-771) + reflect/self-correct gates + blueprint overBudget (:619-622) enforce direct-call spend the per-kernel Arbitrator never sees; both already read the shared meter via resolveRunSpend. Named tests 24/24, reasoning 3162/0. Closed with file:line evidence; no code change (correct per stale-premise rule)."
 bypass-reason: none
+
+```yaml
+date: 2026-10-16
+warden: none (main thread; release-warden.md authority manifest hard-refuses edits to scripts/release.ts, line 29)
+task: "GH #235 release.ts stamps versions without bun.lock resync"
+result: completed, confidence 0.9
+outcome: "Added stamp -> bun install -> git add bun.lock after the version-stamp block (scripts/release.ts:280-286). Verified end-to-end with `bun scripts/release.ts 99.99.99 --no-publish` (exit 0, full build 38/38, lock resynced + staged). Then fully reverted test mutation, re-applied fix. Final: bun install --frozen-lockfile exit 0, build 38/38, typecheck 69/69, dry-run parses. No changeset (internal tooling, not a published package)."
+bypass-reason: none
