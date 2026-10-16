@@ -1374,3 +1374,29 @@ task: "Rung-2 on gemini (credit-block bypass) + rung-3 refix + branch-wide revie
 result: completed, confidence 0.85
 outcome: "Rung-2: gemini FC-disabled shadow/act 3/3 each — taught grammar ignored (<tool_code> invented, deterministic); promotion NOT recommended (no end-to-end text-parse execution anywhere). Rung-3 refix: coder parses 9/9 (was 0/5), uses native FC, finals honestly failed; phi4 still hangs. Branch review must-fix all closed (3 changesets, plan hygiene, 4 issues closed, doc-truth one-liners); full suite 10369/20fail with 18 environmental-Docker + 2 fixed here (feature-matrix, ceiling 251 with rationale). Open trackers: #235,#237,#238,#240,#241,#242,#248,#249,#250 (+#234 backlog)."
 ```
+
+```yaml
+date: 2026-10-15
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "GH #251 contract compiler mints task input files as deliverables (deriveDeliverablePaths listMode fallback)"
+result: completed, confidence 0.9
+outcome: "No-verb branch requires write-verb-before-token + no existential framing + no forward read veto (FORWARD_READ_WINDOW=80, WRITE_ADJACENT_WINDOW=30); S3 task now yields ['./report.md'] only, genuine multi-deliverable lists intact. TDD: 3 new tests failed-before/passed-after. Reasoning 3150/0 (baseline 3148+2 new-test fails), typecheck 69/69, 0 new as-any. Parent verifier: targeted 35/0, repro confirmed, multi-list intact."
+bypass-reason: none
+```
+
+```yaml
+date: 2026-10-16
+warden: kernel-warden (via general subagent)
+task: "GH #241 consumer half: guard-visible effective numCtx ceiling"
+result: completed, confidence 0.9
+outcome: "ContextProfile.explicitNumCtx + resolveEffectiveNumCtx (explicit ?? maxTokens); think.ts guard ceiling, log/metadata, demand cap read it. 8 tests RED-proven. Reasoning 3158/0 pre-producer. Residual: producer threading needed (parent dispatched runtime-warden)."
+bypass-reason: none
+```
+
+```yaml
+date: 2026-10-16
+warden: runtime-warden (via general subagent)
+task: "GH #241 producer half: seed explicitNumCtx at createRuntime + light config"
+result: completed, confidence 0.9
+outcome: "Both seed sites thread options.numCtx unless caller-explicit; 5 tests RED-proven; w2-wave-census ratchet green (was 1 pre-existing fail). Runtime 1727/0, typecheck green. Builder path traced read-only. Residual: reasoning dist rebuild needed for DTS (gitignored, done); createRuntime path pinned by code-identity+grep."
+bypass-reason: none

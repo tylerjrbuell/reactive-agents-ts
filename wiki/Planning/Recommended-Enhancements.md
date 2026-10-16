@@ -369,3 +369,53 @@ Log.md` re-read, closed GH issues, the 09-UNIFIED-PROGRAM spec.
 1. **#207** — North Star gate iteration-count regression. Score 18, highest of any finding across all 4 passes today. Needs a bisect across the 59 commits since the 2026-09-15 baseline (`c8b8b418`), starting with the entropy-scoring commits (`d43de304`, `6be81534`, `a07277fe`) since composite entropy feeds the termination decision — not yet confirmed as root cause, just the first place to look.
 
 **Skipped/sampled-out:** TODO/FIXME/`as any` density grep (not run — build+test consumed the budget), `architecture-audit`-style dead-code/layer-violation scan, closed-GH-issue history beyond the two searches run for dedupe.
+
+---
+
+## 2026-10-15 sweep — harness-report-driven single-item triage
+
+**Trigger:** "single highest leverage issue to fix" on top of the prior session's harness-improvement-loop diagnosis (Waves 0–7 merged; scoreboard `wiki/Research/Harness-Reports/2026-10-12-program-scoreboard.md` POST-W567).
+
+**Sources read this pass:** `gh issue list --state open` (full, ~35 open) + `--state all --search` dedupe ×3; `wiki/Issues/Running Issues Log.md` (full); `wiki/Planning/Recommended-Enhancements.md` (this file, full); `wiki/Hot.md` (full, prior session); `wiki/Architecture/DEBT-REGISTER.md` (grepped for deliverable/contract/per-entity/#39 rows); `wiki/Failure-Modes/` (dir listing; catalog sampled via prior sweeps). **Sampled out:** full FM catalog re-read, closed-issue history, fresh `bun run build`/`bun test` DISCOVER (prior session's live-trace evidence + a deterministic no-LLM repro consumed the budget instead).
+
+### GROUND
+
+| Candidate | Check | Result |
+|---|---|---|
+| Contract compiler mints input files as deliverables | `derive-conditions.ts:298-327` read + live `bun -e deriveDeliverablePaths(S3-task)` → `["./sales-q1.txt","./sales-q2.txt","./report.md"]` + trace `post-w567/01M4YKC9…` replay (ledger `seq 135`, terminal prompt `seq 127`, verifier `seq 158`) | **VERIFIED** |
+| Mid-loop completion-claim brake (terminate-arm fabrication iters 1–4, terminal verdict honest) | trace `post-w567/01M4YKD6…` llm-exchange contents vs `run-completed` abstain | **VERIFIED** (symptom); fix needs design care (over-block risk), scored lower |
+| #241 numCtx override blind, #206 abstention synthesis, #213/#214/#217–222 | carried from prior sweeps, not re-grounded this pass | **UNVERIFIED (sampled out)** — not re-ranked here |
+
+### DEDUPE
+- `gh issue list --state all --search "deriveDeliverablePaths" / "artifact requirements input deliverable" / "contract inputs deliverables"` → zero matches. Not in this file's prior sections. No recorded defer decision. → **FILED as #251.**
+
+### SCORE (blast × frequency × cost⁻¹, max 27)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#251 contract inputs-as-deliverables** | 2 (all file tasks naming inputs) | 3 (every contract compile on that task shape) | 3 (one function + tests) | **18** | VERIFIED, filed this pass |
+| Mid-loop completion-claim brake | 2 | 2 | 2 | 8 | VERIFIED symptom, needs design; not filed (follow-up candidate) |
+
+### Sprint batch (capped)
+1. **#251** — fix `deriveDeliverablePaths` admission (write-anchor only; forward read-verb veto); verify S3 N=5 0/2→5/5 + `rax:diagnose diff` + S1/S2 no-drift. Route via kernel-warden.
+
+**Needs go/no-go (not filed):** mid-loop grounding brake — real but risks over-blocking grounded runs; needs its own design pass before issue-worthy scoping.
+
+---
+
+## 2026-10-16 sweep — post-#251 next-item triage + #241 execution
+
+**Sources:** `gh issue list --state open` (full, ~32 open); #241 body re-read + code-grounded (`local.ts resolveOllamaNumCtx`, zero `explicitNumCtx` hits in reasoning//runtime src, guard at `head-truncation-guard.ts`).
+
+### SCORE (blast × frequency × cost⁻¹)
+
+| Item | Blast | Freq | Cost⁻¹ | Score | Status |
+|---|---|---|---|---|---|
+| **#241 guard blind under explicit numCtx** | 2 (override users' truncation guard) | 1 (explicit-override path only) | 2 (cross-seam, isolated) | **4** | VERIFIED, executed + closed this pass |
+| Mid-loop completion-claim brake | 2 | 2 | 2 | 8 | VERIFIED symptom, needs design — deferred, not executed |
+| #206 abstention synthesis | 2 | 3 | 2 | 12 | Carried, needs its own design pass — not executed (×0.5 executability → 6) |
+
+Picked #241: highest shippable score. Higher raw scores both need design passes; #241 ships clean in budget.
+
+### Executed (bundle `reasoning-numctx-guard-override`, plan `2026-10-16-numctx-guard-override.md`)
+Kernel-warden (consumer) + runtime-warden (producer), parent-verified end-to-end. #241 closed.

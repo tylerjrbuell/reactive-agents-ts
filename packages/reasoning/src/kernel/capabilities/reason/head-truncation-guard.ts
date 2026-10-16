@@ -64,8 +64,10 @@ export interface HeadTruncationGuardInput<T extends WireToolPayload = WireToolPa
   readonly wireTools: readonly T[];
   /** The gateway's resolved output allocation for this call (reserve). */
   readonly outputBudget: number;
-  /** The model's context ceiling (profile.maxTokens — bound to
-   * recommendedNumCtx by resolveProfileWithWindow). */
+  /** The model's context ceiling (GH #241: the EFFECTIVE window —
+   * `resolveEffectiveNumCtx(profile)`, i.e. explicit `.withModel({ numCtx })`
+   * override when present, else the capability `recommendedNumCtx` bound by
+   * resolveProfileWithWindow/applyCapabilityMaxTokens). */
   readonly numCtx: number;
   readonly tokenizerFamily?: TokenizerFamily;
   readonly requiredTools: readonly string[];

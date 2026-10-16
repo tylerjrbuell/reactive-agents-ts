@@ -31,6 +31,7 @@ import { project } from "../../../assembly/project.js";
 import { nextNumCtx } from "../../../assembly/capability.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
+import { resolveEffectiveNumCtx } from "../../../context/context-profile.js";
 import type { Projection } from "../../../assembly/project.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
@@ -1079,8 +1080,13 @@ export function handleThinking(
     // W2e review #3: provider-default budget (resolveOutputBudget → undefined,
     // maxTokens omitted = output bounded only by the window) reserves the
     // documented thinking-safe minimum via the guard module, never 0.
+    // GH #241: the ceiling is the EFFECTIVE window (explicit `.withModel`
+    // override wins over the capability recommendation, mirroring the
+    // Ollama wire precedence) — never bare `profile.maxTokens`.
+    const guardNumCtx =
+      input.providerName === "ollama" ? resolveEffectiveNumCtx(profile) : undefined;
     const guardWire =
-      input.providerName === "ollama" && profile.maxTokens !== undefined
+      guardNumCtx !== undefined
         ? yield* preflightHeadTruncation({
             systemPrompt: systemPromptWithDriver,
             messages: messagesForRequest,
@@ -1089,7 +1095,7 @@ export function handleThinking(
             // intent — one definition of the budget, no drift between the
             // guard and what gatewayStream will allocate.
             outputBudget: guardOutputReserve(thinkIntent),
-            numCtx: profile.maxTokens,
+            numCtx: guardNumCtx,
             tokenizerFamily: wireTokenizerFamily,
             requiredTools: input.requiredTools ?? [],
             relevantTools: input.relevantTools ?? [],
@@ -1100,7 +1106,7 @@ export function handleThinking(
     if (guardWire !== null && guardWire.fired) {
       const guardMessage =
         `⚠️ head-truncation-guard: corrected prompt (${guardWire.correctedTokensBefore} tok) ` +
-        `+ output budget exceeded num_ctx ${profile.maxTokens}; shrank tool surface ` +
+        `+ output budget exceeded num_ctx ${guardNumCtx}; shrank tool surface ` +
         `(dropped ${guardWire.droppedToolNames.length > 0 ? guardWire.droppedToolNames.join(", ") : "none"})` +
         ` then history (${guardWire.droppedMessageCount} oldest message(s)) to ` +
         `${guardWire.correctedTokensAfter} tok. System prompt head untouched` +
@@ -1120,7 +1126,7 @@ export function handleThinking(
         metadata: {
           correctedTokensBefore: guardWire.correctedTokensBefore,
           correctedTokensAfter: guardWire.correctedTokensAfter,
-          numCtx: profile.maxTokens,
+          numCtx: guardNumCtx,
           droppedToolNames: guardWire.droppedToolNames,
           droppedMessageCount: guardWire.droppedMessageCount,
           stillOverflowing: guardWire.stillOverflowing,
@@ -1138,7 +1144,9 @@ export function handleThinking(
     // paths. Output budget 2000 matches from-kernel-state.ts's resolveCapability
     // call. Monotone within a run (never shrinks — Ollama reloads the model on
     // any num_ctx change): grows from state.meta.numCtxHighWater, capped at
-    // profile.maxTokens (the model's context window ceiling).
+    // the EFFECTIVE ceiling (GH #241: explicit override wins — a demand
+    // bucket above the explicit window would ride request.numCtx past what
+    // Ollama was told to enforce).
     const demandNumCtx =
       h.numCtxPolicy === "demand" && input.providerName === "ollama"
         ? nextNumCtx(
@@ -1154,7 +1162,7 @@ export function handleThinking(
             ),
             2000,
             state.meta.numCtxHighWater,
-            profile.maxTokens,
+            resolveEffectiveNumCtx(profile),
           )
         : undefined;
     if (demandNumCtx !== undefined) {

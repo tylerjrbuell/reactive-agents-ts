@@ -4,6 +4,7 @@ export {
   ContextProfileSchema,
   CONTEXT_PROFILES,
   mergeProfile,
+  resolveEffectiveNumCtx,
 } from "./context-profile.js";
 export type { ContextProfile } from "./context-profile.js";
 

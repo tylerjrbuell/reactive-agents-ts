@@ -338,6 +338,18 @@ export const createRuntime = (options: RuntimeOptions) => {
         ? {
             ...options.contextProfile,
             maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
+            // GH #241 producer: thread the user-declared window
+            // (`.withModel({ numCtx })`) into the kernel guard's explicit rung
+            // (`resolveEffectiveNumCtx()` = explicit ?? maxTokens). An explicit
+            // caller value wins (spread writes nothing); invalid
+            // (non-positive/non-finite) numCtx writes nothing so the consumer
+            // falls back to maxTokens. The maxTokens precedence above is
+            // byte-identical legacy behavior — out of scope, do not touch.
+            ...(options.contextProfile?.explicitNumCtx !== undefined
+              ? {}
+              : Number.isFinite(options.numCtx) && options.numCtx > 0
+                ? { explicitNumCtx: options.numCtx }
+                : {}),
           }
         : options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
@@ -1227,6 +1239,18 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
         ? {
             ...options.contextProfile,
             maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
+            // GH #241 producer: thread the user-declared window
+            // (`.withModel({ numCtx })`) into the kernel guard's explicit rung
+            // (`resolveEffectiveNumCtx()` = explicit ?? maxTokens). An explicit
+            // caller value wins (spread writes nothing); invalid
+            // (non-positive/non-finite) numCtx writes nothing so the consumer
+            // falls back to maxTokens. The maxTokens precedence above is
+            // byte-identical legacy behavior — out of scope, do not touch.
+            ...(options.contextProfile?.explicitNumCtx !== undefined
+              ? {}
+              : Number.isFinite(options.numCtx) && options.numCtx > 0
+                ? { explicitNumCtx: options.numCtx }
+                : {}),
           }
         : options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,

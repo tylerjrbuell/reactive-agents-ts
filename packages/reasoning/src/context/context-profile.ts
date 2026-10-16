@@ -101,6 +101,15 @@ export const ContextProfileSchema = Schema.Struct({
    */
   toolIndexMaxEntries: Schema.optional(Schema.Number),
   /**
+   * GH #241 — user-declared context window via `.withModel({ numCtx })`.
+   * The provider wire honors it OVER the capability recommendation
+   * (llm-provider local.ts `resolveOllamaNumCtx`: request → explicit →
+   * recommended → default), so every reasoning-side ceiling derived from
+   * `maxTokens` must go through {@link resolveEffectiveNumCtx} instead of
+   * reading `maxTokens` directly. Absent ⇒ pre-#241 behavior, unchanged.
+   */
+  explicitNumCtx: Schema.optional(Schema.Number),
+  /**
    * W2b (registry-first tiering, plan 2.1) — true when this profile's TIER
    * came from the provisional model-name regex because the Capability
    * registry (the single tier arbiter under design law #1) had NO row for
@@ -222,4 +231,24 @@ export function applyCapabilityMaxTokens(
     : profile;
   if (callerProvidedMaxTokens !== undefined) return withThinking;
   return { ...withThinking, maxTokens: cap.recommendedNumCtx };
+}
+
+/**
+ * GH #241 — the effective context ceiling the reasoning side enforces
+ * against. Mirrors the Ollama wire precedence for the explicit rung
+ * (`resolveOllamaNumCtx`: request → explicit → recommended → default):
+ * a present, positive `explicitNumCtx` IS the window Ollama will enforce,
+ * in BOTH directions — below `maxTokens` the guard must fire where the
+ * recommendation would rest (else Ollama head-truncates while every gate
+ * reads green); above `maxTokens` the guard must rest (else it over-fires
+ * on a request the wire fits). Absent/invalid explicit ⇒ `maxTokens`,
+ * i.e. byte-identical pre-#241 behavior.
+ *
+ * Pure / synchronous. Callers: think.ts head-truncation guard preflight
+ * ceiling + demand-`num_ctx` bucket cap (both must agree with the wire).
+ */
+export function resolveEffectiveNumCtx(profile: ContextProfile): number | undefined {
+  const explicit = profile.explicitNumCtx;
+  if (explicit !== undefined && Number.isFinite(explicit) && explicit > 0) return explicit;
+  return profile.maxTokens;
 }

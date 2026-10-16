@@ -173,6 +173,17 @@ export const W2_FIELD_CENSUS: Readonly<Record<string, Census>> = {
     test: "../../reasoning/tests/context/capability-maxtokens.test.ts",
     consumer: "maxTokens",
   },
+  // GH #241 producer+consumer pair: kernel-warden added the consumer seam
+  // (`resolveEffectiveNumCtx()` = explicit ?? maxTokens, read by think.ts)
+  // and the runtime producer (`createRuntime` / `buildLightRuntimeConfig`
+  // seeding from `options.numCtx`, i.e. `.withModel({ numCtx })`). RED proof:
+  // numctx-explicit-seed.test.ts failed 2/5 before the seed landed
+  // (explicitNumCtx undefined) and passes 5/5 after.
+  explicitNumCtx: {
+    status: "PROVEN",
+    test: "numctx-explicit-seed.test.ts",
+    consumer: "explicitNumCtx",
+  },
   recentObservationsLimit: {
     status: "DEAD-DEBT-REGISTERED",
     reason:
