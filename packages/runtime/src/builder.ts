@@ -10,7 +10,7 @@ import type { MCPServerConfig } from './runtime.js'
 // runtime value (`defaultRegistries`) is dynamically imported inside
 // `build()` alongside this file's other `@reactive-agents/tools` runtime
 // access (see tool-mcp-registrations.ts for the established pattern).
-import type { MCPToolkitRequest, MCPVolumeMount } from '@reactive-agents/tools'
+import type { MCPToolkitRequest, MCPVolumeMount, ToolParameter } from '@reactive-agents/tools'
 import {
     defaultTracingConfig,
     deriveGoalAchieved,
@@ -689,7 +689,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * is prepended before the custom prompt.
      *
      * @param persona - AgentPersona with role, background, instructions, and/or tone
+     * @param persona.name - Display name of the agent (defaults to `.withName()` value). Default: undefined
+     * @param persona.role - What this agent does — injected as the "Role:" section of the system prompt. Default: undefined
+     * @param persona.background - Background context or expertise — injected as the "Background:" section. Default: undefined
+     * @param persona.instructions - Explicit behavioral instructions — injected as the "Instructions:" section. Default: undefined
+     * @param persona.tone - Tone/style guidance (e.g., "professional", "concise", "friendly") — injected as the "Tone:" section. Default: undefined
      * @returns `this` for chaining
+     * @see {@link AgentPersona} — the full named type with the same field docs.
      */
     withPersona(persona: AgentPersona): this {
         this._persona = persona
@@ -740,7 +746,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * When enabled, the agent exposes a JSON-RPC 2.0 HTTP endpoint at `/.well-known/agent.json`
      * that allows other agents or services to discover and invoke this agent remotely.
      *
-     * @param options - A2A configuration (port, basePath)
+     * @param options - A2A configuration
+     * @param options.port - HTTP port for the A2A server. Default: 3000
+     * @param options.basePath - Base path prefix for all A2A routes. Default: "/"
      * @returns `this` for chaining
      */
     withA2A(options?: A2AOptions): this {
@@ -757,7 +765,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * and a composable policy engine. The gateway is deterministic infrastructure —
      * it only invokes the LLM when intelligence is genuinely needed.
      *
-     * @param options - Gateway configuration (heartbeat, crons, webhooks, policies)
+     * @param options - Gateway configuration
+     * @param options.timezone - Timezone for cron schedules
+     * @param options.heartbeat - { intervalMs?, policy?, instruction?, maxConsecutiveSkips? }
+     * @param options.crons - Scheduled jobs: { schedule, instruction, agentId?, priority?, timezone?, enabled? }[]
+     * @param options.webhooks - Webhook endpoints: { path, adapter, secret?, events? }[]
+     * @param options.policies - Policy limits: { dailyTokenBudget?, maxActionsPerHour?, heartbeatPolicy?, mergeWindowMs?, requireApprovalFor? }
+     * @param options.persistMemoryAcrossRuns - Share stable agent id across gateway runs for memory continuity
+     * @param options.port - Gateway HTTP server port
+     * @param options.accessControl - Channel access control: { accessPolicy?, allowedSenders?, blockedSenders?, mode?, sessionTtlDays? }
      * @returns `this` for chaining
      */
     withGateway(options?: GatewayOptions): this {
@@ -769,11 +785,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Register the external channel layer (`@reactive-agents/channels`) for webhook/bot ingress.
      *
      * Adapters are started when {@link ReactiveAgent.start} runs (requires `.withGateway()` so the
-     * gateway policy engine can evaluate inbound channel `GatewayEvent` values. Use
-     * `GatewayOptions.accessControl` for messaging allowlists — separate from this API.
-     * messaging allowlists — it is separate from this API.
+     * gateway policy engine can evaluate inbound channel `GatewayEvent` values.
      *
-     * @param config - Adapters, triggers, and optional default agent config
+     * @param config - Channel configuration
+     * @param config.adapters - Message channel adapters (webhooks, bot transports)
+     * @param config.triggers - Trigger definitions for channel ingress
+     * @param config.defaultAgent - Default agent config for triggered channels
+     * @param config.sessions - Session settings: { compactionThreshold?, idleTimeoutMs? }
+     * @returns `this` for chaining
+     * Use `GatewayOptions.accessControl` for messaging allowlists — separate from this API.
      */
     withChannels(config: ChannelsConfig): this {
         this._channelsConfig = config
@@ -804,6 +824,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             maxIterations?: number
             systemPrompt?: string
             persona?: AgentPersona
+            parameters?: ReadonlyArray<ToolParameter>
         }
     ): this {
         this._agentTools.push({ name, agent })
@@ -854,7 +875,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      *
      * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`, `"gemini-2.0-flash"`
      *
-     * @param modelOrParams - Model identifier string, or ModelParams object with model + thinking/temperature/maxTokens
+     * @param model - Model identifier string
+     * @param params - ModelParams object with model + thinking/temperature/maxTokens/numCtx
+     * @param params.model - Model identifier (provider-specific). Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"gemini-2.0-flash"`
+     * @param params.thinking - Enable/disable thinking mode (auto-detect if omitted). Default: undefined
+     * @param params.temperature - Sampling temperature 0.0-1.0. Default: undefined (provider default)
+     * @param params.maxTokens - Maximum output tokens. Default: undefined (provider default)
+     * @param params.numCtx - Context window size for local providers (Ollama `options.num_ctx`); ignored by hosted providers. Default: undefined
      * @returns `this` for chaining
      */
     withModel(model: string): this
@@ -887,7 +914,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * speak a different wire protocol.
      *
      * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, `"groq"`, `"xai"`, or `"test"`
-     * @param config - Optional OpenAI-compatible endpoint override (applies to `"openai"`/`"groq"`/`"xai"`/`"litellm"`)
+     * @param config - Optional OpenAI-compatible endpoint override
+     * @param config.baseUrl - Base URL for the OpenAI-compatible endpoint (e.g. `"http://localhost:8080/v1"`)
+     * @param config.apiKey - API key for the endpoint
+     * @param config.headers - Additional HTTP headers to send with requests
      * @returns `this` for chaining
      *
      * @example
@@ -1072,7 +1102,17 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Optionally provide configuration to toggle individual detectors.
      *
      * @param options - Optional guardrail configuration
+     * @param options.injection - Enable prompt injection detection. Default: true
+     * @param options.pii - Enable PII detection and masking. Default: true
+     * @param options.toxicity - Enable toxicity detection. Default: true
+     * @param options.customBlocklist - Custom blocklist of words/phrases (case-insensitive substring match)
+     * @param options.enableJudgmentBattery - Opt-in judgment battery. Default: false
+     * @param options.judgmentStrictness - "additive" | "jev-primary". Default: "additive"
+     * @param options.judgmentActionThreshold - Noul probability to block. Default: 0.7
+     * @param options.judgmentReviewThreshold - Noul probability to review without blocking. Default: 0.4
+     * @param options.screenOutputs - Opt-in output-side judgment screening. Default: false
      * @returns `this` for chaining
+     * @see {@link GuardrailsOptions} — the full named type with all field docs.
      */
     withGuardrails(options?: GuardrailsOptions): this {
         this._enableGuardrails = true
@@ -1086,11 +1126,23 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Optionally provide configuration to toggle strategies and set thresholds.
      *
      * @param options - Optional verification configuration
+     * @param options.semanticEntropy - Enable semantic entropy estimation. Default: true
+     * @param options.factDecomposition - Enable fact decomposition. Default: true
+     * @param options.multiSource - Enable multi-source verification. Default: false
+     * @param options.selfConsistency - Enable self-consistency checks. Default: true
+     * @param options.nli - Enable natural language inference. Default: true
+     * @param options.hallucinationDetection - Enable hallucination detection. Default: false
+     * @param options.hallucinationThreshold - Hallucination score threshold (0-1). Default: 0.10
+     * @param options.passThreshold - Overall pass threshold (0-1). Default: 0.7
+     * @param options.riskThreshold - Risk threshold below which outputs are flagged (0-1). Default: 0.5
+     * @param options.useLLMTier - Use runtime LLMService for LLM-backed verification. Default: true
+     * @param options.onReject - "block" | "annotate" | "proceed" on rejection. Default: "proceed"
+     * @param options.strictValidation - Promote missing-key/unknown-model checks to hard build errors
+     * @param options.lazyValidation - Keep checks as warnings even under strict validation
      * @returns `this` for chaining
+     * @see {@link VerificationOptions} — the full named type with all field docs.
      * @see {@link HarnessProfile.balanced} — composable preset with the
-     *   verifier default-on; `HarnessProfile.lean()` opts out. For
-     *   configuration overrides, compose:
-     *   `.withProfile(HarnessProfile.balanced()).compose(...)`.
+     *   verifier default-on; `HarnessProfile.lean()` opts out.
      */
     withVerification(options?: VerificationOptions): this {
         this._enableVerification = true
@@ -1127,7 +1179,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * primitive over this agent's own configured `LLMService` — uncalibrated,
      * `calibrated: false` on every answer). Override with `options.backend`.
      *
-     * @param options - Optional judgment configuration (backend, credentials, sites)
+     * @param options - Optional judgment configuration
+     * @param options.apiKey - TypeSafe API key. Falls back to TYPESAFE_API_KEY env var
+     * @param options.baseUrl - Backend base URL override (TypeSafe root or Ollama server root)
+     * @param options.model - Model identifier passed to the backend on each ask() call
+     * @param options.timeoutMs - Per-request timeout in ms. Default: 3000
+     * @param options.defaultConfidenceFloor - Floor applied when consumer doesn't specify minConfidence/minProbability
+     * @param options.backend - Force a backend: "jev" | "llm" | "ollama"
+     * @param options.ollama - Ollama-specific options: { keepAlive }
+     * @param options.sites - Per-site opt-ins for internal harness consumers (all default off)
      * @returns `this` for chaining
      */
     withJudgment(options?: JudgmentBuilderOptions): this {
@@ -1145,6 +1205,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * retry then degrade to warn (never hard-fails the run).
      *
      * @param options - Grounding configuration
+     * @param options.mode - "warn" (advisory) | "block" (one corrective retry then degrade to warn)
+     * @param options.tolerance - Numeric match tolerance as a fraction (rounding). Default: 0.01
+     * @param options.maxRetries - Block mode corrective retries before degrading to warn. Default: 1
+     * @param options.fabricationGuard - Honesty-rails fold: "off" | "warn" | "block"
+     * @param options.stallPolicy - Honesty-rails fold: { ignoredNudgeTolerance, escalateNudgeContent }
      * @returns `this` for chaining
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
@@ -1298,7 +1363,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * `object` is undefined and `objectError` is set (use `{ onParseFail: "throw" }` for strict).
      *
      * @param schema - An Effect Schema or any Standard Schema v1-compliant schema
-     * @param options - Structured output options (mode, onParseFail, abstainBelow)
+     * @param options - Structured output options
+     * @param options.mode - "auto" | "fast" | "grounded". Default: "auto"
+     * @param options.onParseFail - "degrade" | "throw". Default: "degrade"
+     * @param options.abstainBelow - Grounded engine only: omit fields below this confidence. Default: off
      * @returns `this` for chaining
      */
     withOutputSchema<A>(
@@ -1321,7 +1389,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * checkpoints back. Zero cost when not called: no store, no run row, no
      * db file.
      *
-     * @param options - Durable run configuration (dir, checkpointEvery)
+     * @param options - Durable run configuration
+     * @param options.dir - Directory for the runs.db SQLite file. Default: ~/.reactive-agents/<agentId>/
+     * @param options.checkpointEvery - Persist a checkpoint every N iterations. Default: 1
      * @returns `this` for chaining
      */
     withDurableRuns(options?: import('./builder/types.js').DurableRunsOptions): this {
@@ -1349,6 +1419,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Optionally provide budget limits to enforce spending caps.
      *
      * @param options - Optional budget limit configuration (USD)
+     * @param options.perRequest - Maximum cost per single LLM request (USD). Default: $1.00
+     * @param options.perSession - Maximum cost per session (USD). Default: $5.00
+     * @param options.daily - Maximum daily spend (USD). Default: $25.00
+     * @param options.monthly - Maximum monthly spend (USD). Default: $200.00
      * @returns `this` for chaining
      * Composable equivalent: `.withObservability({ costs: ... })` for the
      *   tracking, `.withBudget(...)` for spend caps (master plan §11.4).
@@ -1405,6 +1479,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * to test if the provider has recovered.
      *
      * @param config - Optional circuit breaker thresholds
+     * @param config.failureThreshold - Consecutive failures before opening the breaker. Default: 5
+     * @param config.cooldownMs - Cooldown ms before half-open. Default: 30000
+     * @param config.halfOpenRequests - Requests to allow in half-open state. Default: 1
      * @returns `this` for chaining
      * @see {@link HarnessProfile.balanced} — composable preset that ships
      *   the breaker enabled with sensible thresholds. Use this method (or
@@ -1443,7 +1520,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Configurable per-minute request limits, per-minute token limits (estimated),
      * and maximum concurrent in-flight requests.
      *
-     * @param config - Optional rate limiter thresholds (defaults: 60 RPM, 100k TPM, 10 concurrent)
+     * @param config - Optional rate limiter thresholds
+     * @param config.requestsPerMinute - Max requests per minute. Default: 60
+     * @param config.tokensPerMinute - Max estimated input tokens per minute. Default: 100000
+     * @param config.maxConcurrent - Max concurrent in-flight requests. Default: 10
      * @returns `this` for chaining
      * @example .withRateLimiting({ requestsPerMinute: 30, tokensPerMinute: 50_000 })
      * Limits are also resolved from provider metadata + `CapabilityRegistry`
@@ -1477,7 +1557,23 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Without this, the agent performs single-step LLM calls. With it enabled,
      * the agent can use strategies like ReAct (tool use loops), tree-of-thought, or plan-execute.
      *
-     * @param options - Reasoning configuration overrides
+     * @param options - Reasoning configuration overrides — see {@link ReasoningOptions} for all fields
+     * @param options.defaultStrategy - Default strategy name (e.g. "reactive", "plan-execute-reflect", "tree-of-thought", "blueprint")
+     * @param options.strategies - Per-strategy config overrides (reactive, planExecute, treeOfThought, reflexion)
+     * @param options.adaptive - Adaptive strategy switching: { enabled, learning }
+     * @param options.enableStrategySwitching - Allow automatic strategy switching on loop detection
+     * @param options.maxStrategySwitches - Max strategy switches per run
+     * @param options.fallbackStrategy - Fallback strategy name when switching
+     * @param options.maxIterations - Max reasoning iterations
+     * @param options.parallelToolCalls - Execute tool calls in parallel (default: true)
+     * @param options.observationSummary - LLM-based observation fact extraction: true | false | "auto"
+     * @param options.auditRationale - Emit per-tool-call rationale blocks for debrief audit
+     * @param options.harness - Harness mechanism switches (lazy disclosure, tool discovery, verbose rules)
+     * @param options.synthesis - Synthesis mode: "auto" | "fast" | "deep" | "custom" | "off"
+     * @param options.synthesisModel - Model used for synthesis
+     * @param options.synthesisProvider - Provider used for synthesis
+     * @param options.synthesisTemperature - Temperature for synthesis
+     * @param options.synthesisStrategy - Custom synthesis pipeline (runtime-only, not persisted)
      * @returns `this` for chaining
      * @see {@link HarnessProfile.balanced} — composable preset with
      *   reasoning + strategy switching default-on; `HarnessProfile.lean()`
@@ -1559,6 +1655,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * last-call-wins (see {@link ToolsOptions.required}).
      *
      * @param options - Custom tool definitions and handlers
+     * @param options.tools - Array of custom tool definitions and handlers
+     * @param options.resultCompression - Tool result compression config
+     * @param options.allowedTools - Whitelist of tool names to expose
+     * @param options.focusedTools - Tools to show in the LLM prompt (doesn't block execution)
+     * @param options.adaptive - Enable adaptive tool filtering. Default: false
+     * @param options.builtins - Built-in tools to include: false | true | string[]
+     * @param options.required - Required tools (same as .withRequiredTools())
      * @returns `this` for chaining
      */
     withTools(options?: ToolsOptions): this {
@@ -1624,8 +1727,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Automatically displays a metrics dashboard on completion showing execution timeline,
      * tool usage, costs, and alerts. Configure verbosity and live streaming via options.
      *
-     * @param options - Observability configuration (verbosity, live, file)
+     * @param options - Observability configuration
+     * @param options.verbosity - "minimal" | "normal" | "verbose" | "debug". Default: "normal"
+     * @param options.live - Stream logs in real-time. Default: false
+     * @param options.file - Path for JSONL file export. Default: undefined
+     * @param options.logModelIO - Log full model prompts and responses. Default: false
+     * @param options.cortex - Cortex event reporting: true or { url }. Default: false
+     * @param options.telemetry - Anonymous telemetry: true or TelemetryConfig. Default: false
+     * @param options.logging - Structured logging: { level?, format?, output?, filePath? }
+     * @param options.tracing - JSONL trace persistence: true | false | { dir? }
+     * @param options.health - Enable health checks. Default: false
+     * @param options.audit - Per-tool-call rationale auditing. Default: false
+     * @param options.costs - Cost tracking: true or CostTrackingOptions. Default: false
+     * @param options.streaming - Event streaming. Default: false
      * @returns `this` for chaining
+     * @see {@link ObservabilityOptions} — the full named type with all field docs.
      */
     withObservability(options?: ObservabilityOptions): this {
         this._enableObservability = true
@@ -1771,6 +1887,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * })
      * ```
      *
+     * @param policy - Approval policy configuration
+     * @param policy.tools - Tool names whose calls must be approved
+     * @param policy.requireFor - Predicate: return true to require approval for this call
+     * @param policy.mode - "detach" (durable pause) or "block" (in-process decision)
+     * @param policy.onApprove - In-process decider for block mode: return true/{approve:true} to run, false/{approve:false} to deny
      * @returns `this` for chaining
      */
     withApprovalPolicy(policy: import('./builder/types.js').ApprovalPolicyConfig): this {
@@ -1785,6 +1906,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * model-tier-specific variants and experiment tracking.
      *
      * @param options - Custom prompt template definitions
+     * @param options.templates - Array of custom prompt templates to register (id, content, optional tier)
      * @returns `this` for chaining
      * Composable equivalent: `.compose(h => h.on('prompt.system', ...))` /
      *   the `@reactive-agents/prompts` template registry — prompt templates
