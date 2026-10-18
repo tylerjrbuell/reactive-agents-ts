@@ -190,6 +190,39 @@ describe("LLM decomposition — floor invariant (deterministic core stands alone
     ).toBe(true);
   });
 
+  it("shouldDecompose is closed when classifierReliability is low/skip", () => {
+    const caps = {
+      supportsToolCalling: false,
+      supportsStreaming: true,
+      supportsStructuredOutput: true,
+      supportsLogprobs: false,
+    };
+    expect(
+      shouldDecompose({
+        enableLlmDecomposition: true,
+        capabilities: caps,
+        classifierReliability: "low",
+      }),
+    ).toBe(false);
+    expect(
+      shouldDecompose({
+        enableLlmDecomposition: true,
+        capabilities: caps,
+        classifierReliability: "skip",
+      }),
+    ).toBe(false);
+    expect(
+      shouldDecompose({
+        enableLlmDecomposition: true,
+        capabilities: caps,
+        classifierReliability: "high",
+      }),
+    ).toBe(true);
+    expect(
+      shouldDecompose({ enableLlmDecomposition: true, capabilities: caps }),
+    ).toBe(true);
+  });
+
   it("mergeLlmRequirements never drops the floor and de-dupes by id", () => {
     const floor = compileRunContract(RW_PROMPTS["rw-8"]!).requirements;
     const llm: TaskRequirement[] = [

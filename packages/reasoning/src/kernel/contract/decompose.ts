@@ -15,6 +15,7 @@ import { Effect } from "effect";
 import { extractJsonBlock } from "../../structured-output/json-repair.js";
 import { extractThinkingSafeContent } from "../utils/stream-parser.js";
 import { gatewayComplete } from "../llm-gateway.js";
+import { shouldSkipClassifierEvaluation } from "../capabilities/reflect/strategy-evaluator.js";
 import { outputContains, type PostCondition } from "../capabilities/verify/post-conditions.js";
 import type { RequirementKind, TaskRequirement } from "./run-contract.js";
 
@@ -28,15 +29,23 @@ export interface DecomposeOptions {
   readonly enableLlmDecomposition?: boolean;
   /** Provider capabilities — decomposition needs native structured output. */
   readonly capabilities?: ProviderCapabilities;
+  /** Classifier reliability — when "low"/"skip", decomposition is skipped
+   *  (no LLM classify round-trip). Mirrors the strategy-evaluator gate. */
+  readonly classifierReliability?: string;
 }
 
 /**
  * Pure gate predicate — the SAME shape as the requiredTools classifier gate:
- * opt-in AND capability-advertised. Exported so the floor invariant ("LLM path
- * off ⇒ floor only") is testable without a model call.
+ * opt-in AND capability-advertised AND classifier reliability not low/skip.
+ * Exported so the floor invariant ("LLM path off ⇒ floor only") is testable
+ * without a model call.
  */
 export function shouldDecompose(opts: DecomposeOptions): boolean {
-  return opts.enableLlmDecomposition === true && opts.capabilities?.supportsStructuredOutput === true;
+  return (
+    opts.enableLlmDecomposition === true &&
+    opts.capabilities?.supportsStructuredOutput === true &&
+    !shouldSkipClassifierEvaluation(opts.classifierReliability)
+  );
 }
 
 const DECOMPOSE_SYSTEM =

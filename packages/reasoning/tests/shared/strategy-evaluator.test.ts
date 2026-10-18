@@ -1,7 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { StrategyHandoff, StrategyEvaluation } from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
-import { evaluateStrategySwitch, buildHandoff } from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
+import {
+  evaluateStrategySwitch,
+  buildHandoff,
+  shouldSkipClassifierEvaluation,
+} from "../../src/kernel/capabilities/reflect/strategy-evaluator.js";
 
 describe("StrategyHandoff interface", () => {
   it("StrategyHandoff conforms to expected shape", () => {
@@ -99,5 +103,16 @@ describe("buildHandoff", () => {
     expect(Array.isArray(handoff.toolsCalled)).toBe(true);
     expect(handoff.toolsCalled).toHaveLength(3);
     expect(handoff.switchNumber).toBe(2);
+  });
+});
+
+describe("shouldSkipClassifierEvaluation (W2d 2.6)", () => {
+  it("treats 'low' and 'skip' as skip-eligible", () => {
+    expect(shouldSkipClassifierEvaluation("low")).toBe(true);
+    expect(shouldSkipClassifierEvaluation("skip")).toBe(true);
+  });
+  it("does not skip for trusted or absent reliability", () => {
+    expect(shouldSkipClassifierEvaluation("high")).toBe(false);
+    expect(shouldSkipClassifierEvaluation(undefined)).toBe(false);
   });
 });
