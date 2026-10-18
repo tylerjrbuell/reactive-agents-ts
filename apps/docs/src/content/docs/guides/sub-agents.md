@@ -180,6 +180,57 @@ The parent LLM selects these values based on the subtask it is delegating. For e
 
 ---
 
+### Structured Input Parameters (typed per-call arguments)
+
+By default, `withAgentTool` exposes a single free-form `input` string argument. When the parent LLM needs to pass **structured, dynamic variables** per invocation — e.g. a repo name, PR number, file path, or focus area — declare `parameters` on the sub-agent config. Each entry is a `ToolParameter` (name, type, description, required, optional enum/default), reusing the same type as `withTools()` custom tool schemas.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withAgentTool("review-pr", {
+    name: "PR Reviewer",
+    description: "Reviews a pull request for a given focus area",
+    systemPrompt: "You are a meticulous code reviewer. Return concrete, line-referenced findings.",
+    tools: ["file-read", "web-search"],
+    parameters: [
+      {
+        name: "repo",
+        type: "string",
+        description: "Repository owner/repo",
+        required: true,
+      },
+      {
+        name: "prNumber",
+        type: "number",
+        description: "Pull request number",
+        required: true,
+      },
+      {
+        name: "focus",
+        type: "string",
+        description: "Review focus area",
+        required: false,
+        enum: ["security", "performance", "style"],
+      },
+    ],
+  })
+  .build();
+```
+
+The parent LLM then calls the tool with typed arguments:
+
+```typescript
+// Generated dynamically by the parent LLM:
+toolCall("review-pr", { repo: "owner/repo", prNumber: 42, focus: "security" });
+```
+
+**Rules:**
+- `input` remains available as a catch-all free-form argument even when `parameters` is declared.
+- Duplicate parameter names are not allowed — the schema deduplicates.
+- `parameters` is optional; omitting it preserves the previous single-`input` behavior exactly.
+
+### Dynamic Persona via `spawn-agent`
+
 ## Performance Considerations
 
 Sub-agent delegation adds overhead. Understand the costs before adopting this pattern:
