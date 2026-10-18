@@ -643,6 +643,9 @@
             "deprecated"
           ]
         },
+        "recentlyChanged": {
+          "type": "boolean"
+        },
         "badge": {
           "type": "object",
           "properties": {
