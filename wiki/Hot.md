@@ -10,6 +10,28 @@ updated: 2026-10-05
 
 ---
 
+## 2026-10-17 — #240 classifier-skip gate (execute-backlog singleton bundle)
+
+Executed `execute-backlog` on open issue #240 (area:reasoning, p3 chore). Grounded the premise
+on `origin/main`: `adaptive.ts:219` and `decompose.ts:118` each call
+`gatewayComplete({purpose:"classify"})` ungated; the `shouldSkipClassifierEvaluation` gate
+primitive did NOT exist on this base (it lives only on `dev`, which is 174 commits ahead).
+Created the shared primitive (`CLASSIFIER_SKIP_RELIABILITIES = ["low","skip"]` +
+`shouldSkipClassifierEvaluation`) in `strategy-evaluator.ts` and gated both named sites.
+Behavior for trusted/absent reliability unchanged.
+
+Commit `71a5d4f1` on branch `bundle/reasoning-classifier-skip-gate` (off origin/main).
+- reasoning suite: 2945 pass / 0 fail; typecheck green; cast ceiling green (0 new `as unknown as`)
+- Tests: new `shouldSkipClassifierEvaluation` predicate cases; `shouldDecompose` classifierReliability
+  cases; `adaptive-classifier-skip.test.ts` (low skips the LLM call with no classify response
+  provided; high still consults the LLM)
+- Not on this base: strategy-evaluator.ts's OWN classify call (line 165) remains ungated — a
+  disclosed follow-up (already done on dev; needs calibration threaded from iterate-pass).
+- Plan: wiki/Planning/Implementation-Plans/2026-10-17-reasoning-classifier-skip-gate.md
+
+Demoted prior entries below.
+
+---
 ## 2026-10-05 — #231 run-scoped budget meter (canonical mechanism landed, partial)
 
 Executed `execute-backlog` on `priority:p1` → singleton #231 (canonical run-level
