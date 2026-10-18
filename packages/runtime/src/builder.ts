@@ -385,6 +385,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _reasoningOptions?: ReasoningOptions
     private _enableTools: boolean = false
     private _toolsOptions?: ToolsOptions
+    private _scratchpad: Map<string, string> = new Map()
     private _resultCompression?: ResultCompressionConfig
     private _requiredToolsConfig?: {
         tools?: readonly string[]
@@ -825,6 +826,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             systemPrompt?: string
             persona?: AgentPersona
             parameters?: ReadonlyArray<ToolParameter>
+            requiresApproval?: boolean
+            timeoutMs?: number
         }
     ): this {
         this._agentTools.push({ name, agent })
@@ -3116,6 +3119,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     dynamicSubAgentOptions,
                     agentId,
                     getParentContext,
+                    parentScratchpadWriter: (key: string, value: string) => {
+                      self._scratchpad.set(key, value);
+                    },
                     parentProvider,
                     parentModel,
                     parentReasoningOptions,
@@ -3164,6 +3170,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                 fullRuntime,
                 agentId,
                 name: self._name,
+                scratchpad: self._scratchpad,
                 a2aDefaultPort: self._a2aOptions?.port,
                 a2aDefaultBasePath: self._a2aOptions?.basePath,
                 judgmentAutoShadow: self._judgmentShadowDbPath !== undefined,

@@ -457,3 +457,28 @@ export function buildSubAgentSystemPrompt(
         ? `${personaPrompt}\n\n${systemPrompt}`
         : personaPrompt
 }
+
+/**
+ * Interpolate `{{key}}` placeholders in a template string with values from a
+ * record. Follows the same `{{key}}` convention as the prompts template engine
+ * (`packages/prompts/src/services/template-engine.ts`). Missing keys are left
+ * as-is (no throw) so a sub-agent can still run when a caller omits an
+ * optional parameter.
+ *
+ * @param template - Optional template string containing `{{key}}` placeholders.
+ * @param vars - Key/value pairs to substitute. Only declared parameter keys
+ *   are interpolated; extra keys are ignored.
+ * @returns The interpolated string, or `undefined` when `template` is
+ *   `undefined`.
+ */
+export function interpolateTemplate(
+    template: string | undefined,
+    vars: Record<string, unknown>,
+): string | undefined {
+    if (!template) return template
+    let result = template
+    for (const [key, value] of Object.entries(vars)) {
+        result = result.replaceAll(`{{${key}}}`, String(value ?? ""))
+    }
+    return result
+}

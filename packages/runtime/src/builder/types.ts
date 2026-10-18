@@ -10,6 +10,7 @@
 import type { Effect } from 'effect'
 import type {
     ToolDefinition,
+    ToolParameter,
     ResultCompressionConfig,
     ShellExecuteConfig,
 } from '@reactive-agents/tools'
@@ -992,6 +993,33 @@ export interface AgentToolOptions {
         readonly systemPrompt?: string
         /** Persona to steer the sub-agent's behavior (composed into system prompt). Default: undefined */
         readonly persona?: AgentPersona
+        /**
+         * Custom input parameters for the sub-agent tool, declared as typed
+         * `ToolParameter` definitions. These are merged into the tool's JSON
+         * Schema so the parent LLM can pass structured, dynamic arguments
+         * per invocation (e.g. `{ repo: "owner/repo", prNumber: 42 }`)
+         * instead of a free-form `input` string. The `input` parameter
+         * remains available as a catch-all free-form argument.
+         *
+         * Declared parameters can be interpolated into `systemPrompt`,
+         * `persona.role`, `persona.instructions`, and
+         * `persona.background` using `{{paramName}}` placeholders — they are
+         * substituted at call time with the values the parent LLM supplies.
+         *
+         * Reuses `@reactive-agents/tools` `ToolParameter` — the same type
+         * used by `createAgentTool` and `withTools()` custom tool schemas.
+         */
+        readonly parameters?: ReadonlyArray<ToolParameter>
+        /**
+         * Whether the parent must approve each invocation of this sub-agent
+         * tool. Default: `true` (matches `createAgentTool`'s historical
+         * default). Set `false` for automated, unattended delegation.
+         */
+        readonly requiresApproval?: boolean
+        /**
+         * Per-invocation timeout in milliseconds. Default: `60_000`.
+         */
+        readonly timeoutMs?: number
     }
     /**
      * URL of a remote A2A server (mutually exclusive with `agent`).

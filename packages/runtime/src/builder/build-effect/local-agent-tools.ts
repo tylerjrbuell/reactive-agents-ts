@@ -42,7 +42,7 @@ import type {
 } from "@reactive-agents/tools";
 import { createLightRuntime } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
-import { buildSubAgentSystemPrompt } from "../helpers.js";
+import { buildSubAgentSystemPrompt, interpolateTemplate } from "../helpers.js";
 import type { AgentToolOptions, ProviderName } from "../types.js";
 import {
   makeSpawnHandlers,
@@ -83,6 +83,13 @@ export interface LocalAgentToolDeps {
   readonly agentId: string;
   /** Lazy reader for the parent's execution context (forwarded to the sub-agent). */
   readonly getParentContext: () => ParentContext | undefined;
+  /**
+   * Writer for sub-agent scratchpad entries forwarded to the parent.
+   * Called with `sub:<agentName>:<key>` keys during `finalizeSubAgentResult`.
+   * Writes into the parent's scratchpad store so the parent can read
+   * sub-agent scratchpad entries after the run completes.
+   */
+  readonly parentScratchpadWriter?: (key: string, value: string) => void;
 }
 
 /**
@@ -95,7 +102,7 @@ export const createLocalAgentToolRegistration = (
   agentTool: AgentToolOptions,
   deps: LocalAgentToolDeps,
 ): LocalAgentToolRegistration => {
-  const { toolsMod, agentId, getParentContext } = deps;
+  const { toolsMod, agentId, getParentContext, parentScratchpadWriter } = deps;
   const {
     createAgentTool,
     composeSubAgentDirectivePrompt,
@@ -109,7 +116,24 @@ export const createLocalAgentToolRegistration = (
     description: agentTool.agent!.description ?? `Agent: ${subName}`,
     capabilities: [],
   };
-  const toolDef = createAgentTool(agentTool.name, agentConfig);
+  const baseDef = createAgentTool(agentTool.name, agentConfig);
+
+  // Merge declared custom parameters into the tool schema so the parent LLM
+  // sees them as typed, dynamic arguments per invocation (GH: structured
+  // input for withAgentTool). `input` remains as a catch-all free-form arg.
+  const customParams = agentTool.agent?.parameters ?? [];
+  const toolDef: ToolDefinition = {
+    ...baseDef,
+    ...(customParams.length > 0
+      ? { parameters: [...baseDef.parameters, ...customParams] }
+      : {}),
+    ...(agentTool.agent?.requiresApproval !== undefined
+      ? { requiresApproval: agentTool.agent.requiresApproval }
+      : {}),
+    ...(agentTool.agent?.timeoutMs !== undefined
+      ? { timeoutMs: agentTool.agent.timeoutMs }
+      : {}),
+  };
 
   // B8-T4: the fixed `.withAgentTool` sub-agent runs forked into the PARENT's
   // fiber tree (Effect.forkScoped + Fiber.await), never on a detached
@@ -118,12 +142,29 @@ export const createLocalAgentToolRegistration = (
   const handler = (args: Record<string, unknown>) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const task =
+        // Build the task string from the caller's args. `input`/`message` are
+        // the catch-all free-form task text; any additional declared parameters
+        // (e.g. `repo`, `prNumber`, `focus`) are appended as structured context
+        // so the sub-agent receives them — they would otherwise be dropped
+        // when `input` takes precedence. Mirrors the input normalization in
+        // @reactive-agents/tools `createSubAgentExecutor`.
+        const hasExplicitTask = typeof args.input === "string" || typeof args.message === "string";
+        const taskText =
           typeof args.input === "string"
             ? args.input
             : typeof args.message === "string"
               ? args.message
               : JSON.stringify(args);
+        const customArgs: Record<string, unknown> = { ...args };
+        delete customArgs.input;
+        delete customArgs.message;
+        // Only append structured args when they weren't already serialized
+        // into taskText (i.e. when input/message was the primary carrier).
+        const extra =
+          hasExplicitTask && Object.keys(customArgs).length > 0
+            ? `\n\nArguments: ${JSON.stringify(customArgs)}`
+            : "";
+        const task = taskText + extra;
 
         // Resolve the spawning agent's RunContext (ambient → run-scoped fallback).
         const explicit = yield* FiberRef.get(CurrentRunContextRef);
@@ -142,19 +183,53 @@ export const createLocalAgentToolRegistration = (
         const childCtx = childContext(spawningCtx, subName);
         const childAgentId = `sub-${subName}-${Date.now()}`;
 
+        // Interpolate declared parameters into the sub-agent's system prompt
+        // and persona fields so a single `withAgentTool` registration can serve
+        // many differently-configured invocations (e.g. review-pr for any repo,
+        // any PR number, any focus area). Follows the same `{{key}}`
+        // convention as the prompts template engine. Missing keys are left as-is.
+        const agentCfg = agentTool.agent!;
+        const interpolatedSystemPrompt = interpolateTemplate(
+          agentCfg.systemPrompt,
+          customArgs,
+        );
+        const interpolatedPersona = agentCfg.persona
+          ? {
+              role: interpolateTemplate(agentCfg.persona.role, customArgs),
+              background: interpolateTemplate(
+                agentCfg.persona.background,
+                customArgs,
+              ),
+              instructions: interpolateTemplate(
+                agentCfg.persona.instructions,
+                customArgs,
+              ),
+              tone: agentCfg.persona.tone,
+              name: agentCfg.persona.name,
+            }
+          : undefined;
+
         const composedSystemPrompt = buildSubAgentSystemPrompt(
-          agentTool.agent!.persona,
+          interpolatedPersona,
           composeSubAgentDirectivePrompt(
-            agentTool.agent!.systemPrompt,
+            interpolatedSystemPrompt,
             getParentContext(),
           ),
           subName,
         );
 
-        const staticAllowed = agentTool.agent!.tools;
-        const staticRequired =
-          staticAllowed && staticAllowed.length > 0
-            ? { tools: [...staticAllowed], adaptive: false, maxRetries: 2 }
+        // Per-call tools override (like spawn-agent's `tools` param). Falls
+        // back to the static `agent.tools` allowlist when not provided.
+        const perCallTools =
+          Array.isArray(args.tools)
+            ? (args.tools as unknown[]).filter(
+                (x): x is string => typeof x === "string",
+              )
+            : undefined;
+        const effectiveAllowed = perCallTools ?? agentCfg.tools;
+        const effectiveRequired =
+          effectiveAllowed && effectiveAllowed.length > 0
+            ? { tools: [...effectiveAllowed], adaptive: false, maxRetries: 2 }
             : undefined;
 
         const busOpt = yield* Effect.serviceOption(EventBus);
@@ -168,14 +243,14 @@ export const createLocalAgentToolRegistration = (
           // run tree). Without it `AgentStarted.agentDisplayName` falls back to
           // "sub-<name>-<epoch>".
           agentDisplayName: subName,
-          provider: (agentTool.agent!.provider ?? "test") as ProviderName,
-          model: agentTool.agent!.model,
-          maxIterations: agentTool.agent!.maxIterations,
+          provider: (agentCfg.provider ?? "test") as ProviderName,
+          model: agentCfg.model,
+          maxIterations: agentCfg.maxIterations,
           systemPrompt: composedSystemPrompt,
           enableReasoning: true,
           enableTools: true,
-          allowedTools: staticAllowed,
-          requiredTools: staticRequired,
+          allowedTools: effectiveAllowed,
+          requiredTools: effectiveRequired,
           sharedEventBus,
         });
 
@@ -226,6 +301,7 @@ export const createLocalAgentToolRegistration = (
               tokensUsed: result.metadata.tokensUsed,
               completionEnvelope: childCompletionEnvelope(result),
             },
+            parentScratchpadWriter,
           );
         }
         const summary = Exit.isInterrupted(exit)

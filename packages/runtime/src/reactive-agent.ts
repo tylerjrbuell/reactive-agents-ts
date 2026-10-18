@@ -315,6 +315,7 @@ export class ReactiveAgent<TOut = unknown> {
          * over this when the caller wants to present a different name than
          * the one the agent was built with.
          */
+        private readonly _scratchpad: Map<string, string> = new Map(),
         private readonly _name?: string,
         /**
          * @internal Default port for `serveA2A()`, from `.withA2A({port})`.
@@ -2884,7 +2885,10 @@ export class ReactiveAgent<TOut = unknown> {
             steps: result.metadata.stepsCount,
             cost: result.metadata.cost,
             reasoningSteps: result.metadata.reasoningSteps,
-            scratchpad: result.metadata.scratchpad,
+            scratchpad: {
+              ...(result.metadata.scratchpad ?? {}),
+              ...Object.fromEntries(this._scratchpad),
+            },
             ...(citationCheck ? { citationCheck } : {}),
         }
     }

@@ -47,6 +47,11 @@ export interface ToolMcpRegistrationsDeps {
   };
   readonly agentId: string;
   readonly getParentContext: () => ParentContext | undefined;
+  /**
+   * Writer for sub-agent scratchpad entries forwarded to the parent.
+   * Writes into the parent's scratchpad store (builder state).
+   */
+  readonly parentScratchpadWriter?: (key: string, value: string) => void;
   readonly parentProvider: ProviderName;
   readonly parentModel?: string;
   readonly parentReasoningOptions?: ReasoningOptions;
@@ -127,6 +132,7 @@ export const buildToolMcpRegistrations = (
               },
               agentId: deps.agentId,
               getParentContext: deps.getParentContext,
+              parentScratchpadWriter: deps.parentScratchpadWriter,
             }),
           );
         }

@@ -45,6 +45,13 @@ export interface AgentInstantiationDeps {
    */
   readonly name?: string;
   /**
+   * Mutable scratchpad store for sub-agent forwarded entries (from `.withAgentTool()`).
+   * The builder owns this map; `parentScratchpadWriter` writes sub-agent entries
+   * into it during execution. After the run, entries appear on `AgentResult.scratchpad`
+   * keyed `sub:<agentName>:<key>`.
+   */
+  readonly scratchpad: Map<string, string>;
+  /**
    * Default port for `ReactiveAgent.serveA2A()`, sourced from `.withA2A({port})`.
    * `.withA2A()` no longer builds a layer (the old wiring never bound a real
    * port or reached the agent) — it now only carries this default.
@@ -176,6 +183,7 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.enableTools,
     deps.runtimeConfig ?? {},
     deps.kernelMetaTools,
+    deps.scratchpad,
     deps.name,
     deps.a2aDefaultPort,
     deps.a2aDefaultBasePath,

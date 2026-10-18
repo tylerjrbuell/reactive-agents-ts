@@ -135,6 +135,7 @@ export interface BuilderState {
   _reasoningOptions?: ReasoningOptions;
   _enableTools: boolean;
   _toolsOptions?: ToolsOptions;
+  _scratchpad: Map<string, string>;
   _resultCompression?: ResultCompressionConfig;
   _requiredToolsConfig?: {
     tools?: readonly string[];

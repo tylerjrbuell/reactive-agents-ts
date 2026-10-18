@@ -5,6 +5,8 @@
  * `.withTools()` (terminal access is `.withTools({ terminal })`),
  * `.withDocuments()`, `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
+import { ToolBuilder, type ToolDefinition } from '@reactive-agents/tools';
+import { Effect } from "effect";
 import type { ReactiveAgentBuilder } from "../../builder.js";
 import type { ToolsOptions } from "../../builder.js";
 import type { RequiredToolsOptions } from "../types.js";
@@ -158,4 +160,45 @@ export const applyWithMetaTools = (
     };
   }
 };
+
+/**
+ * Convert a `ToolBuilder` instance into a `{ definition, handler }` entry
+ * suitable for `.withTools({ tools: [...] })`.
+ *
+ * Wraps the `ToolBuilder` handler (which receives `...args` and returns a
+ * plain value) in the Effect-returning form expected by the tool registry.
+ * Throws if the builder has no `.handler()` configured.
+ *
+ * @example
+ * ```typescript
+ * import { ToolBuilder } from '@reactive-agents/tools';
+ * import { toolBuilderToEntry } from '@reactive-agents/runtime';
+ *
+ * agent.withTools({
+ *   tools: [
+ *     toolBuilderToEntry(
+ *       ToolBuilder.create("ping")
+ *         .description("Echo back the input")
+ *         .param("message", "string", "Message to echo", { required: true })
+ *         .handler(({ message }) => `pong: ${message}`),
+ *     ),
+ *   ],
+ * });
+ * ```
+ */
+export function toolBuilderToEntry(
+  tb: ToolBuilder,
+): { readonly definition: ToolDefinition; readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown, any> } {
+  const built = tb.build();
+  const handler = built.handler;
+  if (!handler) {
+    throw new Error(
+      `ToolBuilder "${built.definition.name}" has no handler — call .handler(fn) before passing to .withTools()`,
+    );
+  }
+  return {
+    definition: built.definition,
+    handler: (args: Record<string, unknown>) => Effect.succeed(handler(args)),
+  };
+}
 

@@ -123,6 +123,8 @@ export type {
   AgentToolOptions,
 } from "./builder.js";
 
+export { toolBuilderToEntry } from "./builder/withers/tools.js";
+
 export type { ChannelsConfig } from "@reactive-agents/channels";
 
 // ─── Streaming ───
