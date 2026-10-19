@@ -1,5 +1,5 @@
 {
   "installDependencies": true,
-  "startCommand": "npm install && npm start",
+  "startCommand": "npm start",
   "openFile": "README.md,.env,src/agent.ts"
 }

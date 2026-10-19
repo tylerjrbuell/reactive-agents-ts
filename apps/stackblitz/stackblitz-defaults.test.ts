@@ -7,7 +7,7 @@ type DemoName =
   | "01-hello-agent"
   | "02-tool-integration"
   | "03-strategy-demo";
-type DemoFile = "src/agent.ts" | "src/env-setup.ts" | ".env.example";
+type DemoFile = "src/agent.ts" | "src/env-setup.ts" | ".env.example" | ".stackblitzrc";
 
 const DEMOS: readonly DemoName[] = [
   "01-hello-agent",
@@ -151,6 +151,22 @@ describe("StackBlitz demo defaults", () => {
 
       expect(source).toContain('from "./env-setup.ts"');
       expect(source).not.toMatch(/from "\.\/env-setup"/);
+    }
+  }, 15000);
+
+  it("lets StackBlitz own the single install (no duplicate npm install)", () => {
+    // installDependencies:true already runs the install; a second
+    // `npm install` in startCommand double-reads the WebContainer cache
+    // (and bypasses StackBlitz's built-in --legacy-peer-deps retry).
+    for (const demo of DEMOS) {
+      const config = JSON.parse(readDemoFile(demo, ".stackblitzrc")) as {
+        installDependencies?: boolean;
+        startCommand?: string;
+      };
+
+      expect(config.installDependencies).toBe(true);
+      expect(config.startCommand).toBe("npm start");
+      expect(config.startCommand).not.toContain("npm install");
     }
   }, 15000);
 });

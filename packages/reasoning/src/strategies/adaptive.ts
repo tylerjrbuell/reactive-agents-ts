@@ -30,6 +30,7 @@ import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { LedgerEntry, LedgerEntryKind } from "../kernel/ledger/run-ledger.js";
 import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
+import { shouldSkipClassifierEvaluation } from "../kernel/capabilities/reflect/strategy-evaluator.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -196,6 +197,25 @@ export const executeAdaptive = (
         totalSteps: 1,
         thought: `[ADAPTIVE] Heuristic: ${selectedStrategy}`,
         kernelPass: "adaptive:heuristic",
+      });
+    } else if (shouldSkipClassifierEvaluation(input.calibration?.classifierReliability)) {
+      // W2d 2.6 — classifier-skip: reliability "low"/"skip" means skip the LLM
+      // classify round-trip entirely and default to the honest reactive strategy.
+      selectedStrategy = "reactive";
+      steps.push(
+        makeStep(
+          "thought",
+          `[ADAPTIVE] Classifier skipped (classifierReliability=${input.calibration?.classifierReliability}); defaulting to reactive (no LLM classify call)`,
+        ),
+      );
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "adaptive",
+        strategy: "adaptive",
+        step: 1,
+        totalSteps: 1,
+        thought: `[ADAPTIVE] Classifier skipped; defaulting to reactive`,
+        kernelPass: "adaptive:classifier-skip",
       });
     } else {
     // ── Analyze task to select strategy ──
