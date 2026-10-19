@@ -46,26 +46,6 @@ export function shouldSkipClassifierEvaluation(
   );
 }
 
-// ── Classifier-skip gate (W2d 2.6) ────────────────────────────────────────────
-//
-// When the model's classifier reliability is measured "low" (or explicitly
-// "skip"), the LLM classify round-trip is skipped entirely — saving a
-// round-trip per the documented calibration contract
-// (AGENTS.md: "When classifier reliability is 'low', the LLM classifier call is
-// skipped entirely"). Mirrors the runtime's tool-relevance classifier
-// ("low" AND "skip" bypass). This is the shared primitive used by the
-// classify call sites in adaptive.ts and kernel/contract/decompose.ts.
-export const CLASSIFIER_SKIP_RELIABILITIES: readonly string[] = ["low", "skip"];
-
-/** True when classifier reliability mandates skipping the LLM classify round-trip. */
-export function shouldSkipClassifierEvaluation(
-  classifierReliability: string | undefined,
-): boolean {
-  return (
-    classifierReliability !== undefined &&
-    CLASSIFIER_SKIP_RELIABILITIES.includes(classifierReliability)
-  );
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
