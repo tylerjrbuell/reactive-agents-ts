@@ -1,12 +1,35 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-17
+updated: 2026-10-19
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## 2026-10-19 — #238 gemini thought streaming + #240 closeout (execute-backlog, providers bundle)
+
+Pass: SCAN (31 open) → #240+#238 picked → cross-package gate descoped → #240 found
+ALREADY FIXED on dev (71a5d4f1, 2026-10-17 bundle never closed its issue → closed with
+evidence comment) → #238 shipped as the code bundle.
+
+- #238 fix: gemini stream loop no longer drops thought:true parts. Routes through the
+  shared `thinking_delta` StreamEvent (parity with local/anthropic) + accumulates
+  `content_complete.thinking`. Gate = model CAPABILITY (`resolveCapability`/supportsThinkingMode),
+  NOT consent — Gemini's `thinkingBudget:0` is advisory (gemini-2.5-class can leak thought
+  parts on non-opted-in streams), so the anthropic consent-gate shape would keep swallowing.
+  Thought text never joins fullContent. `packages/llm-provider/src/providers/gemini.ts`
+  (+31/-2), tests `gemini-stream-thinking.test.ts` (4 cases; 2 native-RED pre-fix).
+- Verification: llm-provider 536 pass/0 fail (baseline 533), build green, typecheck green,
+  cast-ceiling green.
+- PR #253 open against dev (merge = human decision). Plan:
+  wiki/Planning/Implementation-Plans/2026-10-19-providers-gemini-thought.md; retro:
+  wiki/Research/Debriefs/2026-10-19-providers-gemini-thought-execution-debrief.md
+- SCAN lesson (applied to M-SCAN in this skill): `git log --all --oneline --grep=<issue#>`
+  before planning — GH issues can sit open after their fix merges to dev.
 
 ---
 
