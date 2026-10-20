@@ -1,5 +1,5 @@
 {
-  "tests": 10001,
-  "updated": "2026-10-12",
-  "_note": "Latest full bun test run: 9983 pass / 18 fail / 28 skip / 4 todo across 1317 files. The 18 fails are Docker-dependent sandbox tests that fail only because the local Docker daemon is unavailable (they pass when Docker runs) — count is the Docker-healthy total (10001). The count is passing tests only. NOT auto-refreshed by CI; update manually after a full local run when the count moves."
+  "tests": 10428,
+  "updated": "2026-10-20",
+  "_note": "Latest full bun test run (clean CI, PR #253 merge-verification run 39355618181): 10428 pass / 0 fail / 37 skip / 4 todo across 10469 tests in 1379 files, 171.8s. Count is the clean CI pass count (no Docker on CI). The local dev box additionally fails 18 docker-sandbox + 4 telemetry tests when its daemon is wedged or port-0 fetch behaves differently — documented pool, see GH issue #254. NOT auto-refreshed by CI; update manually after a full clean run when the count moves."
 }
