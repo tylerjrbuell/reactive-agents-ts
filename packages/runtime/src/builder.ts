@@ -3,36 +3,30 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 // createRuntime usage extracted to ./builder/build-effect/runtime-construction.ts (W25-B step 7)
 // createLightRuntime is no longer used directly from builder.ts.
-import { durableConfigHash } from './services/run-store.js'
+// build()/buildEffect() bodies extracted to ./builder/build/ (2026-10-20 decomp).
 import type { MCPServerConfig } from './runtime.js'
+import { serializeBuilder } from './builder/to-config.js'
 // MCP toolkit scaffolding (2026-09-19) — type-only import, matching the
 // existing ResultCompressionConfig/RemoteAgentClient style below; the
 // runtime value (`defaultRegistries`) is dynamically imported inside
 // `build()` alongside this file's other `@reactive-agents/tools` runtime
 // access (see tool-mcp-registrations.ts for the established pattern).
 import type { MCPToolkitRequest, MCPVolumeMount, ToolParameter } from '@reactive-agents/tools'
+import { buildAgent } from './builder/build/build-agent.js'
+import { runBuilderBuildEffect } from './builder/build/build-effect.js'
+import { asBuilderState } from './builder/withers/_state.js'
 import {
     defaultTracingConfig,
     deriveGoalAchieved,
-    buildSubAgentSystemPrompt,
 } from './builder/helpers.js'
 
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
-import { serializeBuilder } from './builder/to-config.js'
-import { probeAutoShadow } from './judgment-autoshadow.js'
-import type { HarnessProfilePatch } from './capabilities/profile.js'
-import { composeHealthLayer } from './builder/build-effect/health-layer.js'
-import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
-import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
-import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
-import { setupParentContext } from './builder/build-effect/parent-context.js'
-import { buildToolMcpRegistrations } from './builder/build-effect/tool-mcp-registrations.js'
-import { instantiateAgent } from './builder/build-effect/agent-instantiation.js'
 import {
     reactiveAgentsFromConfig,
     reactiveAgentsFromJSON,
 } from './builder/api-surface.js'
+import type { HarnessProfilePatch } from './capabilities/profile.js'
 import {
     applyReactiveIntelligenceOptions,
     applyMemoryOptions,
@@ -65,11 +59,84 @@ import {
     applyWithReasoning,
     applyWithVerificationStep,
 } from './builder/withers/prompt-reasoning.js'
-import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
-    buildBaseRuntimeAndEngine,
-    type BuilderRuntimeStateView,
-} from './builder/build-effect/runtime-construction.js'
+    applyWithName,
+    applyWithAgentId,
+    applyWithPersona,
+    applyWithEnvironment,
+    applyWithA2A,
+    applyWithGateway,
+    applyWithChannels,
+    applyWithProvider,
+    applyWithAgentTool,
+    applyWithDynamicSubAgents,
+    applyWithRemoteAgent,
+} from './builder/withers/identity-surface.js'
+import {
+    applyWithGuardrails,
+    applyWithVerification,
+    applyWithJudgment,
+    applyWithGrounding,
+    applyWithReceiptSigning,
+    applyWithFabricationGuard,
+    applyWithStallPolicy,
+    applyWithKillSwitch,
+    applyWithBehavioralContracts,
+} from './builder/withers/quality-guardrails.js'
+import {
+    applyWithLongHorizon,
+    applyWithAdaptiveHarness,
+    applyWithModelRouting,
+    applyWithDurableRuns,
+    applyWithUserInteraction,
+    applyWithApprovalPolicy,
+    applyWithContract,
+    applyWithTimeout,
+    applyWithLlmTimeout,
+    applyWithRetryPolicy,
+} from './builder/withers/horizon-contract.js'
+import {
+    applyWithObservability,
+    applyWithoutObservability,
+    applyWithCortex,
+    applyWithStreaming,
+    applyWithLogging,
+    applyWithPrompts,
+    applyWithAudit,
+} from './builder/withers/observability-exporters.js'
+import {
+    applyWithModelPricing,
+    applyWithDynamicPricing,
+    applyWithCircuitBreaker,
+    applyWithoutCircuitBreaker,
+    applyWithRateLimiting,
+    applyWithFallbacks,
+    applyWithLayers,
+    applyWithOpenInference,
+    applyWithReplayLLM,
+    applyWithTracing,
+} from './builder/withers/model-reliability.js'
+import {
+    applyWithCostTracking,
+    applyWithSelfImprovement,
+    applyWithExperienceLearning,
+    applyWithHealthCheck,
+    applyWithMinIterations,
+    applyWithMaxIterations,
+    applyWithTaskContext,
+    applyWithOutputValidator,
+    applyWithCustomTermination,
+    applyWithToolIntent,
+    applyWithSkillPersistence,
+    applyWithSkills,
+} from './builder/withers/capability-progress.js'
+import {
+    applyWithTestScenario,
+    applyWithStrictValidation,
+    applyWithLazyValidation,
+} from './builder/withers/validation-testing.js'
+import type { BuilderRuntimeStateView } from './builder/build-effect/runtime-construction.js'
+import type { RiHooks } from './builder/ri-wiring.js'
 import type { TestTurn, LLMService } from '@reactive-agents/llm-provider'
 import type { TaskContract } from '@reactive-agents/core'
 import type {
@@ -659,47 +726,31 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Set the agent's name — used for identification and logging.
-     *
-     * @param name - Display name for the agent
-     * @returns `this` for chaining
+     * Delegates to `applyWithName` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withName(name: string): this {
-        this._name = name
+        applyWithName(asBuilderState(this), name)
         return this
     }
 
     /**
      * Pin a stable agent identity for this agent.
-     *
-     * When set, `build()` uses this value as the `agentId` instead of generating
-     * a new `${name}-${Date.now()}` ID. All memory and run data keyed on `agentId`
-     * will accumulate across multiple builds that share the same ID.
-     *
-     * @param id - The stable identifier to use (e.g. a UUID or Cortex session ID).
+     * Delegates to `applyWithAgentId` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withAgentId(id: string): this {
-        this._stableAgentId = id
+        applyWithAgentId(asBuilderState(this), id)
         return this
     }
 
     /**
      * Set the agent's persona — a structured way to define behavior and characteristics.
-     *
-     * The persona is composed into the system prompt, providing guidance on role, background,
-     * instructions, and tone. When combined with an explicit system prompt, the persona
-     * is prepended before the custom prompt.
-     *
-     * @param persona - AgentPersona with role, background, instructions, and/or tone
-     * @param persona.name - Display name of the agent (defaults to `.withName()` value). Default: undefined
-     * @param persona.role - What this agent does — injected as the "Role:" section of the system prompt. Default: undefined
-     * @param persona.background - Background context or expertise — injected as the "Background:" section. Default: undefined
-     * @param persona.instructions - Explicit behavioral instructions — injected as the "Instructions:" section. Default: undefined
-     * @param persona.tone - Tone/style guidance (e.g., "professional", "concise", "friendly") — injected as the "Tone:" section. Default: undefined
-     * @returns `this` for chaining
-     * @see {@link AgentPersona} — the full named type with the same field docs.
+     * Delegates to `applyWithPersona` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withPersona(persona: AgentPersona): this {
-        this._persona = persona
+        applyWithPersona(asBuilderState(this), persona)
         return this
     }
 
@@ -722,20 +773,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Add custom environment context injected into the system prompt.
-     *
-     * The framework always injects date, time, timezone, and platform automatically.
-     * Use this to add custom context the agent should know without tool calls.
-     *
-     * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
-     * @returns `this` for chaining
-     * No composable equivalent yet: the `Environment:` block (auto date/time/
-     *   timezone/platform + whatever you pass here) is assembled from a
-     *   separate `environmentContext` channel (assembly/stages/system-prompt.ts),
-     *   not the `input.systemPrompt` that `.compose(h => h.on('prompt.system',
-     *   ...))` sees — that hook cannot see or override this block today.
+     * Delegates to `applyWithEnvironment` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withEnvironment(context: Record<string, string>): this {
-        this._environmentContext = { ...this._environmentContext, ...context }
+        applyWithEnvironment(asBuilderState(this), context)
         return this
     }
 
@@ -743,17 +785,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Enable Agent-to-Agent (A2A) protocol server for remote agent invocation.
-     *
-     * When enabled, the agent exposes a JSON-RPC 2.0 HTTP endpoint at `/.well-known/agent.json`
-     * that allows other agents or services to discover and invoke this agent remotely.
-     *
-     * @param options - A2A configuration
-     * @param options.port - HTTP port for the A2A server. Default: 3000
-     * @param options.basePath - Base path prefix for all A2A routes. Default: "/"
-     * @returns `this` for chaining
+     * Delegates to `applyWithA2A` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withA2A(options?: A2AOptions): this {
-        this._a2aOptions = options ?? { port: 3000 }
+        applyWithA2A(asBuilderState(this), options)
         return this
     }
 
@@ -761,43 +797,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Enable the persistent gateway for autonomous agent behavior.
-     *
-     * Configures heartbeats (adaptive by default), cron schedules, webhook endpoints,
-     * and a composable policy engine. The gateway is deterministic infrastructure —
-     * it only invokes the LLM when intelligence is genuinely needed.
-     *
-     * @param options - Gateway configuration
-     * @param options.timezone - Timezone for cron schedules
-     * @param options.heartbeat - { intervalMs?, policy?, instruction?, maxConsecutiveSkips? }
-     * @param options.crons - Scheduled jobs: { schedule, instruction, agentId?, priority?, timezone?, enabled? }[]
-     * @param options.webhooks - Webhook endpoints: { path, adapter, secret?, events? }[]
-     * @param options.policies - Policy limits: { dailyTokenBudget?, maxActionsPerHour?, heartbeatPolicy?, mergeWindowMs?, requireApprovalFor? }
-     * @param options.persistMemoryAcrossRuns - Share stable agent id across gateway runs for memory continuity
-     * @param options.port - Gateway HTTP server port
-     * @param options.accessControl - Channel access control: { accessPolicy?, allowedSenders?, blockedSenders?, mode?, sessionTtlDays? }
-     * @returns `this` for chaining
+     * Delegates to `applyWithGateway` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withGateway(options?: GatewayOptions): this {
-        this._gatewayOptions = options ?? {}
+        applyWithGateway(asBuilderState(this), options)
         return this
     }
 
     /**
      * Register the external channel layer (`@reactive-agents/channels`) for webhook/bot ingress.
-     *
-     * Adapters are started when {@link ReactiveAgent.start} runs (requires `.withGateway()` so the
-     * gateway policy engine can evaluate inbound channel `GatewayEvent` values.
-     *
-     * @param config - Channel configuration
-     * @param config.adapters - Message channel adapters (webhooks, bot transports)
-     * @param config.triggers - Trigger definitions for channel ingress
-     * @param config.defaultAgent - Default agent config for triggered channels
-     * @param config.sessions - Session settings: { compactionThreshold?, idleTimeoutMs? }
-     * @returns `this` for chaining
-     * Use `GatewayOptions.accessControl` for messaging allowlists — separate from this API.
+     * Delegates to `applyWithChannels` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withChannels(config: ChannelsConfig): this {
-        this._channelsConfig = config
+        applyWithChannels(asBuilderState(this), config)
         return this
     }
 
@@ -805,14 +819,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Register a local agent as a callable tool for real sub-agent delegation.
-     *
-     * The sub-agent runs in an isolated context with its own reasoning loop.
-     * It inherits the parent's provider and model by default but can override them.
-     * Sub-agents do NOT automatically inherit the spawn-agent tool.
-     *
-     * @param name - Name of the tool (how the LLM invokes it)
-     * @param agent - Sub-agent configuration
-     * @returns `this` for chaining
+     * Delegates to `applyWithAgentTool` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withAgentTool(
         name: string,
@@ -830,44 +838,30 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             timeoutMs?: number
         }
     ): this {
-        this._agentTools.push({ name, agent })
+        applyWithAgentTool(asBuilderState(this), name, agent)
         return this
     }
 
     /**
      * Allow this agent to dynamically spawn sub-agents at runtime via the `spawn-agent` tool.
-     *
-     * Sub-agents run in a clean context window (no parent history) using the parent's provider
-     * and model by default. The parent LLM can generate parameters to steer spawned agents.
-     * Recursion depth is capped at 3; spawned agents do NOT inherit the spawn-agent tool
-     * unless explicitly given it.
-     *
-     * @param options - Optional configuration
-     * @param options.maxIterations - Max iterations for spawned agents (default: inherits parent's cap)
-     * @param options.maxRecursionDepth - Max recursion depth for nested spawning (default: 3)
-     * @returns `this` for chaining
+     * Delegates to `applyWithDynamicSubAgents` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withDynamicSubAgents(options?: {
         maxIterations?: number
         maxRecursionDepth?: number
     }): this {
-        this._allowDynamicSubAgents = true
-        this._dynamicSubAgentOptions = options
+        applyWithDynamicSubAgents(asBuilderState(this), options)
         return this
     }
 
     /**
      * Register a remote A2A agent as a callable tool for distributed agent networks.
-     *
-     * The tool invocations are sent as JSON-RPC 2.0 POST requests to the remote agent's
-     * endpoint. Responses are unpacked and returned to the parent agent.
-     *
-     * @param name - Name of the tool (how the LLM invokes it)
-     * @param remoteUrl - Base URL of the remote A2A agent (e.g., `http://localhost:8000`)
-     * @returns `this` for chaining
+     * Delegates to `applyWithRemoteAgent` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withRemoteAgent(name: string, remoteUrl: string): this {
-        this._agentTools.push({ name, remoteUrl })
+        applyWithRemoteAgent(asBuilderState(this), name, remoteUrl)
         return this
     }
 
@@ -906,36 +900,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Set the LLM provider for the agent.
-     *
-     * The `config` argument (OpenAI-compatible endpoint override) applies to
-     * the whole OpenAI-compatible provider family — `"openai"`, `"groq"`,
-     * `"xai"`, and `"litellm"` — which all speak the same Chat Completions
-     * wire protocol. Use it to point at a LiteLLM proxy, a llama.cpp server's
-     * `/v1` API, Deepseek, or any other OpenAI-compatible endpoint at
-     * runtime, without predefining `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc.
-     * Silently ignored for `"anthropic"`, `"gemini"`, and `"ollama"` — those
-     * speak a different wire protocol.
-     *
-     * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, `"groq"`, `"xai"`, or `"test"`
-     * @param config - Optional OpenAI-compatible endpoint override
-     * @param config.baseUrl - Base URL for the OpenAI-compatible endpoint (e.g. `"http://localhost:8080/v1"`)
-     * @param config.apiKey - API key for the endpoint
-     * @param config.headers - Additional HTTP headers to send with requests
-     * @returns `this` for chaining
-     *
-     * @example
-     * ```typescript
-     * agent.withProvider("litellm", {
-     *   baseUrl: "http://localhost:8080/v1", // llama.cpp server
-     *   apiKey: process.env.MY_KEY,
-     *   headers: { "X-Custom": "value" },
-     * })
-     * ```
+     * Delegates to `applyWithProvider` in `builder/withers/identity-surface.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withProvider(provider: ProviderName, config?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> }): this {
-        this._provider = provider
-        this._providerExplicit = true
-        this._providerConfig = config
+        applyWithProvider(asBuilderState(this), provider, config)
         return this
     }
 
@@ -956,27 +925,12 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Persist learned skills across sessions via `@reactive-agents/memory`
-     * `SkillStoreService`.
-     *
-     * Requires memory to be enabled (via `.withMemory()`). When unset, defaults
-     * to `true` when memory is enabled — graduates M6 "learning transfers within
-     * session but doesn't persist" verdict to KEEP by activating the existing
-     * skill-persistence write path in the reactive-intelligence learning engine.
-     *
-     * Without memory, this flag is ignored: `SkillStoreService` is not in the
-     * layer and `agent.skills()` silently returns `[]` via
-     * `Effect.serviceOption` at `reactive-agent.ts:370`.
-     *
-     * @param enabled - When `true` (default), wire `SkillStoreServiceLive`;
-     *                  when `false`, explicitly disable even if memory is on.
-     * @returns `this` for chaining
-     * @see {@link HarnessProfile.intelligent} — composable preset that
-     *   bundles this (`enableSkillPersistence: true`) with compounding
-     *   cross-session learning. `HarnessProfile.lean()` is the opt-out.
+     * Persist learned skills across sessions via `@reactive-agents/memory`.
+     * Delegates to `applyWithSkillPersistence` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withSkillPersistence(enabled: boolean = true): this {
-        this._skillPersistence = enabled
+        applyWithSkillPersistence(asBuilderState(this), enabled)
         return this
     }
 
@@ -1041,16 +995,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Set the maximum number of reasoning iterations the agent can perform.
-     *
-     * Higher values allow more complex reasoning but increase execution time and token cost.
-     * The agent stops earlier if it finds a final answer.
-     *
-     * @param n - Maximum iterations (typically 5-15)
-     * @returns `this` for chaining
-     * @default 10
+     * Delegates to `applyWithMaxIterations` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withMaxIterations(n: number): this {
-        this._maxIterations = n
+        applyWithMaxIterations(asBuilderState(this), n)
         return this
     }
 
@@ -1101,262 +1050,101 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Enable guardrails to protect against injection attacks and PII exposure.
-     *
-     * Optionally provide configuration to toggle individual detectors.
-     *
-     * @param options - Optional guardrail configuration
-     * @param options.injection - Enable prompt injection detection. Default: true
-     * @param options.pii - Enable PII detection and masking. Default: true
-     * @param options.toxicity - Enable toxicity detection. Default: true
-     * @param options.customBlocklist - Custom blocklist of words/phrases (case-insensitive substring match)
-     * @param options.enableJudgmentBattery - Opt-in judgment battery. Default: false
-     * @param options.judgmentStrictness - "additive" | "jev-primary". Default: "additive"
-     * @param options.judgmentActionThreshold - Noul probability to block. Default: 0.7
-     * @param options.judgmentReviewThreshold - Noul probability to review without blocking. Default: 0.4
-     * @param options.screenOutputs - Opt-in output-side judgment screening. Default: false
-     * @returns `this` for chaining
-     * @see {@link GuardrailsOptions} — the full named type with all field docs.
+     * Delegates to `applyWithGuardrails` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withGuardrails(options?: GuardrailsOptions): this {
-        this._enableGuardrails = true
-        if (options) this._guardrailsOptions = options
+        applyWithGuardrails(asBuilderState(this), options)
         return this
     }
 
     /**
      * Enable semantic verification to assess confidence in agent outputs.
-     *
-     * Optionally provide configuration to toggle strategies and set thresholds.
-     *
-     * @param options - Optional verification configuration
-     * @param options.semanticEntropy - Enable semantic entropy estimation. Default: true
-     * @param options.factDecomposition - Enable fact decomposition. Default: true
-     * @param options.multiSource - Enable multi-source verification. Default: false
-     * @param options.selfConsistency - Enable self-consistency checks. Default: true
-     * @param options.nli - Enable natural language inference. Default: true
-     * @param options.hallucinationDetection - Enable hallucination detection. Default: false
-     * @param options.hallucinationThreshold - Hallucination score threshold (0-1). Default: 0.10
-     * @param options.passThreshold - Overall pass threshold (0-1). Default: 0.7
-     * @param options.riskThreshold - Risk threshold below which outputs are flagged (0-1). Default: 0.5
-     * @param options.useLLMTier - Use runtime LLMService for LLM-backed verification. Default: true
-     * @param options.onReject - "block" | "annotate" | "proceed" on rejection. Default: "proceed"
-     * @param options.strictValidation - Promote missing-key/unknown-model checks to hard build errors
-     * @param options.lazyValidation - Keep checks as warnings even under strict validation
-     * @returns `this` for chaining
-     * @see {@link VerificationOptions} — the full named type with all field docs.
-     * @see {@link HarnessProfile.balanced} — composable preset with the
-     *   verifier default-on; `HarnessProfile.lean()` opts out.
+     * Delegates to `applyWithVerification` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withVerification(options?: VerificationOptions): this {
-        this._enableVerification = true
-        if (options) {
-            const { strictValidation, lazyValidation, ...verification } = options
-            this._verificationOptions = verification
-            // Validation-timing folds (audit #10): same slots the standalone
-            // withers set. Only when explicitly provided.
-            if (strictValidation !== undefined) this._strictValidation = strictValidation
-            if (lazyValidation !== undefined) this._lazyValidation = lazyValidation
-        }
+        applyWithVerification(asBuilderState(this), options)
         return this
     }
 
     /**
-     * Enable the optional `JudgmentService` (calibrated Choice/Score/Noul
-     * typed judgments via `@reactive-agents/judgment`). Off by default —
-     * without this call, `JudgmentService` is genuinely absent from the
-     * runtime's Layer graph and every existing harness site takes its
-     * existing regex/heuristic/LLM-classifier path unchanged.
-     *
-     * With it, two things become available:
-     * - `agent.judge({ state, questions })` — the public composable
-     *   primitive for calibrated Choice/Score/Noul questions.
-     * - Per-site opt-ins via `options.sites` (all default off) for later
-     *   internal harness consumers (strategy-selection, task-comprehension,
-     *   guardrail-battery, tool-name-healing) — see
-     *   `wiki/Planning/Implementation-Plans/2026-09-20-typesafe-judgment-layer.md`.
-     *   Nothing reads `sites` yet; setting them today has no effect until
-     *   the corresponding site is wired.
-     *
-     * Backend selection: `"jev"` (calls the TypeSafe API) when `options.apiKey`
-     * or the `TYPESAFE_API_KEY` env var resolves, else `"llm"` (emulates the
-     * primitive over this agent's own configured `LLMService` — uncalibrated,
-     * `calibrated: false` on every answer). Override with `options.backend`.
-     *
-     * @param options - Optional judgment configuration
-     * @param options.apiKey - TypeSafe API key. Falls back to TYPESAFE_API_KEY env var
-     * @param options.baseUrl - Backend base URL override (TypeSafe root or Ollama server root)
-     * @param options.model - Model identifier passed to the backend on each ask() call
-     * @param options.timeoutMs - Per-request timeout in ms. Default: 3000
-     * @param options.defaultConfidenceFloor - Floor applied when consumer doesn't specify minConfidence/minProbability
-     * @param options.backend - Force a backend: "jev" | "llm" | "ollama"
-     * @param options.ollama - Ollama-specific options: { keepAlive }
-     * @param options.sites - Per-site opt-ins for internal harness consumers (all default off)
-     * @returns `this` for chaining
+     * Enable the optional `JudgmentService` (calibrated Choice/Score/Noul.
+     * Delegates to `applyWithJudgment` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withJudgment(options?: JudgmentBuilderOptions): this {
-        this._enableJudgment = true
-        if (options) this._judgmentOptions = options
+        applyWithJudgment(asBuilderState(this), options)
         return this
     }
 
     /**
      * Enable opt-in numeric evidence-grounding. Off by default.
-     *
-     * When on, figures in the final answer are checked against the FULL tool
-     * data (resolved via storedKey to bypass compression) with rounding
-     * tolerance. `mode: "warn"` = advisory; `mode: "block"` = one corrective
-     * retry then degrade to warn (never hard-fails the run).
-     *
-     * @param options - Grounding configuration
-     * @param options.mode - "warn" (advisory) | "block" (one corrective retry then degrade to warn)
-     * @param options.tolerance - Numeric match tolerance as a fraction (rounding). Default: 0.01
-     * @param options.maxRetries - Block mode corrective retries before degrading to warn. Default: 1
-     * @param options.fabricationGuard - Honesty-rails fold: "off" | "warn" | "block"
-     * @param options.stallPolicy - Honesty-rails fold: { ignoredNudgeTolerance, escalateNudgeContent }
-     * @returns `this` for chaining
+     * Delegates to `applyWithGrounding` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
-        const { fabricationGuard, stallPolicy, ...grounding } = options
-        this._groundingConfig = grounding
-        // Honesty-rails umbrella folds (audit #18, Q3): route to the SAME slots
-        // the standalone withers set. Only when explicitly provided — grounding's
-        // opt-in defaults and the guard's always-on default are untouched.
-        if (fabricationGuard !== undefined) this._fabricationGuard = fabricationGuard
-        if (stallPolicy !== undefined) this._stallPolicy = stallPolicy
+        applyWithGrounding(asBuilderState(this), options)
         return this
     }
 
     /**
-     * Opt in to an Ed25519 provenance signature on the trust receipt
-     * (Arc 1 Task 9). Off by default — the receipt is unsigned unless a key
-     * is configured here or via the `RA_RECEIPT_KEY` env var (this option
-     * wins when both are present).
-     *
-     * HONEST-CLAIMS SCOPE: the signature certifies "this receipt, this run,
-     * untampered" — it NEVER certifies the correctness of the agent's
-     * answer. See `TrustReceipt.signature`'s JSDoc in `@reactive-agents/core`.
-     *
-     * @example
-     * ```typescript
-     * const { privateKeyJwk } = await generateReceiptKeyPair();
-     * agent.withReceiptSigning({ privateKeyJwk });
-     * ```
-     * @returns `this` for chaining
+     * Opt in to an Ed25519 provenance signature on the trust receipt.
+     * Delegates to `applyWithReceiptSigning` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withReceiptSigning(options: import('./builder/types.js').ReceiptSigningOptions): this {
-        this._receiptSigningKey = options.privateKeyJwk
+        applyWithReceiptSigning(asBuilderState(this), options)
         return this
     }
 
     /**
-     * Configure the fabrication guard — the always-on verifier check that
-     * rejects invented empirical performance measurements (benchmark timings,
-     * % speed-ups) absent from the tool-observation corpus.
-     *
-     * On by default (`"block"`) — no call needed for protection. Use this only
-     * to soften (`"warn"`, advisory) or disable (`"off"`). High-precision: only
-     * perf measurements are policed; counts, prices, Big-O are ignored, and a
-     * claim grounded by a real benchmark/execution tool always passes.
-     *
-     * Also settable via the `RA_FABRICATION_GUARD` env var (this method wins).
-     *
-     * TWO ENFORCEMENT SITES, different defaults — do not conflate them:
-     *  - the IN-LOOP verifier check described above is on by default (`"block"`,
-     *    env-settable);
-     *  - the TERMINAL grounding check (the strategy result mint) is OPT-IN ONLY.
-     *    It flips a run whose declared required tools never succeeded to
-     *    `status:"failed"` with an honest abstention, and it fires only when this
-     *    method was actually called with `"block"`. An unconfigured run is never
-     *    judged there and stays byte-identical — the env var does not arm it.
-     *
-     * @param mode - `"block"` (default) | `"warn"` | `"off"`
-     * @returns `this` for chaining
+     * Configure the fabrication guard — the always-on verifier check that.
+     * Delegates to `applyWithFabricationGuard` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withFabricationGuard(mode: import('@reactive-agents/reasoning').FabricationGuardMode = 'block'): this {
-        this._fabricationGuard = mode
+        applyWithFabricationGuard(asBuilderState(this), mode)
         return this
     }
 
     /**
-     * Tune the stall / no-progress policy — how the harness reacts when the
-     * model ignores required-tool nudges (makes no progress toward a required
-     * tool across consecutive nudges).
-     *
-     * Sensible defaults apply when unset: tolerate **2** consecutive ignored
-     * nudges before fast-escalating (deliver accumulated artifacts, else fail)
-     * instead of looping to the full nudge cap, and **escalate** the nudge
-     * wording on repeats rather than repeating verbatim. This bounds wasted
-     * iterations/tokens on stuck runs while keeping legitimately-progressing
-     * runs untouched (progress resets the ignored streak).
-     *
-     * @example
-     * ```typescript
-     * agent.withStallPolicy({ ignoredNudgeTolerance: 1 })   // escalate fast
-     * agent.withStallPolicy({ escalateNudgeContent: false }) // stable wording
-     * ```
-     * @returns `this` for chaining
+     * Tune the stall / no-progress policy — how the harness reacts when the.
+     * Delegates to `applyWithStallPolicy` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withStallPolicy(policy: import('@reactive-agents/reasoning').StallPolicy): this {
-        this._stallPolicy = policy
+        applyWithStallPolicy(asBuilderState(this), policy)
         return this
     }
 
     /**
-     * Opt in to the **long-horizon guard profile** (off by default). A mode
-     * toggle — no arguments; the kernel scales its audit-02-#12 guard constants
-     * proportionally to `maxIterations` (via `resolveHorizonProfile`) instead of
-     * using absolute counts, so a run configured for ≥40 iterations of
-     * tool-using work is not tripped by guards tuned for short runs.
-     *
-     * Flows through to `KernelRunOptions.horizonProfile = "long"` (read by the
-     * reasoning kernel). Zero cost when not called: `horizonProfile` stays unset
-     * and behaviour is byte-identical to today.
-     *
-     * Forward note: the Phase 6 policy compiler (plan G1) will subsume this
-     * wither — the `horizonProfile` config field is the durable interface.
-     *
-     * @returns `this` for chaining
+     * Opt in to the **long-horizon guard profile** (off by default). A mode.
+     * Delegates to `applyWithLongHorizon` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withLongHorizon(): this {
-        this._longHorizon = true
+        applyWithLongHorizon(asBuilderState(this))
         return this
     }
 
     /**
-     * Opt in to the **adaptive harness** (off by default) — the Phase 6 policy
-     * compiler (plan G1). A mode toggle, no arguments. When enabled, the kernel
-     * compiles a single `HarnessPlan` at run-start from what the run KNOWS about
-     * itself (the model's capability tier + calibration, the compiled contract's
-     * horizon, and the task classification): strategy, budget class, guard/horizon
-     * profile, tool surface, memory posture. The plan supplies the
-     * DEFAULTS; any explicit wither you set (`.withStrategy`, `.withLongHorizon`,
-     * budget withers, …) OVERRIDES the corresponding plan field. Mid-run, the plan
-     * is recompiled on live progress evidence — DEEPENING scaffolding when the run
-     * struggles (repeated failures / no new evidence) and LEANING when it flows —
-     * each recompile recorded as a ledger `harness-signal`.
-     *
-     * `horizonProfile` becomes a plan output: the compiler sets it to "long" when
-     * `contract.horizon === "long"`; `.withLongHorizon()` still forces it on.
-     *
-     * Flows through to `KernelRunOptions.adaptiveHarness = true`. Zero cost when
-     * not called: no plan is compiled and the config path is byte-identical.
-     *
-     * @returns `this` for chaining
+     * Opt in to the **adaptive harness** (off by default) — the Phase 6 policy.
+     * Delegates to `applyWithAdaptiveHarness` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withAdaptiveHarness(): this {
-        this._adaptiveHarness = true
+        applyWithAdaptiveHarness(asBuilderState(this))
         return this
     }
 
     /**
-     * Opt in to cost-aware model routing (off by default). Routes each run to
-     * the cheapest CAPABLE model of the configured provider, picked by task
-     * complexity. Stays within the provider's tiers; degrades to the configured
-     * model on any routing error.
-     * @returns `this` for chaining
+     * Opt in to cost-aware model routing (off by default). Routes each run to.
+     * Delegates to `applyWithModelRouting` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withModelRouting(options: import('./builder/types.js').ModelRoutingOptions = {}): this {
-        this._modelRouting = options
+        applyWithModelRouting(asBuilderState(this), options)
         return this
     }
 
@@ -1382,70 +1170,38 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Opt in to durable run persistence (off by default).
-     *
-     * When enabled, the runtime generates a stable `runId` for each run,
-     * records it in a SQLite `RunStore` (`runs.db` under `dir`, default
-     * `~/.reactive-agents/<agentId>/`), and persists a lossless serialized
-     * kernel-state snapshot every `checkpointEvery` iterations (default 1).
-     * Writes are fire-and-forget — they never block or fail the run. This is
-     * the write half of crash-resume; Phase C's `resume(runId)` reads these
-     * checkpoints back. Zero cost when not called: no store, no run row, no
-     * db file.
-     *
-     * @param options - Durable run configuration
-     * @param options.dir - Directory for the runs.db SQLite file. Default: ~/.reactive-agents/<agentId>/
-     * @param options.checkpointEvery - Persist a checkpoint every N iterations. Default: 1
-     * @returns `this` for chaining
+     * Delegates to `applyWithDurableRuns` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withDurableRuns(options?: import('./builder/types.js').DurableRunsOptions): this {
-        this._durableRuns = options ?? {}
+        applyWithDurableRuns(asBuilderState(this), options)
         return this
     }
 
     /**
-     * Agentic-UI (Task 11): enable agent-initiated user interaction. When set, the
-     * model may call `request_user_input` to pause the run durably and ask the
-     * human for a form / choice / confirmation; `respondToInteraction` resumes it.
-     * Requires `.withDurableRuns()` — interaction pauses persist to the durable
-     * store. Zero cost when not called.
-     *
-     * @returns `this` for chaining
+     * Agentic-UI (Task 11): enable agent-initiated user interaction. When set, the.
+     * Delegates to `applyWithUserInteraction` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withUserInteraction(): this {
-        this._userInteraction = true
+        applyWithUserInteraction(asBuilderState(this))
         return this
     }
 
     /**
      * Enable cost tracking to monitor token consumption and estimate USD costs.
-     *
-     * Optionally provide budget limits to enforce spending caps.
-     *
-     * @param options - Optional budget limit configuration (USD)
-     * @param options.perRequest - Maximum cost per single LLM request (USD). Default: $1.00
-     * @param options.perSession - Maximum cost per session (USD). Default: $5.00
-     * @param options.daily - Maximum daily spend (USD). Default: $25.00
-     * @param options.monthly - Maximum monthly spend (USD). Default: $200.00
-     * @returns `this` for chaining
-     * Composable equivalent: `.withObservability({ costs: ... })` for the
-     *   tracking, `.withBudget(...)` for spend caps (master plan §11.4).
-     *   Cost tracking also rides the observability stack.
+     * Delegates to `applyWithCostTracking` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withCostTracking(options?: CostTrackingOptions): this {
-        this._enableCostTracking = true
-        if (options) this._costTrackingOptions = options
+        applyWithCostTracking(asBuilderState(this), options)
         return this
     }
 
     /**
      * Sets programmatic pricing for specific models.
-     * Useful for explicitly overriding costs for known or custom models.
-     *
-     * @param registry - Record mapping model IDs to input/output token cost per 1 million tokens
-     * @returns `this` for chaining
-     * The `CapabilityRegistry` also resolves model pricing automatically
-     * from the provider's published rates; use this explicit override for
-     * custom / proxied models whose pricing the registry can't infer.
+     * Delegates to `applyWithModelPricing` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withModelPricing(
         registry: Record<
@@ -1453,104 +1209,65 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             { readonly input: number; readonly output: number }
         >
     ): this {
-        this._pricingRegistry = { ...this._pricingRegistry, ...registry }
+        applyWithModelPricing(asBuilderState(this), registry)
         return this
     }
 
     /**
      * Register a remote/dynamic pricing provider.
-     * Fetches latest pricing data during `.buildEffect()` or `.build()`.
-     *
-     * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
-     * @returns `this` for chaining
-     * Dynamic pricing providers can also register with the
-     * `CapabilityRegistry` directly; this explicit builder wiring is handy
-     * for ad-hoc overrides scoped to a single agent.
+     * Delegates to `applyWithDynamicPricing` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withDynamicPricing(
         provider: import('@reactive-agents/llm-provider').PricingProvider
     ): this {
-        this._pricingProvider = provider
+        applyWithDynamicPricing(asBuilderState(this), provider)
         return this
     }
 
     /**
      * Enable circuit breaker for LLM provider calls.
-     *
-     * After `failureThreshold` consecutive failures, the breaker opens and fast-fails
-     * without hitting the provider. After `cooldownMs`, it enters half-open state
-     * to test if the provider has recovered.
-     *
-     * @param config - Optional circuit breaker thresholds
-     * @param config.failureThreshold - Consecutive failures before opening the breaker. Default: 5
-     * @param config.cooldownMs - Cooldown ms before half-open. Default: 30000
-     * @param config.halfOpenRequests - Requests to allow in half-open state. Default: 1
-     * @returns `this` for chaining
-     * @see {@link HarnessProfile.balanced} — composable preset that ships
-     *   the breaker enabled with sensible thresholds. Use this method (or
-     *   `.compose(...)` / environment config) to override those thresholds.
+     * Delegates to `applyWithCircuitBreaker` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withCircuitBreaker(
         config?: Partial<
             import('@reactive-agents/llm-provider').CircuitBreakerConfig
         >
     ): this {
-        this._circuitBreakerConfig = config ?? {}
+        applyWithCircuitBreaker(asBuilderState(this), config)
         return this
     }
 
     /**
-     * Disable the default-on circuit breaker for non-test providers. Useful for
-     * chaos tests that intentionally fault the provider in tight loops (otherwise
-     * the breaker would trip after 5 consecutive failures and the test would see
-     * fast-fail errors instead of the underlying fault).
-     *
-     * @returns `this` for chaining
-     * @example .withoutCircuitBreaker()
-     * @see {@link HarnessProfile.lean} — composable preset that disables
-     *   registry default-on capabilities (including the breaker) wholesale.
-     *   Use this method when you want to drop only the breaker.
+     * Disable the default-on circuit breaker for non-test providers. Useful for.
+     * Delegates to `applyWithoutCircuitBreaker` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withoutCircuitBreaker(): this {
-        this._circuitBreakerConfig = false
+        applyWithoutCircuitBreaker(asBuilderState(this))
         return this
     }
 
     /**
-     * Enable rate limiting for LLM requests. Throttles outbound API calls using
-     * a sliding window algorithm to prevent 429 errors before they occur.
-     *
-     * Configurable per-minute request limits, per-minute token limits (estimated),
-     * and maximum concurrent in-flight requests.
-     *
-     * @param config - Optional rate limiter thresholds
-     * @param config.requestsPerMinute - Max requests per minute. Default: 60
-     * @param config.tokensPerMinute - Max estimated input tokens per minute. Default: 100000
-     * @param config.maxConcurrent - Max concurrent in-flight requests. Default: 10
-     * @returns `this` for chaining
-     * @example .withRateLimiting({ requestsPerMinute: 30, tokensPerMinute: 50_000 })
-     * Limits are also resolved from provider metadata + `CapabilityRegistry`
-     * defaults; use this explicit override to pin a per-deployment policy.
+     * Enable rate limiting for LLM requests. Throttles outbound API calls using.
+     * Delegates to `applyWithRateLimiting` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withRateLimiting(
         config?: import('@reactive-agents/llm-provider').RateLimiterConfig
     ): this {
-        this._rateLimiterConfig = config ?? {}
+        applyWithRateLimiting(asBuilderState(this), config)
         return this
     }
 
     /**
      * Enable audit logging for compliance and post-execution analysis.
-     *
-     * Audit logs record all phase transitions, tool invocations, and decision points.
-     *
-     * @returns `this` for chaining
-     * Composable equivalent: `.withObservability({ audit: true })` /
-     *   `@reactive-agents/observe` exporters — audit is also a verbosity
-     *   tier on the observability stack.
+     * Delegates to `applyWithAudit` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withAudit(): this {
-        this._enableAudit = true
+        applyWithAudit(asBuilderState(this))
         return this
     }
 
@@ -1726,127 +1443,48 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Enable observability — metrics collection, structured logging, and tracing.
-     *
-     * Automatically displays a metrics dashboard on completion showing execution timeline,
-     * tool usage, costs, and alerts. Configure verbosity and live streaming via options.
-     *
-     * @param options - Observability configuration
-     * @param options.verbosity - "minimal" | "normal" | "verbose" | "debug". Default: "normal"
-     * @param options.live - Stream logs in real-time. Default: false
-     * @param options.file - Path for JSONL file export. Default: undefined
-     * @param options.logModelIO - Log full model prompts and responses. Default: false
-     * @param options.cortex - Cortex event reporting: true or { url }. Default: false
-     * @param options.telemetry - Anonymous telemetry: true or TelemetryConfig. Default: false
-     * @param options.logging - Structured logging: { level?, format?, output?, filePath? }
-     * @param options.tracing - JSONL trace persistence: true | false | { dir? }
-     * @param options.health - Enable health checks. Default: false
-     * @param options.audit - Per-tool-call rationale auditing. Default: false
-     * @param options.costs - Cost tracking: true or CostTrackingOptions. Default: false
-     * @param options.streaming - Event streaming. Default: false
-     * @returns `this` for chaining
-     * @see {@link ObservabilityOptions} — the full named type with all field docs.
+     * Delegates to `applyWithObservability` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withObservability(options?: ObservabilityOptions): this {
-        this._enableObservability = true
-        if (options) {
-            this._observabilityOptions = options
-            // DX wave (v0.12) — fan sub-options out to the same state the
-            // dedicated convenience methods set, so this one method configures
-            // the whole observability stack. Last call wins (a later
-            // `.withCortex()` / `.withObservability({cortex})` overrides).
-            if (options.cortex !== undefined) {
-                this._cortexUrl =
-                    (typeof options.cortex === 'object' ? options.cortex.url : undefined) ??
-                    process.env.CORTEX_URL ??
-                    'http://localhost:4321'
-            }
-            if (options.telemetry !== undefined) {
-                this._telemetryConfig =
-                    typeof options.telemetry === 'object' ? options.telemetry : { mode: 'isolated' }
-            }
-            if (options.logging !== undefined) {
-                this._loggingConfig = options.logging
-            }
-            if (options.tracing !== undefined) {
-                this._tracingConfig =
-                    options.tracing === false
-                        ? null
-                        : { dir: (typeof options.tracing === 'object' ? options.tracing.dir : undefined) ?? `.reactive-agents/traces` }
-            }
-            if (options.health) this._enableHealthCheck = true
-            if (options.audit) this._enableAudit = true
-            if (options.costs !== undefined) {
-                this._enableCostTracking = true
-                if (typeof options.costs === 'object') this._costTrackingOptions = options.costs
-            }
-            // Streaming fold (audit #8): route to the same `_streamDensity` slot
-            // `.withStreaming()` sets (serializes under `features.streaming`).
-            if (options.streaming) this._streamDensity = 'tokens'
-        }
+        applyWithObservability(asBuilderState(this), options)
         return this
     }
 
     /**
      * Disable observability layer wiring and console exporters.
-     *
-     * Use for CI, scripted smoke tests, or hosts that should not print the
-     * metrics dashboard on completion. Tracing remains governed separately by
-     * `.withTracing()` / `.withObservability({ tracing: false })` and
-     * `REACTIVE_AGENTS_TRACE`.
+     * Delegates to `applyWithoutObservability` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withoutObservability(): this {
-        this._enableObservability = false
+        applyWithoutObservability(asBuilderState(this))
         return this
     }
 
     /**
      * Enable Cortex event reporting.
-     *
-     * URL resolution order:
-     * 1) explicit `url` argument
-     * 2) `CORTEX_URL` environment variable
-     * 3) `http://localhost:4321`
-     *
-     * Composable equivalent: `.withObservability({ cortex: { url } })` —
-     *   Cortex is also one of the observability exporters.
+     * Delegates to `applyWithCortex` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withCortex(url?: string): this {
-        this._cortexUrl =
-            url ?? process.env.CORTEX_URL ?? 'http://localhost:4321'
+        applyWithCortex(asBuilderState(this), url)
         return this
     }
 
     /**
      * Configure default streaming density for `agent.runStream()` calls.
-     *
-     * @param options.density - `"tokens"` (default) for TextDelta only, `"full"` for all events
-     * @returns `this` for chaining
-     * Per-call equivalent: pass `density` directly to
-     *   `agent.runStream({ density })`. Use this method to set a build-time
-     *   default that every `runStream()` call inherits.
+     * Delegates to `applyWithStreaming` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withStreaming(options?: { density?: StreamDensity }): this {
-        this._streamDensity = options?.density ?? 'tokens'
+        applyWithStreaming(asBuilderState(this), options)
         return this
     }
 
     /**
      * Configure structured logging with level filtering, format selection, and output routing.
-     *
-     * The logger filters by the configured level and formats messages as plain text or JSON.
-     * Output can be routed to console, files (with rotation), or custom WritableStream.
-     *
-     * @param config - Logging configuration
-     * @param config.level - Minimum log level: "debug" | "info" | "warn" | "error" (default: "info")
-     * @param config.format - Output format: "text" | "json" (default: "text")
-     * @param config.output - Output destination: "console" | "file" | WritableStream (default: "console")
-     * @param config.filePath - File path for file output (required when output: "file")
-     * @param config.maxFileSizeBytes - Max file size before rotation (default: 10MB)
-     * @param config.maxFiles - Max rotated files to keep (default: 5)
-     * @returns `this` for chaining
-     * Composable equivalent: `.withObservability({ logging: ... })` —
-     *   structured logging is also a verbosity tier on the observability
-     *   stack.
+     * Delegates to `applyWithLogging` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withLogging(config: {
         level?: 'debug' | 'info' | 'warn' | 'error'
@@ -1856,138 +1494,69 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         maxFileSizeBytes?: number
         maxFiles?: number
     }): this {
-        this._loggingConfig = config
+        applyWithLogging(asBuilderState(this), config)
         return this
     }
 
     /**
      * Configure durable human-in-the-loop approval gates (Phase D).
-     *
-     * In `mode: "detach"` (the default when `.withDurableRuns()` is set), a tool
-     * call named in `tools` — or matched by `requireFor` — pauses the run on the
-     * `runStream()` path: the engine persists `awaiting-approval` plus the pending
-     * action and the stream completes with `pendingApproval`. A human then calls
-     * `agent.approveRun(runId)` / `agent.denyRun(runId, reason)` from ANY process,
-     * which resumes the run from its checkpoint to completion.
-     *
-     * `mode: "detach"` requires `.withDurableRuns()` (detached pauses need a
-     * durable store).
-     *
-     * `mode: "block"` (the default when durable runs are OFF) decides each gated
-     * call IN PROCESS via the `onApprove` callback, without pausing. **Supply
-     * `onApprove`, or every gated call is DENIED** — the tool does not run and
-     * the model sees an honest refusal. (Through v0.14.0, `mode: "block"`
-     * silently executed gated tools with no decision — an inert safety switch;
-     * it now fails closed.)
-     *
-     * @example
-     * ```typescript
-     * agent.withApprovalPolicy({
-     *   tools: ["shell-execute"],
-     *   onApprove: async ({ toolName, args }) => ({
-     *     approve: await promptHuman(`Run ${toolName}?`, args),
-     *   }),
-     * })
-     * ```
-     *
-     * @param policy - Approval policy configuration
-     * @param policy.tools - Tool names whose calls must be approved
-     * @param policy.requireFor - Predicate: return true to require approval for this call
-     * @param policy.mode - "detach" (durable pause) or "block" (in-process decision)
-     * @param policy.onApprove - In-process decider for block mode: return true/{approve:true} to run, false/{approve:false} to deny
-     * @returns `this` for chaining
+     * Delegates to `applyWithApprovalPolicy` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withApprovalPolicy(policy: import('./builder/types.js').ApprovalPolicyConfig): this {
-        this._approvalPolicy = policy
+        applyWithApprovalPolicy(asBuilderState(this), policy)
         return this
     }
 
     /**
      * Enable the prompt template service for prompt management and A/B experiments.
-     *
-     * Allows registering and selecting from a library of prompts, with support for
-     * model-tier-specific variants and experiment tracking.
-     *
-     * @param options - Custom prompt template definitions
-     * @param options.templates - Array of custom prompt templates to register (id, content, optional tier)
-     * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))` /
-     *   the `@reactive-agents/prompts` template registry — prompt templates
-     *   also flow through the compose chokepoint.
+     * Delegates to `applyWithPrompts` in `builder/withers/observability-exporters.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withPrompts(options?: PromptsOptions): this {
-        this._enablePrompts = true
-        if (options) this._promptsOptions = options
+        applyWithPrompts(asBuilderState(this), options)
         return this
     }
 
     /**
      * Enable the kill switch service — allows pausing, resuming, stopping, and terminating agents.
-     *
-     * Provides fine-grained control over agent execution at phase boundaries.
-     * Required for `.pause()`, `.resume()`, `.stop()`, and `.terminate()` methods on ReactiveAgent.
-     *
-     * @returns `this` for chaining
-     * Composable equivalent: the 5 shipped killswitches (master plan §11.4 —
-     *   `budgetLimit`, `maxIterations`, `timeoutAfter`, `watchdog`,
-     *   `requireApprovalFor`) via `.compose(killSwitch(...))`.
-     *   Note: `confidenceFloor` was unshipped 2026-05-19 (Tier 0 honesty sweep,
-     *   GH #160) — verify-phase killswitches cannot fire at runtime per the
-     *   compose pipeline contract; see `packages/compose/test/killswitches.test.ts`.
+     * Delegates to `applyWithKillSwitch` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withKillSwitch(): this {
-        this._enableKillSwitch = true
+        applyWithKillSwitch(asBuilderState(this))
         return this
     }
 
     /**
      * Enable behavioral contracts — enforce constraints on tool usage, outputs, and iterations.
-     *
-     * Contracts can enforce that certain tools must/must not be used, iterations cannot exceed
-     * a threshold, or output must conform to specific patterns. Violations trigger guardrail violations.
-     *
-     * @param contract - Behavioral contract specification
-     * @returns `this` for chaining
-     * Composable equivalent: `.withGuardrails(...)` +
-     *   `.compose(h => h.before('act', ...))` — behavioural contracts also
-     *   compose from guardrails plus the pre-act chokepoint.
+     * Delegates to `applyWithBehavioralContracts` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withBehavioralContracts(
         contract: import('@reactive-agents/guardrails').BehavioralContract
     ): this {
-        this._enableBehavioralContracts = true
-        this._behavioralContract = contract
+        applyWithBehavioralContracts(asBuilderState(this), contract)
         return this
     }
 
     /**
      * Enable cross-task self-improvement — the agent learns from past execution outcomes.
-     *
-     * Requires memory tier 2. When enabled, the agent logs which reasoning strategies
-     * succeeded or failed on similar tasks and biases future strategy selection toward
-     * strategies with higher success rates.
-     *
-     * @returns `this` for chaining
-     * @see {@link HarnessProfile.intelligent} — composable preset that
-     *   bundles this into the compounding cross-session learning surface.
+     * Delegates to `applyWithSelfImprovement` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withSelfImprovement(): this {
-        this._enableSelfImprovement = true
+        applyWithSelfImprovement(asBuilderState(this))
         return this
     }
 
     /**
      * Enable ExperienceStore cross-agent learning.
-     *
-     * Records tool-use patterns and queries them at bootstrap to surface tips from
-     * prior runs. Tips are injected into the execution context as `experienceTips`.
-     *
-     * @returns `this` for chaining
-     * @see {@link HarnessProfile.intelligent} — composable preset that
-     *   bundles this into the cross-agent learning surface.
+     * Delegates to `applyWithExperienceLearning` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withExperienceLearning(): this {
-        this._enableExperienceLearning = true
+        applyWithExperienceLearning(asBuilderState(this))
         return this
     }
 
@@ -2187,131 +1756,73 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Configure a deterministic multi-turn scenario for the test LLM provider.
-     *
-     * Turns are consumed sequentially. Each turn produces one LLM response:
-     * - `{ text: "..." }` — plain text, stopReason: "end_turn"
-     * - `{ toolCall: { name, args } }` — single tool call, stopReason: "tool_use"
-     * - `{ toolCalls: [...] }` — parallel tool calls, stopReason: "tool_use"
-     * - `{ json: value }` — structured output for completeStructured(), stopReason: "end_turn"
-     * - `{ error: "message" }` — throws with that message
-     *
-     * Add `match?: string` to any turn to guard it with a regex — the turn is only
-     * consumed when the LLM input matches the pattern. End scenarios with an
-     * unconditional turn as catch-all. The last turn repeats when exhausted.
-     *
-     * Automatically sets the provider to "test".
-     *
-     * @param turns - Array of test turns to consume sequentially
-     * @returns `this` for chaining
+     * Delegates to `applyWithTestScenario` in `builder/withers/validation-testing.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withTestScenario(turns: TestTurn[]): this {
-        this._testScenario = turns
-        this._provider = 'test'
-        this._providerExplicit = true
+        applyWithTestScenario(asBuilderState(this), turns)
         return this
     }
 
     // ─── Build Options ───
 
     /**
-     * Enable strict build-time validation. Missing API keys and model/provider
-     * mismatches become hard errors instead of warnings.
-     *
-     * Equivalent env config: `REACTIVE_AGENTS_STRICT_VALIDATION=1`.
-     *   `HarnessProfile.balanced()` also enables strict build defaults.
+     * Enable strict build-time validation. Missing API keys and model/provider.
+     * Delegates to `applyWithStrictValidation` in `builder/withers/validation-testing.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withStrictValidation(): this {
-        this._strictValidation = true
+        applyWithStrictValidation(asBuilderState(this))
         return this
     }
 
     /**
-     * Force the missing-API-key and unknown-for-provider-model checks to stay
-     * warnings even under {@link withStrictValidation} (lazy mode).
-     *
-     * By default `build()` already warns (not throws) on a missing key or an
-     * unknown-for-provider model and succeeds — the clean typed failure then
-     * surfaces at run() time. {@link withStrictValidation} promotes those two
-     * gates to hard build errors; call this to keep them as warnings even when
-     * strict is on (useful when keys are injected after construction, or in
-     * tooling that constructs many configs eagerly). Keyless providers
-     * (`ollama`, `test`) are exempt from the key gate regardless.
-     *
-     * Equivalent env config: `REACTIVE_AGENTS_LAZY_VALIDATION=1`.
+     * Force the missing-API-key and unknown-for-provider-model checks to stay.
+     * Delegates to `applyWithLazyValidation` in `builder/withers/validation-testing.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withLazyValidation(): this {
-        this._lazyValidation = true
+        applyWithLazyValidation(asBuilderState(this))
         return this
     }
 
     /**
      * Declare a {@link TaskContract} the agent must satisfy at build time.
-     *
-     * `build()` validates the contract against the statically-knowable
-     * exposed-tool set and the resolved model capability:
-     *   - every `required` tool must be exposed to the agent;
-     *   - every `forbidden` tool must be absent;
-     *   - the resolved capability must meet `modelFloor` (window / thinking /
-     *     nativeFC).
-     *
-     * Violations route through the SAME build-validation errors/warnings path
-     * as missing-API-key and capability-source checks: with
-     * `.withStrictValidation()` they are hard errors (build throws); otherwise
-     * they are warnings. When MCP servers are configured, a missing `required`
-     * tool is downgraded to a warning (MCP tools are discovered at connect
-     * time and cannot be verified statically).
-     *
-     * Build-time enforcement only — threading the contract into the kernel at
-     * execute-time is a separate slice.
-     *
-     * @returns `this` for chaining
+     * Delegates to `applyWithContract` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withContract(contract: TaskContract): this {
-        this._taskContract = contract
+        applyWithContract(asBuilderState(this), contract)
         return this
     }
 
     /**
-     * Set a timeout for agent execution. If the agent doesn't complete within
-     * this duration, execution is aborted and an error is thrown.
-     * @param ms - Timeout in milliseconds
-     * @example .withTimeout(30_000) // 30 seconds
+     * Set a timeout for agent execution. If the agent doesn't complete within.
+     * Delegates to `applyWithTimeout` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withTimeout(ms: number): this {
-        this._executionTimeoutMs = ms
+        applyWithTimeout(asBuilderState(this), ms)
         return this
     }
 
     /**
-     * Set the per-LLM-call timeout for local (Ollama) providers. This bounds a
-     * single provider request — distinct from {@link withTimeout}, which bounds
-     * the *whole agent run* (all iterations combined).
-     *
-     * Provider-scoped: only Ollama/local honors this (maps to
-     * `LLMConfig.ollamaTimeoutMs`, consumed in the local provider's request
-     * timeout resolution `request.timeoutMs → ollamaTimeoutMs → default`).
-     * Hosted providers (Anthropic/OpenAI/Gemini) ignore it. Equivalent to the
-     * `OLLAMA_TIMEOUT_MS` env var, but scoped to this agent.
-     *
-     * @param ms - Per-call timeout in milliseconds
-     * @example .withLlmTimeout(600_000) // tolerate a 10-min cold model load
+     * Set the per-LLM-call timeout for local (Ollama) providers. This bounds a.
+     * Delegates to `applyWithLlmTimeout` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withLlmTimeout(ms: number): this {
-        this._ollamaTimeoutMs = ms
+        applyWithLlmTimeout(asBuilderState(this), ms)
         return this
     }
 
     /**
-     * Configure retry policy for LLM calls. When an LLM call fails with a
-     * transient error (rate limit, network), it will be retried with exponential backoff.
-     * @param policy.maxRetries - Maximum number of retries (default: 0 = no retries)
-     * @param policy.backoffMs - Base backoff duration in milliseconds (doubled each retry)
-     * @example .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
-     * The default retry policy also resolves from `CapabilityRegistry`; use
-     * this explicit override to pin a per-deployment policy.
+     * Configure retry policy for LLM calls. When an LLM call fails with a.
+     * Delegates to `applyWithRetryPolicy` in `builder/withers/horizon-contract.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withRetryPolicy(policy: { maxRetries: number; backoffMs: number }): this {
-        this._retryPolicy = policy
+        applyWithRetryPolicy(asBuilderState(this), policy)
         return this
     }
 
@@ -2341,44 +1852,31 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Enable health checks for this agent.
-     *
-     * Adds an `agent.health()` method that returns the current health status
-     * with individual check results. Useful for Kubernetes liveness/readiness probes.
-     *
-     * @returns `this` for chaining
-     * Composable equivalent: `.withObservability({ health: true })` —
-     *   health checks also ride the observability stack.
+     * Delegates to `applyWithHealthCheck` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withHealthCheck(): this {
-        this._enableHealthCheck = true
+        applyWithHealthCheck(asBuilderState(this))
         return this
     }
 
     /**
      * Require at least N iterations before the agent can declare success.
-     * Blocks the fast-path and hides the final-answer tool until the minimum
-     * is reached. Only iterations that include at least one tool call count.
-     * @param n - Minimum number of iterations required
-     * @returns `this` for chaining
-     * Composable equivalent: the `.compose(...)` minimum-iteration
-     *   killswitch variant.
+     * Delegates to `applyWithMinIterations` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withMinIterations(n: number): this {
-        this._minIterations = n
+        applyWithMinIterations(asBuilderState(this), n)
         return this
     }
 
     /**
      * Provide background data injected into the reasoning memory context.
-     * Unlike systemPrompt (instructions), taskContext is treated as grounding
-     * data — facts about the current task, project, or environment.
-     * @param context - Key-value pairs injected as a "Task Context" section
-     * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))`
-     *   with task-context formatting.
+     * Delegates to `applyWithTaskContext` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withTaskContext(context: Record<string, string>): this {
-        this._taskContext = context
+        applyWithTaskContext(asBuilderState(this), context)
         return this
     }
 
@@ -2400,58 +1898,35 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Validate the final output before accepting it. If validation fails, the
-     * feedback is injected as context and the agent retries (up to maxRetries times).
-     * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
-     * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
-     * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.before('finalize', validatorFn))`
-     *   on the output-assembly chokepoint.
+     * Validate the final output before accepting it. If validation fails, the.
+     * Delegates to `applyWithOutputValidator` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withOutputValidator(
         validator: (output: string) => { valid: boolean; feedback?: string },
         options?: { maxRetries?: number }
     ): this {
-        this._outputValidator = validator
-        this._outputValidatorOptions = options
+        applyWithOutputValidator(asBuilderState(this), validator, options)
         return this
     }
 
     /**
-     * Provide a custom termination predicate. After each reasoning result, this
-     * function is called with the output. If it returns false, the agent re-runs
-     * with the prior output as context, up to 3 additional times.
-     * @param fn - Predicate receiving { output: string }; return true to accept the result
-     * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.on('arbitrator.decide', fn))`
-     *   — termination predicates also compose through the arbitrator
-     *   chokepoint.
+     * Provide a custom termination predicate. After each reasoning result, this.
+     * Delegates to `applyWithCustomTermination` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withCustomTermination(fn: (state: { output: string }) => boolean): this {
-        this._customTermination = fn
+        applyWithCustomTermination(asBuilderState(this), fn)
         return this
     }
 
     /**
      * Override `agent.chat()`'s automatic tool-need detection for this agent.
-     *
-     * By default, `chat()` routes each message through the built-in
-     * `requiresTools()` heuristic (`chat.ts`) to decide between the direct-LLM
-     * path and the tool-capable path. That heuristic is domain-agnostic and can
-     * misclassify messages whose phrasing is common in one agent's domain but
-     * ambiguous in general (e.g. "tell me about X" defaults to chat-only, but
-     * for an agent whose "X" is always a live lookup, that's a false negative).
-     * Use this to replace the default classifier for every `chat()` call on
-     * this agent, without having to reimplement or fork the whole heuristic.
-     *
-     * Precedence per call: explicit `chat(msg, { useTools })` always wins,
-     * then this agent-level classifier (if set), then the default
-     * `requiresTools()`.
-     * @param classifier - Receives the raw chat message; return true to route to the tool-capable path
-     * @returns `this` for chaining
+     * Delegates to `applyWithToolIntent` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withToolIntent(classifier: (message: string) => boolean): this {
-        this._toolIntentClassifier = classifier
+        applyWithToolIntent(asBuilderState(this), classifier)
         return this
     }
 
@@ -2492,48 +1967,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Register Living Skills directories. Each path must contain subfolders
-     * with a `SKILL.md` (agentskills.io layout); matching skills are resolved
-     * per task and injected as `<available_skills>`.
-     *
-     * `paths` is REQUIRED and must be non-empty — a path-less call has no
-     * effect, so it throws instead of silently no-opping (v0.14, DEBT-REGISTER
-     * P0-10). The former `packages` / `evolution` / `overrides` keys were
-     * accepted-but-ignored and were removed in v0.14; passing them throws.
-     *
-     * @param config.paths - Skill directories to resolve from (non-empty)
-     * @param config.activate - Skill names to ALWAYS load: their full
-     *   instructions are injected into the agent's context at bootstrap so the
-     *   procedure is present before it acts, instead of being merely
-     *   discoverable. Task-relevant skills are also auto-activated; this is the
-     *   deterministic override.
-     * @see {@link HarnessProfile.intelligent} — composable preset where
-     *   skills graduate as part of the compounding-intelligence stack.
+     * Register Living Skills directories. Each path must contain subfolders.
+     * Delegates to `applyWithSkills` in `builder/withers/capability-progress.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withSkills(config: {
         paths: readonly string[]
         activate?: readonly string[]
     }): this {
-        const cfg = config as {
-            paths?: readonly string[]
-            activate?: readonly string[]
-        } & Record<string, unknown>
-        for (const removed of ['packages', 'evolution', 'overrides']) {
-            if (cfg && removed in cfg) {
-                throw new Error(
-                    `.withSkills({ ${removed} }) was a no-op (the key was accepted but never read) and was removed in v0.14; see DEBT-REGISTER P0-10. Pass { paths: [...] } only.`
-                )
-            }
-        }
-        if (!cfg?.paths?.length) {
-            throw new Error(
-                '.withSkills() requires { paths: [...] } with at least one skill directory — a path-less call was a silent no-op and now throws (v0.14, DEBT-REGISTER P0-10).'
-            )
-        }
-        this._skillsConfig = {
-            paths: [...cfg.paths],
-            ...(cfg.activate?.length ? { activate: [...cfg.activate] } : {}),
-        }
+        applyWithSkills(asBuilderState(this), config)
         return this
     }
 
@@ -2551,27 +1993,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Configure provider fallbacks for graceful degradation.
-     *
-     * The providers are tried in order: the primary first, then each fallback
-     * on ANY error, until one succeeds or all are exhausted. Each real switch
-     * emits a `ProviderFallbackActivated` event.
-     *
-     * NOTE: this is an IMMEDIATE cascade — the first error on a provider moves to
-     * the next. There is no consecutive-error threshold and no per-model
-     * (cheaper-model-on-429) chain; those options were removed in v0.14 (P0-3)
-     * because they were never wired. Model fallback within a provider is not
-     * supported here — configure distinct providers instead.
-     *
-     * @param config - `{ providers }`: ordered provider names (primary first).
-     * @param config.providers - Ordered provider names to try on failure (primary first).
-     * @returns `this` for chaining
-     * Fallback order also resolves from `CapabilityRegistry` provider tiers;
-     * use this explicit override to pin a multi-provider deployment chain.
+     * Delegates to `applyWithFallbacks` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withFallbacks(config: {
         providers?: string[]
     }): this {
-        this._fallbackConfig = config
+        applyWithFallbacks(asBuilderState(this), config)
         return this
     }
 
@@ -2579,100 +2007,41 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Compose additional Effect-TS layers into the runtime.
-     *
-     * Advanced feature for adding custom services or dependencies.
-     * Layers are merged into the main runtime layer stack.
-     *
-     * Does NOT reach `LLMService`: this merges at terminal composition and only
-     * overrides late-bound tags, but `LLMService` is captured upstream of that,
-     * at construction time, for every builder (kernel arm, since Move 1,
-     * 2026-08-13). A layer providing `LLMService` here silently binds nothing —
-     * the real configured provider still answers every call. Use
-     * `withReplayLLM()` to override `LLMService` (e.g. for deterministic
-     * replay/recording in tests).
-     *
-     * @param layers - Effect-TS Layer(s) to add
-     * @returns `this` for chaining
+     * Delegates to `applyWithLayers` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withLayers(layers: Layer.Layer<never, unknown, unknown>): this {
-        this._extraLayers = layers
+        applyWithLayers(asBuilderState(this), layers)
         return this
     }
 
     /**
      * Export OpenInference spans for this agent's runs (Wave 6.7).
-     *
-     * One glue over the existing `OpenInferenceTracerLayer`: subscribes the
-     * agent's EventBus to an OpenTelemetry tracer with OpenInference semantic
-     * attributes (agent/LLM/tool spans). Merges with any `.withLayers()` layers
-     * rather than replacing them.
-     *
-     * Destination is configured once per process, NOT per agent — via
-     * `setupOpenInferenceExporter()` or the standard
-     * `OTEL_EXPORTER_OTLP_ENDPOINT` env var (see `@reactive-agents/observe`).
-     * There is deliberately no `endpoint` option here: exporter setup
-     * registers a process-global provider, so per-agent endpoints would stack
-     * providers and leak exporters. Without a configured exporter the spans
-     * still build against the global tracer (observable via any registered
-     * provider, e.g. an in-memory exporter in tests).
-     *
-     * Ordering vs `.withLayers()`: this wither MERGES into any existing
-     * extra layers, but `.withLayers()` ASSIGNS (replaces). Call
-     * `.withOpenInference()` AFTER `.withLayers()` to keep both; the reverse
-     * order drops the tracer layer. Idempotent — calling twice subscribes once.
-     *
-     * @returns `this` for chaining
+     * Delegates to `applyWithOpenInference` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withOpenInference(): this {
-        // Idempotent: a second call is a no-op (merging the same layer twice
-        // would double-subscribe EventBus → duplicate spans).
-        if (this._openInferenceAdded === true) return this
-        this._openInferenceAdded = true
-        this._extraLayers = this._extraLayers
-            ? Layer.mergeAll(this._extraLayers, OpenInferenceTracerLayer)
-            : OpenInferenceTracerLayer
+        applyWithOpenInference(asBuilderState(this))
         return this
     }
 
     /**
-     * Replace the base LLMService the whole runtime builds on (reasoning,
-     * engine, memory) with a custom layer — the deterministic-replay keystone.
-     *
-     * Unlike `withLayers()`, which merges at the terminal composition and so
-     * can only override late-bound tags (ToolService), this swaps in upstream
-     * of every consumer that captures LLMService at construction. Pass a replay
-     * LLM layer to run the entire harness against recorded model responses with
-     * no live provider.
-     *
-     * @param layer - an Effect Layer providing LLMService, with no unresolved
-     * requirements or errors — it must be able to run standalone as the
-     * whole-runtime replacement for the base `LLMService` layer.
+     * Replace the base LLMService the whole runtime builds on (reasoning.
+     * Delegates to `applyWithReplayLLM` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withReplayLLM(layer: Layer.Layer<LLMService>): this {
-        this._llmOverrideLayer = layer
+        applyWithReplayLLM(asBuilderState(this), layer)
         return this
     }
 
     /**
      * Enable JSONL trace persistence.
-     *
-     * Each run writes a `<runId>.jsonl` file to `dir` containing all trace events
-     * (entropy scores, reactive decisions, strategy switches).
-     *
-     * @param opts.dir - Directory to write JSONL files (default: `~/.reactive-agents/traces` —
-     *   same canonical location `defaultTracingConfig()` uses when tracing is
-     *   left on its implicit default, and the one `rax diagnose` reads by
-     *   default. Previously defaulted to the cwd-relative `.reactive-agents/traces`,
-     *   which silently diverged from that location — every trace written by an
-     *   explicit `.withTracing()` call was invisible to `rax diagnose` unless
-     *   the agent happened to run from the CLI's own cwd. Fixed 2026-09-04.)
-     *
-     * Composable equivalent: `.withObservability({ tracing: { dir } })` or
-     *   the `REACTIVE_AGENTS_TRACE` env config (process-wide) — tracing also
-     *   rides the observability stack.
+     * Delegates to `applyWithTracing` in `builder/withers/model-reliability.ts` (#218 decomp) —
+     * full public-contract JSDoc moved verbatim there.
      */
     withTracing(opts: { dir?: string } = {}): this {
-        this._tracingConfig = { dir: opts.dir ?? join(homedir(), '.reactive-agents', 'traces') }
+        applyWithTracing(asBuilderState(this), opts)
         return this
     }
 
@@ -2696,226 +2065,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     /**
      * Build and instantiate the agent (simple async version).
      *
-     * Validates configuration, creates layers, and returns a ready-to-use ReactiveAgent.
-     * Throws an error if required API keys are missing.
+     * Delegates to `builder/build/build-agent.ts` (moved for #218 / HS-248) —
+     * see `buildAgent` there for the orchestration body, moved verbatim.
+     * Validates configuration, creates layers, and returns a ready-to-use
+     * ReactiveAgent.
      *
      * @returns Promise resolving to a ReactiveAgent instance
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent<TOut>> {
-        // Wave 7.1 auto-shadow: shadow sites sample nothing without a wired
-        // JudgmentService, so a default-off world never accumulates inversion
-        // traffic. When the user did not opt into judgment AND did not opt
-        // out (REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
-        // Ollama backend: shadow events fire, decisions are never consumed.
-        // Keyless-safe: unreachable server or any error = no service, build
-        // proceeds unchanged. Explicit `.withJudgment()` always wins (this
-        // branch only runs when it was never called).
-        if (!this._enableJudgment) {
-            const auto = await probeAutoShadow()
-            if (auto !== undefined) {
-                this._enableJudgment = true
-                this._judgmentOptions = { backend: auto.backend, baseUrl: auto.baseUrl }
-                this._judgmentShadowDbPath =
-                    process.env.REACTIVE_AGENTS_SHADOW_DB ??
-                    join(homedir(), ".reactive-agents", "judgment-shadow.db")
-            }
-        }
-        // Wave 6.1: gateway-declared approvals join the kernel approval
-        // policy HERE (not in withGateway/withApprovalPolicy) so the merge is
-        // order-independent — whichever wither runs last must not silently
-        // drop a safety list. Gateway only ADDS tools (union); an explicit
-        // policy keeps its mode/decider, and gateway-only runs get block mode
-        // via the existing default below. Before this the gateway
-        // `policies.requireApprovalFor` field had zero consumers.
-        const gatewayGated = this._gatewayOptions?.policies?.requireApprovalFor ?? []
-        if (gatewayGated.length > 0) {
-            const prior = this._approvalPolicy?.tools ?? []
-            this._approvalPolicy = {
-                ...this._approvalPolicy,
-                tools: [...new Set([...prior, ...gatewayGated])],
-            }
-        }
-        // Durable HITL (Phase D): a detached approval pause needs a durable store
-        // to persist it. Guard early so misconfiguration fails fast.
-        if (this._approvalPolicy) {
-            const approvalMode =
-                this._approvalPolicy.mode ?? (this._durableRuns ? 'detach' : 'block')
-            if (approvalMode === 'detach' && !this._durableRuns) {
-                throw new Error(
-                    ".withApprovalPolicy({ mode: 'detach' }) requires .withDurableRuns() — " +
-                        'detached approval pauses need a durable store to persist them.',
-                )
-            }
-        }
-
-        // Agentic-UI (Task 11): request_user_input pauses persist to the durable
-        // store, so .withUserInteraction() requires .withDurableRuns(). Mirror of
-        // the approval-detach guard above — fail fast on misconfiguration.
-        if (this._userInteraction && !this._durableRuns) {
-            throw new Error(
-                '.withUserInteraction() requires .withDurableRuns() — interaction pauses persist to the durable store.',
-            )
-        }
-
-        // Durable checkpoint hardening (Arc 1 Task 4): `.withDurableRuns()`
-        // writes a run row unconditionally, but per-iteration checkpointing
-        // only fires through the kernel path — installDurableCheckpointing's
-        // onCheckpoint seam is wired by the reasoning kernel, so without
-        // `.withReasoning()` the run row exists but is never checkpointed and
-        // crash-resume silently can't rehydrate. Warn once, don't throw: the
-        // run row + approval rails still work without the kernel path.
-        // Category-A sync fallback (see packages/core/src/errors/index.ts): sync build() config validation, no hydrated Effect runtime yet.
-        if (this._durableRuns && !this._enableReasoning) {
-            console.warn(
-                "[reactive-agents] .withDurableRuns() is configured but the run will NOT checkpoint: " +
-                "crash-resume checkpoints require the kernel path — add .withReasoning(). " +
-                "(The run row and approval rails still work.)",
-            )
-        }
-
-        // Implicit-test-provider warning lives in `warnIfImplicitTestProvider()`,
-        // invoked from `buildEffect()`'s Effect.gen. `build()` is covered
-        // transitively: it runs this very effect at
-        // `Effect.runPromise(this.buildEffect())` below, so a single call site
-        // keeps the "exactly once per build" guarantee on both public terminals
-        // (class JSDoc advertises `.build()` AND `.buildEffect()`).
-
-        // MCP toolkit resolution (2026-09-19): resolve any pending
-        // `.withMCP(catalogName)` requests via their registry BEFORE anything
-        // else reads `_mcpServers` below (e.g. the task-contract
-        // `hasMcpServers` check just past the capability-prime block). Plain
-        // `await` here, matching this method's existing style (see the
-        // dynamic imports throughout `build()`) — NOT routed through
-        // `buildEffect()`'s Effect.gen, so a registry rejection
-        // (`MCPApprovalRequiredError`, `MCPMissingEnvVarError`, etc.)
-        // propagates out of this `await` untransformed instead of being
-        // flattened by `unwrapError()` at the
-        // `Effect.runPromise(this.buildEffect())` boundary further down.
-        if (this._mcpToolkitRequests.length > 0) {
-            const { defaultRegistries } = await import('@reactive-agents/tools')
-            const pending = this._mcpToolkitRequests
-            this._mcpToolkitRequests = []
-            const resolved = await Promise.all(
-                pending.map((request) =>
-                    defaultRegistries[request.registry ?? 'docker-hub'].resolve(request)
-                )
-            )
-            this._mcpServers.push(...(resolved as MCPServerConfig[]))
-            this._enableTools = true
-        }
-
-        // Eager capability prime — run the provider's live discovery probe
-        // (Ollama /api/show) and write through to the process-wide registry
-        // BEFORE we resolve the context profile below AND before validateBuild's
-        // synchronous PreFlight resolve. Ordering is load-bearing: the context
-        // profile (tier + window/maxTokens) is frozen HERE from the resolved
-        // capability, and the wire `num_ctx` resolves later at call time from the
-        // SAME registry. If prime ran AFTER the profile resolve, the profile
-        // froze to the 2048-ctx `source: "fallback"` while the wire got the real
-        // probed window (e.g. gemma4 32768) — a 16× budget/wire divergence that
-        // starved every tool-result compression budget (live-confirmed 2026-07-30:
-        // a 25-KB gh-cli result crushed to ~1.2 KB → model fabricated the tail).
-        // Best-effort: never throws, no-op for providers without a probe.
-        const { primeCapability, registerUserSuppliedCapability } = await import(
-            '@reactive-agents/llm-provider'
-        )
-        await primeCapability(this._provider, this._model)
-        // Developer-declared window via `.withModel({ numCtx })` wins over the
-        // probe/table AND must reach the profile too — so it has to register
-        // BEFORE the profile resolve below (one knob moves both budget + wire).
-        // Also the escape hatch when the probe is unavailable (air-gapped,
-        // proxied gateway): otherwise validateBuild fails on a `source:
-        // "fallback"` capability and tells the user to patch STATIC_CAPABILITIES
-        // for a fact they just supplied. No-op when the probe or table won.
-        if (this._numCtx !== undefined && this._model !== undefined) {
-            registerUserSuppliedCapability(this._provider, this._model, this._numCtx)
-        }
-
-        // Auto-resolve context profile from model name if not explicitly set.
-        // resolveProfileWithWindow binds maxTokens to the MODEL's real window
-        // (recommendedNumCtx — now probe/numCtx-aware thanks to the prime above)
-        // instead of the tier placeholder — otherwise the placeholder (e.g.
-        // mid=32768) masqueraded as a caller-set cap and the runner's
-        // applyCapabilityMaxTokens skipped resolution, so builder agents ran at
-        // 32768 instead of e.g. haiku's 200k (createRuntime resolved fine → a
-        // same-model asymmetry between the two construction paths).
-        if (!this._contextProfile && this._model) {
-            const { resolveProfileWithWindow } = await import(
-                '@reactive-agents/reasoning'
-            )
-            this._contextProfile = resolveProfileWithWindow(
-                this._model,
-                this._provider
-            )
-        }
-
-        // Build-time validation
-        const {
-            validateBuild,
-            validateProviderConnection,
-            logBuildInfo,
-            BuildValidationError,
-        } = await import('./build-validation.js')
-        let defaultModel = 'unknown'
-        try {
-            const { getProviderDefaultModel } = await import(
-                '@reactive-agents/llm-provider'
-            )
-            defaultModel = getProviderDefaultModel(this._provider) ?? 'unknown'
-        } catch {
-            // ignore — provider defaults unavailable
-        }
-        let taskContractInput:
-            | import('./build-validation.js').TaskContractValidationInput
-            | undefined
-        if (this._taskContract) {
-            const { computeExposedToolNames } = await import(
-                './builder/contract-tool-set.js'
-            )
-            taskContractInput = {
-                contract: this._taskContract,
-                exposedToolNames: computeExposedToolNames(
-                    this._toolsOptions,
-                    this._requiredToolsConfig?.tools
-                ),
-                hasMcpServers: this._mcpServers.length > 0,
-            }
-        }
-        const validation = validateBuild(
-            this._provider,
-            this._model,
-            defaultModel,
-            this._strictValidation,
-            this._lazyValidation,
-            taskContractInput,
-            this._providerConfig?.apiKey
-        )
-        for (const warning of validation.warnings) {
-            console.warn(`⚠ ${warning}`)
-        }
-        if (validation.errors.length > 0) {
-            throw new BuildValidationError(validation.errors)
-        }
-
-        // Pre-flight connection check for local providers
-        const conn = await validateProviderConnection(this._provider)
-        if (!conn.ok) {
-            throw new Error(`Provider connection failed: ${conn.error}`)
-        }
-
-        logBuildInfo(this._provider, validation.resolvedModel, this._providerConfig?.apiKey)
-
-        const agent = await Effect.runPromise(this.buildEffect()).catch((e) => {
-            throw unwrapError(e)
+        return buildAgent({
+            state: asBuilderState(this),
+            // Fresh closure: `buildEffect()` re-reads mutable class state live.
+            buildEffect: () => this.buildEffect(),
         })
-
-        // RI hook subscription — extracted to ./builder/ri-wiring.ts (W25-C step 1)
-        if (this._riHooks) {
-            await wireRiHooks(agent, this._riHooks)
-        }
-
-        return agent
     }
 
     /**
@@ -2937,305 +2100,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Warn when the provider silently resolves to `"test"` without expressed
-     * user intent (W0.3, Local-Tier Reliability program). The builder's
-     * `_provider` default is `"test"`, so a user who never chooses a provider
-     * gets canned output that reports success with no model ever called (the
-     * program's named "fake green" trap at the framework's front door). Signal
-     * only: no throw, no default flip.
-     *
-     * Explicit arms stay silent: `.withProvider(...)` (also used by `quick()`
-     * and `fromConfig()`), `.withTestScenario(...)`, and `.withReplayLLM(...)`:
-     * with a replay LLM override the `_provider` field is irrelevant, so
-     * warning about canned test output would be a false positive.
-     *
-     * Called from `buildEffect()`'s Effect.gen, which `build()` runs at
-     * `Effect.runPromise(this.buildEffect())`: one call site covers both
-     * public terminals with exactly one warning per build. Not per run():
-     * emitting here (build time) keeps the cost at one line per agent
-     * construction.
-     */
-    private warnIfImplicitTestProvider(): void {
-        if (this._provider === 'test' && !this._providerExplicit && this._llmOverrideLayer === undefined) {
-            console.warn(
-                "[reactive-agents] ⚠ No provider was chosen: this agent silently defaults to the \"test\" provider, " +
-                "which returns canned output and reports success without ever calling a model. " +
-                "Choose one explicitly with .withProvider(\"anthropic\"|\"openai\"|\"ollama\"|...), " +
-                "or make the test provider intentional with .withProvider(\"test\") / .withTestScenario(...).",
-            )
-        }
-    }
-
-    /**
      * Build the agent as an Effect (advanced async version).
      *
-     * Returns an Effect that, when run, instantiates the agent.
-     * Useful for composing agent creation into larger Effect workflows.
+     * Delegates to `builder/build/build-effect.ts` (moved for #218 / HS-248) —
+     * see `runBuilderBuildEffect` there for the generator body (and the
+     * moved `warnIfImplicitTestProvider()` precondition), both moved verbatim.
      *
      * @returns Effect that produces a ReactiveAgent
      */
     buildEffect(): Effect.Effect<ReactiveAgent<TOut>, Error> {
-        const self = this
-
-        return Effect.gen(function* () {
-            // Implicit-test-provider warning (W0.3): runs on BOTH public build
-            // terminals. `build()` delegates to this effect, so a single call
-            // site here satisfies the file's own duplication convention
-            // ("buildEffect() is also a public entry point", see the strict-
-            // validation block below) without double-warning on the Promise
-            // path.
-            self.warnIfImplicitTestProvider()
-
-            // Under strict validation, fail fast on a missing API key. `build()`
-            // already ran the full validateBuild gate before reaching here, but
-            // buildEffect() is also a public entry point, so it independently
-            // refuses to construct a provider layer that cannot run. Routed
-            // through the single build-time read path so the check can never
-            // disagree with what the provider actually sees. Default (non-strict)
-            // is warn-then-succeed — the run() boundary surfaces a clean typed
-            // failure if the agent is actually invoked without a key.
-            if (self._strictValidation && !self._lazyValidation) {
-                const { providerRequiresApiKey, readProviderApiKey, providerApiKeyName } =
-                    yield* Effect.promise(() => import('./build-validation.js'))
-                if (
-                    providerRequiresApiKey(self._provider) &&
-                    !readProviderApiKey(self._provider) &&
-                    !self._providerConfig?.apiKey
-                ) {
-                    const keyName = providerApiKeyName(self._provider)
-                    return yield* Effect.fail(
-                        new Error(
-                            `Missing ${keyName} for provider "${self._provider}" — the agent cannot run without it. ` +
-                                `Set ${keyName}, switch providers, or call .withLazyValidation() to defer this check.`
-                        )
-                    )
-                }
-            }
-
-            // Automatically fetch remote pricing if a provider was configured.
-            // Extracted to ./builder/build-effect/pricing-fetch.ts (W26-B step 1).
-            {
-                const { registry } = yield* fetchAndMergePricing({
-                    pricingProvider: self._pricingProvider,
-                    pricingRegistry: self._pricingRegistry,
-                    strict: self._strictValidation,
-                })
-                self._pricingRegistry = registry
-            }
-
-            const agentId = self._stableAgentId ?? `${self._name}-${Date.now()}`
-
-            // Compose persona into system prompt if provided
-            const composedSystemPrompt = buildSubAgentSystemPrompt(
-                self._persona,
-                self._systemPrompt,
-                self._name
-            )
-
-            // Base runtime + cortex + meta-tools + engine resolution — extracted to
-            // ./builder/build-effect/runtime-construction.ts (W25-B step 7).
-            const { baseRuntime, runtimeWithCortex, engine, kernelMetaTools } =
-                yield* buildBaseRuntimeAndEngine({
-                    agentId,
-                    composedSystemPrompt,
-                    state: self as unknown as BuilderRuntimeStateView,
-                })
-
-            const hooks = [...self._hooks]
-            const mcpServers = [...self._mcpServers]
-            const toolsOptions = self._toolsOptions
-            const promptsOptions = self._promptsOptions
-            const gatewayOptions = self._gatewayOptions
-            const agentTools = self._agentTools
-            const allowDynamicSubAgents = self._allowDynamicSubAgents
-            const dynamicSubAgentOptions = self._dynamicSubAgentOptions
-            const parentProvider = self._provider
-            const parentModel = self._model
-            const streamDensity = self._streamDensity
-            const errorHandler = self._errorHandler
-            const enableHealthCheck = self._enableHealthCheck
-            const sessionPersist = self._sessionPersist
-            const sessionMaxAgeDays = self._sessionMaxAgeDays
-            const documents = [...self._documents]
-            const agentIdCapture = agentId
-
-            // Capture parent config for sub-agent inheritance — sub-agents get
-            // the same infrastructure as the parent without explicit configuration.
-            const parentReasoningOptions = self._reasoningOptions
-            const parentEnableGuardrails = self._enableGuardrails
-            const parentEnableObservability = self._enableObservability
-            const parentObservabilityOptions = self._observabilityOptions
-            const parentContextProfile = self._contextProfile
-            const parentEnableCostTracking = self._enableCostTracking
-            // Cross-cutting inheritance (2026-07-23) — a sub-agent operates under
-            // the parent's judgment + safety constraints, not rubber-stamped.
-            const parentTaskContract = self._taskContract
-            const parentFabricationGuard = self._fabricationGuard
-            const parentGrounding = self._groundingConfig
-            const parentApprovalPolicy = self._approvalPolicy
-
-            for (const hook of hooks) {
-                yield* engine.registerHook(hook)
-            }
-
-            // Parent-context wiring for sub-agent registrations.
-            // Extracted to ./builder/build-effect/parent-context.ts (W26-B step 2).
-            const parentCtx = setupParentContext()
-            const getParentContext = parentCtx.getParentContext
-
-            if (agentTools.length > 0 || allowDynamicSubAgents) {
-                yield* parentCtx.registerCaptureHook(engine)
-            }
-
-            // Register custom prompt templates if configured
-            if (
-                promptsOptions?.templates &&
-                promptsOptions.templates.length > 0
-            ) {
-                const { PromptService } = yield* Effect.promise(
-                    () => import('@reactive-agents/prompts')
-                )
-                // `as any` justified: resolving a dynamically-imported service Tag
-                // against `baseRuntime`, whose R/E/ROut channels are intentionally
-                // erased to `unknown` at the build seam (see BuildBaseRuntimeResult
-                // in runtime-construction.ts — tightening them is a separate refactor).
-                const promptService = yield* (PromptService as any).pipe(
-                    Effect.provide(baseRuntime)
-                )
-                for (const template of promptsOptions.templates) {
-                    yield* (promptService as { register: (t: unknown) => Effect.Effect<unknown> }).register(template)
-                }
-            }
-
-            // ── MCP servers, custom tools, agent tools: bake into the runtime layer ────
-            // Extracted to ./builder/build-effect/tool-mcp-registrations.ts (W26-B step 3).
-            const { fullRuntime: fullRuntimeAfterTools } =
-                yield* buildToolMcpRegistrations({
-                    runtimeWithCortex,
-                    mcpServers,
-                    toolsOptions,
-                    agentTools,
-                    allowDynamicSubAgents,
-                    dynamicSubAgentOptions,
-                    agentId,
-                    getParentContext,
-                    parentScratchpadWriter: (key: string, value: string) => {
-                      self._scratchpad.set(key, value);
-                    },
-                    parentProvider,
-                    parentModel,
-                    parentReasoningOptions,
-                    parentEnableGuardrails,
-                    parentEnableObservability,
-                    parentObservabilityOptions,
-                    parentContextProfile,
-                    parentEnableCostTracking,
-                    parentTestScenario: self._testScenario,
-                    // Cross-cutting inheritance (2026-07-23) — judgment + safety
-                    // to the child. Undefined-spread so an unset field is absent,
-                    // not a written `undefined` (keeps createLightRuntime's
-                    // presence checks honest).
-                    ...(parentTaskContract !== undefined ? { parentTaskContract } : {}),
-                    ...(parentFabricationGuard !== undefined ? { parentFabricationGuard } : {}),
-                    ...(parentGrounding !== undefined ? { parentGrounding } : {}),
-                    ...(parentApprovalPolicy !== undefined ? { parentApprovalPolicy } : {}),
-                })
-            let fullRuntime: Layer.Layer<unknown, unknown, unknown> = fullRuntimeAfterTools
-
-            // RAG ingestion + meta-tool back-fill — extracted to ./builder/build-effect/rag-ingestion.ts (W25-B step 4)
-            const ragStore = yield* ingestRagDocuments({
-                documents,
-                toolsOptions,
-                agentTools,
-                allowDynamicSubAgents,
-                mcpServers,
-                kernelMetaTools,
-            })
-
-            // Wire health layer when enabled — extracted to ./builder/build-effect/health-layer.ts (W25-B step 5)
-            fullRuntime = composeHealthLayer(fullRuntime, {
-                enableHealthCheck,
-                agentName: agentIdCapture,
-            })
-
-            // Wire tracing layers when .withTracing() was called — extracted to ./builder/build-effect/tracing-layer.ts (W25-B step 6)
-            fullRuntime = yield* composeTracingLayer(fullRuntime, {
-                tracingConfig: self._tracingConfig,
-            })
-
-            // ManagedRuntime + ReactiveAgent construction extracted to
-            // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).
-            return instantiateAgent({
-                engine,
-                fullRuntime,
-                agentId,
-                name: self._name,
-                scratchpad: self._scratchpad,
-                a2aDefaultPort: self._a2aOptions?.port,
-                a2aDefaultBasePath: self._a2aOptions?.basePath,
-                judgmentAutoShadow: self._judgmentShadowDbPath !== undefined,
-                mcpServerNames: mcpServers.map((s) => s.name),
-                gatewayOptions,
-                streamDensity,
-                hasParentCallbacks: agentTools.length > 0 || allowDynamicSubAgents,
-                parentCtxRef: parentCtx.ref,
-                errorHandler,
-                sessionPersist,
-                sessionMaxAgeDays,
-                ragStore,
-                kernelMetaTools: kernelMetaTools
-                    ? (kernelMetaTools as {
-                          find?: boolean
-                          staticBriefInfo?: {
-                              indexedDocuments: Array<{ source: string; chunkCount: number; format: string }>
-                          }
-                      })
-                    : undefined,
-                channelsConfig: self._channelsConfig,
-                capabilities: {
-                    minIterations: self._minIterations,
-                    taskContext: self._taskContext,
-                    verificationStep: self._verificationStep,
-                    outputValidator: self._outputValidator,
-                    outputValidatorOptions: self._outputValidatorOptions,
-                    customTermination: self._customTermination,
-                    modelRouting: self._modelRouting,
-                    toolIntentClassifier: self._toolIntentClassifier,
-                },
-                // Phase C: when durable runs are enabled, resolve the same
-                // checkpoint dir + identity configHash execute-stream computes
-                // at run start, so agent.resume(runId) can open the store and
-                // guard config drift. dir derivation MUST mirror
-                // execute-stream.ts:175-179.
-                durableResume: self._durableRuns
-                    ? {
-                          dir:
-                              self._durableRuns.dir ??
-                              join(homedir(), '.reactive-agents', agentId),
-                          configHash: durableConfigHash({
-                              systemPrompt: composedSystemPrompt,
-                              provider: self._provider,
-                          }),
-                      }
-                    : undefined,
-                outputSchemaConfig: self._outputSchemaConfig,
-                enableTools: self._enableTools,
-                runtimeConfig: {
-                    thinking: self._thinking,
-                    thinkingOptions: self._thinkingOptions,
-                    provider: self._provider,
-                    model: self._model,
-                    // Arc 1 Task 9: threaded through so buildRunTaskEffect can
-                    // resolve it via resolveReceiptSigningKey (config wins over
-                    // RA_RECEIPT_KEY env var).
-                    receiptSigningKey: self._receiptSigningKey,
-                    // B1 (Move 1 merge, 2026-08-12): whether .withReasoning() was
-                    // called explicitly. Used only to decide the provider-fault
-                    // error contract in run() — see reactive-agent.ts's execute().
-                    enableReasoning: self._enableReasoning,
-                },
-            })
-        }) as Effect.Effect<ReactiveAgent<TOut>, Error>
+        return runBuilderBuildEffect(asBuilderState(this))
     }
 
     /**
