@@ -1,12 +1,44 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## 2026-10-20 — #217 runtime decomposition + CI gates consolidation (execute-backlog)
+
+Bundle: #217 single issue (HS-247). PR #255 (first) then PR #256 merged to `dev`
+(merge `b72b302f9`). Main checkout is the live peer's (`dev`, switched 2026-10-19
+20:23) — bundle work stayed in worktrees; do not check out branches there.
+
+- #217: `packages/runtime/src/reactive-agent.ts` **3,303 → 2,338 LOC** via 4
+  verbatim `agent/*` facades (judgment 350 / skills 181 / durable 459 /
+  run-task-effect 547). Thin deps-object delegates; exports still 4; surface
+  bit-identical. runtime-warden via general subagent (standing deviation).
+  Verifier: typecheck 24/24, runtime suite 1,677/7/0 exact baseline ×3, cast
+  ceiling 39 flat. Review 7/9 applicable categories; `JudgeInput` canonicalized
+  on `agent/judgment-facade.ts` (`f8b1e604f`, removed type-only back-cycle).
+- PR #255: `regression-gate.yml` rewritten — GitHub rejects `secrets` in ANY
+  `if:` (runs 39347272779/39356471098), guard is now bash `env` + test. Phantom
+  Regression Gate runs gone from every push.
+- CI test flake root-caused (3 datapoints, 0 local): CI-only PHANTOM
+  double-invocation of the shared-mock `fetchJsonTool` handler ate even (4) and
+  odd (3, floater never completed) hit spans. Outcome-contract rewrite + exact
+  one-retry pin on a `node:http` live server. **Do NOT re-add count/parity pins
+  on shared mock closures; pin exact contracts on real in-process servers.**
+- Docs: metrics-cache 10,428 snapshot; debrief
+  `wiki/Research/Debriefs/2026-10-20-runtime-reactive-agent-decomp-execution-debrief.md`;
+  plan `wiki/Planning/Implementation-Plans/2026-10-20-runtime-reactive-agent-decomp.md`.
+- Micro-debt: `safeParseJson` duplicated in durable-facade + run-task-effect.
+
+Next seeds: #218 builder.ts (3,081) · #219 think.ts (2,135) · #221
+execution-engine.ts (1,807). Same warden flow: verbatim-move mandate, deps-object
+delegates, verifier bar = exact-baseline suites + flat cast ceiling.
 
 ---
 

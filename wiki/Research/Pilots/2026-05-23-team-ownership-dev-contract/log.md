@@ -1448,3 +1448,11 @@ task: "GH #248 part 2: watchdog resets no-progress timer on llm-exchange (after(
 result: completed, confidence 0.9
 outcome: "Added harness.after('think', () => { lastProgress = Date.now(); }) to watchdog.ts after the existing after('act') reset. A slow-but-progressing LLM exchange during think no longer triggers a false watchdog abort at the next before('think') boundary. New test proves reset on after('think'). compose test suite 30/0 (baseline 29 + 1 new), typecheck green, 0 new as unknown as. Part 1 (shared computeBudgetSignal) not addressed — separate design pass needed."
 bypass-reason: none
+
+```yaml
+date: 2026-10-20
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "GH #217 reactive-agent.ts decomposition (3,303 LOC, 4 top-level exports)"
+result: completed, confidence 0.92
+outcome: "4 cohesive clusters moved verbatim into packages/runtime/src/agent/{judgment-facade,skills-facade,durable-facade,run-task-effect}.ts (350/181/459/547 LOC); class methods became thin per-call deps-object delegates preserving live-read of mutable class state. Parent verifier: typecheck 24/24, runtime suite 1677/7/0 = exact baseline (re-run 3x), cast-ceiling green (39 flat), 0 new as-any, surface bit-identical. Review pass: JudgeInput canonicalized on judgment-facade (removed type-only back-import cycle). Known micro-debt: safeParseJson duplicated ~15 LOC in durable-facade + run-task-effect; pattern-modernization (async/Promise class facade) explicitly out of scope."
+bypass-reason: none
