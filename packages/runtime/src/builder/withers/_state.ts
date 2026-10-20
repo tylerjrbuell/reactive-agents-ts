@@ -225,6 +225,37 @@ export interface BuilderState {
     { readonly input: number; readonly output: number }
   >;
   _pricingProvider?: import("@reactive-agents/llm-provider").PricingProvider;
+
+  // build()/buildEffect() extraction surfaces (2026-10-20 builder decomp)
+  // — fields the moved bodies read/mutate that the Phase-1 wither buckets
+  // did not touch. Declared here (same single `as unknown as` cast
+  // site via `asBuilderState`) rather than a parallel view.
+  // Explicit provider intent (`.withProvider` / `.withTestScenario`).
+  _providerExplicit: boolean;
+  _providerConfig?: {
+    baseUrl?: string;
+    apiKey?: string;
+    headers?: Record<string, string>;
+  };
+  _mcpToolkitRequests: import("@reactive-agents/tools").MCPToolkitRequest[];
+  _lazyValidation: boolean;
+  _enableJudgment: boolean;
+  _judgmentOptions?: import("../types.js").JudgmentBuilderOptions;
+  _judgmentShadowDbPath?: string;
+  _approvalPolicy?: import("../types.js").ApprovalPolicyConfig;
+  _userInteraction: boolean;
+  _llmOverrideLayer?: Layer.Layer<
+    import("@reactive-agents/llm-provider").LLMService
+  >;
+  _outputSchemaConfig?:
+    | {
+        readonly contract: import("@reactive-agents/reasoning").SchemaContract<unknown>;
+        readonly options: import("../types.js").OutputSchemaOptions;
+      }
+    | undefined;
+  _receiptSigningKey: JsonWebKey | undefined;
+  _toolIntentClassifier?: (message: string) => boolean;
+  _openInferenceAdded?: boolean;
 }
 
 /**
