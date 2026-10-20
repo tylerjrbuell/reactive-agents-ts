@@ -20,57 +20,46 @@ import {
     Fiber,
     Layer,
 } from 'effect'
-import { deriveReceiptModelId } from './builder/helpers.js'
-import { deriveTaskOutcome, deriveMetadataToolCalls } from './engine/finalize/derive-outcome.js'
-import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
-import {
-    CapabilityRegistry,
-    type CapabilityAuditReport,
-} from './capabilities/registry.js'
 import {
     startGateway,
     queryGatewayStatus,
 } from './agent/gateway-runner.js'
+import { makeJudgmentFacade } from './agent/judgment-facade.js'
+import { makeSkillsFacade } from './agent/skills-facade.js'
+import { makeDurableFacade } from './agent/durable-facade.js'
+import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError, unwrapErrorWithSuggestion, toRunBoundaryError, KillSwitchTriggeredError, ExecutionError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, type TrustReceipt } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
-    loadResumePayload,
-    loadForkPayload,
-    listDurableRuns,
-    markRunStatus,
-    decideApprovalRecord,
-    getPendingApprovalAt,
+    CapabilityRegistry,
+    type CapabilityAuditReport,
+} from './capabilities/registry.js'
+import {
     createDurableRun,
     persistApprovalPauseAt,
     persistInteractionPauseAt,
-    decideInteractionRecord,
-    getPendingInteractionAt,
 } from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type {
     AgentEvent,
-    OutputFormat,
-    TerminatedBy,
     RunControllerLike,
 } from '@reactive-agents/core'
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
-import { JudgmentService } from '@reactive-agents/judgment'
 import type {
     JudgmentAnswers,
     JudgmentEntry,
     JudgmentModel,
     QuestionSpecs,
 } from '@reactive-agents/judgment'
-import { buildAutoContext, mergeJudgmentState, type JudgeContextConfig } from './judgment-context.js'
+import { type JudgeContextConfig } from './judgment-context.js'
 import {
-    judgeRank,
     type JudgeRankCandidate,
     type JudgeRankOptions,
     type JudgeRankQuestion,
@@ -129,17 +118,12 @@ import type { DeepPartial } from './builder/types.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type {
     GatewayHandle,
-    AgentResultMetadata,
     AgentResult,
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
-import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields, validateCitations } from '@reactive-agents/reasoning'
+import { validateCitations } from '@reactive-agents/reasoning'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
-import { LLMService } from '@reactive-agents/llm-provider'
-import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
-import { chooseStructuredEngine } from './engine/finalize/structured-route.js'
-import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
  * `agent.judge()`'s options — a discriminated union on `includeContext` so
@@ -186,15 +170,6 @@ export type JudgeInput<Q extends QuestionSpecs> = (
 type ToolServiceTag = import('effect').Context.Tag<any, any>
 const asToolServiceTag = (tag: unknown): ToolServiceTag =>
     tag as unknown as ToolServiceTag
-
-/** Parse stored approval args JSON, falling back to the raw string on malformed input. */
-const safeParseJson = (s: string): unknown => {
-    try {
-        return JSON.parse(s)
-    } catch {
-        return s
-    }
-}
 
 // ── Class ──
 export class ReactiveAgent<TOut = unknown> {
@@ -374,45 +349,9 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
-     * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
-     * from `text` after stripping thinking tags, markdown fences, and leading prose.
+     * `parseJsonLoose` moved to `agent/run-task-effect.ts` (it was only ever
+     * called from `buildRunTaskEffect`, which moved there for #217).
      *
-     * Returns the parsed value (object or array) on success, or `null` if no
-     * top-level JSON structure can be found or parsed.
-     */
-    private static parseJsonLoose(text: string): unknown {
-        const cleaned = stripThinking(text).trim()
-        // Strip markdown code fences: ```json … ``` or ``` … ```
-        const defenced = cleaned
-            .replace(/^```(?:json)?\s*\n?/i, "")
-            .replace(/\n?```\s*$/, "")
-            .trim()
-
-        // Try to find first `{` (object) or `[` (array) and parse from there.
-        const braceIdx = defenced.indexOf("{")
-        const bracketIdx = defenced.indexOf("[")
-        // Pick the earlier of the two (or whichever is present)
-        let startIdx: number
-        if (braceIdx === -1 && bracketIdx === -1) return null
-        if (braceIdx === -1) startIdx = bracketIdx
-        else if (bracketIdx === -1) startIdx = braceIdx
-        else startIdx = Math.min(braceIdx, bracketIdx)
-
-        const candidate = defenced.slice(startIdx)
-        try {
-            return JSON.parse(candidate)
-        } catch {
-            // Try parsePartial for objects — handles truncated/fenced input
-            if (candidate.startsWith("{")) {
-                const partial = parsePartial(candidate)
-                // parsePartial returns {} on failure; treat empty as failure
-                if (Object.keys(partial).length > 0) return partial
-            }
-            return null
-        }
-    }
-
-    /**
      * MOVE-2 M2.1 — read the agent's active capability registry.
      *
      * Returns a structured `CapabilityAuditReport` covering every registered
@@ -556,266 +495,56 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
-     * Ask a calibrated typed judgment question (Choice/Score/Noul, with
-     * probabilities) via the `JudgmentService` configured by
-     * `.withJudgment()`.
+     * Ask a calibrated typed judgment question.
      *
-     * This is the public composable judgment primitive — the same
-     * `JudgmentService.ask()` internal harness sites will opt into per-site
-     * (`.withJudgment({ sites: {...} })`), exposed directly for user code
-     * to compose calibrated decisions without going through a run.
-     *
-     * @param input - `state` (the JSON-compatible context to judge, optional
-     *   when `includeContext` supplies it automatically), `questions` (named
-     *   Choice/Score/Noul specs, answered in one batch), and the optional
-     *   `includeContext` auto-context option (Phase D). `includeContext`
-     *   accepts either `true` (every context layer on - recent chat
-     *   history, recent tool observations, and the full last-run
-     *   reasoning-step trace - each with its own default) or a
-     *   `JudgeContextConfig` object (`{ messages?, toolResults?,
-     *   reasoningSteps? }`) to opt into only the named layers, each itself
-     *   `boolean | { window?, ... }` for per-layer tuning. A layer absent
-     *   from the object form is OFF, unlike bare `true` where every layer
-     *   defaults on. `images` is an optional array of base64-encoded image
-     *   strings (PNG, JPEG, or WebP) supplied in caller order and forwarded
-     *   verbatim to the judgment backend. Use a vision-capable decision model
-     *   such as `clef` or `clef-flash`; the runtime does not fetch URLs or
-     *   data URLs. Text-only backends reject non-empty images with
-     *   `JudgmentUnsupported` at the service guard.
-     * @throws Error if `.withJudgment()` was not called during build —
-     *   `JudgmentService` is genuinely absent from the runtime's Layer
-     *   graph in that case, not silently stubbed.
-     *
-     * @example
-     * ```typescript
-     * const { risky } = await agent.judge({
-     *   state: { action: "delete all files in /tmp" },
-     *   questions: {
-     *     risky: { type: "noul", instructions: "Is this action destructive?" },
-     *   },
-     * });
-     * if (risky.probability > 0.7) { ... }
-     * ```
-     *
-     * @example Auto-context (Phase D) — fold recent history + tool
-     * observations into `state` instead of hand-assembling it:
-     * ```typescript
-     * // Before: hand-assembled state
-     * const { onTrack } = await agent.judge({
-     *   state: { history: agent.chatHistory, lastToolResult: someObservation },
-     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
-     * });
-     *
-     * // After: includeContext does it for you
-     * const { onTrack } = await agent.judge({
-     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
-     *   includeContext: true,
-     * });
-     *
-     * // Or opt into just the reasoning trace, nothing else:
-     * const { onTrack } = await agent.judge({
-     *   questions: { onTrack: { type: "noul", instructions: "Is progress on track?" } },
-     *   includeContext: { reasoningSteps: true },
-     * });
-     * ```
-     * Precedence: an explicit `state` field always wins on key collision —
-     * `includeContext` only fills gaps a manual `state` doesn't cover.
-     *
-     * `state` is only optional when `includeContext` is truthy (`true` or a
-     * `JudgeContextConfig` object) — `judge()` has no honest value to send
-     * the backend otherwise, so omitting BOTH `state` and `includeContext`
-     * is a compile-time type error, not a silent `undefined` reaching
-     * `JudgmentService.ask()` (fix round, final review #4). `state: null`
-     * remains valid (a real `JudgmentEntry` value) — this only closes the
-     * gap where `state` was missing entirely.
+     * Delegates to `agent/judgment-facade.ts` (moved from this file for #217) —
+     * see `makeJudgmentFacade().judge` there for the full public-contract JSDoc,
+     * which moved verbatim with the body.
      */
     async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
-        const { questions, model, images } = input
-        let mergedState: JudgmentEntry
-        let contextMerged: boolean
-        if (input.includeContext) {
-            contextMerged = true
-            mergedState = mergeJudgmentState(
-                input.state,
-                buildAutoContext(
-                    {
-                        chatHistory: this._chatHistory,
-                        reasoningSteps: this._lastReasoningSteps,
-                    },
-                    input.includeContext
-                )
-            ) as JudgmentEntry
-        } else {
-            contextMerged = false
-            mergedState = input.state
-        }
-        const agentId = this.agentId
-        const autoShadowed = this._judgmentAutoShadow
-        return this.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judge() requires .withJudgment() to be called during build() — this agent only carries auto-shadow sampling, not an explicit judge backend.'
-                        )
-                    )
-                }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judge() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                // Phase D: surface which judge() calls used includeContext auto-merge
-                // via the framework's own "Custom" event variant — the JudgmentService's
-                // JudgmentEvaluated/JudgmentFailed events live in @reactive-agents/judgment,
-                // outside this task's packages/runtime/** authority, so this rides the
-                // existing extension-event channel rather than that package's schema.
-                if (contextMerged) {
-                    yield* EventBus.pipe(
-                        Effect.flatMap((eb) =>
-                            eb.publish({
-                                _tag: 'Custom' as const,
-                                type: 'judgment:context-merged',
-                                payload: { agentId, contextMerged },
-                            } as AgentEvent)
-                        ),
-                        Effect.catchAll((err) =>
-                            emitErrorSwallowed({ site: 'runtime/src/reactive-agent.ts:judge', tag: errorTag(err) })
-                        )
-                    ) as Effect.Effect<void>
-                }
-                const askInput: { state: JudgmentEntry; questions: Q; model?: string; images?: readonly string[] } = { state: mergedState, questions, model }
-                if (images !== undefined && images.length > 0) {
-                    askInput.images = images
-                }
-                return yield* judgmentOpt.value.ask(askInput)
-            })
-        )
+        return makeJudgmentFacade({
+            agentId: this.agentId,
+            runtime: this.runtime,
+            judgmentAutoShadow: this._judgmentAutoShadow,
+            chatHistory: this._chatHistory,
+            lastReasoningSteps: this._lastReasoningSteps,
+        }).judge(input)
     }
 
     /**
-     * List the models/aliases available to `judge()` on this agent's JudgmentService backend.
+     * List the models/aliases available to `judge()`.
      *
-     * Delegates to the wired `JudgmentService.listModels()` — surfaces the catalog
-     * for backends like `jev` that maintain one. Backends without a catalog (e.g. `llm`)
-     * reject with a `JudgmentUnsupported` failure.
-     *
-     * @returns Promise resolving to an array of available judgment models
-     * @throws Error if `.withJudgment()` was not called during build
-     * @throws Rejects (does NOT throw a bare `JudgmentUnsupported` you can
-     *   `instanceof`-check) when the backend has no model catalog. This
-     *   Promise is backed by `ManagedRuntime.runPromise()`, which rejects
-     *   with a `FiberFailure` wrapper around the underlying tagged error, not
-     *   the tagged error itself — `error instanceof JudgmentUnsupported` is
-     *   `false` on the real rejection. The rejection's `message` names the
-     *   missing catalog (e.g. `Backend "llm" has no model catalog`); match on
-     *   that if you need to distinguish this case from other failures.
-     *
-     * @example
-     * ```typescript
-     * const agent = ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withJudgment({ backend: "jev" })
-     *   .build();
-     *
-     * const models = await agent.listJudgmentModels();
-     * models.forEach(m => console.log(`${m.name}: ${m.description}`));
-     * ```
+     * Delegates to `agent/judgment-facade.ts` (moved from this file for #217) —
+     * see `makeJudgmentFacade().listJudgmentModels` there for the full JSDoc.
      */
     async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
-        const autoShadowed = this._judgmentAutoShadow
-        return this.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                return yield* judgmentOpt.value.listModels()
-            })
-        )
+        return makeJudgmentFacade({
+            agentId: this.agentId,
+            runtime: this.runtime,
+            judgmentAutoShadow: this._judgmentAutoShadow,
+            chatHistory: this._chatHistory,
+            lastReasoningSteps: this._lastReasoningSteps,
+        }).listJudgmentModels()
     }
 
     /**
-     * Score-rank candidates against one question via the `JudgmentService`
-     * configured by `.withJudgment()` — the batched primitive behind the
-     * judgment cookbook's re-ranking recipe.
+     * Score-rank candidates against one question.
      *
-     * Batches every candidate into a single `ask()` call when they fit the
-     * effective cap (`opts.chunkCap` clamped to the backend's advertised
-     * `maxQuestions`, defaulting to `DEFAULT_JUDGE_RANK_CHUNK_CAP` in
-     * `judgment-rank.ts`), chunking into multiple `ask()` calls otherwise —
-     * real leverage over hand-rolling `Promise.all(candidates.map(c =>
-     * agent.judge(...)))`, which fires one round trip PER candidate
-     * regardless of count.
-     *
-     * @param candidates - Candidates to rank, each with a caller-chosen `id`
-     *   (returned unchanged in the result) and a `state` judged against `question`.
-     * @param question - The single Score question every candidate is judged
-     *   against: `instructions` plus an ordered `criteria` rubric.
-     * @param opts - Optional `chunkCap` (candidates per `ask()` call) and `model`.
-     * @returns Candidates sorted best-first (highest score first); ties keep
-     *   the candidates' original relative order (stable sort). **May be
-     *   SHORTER than `candidates`** — a candidate the backend answers with
-     *   something other than a Score answer (non-conforming custom backend)
-     *   is silently dropped rather than surfaced as a partial-failure
-     *   marker; diff the returned ids against `candidates` if you need to
-     *   detect drops.
-     * @throws Error if `.withJudgment()` was not called during build —
-     *   `JudgmentService` is genuinely absent from the runtime's Layer
-     *   graph in that case, not silently stubbed.
-     *
-     * @example
-     * ```typescript
-     * const ranked = await agent.judgeRank(
-     *   drafts.map((text, i) => ({ id: String(i), state: { text } })),
-     *   {
-     *     instructions: "How well does this draft answer the user's question?",
-     *     criteria: ["poor", "weak", "adequate", "strong", "excellent"],
-     *   }
-     * );
-     * const best = drafts[Number(ranked[0].id)];
-     * ```
+     * Delegates to `agent/judgment-facade.ts` (moved from this file for #217) —
+     * see `makeJudgmentFacade().judgeRank` there for the full JSDoc.
      */
     async judgeRank(
         candidates: readonly JudgeRankCandidate[],
         question: JudgeRankQuestion,
         opts: JudgeRankOptions = {}
     ): Promise<ReadonlyArray<JudgeRankResult>> {
-        const autoShadowed = this._judgmentAutoShadow
-        return this.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                return yield* judgeRank(judgmentOpt.value, candidates, question, opts)
-            })
-        )
+        return makeJudgmentFacade({
+            agentId: this.agentId,
+            runtime: this.runtime,
+            judgmentAutoShadow: this._judgmentAutoShadow,
+            chatHistory: this._chatHistory,
+            lastReasoningSteps: this._lastReasoningSteps,
+        }).judgeRank(candidates, question, opts)
     }
 
     /**
@@ -953,149 +682,34 @@ export class ReactiveAgent<TOut = unknown> {
 
     /**
      * List all loaded skills for this agent.
+     *
+     * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
     async skills(): Promise<import('@reactive-agents/core').SkillRecord[]> {
-        try {
-            const agentId = this.agentId
-            return await this.runtime.runPromise(
-                Effect.gen(function* () {
-                    const store = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                            listAll: (
-                                agentId: string
-                            ) => Effect.Effect<any[], unknown>
-                        }>('SkillStoreService')
-                    )
-                    if (store._tag !== 'Some') return []
-                    return yield* store.value.listAll(agentId)
-                })
-            )
-        } catch {
-            return []
-        }
+        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills()
     }
 
     /**
-     * Export a skill to SKILL.md format.
+     * Delegates to `agent/skills-facade.ts` — exportSkill (moved from this file for #217).
      */
     async exportSkill(name: string, outputPath?: string): Promise<string> {
-        const allSkills = await this.skills()
-        const skill = allSkills.find((s: any) => s.name === name)
-        if (!skill) throw new Error(`Skill "${name}" not found`)
-
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-        const dir = outputPath ?? path.join('.', '.agents', 'skills', name)
-        fs.mkdirSync(dir, { recursive: true })
-
-        const frontmatter = [
-            '---',
-            `name: ${skill.name}`,
-            `description: ${skill.description}`,
-            `# source: ${skill.source}`,
-            `# confidence: ${skill.confidence}`,
-            `# version: ${skill.version}`,
-            '---',
-        ].join('\n')
-
-        const content = `${frontmatter}\n\n${skill.instructions}\n`
-        const filePath = path.join(dir, 'SKILL.md')
-        fs.writeFileSync(filePath, content)
-        return filePath
+        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath)
     }
 
     /**
-     * Load a SKILL.md skill at runtime.
+     * Delegates to `agent/skills-facade.ts` — loadSkill (moved from this file for #217).
      */
     async loadSkill(skillPath: string): Promise<void> {
-        const { parseSKILLmd } = await import(
-            '@reactive-agents/reactive-intelligence'
-        )
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-
-        const skillMdPath = fs.statSync(skillPath).isDirectory()
-            ? path.join(skillPath, 'SKILL.md')
-            : skillPath
-
-        const parsed = parseSKILLmd(skillMdPath)
-        if (!parsed)
-            throw new Error(`Failed to parse SKILL.md at ${skillMdPath}`)
-
-        const agentId = this.agentId
-        await this.runtime.runPromise(
-            Effect.gen(function* () {
-                const store = yield* Effect.serviceOption(
-                    Context.GenericTag<{
-                        store: (record: any) => Effect.Effect<string, unknown>
-                    }>('SkillStoreService')
-                )
-                if (store._tag !== 'Some') return
-                yield* store.value.store({
-                    id: `installed-${parsed.name}`,
-                    name: parsed.name,
-                    description: parsed.description,
-                    agentId,
-                    source: 'installed',
-                    instructions: parsed.instructions,
-                    version: 1,
-                    versionHistory: [],
-                    config: {
-                        strategy: 'reactive',
-                        temperature: 0.7,
-                        maxIterations: 5,
-                        promptTemplateId: 'default',
-                        systemPromptTokens: 0,
-                        compressionEnabled: false,
-                    },
-                    evolutionMode: 'locked',
-                    confidence: 'trusted',
-                    successRate: 0,
-                    useCount: 0,
-                    refinementCount: 0,
-                    taskCategories: [],
-                    modelAffinities: [],
-                    base: parsed.instructions,
-                    avgPostActivationEntropyDelta: 0,
-                    avgConvergenceIteration: 0,
-                    convergenceSpeedTrend: [],
-                    conflictsWith: [],
-                    lastActivatedAt: null,
-                    lastRefinedAt: null,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    contentVariants: {
-                        full: parsed.instructions,
-                        summary: null,
-                        condensed: null,
-                    },
-                })
-            })
-        )
+        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath)
     }
 
     /**
      * Manually trigger a skill refinement pass.
+     *
+     * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
     async refineSkills(): Promise<{ refined: number }> {
-        try {
-            const agentId = this.agentId
-            return await this.runtime.runPromise(
-                Effect.gen(function* () {
-                    const distiller = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                            distill: (
-                                agentId: string
-                            ) => Effect.Effect<{ refined: number }, unknown>
-                        }>('SkillDistillerService')
-                    )
-                    if (distiller._tag !== 'Some') return { refined: 0 }
-                    return yield* distiller.value.distill(agentId)
-                })
-            )
-        } catch {
-            return { refined: 0 }
-        }
+        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills()
     }
 
     /**
@@ -1449,217 +1063,91 @@ export class ReactiveAgent<TOut = unknown> {
     /**
      * Resume a crashed or paused durable run from its last checkpoint (Phase C).
      *
-     * Loads the highest-iteration checkpoint persisted by `.withDurableRuns()`,
-     * validates that this agent's config still matches the one the run was
-     * captured under (config-hash guard), seeds the restored `KernelState` via
-     * `ResumeStateRef`, and continues the run to completion. Completed tools are
-     * NOT re-executed — their results live in the restored steps/messages.
-     *
-     * @param runId - The run id reported when the original run was created.
-     * @throws Error if the agent was not built with `.withDurableRuns()`.
-     * @throws DurableRunNotFoundError if the run / checkpoint is unknown.
-     * @throws DurableConfigMismatchError if the agent config changed since capture.
-     *
-     * Note: resumed results return the base `AgentResult`; typed structured `object` carry is not threaded through resume yet.
-     *
-     * Named `resumeRun` (not `resume`) to avoid colliding with the in-process
-     * pause/resume control verb `resume()`.
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217) —
+     * see `makeDurableFacade().resumeRun` there for the full JSDoc.
      */
     async resumeRun(runId: string): Promise<AgentResult> {
-        if (!this._durableResume) {
-            throw new Error(
-                'resumeRun() requires .withDurableRuns() — this agent has no durable run store.',
-            )
-        }
-        const { dir, configHash } = this._durableResume
-        const dbPath = join(dir, 'runs.db')
-
-        // 1. Load + guard the checkpoint on the default runtime (RunStore is
-        //    self-contained; no agent services required).
-        const payload = await Effect.runPromise(
-            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
-        )
-
-        // 2. Re-run to completion with the restored state seeded via FiberRef.
-        //    reasoning-think reads ResumeStateRef, deserializes, and forwards it
-        //    as KernelInput.resumeState so the runner continues mid-stream.
-        const pipeline = this.buildRunTaskEffect(payload.run.task, { taskId: runId })
-        try {
-            const result = await this.runtime.runPromise(
-                Effect.locally(pipeline, ResumeStateRef, payload.stateJson),
-            )
-            await Effect.runPromise(
-                markRunStatus({ dbPath, runId, status: 'completed' }),
-            )
-            return result
-        } catch (e) {
-            await Effect.runPromise(
-                markRunStatus({ dbPath, runId, status: 'failed' }),
-            )
-            throw unwrapErrorWithSuggestion(e)
-        }
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).resumeRun(runId)
     }
 
     /**
-     * Fork a NEW run from any checkpoint of a prior run (Arc 1 Task 6) —
-     * a counterfactual restart, NEVER "time travel". Every LLM call made
-     * after the fork point is a live, fresh call against the current
-     * provider; nothing is replayed.
+     * Fork a NEW run from any checkpoint of a prior run (Arc 1 Task 6).
      *
-     * Loads the checkpoint at-or-below `opts.at` (defaults to the source
-     * run's latest checkpoint, like `resumeRun`) from `runId`'s history via
-     * `loadForkPayload` — deliberately WITHOUT `resumeRun`'s config-hash
-     * guard, since forking under a different config (or a different
-     * `opts.model`) is the whole point, not an error. Creates a BRAND NEW
-     * run row (`${runId}-fork-<8 hex chars>`) stamped with THIS agent's
-     * current config hash and `{ forkedFrom, forkedAtIteration }` provenance,
-     * seeds the restored `KernelState`, and runs to completion — mirroring
-     * `runDurable`'s create-row + checkpoint + resume-seed pipeline used by
-     * `run()`/`approveRun`/`denyRun`.
-     *
-     * v1 scope: same agent instance/tools/system prompt as the source run.
-     * `opts.task` overrides the re-run input (defaults to the source run's
-     * original task — reusing it verbatim only makes sense against a fresh
-     * test scenario/replay; real providers regenerate live). `opts.model`
-     * overrides the model for this run only (see `ModelOverrideRef`); it has
-     * no effect when `.withModelRouting()` is also enabled, since that phase
-     * recomputes the selected model independently (known v1 gap).
-     *
-     * Caveat inherited from Task 4: a run that is currently paused
-     * (`awaiting-approval` / `awaiting-interaction`) does not flush its
-     * in-flight checkpoint write, so forking it may see a stale or absent
-     * checkpoint row.
-     *
-     * @param runId - The SOURCE run id to fork from.
-     * @throws Error if the agent was not built with `.withDurableRuns()`.
-     * @throws DurableRunNotFoundError if the source run / a qualifying checkpoint is unknown.
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217) —
+     * see `makeDurableFacade().fork` there for the full JSDoc.
      */
     async fork(
         runId: string,
         opts?: { at?: number; model?: string; task?: string },
     ): Promise<AgentResult> {
-        if (!this._durableResume) {
-            throw new Error(
-                'fork() requires .withDurableRuns() — this agent has no durable run store.',
-            )
-        }
-        const { dir } = this._durableResume
-        const dbPath = join(dir, 'runs.db')
-
-        // 1. Load the source checkpoint — any iteration, no config-hash guard.
-        const payload = await Effect.runPromise(
-            loadForkPayload({ runId, dbPath, at: opts?.at }),
-        )
-
-        // 2. Fresh identity for the forked run — distinct from the source by
-        //    construction, and 8 hex chars (32 bits) of suffix entropy make
-        //    two forks of the SAME source colliding with each other
-        //    astronomically unlikely (4 hex chars/16 bits was too narrow:
-        //    `INSERT OR REPLACE` on a collision would clobber the earlier
-        //    fork's run row while its `run_checkpoints` rows stayed behind
-        //    under the reused runId — a stale-state rehydration hazard).
-        const forkedRunId = `${runId}-fork-${crypto.randomUUID().slice(0, 8)}`
-        const task = opts?.task ?? payload.run.task
-
-        // 3. Create the new row (this agent's CURRENT configHash) + seed the
-        //    restored state + run to completion, same rail as run()/approveRun.
-        return this.runDurable({
-            input: task,
-            taskId: forkedRunId,
-            runId: forkedRunId,
-            task,
-            resume: { stateJson: payload.stateJson },
-            ...(opts?.model !== undefined ? { modelOverride: opts.model } : {}),
-            forkedFrom: runId,
-            forkedAtIteration: payload.iteration,
-        })
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).fork(runId, opts)
     }
 
     /**
      * List persisted durable runs (newest-updated first), optionally filtered by
-     * lifecycle status. Requires `.withDurableRuns()`.
+     * lifecycle status.
+     *
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async listRuns(filter?: { status?: RunStatus; userId?: string }): Promise<readonly RunRecord[]> {
-        if (!this._durableResume) {
-            throw new Error(
-                'listRuns() requires .withDurableRuns() — this agent has no durable run store.',
-            )
-        }
-        const dbPath = join(this._durableResume.dir, 'runs.db')
-        return Effect.runPromise(
-            listDurableRuns({ dbPath, status: filter?.status, userId: filter?.userId }),
-        )
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).listRuns(filter)
     }
 
     /**
      * Durable HITL (Phase D): approve a run that paused for human approval and
-     * resume it to completion. Callable from ANY process (the decision + the
-     * paused checkpoint live in the durable RunStore). Requires `.withDurableRuns()`.
+     * resume it to completion.
      *
-     * @throws Error if the agent was not built with `.withDurableRuns()`.
-     * @throws ApprovalStateError if the run has no pending approval.
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async approveRun(runId: string, opts?: { reason?: string }): Promise<AgentResult> {
-        return this.decideAndResumeRun(runId, { status: 'approved', reason: opts?.reason })
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).approveRun(runId, opts)
     }
 
     /**
      * Durable HITL (Phase D): deny a run's paused action and resume it to
-     * completion (the agent observes the denial and continues). Requires
-     * `.withDurableRuns()`.
+     * completion.
      *
-     * @throws Error if the agent was not built with `.withDurableRuns()`.
-     * @throws ApprovalStateError if the run has no pending approval.
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async denyRun(runId: string, reason: string): Promise<AgentResult> {
-        return this.decideAndResumeRun(runId, { status: 'denied', reason })
-    }
-
-    /** Record an approve/deny decision then resume the run from its checkpoint. */
-    private async decideAndResumeRun(
-        runId: string,
-        decision: { status: 'approved' | 'denied'; reason?: string },
-    ): Promise<AgentResult> {
-        if (!this._durableResume) {
-            throw new Error(
-                'approveRun()/denyRun() requires .withDurableRuns() — this agent has no durable run store.',
-            )
-        }
-        const { dir, configHash } = this._durableResume
-        const dbPath = join(dir, 'runs.db')
-
-        // 1. Record the human decision (fails ApprovalStateError if not pending).
-        const { gateId } = await Effect.runPromise(
-            decideApprovalRecord({ dbPath, runId, status: decision.status, reason: decision.reason }),
-        )
-
-        // 2. Load + guard the paused checkpoint.
-        const payload = await Effect.runPromise(
-            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
-        )
-
-        // 3. Resume through the durable wrapper (same as run()), seeding the restored
-        //    state + the decision. Using runDurable means a re-pause on resume is
-        //    persisted + surfaced (multi-gate), and completion flips to `completed`.
-        return this.runDurable({
-            input: payload.run.task,
-            taskId: runId,
-            runId,
-            task: payload.run.task,
-            resume: {
-                stateJson: payload.stateJson,
-                decision: {
-                    gateId,
-                    status: decision.status,
-                    ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
-                },
-            },
-        })
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).denyRun(runId, reason)
     }
 
     /**
      * Durable HITL (Phase D): list runs paused awaiting a human decision, with the
-     * pending action (tool + args) for each. Requires `.withDurableRuns()`.
+     * pending action (tool + args) for each.
+     *
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async listPendingApprovals(): Promise<
         readonly {
@@ -1671,58 +1159,37 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        if (!this._durableResume) {
-            throw new Error('listPendingApprovals() requires .withDurableRuns().')
-        }
-        const dbPath = join(this._durableResume.dir, 'runs.db')
-        const runs = await Effect.runPromise(
-            listDurableRuns({ dbPath, status: 'awaiting-approval' }),
-        )
-        const out: {
-            runId: string
-            gateId: string
-            toolName: string
-            args: unknown
-            task: string
-            updatedAt: number
-        }[] = []
-        for (const run of runs) {
-            const pending = await Effect.runPromise(
-                getPendingApprovalAt({ dbPath, runId: run.runId }),
-            )
-            if (pending) {
-                out.push({
-                    runId: run.runId,
-                    gateId: pending.gateId,
-                    toolName: pending.toolName,
-                    args: safeParseJson(pending.argsJson),
-                    task: run.task,
-                    updatedAt: run.updatedAt,
-                })
-            }
-        }
-        return out
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).listPendingApprovals()
     }
 
     /**
      * Agentic-UI interaction rail (Task 10): the durable store location + agent id
      * for this agent when built with `.withDurableRuns()`, else `undefined`.
-     * Lets server adapters (Task 12) resolve the db path without reaching into
-     * builder internals. Matches how `runDurable`/`listRuns` compute the db path.
+     *
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     getDurableInfo(): { dbPath: string; agentId: string } | undefined {
-        if (!this._durableResume) return undefined
-        return {
-            dbPath: join(this._durableResume.dir, 'runs.db'),
+        return makeDurableFacade({
+            durableResume: this._durableResume,
             agentId: this.agentId,
-        }
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).getDurableInfo()
     }
 
     /**
      * Agentic-UI interaction rail (Task 10): list runs paused awaiting a human
      * response to a `request_user_input`, with the pending interaction (kind +
-     * prompt + parsed schema) for each. Requires `.withDurableRuns()`. Clone of
-     * `listPendingApprovals`.
+     * prompt + parsed schema) for each.
+     *
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async listPendingInteractions(): Promise<
         readonly {
@@ -1735,91 +1202,33 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        if (!this._durableResume) {
-            throw new Error('listPendingInteractions() requires .withDurableRuns().')
-        }
-        const dbPath = join(this._durableResume.dir, 'runs.db')
-        const runs = await Effect.runPromise(
-            listDurableRuns({ dbPath, status: 'awaiting-interaction' }),
-        )
-        const out: {
-            runId: string
-            interactionId: string
-            kind: string
-            prompt: string
-            schema: unknown
-            task: string
-            updatedAt: number
-        }[] = []
-        for (const run of runs) {
-            const pending = await Effect.runPromise(
-                getPendingInteractionAt({ dbPath, runId: run.runId }),
-            )
-            if (pending) {
-                out.push({
-                    runId: run.runId,
-                    interactionId: pending.interactionId,
-                    kind: pending.kind,
-                    prompt: pending.prompt,
-                    schema: safeParseJson(pending.schemaJson),
-                    task: run.task,
-                    updatedAt: run.updatedAt,
-                })
-            }
-        }
-        return out
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).listPendingInteractions()
     }
 
     /**
      * Agentic-UI interaction rail (Task 10): record a human's response to a run
-     * that paused for `request_user_input` and resume it to completion. Callable
-     * from ANY process (the response + the paused checkpoint live in the durable
-     * RunStore). Requires `.withDurableRuns()`. Clone of `decideAndResumeRun`.
+     * that paused for `request_user_input` and resume it to completion.
      *
-     * @throws Error if the agent was not built with `.withDurableRuns()`.
-     * @throws InteractionStateError if the run has no pending interaction.
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
      */
     async respondToInteraction(
         runId: string,
         interactionId: string,
         value: unknown,
     ): Promise<AgentResult> {
-        if (!this._durableResume) {
-            throw new Error(
-                'respondToInteraction() requires .withDurableRuns() — this agent has no durable run store.',
-            )
-        }
-        const { dir, configHash } = this._durableResume
-        const dbPath = join(dir, 'runs.db')
-
-        // 1. Record the human response (fails InteractionStateError if not pending).
-        await Effect.runPromise(
-            decideInteractionRecord({
-                dbPath,
-                runId,
-                interactionId,
-                valueJson: JSON.stringify(value),
-            }),
-        )
-
-        // 2. Load + guard the paused checkpoint.
-        const payload = await Effect.runPromise(
-            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
-        )
-
-        // 3. Resume through the durable wrapper (same as approve/deny), seeding the
-        //    restored state + the interaction response. The runner injects the
-        //    value as the pending interaction's result and re-thinks to completion.
-        return this.runDurable({
-            input: payload.run.task,
-            taskId: runId,
-            runId,
-            task: payload.run.task,
-            resume: {
-                stateJson: payload.stateJson,
-                interaction: { interactionId, valueJson: JSON.stringify(value) },
-            },
-        })
+        return makeDurableFacade({
+            durableResume: this._durableResume,
+            agentId: this.agentId,
+            runtime: this.runtime,
+            buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
+            runDurable: (params) => this.runDurable(params),
+        }).respondToInteraction(runId, interactionId, value)
     }
 
     /**
@@ -1971,7 +1380,39 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * Explicit dependency surface for `agent/run-task-effect.ts` — exactly the
+     * class fields the moved `buildRunTaskEffect` body reads/writes. Mutables
+     * (`_lastDebrief`, `_lastRunObservations`, `_lastReasoningSteps`) ride as
+     * setter closures so the fields stay the single source of truth; the
+     * debrief-fiber Set is passed by reference.
+     *
+     * @internal Deps builder for the #217 factor-out; not part of the public API.
+     */
+    private _runTaskDeps(): RunTaskDeps {
+        return {
+            agentId: this.agentId,
+            engine: this.engine,
+            runtime: this.runtime,
+            config: this.config,
+            outputSchemaConfig: this._outputSchemaConfig,
+            durableResume: this._durableResume,
+            enableTools: this._enableTools,
+            setTaskDescription: this._setTaskDescription,
+            pendingDebriefs: this._pendingDebriefs,
+            setLastDebrief: (debrief) => { this._lastDebrief = debrief },
+            setLastRunObservations: (observations) => { this._lastRunObservations = observations },
+            setLastReasoningSteps: (steps) => { this._lastReasoningSteps = steps },
+            buildSchemaSteering: (contract) => this.buildSchemaSteering(contract),
+        }
+    }
+
+    /**
      * Core task execution Effect (requires services from the agent's ManagedRuntime).
+     *
+     * Delegates to `agent/run-task-effect.ts` — moved from this file for #217
+     * (the largest single method, ~400 LOC); `parseJsonLoose` moved alongside it.
+     * This thin delegate remains because `runDurable`, `runEffect`, and
+     * `resumeRun` (via the durable facade) call it.
      */
     private buildRunTaskEffect(
         input: string,
@@ -1982,394 +1423,7 @@ export class ReactiveAgent<TOut = unknown> {
             readonly forkedFrom?: string
         }
     ): Effect.Effect<AgentResult, Error> {
-        // Pre-set the task description so sub-agents spawned on the first iteration
-        // have access to the full user prompt (including phone numbers, URLs, etc.)
-        this._setTaskDescription?.(input.slice(0, 500))
-
-        const taskId = options?.taskId
-            ? Schema.decodeSync(TaskId)(options.taskId)
-            : generateTaskId()
-
-        // Steer the agent to emit schema-shaped JSON when a schema is configured.
-        // This lets parse-first (below) skip the extra LLM extraction call on the
-        // happy path — same pattern used by streamObject.
-        const steeredInput = this._outputSchemaConfig
-            ? `${input}${this.buildSchemaSteering(this._outputSchemaConfig.contract)}`
-            : input
-
-        const task: Task = {
-            id: taskId,
-            agentId: Schema.decodeSync(AgentId)(this.agentId),
-            type: 'query' as const,
-            input: { question: steeredInput },
-            priority: 'medium' as const,
-            status: 'pending' as const,
-            metadata: { tags: [] },
-            createdAt: new Date(),
-        }
-
-        return this.engine.execute(task).pipe(
-            Effect.flatMap((result: TaskResult) => {
-                const r = result as TaskResult & {
-                    format?: OutputFormat
-                    terminatedBy?: TerminatedBy
-                    debrief?: AgentDebrief
-                    awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }
-                    awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }
-                }
-                // Derive toolCalls from reasoning steps so consumers don't
-                // have to filter `metadata.reasoningSteps` themselves. The
-                // public AgentResult never exposed steps until now — task
-                // gate / eval scripts were reading `result.steps` (undefined)
-                // and seeing empty toolCalls arrays even when tools ran.
-                const rawMetadata = r.metadata as AgentResultMetadata
-                const reasoningSteps = (rawMetadata as { reasoningSteps?: ReadonlyArray<{
-                    readonly id?: string
-                    readonly type: string
-                    readonly content: string
-                    readonly metadata?: Record<string, unknown>
-                }> }).reasoningSteps
-                const derivedToolCalls = deriveMetadataToolCalls(reasoningSteps)
-                const enrichedMetadata: AgentResultMetadata = {
-                    ...rawMetadata,
-                    ...(reasoningSteps !== undefined ? { reasoningSteps } : {}),
-                    ...(derivedToolCalls.length > 0 ? { toolCalls: derivedToolCalls } : {}),
-                }
-                // Rich LLM debrief: the engine forks it off the critical path and
-                // attaches the fiber here. debriefRich() awaits it lazily; the
-                // fiber is tracked so dispose() joins it (no dropped persist).
-                const debriefFiber = (r as { _debriefFiber?: Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never> })._debriefFiber
-                // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
-                // answer was produced, computed from in-memory run data (works
-                // without tracing). See @reactive-agents/core's TrustReceipt
-                // JSDoc: NOT a truth certificate.
-                // Receipts belong to TERMINAL results only: a run paused for
-                // approval/interaction is unfinished — grading it now would
-                // stamp a misleading verdict, and the resumed run produces its
-                // own receipt on completion. Mirrors the TrustEvent pause
-                // suppression in engine/execute-stream.ts.
-                const isPausedRun =
-                    r.awaitingApprovalFor !== undefined ||
-                    r.awaitingInteractionFor !== undefined
-                // Single terminal-outcome computation (FM-4 part 1) — shared
-                // with execute-stream.ts's runStream() path via
-                // deriveTaskOutcome (engine/finalize/derive-outcome.ts), so
-                // the two paths cannot silently diverge on deliverables,
-                // goalAchieved, or the trust receipt. Computed unconditionally
-                // (pure function, no side effects) — but `isPausedRun` is
-                // threaded through so deriveTaskOutcome itself suppresses
-                // `deliverables` (and, transitively, `goalAchieved`'s
-                // deliverable-evidence upgrade) on a paused run — see
-                // DeriveTaskOutcomeCtx.isPausedRun's JSDoc for why this must
-                // happen INSIDE the shared function rather than only being
-                // gated by the RECEIPT discard below: a paused run with
-                // declared-but-not-yet-produced deliverables would otherwise
-                // read as a definitive "goal not achieved" (false) instead of
-                // the correct ambiguous (null). goalAchieved is still
-                // reported on paused runs, matching prior behavior (it falls
-                // back to the terminatedBy-only heuristic).
-                const outcome = deriveTaskOutcome(r, {
-                    task: input,
-                    ...((this.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
-                        ? { requiredTools: (this.config['requiredTools'] as { tools?: readonly string[] }).tools }
-                        : {}),
-                    ...(this.config['taskContract'] !== undefined
-                        ? { taskContract: this.config['taskContract'] as import('@reactive-agents/core').TaskContract }
-                        : {}),
-                    // Single shared source with the streaming site — see
-                    // deriveReceiptModelId's JSDoc (builder/helpers.ts).
-                    modelId: deriveReceiptModelId(this.config.model, this.config.provider),
-                    ...(this._durableResume?.configHash !== undefined
-                        ? { configHash: this._durableResume.configHash }
-                        : {}),
-                    ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
-                    isPausedRun,
-                    now: Date.now(),
-                })
-                const goalAchieved = outcome.goalAchieved
-                // A receipt belongs to a TERMINAL result only — suppressed
-                // separately here even though `isPausedRun` already forced
-                // `deliverables`/`goalAchieved`'s upgrade off inside
-                // deriveTaskOutcome, because the receipt carries other
-                // terminal-only evidence (tool calls, interventions,
-                // verifier verdict) that shouldn't be stamped on an
-                // unfinished run either.
-                const receipt: TrustReceipt | undefined = isPausedRun ? undefined : outcome.receipt
-                const agentResult: AgentResult = {
-                    output: String(r.output ?? ''),
-                    success: r.success,
-                    taskId: String(r.taskId),
-                    agentId: String(r.agentId),
-                    metadata: enrichedMetadata,
-                    ...(receipt !== undefined ? { receipt } : {}),
-                    ...(r.format !== undefined ? { format: r.format } : {}),
-                    ...(r.terminatedBy !== undefined
-                        ? { terminatedBy: r.terminatedBy }
-                        : {}),
-                    goalAchieved,
-                    ...(projectAbstention(r) !== undefined
-                        ? { abstention: projectAbstention(r) }
-                        : {}),
-                    // Durable HITL (Phase D): when the run paused for human approval,
-                    // surface status + the pending action (with the durable runId so
-                    // callers can approveRun/denyRun it). durableRunId is threaded by
-                    // the run()/resume durable wrapper; absent on non-durable runs.
-                    ...(r.awaitingApprovalFor !== undefined && options?.durableRunId !== undefined
-                        ? {
-                              status: 'awaiting-approval' as const,
-                              pendingApproval: {
-                                  runId: options.durableRunId,
-                                  gateId: r.awaitingApprovalFor.gateId,
-                                  toolName: r.awaitingApprovalFor.toolName,
-                                  args: r.awaitingApprovalFor.args,
-                              },
-                          }
-                        : {}),
-                    // Agentic-UI interaction rail (Task 10): when the run paused
-                    // for user interaction, surface status + the pending
-                    // interaction (with the durable runId so callers can
-                    // respondToInteraction it). Mirrors awaitingApprovalFor above.
-                    ...(r.awaitingInteractionFor !== undefined && options?.durableRunId !== undefined
-                        ? {
-                              status: 'awaiting-interaction' as const,
-                              pendingInteraction: {
-                                  runId: options.durableRunId,
-                                  interactionId: r.awaitingInteractionFor.interactionId,
-                                  kind: r.awaitingInteractionFor.kind,
-                                  prompt: r.awaitingInteractionFor.prompt,
-                                  schema: safeParseJson(r.awaitingInteractionFor.schemaJson),
-                              },
-                          }
-                        : {}),
-                    ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
-                    ...(debriefFiber
-                        ? {
-                              debriefRich: () =>
-                                  this.runtime
-                                      .runPromise(Fiber.join(debriefFiber))
-                                      .then((res) => res.debrief ?? r.debrief)
-                                      .catch(() => r.debrief),
-                          }
-                        : {}),
-                    ...(r.error !== undefined ? { error: r.error } : {}),
-                }
-                // Capture debrief for use as context in subsequent chat() calls.
-                // result.debrief is the instant deterministic fallback.
-                if (agentResult.debrief) this._lastDebrief = agentResult.debrief
-
-                // Track the fiber for dispose(); upgrade _lastDebrief to the rich
-                // version once it resolves; deregister when done (fire-and-forget).
-                if (debriefFiber) {
-                    this._pendingDebriefs.add(debriefFiber)
-                    void this.runtime
-                        .runPromise(Fiber.join(debriefFiber))
-                        .then((res) => {
-                            if (res.debrief) this._lastDebrief = res.debrief
-                        })
-                        .catch(() => {})
-                        .finally(() => {
-                            this._pendingDebriefs.delete(debriefFiber)
-                        })
-                }
-                // Capture reasoning context so chat() has access to actual data.
-                // Includes: tool observations + agent analysis thoughts (which contain
-                // the synthesized data from tool results, not just compressed previews).
-                const steps = ((r.metadata as { reasoningSteps?: readonly unknown[] } | undefined)?.reasoningSteps ??
-                    []) as Array<{
-                    type: string
-                    content: string
-                    metadata?: {
-                        observationResult?: { success?: boolean }
-                        toolUsed?: string
-                    }
-                }>
-                const contextParts: string[] = []
-                for (let i = 0; i < steps.length; i++) {
-                    const s = steps[i]!
-                    if (s.type === 'observation') {
-                        // Include successful observations (tool results)
-                        if (
-                            s.metadata?.observationResult?.success !== false &&
-                            s.content.length > 10 &&
-                            !s.content.startsWith('⚠️') &&
-                            !s.content.startsWith('✓ final-answer')
-                        ) {
-                            contextParts.push(`[Tool result]: ${s.content}`)
-                        }
-                    } else if (s.type === 'thought' && i > 0) {
-                        // Include analysis thoughts that follow observations — these contain
-                        // the actual synthesized data (e.g. commit summaries, parsed results).
-                        const prev = steps[i - 1]
-                        if (
-                            prev?.type === 'observation' &&
-                            s.content.length > 50
-                        ) {
-                            contextParts.push(`[Agent analysis]: ${s.content}`)
-                        }
-                    }
-                }
-                this._lastRunObservations = contextParts
-                // Reuses the SAME `reasoningSteps` variable (and its existing
-                // single-assertion cast pattern, see buildEvidenceCorpusFromSteps
-                // below) rather than the narrower inline-typed `steps` local
-                // above — avoids introducing a new `as unknown as` double-cast
-                // site (WS-5b ceiling, packages/runtime/test/as-unknown-as-ceiling.test.ts).
-                this._lastReasoningSteps = (reasoningSteps ?? []) as readonly ReasoningStep[] as ReasoningStep[]
-
-                // ── Structured output extraction (Task 1.4 / 1.5) ───────────
-                const outputSchemaConfig = this._outputSchemaConfig
-                if (!outputSchemaConfig) {
-                    return Effect.succeed(agentResult)
-                }
-                // Task 1.5 / 2.5: resolve the fast/grounded route before extracting.
-                // LLMService is in the ManagedRuntime context (same requirement as
-                // extractObjectFromAnswer / groundedExtract), so we can flatMap over it here.
-                const self = this
-                // Build evidence corpus from reasoning steps — used by the grounded engine.
-                // reasoningSteps is already captured above; we cast to ReasoningStep[] for
-                // buildEvidenceCorpusFromSteps (only accesses type/content/metadata fields
-                // that are present on the inline type captured at line ~793).
-                const evidenceCorpus = buildEvidenceCorpusFromSteps(
-                    (reasoningSteps ?? []) as readonly ReasoningStep[]
-                )
-                // ── Parse-first: try to extract the object from the agent's own
-                // answer before touching the LLM. The steering injected above
-                // (buildSchemaSteering) makes the agent emit schema-shaped JSON
-                // directly, so on the happy path this succeeds and we skip the
-                // extra extraction LLM call entirely (~28s on local models).
-                const parsedLoose = ReactiveAgent.parseJsonLoose(agentResult.output)
-                const directValidation = parsedLoose !== null
-                    ? outputSchemaConfig.contract.validate(parsedLoose)
-                    : null
-
-                const onParseFail = outputSchemaConfig.options.onParseFail ?? 'degrade'
-
-                if (directValidation?.ok === true) {
-                    // ── Happy path: agent already emitted valid JSON — zero extra LLM calls.
-                    // For grounded mode we still compute provenance/confidence via groundFields
-                    // (pure function, no LLM) so callers get the expected grounding fields.
-                    // Arrays are skipped for grounding (no top-level Object.entries).
-                    const jsonSchema = outputSchemaConfig.contract.toJsonSchema()
-                    const isTopLevelObject = !jsonSchema || jsonSchema["type"] === "object"
-                    const needsGrounding = (() => {
-                        // Determine if grounded mode would have been selected, but we need
-                        // to avoid an LLM call just for the engine choice. Use a synchronous
-                        // heuristic: mode === "grounded" explicitly always needs grounding;
-                        // "auto" and "fast" don't need groundFields on parse-first success.
-                        return outputSchemaConfig.options.mode === 'grounded'
-                    })()
-
-                    if (needsGrounding && isTopLevelObject && typeof parsedLoose === 'object' && parsedLoose !== null && !Array.isArray(parsedLoose)) {
-                        // Pure provenance computation — no LLM call.
-                        const grounded = groundFields(
-                            parsedLoose as Record<string, unknown>,
-                            evidenceCorpus
-                        )
-                        const result: AgentResult = {
-                            ...agentResult,
-                            object: directValidation.value,
-                            provenance: grounded.provenance,
-                            confidence: grounded.confidence,
-                        }
-                        return Effect.succeed(result)
-                    }
-                    return Effect.succeed({
-                        ...agentResult,
-                        object: directValidation.value,
-                    } satisfies AgentResult)
-                }
-
-                // ── Fallback: parse-first missed — run the LLM extraction pipeline.
-                // This preserves all existing behavior for prose answers / model
-                // non-compliance, and handles onParseFail:"throw" correctly.
-                return LLMService.pipe(
-                    Effect.flatMap((llm) => llm.getStructuredOutputCapabilities()),
-                    Effect.flatMap((structCaps) => {
-                        const engine = chooseStructuredEngine({
-                            mode: outputSchemaConfig.options.mode ?? 'auto',
-                            nativeJsonMode: structCaps.nativeJsonMode,
-                            toolsRegistered: self._enableTools,
-                            // TODO(P2): wire real calibration signal from Capability table.
-                            // Defaulting to `true` (frontier-ish) is conservative — auto→fast
-                            // only when nativeJsonMode AND no tools, which is already safe.
-                            calibrated: true,
-                        })
-                        if (engine === 'grounded') {
-                            // ── Task 2.5: grounded engine path ───────────────────────────────
-                            // groundedExtract error channel is `never`; all failures degrade to
-                            // { objectError }. We translate objectError → thrown error here when
-                            // onParseFail === "throw" (callers expect StructuredOutputError).
-                            return groundedExtract({
-                                contract: outputSchemaConfig.contract,
-                                finalAnswer: agentResult.output,
-                                evidenceCorpus,
-                                onParseFail,
-                                abstainBelow: outputSchemaConfig.options.abstainBelow,
-                            }).pipe(
-                                Effect.flatMap((g) => {
-                                    if (g.objectError !== undefined && onParseFail === 'throw') {
-                                        return Effect.fail(new StructuredOutputError({
-                                            rawText: agentResult.output,
-                                            issues: [g.objectError],
-                                        }))
-                                    }
-                                    const result: AgentResult = {
-                                        ...agentResult,
-                                        ...(g.object !== undefined ? { object: g.object } : {}),
-                                        ...(g.objectError !== undefined ? { objectError: g.objectError } : {}),
-                                        ...(g.provenance !== undefined ? { provenance: g.provenance } : {}),
-                                        ...(g.confidence !== undefined ? { confidence: g.confidence } : {}),
-                                        ...(g.abstained !== undefined ? { abstained: g.abstained } : {}),
-                                    }
-                                    return Effect.succeed(result)
-                                })
-                            )
-                        }
-                        // ── Fast path (auto → fast) ───────────────────────────────────────
-                        return extractObjectFromAnswer({
-                            contract: outputSchemaConfig.contract,
-                            finalAnswer: agentResult.output,
-                            onParseFail,
-                            traceContext: { taskId: String(r.taskId) },
-                        }).pipe(
-                            Effect.map((extracted) => ({
-                                ...agentResult,
-                                ...(extracted.object !== undefined ? { object: extracted.object } : {}),
-                                ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
-                            } satisfies AgentResult)),
-                            // If onParseFail: "throw" let StructuredOutputError propagate as-is.
-                            // If "degrade" extractObjectFromAnswer already catches and returns
-                            // { objectError } in the success channel — nothing extra needed.
-                            Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
-                                Effect.fail(e)
-                            ),
-                        )
-                    }),
-                )
-            }),
-            // Trust receipt signing (Arc 1 Task 9) — optional, additive. Signs
-            // the ALREADY-COMPUTED receipt (attached above, whichever branch
-            // produced this result) with the configured Ed25519 key, if any.
-            // Never fails the run: signing errors degrade to an unsigned
-            // receipt rather than surfacing a spurious failure to the caller.
-            // See receipt-signing.ts's honest-claims note — the signature
-            // certifies provenance/integrity of the receipt, never the
-            // correctness of `result.output`.
-            Effect.flatMap((result: AgentResult): Effect.Effect<AgentResult, never> => {
-                const key = resolveReceiptSigningKey(this.config['receiptSigningKey'])
-                const receipt = result.receipt
-                if (!key || !receipt) return Effect.succeed(result)
-                return Effect.promise(() =>
-                    signReceipt(receipt, key)
-                        .then((signed) => ({ ...result, receipt: signed }) satisfies AgentResult)
-                        .catch(() => result)
-                )
-            }),
-            Effect.mapError(
-                (e: RuntimeErrors | TaskError | Error) =>
-                    e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
-            )
-        ) as Effect.Effect<AgentResult, Error>
+        return buildRunTaskEffect(this._runTaskDeps(), input, options)
     }
 
     /**
