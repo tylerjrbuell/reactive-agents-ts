@@ -1456,3 +1456,11 @@ task: "GH #217 reactive-agent.ts decomposition (3,303 LOC, 4 top-level exports)"
 result: completed, confidence 0.92
 outcome: "4 cohesive clusters moved verbatim into packages/runtime/src/agent/{judgment-facade,skills-facade,durable-facade,run-task-effect}.ts (350/181/459/547 LOC); class methods became thin per-call deps-object delegates preserving live-read of mutable class state. Parent verifier: typecheck 24/24, runtime suite 1677/7/0 = exact baseline (re-run 3x), cast-ceiling green (39 flat), 0 new as-any, surface bit-identical. Review pass: JudgeInput canonicalized on judgment-facade (removed type-only back-import cycle). Known micro-debt: safeParseJson duplicated ~15 LOC in durable-facade + run-task-effect; pattern-modernization (async/Promise class facade) explicitly out of scope."
 bypass-reason: none
+
+```yaml
+date: 2026-10-20
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "GH #218 builder.ts decomposition (3,348 LOC at bundle time, largest exported-API file)"
+result: completed, confidence 0.92
+outcome: "builder.ts 3,348 -> 2,222 LOC via verbatim moves: build() -> builder/build/build-agent.ts, buildEffect()+warnIfImplicitTestProvider -> builder/build/build-effect.ts, 61 with* bodies -> 7 builder/withers/* modules; delegates are thin applyWithX over per-call asBuilderState(this) views. Overload sets verified identical; surface bit-identical. Verifier: typecheck rc=0 + downstream 29/29, suite 1677/7/0 exact baseline, ceiling flat, 0 new throw/as-any. Contract-coupled bodies stayed on class (withMCP dispatch, withOutputSchema inline-cast return, _assertRuntimeStateViewShape drift guard) - documented extraction-boundary rule."
+bypass-reason: none

@@ -10,6 +10,35 @@ updated: 2026-10-20
 
 ---
 
+## 2026-10-20 (b) — #218 builder.ts decomposition (execute-backlog)
+
+Second bundle of the day. PR #257 merged (`878461bac`), #218 closed.
+
+- `packages/runtime/src/builder.ts` **3,348 → 2,222 LOC** (−1,126; was 3,081 at
+  sweep time, regrown past its W26-B trim). Verbatim moves: `build()` →
+  `builder/build/build-agent.ts` (258), `buildEffect()`+`warnIfImplicitTestProvider`
+  → `builder/build/build-effect.ts` (333), 61 `with*` bodies → 7
+  `builder/withers/*` family modules (65-247). Thin `applyWithX` delegates over
+  per-call `asBuilderState(this)` views. Overloads verified identical
+  (`withMCP` 5, `withHarness` 3, `withModel` 3, `withReactiveIntelligence` 3);
+  surface bit-identical. runtime-warden via general subagent (0.92), verifier
+  green (suite 1,677/7/0 exact baseline, ceiling flat, 0 new casts).
+- **Extraction-boundary rule (added):** builder-decomp end-state is "zero
+  surface change + LOC cap + zero behavior change", NOT "convert every method" —
+  contract-coupled families (`withMCP` dispatch, `withOutputSchema` inline-cast
+  return) and compile-time drift guards (`_assertRuntimeStateViewShape`) stay on
+  the class by design.
+- Builder additions henceforth go in `builder/*` modules, never the class file.
+- Micro-debt: `BuilderState` view extended +17 comment-marked fields (live-read
+  bag; class fields stay source of truth; drift partially guarded).
+
+Debrief: `wiki/Research/Debriefs/2026-10-20-runtime-builder-decomp-execution-debrief.md`.
+
+Next: #219 think.ts (2,135, kernel-warden) — the only remaining p1. Then p2
+seeds #221/#220/#222.
+
+---
+
 ## 2026-10-20 — #217 runtime decomposition + CI gates consolidation (execute-backlog)
 
 Bundle: #217 single issue (HS-247). PR #255 (first) then PR #256 merged to `dev`
