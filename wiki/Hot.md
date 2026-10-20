@@ -10,6 +10,33 @@ updated: 2026-10-20
 
 ---
 
+## 2026-10-20 (c) — #219 think.ts decomposition (execute-backlog)
+
+Third bundle of the window. PR #258 merged (`6330bb92d`), #219 closed.
+
+- `packages/reasoning/src/kernel/capabilities/reason/think.ts`
+  **2,445 → 676 LOC** (−1,769; issue cited 2,135 at sweep time). NOT a class —
+  one ~2,100-LOC `handleThinking`: decomposed as a 6-stage orchestrator with
+  byte-stable signature contract; 10 verbatim modules in `capabilities/reason/`
+  (dispatch-think-response 800 largest; helpers byte-identical). Canonical
+  request core stays inline by design — grandfathered by enforcement scripts
+  (check-projection / check-domain-only-fc / check-volatile-placement). 4th
+  script (check-llm-gateway) PASS. kernel-warden via general subagent (0.95),
+  verifier exact-baseline green (3,163/4todo/0/366; ceiling 2/2; 0 casts in
+  think.ts+10 modules).
+- Skill lesson (v26b): grep `scripts/check-*.sh` for the target file BEFORE
+  writing a decomposition brief — pins dictate the carve-around. Single-function
+  monoliths decompose as stage pipelines, not method facades.
+- All three decomp wikis (#217/#218/#219) shipped this window confirm the rule:
+  additions to big files land in submodules going forward.
+
+Debrief: `wiki/Research/Debriefs/2026-10-20-reasoning-think-decomp-execution-debrief.md`.
+
+Remaining decomp seeds now p2-only: #221 execution-engine (1,807), #220
+arbitrator (1,908, 31 exports), #222 iterate-pass (1,734) + runner (1,703).
+
+---
+
 ## 2026-10-20 (b) — #218 builder.ts decomposition (execute-backlog)
 
 Second bundle of the day. PR #257 merged (`878461bac`), #218 closed.

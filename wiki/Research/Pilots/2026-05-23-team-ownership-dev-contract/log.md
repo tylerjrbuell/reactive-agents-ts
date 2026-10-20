@@ -1464,3 +1464,11 @@ task: "GH #218 builder.ts decomposition (3,348 LOC at bundle time, largest expor
 result: completed, confidence 0.92
 outcome: "builder.ts 3,348 -> 2,222 LOC via verbatim moves: build() -> builder/build/build-agent.ts, buildEffect()+warnIfImplicitTestProvider -> builder/build/build-effect.ts, 61 with* bodies -> 7 builder/withers/* modules; delegates are thin applyWithX over per-call asBuilderState(this) views. Overload sets verified identical; surface bit-identical. Verifier: typecheck rc=0 + downstream 29/29, suite 1677/7/0 exact baseline, ceiling flat, 0 new throw/as-any. Contract-coupled bodies stayed on class (withMCP dispatch, withOutputSchema inline-cast return, _assertRuntimeStateViewShape drift guard) - documented extraction-boundary rule."
 bypass-reason: none
+
+```yaml
+date: 2026-10-20
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "GH #219 think.ts decomposition (2,445 LOC at bundle time; one ~2,100-LOC handleThinking)"
+result: completed, confidence 0.95
+outcome: "think.ts 2,445 -> 676 LOC as a 6-stage orchestrator; 10 verbatim modules under capabilities/reason/ (dispatch-think-response 800 is the largest); canonical request core kept inline by design (check-projection/check-domain-only-fc/check-volatile-placement grandfathered lines). Verifier: tsc rc=0, suite 3163/4todo/0f exact baseline, ceiling 2/2 (0 casts in think.ts+10 modules), all 4 enforcement scripts PASS, kernel invariants untouched (signature byte-stable, runner/terminate/loop-detector untouched)."
+bypass-reason: none
