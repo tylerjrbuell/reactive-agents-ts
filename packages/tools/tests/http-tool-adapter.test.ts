@@ -21,15 +21,23 @@ describe("fetchJsonTool", () => {
   });
 
   it("retries on 503 then succeeds", async () => {
-    let calls = 0;
+    // Script + hit-log form: each fetch invocation gets its exact scripted
+    // response AND records its position. A reentrancy or double-invocation
+    // anomaly (seen once on CI: `calls: 4` after a single awaited handler
+    // call, GH PR #253 CI run 39341793990) surfaces as a hits mismatch in
+    // the failure message instead of an opaque count delta.
+    const hits: number[] = [];
     global.fetch = mock(async () => {
-      calls++;
-      if (calls < 2) return new Response("unavailable", { status: 503 });
-      return new Response(JSON.stringify({ ok: true, calls }), { status: 200 });
+      const call = hits.length + 1;
+      hits.push(call);
+      if (call === 1) return new Response("unavailable", { status: 503 });
+      return new Response(JSON.stringify({ ok: true, calls: call }), { status: 200 });
     }) as unknown as typeof fetch;
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/flaky", maxRetries: 3 });
     const result = await handler({});
     expect(result).toEqual({ ok: true, calls: 2 });
+    // Production contract: EXACTLY one retry fetch after the transient 503.
+    expect(hits).toEqual([1, 2]);
   });
 
   it("returns emptyResultValue on 204 instead of throwing", async () => {

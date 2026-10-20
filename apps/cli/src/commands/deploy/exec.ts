@@ -22,7 +22,7 @@ export function execLive(cmd: string, cwd?: string): number {
 /** Check if a CLI tool is available on PATH */
 export function hasCommand(name: string): boolean {
   try {
-    execSync(`command -v ${name}`, { stdio: "pipe" });
+    execSync(`command -v ${name}`, { stdio: "pipe", timeout: 5_000 });
     return true;
   } catch {
     return false;
@@ -32,7 +32,11 @@ export function hasCommand(name: string): boolean {
 /** Check if Docker daemon is running */
 export function isDockerRunning(): boolean {
   try {
-    execSync("docker info", { stdio: "pipe" });
+    // Bounded probe: hosts where the docker CLI exists but the daemon is
+    // unreachable (runner images, locked-down CI) can block this for
+    // seconds-to-minutes on socket retries. The preflight must ANSWER, not
+    // hang, so a slow/unresponsive daemon reports as not-running.
+    execSync("docker info", { stdio: "pipe", timeout: 5_000 });
     return true;
   } catch {
     return false;
