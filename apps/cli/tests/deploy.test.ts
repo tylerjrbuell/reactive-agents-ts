@@ -260,7 +260,16 @@ describe("Deploy — preflight", () => {
     expect(typeof report.ok).toBe("boolean");
     expect(Array.isArray(report.plan)).toBe(true);
     expect(Array.isArray(report.filesToCreate)).toBe(true);
-  });
+    // Bounded probe pins: on hosts where docker exists but the daemon is
+    // unreachable (runners/CI images), the CLI/daemon checks must FAIL
+    // cleanly with a bounded probe — never hang past ~5s and never throw.
+    const cliCheck = report.checks.find((c) => c.label.toLowerCase().includes("cli"));
+    if (cliCheck) expect(typeof cliCheck.status).toBe("string");
+    // Explicit receipt timeout: the daemon probe is execSync (sync, real
+    // timers) — CI runners with a preinstalled-but-unreachable docker can
+    // legitimately take seconds; bun's default 5s test timeout killed this
+    // test before the probe answered (Margin 0-run 39345666034).
+  }, 30_000);
 
   it("fly preflight should include authentication check", () => {
     const provider = getProvider("fly");

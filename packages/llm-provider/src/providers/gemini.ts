@@ -452,6 +452,13 @@ export const GeminiProviderLive = Layer.effect(
           const contents = toGeminiContents(request.messages);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
+          const cap = resolveCapability("gemini", model);
+          // GH #238 — gate on CAPABILITY, not consent. Unlike anthropic (where
+          // thinking can only arrive when the request opts in), Gemini's
+          // thinkingBudget: 0 is ADVISORY — gemini-2.5-class models can still
+          // emit `thought: true` parts on a stream that never opted in. Gating
+          // on consent would keep silently swallowing that real reasoning.
+          const streamThinkEnabled = cap.supportsThinkingMode;
 
           // M12 Hook 1/7 — adapter selection decided up-front. When the
           // adapter supplies parseToolCalls we SUPPRESS per-chunk
@@ -487,6 +494,7 @@ export const GeminiProviderLive = Layer.effect(
                 });
 
                 let fullContent = "";
+                let accumulatedThinking = "";
                 let inputTokens = 0;
                 let outputTokens = 0;
                 let cachedContentTokens: number | undefined;
@@ -519,8 +527,23 @@ export const GeminiProviderLive = Layer.effect(
 
                   if (parts.length > 0) {
                     for (const part of parts) {
-                      // Skip thought parts — they're not visible content.
-                      if ((part as { thought?: boolean }).thought) continue;
+                      // GH #238 — thought parts route through the SAME
+                      // thinking_delta StreamEvent local/anthropic emit,
+                      // gated on model capability (streamThinkEnabled above,
+                      // NOT consent — thinkingBudget 0 is advisory for
+                      // gemini-2.5-class models). They never join
+                      // fullContent: thinking is not visible content.
+                      if ((part as { thought?: boolean }).thought) {
+                        if (
+                          streamThinkEnabled &&
+                          typeof part.text === "string" &&
+                          part.text.length > 0
+                        ) {
+                          emit.single({ type: "thinking_delta", thinking: part.text });
+                          accumulatedThinking += part.text;
+                        }
+                        continue;
+                      }
                       // Visible text
                       if (typeof part.text === "string" && part.text.length > 0) {
                         emit.single({ type: "text_delta", text: part.text });
@@ -635,10 +658,16 @@ export const GeminiProviderLive = Layer.effect(
                 }
 
                 const hasToolCalls = accumulatedToolCalls.length > 0;
+                // GH #238 — attach the accumulated thinking to the terminal
+                // event (symmetry with anthropic.ts + the thinking_delta
+                // passthrough above).
                 emit.single({
                   type: "content_complete",
                   content: fullContent,
                   ...(hasToolCalls ? { stopReason: "tool_use", toolCalls: accumulatedToolCalls } : {}),
+                  ...(streamThinkEnabled && accumulatedThinking.length > 0
+                    ? { thinking: accumulatedThinking }
+                    : {}),
                 } as StreamEvent);
                 emit.single({
                   type: "usage",

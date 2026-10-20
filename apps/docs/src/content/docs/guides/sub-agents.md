@@ -219,7 +219,7 @@ const agent = await ReactiveAgents.create()
 
 The parent LLM then calls the tool with typed arguments:
 
-```typescript
+```text
 // Generated dynamically by the parent LLM:
 toolCall("review-pr", { repo: "owner/repo", prNumber: 42, focus: "security" });
 ```

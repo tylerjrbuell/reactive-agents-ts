@@ -9,7 +9,7 @@ export class ToolBuilder {
   private _requiresApproval = false;
   private _returnType?: string;
   private _category?: ToolDefinition["category"];
-  private _handler?: (...args: unknown[]) => unknown;
+  private _handler?: (args: Record<string, unknown>) => unknown;
 
   constructor(name: string) {
     this._name = name;
@@ -71,12 +71,20 @@ export class ToolBuilder {
     return this;
   }
 
-  handler(fn: (...args: unknown[]) => unknown): this {
+  /**
+   * Register the tool's runtime function. It receives ONE object: the
+   * validated tool args keyed by parameter name (destructure them directly,
+   * e.g. `({ message }) => \`pong: ${message}\``), not a spread of positional
+   * arguments — tool handlers everywhere in this codebase (`toolService`,
+   * `toolBuilderToEntry`, `defineToolSimple`) are invoked with a single args
+   * object.
+   */
+  handler(fn: (args: Record<string, unknown>) => unknown): this {
     this._handler = fn;
     return this;
   }
 
-  build(): { definition: ToolDefinition; handler?: (...args: unknown[]) => unknown } {
+  build(): { definition: ToolDefinition; handler?: (args: Record<string, unknown>) => unknown } {
     if (!this._description) {
       throw new Error("ToolBuilder: description is required");
     }

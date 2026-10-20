@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 # T1.1 — Concurrency cancellation: a new push to a branch cancels in-flight
 # CI runs on the same ref. Saves ~6 min per redundant push.
