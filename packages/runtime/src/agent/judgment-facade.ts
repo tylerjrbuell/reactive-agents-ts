@@ -26,10 +26,38 @@ import {
     type JudgeRankQuestion,
     type JudgeRankResult,
 } from '../judgment-rank.js'
-import { buildAutoContext, mergeJudgmentState } from '../judgment-context.js'
+import { buildAutoContext, mergeJudgmentState, type JudgeContextConfig } from '../judgment-context.js'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 import type { ChatMessage } from '../chat.js'
-import type { JudgeInput } from '../reactive-agent.js'
+
+/**
+ * `agent.judge()`'s options — a discriminated union on `includeContext` so
+ * `state` is only optional when `includeContext` supplies it automatically
+ * (fix round, final review #4). Before this, `state` was unconditionally
+ * optional: `agent.judge({questions})` (no `state`, no `includeContext`)
+ * typechecked but passed `undefined` through to `JudgmentService.ask()`,
+ * which requires a real `JudgmentEntry` (itself `string | object | array |
+ * null` — `null` is a legitimate explicit value, `undefined` never is) and
+ * eventually reaches `JSON.stringify(entry)` in `@reactive-agents/judgment`'s
+ * `llm-backend.ts`.
+ *
+ * You must pass one of `state` or `includeContext` (or both — a manual
+ * `state` always wins on key collision with the auto-folded context, see
+ * `mergeJudgmentState`). `agent.judge({questions})` alone is a compile error
+ * — this is intentional, not a bug — and because the union's second member
+ * is keyed on `includeContext`, TS reports that error as "`includeContext`
+ * is missing" even when the fix you want is to add `state` instead. Read
+ * that error as "supply state or includeContext", not "includeContext is
+ * mandatory".
+ */
+export type JudgeInput<Q extends QuestionSpecs> = (
+    | { readonly state: JudgmentEntry; readonly includeContext?: false }
+    | { readonly includeContext: true | JudgeContextConfig; readonly state?: JudgmentEntry }
+) & {
+    readonly questions: Q
+    readonly model?: string
+    readonly images?: readonly string[]
+}
 
 /**
  * Explicit dependency surface for the judgment facade — exactly the
