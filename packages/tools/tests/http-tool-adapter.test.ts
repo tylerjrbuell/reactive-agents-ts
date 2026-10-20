@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, mock } from "bun:test";
+import { createServer } from "node:http";
 import { fetchJsonTool, HttpToolError } from "../src/adapters/http-tool-adapter.js";
 
 const originalFetch = global.fetch;
@@ -21,11 +22,15 @@ describe("fetchJsonTool", () => {
   });
 
   it("retries on 503 then succeeds", async () => {
-    // Script + hit-log form: each fetch invocation gets its exact scripted
-    // response AND records its position. A reentrancy or double-invocation
-    // anomaly (seen once on CI: `calls: 4` after a single awaited handler
-    // call, GH PR #253 CI run 39341793990) surfaces as a hits mismatch in
-    // the failure message instead of an opaque count delta.
+    // 503-then-200 script. The exact call-count pin (calls===2) is deliberately
+    // NOT asserted on the shared mock: a CI-only phantom double-invocation of
+    // this handler was observed twice (CI runs 39341793990 / 39347275662:
+    // calls=4 after a single awaited handler call — two full invocations of
+    // the adapter closure, never reproduced locally). The adapter contract is
+    // asserted outcome-wise (success after a transient failure, at least one
+    // retry); the EXACT one-retry contract is pinned deterministically by the
+    // live-server test below, which uses no global mocks and is immune to
+    // the phantom.
     const hits: number[] = [];
     global.fetch = mock(async () => {
       const call = hits.length + 1;
@@ -34,10 +39,46 @@ describe("fetchJsonTool", () => {
       return new Response(JSON.stringify({ ok: true, calls: call }), { status: 200 });
     }) as unknown as typeof fetch;
     const handler = fetchJsonTool({ buildUrl: () => "https://example.test/flaky", maxRetries: 3 });
-    const result = await handler({});
-    expect(result).toEqual({ ok: true, calls: 2 });
-    // Production contract: EXACTLY one retry fetch after the transient 503.
-    expect(hits).toEqual([1, 2]);
+    const result = (await handler({})) as { ok: boolean; calls: number };
+    expect(result.ok).toBe(true);
+    // The returned success body must have come from a retry (post-503 hit).
+    expect(result.calls).toBeGreaterThanOrEqual(2);
+    // The script is 503-then-200-only: every invocation must have observed an
+    // even hit count (first hit 503, second hit 200). An odd count would mean
+    // a 503 at a position the script does not serve — a real retry stuck.
+    expect(hits.length % 2).toBe(0);
+  });
+
+  it("retries a transient 503 exactly once against a live server", async () => {
+    // Deterministic one-retry pin: a real HTTP server (no global mocks, no
+    // shared fetch state) serves 503 once then 200. The adapter must issue
+    // exactly ONE retry and surface the success body. node:http keeps this
+    // portable across Bun/Node per the runtime policy.
+    const requests: number[] = [];
+    const server = createServer((_req, res) => {
+      const hit = requests.push(1);
+      if (hit === 1) {
+        res.statusCode = 503;
+        res.end("unavailable");
+        return;
+      }
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, requests: hit }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      global.fetch = originalFetch as typeof fetch; // real fetch for this test
+      const handler = fetchJsonTool({
+        buildUrl: () => `http://127.0.0.1:${port}/flaky`,
+        maxRetries: 3,
+      });
+      const result = await handler({});
+      expect(requests).toEqual([1, 1]);
+      expect(result).toEqual({ ok: true, requests: 2 });
+    } finally {
+      server.close();
+    }
   });
 
   it("returns emptyResultValue on 204 instead of throwing", async () => {
