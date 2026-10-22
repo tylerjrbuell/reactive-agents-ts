@@ -15,6 +15,17 @@ deploy rolls the process. **Durable execution** lets an agent survive that: ever
 iteration is checkpointed to disk, and a fresh process can reconstruct the run
 from its last checkpoint and finish it — without re-doing completed tool work.
 
+Side effects are handled exactly once where the framework can observe them:
+each tool call is durably recorded (an awaited pre-dispatch write, then a
+terminal outcome write), so a crash between "the tool succeeded" and "the
+checkpoint committed" is resolved on resume instead of silently replayed. If
+the recorded outcome proves the effect already happened, the stored result is
+injected and the tool is NOT re-executed; if only the pre-effect write
+committed, the call replays and the run's trust receipt names it
+`ambiguous-then-replayed` in `receipt.effects[]` — the honest case where the
+effect may or may not have happened (the tool itself can key idempotency on
+the stable call identity to close it fully). Ordinary receipts are unchanged.
+
 ![An agent checkpointing each step to disk, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing the job](../../../assets/durable-resume.gif)
 
 *Process A checkpoints each step, then is killed mid-run. Process B — a fresh process, same agent, same store — finds the crashed run on disk and finishes it. [Demo source](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/durable-resume.ts).*

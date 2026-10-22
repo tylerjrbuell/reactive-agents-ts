@@ -20,6 +20,7 @@ tags: [failure-modes, empirical, catalog]
 **Categories:**
 - [[Failure-Modes/FM-A Tool Engagement|FM-A1 No-Tool Fabrication]] — Agent writes answer directly instead of using required tools
 - [[Failure-Modes/FM-A Tool Engagement|FM-A2 Persistent FC Failure]] — Agent makes repeated non-recoverable tool call errors
+- [[Failure-Modes/FM-A3 Crash-Window Tool Re-Execution|FM-A3 Crash-Window Tool Re-Execution]] — Durable run replays a side-effecting call whose outcome did not survive the crash (fixed: run_effects records + resume reconciliation, GH #262)
 
 **Impact:** Task incompleteness, hallucinated outputs, policy violations
 
@@ -27,6 +28,7 @@ tags: [failure-modes, empirical, catalog]
 - ✅ M13 Guards & Meta-tools — enforce required tools (0.001ms latency)
 - ✅ M4 Healing Pipeline — recover from tool call errors (86.7% recovery rate)
 - ✅ M1 RI Dispatcher — intervene on entropy spikes
+- ✅ Durable tool-effect records + resume reconciliation (recovered vs ambiguous-then-replayed on the receipt, GH #262)
 - 🔄 Phase 1.5: M3 retry context tuning for cogito:14b
 
 ---
@@ -164,6 +166,7 @@ tags: [failure-modes, empirical, catalog]
 |----|----------|----------|--------|
 | FM-A1 | No-Tool Fabrication | Spike data + 12 reproducer tests | ✅ Mitigated by M13 |
 | FM-A2 | Persistent FC Failure | 8 reproducer tests, recovery rates | ✅ Mitigated by M4 |
+| FM-A3 | Crash-Window Tool Re-Execution | Deterministic cross-process crash tests (GH #262) | ✅ Fixed: run_effects + resume reconciliation |
 | FM-B1 | Unrecoverable Errors | Error triage classification | ✅ Diagnosed by M11 |
 | FM-B2 | Cascade Failures | Multi-tool failure chains | 🔄 Metrics via M8 |
 | FM-C1 | Red-Herring Reasoning | Strategy switching tests | ✅ Addressed by M2 |

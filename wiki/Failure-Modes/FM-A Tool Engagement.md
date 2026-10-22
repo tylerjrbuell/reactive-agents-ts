@@ -174,3 +174,70 @@ if (requiredTools.length > 0) {
 **Last Updated:** May 4, 2026  
 **Phase:** Phase 1 Complete  
 **Confidence:** HIGH (50+ runs, clear causation, validated mitigations)
+
+---
+
+## FM-A3: Crash-Window Tool Re-Execution (Silent At-Least-Once)
+
+## Symptom
+
+A durable run (`.withDurableRuns()`) executes a side-effecting tool. The effect
+succeeds in the world. The process is killed before the effect becomes durable
+in the RunStore. A fresh process `resumeRun()`s: the act phase re-executes the
+tool and the duplicate is unrecorded and uninspectable, because the receipt
+aggregates (`toolsUsed`, `toolCallStats`) and the re-executed call looks like an
+ordinary first execution. Also cost-bearing even for idempotent tools: the
+resumed run re-pays LLM re-derivation with no recovery on record.
+
+## Reproduction
+
+`packages/runtime/tests/durable-tool-effect-crash.test.ts` (both tests):
+
+1. A side-effecting tool records its dispatch count to disk; trigger faults in
+   the RunStore commit the pre-effect and terminal write out of band.
+2. Kill the child mid-run (SIGKILL) after the tool succeeded but before the
+   next boundary checkpoint and effect row committed.
+3. Fresh process, `resumeRun()`. Pre-fix: dispatch count 2 (silent duplicate)
+   and zero `run_effects` rows.
+
+## Root Cause (GH #262)
+
+- The durable rail is boundary-only and fire-and-forget:
+  `iterate-pass.ts` fires `onCheckpoint` at the start of each loop pass
+  capturing pre-phase state; `run-controller.ts` writes persisted via
+  fire-and-forget `Effect.runPromise`, awaited only via `flush()` at terminal
+  events. A hard kill between "tool succeeded" (act, pass N) and the pass N+1
+  boundary write committing loses the effect.
+- The RunStore schema had no per-call record (`runs`, `run_checkpoints`,
+  `run_approvals`, `run_events`, `run_interactions`), so nothing keyed
+  `toolCallId` to a durable outcome.
+- On resume, the kernel continues from the last committed checkpoint and
+  re-derives calls (provider call ids get re-minted), so any toolCallId-based
+  recovery keyed on ledger contents alone cannot survive the window.
+
+## Fix (v0.18, this entry)
+
+- Awaited pre-dispatch (`executing`) + awaited terminal (`succeeded`/`failed`)
+  effect record per tool call in a new `run_effects` RunStore table, written
+  through the core observer seam (`RunControllerLike.onToolEffectStart` /
+  `onToolEffectEnd`), keyed by tool name + canonical key-sorted args
+  (`toolEffectIdentityKey`), framework-minted `fx-<taskId>-<iteration>-<index>`
+  ids rather than provider call ids.
+- Resume reconciliation: a recorded-succeeded effect injects its stored result
+  WITHOUT re-execution; a terminal-less `executing` row replays AND is named
+  `ambiguous-then-replayed` on the receipt (`receipt.effects[]`).
+- Residual honesty: a crash INSIDE a single tool call (effect happened, process
+  died pre-record) is irreducible without tool cooperation; the stable call
+  identity exists so tools can key idempotency on it. The ambiguous case is
+  surfaced, never hidden.
+
+## Evidence
+
+- `packages/reasoning/src/kernel/capabilities/act/tool-observe.ts` (recovery
+  consult + awaited observers), `packages/reasoning/tests/kernel/act/tool-effect-durability.test.ts`
+- `packages/runtime/src/services/run-store.ts` (`run_effects` DDL +
+  `putToolEffect`/`updateToolEffectOutcome`/`listToolEffects`),
+  `packages/runtime/src/agent/durable-facade.ts` (`reconcileToolEffects`),
+  `packages/runtime/tests/durable-tool-effect-crash.test.ts`
+- GitHub issue #262 (raised externally by Raju Dandigam on the v0.16 launch
+  post).
