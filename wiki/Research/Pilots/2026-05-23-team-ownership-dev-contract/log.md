@@ -1472,3 +1472,11 @@ task: "GH #219 think.ts decomposition (2,445 LOC at bundle time; one ~2,100-LOC 
 result: completed, confidence 0.95
 outcome: "think.ts 2,445 -> 676 LOC as a 6-stage orchestrator; 10 verbatim modules under capabilities/reason/ (dispatch-think-response 800 is the largest); canonical request core kept inline by design (check-projection/check-domain-only-fc/check-volatile-placement grandfathered lines). Verifier: tsc rc=0, suite 3163/4todo/0f exact baseline, ceiling 2/2 (0 casts in think.ts+10 modules), all 4 enforcement scripts PASS, kernel invariants untouched (signature byte-stable, runner/terminate/loop-detector untouched)."
 bypass-reason: none
+
+```yaml
+date: 2026-10-22
+warden: runtime-warden + kernel-warden (parallel general-subagent dispatch; MissionBrief-in / UpwardReport-out)
+task: "GH #262 durable tool-effect records + crash-window resume reconciliation (raised externally by Raju Dandigam)"
+result: completed, confidence 0.9/0.93
+outcome: "Parent landed the core seam first (RunControllerLike awaited onToolEffectStart/onToolEffectEnd, ToolEffectSpec/Record types, RecoveredToolEffectsRef keyed by toolEffectIdentityKey=tool+canonical-args, TrustReceipt.effects[] + ui-core wire mirror). runtime-warden: run_effects RunStore table (PK run_id+effect_id, putToolEffect/updateToolEffectOutcome/listToolEffects), awaited never-throw observer impl, resumeRun reconciliation (succeeded row = recovered; terminal-less executing row = ambiguous-then-replayed), receipt threading, deterministic cross-process crash tests. kernel-warden: act routes ALL dispatch paths through tool-observe.ts recovery consult + awaited observers with fx-<taskId>-<iter>-<idx> ids and recovered-injection (tool NOT re-executed, metadata.recoveredEffect provenance). Verifier (parent): typecheck 69/69 green; core 178/0, runtime 1746/0, reasoning 3175/0, ui-core 37/0; built-surface green after package rebuild. One commit per land: core seam / kernel / runtime / docs+FM catalog+changeset. FM-A3 catalog entry added."
+bypass-reason: none
