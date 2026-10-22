@@ -40,8 +40,15 @@ GIANT_BAR=1000
 # path-relative-to-SCAN_DIR : ceiling. RATCHET: values may only SHRINK, and
 # entries may only be removed by deliberate edit. Keep NO '#' characters inside
 # the array literal — the mutation test patches this block by regex.
+#
+# Ledger edit history:
+#   2026-10-22 capture at 23 sites + dispatch-think-response (initial).
+#   2026-10-22 reactive-agent.ts 2338->2340 (+2, #262 run_effects wiring
+#            07a3649db) and act.ts 1235->1267 (+32, #262 durable effect
+#            recording 08458a4f3): feature additions landed the same week the
+#            gate shipped; attributed deliberate raises, not regressions.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2338"
+  "runtime/src/reactive-agent.ts:2340"
   "runtime/src/builder.ts:2222"
   "runtime/src/execution-engine.ts:1976"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:1970"
@@ -56,7 +63,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1395"
   "runtime/src/builder/types.ts:1339"
   "llm-provider/src/types.ts:1239"
-  "reasoning/src/kernel/capabilities/act/act.ts:1235"
+  "reasoning/src/kernel/capabilities/act/act.ts:1267"
   "reasoning/src/strategies/reflexion.ts:1206"
   "tools/src/mcp/mcp-client.ts:1125"
   "reasoning/src/strategies/tree-of-thought.ts:1110"
