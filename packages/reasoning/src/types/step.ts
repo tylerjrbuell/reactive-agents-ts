@@ -101,6 +101,23 @@ export const StepMetadataSchema = Schema.Struct({
       iter: Schema.Number,
     }),
   ),
+  /**
+   * GH #262 — durable-recovery marker. Present ONLY on an observation step
+   * whose tool result was INJECTED from a recovered success-visible
+   * `ToolEffectRecord` (crash resume: the side effect already happened and
+   * committed a terminal record before the crash, re-discovered via
+   * `RecoveredToolEffectsRef` and NOT re-executed) instead of from a live
+   * execution. The runtime binds it into `TrustReceipt.effects[]` with status
+   * "recovered". Absence ⇒ the step is a live execution.
+   */
+  recoveredEffect: Schema.optional(
+    Schema.Struct({
+      /** The framework-minted durable-effect id of the recovered record. */
+      effectId: Schema.String,
+      /** The provider call id the ORIGINAL (crashed) record was keyed by. */
+      toolCallId: Schema.String,
+    }),
+  ),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

@@ -92,6 +92,19 @@ const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
     ),
   );
 
+/**
+ * Framework-minted durable-effect id for one side-effecting tool dispatch
+ * (GH #262). Derived from the run identity + the call's dispatch POSITION —
+ * NOT the provider call id, which a crash-resume re-derivation re-mints. The
+ * durable record keys on WHAT was called (tool + canonical args); the id is
+ * provenance only. Format: `fx-<taskId>-<iteration>-<index>`.
+ */
+export const mintToolEffectId = (
+  taskId: string,
+  iteration: number,
+  index: number,
+): string => `fx-${taskId}-${iteration}-${index}`;
+
 function isGuardHardFailure(observation: string): boolean {
   return observation.includes("is not available in this run");
 }
@@ -331,6 +344,13 @@ export function handleActing(
         normalizedPendingCalls,
         input.nextMovesPlanning,
       );
+      // Durable-effect id index (GH #262): each pending call's POSITION within
+      // the live pending-call list — heals re-name Calls not ids, and batching
+      // reorders execution, so the position map keeps the minted id stable.
+      const callIndexById = new Map<string, number>();
+      for (let i = 0; i < normalizedPendingCalls.length; i++) {
+        callIndexById.set(normalizedPendingCalls[i]!.id, i);
+      }
       const batchLeaderToCalls = new Map<string, readonly ToolCallSpec[]>();
       const batchFollowers = new Set<string>();
       for (const batch of plannedBatches) {
@@ -715,6 +735,13 @@ export function handleActing(
               ...(batchCall.rationale ? { rationale: batchCall.rationale } : {}),
               callId: batchCall.id,
               healed: healedByCallId.get(batchCall.id) ?? false,
+              // Durable-effect seam (GH #262): mint the framework effect id
+              // from this member's dispatch position in the pending list.
+              effectId: mintToolEffectId(
+                state.taskId,
+                state.iteration,
+                callIndexById.get(batchCall.id) ?? 0,
+              ),
             })),
             {
               iteration: state.iteration,
@@ -908,6 +935,11 @@ export function handleActing(
             strategy: state.strategy ?? "react",
             state: asKernelStateLike(state),
             callId: tc.id,
+            // Durable-effect seam (GH #262): mint the framework effect id from
+            // this call's dispatch position in the pending list. Absent
+            // durable controller / non-durable run ⇒ the primitive writes
+            // nothing (zero cost).
+            effectId: mintToolEffectId(state.taskId, state.iteration, idx),
             // Healing already ran upstream (act.ts HealingPipeline). Pass the
             // precomputed flag rather than re-healing inside the primitive.
             healed: healResult.actions.length > 0,

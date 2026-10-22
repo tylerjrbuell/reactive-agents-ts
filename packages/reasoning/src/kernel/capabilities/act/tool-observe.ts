@@ -15,7 +15,7 @@
  * the canonical-tool-execution plan (they unify a pre-existing kernel
  * single/batch asymmetry as a separate, visible behavior change).
  */
-import { Effect, Option, Ref } from "effect";
+import { Effect, FiberRef, Option, Ref } from "effect";
 import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runHealingPipeline, type ToolCallSpec } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -25,7 +25,14 @@ import {
   errorTag,
   type HarnessPipeline,
   type KernelStateLike,
+  type RunControllerLike,
   type TaskContract,
+  type ToolEffectSpec,
+  type ToolEffectOutcome,
+  RunControllerRef,
+  RecoveredToolEffectsRef,
+  toolEffectIdentityKey,
+  canonicalToolArgsJson,
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "./tool-execution.js";
@@ -75,6 +82,17 @@ export interface ToolObserveContext {
    *  hints may only name tools present here — the registry also lists
    *  built-ins the schema withheld. Absent ⇒ hints name no tool. */
   readonly schemas?: readonly ToolSchemaLite[];
+  /**
+   * Framework-minted durable-effect id for THIS dispatch, in
+   * `fx-<taskId>-<iteration>-<index>` form (minted by the caller — the kernel
+   * act phase uses `mintToolEffectId`). Threaded only by the kernel act paths.
+   * Present ⇒ the ambient `RunControllerRef`'s `onToolEffectStart` /
+   * `onToolEffectEnd` observers (both AWAITED promises) fire around execution
+   * when a durable controller exists (GH #262). Absent ⇒ no effect record is
+   * written — zero cost (plan-execute/blueprint callers are not yet threaded;
+   * ordinary runs have no durable controller at all).
+   */
+  readonly effectId?: string;
 }
 
 export interface ToolObserveHealConfig {
@@ -195,6 +213,31 @@ const defaultEmitLog = (event: LogEvent): Effect.Effect<void, never> =>
     ),
   );
 
+// ─── Durable tool-effect observers (GH #262) ─────────────────────────────────
+
+const formatObserverError = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
+
+/**
+ * AWAIT one promise-returning tool-effect observer (pre-dispatch
+ * `onToolEffectStart` / post-outcome `onToolEffectEnd`) without ever killing
+ * the dispatch path (R11 observe-failures-are-warns precedent): the durable
+ * record is the controller's responsibility, so a rejecting/throwing observer
+ * is warn-surfaced and swallowed — it must never fail a tool call that
+ * actually ran, nor skip the counterpart record.
+ */
+const awaitToolEffectObserver = (
+  promise: Promise<unknown>,
+  site: string,
+): Effect.Effect<void, never> =>
+  Effect.tryPromise({
+    try: () => promise,
+    catch: (err) =>
+      new Error(`[durable-tool-effect] ${site} failed: ${formatObserverError(err)}`),
+  }).pipe(
+    Effect.catchAll((err) => Effect.logWarning(err.message)),
+  );
+
 // ─── Tool-policy gate (P0-4) — ONE decision shared by act.ts + the primitive ──
 
 /** Allow/deny policy the tool-observe gate enforces. Both fields optional. */
@@ -257,9 +300,13 @@ export interface ToolObserveBatchCall {
   readonly args: Record<string, unknown>;
   readonly rationale?: { readonly why: string; readonly confidence?: number };
   readonly callId: string;
-  /** Same meaning as `ToolObserveContext.healed` — pre-healed upstream, or left
+  /** Pre-healed upstream, or left
    *  for `config.heal` to compute internally when that config is supplied. */
   readonly healed?: boolean;
+  /** Per-member framework-minted durable-effect id (see
+   *  `ToolObserveContext.effectId`). The kernel act batch path mints one per
+   *  member from its dispatch position; absent ⇒ no effect record (zero cost). */
+  readonly effectId?: string;
 }
 
 /** A single member's result, carrying back the call identity for the caller's
@@ -307,7 +354,7 @@ export function executeToolAndObserveBatch(
       executeToolAndObserve(
         toolService,
         { toolName: call.toolName, args: call.args, rationale: call.rationale },
-        { ...ctx, callId: call.callId, healed: call.healed },
+        { ...ctx, callId: call.callId, healed: call.healed, effectId: call.effectId },
         config,
       ).pipe(
         Effect.map(
@@ -470,6 +517,40 @@ export function executeToolAndObserve(
       } satisfies ToolObserveResult;
     }
 
+    // ── 1d. Durable tool-effect recovery consult (GH #262) ────────────────────
+    // Crash-resume seam: `RecoveredToolEffectsRef` is seeded by the durable
+    // resume path with the SUCCESS-visible tool-effect records of the crashed
+    // run, keyed by tool + canonical args (provider ids are re-minted on
+    // resume, so identity is WHAT was called). A matching "succeeded" record
+    // means the effect ALREADY happened: inject the stored result WITHOUT
+    // re-executing. "executing" records (ambiguous crash window) deliberately
+    // fall through to a live dispatch — the caller-side reconciliation owns
+    // that ambiguity. Null map (every normal run) ⇒ zero behavioral change.
+    const recoveredEffects = yield* FiberRef.get(RecoveredToolEffectsRef);
+    const recoveredRecord = recoveredEffects?.get(
+      toolEffectIdentityKey(toolName, canonicalToolArgsJson(args)),
+    );
+    if (recoveredRecord?.status === "succeeded") {
+      const content = recoveredRecord.resultContent ?? "";
+      const obsStep = makeStep("observation", content, {
+        toolCallId: ctx.callId,
+        observationResult: makeObservationResult(toolName, true, content),
+        recoveredEffect: {
+          effectId: recoveredRecord.effectId,
+          toolCallId: recoveredRecord.toolCallId,
+        },
+      });
+      return {
+        obsStep,
+        content,
+        ...(content !== "" ? { fullResult: content } : {}),
+        success: true,
+        durationMs: 0,
+        healed,
+        healedArgs: args,
+      } satisfies ToolObserveResult;
+    }
+
     // ── 2. ToolService unavailable → failed observation (parity with act.ts) ─
     if (Option.isNone(toolService)) {
       const content = `[Tool "${toolName}" requested but ToolService is not available]`;
@@ -508,6 +589,32 @@ export function executeToolAndObserve(
       });
     }
 
+    // ── 3b. Durable tool-effect START record (GH #262) ───────────────────────
+    // Fire-and-RESOLVE (awaits the controller promise) — the pre-effect
+    // "executing" row must be committed BEFORE the world can change, or the
+    // record is worth nothing. Only fires when the caller minted an effectId
+    // (kernel act paths) AND a controller with the observer exists; observer
+    // failures are warn-swallowed so dispatch never depends on durability.
+    const durableCtl: RunControllerLike | null = yield* FiberRef.get(RunControllerRef);
+    let effectSpec: ToolEffectSpec | undefined;
+    if (
+      durableCtl !== null &&
+      ctx.effectId !== undefined &&
+      durableCtl.onToolEffectStart !== undefined
+    ) {
+      effectSpec = {
+        effectId: ctx.effectId,
+        toolName,
+        toolCallId: ctx.callId,
+        iteration: ctx.iteration,
+        argsJson: canonicalToolArgsJson(args),
+      };
+      yield* awaitToolEffectObserver(
+        durableCtl.onToolEffectStart(effectSpec),
+        "onToolEffectStart",
+      );
+    }
+
     // ── 4. Execute + observe (shared core) ───────────────────────────────────
     yield* emitLog({ _tag: "tool_call", tool: toolName, iteration: ctx.iteration, timestamp: new Date() });
     const startMs = Date.now();
@@ -529,6 +636,23 @@ export function executeToolAndObserve(
       },
     );
     const durationMs = Date.now() - startMs;
+
+    // ── 4b. Durable tool-effect END record (GH #262) ─────────────────────────
+    // Awaited immediately after the outcome is known: a crash can never fall
+    // between "effect happened" and "outcome durable" except inside the tool
+    // call itself — precisely the ambiguity the "executing" status encodes.
+    // Success records the FULL pre-compression content (`fullContent`) so a
+    // resumed run can inject a complete result without re-executing the tool.
+    if (effectSpec !== undefined && durableCtl?.onToolEffectEnd !== undefined) {
+      const outcome: ToolEffectOutcome = exec.success
+        ? { status: "succeeded", resultContent: exec.fullContent ?? exec.content }
+        : { status: "failed", errorText: exec.content };
+      yield* awaitToolEffectObserver(
+        durableCtl.onToolEffectEnd(effectSpec, outcome),
+        "onToolEffectEnd",
+      );
+    }
+
     yield* emitLog({
       _tag: "tool_result",
       tool: toolName,
