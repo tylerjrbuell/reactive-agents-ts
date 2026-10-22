@@ -2,6 +2,15 @@
 
 **For any AI coding agent (Claude/Cursor/Codex/Aider/etc.).** This file is a repository-local operational cache, not an authority above current source, tests, or canonical wiki specs. Historical detail belongs in [MEMORY-ARCHIVE.md](MEMORY-ARCHIVE.md). ▶ = active/open, ✅ = shipped, ⚠️ = caution, 📍 = audit/reference.
 
+## Current Status (2026-10-22, quality program Phase A)
+
+**Quality & Scalability Program ACTIVE** — living tracker `wiki/Planning/Implementation-Plans/2026-10-22-quality-scalability-program.md` (input: 2026-10-22 decomposition-scale audit). Phase A gates shipped: `scripts/check-file-size.sh` (24-file shrink-only ceiling ledger, #259 closed via PR #263) + `scripts/check-string-errors.sh` (new Error( pool pinned 300, PR #269/#270). Red-on-cut fixtures 9+7, ride the auto-globbed CI lane (24 scripts discovered). Gate caught real drift day one (#262's +2/+32 → attributed ledger edits). Open next: Task 3 instanceof inventory+gate (128 sites measured), Task 4 #221 execution-engine decomp (runtime-warden), Task 5 seam tests #260, then D1 Promise→Effect bridge. Baselines MOVED (peer's #262 durable-effect work landed mid-window): runtime 1,679 pass/7 skip/0 fail/310 files, reasoning see tracker after #270; do not reuse #217/#219-era numbers.
+
+**CI-ops rules earned 2026-10-22 (execute-backlog v26c has the detail):**
+1. ALL jobs red at ~20s on `bun install --frozen-lockfile` = upstream patch drift in a `^-range` devDep (bun-types 1.4.3→1.4.4). Fix: standalone resync PR (pattern `66ca4f186`, main did the same at `5f1f5fd92`), then rebase in-flight branches. Recurring disease, budget ~15 min.
+2. Adding/removing ANY test file requires `bun run --cwd apps/docs metrics && metrics:sync-readme` + README commit IN that PR; sequential PRs must re-sync after each dependency merges (generator counts test FILES live).
+3. This box's `gh`: NO `--exit-status` on `pr checks --watch` (prints help, rc=1). Poll `gh pr checks --json bucket` instead. Also: `gh pr checks | grep fail` right after watch can race pending reruns — trust buckets.
+
 ## Current Status (2026-10-11, v0.17.0 shipped)
 
 **v0.17.0 shipped** — 35/35 packages live on npm (`reactive-agents@0.17.0` + 33 scoped + `create-reactive-agent`), GitHub Release `v0.17.0` published with 28 notes, post-publish sync `0bb35387` on `main` (VERSION/CHANGELOG stamped, changesets consumed). `main`/`dev`/`origin` all at `0bb35387`.

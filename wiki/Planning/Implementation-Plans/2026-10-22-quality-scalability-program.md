@@ -50,12 +50,12 @@ tags: [quality-program, gates, decomposition, modernization-bridge, execute-back
 **Interfaces:**
 - Produces: `SIZE_BASELINE` associative array mapping `packages/**.ts` (non-test) path → integer ceiling. CI lane auto-globs it (`ci.yml:85` loop); `enforcement-scripts.test.ts` discovers it automatically.
 
-- [ ] **Step 1: Capture baseline** — `find packages/*/src -name '*.ts' ! -name '*.test.ts' | xargs wc -l` filtered `>=1000`; 23 files pinned at their exact current values (2,338 reactive-agent.ts … 1,046 console-exporter.ts). Type-declaration files (`*/types.ts`, `runtime-types.ts`) are pinned but marked `# type-file: shrink allowed, decomposition not required` in the array comment.
-- [ ] **Step 2: Write failing fixture** — fixture runs the script against a temp tree copy where one baselined file grew +1 line: expect exit 1; where a baselined file shrank 10 lines with no baseline edit: expect exit 1 (shrink-only law); where scan root is empty: expect exit 1 (SCAN-EMPTY). Run: `bun test packages/reasoning/tests/enforcement-scripts-file-size.test.ts --timeout 30000`. Verify RED before implementing.
-- [ ] **Step 3: Implement script** — bash, POSIX-safe, no process substitution beyond bashisms already used by `check-orphans.sh`; counts via `wc -l`; error format `::error:: <path> LOC <n> > ceiling <cap>` (or shrink variant). Exit 0 green.
-- [ ] **Step 4: Green fixture + real run** — fixture PASS; `bash scripts/check-file-size.sh` PASS on real tree.
-- [ ] **Step 5: Full gates** — `bun run build`, `bunx turbo run typecheck` unaffected; commit, PR → dev, CI green, merge, close #259, pilot-log entry (parent-direct).
-- [ ] **Step 6: File the untracked giants** (design item B4) — create issues for `strategies/plan-execute.ts` (1,714), `core/services/event-bus.ts` (1,576), `runtime.ts` (1,540), `benchmarks/runner.ts` (1,599) using the HS template (LOC, exports count, package precedent); label `type:chore,priority:p2,health-sweep`. Bundling deferred — the ratchet already contains them.
+- [x] **Step 1: Capture baseline** — `find packages/*/src -name '*.ts' ! -name '*.test.ts' | xargs wc -l` filtered `>=1000`; 23 files pinned at their exact current values (2,338 reactive-agent.ts … 1,046 console-exporter.ts). Type-declaration files (`*/types.ts`, `runtime-types.ts`) are pinned but marked `# type-file: shrink allowed, decomposition not required` in the array comment.
+- [x] **Step 2: Write failing fixture** — fixture runs the script against a temp tree copy where one baselined file grew +1 line: expect exit 1; where a baselined file shrank 10 lines with no baseline edit: expect exit 1 (shrink-only law); where scan root is empty: expect exit 1 (SCAN-EMPTY). Run: `bun test packages/reasoning/tests/enforcement-scripts-file-size.test.ts --timeout 30000`. Verify RED before implementing.
+- [x] **Step 3: Implement script** — bash, POSIX-safe, no process substitution beyond bashisms already used by `check-orphans.sh`; counts via `wc -l`; error format `::error:: <path> LOC <n> > ceiling <cap>` (or shrink variant). Exit 0 green.
+- [x] **Step 4: Green fixture + real run** — fixture PASS; `bash scripts/check-file-size.sh` PASS on real tree.
+- [x] **Step 5: Full gates** — `bun run build`, `bunx turbo run typecheck` unaffected; commit, PR → dev, CI green, merge, close #259, pilot-log entry (parent-direct).
+- [x] **Step 6: File the untracked giants** (design item B4) — create issues for `strategies/plan-execute.ts` (1,714), `core/services/event-bus.ts` (1,576), `runtime.ts` (1,540), `benchmarks/runner.ts` (1,599) using the HS template (LOC, exports count, package precedent); label `type:chore,priority:p2,health-sweep`. Bundling deferred — the ratchet already contains them.
 
 ### Task 2: String-errors ceiling ratchet (`check-string-errors.sh`)
 
@@ -66,10 +66,10 @@ tags: [quality-program, gates, decomposition, modernization-bridge, execute-back
 **Interfaces:**
 - Produces: count of `new Error(` occurrences in `packages/*/src/**/*.ts` excluding `*.test.ts` and `*_` comment-stripped lines is NOT required; metric = plain `grep -rEn "new Error\("` on non-test src files (comments count; documented honestly — same tradeoff `console-ceiling` avoided by AST; text metric chosen for bash portability, comment inflation documented in header).
 
-- [ ] **Step 1: Pin baseline** — measured 2026-10-22: **299**. Script header records date + value + the metric definition.
-- [ ] **Step 2: Failing fixture** — copy a src file into fixture temp tree with +1 `new Error(` (expect red); −1 without baseline edit (expect red, shrink-only); empty root (expect red).
-- [ ] **Step 3: Implement** — same skeleton as Task 1 script.
-- [ ] **Step 4: Green + merge** — full gate cycle as Task 1; issue: create `ci: string-errors ceiling ratchet` on the fly (p1, area:harness) and close it in the PR.
+- [x] **Step 1: Pin baseline** — measured 2026-10-22: **299** (raised to 300 same day: +1 in-src site from #262 08458a4f3, attributed ledger edit, PR #270). Script header records date + value + the metric definition.
+- [x] **Step 2: Failing fixture** — copy a src file into fixture temp tree with +1 `new Error(` (expect red); −1 without baseline edit (expect red, shrink-only); empty root (expect red).
+- [x] **Step 3: Implement** — same skeleton as Task 1 script.
+- [x] **Step 4: Green + merge** — full gate cycle as Task 1; issue: create `ci: string-errors ceiling ratchet` on the fly (p1, area:harness) and close it in the PR.
 
 ### Task 3: `instanceof Error` inventory + new-sites gate
 
@@ -153,7 +153,7 @@ Same protocol; largest family (547 LOC). If fiber-parent changes cannot be prove
 
 ## Verification Protocol (cross-cutting, every task)
 
-- Package suite at EXACT recorded baseline (runtime 1,677/7/0/309 files; reasoning 3,163/4/0/366 files; others recorded at task start)
+- Package suite at EXACT recorded baseline (post-#262/#263/#269/#270: runtime 1,679/7/0/310 files; reasoning 3,189/4/0/369 files; others recorded at task start — the #217-era 1,677/309 and #219-era 3,163/366 numbers are retired, durable-effect work moved them)
 - `bunx tsc --noEmit -p <pkg>` rc=0; downstream turbo typecheck for anything touching builder/agent surfaces
 - `as-unknown-as-ceiling` 2/2, counts flat
 - `bash scripts/check-file-size.sh` + `check-string-errors.sh` green (or with committed shrink edits)
@@ -162,3 +162,8 @@ Same protocol; largest family (547 LOC). If fiber-parent changes cannot be prove
 ## Execution Log
 
 - 2026-10-22: Plan created (approved design, spec stage waived by user). Awaiting go.
+- 2026-10-22: **Task 1 SHIPPED** (PR #263, closed #259): `check-file-size.sh` 24-file shrink-only ledger + 9-case red-on-cut fixture. Review finding caught pre-merge and fixed: ledger-size floor removed (a floor would fail exactly when decompositions land). Gate earned keep same day: forced attributed edits for #262 feature growth (+2 reactive-agent.ts, +32 act.ts). Step 6 done: giants filed #265/#266/#267/#268.
+- 2026-10-22: **Task 2 SHIPPED** (PR #269 + ledger fix PR #270, both merged): `check-string-errors.sh` pool pinned 300 (299 capture; +1 attributed #262 in-src site), 7 fixtures, echo-test parses the ledger (no magic numbers survives legitimate edits).
+- 2026-10-22: **Incidents resolved en route** (lessons in execute-backlog v26c/v26d + MEMORY): (a) frozen-lockfile drift (bun-types 1.4.3→1.4.4) killed every job at step 1 ~2h — resync PR #264 + rebases; (b) `metrics:check` requires `metrics:sync-readme` in any PR touching test-file counts — README sync commits added to #263/#269, re-synced after dependency merges; (c) docs-sync `capabilities-manifest` drift from #262 (act.ts touched, CAPABILITIES.md untouched) is tree-wide and blocked #270 — audited honestly (registry parity green, #262 registered no handler), sanctioned `--ack` re-baseline shipped as its own commit d43f4a25f.
+- 2026-10-22: **Baselines re-measured post-A2** (replaces #217/#219-era numbers throughout): runtime 1,679 pass / 7 skip / 0 fail / 310 files; reasoning 3,189 pass / 4 todo / 0 fail / 369 files; `check-string-errors` 300/300; `check-file-size` 24 entries at ceiling; enforcement lane 24/24.
+- NEXT: Task 3 (instanceof inventory 128 + second counter, in flight on bundle/quality-program-t3-instanceof), Task 4 (#221 execution-engine, runtime-warden), Task 5 (seam seeds #260).

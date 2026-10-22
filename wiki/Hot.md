@@ -10,6 +10,39 @@ updated: 2026-10-20
 
 ---
 
+## 2026-10-22 — Quality & Scalability Program launched: gates landed (#259 done, #260 open)
+
+Living tracker: `wiki/Planning/Implementation-Plans/2026-10-22-quality-scalability-program.md`
+(input: `wiki/Research/Audit-Reports-2026-10-22/decomposition-scale-audit.md`). Phase A shipped:
+
+- **#263 (Task 1, closes #259):** `scripts/check-file-size.sh` — 24 files pinned at wc -l
+  ceilings, shrink-only deliberate-ledger law, new-giant-at-birth block, SCAN-EMPTY,
+  9 red-on-cut fixtures. Caught its first drift THE SAME DAY: #262's durable-effect
+  features (+2 reactive-agent.ts / +32 act.ts) forced the attributed ledger edit —
+  the designed friction, working.
+- **#269 + #270 (Task 2):** `scripts/check-string-errors.sh` — `new Error(` pool pinned
+  (299 capture; 300 after #262's +1 in-src site, attributed). Fixtures parse the ledger
+  (no magic numbers).
+- Peer landed **#262** (durable tool-effect records + crash-window resume) mid-program;
+  it is the reason both ledgers needed their first edits.
+- New giant files filed: #265 plan-execute (1,714), #266 event-bus (1,576), #267
+  runtime.ts (1,540), #268 benchmarks/runner (1,599).
+- Two CI-ops incidents fixed en route (lessons recorded in execute-backlog v26c +
+  memory): `bun install --frozen-lockfile` drift from `bun-types` upstream patch
+  killed every job at step 1 for ~2h — resync PR #264 (`66ca4f186`) unblocked;
+  Docs Anti-Rot `metrics:check` requires `metrics:sync-readme` in ANY PR touching
+  test-file counts.
+- Current baselines (post-#262/#263/#269): runtime 1,679 pass / 7 skip / 0 fail
+  (310 files); reasoning 3,189 pass / 4 todo / 0 fail (369 files). NOTE for next
+  bundles: #262 changed these from the #217-#219 numbers; plan re-captured.
+
+Next: Task 3 (instanceof inventory 128 sites + gate extension), Task 4 (#221
+execution-engine decomp, runtime-warden), Task 5 (seam seeds #260), then the D1
+Effect-bridge families. Machine gotchas this box: gh has no `--exit-status` on
+`pr checks` (poll buckets instead); CI runs queue behind peer concurrency.
+
+---
+
 ## 2026-10-20 (c) — #219 think.ts decomposition (execute-backlog)
 
 Third bundle of the window. PR #258 merged (`6330bb92d`), #219 closed.

@@ -1480,3 +1480,11 @@ task: "GH #262 durable tool-effect records + crash-window resume reconciliation 
 result: completed, confidence 0.9/0.93
 outcome: "Parent landed the core seam first (RunControllerLike awaited onToolEffectStart/onToolEffectEnd, ToolEffectSpec/Record types, RecoveredToolEffectsRef keyed by toolEffectIdentityKey=tool+canonical-args, TrustReceipt.effects[] + ui-core wire mirror). runtime-warden: run_effects RunStore table (PK run_id+effect_id, putToolEffect/updateToolEffectOutcome/listToolEffects), awaited never-throw observer impl, resumeRun reconciliation (succeeded row = recovered; terminal-less executing row = ambiguous-then-replayed), receipt threading, deterministic cross-process crash tests. kernel-warden: act routes ALL dispatch paths through tool-observe.ts recovery consult + awaited observers with fx-<taskId>-<iter>-<idx> ids and recovered-injection (tool NOT re-executed, metadata.recoveredEffect provenance). Verifier (parent): typecheck 69/69 green; core 178/0, runtime 1746/0, reasoning 3175/0, ui-core 37/0; built-surface green after package rebuild. One commit per land: core seam / kernel / runtime / docs+FM catalog+changeset. FM-A3 catalog entry added."
 bypass-reason: none
+
+```yaml
+date: 2026-10-22
+warden: none (parent-direct; scripts/ + gate fixtures are outside warden tables)
+task: "Quality program Tasks 1+2: file-size ratchet + string-throw ceiling gates (GH #259)"
+result: completed, confidence 0.9
+outcome: "check-file-size.sh: 24 files pinned at wc -l ceilings, shrink-only deliberate-ledger law, new-giant block, SCAN-EMPTY, 9 red-on-cut fixtures (PR #263). check-string-errors.sh: new Error( pool pinned 300 (299 capture +1 attributed #262 site via PR #270 fix), 7 fixtures parsing the ledger (PR #269). Gate earned its keep same-day: forced attributed ledger edits for #262's real feature growth (+2/+32). Review finding fixed pre-merge: removed ledger-size floor (would go red on program success). TDD honored: fixtures RED before scripts both times. Verified (measured): reasoning 3,189 pass / 4 todo / 0 fail (369 files); runtime 1,679 / 7 skip / 0 fail (310 files); enforcement lane 24/24. NOTE both suites moved off the 217-219-era baselines because of peer durable-effect work #262; program recorded new numbers in plan Verification Protocol.."
+bypass-reason: none
