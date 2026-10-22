@@ -1,4 +1,4 @@
-import type { TaskResult, TaskContract, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
+import type { TaskResult, TaskContract, TerminatedBy, TrustReceipt, EffectReceiptRecord } from '@reactive-agents/core'
 import { computeTrustReceipt, deriveInterventionsFromSteps } from '@reactive-agents/core'
 import {
     resolveGoalAchieved,
@@ -52,6 +52,16 @@ export interface DeriveTaskOutcomeCtx {
     /** Fork lineage (`run()` only, `options.forkedFrom`) — passed through
      * verbatim onto the receipt, does not affect verdict/confidence. */
     readonly forkedFrom?: string
+    /**
+     * Durable tool-effect reconciliation ledger (GH #262): the resume path
+     * derives these from the crashed run's `run_effects` rows (succeeded →
+     * `recovered`, terminal-less `executing` → `ambiguous-then-replayed`)
+     * and threads them here so the receipt binds the crash-window outcome to
+     * the stable identity. OMITTED on every ordinary run — an empty/absent
+     * list leaves the receipt byte-identical to pre-#262 shape (the effects
+     * passthrough in `computeTrustReceipt` is additive-only).
+     */
+    readonly effects?: readonly EffectReceiptRecord[]
     /**
      * True when the run paused for approval/interaction before this
      * `TaskResult` became terminal. Forces `deliverables` to `undefined`
@@ -165,6 +175,9 @@ export function deriveTaskOutcome(taskResult: TaskResult, ctx: DeriveTaskOutcome
         modelId: ctx.modelId ?? 'claude-sonnet-4-6',
         ...(ctx.configHash !== undefined ? { configHash: ctx.configHash } : {}),
         ...(ctx.forkedFrom !== undefined ? { forkedFrom: ctx.forkedFrom } : {}),
+        // Durable tool-effect recovery ledger (GH #262) — absent/empty on
+        // every ordinary run, so the receipt stays byte-identical there.
+        ...(ctx.effects !== undefined && ctx.effects.length > 0 ? { effects: ctx.effects } : {}),
         now: ctx.now ?? Date.now(),
     })
 

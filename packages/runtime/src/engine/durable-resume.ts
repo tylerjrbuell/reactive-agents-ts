@@ -21,6 +21,7 @@ import {
   type RunStatus,
   type ApprovalRecord,
   type InteractionRecord,
+  type ToolEffectRow,
 } from "../services/run-store.js";
 import {
   DurableRunNotFoundError,
@@ -34,6 +35,15 @@ export interface ResumePayload {
   readonly run: RunRecord;
   /** Codec-serialized `KernelState` from the highest-iteration checkpoint. */
   readonly stateJson: string;
+  /**
+   * Tool-effect rows of the crashed run (GH #262), including terminal-less
+   * `executing` ones — the caller (resumeRun) reconciles: rows still
+   * `executing` are the AMBIGUOUS crash window, `succeeded` rows are
+   * recovery-eligible. The kernel act phase consumes the succeeded subset
+   * via `RecoveredToolEffectsRef` and injects their recorded results
+   * without re-executing.
+   */
+  readonly toolEffects: readonly ToolEffectRow[];
 }
 
 /**
@@ -74,7 +84,8 @@ export const loadResumePayload = (params: {
         }),
       );
     }
-    return { run, stateJson: checkpoint.stateJson };
+    const toolEffects = yield* store.listToolEffects(params.runId);
+    return { run, stateJson: checkpoint.stateJson, toolEffects };
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
 /**

@@ -103,6 +103,28 @@ export interface InteractionRecord {
   readonly valueJson?: string;
 }
 
+/**
+ * Durable record of one side-effecting tool call (GH #262). Row statuses:
+ * `executing` = pre-effect write committed, no terminal write yet (the
+ * AMBIGUOUS crash window — the effect may or may not have happened);
+ * `succeeded`/`failed` = the awaited terminal write committed too. Identity
+ * for recovery is (tool name, canonical args JSON) — see core's
+ * `toolEffectIdentityKey` — NOT the provider call id, which a resume re-mints.
+ */
+export interface ToolEffectRow {
+  readonly runId: string;
+  readonly effectId: string;
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly argsJson: string;
+  readonly status: "executing" | "succeeded" | "failed";
+  readonly resultContent?: string;
+  readonly errorText?: string;
+  readonly createdAt: number;
+  readonly committedAt?: number;
+}
+
 export interface RunStore {
   /** Insert (or replace) a run row, status seeded to `running`. */
   readonly createRun: (r: {
@@ -206,6 +228,37 @@ export interface RunStore {
     interactionId: string,
     valueJson: string,
   ) => Effect.Effect<boolean, never>;
+  /**
+   * Insert the pre-effect `executing` row for one side-effecting tool call
+   * (GH #262). Must be awaited by the caller BEFORE the tool dispatches —
+   * a crash between here and the terminal write is precisely the ambiguity
+   * the `executing` status encodes.
+   */
+  readonly putToolEffect: (r: {
+    runId: string;
+    effectId: string;
+    toolName: string;
+    toolCallId: string;
+    iteration: number;
+    argsJson: string;
+  }) => Effect.Effect<void, never>;
+  /**
+   * Record the terminal outcome of one previously inserted effect row.
+   * Returns false when no matching `executing` row exists (e.g. the
+   * pre-effect write was lost) — a lost `executing` row degrades to "row
+   * absent", which is safe: an unknown effect is never skipped.
+   */
+  readonly updateToolEffectOutcome: (r: {
+    runId: string;
+    effectId: string;
+    status: "succeeded" | "failed";
+    resultContent?: string;
+    errorText?: string;
+  }) => Effect.Effect<boolean, never>;
+  /** All effect rows for a run, oldest first. Used by the resume path. */
+  readonly listToolEffects: (
+    runId: string,
+  ) => Effect.Effect<readonly ToolEffectRow[], never>;
 }
 
 export class RunStoreService extends Context.Tag("RunStoreService")<
@@ -255,6 +308,20 @@ interface InteractionRow {
   prompt: string;
   status: string;
   value_json: string | null;
+}
+
+interface ToolEffectDbRow {
+  run_id: string;
+  effect_id: string;
+  tool_name: string;
+  tool_call_id: string;
+  iteration: number;
+  args_json: string;
+  status: string;
+  result_content: string | null;
+  error_text: string | null;
+  created_at: number;
+  committed_at: number | null;
 }
 
 /**
@@ -345,6 +412,22 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         created_at    INTEGER NOT NULL,
         decided_at    INTEGER,
         PRIMARY KEY (run_id, interaction_id)
+      )`,
+    );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS run_effects (
+        run_id         TEXT NOT NULL,
+        effect_id      TEXT NOT NULL,
+        tool_name      TEXT NOT NULL,
+        tool_call_id   TEXT NOT NULL,
+        iteration      INTEGER NOT NULL,
+        args_json      TEXT NOT NULL,
+        status         TEXT NOT NULL,
+        result_content TEXT,
+        error_text     TEXT,
+        created_at     INTEGER NOT NULL,
+        committed_at   INTEGER,
+        PRIMARY KEY (run_id, effect_id)
       )`,
     );
 
@@ -630,6 +713,60 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             )
             .run(valueJson, now(), runId, interactionId);
           return res.changes > 0;
+        }),
+
+      putToolEffect: ({ runId, effectId, toolName, toolCallId, iteration, argsJson }) =>
+        Effect.sync(() => {
+          db.prepare(
+            `INSERT OR REPLACE INTO run_effects
+               (run_id, effect_id, tool_name, tool_call_id, iteration, args_json, status, result_content, error_text, created_at, committed_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'executing', NULL, NULL, ?, NULL)`,
+          ).run(runId, effectId, toolName, toolCallId, iteration, argsJson, now());
+        }),
+
+      updateToolEffectOutcome: ({ runId, effectId, status, resultContent, errorText }) =>
+        Effect.sync(() => {
+          const res = db
+            .prepare(
+              `UPDATE run_effects
+                  SET status = ?, result_content = ?, error_text = ?, committed_at = ?
+                WHERE run_id = ? AND effect_id = ? AND status = 'executing'`,
+            )
+            .run(
+              status,
+              status === "succeeded" ? (resultContent ?? null) : null,
+              status === "failed" ? (errorText ?? null) : null,
+              now(),
+              runId,
+              effectId,
+            );
+          return res.changes > 0;
+        }),
+
+      listToolEffects: (runId) =>
+        Effect.sync(() => {
+          const rows = db
+            .prepare(
+              `SELECT run_id, effect_id, tool_name, tool_call_id, iteration, args_json, status,
+                      result_content, error_text, created_at, committed_at
+                 FROM run_effects
+                WHERE run_id = ?
+             ORDER BY created_at ASC, iteration ASC`,
+            )
+            .all(runId) as ToolEffectDbRow[];
+          return rows.map((row) => ({
+            runId: row.run_id,
+            effectId: row.effect_id,
+            toolName: row.tool_name,
+            toolCallId: row.tool_call_id,
+            iteration: row.iteration,
+            argsJson: row.args_json,
+            status: row.status as ToolEffectRow["status"],
+            ...(row.result_content !== null ? { resultContent: row.result_content } : {}),
+            ...(row.error_text !== null ? { errorText: row.error_text } : {}),
+            createdAt: row.created_at,
+            ...(row.committed_at !== null ? { committedAt: row.committed_at } : {}),
+          }));
         }),
     };
   });

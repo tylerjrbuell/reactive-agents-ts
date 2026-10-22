@@ -1402,6 +1402,8 @@ export class ReactiveAgent<TOut = unknown> {
             readonly durableRunId?: string
             /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
             readonly forkedFrom?: string
+            /** Durable tool-effect ledger (GH #262) — threaded by `resumeRun` through the durable facade. */
+            readonly recoveredToolEffects?: readonly import('@reactive-agents/core').EffectReceiptRecord[]
         }
     ): Effect.Effect<AgentResult, Error> {
         return buildRunTaskEffect(this._runTaskDeps(), input, options)

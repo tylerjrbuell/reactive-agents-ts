@@ -13,8 +13,14 @@
 
 import { Effect } from 'effect'
 import { ManagedRuntime } from 'effect'
-import { ResumeStateRef } from '@reactive-agents/core'
+import {
+    ResumeStateRef,
+    RecoveredToolEffectsRef,
+    toolEffectIdentityKey,
+} from '@reactive-agents/core'
+import type { EffectReceiptRecord, ToolEffectRecord } from '@reactive-agents/core'
 import { join } from 'node:path'
+import type { ToolEffectRow } from '../services/run-store.js'
 import {
     loadResumePayload,
     loadForkPayload,
@@ -36,6 +42,73 @@ const safeParseJson = (s: string): unknown => {
     } catch {
         return s
     }
+}
+
+/**
+ * Reconcile a crashed run's tool-effect rows for resume (GH #262).
+ *
+ * TWO consumers, one pass over the rows:
+ *   - the SUCCESS-visible subset (`succeeded` rows) becomes the
+ *     `RecoveredToolEffectsRef` seed map, keyed by
+ *     `toolEffectIdentityKey(toolName, argsJson)`; the kernel act phase
+ *     consults it before each dispatch and injects the recorded result
+ *     WITHOUT re-executing when a matching succeeded record exists.
+ *   - the receipt ledger: `succeeded` rows stamp the receipt `recovered`
+ *     (the effect demonstrably happened and was not re-executed — either
+ *     injected on resume when the call was re-derived, or already carried
+ *     inside the restored checkpoint state, in which case the store row is
+ *     its durable proof), while terminal-less `executing` rows stamp
+ *     `ambiguous-then-replayed` (only the pre-effect write committed, so the
+ *     resumed run MUST dispatch live to find out). `failed` rows carry no
+ *     recovery semantics and are omitted — the failure is already visible in
+ *     the restored steps and the receipt's toolCallStats.
+ *
+ * Documented fallback (per the parent coordination note): consumption-aware
+ * statuses would scan the resumed run's step metadata (`recoveredEffect` is
+ * marked by the kernel on injected steps), but under the kernel contract
+ * every re-derived call either consumes a succeeded record or is absent from
+ * it — so the row-status fallback below is faithful for both halves and
+ * needs no coupling to the kernel's step-metadata shape.
+ */
+export const reconcileToolEffects = (rows: readonly ToolEffectRow[]): {
+    recoveredMap: Map<string, ToolEffectRecord>
+    receiptEffects: readonly EffectReceiptRecord[]
+} => {
+    const succeeded = rows.filter((r) => r.status === 'succeeded')
+    const executing = rows.filter((r) => r.status === 'executing')
+    const recoveredMap = new Map<string, ToolEffectRecord>()
+    for (const row of succeeded) {
+        recoveredMap.set(toolEffectIdentityKey(row.toolName, row.argsJson), {
+            toolName: row.toolName,
+            toolCallId: row.toolCallId,
+            iteration: row.iteration,
+            argsJson: row.argsJson,
+            status: 'succeeded',
+            resultContent: row.resultContent ?? '',
+            effectId: row.effectId,
+        })
+    }
+    const receiptEffects: EffectReceiptRecord[] = [
+        ...succeeded.map(
+            (row): EffectReceiptRecord => ({
+                toolName: row.toolName,
+                argsJson: row.argsJson,
+                status: 'recovered',
+                effectId: row.effectId,
+                iteration: row.iteration,
+            }),
+        ),
+        ...executing.map(
+            (row): EffectReceiptRecord => ({
+                toolName: row.toolName,
+                argsJson: row.argsJson,
+                status: 'ambiguous-then-replayed',
+                effectId: row.effectId,
+                iteration: row.iteration,
+            }),
+        ),
+    ]
+    return { recoveredMap, receiptEffects }
 }
 
 /**
@@ -69,6 +142,8 @@ export interface DurableFacadeDeps {
         readonly taskId?: string
         readonly durableRunId?: string
         readonly forkedFrom?: string
+        /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
+        readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
     }) => Effect.Effect<AgentResult, Error>
     readonly runDurable: (params: RunDurableParams) => Promise<AgentResult>
 }
@@ -116,13 +191,36 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
             )
 
-            // 2. Re-run to completion with the restored state seeded via FiberRef.
-            //    reasoning-think reads ResumeStateRef, deserializes, and forwards it
-            //    as KernelInput.resumeState so the runner continues mid-stream.
-            const pipeline = deps.buildRunTaskEffect(payload.run.task, { taskId: runId })
+            // 2. Reconcile the crashed run's tool-effect rows (GH #262):
+            //    succeeded rows seed `RecoveredToolEffectsRef` (the kernel act
+            //    phase injects their results WITHOUT re-executing), all
+            //    recovery-bearing rows thread the trust receipt, and the
+            //    terminal-less `executing` rows keep their ambiguity
+            //    inspectable in the store.
+            const { recoveredMap, receiptEffects } = reconcileToolEffects(
+                payload.toolEffects,
+            )
+
+            // 3. Re-run to completion with the restored state + the recovered
+            //    effects seeded via FiberRef.
+            //    - reasoning-think reads ResumeStateRef, deserializes, and
+            //      forwards it as KernelInput.resumeState so the runner
+            //      continues mid-stream.
+            //    - The kernel act phase reads RecoveredToolEffectsRef before
+            //      each dispatch; a matching succeeded record means the
+            //      effect already happened. Null-seeding is skipped entirely
+            //      (runs with no recorded effects resume at zero cost).
+            const pipeline = deps.buildRunTaskEffect(payload.run.task, {
+                taskId: runId,
+                ...(receiptEffects.length > 0 ? { recoveredToolEffects: receiptEffects } : {}),
+            })
+            const withRecovery =
+                recoveredMap.size > 0
+                    ? Effect.locally(pipeline, RecoveredToolEffectsRef, recoveredMap)
+                    : pipeline
             try {
                 const result = await deps.runtime.runPromise(
-                    Effect.locally(pipeline, ResumeStateRef, payload.stateJson),
+                    Effect.locally(withRecovery, ResumeStateRef, payload.stateJson),
                 )
                 await Effect.runPromise(
                     markRunStatus({ dbPath, runId, status: 'completed' }),

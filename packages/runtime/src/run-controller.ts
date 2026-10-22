@@ -1,5 +1,9 @@
 import { Effect, Layer } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type {
+    ToolEffectSpec,
+    ToolEffectOutcome,
+} from "@reactive-agents/core";
 import type { AgentStreamEvent } from "./stream-types.js";
 import type { RunControllerLike } from "@reactive-agents/core";
 import {
@@ -52,6 +56,14 @@ export interface DurableCheckpointDeps {
  * Only called when `.withDurableRuns()` was set, so absent that opt-in the
  * controller's `onCheckpoint` stays undefined and the kernel pays zero cost.
  */
+/** How much of a tool result the `run_effects` row keeps (GH #262). The
+ * kernel act phase passes the FULL pre-compression content as the effect
+ * outcome; without a cap one huge tool result would make every resume pay
+ * the full row-nonzero cost. 16384 covers a large file digest / page dump
+ * while keeping the store bounded — the injected content is capped to the
+ * same value, so a resumed run sees exactly what was persisted. */
+const MAX_RESULT_CONTENT_CHARS = 16_384;
+
 export function installDurableCheckpointing(
     controller: RunControllerLike,
     deps: DurableCheckpointDeps,
@@ -94,6 +106,67 @@ export function installDurableCheckpointing(
             }),
             "runtime/src/run-controller.ts:putCheckpoint",
         );
+    };
+
+    // Durable tool-effect observers (GH #262). UNLIKE onCheckpoint these are
+    // AWAITED (the kernel act phase awaits the returned promise before
+    // dispatch / past the outcome), because a committed-but-never-observed
+    // `executing` row documents nothing: the whole point is that a crash can
+    // never fall between the world changing and the row existing. They must
+    // NEVER reject though — a store failure must degrade the run to
+    // "effect unrecorded" (never skipped, never failed), so each write is
+    // swallow-and-resolve via runWrite's swallow + an explicit `.catch`
+    // backstop. Writes still join the in-flight set so flush()/finish() waits
+    // on them at run end.
+    controller.onToolEffectStart = async (spec: ToolEffectSpec): Promise<void> => {
+        try {
+            await runWrite(
+                Effect.gen(function* () {
+                    const store = yield* RunStoreService;
+                    yield* store.putToolEffect({
+                        runId,
+                        effectId: spec.effectId,
+                        toolName: spec.toolName,
+                        toolCallId: spec.toolCallId,
+                        iteration: spec.iteration,
+                        argsJson: spec.argsJson,
+                    });
+                }),
+                "runtime/src/run-controller.ts:putToolEffect",
+            );
+        } catch {
+            // Unreachable while runWrite keeps swallowing its own defects, but
+            // the observer contract says "never throw" — degrade silently.
+        }
+    };
+
+    controller.onToolEffectEnd = async (
+        spec: ToolEffectSpec,
+        outcome: ToolEffectOutcome,
+    ): Promise<void> => {
+        try {
+            await runWrite(
+                Effect.gen(function* () {
+                    const store = yield* RunStoreService;
+                    yield* store.updateToolEffectOutcome({
+                        runId,
+                        effectId: spec.effectId,
+                        status: outcome.status,
+                        ...(outcome.status === "succeeded"
+                            ? {
+                                  resultContent: outcome.resultContent.slice(
+                                      0,
+                                      MAX_RESULT_CONTENT_CHARS,
+                                  ),
+                              }
+                            : { errorText: outcome.errorText }),
+                    });
+                }),
+                "runtime/src/run-controller.ts:updateToolEffectOutcome",
+            );
+        } catch {
+            // Same never-throw contract as onToolEffectStart.
+        }
     };
 
     const flush = (): Promise<void> =>
@@ -194,6 +267,16 @@ export class RunController implements RunControllerLike { // RunControllerLike f
      * call site already no-ops when absent, so this stays zero-cost.
      */
     onCheckpoint?: (serializedState: string, iteration: number) => void;
+
+    /**
+     * Durable tool-effect observers (GH #262) — see
+     * {@link installDurableCheckpointing}. Declared so the assignments and
+     * kernel-act reads typecheck against the concrete instance. Undefined
+     * until durable runs are enabled; the kernel's act phase already no-ops
+     * when absent, so non-durable runs pay zero cost.
+     */
+    onToolEffectStart?: (spec: ToolEffectSpec) => Promise<void>;
+    onToolEffectEnd?: (spec: ToolEffectSpec, outcome: ToolEffectOutcome) => Promise<void>;
 
     /**
      * Latest snapshot thunk noted by the kernel (Arc 1 Task 5). Stored, not

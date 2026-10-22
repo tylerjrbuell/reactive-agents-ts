@@ -21,6 +21,7 @@ import {
     AgentId,
     TaskId,
     type TrustReceipt,
+    type EffectReceiptRecord,
 } from '@reactive-agents/core'
 import type {
     Task,
@@ -110,6 +111,13 @@ export interface RunTaskEffectOptions {
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
+    /**
+     * Durable tool-effect reconciliation ledger (GH #262) — threaded by the
+     * resume path (`resumeRun`) from the crashed run's `run_effects` rows so
+     * the trust receipt binds recovered/ambiguous effects to their stable
+     * identity. Absent on every ordinary run.
+     */
+    readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
 }
 
 /**
@@ -258,6 +266,13 @@ export const buildRunTaskEffect = (
                     ? { configHash: deps.durableResume.configHash }
                     : {}),
                 ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                // Durable tool-effect reconciliation (GH #262) — the resume
+                // path threads the crashed run's effect rows here so the
+                // receipt surfaces them; omitted on ordinary runs.
+                ...(options?.recoveredToolEffects !== undefined &&
+                options.recoveredToolEffects.length > 0
+                    ? { effects: options.recoveredToolEffects }
+                    : {}),
                 isPausedRun,
                 now: Date.now(),
             })
