@@ -42,6 +42,18 @@ export interface TrustReceiptWire {
   readonly modelId: string;
   readonly computedAt: number;
   readonly [key: string]: unknown;
+  /**
+   * Durable tool-effect recovery ledger (GH #262), passed through by the
+   * server from the runtime receipt. Typed here for IntelliSense although the
+   * index signature already admits it; loose pass-through unchanged.
+   */
+  readonly effects?: ReadonlyArray<{
+    readonly toolName: string;
+    readonly argsJson: string;
+    readonly status: "recovered" | "ambiguous-then-replayed";
+    readonly effectId: string;
+    readonly iteration: number;
+  }>;
 }
 
 // ── Base tags (server-originated, exist today) ────────────────────────────

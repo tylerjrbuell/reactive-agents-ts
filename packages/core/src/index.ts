@@ -65,6 +65,7 @@ export type { Rationale } from "./types/rationale.js";
 export type {
   TrustReceipt,
   DeliverableReceipt,
+  EffectReceiptRecord,
   InterventionReceipt,
   InterventionStepLike,
 } from "./types/receipt.js";
@@ -225,8 +226,8 @@ export {
 export type { RunContext } from "./run-context.js";
 
 // ─── Streaming ───
-export { StreamingTextCallback, CurrentRunContext, RunControllerRef, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef } from "./streaming.js";
-export type { InteractionResponse } from "./streaming.js";
+export { StreamingTextCallback, CurrentRunContext, RunControllerRef, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RecoveredToolEffectsRef, toolEffectIdentityKey, canonicalToolArgsJson } from "./streaming.js";
+export type { InteractionResponse, ToolEffectSpec, ToolEffectOutcome, ToolEffectRecord } from "./streaming.js";
 export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 
 // ─── AgentMemory port (NS §3.1 — FIX-34) ───

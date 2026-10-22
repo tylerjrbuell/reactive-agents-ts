@@ -14,6 +14,21 @@
  * adding a REQUIRED field here requires updating that mirror too.
  */
 /**
+ * One durable tool-effect entry on the receipt (GH #262). Identity uses the
+ * canonical args JSON (stable across provider call-id re-minting), not the
+ * toolCallId alone.
+ */
+export interface EffectReceiptRecord {
+  readonly toolName: string;
+  /** Canonical (key-sorted) JSON of the tool arguments. */
+  readonly argsJson: string;
+  readonly status: "recovered" | "ambiguous-then-replayed";
+  /** Framework-minted effect id from the crashed run's pre-effect record. */
+  readonly effectId: string;
+  readonly iteration: number;
+}
+
+/**
  * One declared deliverable's completion status, named on the receipt (B2 /
  * meta-loop 4a). Computed from the RunContract's deliverable specs × the
  * step-based artifact scan: `produced: false` names a MISSING deliverable so a
@@ -74,6 +89,16 @@ export interface TrustReceipt {
    * byte-identical to v1. Ordered by iteration (emission order).
    */
   readonly interventions?: readonly InterventionReceipt[];
+  /**
+   * Durable tool-effect recovery ledger (GH #262): effects of a crashed run
+   * recorded by the RunStore, threaded after resume reconciliation.
+   * "recovered" = recorded succeeded and the stored result was injected on
+   * resume without re-execution; "ambiguous-then-replayed" = only the
+   * pre-effect write committed, the effect may or may not have happened, and
+   * the resumed run replayed it. Present only on a durable run that crashed
+   * mid-window, so ordinary receipts stay byte-identical.
+   */
+  readonly effects?: readonly EffectReceiptRecord[];
   /** Terminal reason (mirrors AgentResult.terminatedBy). */
   readonly terminatedBy?: string;
   /**
@@ -242,6 +267,16 @@ export function computeTrustReceipt(input: {
    * ordinary run so the receipt stays byte-identical.
    */
   readonly replayed?: boolean;
+  /**
+   * Durable tool-effect recovery ledger (GH #262): effects of a crashed run
+   * observed by the RunStore, threaded by the resume path after
+   * reconciliation. "recovered" = recorded succeeded, result injected on
+   * resume WITHOUT re-execution; "ambiguous-then-replayed" = only the
+   * pre-effect write committed, so the effect may or may not have happened
+   * and the resumed run replayed it. Caller-derived; omit for zero ordinary
+   * runs so the receipt is byte-identical to v1.
+   */
+  readonly effects?: readonly EffectReceiptRecord[];
   readonly now: number;
 }): TrustReceipt {
   const ok = input.toolCalls.filter((tc) => tc.ok).length;
@@ -321,6 +356,9 @@ export function computeTrustReceipt(input: {
       ? { interventions: input.interventions }
       : {}),
     ...(input.replayed === true ? { replayed: true as const } : {}),
+    ...(input.effects !== undefined && input.effects.length > 0
+      ? { effects: input.effects }
+      : {}),
     modelId: input.modelId,
     ...(input.configHash !== undefined ? { configHash: input.configHash } : {}),
     computedAt: input.now,

@@ -95,7 +95,108 @@ export interface RunControllerLike {
    * not throw and must not block the loop.
    */
   noteCheckpoint?(snapshot: () => string, iteration: number): void;
+  /**
+   * Durable tool-effect seam (GH #262) - record a side-effecting tool call
+   * BEFORE it executes. Awaited by design: the pre-effect `executing` row must
+   * be committed before the world can change, or the record is worth nothing.
+   * Present only when durable runs are enabled (`.withDurableRuns()`); absent
+   * otherwise, so non-durable runs pay zero cost. Must not throw; persistence failures surface via swallowed-error emission in the implementation.
+   */
+  onToolEffectStart?(spec: ToolEffectSpec): Promise<void>;
+  /**
+   * Durable tool-effect seam (GH #262) - record the outcome of a tool call
+   * AFTER it completed (success or failure). Awaited so a crash can never
+   * fall between "effect happened" and "outcome durable" except inside the
+   * tool call itself. Must not throw.
+   */
+  onToolEffectEnd?(spec: ToolEffectSpec, outcome: ToolEffectOutcome): Promise<void>;
 }
+
+/**
+ * Stable identity of one side-effecting tool call (GH #262). `effectId` is
+ * framework-minted at dispatch (`fx-<taskId>-<iteration>-<index>`), NOT the
+ * provider call id: a crash-resume re-derivation re-mints provider ids, so the
+ * durable record must never key on them. `toolCallId` is carried for
+ * provenance (what the ledger used) only.
+ */
+export interface ToolEffectSpec {
+  readonly effectId: string;
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  /** Canonical (key-sorted) JSON of the tool arguments (half of the recovery identity). */
+  readonly argsJson: string;
+}
+
+/** Terminal outcome of one recorded tool effect (GH #262). */
+export type ToolEffectOutcome =
+  | {
+      readonly status: "succeeded";
+      /** Full tool-result content (capped by the writer) so a resumed run can inject it without re-executing. */
+      readonly resultContent: string;
+    }
+  | {
+      readonly status: "failed";
+      readonly errorText: string;
+    };
+
+/**
+ * Durable record of one tool effect as persisted by the RunStore (GH #262).
+ * Status "executing" means the pre-effect write committed but no terminal
+ * write did: the AMBIGUOUS crash-window case (effect may or may not have
+ * happened). Resume reconciliation consumes this status.
+ */
+export interface ToolEffectRecord {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly argsJson: string;
+  readonly status: "executing" | "succeeded" | "failed";
+  readonly resultContent?: string;
+  readonly errorText?: string;
+  readonly effectId: string;
+}
+
+/**
+ * FiberRef seeded by the durable-resume path (`.withDurableRuns()` resumeRun)
+ * with the SUCCESS-visible tool-effect records of the crashed run, keyed by
+ * {@link toolEffectIdentityKey}. The kernel act phase consults it before each
+ * dispatch: a matching "succeeded" record means the effect already happened;
+ * inject the stored result, do not re-execute. Null on every normal run and
+ * on resumes with no recorded effects (zero cost).
+ */
+export const RecoveredToolEffectsRef = FiberRef.unsafeMake<
+  ReadonlyMap<string, ToolEffectRecord> | null
+>(null);
+
+/**
+ * Recovery identity for a tool effect: tool name + canonical args JSON. The
+ * resume path re-derives calls (provider call ids are re-minted), so effects
+ * bind to WHAT was called, not what id the provider gave it.
+ */
+export const toolEffectIdentityKey = (
+  toolName: string,
+  argsJson: string,
+): string => `${toolName}\x00${argsJson}`;
+
+/**
+ * Canonical JSON key-sorted stringify; stable across insertion order so the
+ * effect identity of {a:1,b:2} equals that of {b:2,a:1}. Arrays keep order
+ * (positions are semantic); primitives stringify like JSON.stringify.
+ */
+export const canonicalToolArgsJson = (args: unknown): string => {
+  const w: (value: unknown) => unknown = (value) => {
+    if (Array.isArray(value)) return value.map(w);
+    if (value !== null && typeof value === "object") {
+      const entries = Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => [k, w(v)]);
+      return Object.fromEntries(entries);
+    }
+    return value;
+  };
+  return JSON.stringify(w(args)) ?? String(args);
+};
 
 /**
  * FiberRef carrying the per-call RunController for runStream() executions.
