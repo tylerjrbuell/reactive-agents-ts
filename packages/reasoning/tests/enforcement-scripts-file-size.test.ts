@@ -94,9 +94,14 @@ describe("check-file-size.sh — real tree", () => {
   });
 
   it("discovers its baseline: the ledger is non-empty and every entry exists", () => {
+    // Floor is deliberately >0, NOT the captured size: as decomposition lands
+    // (#220/#221/#222), entries LEAVE the ledger. A size floor would go red on
+    // success and incentivize keeping stale inflated ceilings — the exact
+    // slow-regrowth channel this gate exists to close. Vacuous-green is already
+    // covered by the script's own SCAN-EMPTY guard and the per-entry checks.
     const src = readFileSync(SCRIPT, "utf8");
     const entries = [...src.matchAll(/"([^"]+):\d+"/g)].map((m) => m[1]);
-    expect(entries.length).toBeGreaterThanOrEqual(23);
+    expect(entries.length).toBeGreaterThan(0);
     for (const rel of entries) {
       expect(readFileSync(join(REPO_ROOT, "packages", rel), "utf8").length).toBeGreaterThan(0);
     }
