@@ -68,9 +68,19 @@ describe("check-string-errors.sh — real tree", () => {
     expect(code).toBe(0);
   });
 
-  it("the baseline matches the documented metric (no silent metric drift)", () => {
-    const { out } = runGuard(join(REPO_ROOT, "packages"));
-    expect(out).toContain("299");
+  it("the script's echoed count and baseline agree with its own ledger (no hard-coded magic)", () => {
+    // Parse the ledger from the script instead of pinning a literal here: a
+    // deliberate future baseline edit (attributed drift, like the 299->300
+    // #262 raise) must NOT require touching this test — only the real-tree
+    // green-on-repo test above decides truth. The echo assertion guards the
+    // metric itself from silent drift (e.g. a grep-pattern change).
+    const script = readFileSync(SCRIPT, "utf8");
+    const m = script.match(/STRING_ERRORS_BASELINE=(\d+)/);
+    expect(m).not.toBeNull();
+    const { code, out } = runGuard(join(REPO_ROOT, "packages"));
+    expect(code).toBe(0);
+    expect(out).toContain(`at baseline ${m![1]}`);
+    expect(out).toContain(`${m![1]} string-throw sites`);
   });
 });
 
