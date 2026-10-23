@@ -13,15 +13,12 @@
  *   6. Terminal hooks: onDone / onError
  */
 import { WRITING_TOOL_NAMES } from "../capabilities/verify/post-conditions.js";
-import { findUnconsumedStoredKeys } from "../capabilities/verify/unconsumed-evidence.js";
-import { looksSubstantive } from "../capabilities/verify/quality-utils.js";
-import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
 import { Effect, FiberRef, Option, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
-import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME, scratchpadStoreRef } from "@reactive-agents/tools";
+import { sentinelDeliverable } from "@reactive-agents/core";
+import { createToolCallResolver, selectToolCallingDriver, scratchpadStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -32,55 +29,41 @@ import {
   type KernelState,
   type KernelContext,
   type KernelInput,
-  type KernelMessage,
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
 import { RunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-envelope.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
-import { gatewayComplete } from "../llm-gateway.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
-import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
-import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier, resolveResultSeverity, verifyAndEmit, humanizeVerifierFailure } from "../../kernel/capabilities/verify/verifier.js";
-import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
+import { extractOutputFormat, nominateRequiredTools } from "../../kernel/capabilities/comprehend/task-intent.js";
+import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
 import { assessActionSatisfiability } from "../../kernel/contract/satisfiability.js";
 import { recordRequirementsDeclared } from "../../kernel/ledger/emit.js";
 import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
 import { judgmentComprehendShadow } from "../../kernel/capabilities/comprehend/judgment-classification.js";
-import { judgmentGroundingFabricationShadowFromState } from "../../kernel/capabilities/verify/grounding-fabrication-judgment-shadow.js";
 import {
   applyExplicitOverrides,
   compileHarnessPlan,
   type PlanStrategy,
 } from "../../kernel/policy/harness-plan.js";
-import { emitContractCompiled, emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
-import {
-  validateOutputFormat,
-  validateContentCompleteness,
-  buildFinalAnswerCandidate,
-  finalizeOutput,
-  buildSynthesisPrompt,
-  deScaffoldRawDeliverable,
-  type FinalizedOutput,
-} from "./output-synthesis.js";
+import { emitContractCompiled, emitGuardFired } from "../../kernel/utils/diagnostics.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
 import { CurrentRunBudget, CurrentRunBudgetLimits } from "../run-budget.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
-import {
-  TERMINAL_ANSWER_REASONS,
-  hasSuccessfulSubstantiveToolCall,
-  hasSuccessfulRequiredToolCall,
-} from "./runner-helpers/grounded-terminal.js";
 
 // ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
 // Tier-aware guard thresholds, deliverable assembly, recovery steering, and
 // state-query helpers all moved to ./runner-helpers/<bucket>.ts. Re-exports
 // below keep `kernel/loop/runner.js` as the stable import surface for callers
 // (output-quality-gate.test.ts, tier-guard-config.test.ts, strategies/*).
+// Task 9 (2026-10-23): the §7.5 input derivation, the resume re-entry blocks,
+// the §8/§8.5/§8.7-§8.8 post-loop finalization, the §9.0 terminal verifier
+// gate, and the §9 output quality gate moved verbatim to the ./runner-*.ts
+// modules imported below — every script-anchored region (deriveConditions,
+// compileHarnessPlan + applyExplicitOverrides, decideForcedAbstention,
+// terminate routing, the main while-loop) stayed inline in runKernel().
 import {
   TIER_GUARD_THRESHOLDS,
   resolveMaxSameTool,
@@ -89,18 +72,19 @@ import {
   resolveHorizonProfile,
   type HorizonProfile,
 } from "./runner-helpers/horizon-profile.js";
-import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
-import { decideGroundingBlockOutcome } from "./runner-helpers/grounding-block.js";
 import {
-  assembleDeliverable,
   commitDeliverable,
   passthroughOutputDeliverable,
-  deliverableTerminationReason,
-  countDeliverableCandidates,
-  countArtifacts,
-  buildEffectiveToolsUsed,
-  collectValidatedObservations,
 } from "./runner-helpers/deliverable.js";
+import { runApprovalResumeReentry, runInteractionResumeReentry } from "./runner-resume-reentry.js";
+import { deriveForcedAbstentionInputs } from "./runner-forced-abstention-inputs.js";
+import {
+  applyRequiredToolsFinalCheck,
+  applyNonFinalAnswerDeliverable,
+  applyOutputOwnershipCluster,
+} from "./runner-post-loop-deliverable.js";
+import { runTerminalVerifierGate } from "./runner-terminal-verify-gate.js";
+import { runOutputQualityGate } from "./runner-output-quality-gate.js";
 
 // WS-6 Phase 4 (2026-05-29) — per-iteration body lifted to iterate-pass.ts.
 // The outer while loop stays here; the body invokes runIterationPass() once
@@ -110,8 +94,6 @@ import {
   type IterationCarrier,
   type IterationConfig,
 } from "./iterate-pass.js";
-import { handleActing } from "../capabilities/act/act.js";
-import { makeStep } from "../capabilities/sense/step-utils.js";
 
 // Re-export the public helper surface so external imports of
 // `kernel/loop/runner.js` remain unchanged.
@@ -129,35 +111,11 @@ export {
 export type { TierGuardConfig } from "./runner-helpers/tier-guards.js";
 
 // ── Durable HITL resume re-entry (Phase D) ────────────────────────────────────
-
-/** How a resumed run re-enters at a pending approval gate. */
-export interface ApprovalReentry {
-  readonly action: "execute" | "observe" | "none";
-  readonly call?: { readonly name: string; readonly arguments: unknown };
-  readonly observation?: string;
-}
-
-/**
- * Map a stored approval gate + the human's decision to a re-entry action. Pure:
- * approved → execute the EXACT stored call (no LLM re-think, so the executed call
- * is the one the human saw — spec §7 determinism); denied → observe the denial so
- * the next think reacts; gateId mismatch → no-op (fall through to normal think).
- */
-export function resolveApprovalReentry(
-  gate: { readonly gateId: string; readonly toolName: string; readonly args: unknown },
-  decision: { readonly gateId: string; readonly status: "approved" | "denied"; readonly reason?: string } | undefined,
-): ApprovalReentry {
-  if (!decision || decision.gateId !== gate.gateId) return { action: "none" };
-  if (decision.status === "approved") {
-    return { action: "execute", call: { name: gate.toolName, arguments: gate.args } };
-  }
-  return {
-    action: "observe",
-    observation: `Action ${gate.toolName} was denied by a human${
-      decision.reason ? `: ${decision.reason}` : ""
-    }.`,
-  };
-}
+// ApprovalReentry + resolveApprovalReentry now LIVE in ./runner-resume-reentry.ts
+// (quality program Task 9); re-exported here so the stable
+// `kernel/loop/runner.js` import surface is unchanged (zero consumer edits).
+export { resolveApprovalReentry } from "./runner-resume-reentry.js";
+export type { ApprovalReentry } from "./runner-resume-reentry.js";
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -743,147 +701,12 @@ export function runKernel(
     }
 
     // ── Durable HITL resume re-entry (Phase D) ───────────────────────────────
-    // When resuming a checkpoint that paused at an approval gate, apply the
-    // human's stored decision HERE — before the loop — so the gated step is
-    // resolved without re-calling the LLM (spec §7 determinism). Approved:
-    // execute the exact stored call once via the act capability, with
-    // `approvalBypass` set so the gate does not re-pause it. Denied: inject the
-    // denial as an LLM-visible message so the next think reacts. No-op on a
-    // normal run (both fields undefined → zero cost).
-    //
-    // The paused checkpoint is a clean terminal state (act.ts terminate on
-    // pause: status:"done", terminatedBy:"awaiting-approval", a sentinel
-    // output). We MUST reset those terminal fields on resume — exactly as the
-    // interaction re-entry directly below does — so the main loop re-runs and
-    // synthesizes a real answer instead of returning the pause sentinel. The
-    // "execute" branch happened to work without this reset (handleActing sets
-    // status back to "acting"/"thinking" as a side effect), but the "observe"
-    // (deny) branch does NOT run a tool: without the reset, status stayed
-    // "done", the main loop was skipped, and denyRun returned "Run paused —
-    // awaiting human approval." as the final answer. Reset unconditionally so
-    // both branches re-enter the loop.
-    if (state.meta.awaitingApprovalFor && effectiveInput.approvalDecision) {
-      const gate = state.meta.awaitingApprovalFor;
-      const reentry = resolveApprovalReentry(gate, effectiveInput.approvalDecision);
-      if (reentry.action !== "none") {
-        state = transitionState(state, {
-          status: "thinking",
-          output: null,
-          meta: {
-            ...state.meta,
-            awaitingApprovalFor: undefined,
-            terminatedBy: undefined,
-          },
-        });
-      }
-      if (reentry.action === "execute" && reentry.call) {
-        state = transitionState(state, {
-          meta: {
-            ...state.meta,
-            approvalBypass: true,
-            pendingNativeToolCalls: [
-              {
-                id: crypto.randomUUID(),
-                name: reentry.call.name,
-                arguments: (reentry.call.arguments ?? {}) as Record<string, unknown>,
-              },
-            ],
-          },
-        });
-        state = yield* handleActing(state, currentContext);
-        state = transitionState(state, {
-          meta: { ...state.meta, approvalBypass: undefined },
-        });
-      } else if (reentry.action === "observe" && reentry.observation) {
-        // Inject the denial as an LLM-VISIBLE message pair (synthetic assistant
-        // tool-call + tool_result), not only a step: prompt assembly
-        // (fromKernelState) builds the EventLog from state.messages, NOT steps,
-        // so a bare observation step is invisible to the next think and the
-        // model would never learn its action was denied. Mirrors the
-        // interaction re-entry's tool_result injection. The act gate paused
-        // BEFORE assembleConversation ran, so state.messages has no record of
-        // the gated call — synthesize the assistant-call + tool_result pair here
-        // (keyed on the stored gateId) so the denial renders as that call's
-        // result. Keep the observation step too, for the systems-observed
-        // record (entropy/metrics/debrief).
-        const observation = reentry.observation;
-        const assistantCall: KernelMessage = {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: gate.gateId,
-              name: gate.toolName,
-              arguments: (gate.args ?? {}) as Record<string, unknown>,
-            },
-          ],
-        };
-        const toolResult: KernelMessage = {
-          role: "tool_result",
-          toolCallId: gate.gateId,
-          toolName: gate.toolName,
-          content: observation,
-        };
-        state = transitionState(state, {
-          messages: [...state.messages, assistantCall, toolResult],
-          steps: [...state.steps, makeStep("observation", observation)],
-        });
-      }
-    }
+    // Decomposed verbatim to ./runner-resume-reentry.ts (Task 9).
+    state = yield* runApprovalResumeReentry({ state, effectiveInput, currentContext });
 
     // ── Durable interaction resume re-entry (Task 10) ────────────────────────
-    // Mirrors the approval re-entry directly above for the request_user_input
-    // rail. When resuming a checkpoint that paused for user interaction, inject
-    // the human's stored response HERE — before the loop — as an observation the
-    // next think reacts to, then clear `meta.awaitingInteractionFor`. Unlike
-    // approvals there is NO execute/skip branch: an interaction response is
-    // ALWAYS injected as the pending call's result. The paused checkpoint carries
-    // `status:"done"` + a sentinel output (act.ts terminate on pause), so we also
-    // reset the terminal fields — status back to "thinking", output/terminatedBy
-    // cleared — so the main loop re-runs and synthesizes a fresh answer from the
-    // injected response instead of returning the pause sentinel. No-op on a
-    // normal run (both fields undefined → zero cost).
-    if (state.meta.awaitingInteractionFor && effectiveInput.interactionResponse) {
-      const pending = state.meta.awaitingInteractionFor;
-      const response = effectiveInput.interactionResponse;
-      if (response.interactionId === pending.interactionId) {
-        // The act gate paused BEFORE assembleConversation ran, so state.messages
-        // has no record of the request_user_input call. Synthesize the
-        // assistant-call + tool_result pair here so the prompt-assembly path
-        // (fromKernelState builds the EventLog from state.messages, NOT steps)
-        // renders the human's answer as the pending call's result. A plain
-        // observation step alone would be invisible to the LLM prompt.
-        const observation = `The user responded: ${response.valueJson}`;
-        const assistantCall: KernelMessage = {
-          role: "assistant",
-          content: "",
-          toolCalls: [
-            {
-              id: pending.interactionId,
-              name: REQUEST_USER_INPUT_TOOL_NAME,
-              arguments: { kind: pending.kind, prompt: pending.prompt },
-            },
-          ],
-        };
-        const toolResult: KernelMessage = {
-          role: "tool_result",
-          toolCallId: pending.interactionId,
-          toolName: REQUEST_USER_INPUT_TOOL_NAME,
-          content: observation,
-        };
-        state = transitionState(state, {
-          status: "thinking",
-          output: null,
-          messages: [...state.messages, assistantCall, toolResult],
-          steps: [...state.steps, makeStep("observation", observation)],
-          meta: {
-            ...state.meta,
-            awaitingInteractionFor: undefined,
-            terminatedBy: undefined,
-          },
-        });
-      }
-    }
+    // Decomposed verbatim to ./runner-resume-reentry.ts (Task 9).
+    state = yield* runInteractionResumeReentry({ state, effectiveInput });
 
     // ── 7. Main loop ─────────────────────────────────────────────────────────
     // WS-6 Phase 4 (2026-05-29): the per-iteration body that used to live
@@ -980,79 +803,18 @@ export function runKernel(
     // with the generic harness-forced message — the earned signal must be preserved.
     // (O3 I2 fix: guard against forced re-terminate clobbering model abstention.)
     //
-    // Input derivation (conservative fallbacks documented inline):
-    //   requiredToolUnavailable: a declared required tool absent from the registered
-    //     schema set. False when allKnownTools is empty (no schema provided = unknown).
-    //   missingRequiredTools: unsatisfied required-tool names (empty array fallback).
-    //   ungroundedSynthesisRejections: synthesisRetryCount + groundingBlockRetry
-    //     (same counters Task 5's legitimacy gate reads). Fallback: 0.
-    //   iterationsRemaining: maxIterations − state.iteration clamped ≥ 0.
-    //     Special case: when a required tool is structurally unavailable AND the
-    //     pre-loop guard fired (iteration=0, status=failed), treat as 0 —
-    //     no iterations can fix a missing tool. Deviation documented in Task 6 report.
-    //   hasDeliverable: countDeliverableCandidates(state) > 0 — never overrides a genuine deliverable.
-    //
-    // Route through terminate() (the single-owner gateway) so terminatedBy +
-    // output are set via the canonical path. The post-condition gate in terminate()
-    // passes "abstained" through (added in Task 6) — an abstained run cannot
-    // honestly meet post-conditions when grounding was structurally impossible.
+    // Input derivation decomposed verbatim to ./runner-forced-abstention-inputs.ts
+    // (Task 9); the decideForcedAbstention call + terminate() route below stay
+    // here per the control-plane grandfathering (script-anchored site).
     if (state.meta.terminatedBy !== "abstained") {
-      const allKnownToolsForAbstain = (
-        currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []
-      ).map((t) => t.name);
-      const knownToolSetForAbstain = new Set(allKnownToolsForAbstain);
-      const unavailableRequired = requiredTools.filter((t) => !knownToolSetForAbstain.has(t));
-      const requiredToolUnavailable =
-        allKnownToolsForAbstain.length > 0 && unavailableRequired.length > 0;
-      // Conservative: structurally-unavailable tool at iteration=0 → treat as
-      // exhausted (the pre-loop guard fired; no iterations could have helped).
-      const iterationsRemainingForAbstain =
-        requiredToolUnavailable && state.iteration === 0
-          ? 0
-          : Math.max(0, currentOptions.maxIterations - state.iteration);
-      // F1 — grounded-terminal invariant (2026-07-02): when the Arbitrator's
-      // grounded-terminal gate already spent its ONE grounding redirect
-      // (meta.groundingRedirectCount ≥ 1), the loop exited via a terminal
-      // final answer (TERMINAL_ANSWER_REASONS), and STILL no substantive tool
-      // call has succeeded — this is the SECOND ungrounded terminal attempt.
-      // Count the redirect + this attempt toward the ≥2 ungrounded-synthesis
-      // threshold (which the redirect made reachable) so the accepted-but-
-      // ungrounded terminal converts to an honest `abstained` here. Grounded
-      // runs (any successful call) and non-answer terminals contribute 0 —
-      // pre-F1 arithmetic byte-identical.
-      const groundingRedirects = state.meta.groundingRedirectCount ?? 0;
-      // Grounding is measured against the DECLARED REQUIRED tools (2026-07-22).
-      // Previously this asked "did ANY non-pseudo tool succeed", so a run whose
-      // required `file-read` failed 3× was still deemed grounded because
-      // `list-directory` returned ok — see hasSuccessfulRequiredToolCall's
-      // docstring for the trace. Falls back to the substantive predicate when
-      // the task declares no required tools (behavior unchanged there).
-      const groundedOnRequired = hasSuccessfulRequiredToolCall(state.steps, requiredTools);
-      const secondUngroundedTerminal =
-        groundingRedirects > 0 &&
-        TERMINAL_ANSWER_REASONS.has(String(state.meta.terminatedBy ?? "")) &&
-        !groundedOnRequired;
-      const ungroundedSynthesisRejections =
-        (state.meta.synthesisRetryCount ?? 0) +
-        (state.meta.groundingBlockRetry ?? 0) +
-        (secondUngroundedTerminal ? groundingRedirects + 1 : 0);
-      // Deliverable-truth (Wave C / C2, audit 01-F1 item 7): a REAL file
-      // artifact (tool-declared ledger entry) is now an authoritative "we have a
-      // deliverable" signal, so abstention never forces over one — even a
-      // code-execute / shell write the old any-success heuristic would have
-      // recognized only via its observation. Evidence candidates remain the
-      // fallback so non-artifact tasks (research answers, no file) stay sane:
-      // the union is a superset of the prior signal, so no run that was
-      // previously protected loses protection (behavior pinned).
-      // A REAL artifact always protects. Evidence candidates only protect a run
-      // that actually GROUNDED on its required tools: otherwise a single
-      // successful adjacent call (`list-directory` on a `file-read` task)
-      // satisfies this predicate, and since `hasDeliverable` is the FIRST
-      // short-circuit in decideForcedAbstention, honest abstention could never
-      // fire on exactly the ungrounded shape it exists for (2026-07-22).
-      const hasDeliverableForAbstain =
-        countArtifacts(state) > 0 ||
-        (groundedOnRequired && countDeliverableCandidates(state) > 0);
+      const {
+        requiredToolUnavailable,
+        unavailableRequired,
+        iterationsRemainingForAbstain,
+        secondUngroundedTerminal,
+        ungroundedSynthesisRejections,
+        hasDeliverableForAbstain,
+      } = deriveForcedAbstentionInputs({ state, currentInput, currentOptions, requiredTools });
 
       const forced = decideForcedAbstention({
         requiredToolUnavailable,
@@ -1122,746 +884,34 @@ export function runKernel(
     // Final safety net: if the loop exited without failure but required quotas
     // are still missing, fail with a deterministic missing_required_tool error.
     // This applies uniformly across all non-failed exits.
-    if (
-      state.status !== "failed" &&
-      requiredTools.length > 0 &&
-      !isAwaitingApproval &&
-      !isAwaitingInteraction &&
-      !isAbstained &&
-      !isBudgetTerminal
-    ) {
-      const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      const missingTools = missingRequiredToolsForInput(state.steps, currentInput, state.ledger);
-      if (missingTools.length > 0) {
-        const visibleTools = (currentInput.availableToolSchemas ?? []).map((t) => t.name);
-        const allKnownTools = (currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []).map((t) => t.name);
-        const calledTools = [...effectiveToolsUsed];
-        const terminatedBy = String(
-          state.meta.terminatedBy ??
-            (state.iteration >= currentOptions.maxIterations ? "max_iterations" : "unknown"),
-        );
-        // Render quantities so the user sees N/M satisfaction rather than a bare
-        // tool name. Without this, a quota of 2 with 1 successful call looks
-        // identical to "tool never called" in the error output.
-        const successCounts = buildSuccessfulToolCallCounts(state.steps);
-        const quantities = currentInput.requiredToolQuantities ?? {};
-        const renderRequirement = (name: string) => {
-          const need = quantities[name] ?? 1;
-          const have = successCounts[name] ?? 0;
-          return need > 1 ? `${name}×${need} (${have}/${need} satisfied)` : name;
-        };
-        // Invariant: status=failed implies output=null. Earlier paths
-        // (loop_graceful, harness_deliverable) may have populated state.output
-        // with a lastThought or assembled artifacts; once required-tool
-        // satisfaction fails the run, those become invalid deliverables and
-        // must be discarded — otherwise they leak as the user-visible answer
-        // even though the run is structurally a failure.
-        state = transitionState(state, {
-          status: "failed",
-          output: null,
-          error:
-            `Task incomplete — missing_required_tool: required tool(s) not called: ${missingTools.map(renderRequirement).join(", ")}.\n` +
-            `required=[${requiredTools.map(renderRequirement).join(", ")}]\n` +
-            `called=[${calledTools.join(", ")}]\n` +
-            `available=[${allKnownTools.join(", ")}]\n` +
-            `visible=[${visibleTools.join(", ")}]\n` +
-            `terminatedBy=${terminatedBy}`,
-        });
-      }
-    }
-
-    // ── 8.5. Non-authoritative termination → harness deliverable ───────────
-    // When the model stopped without explicitly calling `final-answer` (e.g. an
-    // `end_turn` text after a failed tool call, or a dispatcher-forced early
-    // stop) and there are substantive tool artifacts, swap state.output for the
-    // assembled deliverable so the quality gate has real data to synthesize
-    // from. Without this, whatever the model emitted in its last turn — often
-    // an apology, a hallucination, or the raw text of the last observation —
-    // leaks through as the final answer.
-    //
-    // Scoped narrowly to explicit "model ended turn without final-answer"
-    // markers so strategies that deliver their own output without setting
-    // `terminatedBy` keep control of the output.
-    //
-    // ROOT-CAUSE FIX (2026-08-16, live QA): this used to fire unconditionally
-    // whenever `terminatedBy` matched AND any tool artifact existed — it never
-    // looked at `state.output` first. Traced with a raw prompt/state dump on a
-    // native-FC model (gemma4:e4b, `.run('Whats the price of XRP and
-    // bitcoin?')`, no requiredTools): at the exact moment this ran,
-    // `state.output` was ALREADY the model's own correct, complete answer
-    // ("The current price of XRP is $0.999731 and the current price of
-    // Bitcoin (BTC) is $63,101.") — this block clobbered it with a raw
-    // tool_artifact reconstruction anyway, purely because terminatedBy=
-    // "end_turn" and one tool call had happened, then labeled the model's own
-    // (discarded) answer "harness-authored" and paid for an extra output-gate
-    // LLM resynthesis pass to reproduce what the model had already written
-    // correctly. Native-FC's control-plane design (think.ts's `wireToolSchemas`
-    // filter, "the harness reads control from the response shape" — no
-    // `final-answer` TOOL is even offered) makes end_turn-with-real-text the
-    // EXPECTED, common completion shape for these models, not an edge case —
-    // so this was overfiring on the majority path, not a rare one.
-    // Now only steps in when state.output is empty OR reads as a non-answer
-    // (a short apology/incapability statement — `looksSubstantive`,
-    // quality-utils.ts) — the actual "apology, hallucination, or raw
-    // observation text" case the comment above describes. When the model DID
-    // write something substantive, §8.7 below promotes it as `model_synthesis`
-    // instead, and the verifier's other content-quality checks (harness-
-    // parrot, shallow-giveup, continuation-intent, scaffold-leak — verifier.ts
-    // checks 3c-3e, 4b) still run against whatever ships either way, so
-    // genuinely bad model text is still caught; it's just no longer thrown
-    // away UNSEEN the moment it happens to be non-empty.
-    const nonFinalAnswerTerminations = new Set([
-      "end_turn",
-      "llm_end_turn",
-      "dispatcher-early-stop",
-      "low_delta_guard",
-    ]);
-    if (
-      state.status === "done" &&
-      typeof state.meta.terminatedBy === "string" &&
-      nonFinalAnswerTerminations.has(state.meta.terminatedBy) &&
-      !looksSubstantive(state.output ?? "")
-    ) {
-      const artifactCount = countDeliverableCandidates(state);
-      if (artifactCount > 0) {
-        const previousTerminatedBy = state.meta.terminatedBy;
-        const deliverable = assembleDeliverable(state);
-        // Single-writer: commitDeliverable owns state.output; we hand it the
-        // terminatedBy promotion to stamp alongside (Sprint-1 P1 mission 2A).
-        state = commitDeliverable(state, deliverable, {
-          terminatedBy: deliverableTerminationReason(deliverable),
-          previousTerminatedBy,
-        });
-      }
-    }
-
-    // ── 8.7. Output ownership consolidation ──────────────────────────────────
-    // The kernel must own the final output. Strategy adapters (reactive.ts,
-    // plan-execute.ts, etc.) historically had their own fallback chains
-    // (state.output ?? lastThought ?? null) that ran AFTER runKernel returned
-    // — bypassing the verifier gate below. Pull those fallbacks here so:
-    //   1. state.output reflects exactly what the user will receive
-    //   2. the verifier sees the actual deliverable before it ships
-    //   3. strategy adapters can return state.output directly with no synthesis
-    //
-    // Only fills from lastThought when status=done. Failed runs were already
-    // forced to output=null by the transitionState invariant.
-    //
-    // 2026-08-15 root fix (5th funnel): this ran BEFORE §8.8 and unconditionally
-    // accepted ANY non-empty lastThought — including runs where terminatedBy is
-    // null/outside the §8.5 whitelist (e.g. no explicit terminal reason at all,
-    // measured live on a gemini-2.5-flash trace). Because it always satisfies
-    // `!state.output`, §8.8's assembleDeliverable() call — which HAS the
-    // unconsumed-evidence check from 68e0b0d5 — never ran on this path. Skip
-    // here when unconsumed evidence exists and there are grounded observations
-    // to fall back to, so §8.8 gets the case instead.
-    const skip87ForUnconsumedEvidence =
-      findUnconsumedStoredKeys(state.steps).length > 0 &&
-      countDeliverableCandidates(state) > 0;
-    if (state.status === "done" && !state.output && !skip87ForUnconsumedEvidence) {
-      const lastThought = [...state.steps]
-        .filter((s) => s.type === "thought")
-        .pop();
-      if (lastThought?.content && lastThought.content.trim().length > 0) {
-        // Sprint-1 B2 / P1 mission 2A: typed DeliverableProvenance channel.
-        // Construct a model_synthesis Deliverable and route it through the
-        // single writer commitDeliverable (no extraMeta — this path does not
-        // own terminatedBy, so the existing reason is preserved). Raw-string
-        // mutations of state.output are the anti-pattern this collapses.
-        const deliverable = modelSynthesisDeliverable({
-          type: "thought",
-          content: lastThought.content,
-          iteration: state.iteration,
-        });
-        state = commitDeliverable(state, deliverable);
-      }
-    }
-
-    // ── 8.8. Output-ownership invariant — never ship empty output when work
-    // was done. §8.5's harness-deliverable assembly keys off a NARROW
-    // terminatedBy whitelist (end_turn/dispatcher-early-stop/...). But the
-    // arbitrator's early-stop stamps terminatedBy="controller_early_stop:<reason>"
-    // (arbitrator.ts) and other done-terminations fall outside the set too, so a
-    // `done` run could reach the verifier with state.output empty despite
-    // substantive tool artifacts — the 2026-06-29 cross-tier sweep saw gpt-4o-mini
-    // (22418 tok) and sonnet ship output="" with status=done on exactly this path.
-    // This general fallback assembles a deliverable from the accumulated work
-    // whenever a done run has empty output but deliverable candidates exist —
-    // immune to terminatedBy string drift, and additive (fires ONLY on empty
-    // output, so it can never override a path that already produced output).
-    if (
-      state.status === "done" &&
-      !state.output &&
-      countDeliverableCandidates(state) > 0
-    ) {
-      // Task 3 (Phase D leverage plan, shadow-only): fire the
-      // grounding-fabrication judgment shadow alongside the SAME
-      // deterministic content-containment check `assembleDeliverable`
-      // consults (`evaluateUnconsumedEvidenceGrounding`) — this is the most
-      // general, terminatedBy-drift-immune reach of that check across
-      // done-run terminations. Fire-and-forget; never alters `state` or the
-      // deliverable this branch commits.
-      yield* judgmentGroundingFabricationShadowFromState(state);
-      state = commitDeliverable(state, assembleDeliverable(state));
-    }
-
-    // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
-    // Per North Star §3 (Verify capability) — the harness MUST verify the
-    // final output satisfies the task before declaring success. Without this,
-    // the model can ship parroted system guidance ("Your next step: call X")
-    // as its answer because the output is in state.output and status is "done".
-    //
-    // The defaultVerifier with terminal=true runs:
-    //   - required-tools-satisfied (catches "no tool was called" parrots)
-    //   - scaffold-leak (catches framework-internal scaffolding echoed as the answer)
-    //
-    // On verifier rejection: transition to status="failed" with the verdict
-    // in state.error. The reactive.ts strategy adapter (Sprint 3.4 stage 2)
-    // already ensures state.error doesn't leak as state.output; user sees
-    // null output + structured error.
-    if (process.env.DEBUG_VERIFIER === "1") {
-      // WS-5 Phase 3: migrated from console.error to Effect.logDebug. The
-      // [VERIFIER-PRE] trace is a debug-only diagnostic for the verifier-pre
-      // snapshot path; routing through Effect.logDebug threads it into the
-      // structured observability sink instead of stdout. Env-gate preserved
-      // (opt-in semantics — high-frequency message).
-      yield* Effect.logDebug(
-        `[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`,
-      );
-    }
-
-    // ── Terminal snapshot (pre-verifier) ─────────────────────────────────────
-    // Records the exact state the verifier gate inspects. With both an iter-end
-    // snapshot AND this terminal one, a trace narrative becomes complete:
-    // iter-start → iter-end → terminal → verifier-verdict. Without this, you
-    // can't tell whether the verifier rejected the kernel's true final state
-    // or some intermediate state.
-    yield* emitKernelStateSnapshot({
-      state,
-      taskId: currentOptions.taskId ?? state.taskId,
-      iteration: state.iteration,
+    // Decomposed verbatim to ./runner-post-loop-deliverable.ts (Task 9):
+    // §8 / §8.5 / §8.7+§8.8 each own one pure-or-Effect finalization block.
+    state = applyRequiredToolsFinalCheck({
+      state, currentInput, currentOptions, requiredTools,
+      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
     });
 
-    if (
-      state.status === "done" &&
-      state.output &&
-      !isAwaitingApproval &&
-      !isAwaitingInteraction &&
-      !isAbstained &&
-      !isBudgetTerminal
-    ) {
-      // availableUserTools — pass through the user-registered tool list
-      // so the verifier can run classifier-independent "agent-took-action"
-      // checks (rejects parrots / hallucinated answers / meta-tool dumps
-      // when the user wired data tools but the agent never invoked them).
-      const availableUserTools = (effectiveInput.availableToolSchemas ?? []).map(
-        (t) => t.name,
-      );
-      // WS-3 Phase 5a — verify+emit colocated at the verify capability
-      // boundary. `verdict` is still consumed below (severity branching,
-      // softFail surfacing, escalation tagging).
-      //
-      // `buildTerminalVerifyContext(content)` keeps the verifier context
-      // literal in one place so the Phase-D1 block-mode corrective re-verify
-      // (below) inspects the same priorSteps/grounding/scratchpad as the first
-      // pass — only the candidate `content` changes between attempts.
-      const buildTerminalVerifyContext = (content: string) => ({
-        action: "final-answer" as const,
-        content,
-        actionSuccess: true,
-        task: effectiveInput.task,
-        priorSteps: state.steps,
-        requiredTools: effectiveInput.requiredTools,
-        relevantTools: effectiveInput.relevantTools,
-        toolsUsed: state.toolsUsed,
-        availableUserTools,
-        terminal: true,
-        grounding: effectiveInput.grounding,
-        fabricationGuard: effectiveInput.fabricationGuard,
-        scratchpad: state.scratchpad,
-        // H5 (2026-07-08 sweep, audit 02-#4, trace 01KWZ811 seq 1920-1926):
-        // without terminatedBy, the authoritative terminal verify cannot see
-        // harness authorship — the stall path's own verdict correctly failed
-        // output-is-model-authored (escalate), then THIS context re-verified
-        // the same harness-assembled output as "9 checks passed" two seqs
-        // later with no new model turn, and the run shipped success. The
-        // verifier's check 3a keys on terminatedBy=harness_deliverable.
-        terminatedBy: state.meta.terminatedBy,
-      });
-      let verdict = yield* verifyAndEmit({
-        verifier,
-        context: buildTerminalVerifyContext(state.output),
-        taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
-        // W5.2 — stamp the completion-judgment entry ref when the shadow fires.
-        onJudgmentRef: (ref) => {
-          state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
-        },
-      });
+    // ── 8.5. Non-authoritative termination → harness deliverable ───────────
+    state = applyNonFinalAnswerDeliverable({ state });
 
-      // ── Phase D1 — block-mode evidence-grounding: cap-then-degrade ─────────
-      // When grounding is enabled in `block` mode and the terminal verdict
-      // carries an `evidence-grounded` reject, attempt up to
-      // `grounding.maxRetries` (default 1) CORRECTIVE synthesis passes that
-      // inject the ungrounded figures as guidance. If a corrective pass
-      // grounds → accept. If the budget is exhausted → DEGRADE to warn: the
-      // answer ships with `verificationWarning`, status stays non-failed.
-      // This NEVER hard-fails the run and NEVER loops past the cap — both are
-      // enforced by the pure `decideGroundingBlockOutcome` decision. `warn`
-      // mode is untouched (it rides the softFail surface path below).
-      let groundingDegradeWarning: string | undefined;
-      // Bounded by the pure decision: the loop can only iterate while the
-      // decision returns `retry`, which is impossible past `maxRetries`.
-      while (state.status === "done" && state.output) {
-        const outcome = decideGroundingBlockOutcome(
-          verdict,
-          state.meta.groundingBlockRetry ?? 0,
-          effectiveInput.grounding,
-        );
-        if (outcome.kind === "pass") break;
-        if (outcome.kind === "degrade") {
-          groundingDegradeWarning = outcome.warning;
-          break;
-        }
-        // outcome.kind === "retry": one corrective synthesis attempt.
-        state = transitionState(state, {
-          meta: {
-            ...state.meta,
-            groundingBlockRetry: (state.meta.groundingBlockRetry ?? 0) + 1,
-          } as KernelState["meta"],
-        });
-        const llmOpt = yield* Effect.serviceOption(LLMService);
-        if (llmOpt._tag !== "Some") {
-          // No LLM to re-synthesize with — cannot correct. Degrade now rather
-          // than spin: surface the answer with the grounding warning.
-          groundingDegradeWarning = outcome.guidance;
-          break;
-        }
-        // H3 (2026-07-08, audit 05-E2): grounding-corrected re-synthesis IS the
-        // deliverable when it succeeds — terse (2048) truncated it.
-        const corrected = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
-            messages: [
-              {
-                role: "user",
-                content:
-                  `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
-              },
-            ],
-            temperature: 0.2,
-          })
-          .pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-        const correctedContent = extractThinkingSafeContent(corrected).content;
-        if (!correctedContent || correctedContent.trim().length === 0) {
-          // Synthesis produced nothing usable — keep the original answer and
-          // re-decide; the bumped counter guarantees the next pass degrades.
-          continue;
-        }
-        // Single-writer: route the corrected answer through commitDeliverable.
-        // harness_synthesis provenance — the harness ran an LLM synthesis pass
-        // to produce this corrected prose (S11: not model_synthesis).
-        state = commitDeliverable(
-          state,
-          harnessSynthesisDeliverable([], undefined, correctedContent),
-        );
-        verdict = yield* verifyAndEmit({
-          verifier,
-          context: buildTerminalVerifyContext(correctedContent),
-          taskId: currentOptions.taskId ?? state.taskId,
-          iteration: state.iteration,
-          onJudgmentRef: (ref) => {
-            state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
-          },
-        });
-      }
+    // ── 8.7. Output ownership consolidation + 8.8. empty-output fallback ───
+    state = yield* applyOutputOwnershipCluster({ state });
 
-      // ── Phase D2 (2026-09-30), scaffold-leak remediation: synthesize-once ───
-      // The scaffold-leak guard (verifier Check 4b) is always-on and its
-      // `reject` previously meant an instant hard-fail: the model echoed
-      // framework-internal scaffolding as its answer, and the whole run died
-      // even though the DATA needed to produce the real answer sat in the
-      // scratchpad. The repair machinery already exists everywhere EXCEPT the
-      // default path: finalize.ts `decideSynthesisInput` forces DATA→FORMAT
-      // synthesis for leaks on reflexion/plan-execute, and the arbitrator's
-      // `synthesisQualityRetry` retries once for text-protocol final-answers -
-      // but native-FC runs never offer the `final-answer` tool, so the
-      // terminal gate was their only checkpoint, with zero repair attempts.
-      // Live incident (taskId 01M3T04DXBYSYMXTRPSH57AT93): ExecutionError
-      // "Verifier rejected output: final-answer: failed at scaffold-leak".
-      // Mirror the D1 cap-then-degrade precedent: ONE corrective synthesis
-      // pass from the validated observations (falling back to the leaked
-      // draft when there are none), re-verified against the SAME terminal
-      // context. Clean → ship with honest harness_synthesis provenance.
-      // Still leaking → the hard-fail branch below runs unchanged, with the
-      // specific rejection reason preserved on the receipt. The guard is NOT
-      // weakened: a scaffolding dump can still never reach the user.
-      if (
-        groundingDegradeWarning === undefined &&
-        state.status === "done" &&
-        state.output &&
-        !verdict.verified &&
-        verdict.checks.find((c) => !c.passed)?.name === "scaffold-leak"
-      ) {
-        // DATA source: the same success-gated, scratchpad-resolved
-        // observations `assembleDeliverable` trusts, NOT the leaked draft
-        // (re-synthesizing from the echo alone would just echo again).
-        const observations = collectValidatedObservations(state);
-        const rawForSynthesis =
-          observations.length > 0
-            ? observations.map((o) => `[${o.toolName}] ${o.content}`).join("\n\n---\n\n")
-            : state.output;
-        const llmOpt = yield* Effect.serviceOption(LLMService);
-        if (llmOpt._tag === "Some") {
-          // Same abstract wording as the arbitrator's retry feedback, local
-          // models copy literal negative examples verbatim, so never quote
-          // the bad output back into the corrective prompt.
-          const repairGuidance =
-            "Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data, present it.";
-          const repairPrompt =
-            `${buildSynthesisPrompt(rawForSynthesis, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${repairGuidance}`;
-          // H3 rule: this pass renders the deliverable, generous budget.
-          const repaired = yield* gatewayComplete(
-            llmOpt.value,
-            { purpose: "synthesize", budgetClass: "generous" },
-            {
-              messages: [{ role: "user", content: repairPrompt }],
-              temperature: 0.2,
-              traceContext: {
-                taskId: currentOptions.taskId ?? state.taskId,
-                iteration: state.iteration,
-              },
-            },
-          ).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-          const repairedContent = extractThinkingSafeContent(repaired).content;
-          if (repairedContent && repairedContent.trim().length > 0) {
-            // Single-writer: commitDeliverable owns state.output. S11
-            // provenance, the harness ran an LLM synthesis pass to produce
-            // this prose (not model_synthesis).
-            state = commitDeliverable(
-              state,
-              harnessSynthesisDeliverable([], undefined, repairedContent),
-            );
-            verdict = yield* verifyAndEmit({
-              verifier,
-              context: buildTerminalVerifyContext(repairedContent),
-              taskId: currentOptions.taskId ?? state.taskId,
-              iteration: state.iteration,
-              onJudgmentRef: (ref) => {
-                state = transitionState(state, { meta: { ...state.meta, completionJudgmentRef: ref } });
-              },
-            });
-            yield* emitLog({
-              _tag: "warning",
-              message: verdict.verified
-                ? "The answer echoed internal scaffolding, so it was rebuilt from the tool data."
-                : "The answer echoed internal scaffolding; rebuilding it from the tool data did not pass verification either.",
-              context: `[scaffold-leak-repair] re-verified=${verdict.verified} ${verdict.summary}`,
-              timestamp: new Date(),
-            });
-          }
-        }
-      }
-
-      if (groundingDegradeWarning !== undefined) {
-        // DEGRADE-to-warn: surface the answer WITH a warning; do NOT nullify,
-        // do NOT fail. Mirrors the softFail warn-surface contract. The honesty
-        // marker (`verificationWarning`) crosses the strategy boundary via the
-        // CompletionEnvelope (spec §1b). The in-kernel verifier owns CONTROL
-        // FLOW here; `receipt.verifierVerdict` is owned by the result-boundary
-        // verifier (runtime `result-verification.ts`) — B4/§5.3.
-        state = transitionState(state, {
-          meta: {
-            ...state.meta,
-            verificationWarning: groundingDegradeWarning,
-          },
-        });
-      } else if (!verdict.verified) {
-        // GH #121 / I5 Loop Controller wire — resolve severity with the
-        // back-compat default so external Verifier implementations that
-        // predate I5 still get a sensible classification.
-        const verdictSeverity = resolveResultSeverity(verdict);
-        // User-facing message stays plain-English (see `humanizeVerifierFailure`
-        // docstring) — the raw check-id/reason string still rides along in
-        // `context`, which only the verbose/non-status log formats render, so
-        // debugging detail isn't lost, just no longer the first thing a user
-        // sees on a TTY status line.
-        const firstFailedCheck = verdict.checks.find((c) => !c.passed);
-        const friendlyReason = firstFailedCheck ? humanizeVerifierFailure(firstFailedCheck.name) : undefined;
-        yield* emitLog({
-          _tag: "warning",
-          message: friendlyReason
-            ? `The model's answer needed a second look: ${friendlyReason}.`
-            : `[verifier] terminal output rejected (severity=${verdictSeverity}): ${verdict.summary}`,
-          context: friendlyReason ? `[verifier] severity=${verdictSeverity}: ${verdict.summary}` : undefined,
-          timestamp: new Date(),
-        });
-        //   - escalate : structural failure (harness fallback, shallow give-up).
-        //                Suppress by FAILING the run — the `failed` status +
-        //                error IS the escalation signal, and it crosses the
-        //                strategy boundary as the envelope's `failed`
-        //                completionStatus. (The former `verifierEscalation`
-        //                meta write had zero readers — deleted in B4/§5.3.)
-        //   - reject   : recoverable hard failure (parrot, missing required
-        //                action). Suppress entirely. Identical to legacy
-        //                non-softFail path.
-        //   - warn     : advisory (grounding miss). Surface with metadata;
-        //                do NOT nullify output. Identical to legacy
-        //                softFail path.
-        // H5 refinement (2026-07-08, audit 02-#4): when the ONLY failed check
-        // is harness authorship (output-is-model-authored on a
-        // harness_deliverable terminal), the run legitimately delivered
-        // partial artifacts after budget/nudge exhaustion — killing it would
-        // erase real progress. The defect being fixed is the LIE, not the
-        // delivery: pre-fix, a context missing terminatedBy re-verified the
-        // same output as "9 checks passed" (trace 01KWZ811 seq 1920→1923).
-        // Ship it HONESTLY LABELED instead: verified stays false in the
-        // verdict record, a verification warning + harnessAuthoredOutput
-        // surface to receipts/telemetry, and no clean-success flip occurs.
-        const onlyHarnessAuthorshipFailed =
-          state.meta.terminatedBy === "harness_deliverable" &&
-          verdict.checks.every((c) => c.passed || c.name === "output-is-model-authored");
-        if (onlyHarnessAuthorshipFailed) {
-          // `harnessAuthoredOutput` is now a DECLARED meta field with a real
-          // consumer: `resolveCompletionStatus` degrades this run to `partial`,
-          // so the caller sees `success:false` beside the preserved answer. It
-          // used to be an untyped stowaway that nothing read, and the run
-          // reported a clean success (H5 / wiring audit 2026-07-09).
-          state = transitionState(state, {
-            meta: {
-              ...state.meta,
-              verificationWarning: verdict.summary,
-              harnessAuthoredOutput: true,
-            },
-          });
-        } else if (verdictSeverity === "escalate") {
-          // Structural failure: the `failed` status + error IS the escalation
-          // signal (crosses the boundary as the envelope's `failed`
-          // completionStatus). The former `verifierEscalation`/`verifierVerdict`
-          // meta writes had zero readers — deleted in B4/§5.3.
-          state = transitionState(state, {
-            status: "failed",
-            error: `${VERIFIER_ESCALATION_PREFIX}${verdict.summary}`,
-          });
-        } else if (verdict.softFail) {
-          // Advisory failure: grounding check missed compressed observation.
-          // Surface output with warning metadata; do NOT nullify.
-          state = transitionState(state, {
-            meta: {
-              ...state.meta,
-              verificationWarning: verdict.summary,
-            },
-          });
-        } else {
-          // Hard failure: parrot or harness-authored output. Suppress entirely.
-          // The `failed` status + error crosses the boundary as the envelope's
-          // `failed` completionStatus; `receipt.verifierVerdict` is owned by the
-          // result-boundary verifier (result-verification.ts), NOT by a meta
-          // field dropped here (B4/§5.3).
-          // The error message carries the verdict summary so result-boundary
-          // verification can extract and preserve the specific rejection reason.
-          state = transitionState(state, {
-            status: "failed",
-            error: `${VERIFIER_REJECTION_PREFIX}${verdict.summary}`,
-          });
-        }
-
-        // Spec §5b (W-Q / task #54) — when the ALWAYS-ON fabricated-measurement
-        // guard is the (or a) failing check, record it as a receipt-visible
-        // intervention on a dedicated step. Deterministic: the guard rejects
-        // ONLY perf measurements no tool observation produced (evidence-driven).
-        // `receipt.verifierVerdict` is owned by the result-boundary verifier
-        // (runtime `result-verification.ts`), which runs on EVERY path — NOT by
-        // the in-kernel verdict above (which governs control flow only; its
-        // former `meta.verifierVerdict` write had zero receipt readers, B4/§5.3).
-        // This step additionally names the guard in `interventions[]` so the
-        // debugging spine shows WHICH control actor fired. Stamped after the
-        // branch chain so it rides whichever meta transition applied.
-        const fabCheck = verdict.checks.find(
-          (c) => c.name === "output-not-fabricated-measurement" && !c.passed,
-        );
-        if (fabCheck !== undefined) {
-          state = transitionState(state, {
-            steps: [
-              ...state.steps,
-              makeStep(
-                "harness_signal",
-                `⚠️ fabrication guard: ${fabCheck.reason ?? "fabricated measurement rejected"}`,
-                {
-                  intervention: {
-                    actor: "fabrication-guard",
-                    authorityClass: authorityOf("fabrication-guard"),
-                    evidence: (fabCheck.reason ?? "fabricated measurement with no tool evidence").slice(0, 200),
-                    whatChanged: "fabrication-guard: terminal output rejected (fabricated measurement)",
-                    iter: state.iteration,
-                  },
-                },
-              ),
-            ],
-          });
-        }
-      }
-    }
+    // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
+    // Decomposed verbatim to ./runner-terminal-verify-gate.ts (Task 9); the
+    // gate body is byte-identical to the former lines 1308-1702.
+    state = yield* runTerminalVerifierGate({
+      state, verifier, effectiveInput, taskIntent, currentOptions, emitLog,
+      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
+    });
 
     // ── 9. Output quality gate ────────────────────────────────────────────
-    // Route all successful outputs through the canonical finalization pipeline.
-    // Validates format, optionally synthesizes when LLM is available.
-    // Harness-assembled output (raw tool artifacts) always attempts synthesis.
-    if (
-      state.status === "done" &&
-      state.output &&
-      !isAwaitingApproval &&
-      !isAwaitingInteraction &&
-      !isAbstained &&
-      !isBudgetTerminal
-    ) {
-      // `harness_synthesis` (introduced when assembleDeliverable picks a
-      // substantive model thought) is treated as a MODEL output here — the
-      // text was authored by the LLM, not concatenated from raw tool JSON.
-      // Routing it as "harness" would force a second LLM re-synthesis that
-      // can degrade clean prose into hallucinated structured output (e.g.,
-      // local small models compressing/reformatting valid answers).
-      const terminationSource = (state.meta.terminatedBy === "oracle_forced" ? "oracle"
-        : state.meta.terminatedBy === "harness_deliverable" || state.meta.terminatedBy === "low_delta_guard" ? "harness"
-        : "model") as "model" | "harness" | "oracle" | "fallback";
-      const candidate = buildFinalAnswerCandidate(
-        state.output,
-        terminationSource,
-        taskIntent,
-      );
-      const finalized = yield* finalizeOutput(candidate, taskIntent, effectiveInput.task);
-
-      // `taskIntent.format` is a regex parse of the raw task string — it can't
-      // tell "write a markdown table to ./out.md" (deliverable = the FILE)
-      // apart from "give me a markdown table" (deliverable = the chat reply
-      // itself). The RunContract already makes that distinction explicitly
-      // (`deliverables: [{kind:"file", ...}]` from deriveDeliverablePaths, run-
-      // contract.ts:278) — a file deliverable means the real output already
-      // landed via a tool call, and the chat reply's job is just to confirm
-      // that, not restate the file's content in its format. Without this
-      // check, a plain "wrote it to ./crypto.md" confirmation gets forced
-      // through an LLM resynthesis pass trying to turn it into a markdown
-      // table (with no fetched data to draw one from), fails both format and
-      // content validation, and logs a scary-looking but harmless
-      // "[output-gate] Synthesis attempted but validation still failed"
-      // warning on a run that actually succeeded (confirmed live via
-      // rax-diagnose on scratch.ts's "fetch crypto prices ... write to
-      // ./crypto.md" task — file was written correctly, only the redundant
-      // chat-reply reformat failed).
-      const hasFileDeliverable = (state.meta.runContract?.deliverables ?? []).some(
-        (d) => d.kind === "file",
-      );
-      // Only the FORMAT trigger is scoped by hasFileDeliverable — the
-      // harness/oracle trigger stays independent. Those sources mean the
-      // model never produced real prose (raw tool JSON got assembled as the
-      // "answer"), which is worth cleaning up regardless of whether a file
-      // was also written; it's a readability fix, not a format-matching one.
-      const formatAppliesToReply = Boolean(taskIntent.format) && !hasFileDeliverable;
-
-      // Determine if synthesis is needed:
-      // 1. Explicit format requested (for the REPLY, not a file deliverable) but validation failed
-      // 2. Harness/oracle source — raw tool artifacts need professional formatting
-      const needsSynthesis = !finalized.formatValidated &&
-        (formatAppliesToReply || terminationSource === "harness" || terminationSource === "oracle");
-
-      if (needsSynthesis) {
-        const llmOpt = yield* Effect.serviceOption(LLMService);
-        if (llmOpt._tag === "Some") {
-          const synthesisFormat = formatAppliesToReply ? taskIntent.format! : "prose";
-          const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
-          // H3 (2026-07-08, audit 05-E2): format/quality re-synthesis replaces
-          // state.output wholesale — the deliverable render, not a side call.
-          const synthesized = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
-            messages: [{ role: "user", content: synthesisPrompt }],
-            temperature: 0.2,
-          }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
-
-          // Strip <think> blocks before the synthesized output is gated on
-          // format/completeness OR written into state.output. Without this,
-          // thinking-model preambles leak verbatim into the user-facing
-          // final answer.
-          const safeSynth = extractThinkingSafeContent(synthesized);
-          const synthContent = safeSynth.content;
-
-          if (synthContent && synthContent.length > 0) {
-            const formatOk = formatAppliesToReply
-              ? validateOutputFormat(synthContent, taskIntent.format!).valid
-              : true;
-            const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
-
-            if (formatOk && contentOk) {
-              // Drift S11: synthContent is prose the HARNESS produced by running
-              // the LLM synthesis call above — NOT a model-authored trailing
-              // thought. Tag it `harness_synthesis` WITH `synthesized` so the
-              // provenance is truthful; `deliverableToContent` returns
-              // synthContent unchanged (synthesized wins over the empty
-              // `assembled`), so the output string is byte-identical to the old
-              // model_synthesis write. No `synthesisCall` ref: `complete()`
-              // exposes no callId here, and the contract forbids fabricating one.
-              // extraMeta carries ONLY the output-quality flags; terminatedBy is
-              // already set and preserved (commitDeliverable merges, never clobbers).
-              state = commitDeliverable(
-                state,
-                harnessSynthesisDeliverable([], undefined, synthContent),
-                { outputSynthesized: true, outputFormatValidated: true },
-              );
-              yield* emitLog({
-                _tag: "warning",
-                message: `Rewrote the answer to match the requested ${synthesisFormat} format.`,
-                context: `[output-gate] synthesized output to match requested format: ${synthesisFormat}`,
-                timestamp: new Date(),
-              });
-            } else if (terminationSource === "harness" || terminationSource === "oracle") {
-              // Drift S11 (imperfect-but-better-than-raw branch): same provenance
-              // truth as the formatOk&&contentOk branch — harness-orchestrated
-              // synthesis → harness_synthesis WITH synthesized. Output string and
-              // terminatedBy unchanged from the prior model_synthesis write.
-              state = commitDeliverable(
-                state,
-                harnessSynthesisDeliverable([], undefined, synthContent),
-                { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
-              );
-              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
-            } else {
-              state = transitionState(state, {
-                meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
-              });
-              yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis attempted but validation still failed (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
-            }
-          } else if (terminationSource === "harness" || terminationSource === "oracle") {
-            // LLM synthesis was attempted but returned empty content (weak
-            // local models fail this call in practice — see
-            // deScaffoldRawDeliverable's docstring). Shipping the raw
-            // harness_synthesis join verbatim means the user sees internal
-            // `✓ toolName: ` scaffolding as if it were the answer. Strip that
-            // scaffolding as a deterministic floor under the failed LLM call
-            // — honestly still unsynthesized (outputSynthesized stays false),
-            // but no longer visibly an internal artifact dump.
-            state = commitDeliverable(
-              state,
-              harnessSynthesisDeliverable([], undefined, deScaffoldRawDeliverable(state.output ?? "")),
-              { outputFormatValidated: false, outputFormatReason: finalized.validationReason },
-            );
-          } else {
-            state = transitionState(state, {
-              meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
-            });
-          }
-        } else {
-          state = transitionState(state, {
-            meta: { ...state.meta, outputFormatValidated: false, outputFormatReason: finalized.validationReason },
-          });
-        }
-      } else if (taskIntent.format && !hasFileDeliverable) {
-        // Format was requested and validated successfully. Skipped for a
-        // file-deliverable task — hasFileDeliverable means the format
-        // constraint applies to the FILE (already written by a tool call),
-        // not the chat reply, so "no synthesis needed" here says nothing
-        // about whether the reply itself matches the format — it doesn't
-        // need to.
-        state = transitionState(state, {
-          meta: { ...state.meta, outputFormatValidated: true },
-        });
-      }
-    }
+    // Decomposed verbatim to ./runner-output-quality-gate.ts (Task 9); this
+    // call site owns nothing but the delegate.
+    state = yield* runOutputQualityGate({
+      state, effectiveInput, taskIntent, emitLog,
+      isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal,
+    });
 
     // Observe the already-decided terminal decision (emit-only; no control flow).
     yield* emitGuardFired({

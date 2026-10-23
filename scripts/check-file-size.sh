@@ -62,13 +62,21 @@ GIANT_BAR=1000
 #            07a3649db) and act.ts 1235->1267 (+32, #262 durable effect
 #            recording 08458a4f3): feature additions landed the same week the
 #            gate shipped; attributed deliberate raises, not regressions.
+#   2026-10-23 (e) runner.ts 1903->953 AND iterate-pass.ts 1896->1266: SHRINK
+#            by program Task 9 (kernel-warden, GH #222): 14 verbatim kernel/loop/*
+#            seam modules; main-loop spine, control-plane/termination seams,
+#            counter write-backs, policy-compile and the run-assessment-pinned
+#            blocks stayed inline per the anchor audit; every export name still
+#            resolves from its original file (re-export shims). Adapter lines
+#            (10x loop-control break/continue -> returned flags) documented in
+#            the upward report.
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2344"
   "runtime/src/builder.ts:2222"
   "runtime/src/execution-engine.ts:991"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
-  "reasoning/src/kernel/loop/runner.ts:1903"
-  "reasoning/src/kernel/loop/iterate-pass.ts:1896"
+  "reasoning/src/kernel/loop/runner.ts:953"
+  "reasoning/src/kernel/loop/iterate-pass.ts:1266"
   "reasoning/src/strategies/plan-execute.ts:1714"
   "benchmarks/src/runner.ts:1599"
   "core/src/services/event-bus.ts:1576"
