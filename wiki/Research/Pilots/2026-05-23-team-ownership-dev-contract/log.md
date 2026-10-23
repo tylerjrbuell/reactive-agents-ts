@@ -1504,3 +1504,11 @@ task: "GH #221 execution-engine.ts decomposition (program Task 4; 1,976 LOC regr
 result: completed, confidence 0.92
 outcome: "1,976 -> 991 LOC via 11 verbatim engine/execute-* modules (obs-wiring, event-collectors, killswitch-bridge, telemetry-notice, lifecycle-guard, agent-started, output-derivation, output-screens, success-invariants, result-assembly, completion-obs); Refs/accumulator identities passed in never re-created (Effect-native adaptation of the #217 deps-object idiom); tag/interface/Live export bit-identical; index.ts untouched. Stayed inline with reasons: isRootExecution+status-renderer cluster (source-scanning test pins it to the file), executeCore preamble/PhaseDeps/phase-dispatch/debrief-prep glue (fiber-scope). Parent verifier: tsc rc=0 + downstream 29/29; runtime suite 1679/7/0/310 EXACT; ceiling 2/2 (new modules 0 casts); verbatim line-set proof 0 divergences. Ratchet: check-file-size ceiling 1976->991 shrunk as a deliberate ledger commit AFTER the refactor commit (bisect-clean). Follow-up flagged: emitErrorSwallowed site-strings kept byte-identical; re-anchoring tranche rides Task 5."
 bypass-reason: none
+
+```yaml
+date: 2026-10-22
+warden: none (parent-direct; test authoring under seam protocol)
+task: "Quality program Task 5: seam-level behavioral pins for all 3 decomposition families + site-string re-anchor"
+result: completed, confidence 0.9
+outcome: "3 direct-import pin files (withers applyWithBudget 4 pins incl #9 no-empty-spend invariant; agent makeSkillsFacade 3 pins with ARRAY-IDENTITY pass-through + agentId wiring spy + zero-cast ManagedRuntime stub via GenericTag key interning; resolveThinkToolSurface pressure-gate refuse vs narrow arms). RED-on-cut proven per file (forced spend-object, renamed store tag key, short-circuited pressureCritical - each reddened exactly the expected arms, restored clean). Re-anchored 17 stale emitErrorSwallowed site strings in engine/execute-* to true paths (13 numeric, 4 semantic anchors); grep-verified no test pinned the stale strings. Measured: runtime 1,693/7skip/0/312 (=1,686+7), reasoning 3,199/4todo/0/370 (=3,193+2), wiring 4/4, tsc rc=0 both, ceiling 2/2, 0 casts in new files, README metrics synced."
+bypass-reason: none
