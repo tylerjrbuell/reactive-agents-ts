@@ -37,7 +37,14 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # failure wrapper; its other 4 new Error sites live in .test.ts files and are
 # metric-exempt). Attributed deliberate raise; the gate's PR-tree check missed
 # it only because the merge-chain polled checks before the rerun registered.
-STRING_ERRORS_BASELINE=300
+#
+# 2026-10-23: 300 -> 287. Program Task 14 D3 tranche 1: 13 sites converted in
+# @reactive-agents/trace (10 validateRationale throws -> RationaleValidationError,
+# 3 recorder IO catches -> TraceStorageError; errorTag now resolves the recorder
+# discriminator via its `_tag`, "Error" -> "TraceStorageError" in ErrorSwallowed
+# telemetry — no consumer asserted the old string). Classification + tranche map:
+# wiki/Research/Audit-Reports-2026-10-22/d3-error-site-classification.md.
+STRING_ERRORS_BASELINE=287
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-
