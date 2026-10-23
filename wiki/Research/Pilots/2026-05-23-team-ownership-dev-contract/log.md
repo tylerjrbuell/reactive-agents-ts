@@ -1570,3 +1570,11 @@ task: "Quality program Task 11: D1 bridge family 4 (run-task-effect; the mixed/k
 result: completed, confidence 0.92
 outcome: "buildRunTaskEffect was already Effect-typed at the seam (#217); per-site boundary audit: 2 debrief-fiber sites (lazy debriefRich + dispose tracker) routed through shared runFacadeEffect with provable per-arm rejection discard (raw-vs-wrapper identity unobservable), 3 sites KEPT under the STOP rule (killswitch AbortSignal the bridge cannot carry — terminate-aborts-inflight pins it; durable wrapper-identity is the shipped #278 contract; runEffect's runtime round-trip preserves its delivered instance; receipt site already preserved-form), all documented at site + pinned. reactive-agent.ts diff-ZERO (shell boundary already present since Tasks 6/8). Parent verified: tsc rc=0; ratchets exact 300/129; lane 23/23; ceiling 2/2; new seam 4/4; suite Ran 1,706 = 1,702 baseline + 4 exact; README synced. D1 COMPLETE: all four facade families Effect-native at module boundary, one Promise boundary per family in shell — Task 15 precondition met. PR #279."
 bypass-reason: none
+
+```yaml
+date: 2026-10-23
+warden: none (parent-direct; test authoring under seam protocol)
+task: "Quality program Task 12: seam breadth — capability-progress withers + final-answer heuristics (#260 close)"
+result: completed, confidence 0.9
+outcome: "2 new pin files (withers family via live BuilderState view incl. validator identity + no-options arm; heuristics truth table: length bar, modal-verb blocklist discipline, structural-signal requirement, planning-veto ordering). RED-on-cut proven (threshold 100->500 reddens heuristics; n+1 mutation reddens withers). Ground-truth corrections en route: disclosure + pressure predicate + surface stage ALREADY had direct tests (found before duplicating — file scoped to the true gap only); heuristics fixtures lengthened past the 100-char bar they test. #260 closed with coverage table; residual 35-module breadth filed #281. Measured: helpers 8/8 local, runtime 1,710/315 files, reasoning 3,205/372, ratchets 300/129, tsc rc=0 both, README synced. Merged #280."
+bypass-reason: none
