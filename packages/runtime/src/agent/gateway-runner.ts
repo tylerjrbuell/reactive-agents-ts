@@ -32,7 +32,13 @@ import type { GatewaySummary, GatewayHandle } from "../builder/types.js";
  * `start()` method body.
  */
 export interface ReactiveAgentGatewayView {
-  readonly runtime: ManagedRuntime.ManagedRuntime<any, never>;
+  // The view's runtime is read directly (requirement-free effects: the
+  // `queryGatewayStatus` gen is seam-cast to `Effect<any>`, `eb.publish` is
+  // `R = never`) AND forwarded to `bootstrapGateway` / `createChatManager`,
+  // whose params are `ManagedRuntime<unknown, unknown>`. ManagedRuntime is
+  // contravariant in R, so `unknown` is the tightest type the view can carry
+  // while still flowing into those params.
+  readonly runtime: ManagedRuntime.ManagedRuntime<unknown, never>;
   readonly engine: {
     execute: (task: any) => Effect.Effect<any, any>;
   };
@@ -180,7 +186,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     const chatManager = createChatManager({
       agentId: self.agentId ?? "gateway",
       gatewayOptions: gwOpts,
-      runtime: self.runtime as ManagedRuntime.ManagedRuntime<unknown, unknown>,
+      runtime: self.runtime,
       executeEvent,
     });
     chatManagerRef = chatManager;
@@ -214,7 +220,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       channelOutboundToolGuidance,
       executeEvent,
       chatManager,
-      runtime: self.runtime as ManagedRuntime.ManagedRuntime<any, never>,
+      runtime: self.runtime,
       agentId: self.agentId ?? "unknown",
       getStopped: () => stopped,
       incrementChatTurns: () => {

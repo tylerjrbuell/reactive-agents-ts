@@ -41,8 +41,10 @@ export interface ExecuteEventDeps {
     readonly publish: (event: AgentEvent) => Promise<void>
     readonly glog: GLog
     readonly engine: ExecuteEventEngine
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    // The effects this module runs through `runtime` require nothing
+    // (`engine.execute`'s seam type and `GatewayService.updateTokensUsed`
+    // are both `R = never`), so the precise runtime view is `never`.
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly gw: GatewayService
     readonly agentId: string
     readonly persistMemory: boolean

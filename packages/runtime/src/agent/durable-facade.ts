@@ -80,15 +80,7 @@ import {
 import { unwrapErrorWithSuggestion } from '../errors.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
-
-/** Parse stored approval args JSON, falling back to the raw string on malformed input. (Local copy of reactive-agent.ts's helper — needed by both this module and agent/run-task-effect.ts for #217.) */
-const safeParseJson = (s: string): unknown => {
-    try {
-        return JSON.parse(s)
-    } catch {
-        return s
-    }
-}
+import { safeParseJson } from './_json.js'
 
 /**
  * Reconcile a crashed run's tool-effect rows for resume (GH #262).
@@ -188,8 +180,11 @@ export interface DurableFacadeDeps {
      * methods return Effects and the class shell runs them; this field is
      * still read directly by `resumeRun`'s pipeline execution, whose inner
      * runPromise is preserved for rejection-VALUE identity (see its JSDoc).
+     * The pipeline effect is seam-typed `Effect<AgentResult, Error>` (the
+     * `buildRunTaskEffect` dep), i.e. `R = never`, so the precise runtime
+     * view here is `never`.
      */
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly buildRunTaskEffect: (input: string, options?: {
         readonly taskId?: string
         readonly durableRunId?: string
