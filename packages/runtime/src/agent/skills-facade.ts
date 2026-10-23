@@ -8,23 +8,29 @@
  * returned Effect through the agent's `ManagedRuntime`. Since Quality
  * program Task 6 (D1 bridge) the module boundary is Effect-native: every
  * method returns `Effect.Effect<A, E, R>` with a precise error channel and
- * the family's single Promise boundary lives in the class shell
- * (`runSkillsFacade` in `reactive-agent.ts`) — the one documented exception
- * being `loadSkill`'s store-write section, whose inner `runPromise` is kept
- * in-tact for rejection-VALUE identity (see its JSDoc).
+ * the family's single Promise boundary lives in the shared shell helper
+ * `runFacadeEffect` (`agent/run-facade-effect.ts`, called by the
+ * `reactive-agent.ts` delegates).
  *
  * Rejection-VALUE identity vs. the pre-bridge async methods is preserved by
- * construction:
- *   • sync-throw sites (fs/path/`parseSKILLmd`) are wrapped in
- *     `Effect.try`/`Effect.tryPromise` whose catch passes the ORIGINAL error
- *     instance through (`preserveError`), so typed failures carry the same
- *     values the async methods rejected with (verified empirically on
- *     effect@3.19: `ManagedRuntime.runPromise` rejects typed failures AND
- *     defects with a fresh `FiberFailure` wrapper — so a plain `runPromise`
- *     delegate would change the value; the class-shell bridge folds the
- *     error channel via `Effect.either` and re-rejects the raw value);
- *   • deliberate `new Error(...)` rejections keep their exact message and
- *     construction site (carried debt — no tagged errors mid-bridge).
+ * construction, via the defect channel:
+ *   • incidental-throw sites (fs/path calls, `parseSKILLmd`, dynamic
+ *     imports, the inner store-write `runPromise`) run inside
+ *     `Effect.sync`/`Effect.promise`, whose thrown/rejected values become
+ *     DEFECTS carrying the ORIGINAL instance (no wrapping, no stringifying —
+ *     this is why the bridge exists: empirically on effect@3.19,
+ *     `ManagedRuntime.runPromise` rejects typed failures AND defects with a
+ *     fresh `FiberFailure` wrapper, so the shell bridge folds the channel via
+ *     `Effect.either` and re-rejects the raw value verbatim);
+ *   • the `E` channel carries only the DELIBERATE rejections the pre-bridge
+ *     methods threw on purpose, with the same messages and construction
+ *     sites (carried debt — no tagged errors mid-bridge; the error algebra
+ *     belongs to a dedicated pass, not a structure bridge);
+ *   • `loadSkill`'s store-write KEEPS its inner `deps.runtime.runPromise`:
+ *     pre-bridge, a failing store reached callers as THAT call's
+ *     `FiberFailure`, not the raw store error, so the inner boundary is
+ *     preserved and its rejection folds to a defect carrying the same
+ *     instance — byte-identical to the pre-bridge `await` of that call.
  *
  * The exported-typing of `skills()` is unchanged
  * (`import('@reactive-agents/core').SkillRecord[]`, deliberately loose —
@@ -61,20 +67,6 @@ const SkillStoreUpsertService = Context.GenericTag<{
 const SkillDistillerService = Context.GenericTag<{
     distill: (agentId: string) => Effect.Effect<{ refined: number }, unknown>
 }>('SkillDistillerService')
-
-/**
- * Identity-preserving error pass-through for `Effect.try`/`Effect.tryPromise`
- * catches: every `Error` throw value is returned UNCHANGED (same instance),
- * so the rejection value that reaches callers through the class-shell bridge
- * is byte-identical to what the pre-bridge async methods rejected with —
- * Node fs/path failures, module-import rejections, `parseSKILLmd` throws,
- * and `ManagedRuntime.runPromise`'s own `FiberFailure` rejections are all
- * `Error` instances (verified on effect@3.19). A non-Error throw value
- * (unreachable for every wrapped site here) would be string-wrapped, which
- * is the one documented identity caveat of this helper.
- */
-const preserveError = (err: unknown): Error =>
-    err instanceof Error ? err : new Error(String(err))
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields the moved methods read. */
 export interface SkillsFacadeDeps {
@@ -126,13 +118,12 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
          * Export a skill to SKILL.md format (moved verbatim from
          * `ReactiveAgent.exportSkill`).
          *
-         * Effect-typed: `E = Error` is the real reachable rejection surface
-         * (skill-not-found, dynamic-import rejections, and fs/path sync
-         * throws — all `Error` instances). The not-found rejection keeps the
-         * pre-bridge `new Error(...)` message verbatim; every sync-throw
-         * site is wrapped in `Effect.try`/`Effect.tryPromise` with
-         * `preserveError`, so the rejection VALUE reaching callers is the
-         * original instance, exactly as the async method rejected.
+         * Effect-typed: `E = Error` is only the DELIBERATE not-found
+         * rejection (pre-bridge message kept verbatim); fs/path dynamic
+         * imports and sync throws fold to defects carrying the original
+         * instance via `Effect.promise`/`Effect.sync` and are re-raised raw
+         * by the class-shell bridge — the same values the async method
+         * rejected with.
          */
         exportSkill(
             name: string,
@@ -146,23 +137,14 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
                         new Error(`Skill "${name}" not found`),
                     )
 
-                const fs = yield* Effect.tryPromise({
-                    try: () => import('node:fs'),
-                    catch: preserveError,
-                })
-                const path = yield* Effect.tryPromise({
-                    try: () => import('node:path'),
-                    catch: preserveError,
-                })
-                const dir = yield* Effect.try({
-                    try: () =>
-                        outputPath ?? path.join('.', '.agents', 'skills', name),
-                    catch: preserveError,
-                })
-                yield* Effect.try({
-                    try: () => fs.mkdirSync(dir, { recursive: true }),
-                    catch: preserveError,
-                })
+                const fs = yield* Effect.promise(() => import('node:fs'))
+                const path = yield* Effect.promise(() => import('node:path'))
+                const dir = yield* Effect.sync(
+                    () => outputPath ?? path.join('.', '.agents', 'skills', name),
+                )
+                yield* Effect.sync(() =>
+                    fs.mkdirSync(dir, { recursive: true }),
+                )
 
                 const frontmatter = [
                     '---',
@@ -174,16 +156,13 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
                     '---',
                 ].join('\n')
 
-                const filePath = yield* Effect.try({
-                    try: () => {
-                        const fp = path.join(dir, 'SKILL.md')
-                        fs.writeFileSync(
-                            fp,
-                            `${frontmatter}\n\n${skill.instructions}\n`,
-                        )
-                        return fp
-                    },
-                    catch: preserveError,
+                const filePath = yield* Effect.sync(() => {
+                    const fp = path.join(dir, 'SKILL.md')
+                    fs.writeFileSync(
+                        fp,
+                        `${frontmatter}\n\n${skill.instructions}\n`,
+                    )
+                    return fp
                 })
                 return filePath
             })
@@ -193,110 +172,95 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
          * Load a SKILL.md skill at runtime (moved verbatim from
          * `ReactiveAgent.loadSkill`).
          *
-         * Effect-typed: `E = Error`. The statSync / `parseSKILLmd` /
-         * dynamic-import sites are wrapped with `preserveError` (original
-         * instances through) and the not-parsed rejection keeps the
-         * pre-bridge `new Error(...)` message verbatim.
+         * Effect-typed: `E = Error` is only the DELIBERATE not-parsed
+         * rejection (pre-bridge message verbatim); statSync / `parseSKILLmd`
+         * / dynamic-import failures fold to defects carrying the original
+         * instance.
          *
          * IDENTITY EXCEPTION (documented, Task 6): the store-write section
          * KEEPS its inner `deps.runtime.runPromise`. Pre-bridge, a failing
          * store reached callers as THAT runPromise call's `FiberFailure`
          * rejection value, not the raw store error — folding the gen into
          * the outer effect would deliver the raw error instead and change
-         * the value. So the inner boundary is preserved and its rejection
-         * reason passes through `Effect.tryPromise`/`preserveError`
-         * unchanged (`runPromise` rejects only with Error values — its
-         * `FiberFailure` wrappers — verified on effect@3.19). Fiber
-         * parenting for this section is therefore unchanged from pre-bridge.
+         * the value. So the inner boundary is preserved, wrapped in
+         * `Effect.promise` so its rejection folds to a defect carrying the
+         * same instance unchanged, and the shell bridge re-raises it
+         * verbatim. Fiber parenting for this section is therefore unchanged
+         * from pre-bridge.
          */
         loadSkill(skillPath: string): Effect.Effect<void, Error> {
             return Effect.gen(function* () {
-                const { parseSKILLmd } = yield* Effect.tryPromise({
-                    try: () =>
-                        import('@reactive-agents/reactive-intelligence'),
-                    catch: preserveError,
-                })
-                const fs = yield* Effect.tryPromise({
-                    try: () => import('node:fs'),
-                    catch: preserveError,
-                })
-                const path = yield* Effect.tryPromise({
-                    try: () => import('node:path'),
-                    catch: preserveError,
-                })
+                const { parseSKILLmd } = yield* Effect.promise(() =>
+                    import('@reactive-agents/reactive-intelligence'),
+                )
+                const fs = yield* Effect.promise(() => import('node:fs'))
+                const path = yield* Effect.promise(() => import('node:path'))
 
-                const skillMdPath = yield* Effect.try({
-                    try: () =>
+                const skillMdPath = yield* Effect.sync(
+                    () =>
                         fs.statSync(skillPath).isDirectory()
                             ? path.join(skillPath, 'SKILL.md')
                             : skillPath,
-                    catch: preserveError,
-                })
+                )
 
-                const parsed = yield* Effect.try({
-                    try: () => parseSKILLmd(skillMdPath),
-                    catch: preserveError,
-                })
+                const parsed = yield* Effect.sync(() =>
+                    parseSKILLmd(skillMdPath),
+                )
                 if (!parsed)
                     return yield* Effect.fail(
                         new Error(`Failed to parse SKILL.md at ${skillMdPath}`),
                     )
 
                 const agentId = deps.agentId
-                yield* Effect.tryPromise({
-                    try: () =>
-                        deps.runtime.runPromise(
-                            Effect.gen(function* () {
-                                const store = yield* Effect.serviceOption(
-                                    SkillStoreUpsertService,
-                                )
-                                if (store._tag !== 'Some') return
-                                yield* store.value.store({
-                                    id: `installed-${parsed.name}`,
-                                    name: parsed.name,
-                                    description: parsed.description,
-                                    agentId,
-                                    source: 'installed',
-                                    instructions: parsed.instructions,
-                                    version: 1,
-                                    versionHistory: [],
-                                    config: {
-                                        strategy: 'reactive',
-                                        temperature: 0.7,
-                                        maxIterations: 5,
-                                        promptTemplateId: 'default',
-                                        systemPromptTokens: 0,
-                                        compressionEnabled: false,
-                                    },
-                                    evolutionMode: 'locked',
-                                    confidence: 'trusted',
-                                    successRate: 0,
-                                    useCount: 0,
-                                    refinementCount: 0,
-                                    taskCategories: [],
-                                    modelAffinities: [],
-                                    base: parsed.instructions,
-                                    avgPostActivationEntropyDelta: 0,
-                                    avgConvergenceIteration: 0,
-                                    convergenceSpeedTrend: [],
-                                    conflictsWith: [],
-                                    lastActivatedAt: null,
-                                    lastRefinedAt: null,
-                                    createdAt: new Date(),
-                                    updatedAt: new Date(),
-                                    contentVariants: {
-                                        full: parsed.instructions,
-                                        summary: null,
-                                        condensed: null,
-                                    },
-                                })
-                            }),
-                        ),
-                    // Inner runPromise rejection reasons are `FiberFailure`
-                    // Error instances — preserveError passes them through
-                    // unchanged (see the identity note above).
-                    catch: preserveError,
-                })
+                yield* Effect.promise(() =>
+                    deps.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const store = yield* Effect.serviceOption(
+                                SkillStoreUpsertService,
+                            )
+                            if (store._tag !== 'Some') return
+                            yield* store.value.store({
+                                id: `installed-${parsed.name}`,
+                                name: parsed.name,
+                                description: parsed.description,
+                                agentId,
+                                source: 'installed',
+                                instructions: parsed.instructions,
+                                version: 1,
+                                versionHistory: [],
+                                config: {
+                                    strategy: 'reactive',
+                                    temperature: 0.7,
+                                    maxIterations: 5,
+                                    promptTemplateId: 'default',
+                                    systemPromptTokens: 0,
+                                    compressionEnabled: false,
+                                },
+                                evolutionMode: 'locked',
+                                confidence: 'trusted',
+                                successRate: 0,
+                                useCount: 0,
+                                refinementCount: 0,
+                                taskCategories: [],
+                                modelAffinities: [],
+                                base: parsed.instructions,
+                                avgPostActivationEntropyDelta: 0,
+                                avgConvergenceIteration: 0,
+                                convergenceSpeedTrend: [],
+                                conflictsWith: [],
+                                lastActivatedAt: null,
+                                lastRefinedAt: null,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                contentVariants: {
+                                    full: parsed.instructions,
+                                    summary: null,
+                                    condensed: null,
+                                },
+                            })
+                        }),
+                    ),
+                )
             })
         },
 

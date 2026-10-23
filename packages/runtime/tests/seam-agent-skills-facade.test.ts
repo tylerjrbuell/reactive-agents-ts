@@ -20,6 +20,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Context, Layer, ManagedRuntime } from "effect";
 import type { SkillRecord } from "@reactive-agents/core";
 import { makeSkillsFacade } from "../src/agent/skills-facade.js";
+import { runFacadeEffect } from "../src/agent/run-facade-effect.js";
 
 type SkillStoreLike = {
     readonly listAll: (
@@ -92,39 +93,43 @@ describe("agent-family seam — makeSkillsFacade (direct, no ReactiveAgent)", ()
     });
 
     // ── Task 6 (D1 bridge) identity pins ─────────────────────────────────────
-    // The delegate-side bridge (reactive-agent.ts `runSkillsFacade`:
-    // catchAllDefect -> either -> Promise.reject(Left)) preserves whatever
-    // VALUE enters the E channel; Promise.reject semantics are language-
-    // guaranteed. These pins secure the OTHER half — that the values entering
-    // E are the RAW instances (message and identity intact, never Cause-
-    // wrapped or stringified). Reading E via Effect.either resolves instead
-    // of rejecting, so the exact Left value is observable. If a future edit
-    // swaps Effect.fail(new Error(...)) for a wrapper or breaks the
-    // preserveError pass-through, these go red — the template families 2-4
-    // reuse this pattern, so this is their shared tripwire.
+    // These run through the REAL shell path (agent/run-facade-effect.ts) — the
+    // same bridge every ReactiveAgent delegate uses — and assert the rejection
+    // VALUE itself: incidental fs failures reject with the raw ErrnoException
+    // (`code` survives: a Cause- or string-wrap would lose it) and deliberate
+    // not-found rejections reject with the exact Error instance and message
+    // the pre-bridge async methods produced. Defect folding (Effect.sync /
+    // Effect.promise) plus the bridge's either-fold is what makes this work;
+    // families 2-4 reuse this pin shape, so this is their shared tripwire.
 
-    it("exportSkill's not-found rejection enters E as the raw Error instance (Task 6 identity pin)", async () => {
+    it("exportSkill rejects unknown skills with the raw Error instance through the shell bridge (Task 6 pin)", async () => {
         const { facade, runtime } = facadeWithoutStore("seam-agent");
-        const either = await runtime.runPromise(
-            Effect.either(facade.exportSkill("missing-skill")),
+        const rejection = await runFacadeEffect(
+            runtime,
+            facade.exportSkill("missing-skill"),
+        ).then(
+            () => null,
+            (err: unknown) => err,
         );
-        expect(either._tag).toBe("Left");
-        if (either._tag !== "Left") return;
-        // Exact instance semantics: own constructor is Error (not a
-        // FiberFailure wrapper), message byte-identical to the pre-bridge throw.
-        expect(either.left.constructor).toBe(Error);
-        expect(either.left.message).toBe('Skill "missing-skill" not found');
+        expect(rejection).not.toBeNull();
+        if (typeof rejection !== "object" || rejection === null) return;
+        expect(Object.getPrototypeOf(rejection)?.constructor).toBe(Error);
+        expect(Reflect.get(rejection, "message")).toBe(
+            'Skill "missing-skill" not found',
+        );
     });
 
-    it("loadSkill's fs failure enters E as the raw ErrnoException (preserveError identity, Task 6 pin)", async () => {
+    it("loadSkill rejects fs failures with the raw ErrnoException through the shell bridge (Task 6 pin)", async () => {
         const { facade, runtime } = facadeWithoutStore("seam-agent");
-        const either = await runtime.runPromise(
-            Effect.either(facade.loadSkill("/nonexistent-skill-path-qp-t6")),
+        const rejection = await runFacadeEffect(
+            runtime,
+            facade.loadSkill("/nonexistent-skill-path-qp-t6"),
+        ).then(
+            () => null,
+            (err: unknown) => err,
         );
-        expect(either._tag).toBe("Left");
-        if (either._tag !== "Left") return;
-        // Node's ENOENT carries `code` — a Cause- or string-wrap would lose it.
-        // Reflect.get keeps this cast-free (the E channel's static type is Error).
-        expect(Reflect.get(either.left, "code")).toBe("ENOENT");
+        expect(rejection).not.toBeNull();
+        if (typeof rejection !== "object" || rejection === null) return;
+        expect(Reflect.get(rejection, "code")).toBe("ENOENT");
     });
 });
