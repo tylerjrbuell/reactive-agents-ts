@@ -9,6 +9,13 @@ import { describe, it, expect } from "bun:test";
 import { ReactiveAgentBuilder } from "../src/builder.js";
 import { applyWithBudget } from "../src/builder/withers/model-budget.js";
 import { asBuilderState } from "../src/builder/withers/_state.js";
+import {
+  applyWithMinIterations,
+  applyWithMaxIterations,
+  applyWithTaskContext,
+  applyWithOutputValidator,
+  applyWithCostTracking,
+} from "../src/builder/withers/capability-progress.js";
 
 describe("withers seam — applyWithBudget (direct module call)", () => {
   it("writes the spend-cap slot from a token limit", () => {
@@ -44,5 +51,37 @@ describe("withers seam — applyWithBudget (direct module call)", () => {
     const returned = builder.withBudget({ costLimit: 0.25 });
     expect(returned).toBe(builder);
     expect(asBuilderState(builder)._budgetLimits?.costLimit).toBe(0.25);
+  });
+});
+
+// Task 12 (seam breadth, #260): the capability-progress family — apply fns
+// take the BuilderState view directly (the delegates construct it per call);
+// pins prove the module owns the slot writes and the class delegates still
+// land on the SAME slots (chaining + view identity preserved).
+describe("withers seam breadth — capability-progress family (Task 12)", () => {
+  it("apply fns write their documented slots on the live view", () => {
+    const state = asBuilderState(new ReactiveAgentBuilder());
+    applyWithMinIterations(state, 3);
+    applyWithMaxIterations(state, 9);
+    applyWithTaskContext(state, { repo: "reactive-agents-ts" });
+    const validator = (output: string) => ({ valid: output.length > 0 });
+    applyWithOutputValidator(state, validator, { maxRetries: 1 });
+    applyWithCostTracking(state);
+    expect(state._minIterations).toBe(3);
+    expect(state._maxIterations).toBe(9);
+    expect(state._taskContext).toEqual({ repo: "reactive-agents-ts" });
+    expect(state._outputValidator).toBe(validator);
+    expect(state._outputValidatorOptions).toEqual({ maxRetries: 1 });
+    expect(state._enableCostTracking).toBe(true);
+    expect(state._costTrackingOptions).toBeUndefined();
+  });
+
+  it("class delegates reach the same slots through the same view", () => {
+    const builder = new ReactiveAgentBuilder();
+    const returned = builder.withMaxIterations(7).withTaskContext({ k: "v" });
+    expect(returned).toBe(builder);
+    const s = asBuilderState(builder);
+    expect(s._maxIterations).toBe(7);
+    expect(s._taskContext).toEqual({ k: "v" });
   });
 });
