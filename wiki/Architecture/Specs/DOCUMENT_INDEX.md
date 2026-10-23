@@ -15,6 +15,7 @@
 | 1 | `09-UNIFIED-PROGRAM.md` | **CANONICAL sequencing + convergence authority** (2026-07-08) — K/P/T strands, Waves A–G, release slicing |
 | 2 | `08-AGENTIC-OS-NORTH-STAR.md` | v6.0 (ratified 2026-07-05) — product-arc content, exit gates, honest-claims law, non-goals |
 | 3 | `../Design-Specs/2026-07-11-harness-north-star-architecture.md` | Kernel architecture (RATIFIED 2026-07-11) |
+| 3b | `../Design-Specs/2026-10-23-effect-facade-modernization-readiness.md` | Phase-2 readiness checkpoint: blast radius, service-tag shortlist, SEMVER call (ACTIVE 2026-10-23; quality program Task 15) |
 | 4 | `_archive/05-DESIGN-NORTH-STAR.md` | v5.0 architecture reference (superseded for forward sequencing by 08/09; moved to `_archive/` 2026-09-03) |
 | 5 | `01-RESEARCH-DISCIPLINE.md` | 12 rules for every harness change; methodology contract |
 | 6 | `02-FAILURE-MODES.md` | Living catalog of harness failure modes (FM-A1, FM-B2, etc.) |

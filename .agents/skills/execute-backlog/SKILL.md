@@ -479,6 +479,22 @@ Do not block the bundle on such a red; file it as its own issue with the cwd evi
 - **Path fixes must be verified from ≥2 cwds.** "End to end" for a gate/path bug = run the real consumer suite from BOTH the repo root and the package directory (the two cwds turbo visits), not just `bun test packages/X` from root. Only the dual-cwd pair proves cwd-independence.
 - **Fixing a cached red can expose a DIFFERENT pre-existing red.** Turbo may have been caching a *second* failing task green from an older state; once the bundle de-caches it, that task runs and fails for unrelated reasons. Re-run the full workspace and attribute each remaining failure against a fresh baseline (e.g. run that package's suite directly) before claiming green or blaming the bundle. (Reason: 2026-09-28 #230 — after the testing gate was fixed, `bun run test` failed on `@reactive-agents/runtime#test`, which turned out to be the pre-existing #214 `as unknown as` ceiling, reproducible on the untouched base.)
 
+**Commit-message backticks are shell command substitution; parallel batches corrupt closeouts (added 2026-10-23 v26e).**
+A git commit -m message containing markdown backticks gets EVALUATED by bash - the code spans silently
+vanish from the message (seen on #283: two mangled messages, fixed via soft-reset re-split + git commit
+-F file). Rule: any commit message quoting code literals goes through -F. Related closeout hazard from
+the same session: parallel tool batches editing the SAME docs file raced two anchor-replacements into
+partially-applied states and one stale-snapshot restore left a mutation in the tree uncommitted
+(caught only because the parent RE-MEASURED before committing). Rule: doc-flip batches are sequential,
+and re-read the ACTUAL current line before replacing - never reconstruct anchors from memory.
+
+**D3 error-tagging tranche template is proven (added 2026-10-23 v26e).**
+Package-by-package new Error -> Data.TaggedError conversion: audit CONSUMER flows first (Task 3
+instanceof inventory + grep identity/interpolation of the produced value), pick the package with zero
+identity consumers (trace: 13/13 clean), convert with byte-identical messages, anchor every site with
+a _tag + message assertion in the covering test, ride the ratchet baseline as an attributed edit in
+the SAME commit, and commit a per-site classification map so the next tranche starts from dispositions,
+not re-audit. Public-identity pools are Phase-2/semver-gated - the ratchet, not a big bang, drains them.
 ---
 
 ## Phase 6 — UPDATE
