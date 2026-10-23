@@ -1488,3 +1488,11 @@ task: "Quality program Tasks 1+2: file-size ratchet + string-throw ceiling gates
 result: completed, confidence 0.9
 outcome: "check-file-size.sh: 24 files pinned at wc -l ceilings, shrink-only deliberate-ledger law, new-giant block, SCAN-EMPTY, 9 red-on-cut fixtures (PR #263). check-string-errors.sh: new Error( pool pinned 300 (299 capture +1 attributed #262 site via PR #270 fix), 7 fixtures parsing the ledger (PR #269). Gate earned its keep same-day: forced attributed ledger edits for #262's real feature growth (+2/+32). Review finding fixed pre-merge: removed ledger-size floor (would go red on program success). TDD honored: fixtures RED before scripts both times. Verified (measured): reasoning 3,189 pass / 4 todo / 0 fail (369 files); runtime 1,679 / 7 skip / 0 fail (310 files); enforcement lane 24/24. NOTE both suites moved off the 217-219-era baselines because of peer durable-effect work #262; program recorded new numbers in plan Verification Protocol.."
 bypass-reason: none
+
+```yaml
+date: 2026-10-22
+warden: none (parent-direct; gate scripts + fixtures outside warden tables)
+task: "Quality program Task 3: instanceof ceiling (129) + inventory artifact"
+result: completed, confidence 0.9
+outcome: "check-string-errors.sh twin ledger INSTANCEOF_BASELINE=129 occurrences (128 lines, one double-match), collect-FAIL dual verdict; inventory at wiki/Research/Audit-Reports-2026-10-22/instanceof-error-inventory.md (per-file distribution + all 129 sites - the Phase-2 rejection-identity blast radius D3 must carry deliberately); header's 43-site figure corrected to 129/43 split. Fixtures 7->11 cases, TDD RED-first honored (8/10 pre-script RED). Measured: real tree 300/129 green; 11/11; lane 24/24; reasoning 3,193/4todo/0/369; tsc rc=0; ceiling 2/2 flat; 0 casts in new/edited files; no new test FILES (README count stable)."
+bypass-reason: none

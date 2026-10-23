@@ -23,6 +23,11 @@ Living tracker: `wiki/Planning/Implementation-Plans/2026-10-22-quality-scalabili
 - **#269 + #270 (Task 2):** `scripts/check-string-errors.sh` — `new Error(` pool pinned
   (299 capture; 300 after #262's +1 in-src site, attributed). Fixtures parse the ledger
   (no magic numbers).
+- **Task 3 (same day):** the gate gained a twin ledger — `instanceof *Error` pool pinned
+  at 129 occurrences (43 in runtime+reasoning alone), full site list committed at
+  `wiki/Research/Audit-Reports-2026-10-22/instanceof-error-inventory.md`. This IS the
+  Phase-2 rejection-identity blast radius, mapped before D3 converts anything.
+  Fixtures 7 -> 11 cases, RED-first. Reasoning now 3,193/4todo/0fail/369 files.
 - Peer landed **#262** (durable tool-effect records + crash-window resume) mid-program;
   it is the reason both ledgers needed their first edits.
 - New giant files filed: #265 plan-execute (1,714), #266 event-bus (1,576), #267

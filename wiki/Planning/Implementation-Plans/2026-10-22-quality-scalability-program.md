@@ -81,9 +81,9 @@ tags: [quality-program, gates, decomposition, modernization-bridge, execute-back
 **Interfaces:**
 - Produces: second shrink-only baseline: `grep -rEn "instanceof (Error|[A-Za-z]*Error)"` across `packages/*/src` non-test (measure full-repo; runtime+reasoning alone = 43). Inventory table lists every site + one-line identity classification (framework-internal catch vs public-facing rejection path).
 
-- [ ] **Step 1: Produce inventory** (script output committed into DEBT-REGISTER §5 latent-bugs/audit area as a new sub-section, per register conventions).
-- [ ] **Step 2: Gate the count** baseline-pinned in Task 2 script; fixture cases as before.
-- [ ] **Step 3: Full gate cycle + merge.** No site conversions in this task (conversions ride D3).
+- [x] **Step 1: Produce inventory** — DEVIATION (recorded): shipped as a dedicated artifact `wiki/Research/Audit-Reports-2026-10-22/instanceof-error-inventory.md` (129 sites + per-file distribution + Phase-2 relevance) referenced from the DEBT-REGISTER §6 row, instead of a §5 subsection — keeps the 585-line register slim and puts the full list beside the audit that demanded it.
+- [x] **Step 2: Gate the count** — `INSTANCEOF_BASELINE=129` occurrences twin ledger in check-string-errors.sh (collect-FAIL dual verdict); fixtures 7 -> 11 cases (both ledgers patched + parsed, grow/shrink/edit-pass/test-exempt per counter).
+- [x] **Step 3: Full gate cycle + merge.** No site conversions in this task (conversions ride D3). Measured: real tree 300/129 green; 11/11 fixtures; lane 24/24; reasoning suite 3,193 pass / 4 todo / 0 fail / 369 files; tsc rc=0.
 
 ## Phase B — Structural completion (warden bundles)
 
