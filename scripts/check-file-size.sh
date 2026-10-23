@@ -43,6 +43,13 @@ GIANT_BAR=1000
 #
 # Ledger edit history:
 #   2026-10-22 capture at 23 sites + dispatch-think-response (initial).
+#   2026-10-23 (d) arbitrator.ts 1970->850: SHRINK by program Task 7 (kernel-
+#            warden, GH #220, PR #275): 10 verbatim decide/* modules +
+#            re-export shim (all 31 export names resolve unchanged); every
+#            script-anchored region (sole termination authority, grounding-
+#            redirect budget, applyPostConditionGate, exit-success literal)
+#            stayed inline per the anchor audit - single-termination-owner
+#            invariant untouched.
 #   2026-10-22 (c) reactive-agent.ts 2340->2344: +6 structural cost of the D1
 #            bridge family pattern (shared runFacadeEffect module + delegate
 #            boundary docs, GH PR #274). Deliberate attributed raise; families

@@ -41,7 +41,7 @@ Living tracker: `wiki/Planning/Implementation-Plans/2026-10-22-quality-scalabili
   (310 files); reasoning 3,189 pass / 4 todo / 0 fail (369 files). NOTE for next
   bundles: #262 changed these from the #217-#219 numbers; plan re-captured.
 
-Next: Task 5 seam tests (#260) + site-string re-anchor, Task 6 D1 bridge family 1 (skills facade), Tasks 7-9 (#220 arbitrator, #222 iterate-pass+runner). Task 3 shipped (PR #271: instanceof ledger 129 + inventory) and Task 4 shipped (PR #272: execution-engine.ts 1,976->991, runtime-warden 0.92, ceiling shrunk 1976->991 in-branch - first decomposition landed with its lock already on the door). Machine gotchas this box: gh has no `--exit-status` on
+Next: Task 8 (D1 bridge family 2: judgment - apply the Task 6 template: shared runFacadeEffect bridge, defect-channel for incidental throws, shell-path identity pins; judge()'s rejection values must survive byte-for-byte), Task 9 (#222 iterate-pass+runner, kernel-warden), Tasks 10-11 (D1 families 3-4), Task 12 (seam breadth #260). Task 6 shipped (PR #274): skills facade Effect-typed; template findings: runPromise FiberFailure-wraps TYPED failures on effect@3.19 (bridge = catchAllDefect->either->Promise.reject, shared agent/run-facade-effect.ts); both self-gates caught the first iterations (file-size +37 shell growth -> shared module +4; string ratchet 304/130 -> defect fold, net-zero 300/129). Task 7 shipped (PR #275, #220 closed): arbitrator 1,970->850 via 10 verbatim decide/* modules, 31-name re-export shim, script-anchored regions inline per anchor audit.
 `pr checks` (poll buckets instead); CI runs queue behind peer concurrency.
 
 ---

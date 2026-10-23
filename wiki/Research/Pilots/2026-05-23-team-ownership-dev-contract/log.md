@@ -1512,3 +1512,21 @@ task: "Quality program Task 5: seam-level behavioral pins for all 3 decompositio
 result: completed, confidence 0.9
 outcome: "3 direct-import pin files (withers applyWithBudget 4 pins incl #9 no-empty-spend invariant; agent makeSkillsFacade 3 pins with ARRAY-IDENTITY pass-through + agentId wiring spy + zero-cast ManagedRuntime stub via GenericTag key interning; resolveThinkToolSurface pressure-gate refuse vs narrow arms). RED-on-cut proven per file (forced spend-object, renamed store tag key, short-circuited pressureCritical - each reddened exactly the expected arms, restored clean). Re-anchored 17 stale emitErrorSwallowed site strings in engine/execute-* to true paths (13 numeric, 4 semantic anchors); grep-verified no test pinned the stale strings. Measured: runtime 1,693/7skip/0/312 (=1,686+7), reasoning 3,199/4todo/0/370 (=3,193+2), wiring 4/4, tsc rc=0 both, ceiling 2/2, 0 casts in new files, README metrics synced."
 bypass-reason: none
+
+```yaml
+date: 2026-10-23
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "Quality program Task 6: D1 bridge family 1 (skills facade Effect-ization)"
+result: completed, confidence 0.9
+outcome: "skills-facade methods now Effect.Effect<A,E,R> (E = never/Error/never + deliberate Errors); Promise boundary in the shell via SHARED agent/run-facade-effect.ts. Two self-gates fired during review and shaped the design: private bridge copy grew reactive-agent.ts +37 (check-file-size FAILED the PR -> shared module, shell delta +4, attributed ledger raise to 2344); preserveError identity helper added 4 new Error(/1 instanceof sites (check-string-errors FAILED -> defect-channel fold via Effect.sync/Effect.promise, ratchets back to exactly 300/129 net-zero). Empirical: runPromise FiberFailure-wraps typed failures on effect@3.19 -> bridge = catchAllDefect->either->Promise.reject(Left), scratch-proven instance-identity. loadSkill inner runPromise kept (FiberFailure-value identity). Seam pins 3->5 incl. two shell-path rejection-VALUE pins (raw Error + raw ErrnoException code). Parent: tsc rc=0; suite Ran 1,695/7skip/0 = exact baseline+2; lane 24 scripts green; ceiling 2/2; merged #274."
+bypass-reason: none
+```
+
+```yaml
+date: 2026-10-23
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "GH #220 arbitrator.ts decomposition (program Task 7; 1,970 LOC, 31 exports, four content-scanning scripts anchor it)"
+result: completed, confidence 0.9
+outcome: "1,970 -> 850 LOC via 10 verbatim decide/* modules (bodies diff-proven) + re-export shim keeping ALL 31 export names resolvable from arbitrator.ts (compile-side scratch + runtime 18/18 values + 13 types). ANCHOR AUDIT first (v26b): every region pinned by check-run-assessment (grounding-redirect budget writes), check-run-contract (deriveConditions call), check-success-authority (verifyDelivery + no-bare-verify), check-termination-paths (exit-success literal) stayed INLINE; sole termination authority untouched. Parent verifier: tsc rc=0; six scripts green; reasoning 3,195/4todo/0/370 exact; ceiling 2/2 (0 casts touched set); scope 1+10 files under decide/; ledger shrink 1970->850 as its own commit (ratchet intermediate-red by design); merged #275, #220 closed."
+bypass-reason: none
+```
