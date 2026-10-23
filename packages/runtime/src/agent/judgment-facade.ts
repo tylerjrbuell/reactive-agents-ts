@@ -6,6 +6,38 @@
  * {@link JudgmentFacadeDeps} object per call (so mutable class state like
  * `_lastReasoningSteps` is always read live) and forward here. No logic
  * changed — bodies were moved verbatim.
+ *
+ * Since Quality program Task 8 (D1 bridge, family 2 — the Task 6 template,
+ * PR #274, applied to judgment) the module boundary is Effect-native: every
+ * method is a SYNCHRONOUS method returning `Effect.Effect<A, E, R>` with a
+ * precise error channel, and the family's only Promise boundary is the class
+ * shell running the returned Effect through the shared `runFacadeEffect`
+ * helper (`agent/run-facade-effect.ts`, called by the `reactive-agent.ts`
+ * delegates). Rejection-VALUE identity vs. the pre-bridge async methods is
+ * preserved in two classes, deliberately:
+ *   • the `E` channel carries ONLY the deliberate "requires .withJudgment()"
+ *     rejections the pre-bridge code failed on purpose — same messages, same
+ *     construction sites (count-neutral; no tagged-error algebra migration
+ *     mid-bridge). The shell bridge re-raises each exact `Error` instance
+ *     verbatim. Pre-bridge these rode the outer `runPromise` and reached
+ *     callers as its `FiberFailure` wrapper; post-bridge callers receive the
+ *     `Error` itself. Every consumer test in this repo matches these
+ *     rejections on message text, which is byte-identical either way.
+ *   • BACKEND failures (`ask()` rejects such as a text-only backend refusing
+ *     `images`, `listModels()` `JudgmentUnsupported` "no model catalog", the
+ *     `judgeRank` helper's `chunkCap`/duplicate-id guards) KEEP an INNER
+ *     `deps.runtime.runPromise` boundary wrapped in `Effect.promise`:
+ *     pre-bridge they reached callers as THAT call's `FiberFailure` wrapper,
+ *     not the raw tagged error, so the inner boundary is preserved and its
+ *     rejection folds to a defect carrying the same instance — the shell
+ *     bridge re-raises that wrapper verbatim, byte-identical to the
+ *     pre-bridge `await` (Task 6 `loadSkill` precedent). Tripwired by
+ *     `packages/runtime/tests/seam-agent-judgment-facade.test.ts`.
+ *   • `judge()`'s auto-context prologue (`buildAutoContext` /
+ *     `mergeJudgmentState`) runs inside `Effect.sync`, so a throw there
+ *     folds to a defect carrying the original instance and the bridge
+ *     re-raises it raw — the same value the pre-bridge async method rejected
+ *     with.
  */
 
 import { Effect } from 'effect'
@@ -65,9 +97,18 @@ export type JudgeInput<Q extends QuestionSpecs> = (
  */
 export interface JudgmentFacadeDeps {
     readonly agentId: string
+    /**
+     * The agent's ManagedRuntime. Since Task 8 (D1 bridge) the facade
+     * methods return Effects that the class shell runs via
+     * `runFacadeEffect`; this field is still read directly by each method's
+     * PRESERVED inner backend-call boundary (`ask()` / `listModels()` / the
+     * `judgeRank` helper, each run through `runPromise` inside
+     * `Effect.promise`) — see the file header for why that boundary is
+     * load-bearing for rejection-VALUE identity.
+     */
     readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
     readonly judgmentAutoShadow: boolean
-    /** _chatHistory is passed by reference; the facade reads it at call time. */
+    /** _chatHistory is passed by reference; the facade reads it when the effect runs (immediately, within the delegate call). */
     readonly chatHistory: ChatMessage[]
     /** _lastReasoningSteps snapshot taken by the delegate at call time. */
     readonly lastReasoningSteps: readonly ReasoningStep[]
@@ -75,7 +116,7 @@ export interface JudgmentFacadeDeps {
 
 /**
  * Build the judgment facade object — the three public judge primitives,
- * moved verbatim from `reactive-agent.ts` internals.
+ * moved from `reactive-agent.ts` internals and Effect-typed per Task 8.
  */
 export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
     /**
@@ -105,9 +146,17 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      *   such as `clef` or `clef-flash`; the runtime does not fetch URLs or
      *   data URLs. Text-only backends reject non-empty images with
      *   `JudgmentUnsupported` at the service guard.
-     * @throws Error if `.withJudgment()` was not called during build —
-     *   `JudgmentService` is genuinely absent from the runtime's Layer
-     *   graph in that case, not silently stubbed.
+     * @returns Effect whose success value is the answered `JudgmentAnswers`
+     *   map. Its `E` channel carries ONLY the deliberate
+     *   "requires .withJudgment()" rejections — `JudgmentService` is
+     *   genuinely absent from the runtime's Layer graph when
+     *   `.withJudgment()` was not called during build, not silently
+     *   stubbed — and the class-shell bridge re-raises that exact `Error`
+     *   instance (message unchanged from pre-bridge). Backend rejects (e.g.
+     *   a text-only backend refusing `images` with `JudgmentUnsupported`)
+     *   keep the pre-bridge behavior: they run through the preserved inner
+     *   `deps.runtime.runPromise` boundary, so callers receive the same
+     *   `FiberFailure` wrapper carrying the same message as before Task 8.
      *
      * @example
      * ```typescript
@@ -154,72 +203,83 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      *
      * Moved verbatim (body + this JSDoc) from `ReactiveAgent.judge` for #217;
      * the class method on `ReactiveAgent` is now a one-line delegate.
+     * Task 8 (D1 bridge) converted the wrapper to a synchronous
+     * Effect-returning method; the inner flow (prologue → deliberate
+     * rejection arms → context-merge publish → backend `ask`) is otherwise
+     * unchanged.
      */
-    async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
-        const { questions, model, images } = input
-        let mergedState: JudgmentEntry
-        let contextMerged: boolean
-        if (input.includeContext) {
-            contextMerged = true
-            mergedState = mergeJudgmentState(
-                input.state,
-                buildAutoContext(
-                    {
-                        chatHistory: deps.chatHistory,
-                        reasoningSteps: deps.lastReasoningSteps,
-                    },
-                    input.includeContext
-                )
-            ) as JudgmentEntry
-        } else {
-            contextMerged = false
-            mergedState = input.state
-        }
-        const agentId = deps.agentId
-        const autoShadowed = deps.judgmentAutoShadow
-        return deps.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judge() requires .withJudgment() to be called during build() — this agent only carries auto-shadow sampling, not an explicit judge backend.'
+    judge<Q extends QuestionSpecs>(
+        input: JudgeInput<Q>
+    ): Effect.Effect<JudgmentAnswers<Q>, Error, typeof JudgmentService | typeof EventBus> {
+        return Effect.gen(function* () {
+            const { questions, model, images } = input
+            const mergedState = yield* Effect.sync((): JudgmentEntry => {
+                if (input.includeContext) {
+                    return mergeJudgmentState(
+                        input.state,
+                        buildAutoContext(
+                            {
+                                chatHistory: deps.chatHistory,
+                                reasoningSteps: deps.lastReasoningSteps,
+                            },
+                            input.includeContext
                         )
-                    )
+                    ) as JudgmentEntry
                 }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judge() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
-                    )
-                }
-                // Phase D: surface which judge() calls used includeContext auto-merge
-                // via the framework's own "Custom" event variant — the JudgmentService's
-                // JudgmentEvaluated/JudgmentFailed events live in @reactive-agents/judgment,
-                // outside this task's packages/runtime/** authority, so this rides the
-                // existing extension-event channel rather than that package's schema.
-                if (contextMerged) {
-                    yield* EventBus.pipe(
-                        Effect.flatMap((eb) =>
-                            eb.publish({
-                                _tag: 'Custom' as const,
-                                type: 'judgment:context-merged',
-                                payload: { agentId, contextMerged },
-                            } as import('@reactive-agents/core').AgentEvent)
-                        ),
-                        Effect.catchAll((err) =>
-                            emitErrorSwallowed({ site: 'runtime/src/reactive-agent.ts:judge', tag: errorTag(err) })
-                        )
-                    ) as Effect.Effect<void>
-                }
-                const askInput: { state: JudgmentEntry; questions: Q; model?: string; images?: readonly string[] } = { state: mergedState, questions, model }
-                if (images !== undefined && images.length > 0) {
-                    askInput.images = images
-                }
-                return yield* judgmentOpt.value.ask(askInput)
+                return input.state
             })
-        )
+            const contextMerged = Boolean(input.includeContext)
+            const agentId = deps.agentId
+            const autoShadowed = deps.judgmentAutoShadow
+            if (autoShadowed) {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.judge() requires .withJudgment() to be called during build() — this agent only carries auto-shadow sampling, not an explicit judge backend.'
+                    )
+                )
+            }
+            const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+            if (judgmentOpt._tag !== 'Some') {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.judge() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
+                    )
+                )
+            }
+            // Phase D: surface which judge() calls used includeContext auto-merge
+            // via the framework's own "Custom" event variant — the JudgmentService's
+            // JudgmentEvaluated/JudgmentFailed events live in @reactive-agents/judgment,
+            // outside this task's packages/runtime/** authority, so this rides the
+            // existing extension-event channel rather than that package's schema.
+            if (contextMerged) {
+                yield* EventBus.pipe(
+                    Effect.flatMap((eb) =>
+                        eb.publish({
+                            _tag: 'Custom' as const,
+                            type: 'judgment:context-merged',
+                            payload: { agentId, contextMerged },
+                        } as import('@reactive-agents/core').AgentEvent)
+                    ),
+                    Effect.catchAll((err) =>
+                        emitErrorSwallowed({ site: 'runtime/src/reactive-agent.ts:judge', tag: errorTag(err) })
+                    )
+                ) as Effect.Effect<void>
+            }
+            const askInput: { state: JudgmentEntry; questions: Q; model?: string; images?: readonly string[] } = { state: mergedState, questions, model }
+            if (images !== undefined && images.length > 0) {
+                askInput.images = images
+            }
+            // PRESERVED inner boundary (Task 8, Task 6 loadSkill precedent):
+            // a failing `ask()` reached pre-bridge callers as THIS
+            // runPromise call's FiberFailure wrapper, not the raw tagged
+            // error. Keeping the boundary and folding its rejection through
+            // Effect.promise (→ defect carrying the same instance → shell
+            // bridge re-raises it verbatim) keeps that observable value
+            // byte-identical.
+            return yield* Effect.promise(() =>
+                deps.runtime.runPromise(judgmentOpt.value.ask(askInput))
+            )
+        })
     },
 
     /**
@@ -229,16 +289,21 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      * for backends like `jev` that maintain one. Backends without a catalog (e.g. `llm`)
      * reject with a `JudgmentUnsupported` failure.
      *
-     * @returns Promise resolving to an array of available judgment models
-     * @throws Error if `.withJudgment()` was not called during build
-     * @throws Rejects (does NOT throw a bare `JudgmentUnsupported` you can
-     *   `instanceof`-check) when the backend has no model catalog. This
-     *   Promise is backed by `ManagedRuntime.runPromise()`, which rejects
-     *   with a `FiberFailure` wrapper around the underlying tagged error, not
-     *   the tagged error itself — `error instanceof JudgmentUnsupported` is
-     *   `false` on the real rejection. The rejection's `message` names the
-     *   missing catalog (e.g. `Backend "llm" has no model catalog`); match on
-     *   that if you need to distinguish this case from other failures.
+     * @returns Effect resolving to an array of available judgment models.
+     * @throws Error if `.withJudgment()` was not called during build —
+     *   since Task 8 (D1 bridge) this deliberate rejection rides the Effect
+     *   `E` channel and the class-shell bridge (`runFacadeEffect`) re-raises
+     *   the exact `Error` instance; pre-bridge it surfaced wrapped in a
+     *   `FiberFailure`, with the same message either way.
+     * @throws Rejects (does NOT hand back a bare `JudgmentUnsupported` for
+     *   you to catch as such) when the backend has no model catalog. The
+     *   backend call keeps its own inner `ManagedRuntime.runPromise()`
+     *   boundary (preserved for rejection-VALUE identity, Task 8 / Task 6
+     *   `loadSkill` precedent), so — exactly as pre-bridge — the rejection
+     *   is a `FiberFailure` wrapper around the underlying tagged error, not
+     *   the tagged error itself. The rejection's `message` names the
+     *   missing catalog (e.g. `Backend "llm" has no model catalog`); match
+     *   on that if you need to distinguish this case from other failures.
      *
      * @example
      * ```typescript
@@ -253,29 +318,36 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      *
      * Moved verbatim (body + this JSDoc) from `ReactiveAgent.listJudgmentModels`
      * for #217; the class method on `ReactiveAgent` is now a one-line delegate.
+     * Task 8 (D1 bridge) converted the wrapper to a synchronous
+     * Effect-returning method; the inner flow (deliberate rejection arms →
+     * backend `listModels()` through the preserved inner boundary) is
+     * otherwise unchanged.
      */
-    async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
-        const autoShadowed = deps.judgmentAutoShadow
-        return deps.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
+    listJudgmentModels(): Effect.Effect<ReadonlyArray<JudgmentModel>, Error, typeof JudgmentService> {
+        return Effect.gen(function* () {
+            const autoShadowed = deps.judgmentAutoShadow
+            if (autoShadowed) {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
                     )
-                }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
+                )
+            }
+            const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+            if (judgmentOpt._tag !== 'Some') {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.listJudgmentModels() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
                     )
-                }
-                return yield* judgmentOpt.value.listModels()
-            })
-        )
+                )
+            }
+            // PRESERVED inner boundary — see the method JSDoc and the
+            // `judge()` arm above for why a backend rejection must keep
+            // arriving as this runPromise call's FiberFailure wrapper.
+            return yield* Effect.promise(() =>
+                deps.runtime.runPromise(judgmentOpt.value.listModels())
+            )
+        })
     },
 
     /**
@@ -296,16 +368,23 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      * @param question - The single Score question every candidate is judged
      *   against: `instructions` plus an ordered `criteria` rubric.
      * @param opts - Optional `chunkCap` (candidates per `ask()` call) and `model`.
-     * @returns Candidates sorted best-first (highest score first); ties keep
-     *   the candidates' original relative order (stable sort). **May be
-     *   SHORTER than `candidates`** — a candidate the backend answers with
-     *   something other than a Score answer (non-conforming custom backend)
-     *   is silently dropped rather than surfaced as a partial-failure
-     *   marker; diff the returned ids against `candidates` if you need to
-     *   detect drops.
+     * @returns Effect resolving to candidates sorted best-first (highest
+     *   score first); ties keep the candidates' original relative order
+     *   (stable sort). **May be SHORTER than `candidates`** — a candidate the
+     *   backend answers with something other than a Score answer
+     *   (non-conforming custom backend) is silently dropped rather than
+     *   surfaced as a partial-failure marker; diff the returned ids against
+     *   `candidates` if you need to detect drops.
      * @throws Error if `.withJudgment()` was not called during build —
      *   `JudgmentService` is genuinely absent from the runtime's Layer
-     *   graph in that case, not silently stubbed.
+     *   graph in that case, not silently stubbed. Since Task 8 (D1 bridge)
+     *   this deliberate rejection rides the Effect `E` channel and the
+     *   class-shell bridge re-raises the exact `Error` instance (message
+     *   unchanged from pre-bridge). The `judgeRank` helper's own guards
+     *   (`chunkCap` not a positive finite number, duplicate candidate ids)
+     *   keep the pre-bridge behavior: they run through the preserved inner
+     *   `deps.runtime.runPromise` boundary, so callers receive the same
+     *   `FiberFailure` wrapper carrying the same message as before Task 8.
      *
      * @example
      * ```typescript
@@ -321,32 +400,42 @@ export const makeJudgmentFacade = (deps: JudgmentFacadeDeps) => ({
      *
      * Moved verbatim (body + this JSDoc) from `ReactiveAgent.judgeRank` for #217;
      * the class method on `ReactiveAgent` is now a one-line delegate.
+     * Task 8 (D1 bridge) converted the wrapper to a synchronous
+     * Effect-returning method; the inner flow (deliberate rejection arms →
+     * `judgeRank` helper through the preserved inner boundary) is otherwise
+     * unchanged.
      */
-    async judgeRank(
+    judgeRank(
         candidates: readonly JudgeRankCandidate[],
         question: JudgeRankQuestion,
         opts: JudgeRankOptions = {}
-    ): Promise<ReadonlyArray<JudgeRankResult>> {
-        const autoShadowed = deps.judgmentAutoShadow
-        return deps.runtime.runPromise(
-            Effect.gen(function* () {
-                if (autoShadowed) {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
+    ): Effect.Effect<ReadonlyArray<JudgeRankResult>, Error, typeof JudgmentService> {
+        return Effect.gen(function* () {
+            const autoShadowed = deps.judgmentAutoShadow
+            if (autoShadowed) {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
                     )
-                }
-                const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
-                if (judgmentOpt._tag !== 'Some') {
-                    return yield* Effect.fail(
-                        new Error(
-                            'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
-                        )
+                )
+            }
+            const judgmentOpt = yield* Effect.serviceOption(JudgmentService)
+            if (judgmentOpt._tag !== 'Some') {
+                return yield* Effect.fail(
+                    new Error(
+                        'agent.judgeRank() requires .withJudgment() to be called during build() — JudgmentService is not configured on this agent.'
                     )
-                }
-                return yield* judgeRank(judgmentOpt.value, candidates, question, opts)
-            })
-        )
+                )
+            }
+            // PRESERVED inner boundary — see the `judge()` arm above for
+            // why helper rejections (chunkCap/duplicate-id dies, backend
+            // `ask()` failures) must keep arriving as this runPromise
+            // call's FiberFailure wrapper.
+            return yield* Effect.promise(() =>
+                deps.runtime.runPromise(
+                    judgeRank(judgmentOpt.value, candidates, question, opts)
+                )
+            )
+        })
     },
 })

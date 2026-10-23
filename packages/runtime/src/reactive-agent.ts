@@ -484,13 +484,13 @@ export class ReactiveAgent<TOut = unknown> {
      * which moved verbatim with the body.
      */
     async judge<Q extends QuestionSpecs>(input: JudgeInput<Q>): Promise<JudgmentAnswers<Q>> {
-        return makeJudgmentFacade({
+        return runFacadeEffect(this.runtime, makeJudgmentFacade({
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
             chatHistory: this._chatHistory,
             lastReasoningSteps: this._lastReasoningSteps,
-        }).judge(input)
+        }).judge(input))
     }
 
     /**
@@ -500,13 +500,13 @@ export class ReactiveAgent<TOut = unknown> {
      * see `makeJudgmentFacade().listJudgmentModels` there for the full JSDoc.
      */
     async listJudgmentModels(): Promise<ReadonlyArray<JudgmentModel>> {
-        return makeJudgmentFacade({
+        return runFacadeEffect(this.runtime, makeJudgmentFacade({
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
             chatHistory: this._chatHistory,
             lastReasoningSteps: this._lastReasoningSteps,
-        }).listJudgmentModels()
+        }).listJudgmentModels())
     }
 
     /**
@@ -520,13 +520,13 @@ export class ReactiveAgent<TOut = unknown> {
         question: JudgeRankQuestion,
         opts: JudgeRankOptions = {}
     ): Promise<ReadonlyArray<JudgeRankResult>> {
-        return makeJudgmentFacade({
+        return runFacadeEffect(this.runtime, makeJudgmentFacade({
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
             chatHistory: this._chatHistory,
             lastReasoningSteps: this._lastReasoningSteps,
-        }).judgeRank(candidates, question, opts)
+        }).judgeRank(candidates, question, opts))
     }
 
     /**
