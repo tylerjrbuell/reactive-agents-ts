@@ -72,7 +72,7 @@ export const screenFinalOutput = (
               .pipe(
                 Effect.catchAll((err) =>
                   emitErrorSwallowed({
-                    site: "runtime/src/execution-engine.ts:behavioral-contract-output-warning",
+                    site: "runtime/src/engine/execute-output-screens.ts:behavioral-contract-output-warning",
                     tag: errorTag(err),
                   }),
                 ),
@@ -107,7 +107,7 @@ export const screenFinalOutput = (
                   .pipe(
                     Effect.catchAll((swallow) =>
                       emitErrorSwallowed({
-                        site: "runtime/src/execution-engine.ts:guardrail-output-screen-unavailable",
+                        site: "runtime/src/engine/execute-output-screens.ts:guardrail-output-screen-unavailable",
                         tag: errorTag(swallow),
                       }),
                     ),
@@ -134,7 +134,7 @@ export const screenFinalOutput = (
               .pipe(
                 Effect.catchAll((swallow) =>
                   emitErrorSwallowed({
-                    site: "runtime/src/execution-engine.ts:guardrail-output-violation-publish",
+                    site: "runtime/src/engine/execute-output-screens.ts:guardrail-output-violation-publish",
                     tag: errorTag(swallow),
                   }),
                 ),

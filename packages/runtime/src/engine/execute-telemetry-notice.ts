@@ -63,7 +63,7 @@ export const maybeEmitRiTelemetryNotice = (
             }
             return Effect.void;
           }),
-          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:724", tag: errorTag(err) })),
+          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-telemetry-notice.ts:66", tag: errorTag(err) })),
         );
       }
     }

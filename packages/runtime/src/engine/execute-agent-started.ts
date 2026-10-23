@@ -105,6 +105,6 @@ export const publishAgentStarted = (
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
       ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
       ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),
-    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:792", tag: errorTag(err) })));
+    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-agent-started.ts:108", tag: errorTag(err) })));
   });
 };
