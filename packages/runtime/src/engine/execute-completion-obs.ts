@@ -55,7 +55,7 @@ export const emitCompletionObservability = (
         tokensUsed: ctx.tokensUsed,
         cost: ctx.cost,
         duration: result.metadata.duration,
-      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3720", tag: errorTag(err) })));
+      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:58", tag: errorTag(err) })));
     }
 
     if (obs && isNormal) {
@@ -64,7 +64,7 @@ export const emitCompletionObservability = (
       const toks = ctx.tokensUsed.toLocaleString();
       yield* obs.info(
         `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
-      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3729", tag: errorTag(err) })));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:67", tag: errorTag(err) })));
     }
 
     // Calibration provenance (Task 21)
@@ -85,7 +85,7 @@ export const emitCompletionObservability = (
             classifierReliability: resolvedCalibration.classifierReliability,
           },
         });
-        yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3750", tag: errorTag(err) })));
+        yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:88", tag: errorTag(err) })));
       } catch {
         // Provenance rendering is best-effort
       }
@@ -94,25 +94,25 @@ export const emitCompletionObservability = (
     // Record final metrics for dashboard
     if (obs) {
       yield* obs.setGauge("execution.tokens_used", ctx.tokensUsed, { taskId: ctx.taskId })
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3759", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:97", tag: errorTag(err) })));
       yield* obs.setGauge("execution.total_duration", result.metadata.duration, { taskId: ctx.taskId })
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3761", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:99", tag: errorTag(err) })));
       yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3763", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:101", tag: errorTag(err) })));
       // Stage 5 quality fix: expose actual task success as a metric
       // so the console exporter can display the correct status.
       // Prior: exporter inferred success from phase health (always
       // succeeded for verifier-rejected runs), causing the
       // "Status: Success" lie when the task actually failed.
       yield* obs.setGauge("execution.success", executionSucceeded ? 1 : 0, { taskId: ctx.taskId })
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:execution.success", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:execution.success", tag: errorTag(err) })));
 
       // Record model used (updated to actual model from LLM provider response)
       const modelName = String(ctx.selectedModel ?? "unknown");
       const provider = String(config.provider ?? "unknown");
 
       yield* obs.incrementCounter("execution.model_name", 0, { model: modelName, provider, taskId: ctx.taskId })
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3770", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:115", tag: errorTag(err) })));
     }
   });
 };

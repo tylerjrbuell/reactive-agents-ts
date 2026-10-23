@@ -50,9 +50,9 @@ export function makeLifecycleGuard(args: LifecycleGuardDeps): LifecycleGuard {
         .pipe(Effect.catchAll(() => Effect.succeed("ok" as const)));
       if (status === "stopping") {
         if (eb) yield* eb.publish({ _tag: "AgentStopping", agentId: config.agentId,
-          taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:737", tag: errorTag(err) })));
+          taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-lifecycle-guard.ts:53", tag: errorTag(err) })));
         if (eb) yield* eb.publish({ _tag: "AgentStopped", agentId: config.agentId,
-          taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:739", tag: errorTag(err) })));
+          taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-lifecycle-guard.ts:55", tag: errorTag(err) })));
         return yield* Effect.fail(new KillSwitchTriggeredError({
           message: `Agent ${config.agentId} stopping gracefully`,
           taskId, agentId: config.agentId, reason: "stop() requested",
@@ -62,7 +62,7 @@ export function makeLifecycleGuard(args: LifecycleGuardDeps): LifecycleGuard {
         .pipe(Effect.catchAll(() => Effect.succeed({ triggered: false })))) as { triggered: boolean; reason?: string };
       if (ksStatus.triggered) {
         if (eb) yield* eb.publish({ _tag: "AgentTerminated", agentId: config.agentId,
-          taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:749", tag: errorTag(err) })));
+          taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-lifecycle-guard.ts:65", tag: errorTag(err) })));
         return yield* Effect.fail(new KillSwitchTriggeredError({
           message: `Kill switch triggered for agent ${config.agentId}: ${ksStatus.reason ?? "no reason"}`,
           taskId, agentId: config.agentId, reason: ksStatus.reason ?? "no reason",
