@@ -1530,3 +1530,11 @@ result: completed, confidence 0.9
 outcome: "1,970 -> 850 LOC via 10 verbatim decide/* modules (bodies diff-proven) + re-export shim keeping ALL 31 export names resolvable from arbitrator.ts (compile-side scratch + runtime 18/18 values + 13 types). ANCHOR AUDIT first (v26b): every region pinned by check-run-assessment (grounding-redirect budget writes), check-run-contract (deriveConditions call), check-success-authority (verifyDelivery + no-bare-verify), check-termination-paths (exit-success literal) stayed INLINE; sole termination authority untouched. Parent verifier: tsc rc=0; six scripts green; reasoning 3,195/4todo/0/370 exact; ceiling 2/2 (0 casts touched set); scope 1+10 files under decide/; ledger shrink 1970->850 as its own commit (ratchet intermediate-red by design); merged #275, #220 closed."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-23
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "Quality program Task 8: D1 bridge family 2 (judgment facade Effect-typed)"
+result: completed, confidence 0.92
+outcome: "judge/listJudgmentModels/judgeRank -> Effect with precise E (6 deliberate arms raw via bridge, message-identical); backend sections keep preserved inner runPromise boundaries (Effect.promise wrap) because agent-list-judgment-models pin (c) — outside warden authority — proves callers observe the FiberFailure wrapper shape for catalog rejects. Shared runFacadeEffect reused (shell net-zero at ceiling, no private copy); twin ratchets exactly 300/129; new seam file 4 shell-path pins (deliberate-raw + branch order + wrapper tripwire), 0 casts; README metrics synced in-branch. Parent: tsc rc=0; 23/23 lane; suite Ran 1,699/7skip/0 = baseline+4 exact; ceiling 2/2; merged #276."
+bypass-reason: none
