@@ -26,6 +26,7 @@ import {
 } from './agent/gateway-runner.js'
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
+import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps } from './agent/run-task-effect.js'
 import type { ExecutionContext } from './types.js'
@@ -665,23 +666,26 @@ export class ReactiveAgent<TOut = unknown> {
      * List all loaded skills for this agent.
      *
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
+     * Since Task 6 (D1 bridge) the facade methods return Effects and this
+     * class shell — via `runFacadeEffect` — is the family's single Promise
+     * boundary.
      */
     async skills(): Promise<import('@reactive-agents/core').SkillRecord[]> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills()
+        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills())
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — exportSkill (moved from this file for #217).
      */
     async exportSkill(name: string, outputPath?: string): Promise<string> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath)
+        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath))
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — loadSkill (moved from this file for #217).
      */
     async loadSkill(skillPath: string): Promise<void> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath)
+        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath))
     }
 
     /**
@@ -690,7 +694,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
     async refineSkills(): Promise<{ refined: number }> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills()
+        return runFacadeEffect(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills())
     }
 
     /**

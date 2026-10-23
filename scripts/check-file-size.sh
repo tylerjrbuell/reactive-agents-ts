@@ -43,6 +43,11 @@ GIANT_BAR=1000
 #
 # Ledger edit history:
 #   2026-10-22 capture at 23 sites + dispatch-think-response (initial).
+#   2026-10-22 (c) reactive-agent.ts 2340->2344: +6 structural cost of the D1
+#            bridge family pattern (shared runFacadeEffect module + delegate
+#            boundary docs, GH PR #274). Deliberate attributed raise; families
+#            2-4 reuse the shared helper so the per-family shell cost is one
+#            import line, not another 25-line bridge copy.
 #   2026-10-22 (b) execution-engine.ts 1976->991: SHRINK by program Task 4
 #            decomposition (runtime-warden, 11 verbatim engine/execute-* modules).
 
@@ -51,7 +56,7 @@ GIANT_BAR=1000
 #            recording 08458a4f3): feature additions landed the same week the
 #            gate shipped; attributed deliberate raises, not regressions.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2340"
+  "runtime/src/reactive-agent.ts:2344"
   "runtime/src/builder.ts:2222"
   "runtime/src/execution-engine.ts:991"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:1970"
