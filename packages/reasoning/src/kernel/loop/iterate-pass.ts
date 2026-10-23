@@ -82,24 +82,12 @@
 import { Effect, FiberRef } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { checkpointStoreRef } from "@reactive-agents/tools";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { resolveControlPlane, type ControlProposal } from "../control/control-plane.js";
-import {
-  proposeFromErrorRecovery,
-  proposeFromLoopDetector,
-  proposeFromStallGuard,
-} from "../control/emitters.js";
-import { enumerationIncompleteProposal, inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
-import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
-import { makeObservationResult } from "../utils/observation-helpers.js";
-import { resolveUnconsumedEvidence } from "../capabilities/verify/unconsumed-evidence.js";
 import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
-import { serializeKernelState } from "../state/kernel-codec.js";
 import {
   transitionState,
   type KernelState,
@@ -109,7 +97,6 @@ import {
   type ThoughtKernel,
   type KernelHooks,
 } from "../../kernel/state/kernel-state.js";
-import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
@@ -119,53 +106,25 @@ import {
   nextLowDeltaCount,
   nextStalledCount,
 } from "../../kernel/assessment/guard-adapters.js";
-import {
-  shouldForceTerminalSynthesis,
-  triageSteerText,
-} from "../../kernel/assessment/pace-actions.js";
-import { forceTerminalSynthesis } from "./runner-helpers/pace-terminal.js";
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
-import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
-import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
+import { runPhaseHooks } from "./phase-hooks.js";
 import { detectLoopPattern, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
-import {
-  KERNEL_STRATEGY_CANDIDATES,
-  isDefaultCandidateSet,
-  selectLadderStrategy,
-} from "../../kernel/capabilities/reflect/strategy-ladder.js";
-import {
-  arbitrateAndApplyWithBudgetEmit,
-  arbitrationContextFromState,
-} from "../../kernel/capabilities/decide/arbitrator.js";
 import { buildOracleNudge } from "../../kernel/capabilities/decide/oracle-nudge.js";
-import {
-  decideExecutionLane,
-  shouldInjectOracleNudge,
-} from "../../kernel/utils/lane-controller.js";
+import { shouldInjectOracleNudge } from "../../kernel/utils/lane-controller.js";
 import { type Verifier } from "../../kernel/capabilities/verify/verifier.js";
-import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
-import {
-  RecallService,
-  type MemoryRecallResult,
-  type FoundSkill,
-} from "../../kernel/capabilities/recall/recall-service.js";
 import {
   emitKernelStateSnapshot,
   emitGuardFired,
   emitHarnessSignalInjected,
-  emitAssessment,
-  emitControlResolution,
 } from "../../kernel/utils/diagnostics.js";
-import { assess } from "../../kernel/assessment/assess.js";
 import { recompileOnAssessment } from "../../kernel/policy/harness-plan.js";
-import { recordHarnessRecompiled, recordRequirementTransitions } from "../../kernel/ledger/emit.js";
+import { recordHarnessRecompiled } from "../../kernel/ledger/emit.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
   detectRepeatedIdenticalToolFailure,
 } from "./runner-helpers/recovery-steering.js";
-import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { RunControllerRef } from "@reactive-agents/core";
 import {
   TIER_GUARD_THRESHOLDS,
@@ -176,27 +135,45 @@ import {
 import {
   missingRequiredToolsForInput,
   getLastPulseReadyToAnswer,
-  getLastErrors,
 } from "./runner-helpers/state-queries.js";
 import {
-  countArtifacts,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
-  commitDeliverable,
   passthroughOutputDeliverable,
   unproducedDeliverables,
 } from "./runner-helpers/deliverable.js";
-import { actionToolName } from "../../kernel/assessment/progress-arbiter.js";
-import { detectFlailSignature } from "./runner-helpers/flail-signature.js";
+// Task 9 (2026-10-23) — verbatim cluster extractions (quality program / GH #222).
+// Every script-anchored region stayed inline: the carrier/cfg interfaces + the
+// spine counter locals (check-run-assessment grandfather), the
+// recompileOnAssessment block (check-policy-compiler), both applyStrategySwitch
+// seams (check-control-plane), all terminate() routing (check-termination-paths),
+// the token-delta guard + F1 redirect trace + stall-count tracking + oracle gate
+// + loop-resolution + required-tools redirect (counter writes), and the
+// W4.0 single-writer carrier write-back.
+import { runPassBoundaryCheckpoint, runPostPhaseCheckpointSeams } from "./iterate-run-ctl-checkpoint.js";
+import {
+  assessAndRecordPass,
+  zeroEvidenceStandDownReason,
+  applyE3PaceActions,
+} from "./iterate-assessment-seam.js";
+import { runPerIterRecall } from "./iterate-recall-seam.js";
+import { runBeforeThinkHooks } from "./iterate-before-think-seam.js";
+import { handleDispatcherEarlyStop } from "./iterate-early-stop-seam.js";
+import {
+  resolveF3ControlPlane,
+  resolveStallControlPlane,
+  resolveSwitchControlPlane,
+} from "./iterate-control-plane-seams.js";
+import { resolveLoopSwitchEvaluation } from "./iterate-loop-switch-seam.js";
+import {
+  runAutoCheckpointStep,
+  applyExecutionLane,
+  runIcsNudgeStep,
+} from "./iterate-guard-seams.js";
+import { forkIterLearnWrite } from "./iterate-learn-seam.js";
 
-/**
- * W4-live — the default-on zero-evidence stand-down threshold. Consecutive
- * iterations with no new substantive evidence while work remains, past which an
- * impossible/zero-progress task terminates honestly instead of grinding. 2 =
- * the live impossible-task shape terminates within two iterations.
- */
-const EVIDENCE_STALE_TERMINATE_THRESHOLD = 2;
-
+// W4-live evidence-staleness threshold const now lives in
+// ./iterate-assessment-seam.ts (Task 9 extraction; single definition).
 /**
  * Outer-loop control signal returned by `runIterationPass`.
  *
@@ -413,63 +390,10 @@ export function runIterationPass(
       // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
       const _runCtl = yield* FiberRef.get(RunControllerRef);
       if (_runCtl) {
-        const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
-        if (ctl?.stop) {
-          // Sprint-1 B2 / P1 mission 2B: typed DeliverableProvenance channel.
-          // Stop-checkpoint is a user-initiated termination — route through the
-          // single-owner terminate() (status/terminatedBy) which delegates the
-          // output string to commitDeliverable. Preserve any prior committed
-          // output as a passthrough; an empty output becomes a structured
-          // sentinel (NOT a raw empty string).
-          //
-          // FM-5 (Phase 4 Task 4): a hard terminate() (RunHandle.terminate())
-          // is distinguished from a graceful stop() via `ctl.terminate` — both
-          // exit the loop here, before the next provider call, but the reason
-          // differs so `state.meta.terminatedBy` doesn't mislabel an abort as
-          // a graceful stop (see terminate-reason.ts).
-          state = terminate(state, {
-            reason: ctl.terminate ? "terminate_requested" : "stop_requested",
-            deliverable: passthroughOutputDeliverable(state.output),
-          });
+        const passBoundary = yield* runPassBoundaryCheckpoint({ state, _runCtl });
+        state = passBoundary.state;
+        if (passBoundary.stopped) {
           return "break";
-        }
-        // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
-        // state to an optional durable controller. Observer must NEVER kill the
-        // loop — failures are warn-surfaced (R11 precedent), not propagated.
-        //
-        // `checkpointState`/`checkpointIteration` capture the CURRENT (immutable)
-        // state value now — the outer `state` binding is reassigned later this
-        // same pass (`state = yield* kernel(...)` below), so closing over `state`
-        // directly in a deferred thunk would silently serialize a LATER state.
-        // KernelState values themselves never mutate, so this ref is safe to
-        // close over lazily.
-        const checkpointState = state;
-        const checkpointIteration = checkpointState.iteration;
-        // Live-inspection seam (Arc 1 Task 5): always-on, independent of
-        // `onCheckpoint`/durability. `serializeOnce` memoizes so a durable run
-        // (onCheckpoint present) reuses the SAME already-computed string for
-        // both observers instead of serializing twice; a non-durable run
-        // (onCheckpoint absent) pays ZERO serialization cost unless a caller
-        // later invokes `RunHandle.inspect()`, which invokes this thunk.
-        let checkpointSerialized: string | undefined;
-        const serializeOnce = (): string =>
-          checkpointSerialized ?? (checkpointSerialized = serializeKernelState(checkpointState));
-
-        if (_runCtl.onCheckpoint) {
-          try {
-            _runCtl.onCheckpoint(serializeOnce(), checkpointIteration);
-          } catch (err) {
-            const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${checkpointIteration}: ${err instanceof Error ? err.message : String(err)}`;
-            yield* Effect.logWarning(msg);
-          }
-        }
-        if (_runCtl.noteCheckpoint) {
-          try {
-            _runCtl.noteCheckpoint(serializeOnce, checkpointIteration);
-          } catch (err) {
-            const msg = `[live-inspect] noteCheckpoint observer threw at iteration ${checkpointIteration}: ${err instanceof Error ? err.message : String(err)}`;
-            yield* Effect.logWarning(msg);
-          }
         }
       }
 
@@ -501,118 +425,20 @@ export function runIterationPass(
       {
         const contract = state.meta.runContract;
         if (contract) {
-          const limits = state.meta.budgetLimits;
-          const assessment = assess(contract, state.ledger ?? [], {
-            iteration: state.iteration,
-            maxIterations: currentOptions.maxIterations,
-            tokensUsed: state.tokens,
-            costUsd: state.cost,
-            ...(limits?.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
-            ...(limits?.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
-          });
-          // B7: mint the requirement lifecycle TRANSITIONS at this gate — assess()
-          // is the single, entity-aware satisfaction authority; this persists the
-          // ids it partitioned as satisfied|blocked as `requirement` ledger facts,
-          // so assess.ts:207 (next iteration) + standing-frame read a REAL lifecycle
-          // instead of re-deriving. Routed through the ledger-home emitter (single-
-          // writer invariant), threaded via patch.ledger. Idempotent: a persistently
-          // satisfied requirement records once, so the ledger does not grow per turn.
-          state = transitionState(state, {
-            meta: { ...state.meta, assessment },
-            ledger: recordRequirementTransitions(
-              state.ledger,
-              assessment.requirements.satisfied,
-              assessment.requirements.blocked,
-              state.iteration,
-            ),
-          });
-          yield* emitAssessment({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            phase: assessment.phase,
-            band: assessment.pace.band,
-            evidenceDelta: assessment.evidenceDelta,
-            requirementsSatisfied: assessment.requirements.satisfied.length,
-            requirementsOutstanding: assessment.requirements.outstanding.length,
-            deliverablesProduced: assessment.deliverables.produced.length,
-            deliverablesMissing: assessment.deliverables.missing.length,
-            burnRatio: assessment.pace.burnRatio,
-          });
-
-          // W4.1 (e) — evidence-staleness iterations. Read from the assessment's
-          // already-computed `health.iterationsSinceEvidence` (ledger-derived, so
-          // it cannot over-count when a pass assesses more than once). Gated to
-          // the working phases (synthesize/verify are not "still gathering").
-          const workRemaining =
-            assessment.phase !== "synthesize" && assessment.phase !== "verify";
-          evidenceStaleIterations = workRemaining
-            ? assessment.health.iterationsSinceEvidence
-            : 0;
+          const assessed = yield* assessAndRecordPass({ state, contract, currentOptions });
+          state = assessed.state;
+          const assessment = assessed.assessment;
+          evidenceStaleIterations = assessed.evidenceStaleIterations;
 
           // ── W4-live: default-on zero-evidence stand-down ────────────────────
-          // An impossible / zero-progress task (no capable tool, no deliverable,
-          // no substantive evidence) must terminate efficiently by DEFAULT — not
-          // grind to maxIterations or a graceful loop. Reuses the assessment's
-          // ledger-derived staleness signal (the SAME currency as the band rule
-          // and pattern (e)) and the honest-abstain single-owner path. Default-on
-          // as behavior-ordering over already-computed signals (plan 4.2), with a
-          // `.withLongHorizon()` escape hatch (see below).
-          //
-          // FLAIL REQUIREMENT (round-1 fix): bare staleness is ALSO true of a
-          // legitimate no-tool reasoning trajectory (no tools ⇒
-          // iterationsSinceEvidence == the iteration index). The stand-down fires
-          // only when the trajectory shows a flail signature — REFUSAL (canonical
-          // `isGiveUpAnswer`) or REPETITION (near-duplicate thoughts) — so a weak
-          // model deriving a multi-step answer across turns is never aborted
-          // mid-derivation. See runner-helpers/flail-signature.ts.
-          //
-          // Operator-tuning guard: an EXPLICIT `loopDetection` config is the
-          // operator's override of the loop-machinery family — defer to it (the
-          // live default path passes none, so the actuator is armed there).
-          //
-          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
-          // classified horizon is "long") defers the stand-down.
-          //
-          // Tool guard: any tool ATTEMPT at all (substantive OR meta, even one
-          // still in flight) stands the actuator down. A run that is actively
-          // calling tools — a legitimate recall/brief/find workflow, a gather in
-          // flight — is owned by the loop/recovery guards. Only a trajectory that
-          // calls NO tool at all (the live `builtins:false` impossible shape) is
-          // zero-progress here. A declared required tool also defers.
-          const zeroEvidenceActuatorArmed = currentOptions.loopDetection === undefined;
-          const noRequiredTools = requiredTools.length === 0;
-          const attemptedAnyTool = state.steps.some(
-            (s) => s.type === "action" && actionToolName(s) !== undefined,
-          );
-          // W4-live fix (round 1) — FLAIL discriminator. Bare staleness is also
-          // true of a legitimate no-tool REASONING trajectory (a weak model
-          // deriving across turns: no tools ⇒ iterationsSinceEvidence == the
-          // iteration index). Fire only on a flail signature — REFUSAL
-          // (canonical isGiveUpAnswer) OR REPETITION (near-duplicate thoughts).
-          // A deriving run's thoughts change each pass → no signature → survives.
-          const flail = detectFlailSignature(state.steps, evidenceStaleIterations);
-          // Long-horizon escape hatch: `.withLongHorizon()` (or a contract whose
-          // classified horizon is "long") defers the stand-down — long runs are
-          // expected to spend many turns without evidence.
-          const longHorizonDeferred =
-            horizon !== undefined || state.meta.runContract?.horizon === "long";
-          if (
-            zeroEvidenceActuatorArmed &&
-            noRequiredTools &&
-            !longHorizonDeferred &&
-            state.tokens > 0 &&
-            evidenceStaleIterations >= EVIDENCE_STALE_TERMINATE_THRESHOLD &&
-            assessment.requirements.outstanding.length > 0 &&
-            !attemptedAnyTool &&
-            flail.flailing &&
-            countArtifacts(state) === 0 &&
-            countDeliverableCandidates(state) === 0
-          ) {
-            const signal = flail.refusal ? "refused to proceed" : "repeated itself without progress";
-            const reason =
-              `no new task evidence for ${evidenceStaleIterations} iteration(s) while ` +
-              `${assessment.requirements.outstanding.length} requirement(s) remain outstanding ` +
-              `(the model ${signal}) — the task cannot be grounded with the available tools`;
+          // FLAIL discriminator decomposed verbatim to ./iterate-assessment-seam.ts
+          // (quality Task 9); the honest-abstain terminate() route stays HERE —
+          // single-owner termination (check-termination-paths) + the F1/P5
+          // precedence rationale travel with the helper.
+          const reason = zeroEvidenceStandDownReason({
+            state, assessment, evidenceStaleIterations, requiredTools, horizon, currentOptions,
+          });
+          if (reason !== null) {
             state = terminate(state, {
               reason: "abstained",
               deliverable: sentinelDeliverable("no_substantive_output", reason),
@@ -671,77 +497,14 @@ export function runIterationPass(
           }
 
           // ── E3 pace ACTIONS — turn the just-computed pace band into actuator
-          // actions (meta-loop Phase 5a / task E3). DAG-safe: READS
-          // assessment.pace.band (E1, this iteration), acts on the guidance +
-          // terminal actuators, never recomputes assessment / mutates the ledger.
-          // OPT-IN behind the long-horizon profile (`horizon !== undefined`); OFF
-          // → this whole block is skipped → byte-identical to today.
-          //
-          // Gate on status "thinking" (the ICS/stall convention): on an "acting"
-          // sub-pass a tool call is pending but not yet executed, so acting here
-          // would pre-empt in-flight evidence gathering — let the tool complete;
-          // the next thinking pass catches the band with the evidence in hand.
-          if (horizon !== undefined && state.status === "thinking") {
-            // terminal (burnRatio ≥ 0.95): force a generous synthesis NOW, before
-            // the next think turn can push spend over the budget_exceeded cliff
-            // that would discard the answer (audit 05-#1). Pre-empts at iter-start.
-            if (shouldForceTerminalSynthesis(true, assessment)) {
-              const llmOpt = yield* Effect.serviceOption(LLMService);
-              state = yield* forceTerminalSynthesis({
-                state,
-                task: currentInput.task,
-                llm: llmOpt._tag === "Some" ? llmOpt.value : undefined,
-                contract,
-                assessment,
-                taskId: currentOptions.taskId ?? state.taskId,
-                emitLog,
-              });
-              return "break";
-            }
-            // triage (burnRatio ≥ 0.80): steer the model to the OUTSTANDING
-            // requirements via the guidance channel. Rendered by THIS pass's think
-            // turn (guidance is set at iter-start, consumed+cleared by think).
-            // Emitted once per distinct outstanding set (dedup on signature) so a
-            // run sitting in the triage band does not re-steer every iteration.
-            const steer = triageSteerText(true, contract, assessment);
-            if (steer) {
-              const signature = assessment.requirements.outstanding.join(",");
-              if (state.meta.lastTriageSignature !== signature) {
-                yield* emitHarnessSignalInjected({
-                  taskId: currentOptions.taskId ?? state.taskId,
-                  iteration: state.iteration,
-                  signalKind: "redirect",
-                  origin: "loop/iterate-pass.ts:E3-triage",
-                  content: steer,
-                  metadata: {
-                    trigger: "pace-triage",
-                    band: assessment.pace.band,
-                    outstanding: assessment.requirements.outstanding.length,
-                    burnRatio: assessment.pace.burnRatio,
-                  },
-                });
-                state = transitionState(state, {
-                  steps: [
-                    ...state.steps,
-                    makeStep("harness_signal", `⚠️ ${steer}`, {
-                      // Spec §5b (W-Q) — pace-triage steer is a receipt-visible
-                      // intervention. Lexical: the burn-ratio band is a
-                      // statistical pace heuristic (advisory).
-                      intervention: {
-                        actor: "pace-triage",
-                        authorityClass: authorityOf("pace-triage"),
-                        evidence: `burnRatio=${assessment.pace.burnRatio.toFixed(2)} band=${assessment.pace.band}; outstanding=${assessment.requirements.outstanding.length}`,
-                        whatChanged: "pace-triage: steered model to outstanding requirements",
-                        iter: state.iteration,
-                      },
-                    }),
-                  ],
-                  // Merge — never clobber guidance a prior pass queued for this think.
-                  pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer },
-                  meta: { ...state.meta, lastTriageSignature: signature },
-                });
-              }
-            }
+          // actions. Decomposed verbatim to ./iterate-assessment-seam.ts
+          // (quality program Task 9).
+          const pace = yield* applyE3PaceActions({
+            state, contract, assessment, currentInput, currentOptions, horizon, emitLog,
+          });
+          state = pace.state;
+          if (pace.terminated) {
+            return "break";
           }
         }
       }
@@ -762,24 +525,7 @@ export function runIterationPass(
       // per-iter LOCALS (not KernelState); Phase 2 decides persistence
       // shape after the migration of upstream recall (engine/bootstrap)
       // through this seam.
-      let iterRecallContext: MemoryRecallResult = {
-        semanticContext: "",
-        episodic: [],
-      };
-      let iterRecallSkills: readonly FoundSkill[] = [];
-      {
-        const recallOpt = yield* Effect.serviceOption(RecallService);
-        if (recallOpt._tag === "Some") {
-          iterRecallContext = yield* recallOpt.value.recallMemoryContext(
-            state,
-            undefined,
-          );
-          iterRecallSkills = yield* recallOpt.value.findSkills(
-            state,
-            undefined,
-          );
-        }
-      }
+      const { iterRecallContext, iterRecallSkills } = yield* runPerIterRecall({ state });
       // Phase 1 leaves iterRecallContext / iterRecallSkills unused beyond
       // capture — strategies still consume `input.priorContext` /
       // `input.briefResolvedSkills` as today. Phase 2 (runtime-warden) will
@@ -812,113 +558,20 @@ export function runIterationPass(
         yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
       }
 
-      // 'before think' hooks — may abort iteration
-      const beforeThinkAbort = dispatchesThink
-        ? yield* Effect.promise(() =>
-            runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
-          )
-        : undefined;
-      if (beforeThinkAbort) {
-        // D-1 amendment (2026-08-27 dead-signal-wiring plan, Task 3
-        // narrowed): `before('think')` is the ONE runtime site that consumes
-        // a killswitch abort carrying budget `meta` (currently only
-        // `budgetLimit()`, packages/compose/src/killswitches/budget-limit.ts)
-        // — `act.ts`'s before/after('act')/('observe') aborts never see this
-        // killswitch. Publish before the state transition below so the event
-        // fires even on the abort path; real figures only (never fabricated),
-        // straight from the killswitch's own computation.
-        if (beforeThinkAbort.meta) {
-          const meta = beforeThinkAbort.meta;
-          yield* publishReasoningStep(eventBus, {
-            _tag: "BudgetExhausted",
-            agentId: effectiveInput.agentId ?? "reasoning-agent",
-            budgetType: meta.budgetType,
-            limit: meta.limit,
-            used: meta.used,
-            timestamp: Date.now(),
-          });
-        }
-        // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
-        // TerminateReason), so it can't route through terminate(). Set
-        // status + terminatedBy via transitionState (NO output key), then —
-        // only on the successful "done" branch — route the output string
-        // through the single writer commitDeliverable. The "failed" branch
-        // drops the key so the transitionState invariant nulls the output.
-        const aborted = beforeThinkAbort.abort === 'terminate';
-        state = transitionState(state, {
-          status: aborted ? 'failed' : 'done',
-          meta: {
-            ...state.meta,
-            terminatedBy: killswitchTerminatedBy(beforeThinkAbort),
-          },
-        });
-        if (!aborted) {
-          state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
-        }
+      // 'before think' hooks — may abort iteration. Decomposed verbatim to
+      // ./iterate-before-think-seam.ts (quality program Task 9).
+      const beforeThink = yield* runBeforeThinkHooks({ state, effectiveInput, eventBus, dispatchesThink });
+      state = beforeThink.state;
+      if (beforeThink.aborted) {
         return "break";
       }
 
       state = yield* kernel(state, currentContext);
 
-      // Live-inspection seam, post-phase (Arc 1 Task 5): surface the state the
-      // kernel phase just produced — steps appended, iteration incremented,
-      // meta.lastThought / meta.pendingNativeToolCalls populated. The
-      // pass-boundary seam above only captures the PRE-phase state, which for
-      // runs that resolve within few passes (streamed single-exchange answers,
-      // single-tool tasks) leaves `RunHandle.inspect()` permanently showing the
-      // pristine iteration-0 snapshot. The thunk is LAZY (serialization only
-      // happens if `inspect()` is called), so firing at both points costs a
-      // closure allocation and nothing more. `onCheckpoint` (durable writes)
-      // deliberately does NOT fire here — the durable rail stays
-      // boundary-only; resume semantics are unchanged.
-      if (_runCtl?.noteCheckpoint) {
-        // Capture-now: `state` is reassigned later this pass (hooks, guards,
-        // arbitrator) — the deferred thunk must close over THIS value.
-        const postPhaseState = state;
-        try {
-          _runCtl.noteCheckpoint(
-            () => serializeKernelState(postPhaseState),
-            postPhaseState.iteration,
-          );
-        } catch (err) {
-          yield* Effect.logWarning(
-            `[live-inspect] post-phase noteCheckpoint threw at iteration ${postPhaseState.iteration}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-
-      // Durable HITL (Phase D): when the act gate paused the run, checkpoint the
-      // PAUSED state NOW — the per-iteration onCheckpoint above fires at the pass
-      // BOUNDARY (before think/act), so it never captures the post-gate state that
-      // carries `meta.awaitingApprovalFor` + the pending call. Without this, resume
-      // restores a pre-gate checkpoint, the runner re-entry finds no
-      // `awaitingApprovalFor`, and the gate re-fires instead of executing the
-      // approved call. Fire-and-forget through the same observer contract (never
-      // kills the loop). The loop exits immediately after (status:"done").
-      // Durable pause (Task 9): a `request_user_input` interaction pause needs
-      // the identical post-gate checkpoint — same rationale, mirrors
-      // `meta.awaitingInteractionFor` instead of `awaitingApprovalFor`.
-      if (
-        (state.meta.terminatedBy === "awaiting-approval" ||
-          state.meta.terminatedBy === "awaiting-interaction") &&
-        _runCtl?.onCheckpoint
-      ) {
-        try {
-          // Write at iteration+1 so this is a DISTINCT row that always wins
-          // `latestCheckpoint` (ORDER BY iteration DESC) — the pass-boundary
-          // checkpoint above writes the pre-gate state at this same iteration, and
-          // both go through fire-and-forget `Effect.runFork`, so a same-iteration
-          // write would race. The stateJson keeps its real iteration; the column
-          // is only an ordering key. Resume reads the stateJson, not the column.
-          // (The live-inspection seam needs no mirror call here — the post-phase
-          // noteCheckpoint above already captured this same post-gate state.)
-          _runCtl.onCheckpoint(serializeKernelState(state), state.iteration + 1);
-        } catch (err) {
-          yield* Effect.logWarning(
-            `[durable-checkpoint] paused-state onCheckpoint threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
+      // Live-inspection post-phase seam + durable HITL/interaction paused-state
+      // checkpoint — decomposed verbatim to ./iterate-run-ctl-checkpoint.ts
+      // (quality program Task 9).
+      yield* runPostPhaseCheckpointSeams({ state, _runCtl });
 
       // 'after think' hooks — paired with the 'before' fire above, so they
       // only run when this pass actually dispatched a thinking step.
@@ -1031,23 +684,8 @@ export function runIterationPass(
       }
 
       // ── Auto-checkpoint before context pressure gate ────────────────────
-      // When approaching the hard pressure gate (within 5%), auto-save best
-      // observations to the checkpoint store so they survive compaction.
-      if (
-        !autoCheckpointed &&
-        shouldAutoCheckpoint({
-          estimatedTokens: state.tokens,
-          maxTokens: profile.maxTokens ?? Number.MAX_SAFE_INTEGER,
-          tier: profile.tier,
-          alreadyCheckpointed: autoCheckpointed,
-        })
-      ) {
-        const saved = yield* autoCheckpoint(checkpointStoreRef, state.steps);
-        if (saved) {
-          autoCheckpointed = true;
-          yield* emitLog({ _tag: "warning", message: `[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`, timestamp: new Date() });
-        }
-      }
+      // Decomposed verbatim to ./iterate-guard-seams.ts (quality Task 9).
+      ({ autoCheckpointed } = yield* runAutoCheckpointStep({ state, profile, autoCheckpointed, emitLog }));
 
       // Sync scratchpad: kernel may have added entries
       for (const [k, v] of state.scratchpad) {
@@ -1065,55 +703,14 @@ export function runIterationPass(
         failureRecoveryRedirects,
       ));
 
-      // Honor early-stop dispatched by the intervention dispatcher.
-      // Sprint 3.3 — flow through the Arbitrator so the veto can convert
-      // a "framework giving up because of approaching maxIterations"
-      // early-stop into status:failed when there's tool-failure evidence.
+      // ── Honor early-stop dispatched by the intervention dispatcher ────────
+      // Decomposed verbatim to ./iterate-early-stop-seam.ts (quality Task 9):
+      // one evidence-grace turn when unconsumed stored evidence exists (2026-08-16
+      // root fix), else the Arbitrator veto honors the forced stop.
       if (state.meta.terminatedBy === "dispatcher-early-stop") {
-        // 2026-08-16 root fix: measured live as the DOMINANT termination path
-        // for local models under entropy/iteration pressure — it interrupts
-        // the loop directly, mid-iteration, entirely outside think.ts's
-        // per-turn termination oracle (arbitrator.ts's evaluator chain never
-        // runs here). Give the run ONE grace turn to ground its answer in
-        // evidence it already fetched but never read back (storedKey/recall),
-        // rather than honoring the forced stop and shipping whatever the
-        // model wrote from a compressed preview. One-shot via
-        // `evidenceGraceGiven`: a run genuinely out of budget still honors
-        // the NEXT dispatcher-early-stop.
-        if (!state.meta.evidenceGraceGiven) {
-          const unconsumedEvidence = resolveUnconsumedEvidence(state.steps, state.scratchpad);
-          if (unconsumedEvidence !== null) {
-            const evidenceMsg =
-              `⚠️ Before finalizing: earlier tool results were shown to you only as short previews. ` +
-              `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
-              `invent details not present here), then give your final answer now:\n\n${unconsumedEvidence}`;
-            const evidenceStep = makeStep("observation", evidenceMsg, {
-              observationResult: makeObservationResult("evidence-grounding-guard", false, evidenceMsg),
-            });
-            state = transitionState(state, {
-              steps: [...state.steps, evidenceStep],
-              meta: { ...state.meta, terminatedBy: undefined, evidenceGraceGiven: true },
-            });
-            return "continue";
-          }
-        }
-        const arbCtx = arbitrationContextFromState(state, {
-          task: input.task,
-          requiredTools: input.requiredTools,
-        });
-        // WS-3 Phase 5b — emit BudgetSignal + arbitrate in a single call
-        // colocated at the Decide capability boundary (invariant 10).
-        state = yield* arbitrateAndApplyWithBudgetEmit({
-          state,
-          intent: {
-            kind: "controller-early-stop",
-            output: state.output ?? "",
-            reason: "dispatcher_early_stop",
-          },
-          ctx: arbCtx,
-          taskId: effectiveInput.taskId ?? "",
-        });
-        return "break";
+        const earlyStop = yield* handleDispatcherEarlyStop({ state, input, effectiveInput });
+        state = earlyStop.state;
+        return earlyStop.signal;
       }
 
       // Apply temperature override dispatched by the intervention dispatcher
@@ -1225,65 +822,22 @@ export function runIterationPass(
               "stall",
             );
 
-            // ── Control plane (F3 seam) — resolve redirect vs abstain ──────────
-            // This seam used to FORCE its redirect and `return "continue"`, so the
-            // in-loop abstain signal (built only at the strategy-switch seam, which
-            // needs the loop detector to trip) never got to compete. The resolver's
-            // documented total order ranks abstain(1) STRICTLY above redirect(4):
-            // a run whose grounding is structurally impossible must decline
-            // honestly, not be re-steered until the redirect budget runs out. Same
-            // precedence inversion as P5, at a different seam.
-            //
-            // `proposeFromErrorRecovery` had zero production callers before this —
-            // it was unit-tested in emitters.test.ts and never invoked. OFF the
-            // long-horizon profile the block is skipped entirely, so the default
-            // path is byte-identical (the redirect fires exactly as today).
             if (horizon !== undefined) {
-              const recoveryProposal = proposeFromErrorRecovery({
-                repeatedFailureTool: repeated.toolName,
-                errorClass: repeated.errorClass,
-                failedTools: repeatedRecovery.failedUnresolved,
-                guidance,
-                horizonActive: true,
-                assessment: state.meta.assessment,
-              });
-              const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
+              // Control plane (F3 seam) — resolve redirect vs abstain. Decomposed
+              // verbatim to ./iterate-control-plane-seams.ts (quality Task 9).
+              const f3Plane = yield* resolveF3ControlPlane({
                 state,
                 currentInput,
                 requiredTools,
-                currentOptions.maxIterations,
-              );
-              const enumProposal = enumerationIncompleteProposal(
-                state.meta.runContract, state.meta.assessment, horizon !== undefined,
-              );
-              const proposals: ControlProposal[] = [];
-              if (recoveryProposal) proposals.push(recoveryProposal);
-              if (abstainProposal) proposals.push(abstainProposal);
-              if (enumProposal) proposals.push(enumProposal);
-              if (proposals.length > 0) {
-                const resolution = resolveControlPlane(proposals);
-                yield* emitControlResolution({
-                  taskId: currentOptions.taskId ?? state.taskId,
-                  iteration: state.iteration,
-                  action: resolution.action,
-                  reason: resolution.reason,
-                  proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
-                });
-                if (resolution.action === "abstain" && forced !== null) {
-                  // Abstain won — stand down the redirect (its counter was never
-                  // committed) and force the honest decline through the
-                  // single-owner terminate() abstain path, exactly as the
-                  // strategy-switch seam does.
-                  state = transitionState(state, { error: null });
-                  state = terminate(state, {
-                    reason: "abstained",
-                    deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-                    extraMeta: {
-                      abstention: { reason: forced.reason, missing: forced.missing },
-                    },
-                  });
-                  return "break";
-                }
+                currentOptions,
+                horizon,
+                repeated,
+                repeatedRecovery,
+                guidance,
+              });
+              state = f3Plane.state;
+              if (f3Plane.abstained) {
+                return "break";
               }
             }
 
@@ -1331,18 +885,9 @@ export function runIterationPass(
       }
 
       // ── Lane controller (gather vs synthesize) ───────────────────────────
-      const laneDecision = decideExecutionLane({
-        requiredTools: currentInput.requiredTools ?? [],
-        requiredToolQuantities: currentInput.requiredToolQuantities,
-        steps: state.steps,
-      });
-      state = transitionState(state, {
-        meta: {
-          ...state.meta,
-          executionLane: laneDecision.lane,
-          missingRequiredTools: laneDecision.missingRequiredTools,
-        },
-      });
+      const laneSeam = applyExecutionLane({ state, currentInput });
+      state = laneSeam.state;
+      const laneDecision = laneSeam.laneDecision;
 
       // ── Harness artifact stall tracking ─────────────────────────────────
       // Track whether this iteration produced new non-meta tool observations.
@@ -1382,59 +927,14 @@ export function runIterationPass(
         state.status === "thinking";
 
       // ── Control plane (stall seam) — resolve steer vs abstain ───────────────
-      // Same precedence inversion as the F3 seam. `runStallDeliverableStep`
-      // forces its own action: a `steer` (required-tool nudge / recovery
-      // steering) or a harness-deliverable `terminate`. Both rank BELOW `abstain`
-      // in the resolver's total order (abstain(1) < terminate(2) < steer(5)), yet
-      // a run with no deliverable and exhausted ungrounded-synthesis retries — one
-      // that provably cannot ground its answer — was nudged instead of declining.
-      //
-      // `proposeFromStallGuard` exists for exactly this seam and had zero
-      // production callers (every reference lived in emitters.test.ts). OFF the
-      // long-horizon profile the block is skipped, so the default path is
-      // byte-identical.
+      // Decomposed verbatim to ./iterate-control-plane-seams.ts (quality Task 9).
       if (horizon !== undefined && stallTriggered) {
-        const stallProposal = proposeFromStallGuard({
-          stallTriggered: true,
-          missingRequiredTools: laneDecision.missingRequiredTools,
-          horizonActive: true,
-          assessment: state.meta.assessment,
+        const stallPlane = yield* resolveStallControlPlane({
+          state, currentInput, requiredTools, currentOptions, horizon, laneDecision,
         });
-        const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
-          state,
-          currentInput,
-          requiredTools,
-          currentOptions.maxIterations,
-        );
-        const enumProposal = enumerationIncompleteProposal(
-          state.meta.runContract, state.meta.assessment, horizon !== undefined,
-        );
-        const proposals: ControlProposal[] = [];
-        if (stallProposal) proposals.push(stallProposal);
-        if (abstainProposal) proposals.push(abstainProposal);
-        if (enumProposal) proposals.push(enumProposal);
-        if (proposals.length > 0) {
-          const resolution = resolveControlPlane(proposals);
-          yield* emitControlResolution({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            action: resolution.action,
-            reason: resolution.reason,
-            proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
-          });
-          if (resolution.action === "abstain" && forced !== null) {
-            // Abstain won — stand down the stall guard and decline honestly via
-            // the single-owner terminate() abstain path.
-            state = transitionState(state, { error: null });
-            state = terminate(state, {
-              reason: "abstained",
-              deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-              extraMeta: {
-                abstention: { reason: forced.reason, missing: forced.missing },
-              },
-            });
-            return "break";
-          }
+        state = stallPlane.state;
+        if (stallPlane.abstained) {
+          return "break";
         }
       }
       {
@@ -1474,21 +974,7 @@ export function runIterationPass(
       const shouldAllowIcsNudge =
         state.status === "thinking" && (!oracleReady || laneDecision.lane === "gather");
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      if (shouldAllowIcsNudge) {
-        const icsResult = yield* coordinateICS(state, {
-          task: currentInput.task,
-          requiredTools: currentInput.requiredTools ?? [],
-          toolsUsed: effectiveToolsUsed,
-          availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
-          tier: profile.tier ?? "mid",
-          iteration: state.iteration,
-          maxIterations: (state.meta.maxIterations as number) ?? 10,
-          lastErrors: getLastErrors(state),
-        });
-        if (icsResult.steeringNudge) {
-          state = transitionState(state, { pendingGuidance: { icsGuidance: icsResult.steeringNudge } });
-        }
-      }
+      state = yield* runIcsNudgeStep({ state, currentInput, effectiveToolsUsed, profile, shouldAllowIcsNudge });
 
       // ── Oracle hard gate (pulse readyToAnswer two-stage escalation) ──────
       // When the pulse tool has reported readyToAnswer=true but the model
@@ -1607,112 +1093,23 @@ export function runIterationPass(
             // Transition to "evaluating" while we decide
             state = transitionState(state, { status: "evaluating" });
 
-            let evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string };
-
-            if (switchCfg.fallbackStrategy) {
-              // Skip LLM evaluator — use fallback directly
-              evaluation = {
-                shouldSwitch: true,
-                recommendedStrategy: switchCfg.fallbackStrategy,
-                reasoning: "fallback strategy configured",
-              };
-            } else {
-              // W4.5 — deterministic ladder by DEFAULT (zero LLM). The LLM
-              // strategy-evaluator round-trip runs ONLY for a MULTI-CANDIDATE
-              // config: an explicitly-supplied candidate set that is not the
-              // canonical kernel set (the caller wants the model to choose among
-              // its own candidates). Otherwise walk reactive → plan-execute-reflect
-              // → reflexion deterministically.
-              const candidates = switchCfg.availableStrategies ?? KERNEL_STRATEGY_CANDIDATES;
-              const multiCandidate =
-                switchCfg.availableStrategies !== undefined &&
-                !isDefaultCandidateSet(switchCfg.availableStrategies);
-              if (multiCandidate) {
-                evaluation = yield* evaluateStrategySwitch(
-                  state,
-                  currentInput.task ?? "",
-                  candidates,
-                  triedStrategies,
-                  // W2d 2.6 — the runtime already threads calibration onto the
-                  // kernel input; low/skip reliability must skip this
-                  // round-trip (documented behavior, previously unenforced —
-                  // the live post-w1 S1 traces prove it fired on local arms).
-                  { classifierReliability: currentInput.calibration?.classifierReliability },
-                );
-              } else {
-                const next = selectLadderStrategy(triedStrategies, candidates);
-                evaluation = next
-                  ? {
-                      shouldSwitch: true,
-                      recommendedStrategy: next,
-                      reasoning: `deterministic ladder → ${next}`,
-                    }
-                  : {
-                      shouldSwitch: false,
-                      recommendedStrategy: "",
-                      reasoning: "no untried ladder strategy remains",
-                    };
-              }
-            }
+            const evaluation = yield* resolveLoopSwitchEvaluation({
+              state, switchCfg, currentInput, triedStrategies,
+            });
 
             // Fire evaluated hook regardless of whether switch will happen — observability
             yield* hooks.onStrategySwitchEvaluated(state, evaluation);
 
             if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
-              // ── Control plane (F1) — resolve switch vs abstain (the P5 fix) ──
-              // Before F1 the strategy switch fired here unconditionally while
-              // forced abstention only ran POST-loop (§7.5), so a run that
-              // qualified for BOTH switched first and burned a strategy's budget
-              // only to abstain later (the P5 race). Now the switch is ONE
-              // proposal; under the long-horizon profile the in-loop abstain
-              // signal is another; the resolver's documented total order ranks
-              // abstain STRICTLY above strategy-switch, so an honest decline
-              // pre-empts the wasted switch. OFF the profile → the block is
-              // skipped entirely → byte-identical (switch proceeds as today).
               if (horizon !== undefined) {
-                const switchProposal = proposeFromLoopDetector({
-                  loopDetected: true,
-                  switchingViable: true,
-                  horizonActive: true,
-                  assessment: state.meta.assessment,
+                // Control plane (F1) — switch vs abstain (the P5 fix). Decomposed
+                // verbatim to ./iterate-control-plane-seams.ts (quality Task 9).
+                const switchPlane = yield* resolveSwitchControlPlane({
+                  state, currentInput, requiredTools, currentOptions, horizon,
                 });
-                const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
-                  state,
-                  currentInput,
-                  requiredTools,
-                  currentOptions.maxIterations,
-                );
-                const enumProposal = enumerationIncompleteProposal(
-                  state.meta.runContract, state.meta.assessment, horizon !== undefined,
-                );
-                const proposals: ControlProposal[] = [];
-                if (switchProposal) proposals.push(switchProposal);
-                if (abstainProposal) proposals.push(abstainProposal);
-                if (enumProposal) proposals.push(enumProposal);
-                if (proposals.length > 0) {
-                  const resolution = resolveControlPlane(proposals);
-                  yield* emitControlResolution({
-                    taskId: currentOptions.taskId ?? state.taskId,
-                    iteration: state.iteration,
-                    action: resolution.action,
-                    reason: resolution.reason,
-                    proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
-                  });
-                  if (resolution.action === "abstain" && forced !== null) {
-                    // Abstain won — stand down the switch and force the honest
-                    // decline via the single-owner terminate() abstain path
-                    // (identical mechanics to runner §7.5; the post-loop block
-                    // then skips because terminatedBy === "abstained").
-                    state = transitionState(state, { error: null });
-                    state = terminate(state, {
-                      reason: "abstained",
-                      deliverable: sentinelDeliverable("no_substantive_output", forced.reason),
-                      extraMeta: {
-                        abstention: { reason: forced.reason, missing: forced.missing },
-                      },
-                    });
-                    return "break";
-                  }
+                state = switchPlane.state;
+                if (switchPlane.abstained) {
+                  return "break";
                 }
               }
               const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
@@ -1833,38 +1230,11 @@ export function runIterationPass(
       });
 
       // ── Learn capability — per-iter LearningPipeline write ───────────────
-      // Issue #120 / North Star §4.3 / Audit G-D — the compounding-intelligence
-      // seam. Fires EXACTLY ONCE per iter, after Verify/post-iteration finalize
-      // and BEFORE the next iter dispatches. Uses `Effect.serviceOption` so the
-      // kernel works with no LearningPipeline layer provided (returns None →
-      // no-op). Wrapped in `Effect.forkDaemon` so user-supplied slow writers
-      // (SkillStore disk flush, MemoryStore vector write) cannot block the
-      // kernel hot path. Errors are swallowed by the service contract
-      // (Effect<void, never> in learning-pipeline.ts).
-      //
-      // Args follow mission-brief decisions a–c:
-      //   observations = ReasoningSteps appended during THIS iter only
-      //   decisions    = controllerDecisionLog ADDITIONS this iter
-      //   outcome      = mid-loop snapshot (success only authoritative on
-      //                  the terminal iter — see learning-pipeline.ts JSDoc)
-      {
-        const learnOpt = yield* Effect.serviceOption(LearningPipeline);
-        if (learnOpt._tag === "Some") {
-          const newObservations = state.steps.slice(prevStepCountForLearn);
-          const newDecisions = state.controllerDecisionLog.slice(prevDecisionLogCountForLearn);
-          const outcomeSnapshot = {
-            success: state.status === "done",
-            output: state.output ?? undefined,
-            tokensUsed: state.tokens,
-            costUsd: state.cost,
-          } as const;
-          yield* Effect.forkDaemon(
-            learnOpt.value.write(newObservations, newDecisions, outcomeSnapshot),
-          );
-          prevStepCountForLearn = state.steps.length;
-          prevDecisionLogCountForLearn = state.controllerDecisionLog.length;
-        }
-      }
+      // Decomposed verbatim to ./iterate-learn-seam.ts (quality program Task 9);
+      // cursor bookkeeping unchanged (advance only when a layer is present).
+      ({ prevStepCountForLearn, prevDecisionLogCountForLearn } = yield* forkIterLearnWrite({
+        state, prevStepCountForLearn, prevDecisionLogCountForLearn,
+      }));
 
     // Body fall-through — outer while loop should re-evaluate and call us again.
     return "continue";
