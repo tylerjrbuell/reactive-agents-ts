@@ -17,6 +17,7 @@ import {
     Runtime,
     Stream as EStream,
     Context,
+    Either,
     Fiber,
     Layer,
 } from 'effect'
@@ -151,6 +152,39 @@ import type { JudgeInput } from './agent/judgment-facade.js'
 type ToolServiceTag = import('effect').Context.Tag<any, any>
 const asToolServiceTag = (tag: unknown): ToolServiceTag =>
     tag as unknown as ToolServiceTag
+
+/**
+ * The skills family's single Promise boundary (Quality program Task 6 / D1
+ * bridge): runs the Effect returned by an `agent/skills-facade.ts` method
+ * through the agent's ManagedRuntime while preserving the exact rejection
+ * VALUE the pre-bridge async facade methods produced.
+ *
+ * Why not a plain `runPromise` call: verified empirically on effect@3.19,
+ * `ManagedRuntime.runPromise` rejects typed failures AND defects with a
+ * fresh `FiberFailure` wrapper, so `agent.exportSkill('missing')` would
+ * reject with the wrapper rather than the exact `Error("Skill \"missing\"
+ * not found")` instance the async method rejected with pre-bridge. Folding
+ * the error channel into an `Either` (`Effect.either`) makes runPromise
+ * RESOLVE with the original value instead; the Left arm is re-raised
+ * verbatim via `Promise.reject`. `catchAllDefect` first converts any
+ * residual defect into a typed failure carrying the same defect value —
+ * mirroring the async-method semantics where a sync throw rejected with
+ * that exact value.
+ */
+const runSkillsFacade = <A, E, R>(
+    runtime: ManagedRuntime.ManagedRuntime<any, never>,
+    effect: Effect.Effect<A, E, R>,
+): Promise<A> =>
+    runtime
+        .runPromise(
+            effect.pipe(
+                Effect.catchAllDefect((defect) => Effect.fail(defect)),
+                Effect.either,
+            ),
+        )
+        .then((either) =>
+            Either.isLeft(either) ? Promise.reject(either.left) : either.right,
+        )
 
 // ── Class ──
 export class ReactiveAgent<TOut = unknown> {
@@ -665,23 +699,26 @@ export class ReactiveAgent<TOut = unknown> {
      * List all loaded skills for this agent.
      *
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
+     * Since Task 6 (D1 bridge) the facade methods return Effects and this
+     * class shell — via `runSkillsFacade` — is the family's single Promise
+     * boundary.
      */
     async skills(): Promise<import('@reactive-agents/core').SkillRecord[]> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills()
+        return runSkillsFacade(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).skills())
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — exportSkill (moved from this file for #217).
      */
     async exportSkill(name: string, outputPath?: string): Promise<string> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath)
+        return runSkillsFacade(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).exportSkill(name, outputPath))
     }
 
     /**
      * Delegates to `agent/skills-facade.ts` — loadSkill (moved from this file for #217).
      */
     async loadSkill(skillPath: string): Promise<void> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath)
+        return runSkillsFacade(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).loadSkill(skillPath))
     }
 
     /**
@@ -690,7 +727,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
     async refineSkills(): Promise<{ refined: number }> {
-        return makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills()
+        return runSkillsFacade(this.runtime, makeSkillsFacade({ agentId: this.agentId, runtime: this.runtime }).refineSkills())
     }
 
     /**
