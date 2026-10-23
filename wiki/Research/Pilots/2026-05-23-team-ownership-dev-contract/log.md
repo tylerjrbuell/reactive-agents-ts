@@ -1538,3 +1538,11 @@ task: "Quality program Task 8: D1 bridge family 2 (judgment facade Effect-typed)
 result: completed, confidence 0.92
 outcome: "judge/listJudgmentModels/judgeRank -> Effect with precise E (6 deliberate arms raw via bridge, message-identical); backend sections keep preserved inner runPromise boundaries (Effect.promise wrap) because agent-list-judgment-models pin (c) — outside warden authority — proves callers observe the FiberFailure wrapper shape for catalog rejects. Shared runFacadeEffect reused (shell net-zero at ceiling, no private copy); twin ratchets exactly 300/129; new seam file 4 shell-path pins (deliberate-raw + branch order + wrapper tripwire), 0 casts; README metrics synced in-branch. Parent: tsc rc=0; 23/23 lane; suite Ran 1,699/7skip/0 = baseline+4 exact; ceiling 2/2; merged #276."
 bypass-reason: none
+
+```yaml
+date: 2026-10-23
+warden: kernel-warden (via general subagent; no warden agent types in this harness)
+task: "GH #222 runner.ts + iterate-pass.ts decomposition (program Task 9; seven content-anchored scripts, heaviest anchoring in repo)"
+result: completed, confidence 0.9
+outcome: "runner.ts 1,903->953, iterate-pass.ts 1,896->1,266 via 14 verbatim kernel/loop/* seam modules (largest: terminal-verify-gate 460, assessment-seam 288, post-loop-deliverable 252, control-plane-seams 255, resume-reentry 225). Anchor audit governed placement: main-loop spine (Cat-9), all counter writes, policy-compile/contract-seed/control-plane seams, every terminal WRITE site stayed inline; single-termination-owner + loop-detector untouched. 10 documented control-flow adapters (inner break/continue -> driver-honored returned flags, existing precedent). Parent: six anchored scripts green unedited; tsc rc=0; suite 3,195/4todo/0/370 exact after deliberate ledger shrinks (own commit); ceiling 2/2; 0 casts; export census net-zero via shims. Merged #277, #222 closed."
+bypass-reason: none
