@@ -1546,3 +1546,11 @@ task: "GH #222 runner.ts + iterate-pass.ts decomposition (program Task 9; seven 
 result: completed, confidence 0.9
 outcome: "runner.ts 1,903->953, iterate-pass.ts 1,896->1,266 via 14 verbatim kernel/loop/* seam modules (largest: terminal-verify-gate 460, assessment-seam 288, post-loop-deliverable 252, control-plane-seams 255, resume-reentry 225). Anchor audit governed placement: main-loop spine (Cat-9), all counter writes, policy-compile/contract-seed/control-plane seams, every terminal WRITE site stayed inline; single-termination-owner + loop-detector untouched. 10 documented control-flow adapters (inner break/continue -> driver-honored returned flags, existing precedent). Parent: six anchored scripts green unedited; tsc rc=0; suite 3,195/4todo/0/370 exact after deliberate ledger shrinks (own commit); ceiling 2/2; 0 casts; export census net-zero via shims. Merged #277, #222 closed."
 bypass-reason: none
+
+```yaml
+date: 2026-10-23
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "Quality program Task 10: D1 bridge family 3 (durable facade Effect-ization; mixed-boundary case)"
+result: completed, confidence 0.9
+outcome: "8 async methods -> sync Effect<A, Error> (R=never; generics preserved); shared runFacadeEffect wraps 8 delegates in-place (shell net-zero 2,344, no new imports). Identity audit: 17/17 inner runPromise/Promise sites caller-observable through pre-bridge async delegates -> ALL preserved inside Effect.promise wrapping, ZERO folded, ZERO fiber-parent changes; 7 guard arms + 1 unwrap arm ride E byte-verbatim and were raw pre-bridge (no wrapped->raw delta this family); resumeRun try/catch scoping mirrored (inner gen + catchAllDefect, status-mark boundaries keep routing semantics). ACCEPTED DEVIATION: getDurableInfo stays sync pure accessor (Effect-izing = observable API break). New seam file: 3 shell-path pins incl wrapper-identity tripwire + empirics refinement (FiberFailure cause identity in .name, String(err) carries it); README metrics synced in-branch. Parent re-verified: tsc rc=0; ratchets exact 300/129; 23/23 lane; suite Ran 1,702 = pristine 1,699 + 3 pins exact; ceiling 2/2; 0 casts."
+bypass-reason: none
