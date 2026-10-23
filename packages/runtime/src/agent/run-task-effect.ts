@@ -8,6 +8,33 @@
  * (`_lastDebrief`, `_lastRunObservations`, `_lastReasoningSteps`) became explicit
  * setter dep closures so the class fields remain the single source of truth.
  * `parseJsonLoose` moved here too (it was only ever called from this method).
+ *
+ * D1 bridge family 4 (Quality program Task 11) boundary audit: this module's
+ * public seam — `buildRunTaskEffect` — has returned
+ * `Effect.Effect<AgentResult, Error>` since the #217 extraction, so the
+ * family is already Effect-native at the module boundary. The remaining
+ * Promise-boundary decisions, per site:
+ *   - the receipt-signing site keeps its preserved `Effect.promise` boundary
+ *     (it never surfaces rejections: the `.catch` degrades to the unsigned
+ *     result on every arm);
+ *   - the two debrief-fiber sites (lazy `debriefRich()` closure + the
+ *     fire-and-forget dispose tracker) route through the shared shell bridge
+ *     `runFacadeEffect` — provably identity-safe because BOTH arms discard
+ *     every rejection value (the closure `.catch` resolves to the synchronous
+ *     debrief, the tracker `.catch` is a no-op), so raw-vs-wrapper rejection
+ *     identity is unobservable at those boundaries; they are tripwired in
+ *     `packages/runtime/tests/seam-agent-run-task-facade.test.ts`;
+ *   - the shell delegates in `reactive-agent.ts` KEEP their structure (the
+ *     brief's STOP rule, not a forced fold): `run()` threads the killswitch
+ *     AbortSignal as a `runPromise` options argument the shared bridge cannot
+ *     carry (dropping it would change terminate() interrupt behavior —
+ *     `terminate-aborts-inflight.test.ts` pins that flow); `runDurable`'s
+ *     pipeline await is the preserved rejection-VALUE boundary family 3
+ *     (#278) documented for its facade consumers (wrapper identity delivered
+ *     verbatim through their `Effect.promise` dep boundary); `runEffect` is
+ *     already Effect-typed at its public seam and its inner
+ *     runtime-round-trip preserves the wrapper instance it has always
+ *     delivered (folding it would change the public requirements signature).
  */
 
 import {
@@ -16,6 +43,7 @@ import {
     Fiber,
 } from 'effect'
 import { ManagedRuntime } from 'effect'
+import { runFacadeEffect } from './run-facade-effect.js'
 import {
     generateTaskId,
     AgentId,
@@ -334,9 +362,16 @@ export const buildRunTaskEffect = (
                 ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
                 ...(debriefFiber
                     ? {
+                          // Task 11 (D1 family 4): shared-bridge conversion.
+                          // The join's error channel is `never` and every
+                          // rejection arm (typed failure, defect, interrupt)
+                          // is discarded below — raw-vs-wrapper rejection
+                          // identity is unobservable at this boundary, so
+                          // routing it through the bridge is value-flow
+                          // identical by construction (pinned in
+                          // seam-agent-run-task-facade.test.ts).
                           debriefRich: () =>
-                              deps.runtime
-                                  .runPromise(Fiber.join(debriefFiber))
+                              runFacadeEffect(deps.runtime, Fiber.join(debriefFiber))
                                   .then((res) => res.debrief ?? r.debrief)
                                   .catch(() => r.debrief),
                       }
@@ -351,8 +386,13 @@ export const buildRunTaskEffect = (
             // version once it resolves; deregister when done (fire-and-forget).
             if (debriefFiber) {
                 deps.pendingDebriefs.add(debriefFiber)
-                void deps.runtime
-                    .runPromise(Fiber.join(debriefFiber))
+                // Task 11 (D1 family 4): shared-bridge conversion — the
+                // tracker's only observable effects are the success-arm
+                // upgrade of _lastDebrief and the pendingDebriefs cleanup;
+                // rejections are discarded (no-op catch) so the bridge's
+                // raw-vs-wrapper rejection difference cannot surface to any
+                // caller (pinned in seam-agent-run-task-facade.test.ts).
+                void runFacadeEffect(deps.runtime, Fiber.join(debriefFiber))
                     .then((res) => {
                         if (res.debrief) deps.setLastDebrief(res.debrief)
                     })
@@ -544,6 +584,10 @@ export const buildRunTaskEffect = (
         // See receipt-signing.ts's honest-claims note — the signature
         // certifies provenance/integrity of the receipt, never the
         // correctness of `result.output`.
+        // Task 11: PRESERVED BOUNDARY — this `Effect.promise` wrapper is the
+        // template's preserved form; the inner `.catch` degrades every
+        // signing rejection to the unsigned result, so the value flow is
+        // independent of rejection identity either way.
         Effect.flatMap((result: AgentResult): Effect.Effect<AgentResult, never> => {
             const key = resolveReceiptSigningKey(deps.config['receiptSigningKey'])
             const receipt = result.receipt
