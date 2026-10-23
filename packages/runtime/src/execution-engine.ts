@@ -1,26 +1,14 @@
 import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger, FiberRef, Fiber } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
-import {
-  ExecutionError,
-  GuardrailViolationError,
-  KillSwitchTriggeredError,
-  BehavioralContractViolationError,
-  type RuntimeErrors,
-} from "./errors.js";
-import { readRunLedger } from "./engine/run-ledger-scope.js";
+import { ExecutionError, type RuntimeErrors } from "./errors.js";
 import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
-import {
-  CurrentRunContextRef,
-  rootContext,
-  type RunContext,
-} from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
-import type { Task, TaskResult, TerminatedBy } from "@reactive-agents/core";
+import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import {
@@ -37,14 +25,9 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ObservabilityService, ChildDashboardRegistry, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer, makeNoticesManager, NOTICE_IDS } from "@reactive-agents/observability";
-import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
-import { EventBus, EntropySensorService } from "@reactive-agents/core";
-import { scoresEntropyInline } from "@reactive-agents/core";
-import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
-import { type AgentDebrief } from "./debrief.js";
+import { ChildDashboardRegistry, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
 import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
-import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations, telemetryOptedOut } from "@reactive-agents/reactive-intelligence";
+import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { literalMentionRequired } from "./classifier-bypass.js";
@@ -52,9 +35,8 @@ import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Phase pipeline (W23 decomposition) ───
-import { runGuardedPhase, runObservablePhase } from "./engine/pipeline.js";
-import type { PhaseDeps, ObsLike } from "./engine/runtime-context.js";
-import { asObsLike } from "./engine/runtime-context.js";
+import { runGuardedPhase } from "./engine/pipeline.js";
+import type { PhaseDeps } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
 import { bootstrap } from "./engine/phases/bootstrap.js";
 import { complete } from "./engine/phases/complete.js";
@@ -77,13 +59,8 @@ import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reaso
 import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
-import {
-  mergeBehavioralContractIntoConfig,
-  startMaxToolCallsGuard,
-} from "./engine/phases/agent-loop/behavioral-contract-bridge.js";
 import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { verifyResultBoundary } from "./engine/finalize/result-verification.js";
-import { deriveReceiptDeliverables } from "./builder/helpers.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
@@ -91,17 +68,20 @@ import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
 import { mintTraceLinkage } from "./engine/finalize/trace-linkage.js";
 
-// ─── Narrow service types for optional deps ───
-// ObsLike + asObsLike are canonical at engine/runtime-context.ts — reused here
-// rather than re-derived, per WS-5b (cast-site ceiling counts sites, not occurrences).
-
-type EbLike = {
-  publish: (event: AgentEvent) => Effect.Effect<void, never>;
-  on: <T extends AgentEvent["_tag"]>(
-    tag: T,
-    handler: (event: Extract<AgentEvent, { _tag: T }>) => Effect.Effect<void, never>,
-  ) => Effect.Effect<() => void, never>;
-};
+// ─── Execution-cluster decomposition (GH #221 W26) ───
+// Verbatim cluster extractions lifted out of this file; each module's header
+// doc names the cluster and the former line range.
+import { bindExecutionObservability } from "./engine/execute-obs-wiring.js";
+import { registerExecutionEventCollectors } from "./engine/execute-event-collectors.js";
+import { resolveContractAndKillSwitch } from "./engine/execute-killswitch-bridge.js";
+import { makeLifecycleGuard } from "./engine/execute-lifecycle-guard.js";
+import { maybeEmitRiTelemetryNotice } from "./engine/execute-telemetry-notice.js";
+import { publishAgentStarted } from "./engine/execute-agent-started.js";
+import { deriveExecOutput } from "./engine/execute-output-derivation.js";
+import { screenFinalOutput } from "./engine/execute-output-screens.js";
+import { deriveExecutionSuccess } from "./engine/execute-success-invariants.js";
+import { assembleTaskResult } from "./engine/execute-result-assembly.js";
+import { emitCompletionObservability } from "./engine/execute-completion-obs.js";
 
 // ─── Service Tag ───
 
@@ -132,29 +112,13 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
-// Deduplicates notices (RI telemetry banner, etc.) across runs within the
-// same process. Also honors REACTIVE_AGENTS_SUPPRESS_NOTICES (env) and
-// `.withReactiveIntelligence({ notice: false })` (config) — see the
-// TELEMETRY_ENABLED gate below.
-const _noticesManager = makeNoticesManager();
-
-/**
- * GH #236: payload cap for the `task` text stamped into `AgentStarted`.
- * Same 64KB budget convention as the `AgentCompleted.output` cap applied by
- * `engine/finalize/run-finalize.ts` (`RUN_OUTPUT_CAP`); clipped emissions
- * set `taskTruncated: true`.
- */
-const STARTED_TASK_CAP = 64 * 1024;
-
 import { armRunBudget } from "./engine/run-budget-arm.js";
 
 // ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
 // Re-exported here for backward compatibility with external importers.
 export { checkAllowedToolsMismatch } from "./engine/util.js";
 import {
-  sanitizeOutput,
   extractTaskText,
-  classifyComplexity,
   buildAutoMaxCallsPerTool,
   normalizeReasoningResult,
   resolveModelName,
@@ -192,40 +156,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const executionStartMs = Date.now();
             const sessionId = `session-${Date.now()}`;
 
-            // ── H1: Acquire ObservabilityService optionally ──
-            const obsOpt = yield* Effect.serviceOption(
-              ObservabilityService,
-            ).pipe(
-              Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-            );
-            const obs: ObsLike | null = obsOpt._tag === "Some" ? asObsLike(obsOpt.value) : null;
-
-            // Verbosity helpers — read once per execution
-            // ObsLike.verbosity() is typed `() => string` (a deliberately narrow/
-            // widened slice of ObservabilityService, see runtime-context.ts) — cast
-            // to the real 4-tier union here, matching the existing precedent at
-            // this file's other obs.verbosity() call site (progress-logger setup).
-            const verbosity = ((obs?.verbosity?.() as
-              | "minimal"
-              | "normal"
-              | "verbose"
-              | "debug"
-              | undefined) ?? config.observabilityVerbosity) ?? "normal";
-            const isNormal = verbosity !== "minimal";
-            const isVerbose = verbosity === "verbose" || verbosity === "debug";
-            const isDebug = verbosity === "debug";
-            // logModelIO: explicit opt-in/out for full prompt/response dumps.
-            // Default: true when debug, false otherwise.
-            const logModelIO = config.logModelIO ?? isDebug;
-
-            // Log prefix for visual nesting: a sub-agent's lines carry a
-            // depth-aware, name-tagged prefix (built in sub-agent-executor) so a
-            // reader can tell WHICH child — and at what nesting — every line came
-            // from, even when children run in parallel. Wrap ALL log methods, not
-            // just info/debug: a child's warn/error must indent + attribute the
-            // same, or it appears at the PARENT's level and reads as the parent
-            // failing (2026-07-23 — the prior wrap covered info/debug only).
-            const lp = config.logPrefix ?? "";
+            // ── Observability + EventBus acquisition, verbosity + prefix binding ──
+            // Bodies extracted to engine/execute-obs-wiring.ts (GH #221 W26).
+            const { obs, verbosity, isNormal, isVerbose, isDebug, logModelIO, lp, eb } =
+              yield* bindExecutionObservability(config);
             /**
              * "Am I the ROOT execution?" — a sub-agent always runs through this
              * same ExecutionEngine, and `config.logPrefix` is set ONLY by
@@ -238,280 +172,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
              * duplicated/fan-out output. Cf. `669f6571`.
              */
             const isRootExecution = !lp;
-            if (obs && lp) {
-              const origInfo = obs.info.bind(obs);
-              const origDebug = obs.debug.bind(obs);
-              const origWarn = obs.warn.bind(obs);
-              const origError = obs.error.bind(obs);
-              const mutableObs = obs as {
-                info: (msg: string, meta?: Record<string, unknown>) => unknown;
-                debug: (msg: string, meta?: Record<string, unknown>) => unknown;
-                warn: (msg: string, meta?: Record<string, unknown>) => unknown;
-                error: (msg: string, err?: unknown, meta?: Record<string, unknown>) => unknown;
-              };
-              mutableObs.info = (msg, meta) => origInfo(`${lp}${msg}`, meta);
-              mutableObs.debug = (msg, meta) => origDebug(`${lp}${msg}`, meta);
-              mutableObs.warn = (msg, meta) => origWarn(`${lp}${msg}`, meta);
-              mutableObs.error = (msg, err, meta) => origError(`${lp}${msg}`, err, meta);
-            }
 
-            // ── Phase 0.2: Acquire EventBus optionally ──
-            const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
-              Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-            );
-            const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
+            // ── EventBus collectors: debrief tool/rationale logs + entropy telemetry ──
+            // Bodies extracted to engine/execute-event-collectors.ts (GH #221 W26).
+            const { toolCallLog, rationaleLog, entropyLog } =
+              yield* registerExecutionEventCollectors({ eb, task, config });
 
-            // ── Collect ToolCallCompleted events for debrief ──
-            // Track the current kernel iteration so parallel tool calls in the same
-            // turn share the same `iteration` value. ReasoningStepCompleted fires per
-            // iteration and carries `event.step` — we read it via a mutable counter.
-            let _currentKernelIteration = 0;
-            const toolCallLog: { toolName: string; durationMs: number; success: boolean; iteration: number }[] = [];
-            const rationaleLog: {
-              iteration: number;
-              decision: string;
-              toolName?: string;
-              rationale: { why: string; refs?: readonly string[]; confidence?: number };
-            }[] = [];
-            if (eb) {
-              yield* eb.on("ReasoningStepCompleted", (event) =>
-                Effect.sync(() => { _currentKernelIteration = event.step ?? _currentKernelIteration; }),
-              );
-              yield* eb.on("ToolCallCompleted", (event) =>
-                Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success, iteration: _currentKernelIteration }); }),
-              );
-              // Collect rationale from ToolCallStarted events
-              yield* eb.on("ToolCallStarted", (event) => {
-                if (event.rationale) {
-                  return Effect.sync(() => {
-                    rationaleLog.push({
-                      iteration: _currentKernelIteration,
-                      decision: "tool-selection",
-                      toolName: event.toolName,
-                      rationale: {
-                        why: event.rationale!.why,
-                        refs: event.rationale!.refs,
-                        confidence: event.rationale!.confidence,
-                      },
-                    });
-                  });
-                }
-                return Effect.void;
-              });
-
-              // ── Milestone decision capture (v0.11.x) ──
-              // Surface every task-advancing decision in debrief.rationale[], not
-              // just tool calls. Each emitter already records a "why" string;
-              // promote it into structured Rationale shape with a decision tag.
-
-              // Curator decisions — already carry structured Rationale (required).
-              yield* eb.on("CuratorDecisionEmitted", (event) =>
-                Effect.sync(() => {
-                  rationaleLog.push({
-                    iteration: event.iteration,
-                    decision: `curator-${event.action}`,
-                    rationale: {
-                      why: event.rationale.why,
-                      refs: event.rationale.refs,
-                      confidence: event.rationale.confidence,
-                    },
-                  });
-                }),
-              );
-
-              // Strategy switches — promote `reason` string into structured form.
-              yield* eb.on("StrategySwitched", (event) =>
-                Effect.sync(() => {
-                  if (!event.reason || event.reason.trim().length === 0) return;
-                  rationaleLog.push({
-                    iteration: _currentKernelIteration,
-                    decision: `strategy-switch:${event.from}→${event.to}`,
-                    rationale: {
-                      why: event.reason.slice(0, 280),
-                    },
-                  });
-                }),
-              );
-
-              // Reactive interventions — corrective dispatch (early-stop, branch, compress…).
-              yield* eb.on("ReactiveDecision", (event) =>
-                Effect.sync(() => {
-                  if (!event.reason || event.reason.trim().length === 0) return;
-                  rationaleLog.push({
-                    iteration: event.iteration,
-                    decision: `reactive-${event.decision}`,
-                    rationale: {
-                      why: event.reason.slice(0, 280),
-                      ...(typeof event.entropyAfter === "number" && typeof event.entropyBefore === "number"
-                        ? { confidence: Math.max(0, Math.min(1, 1 - Math.abs(event.entropyAfter - event.entropyBefore))) }
-                        : {}),
-                    },
-                  });
-                }),
-              );
-
-              // Termination — captured from KernelStateSnapshotEmitted when terminationRationale present.
-              const terminationSeen = new Set<string>();
-              yield* eb.on("KernelStateSnapshotEmitted", (event) => {
-                const tr = event.terminationRationale;
-                if (!tr || !event.terminatedBy) return Effect.void;
-                const dedup = `${event.taskId}:${event.terminatedBy}`;
-                if (terminationSeen.has(dedup)) return Effect.void;
-                terminationSeen.add(dedup);
-                return Effect.sync(() => {
-                  rationaleLog.push({
-                    iteration: event.iteration,
-                    decision: `termination:${event.terminatedBy}`,
-                    rationale: {
-                      why: tr.why,
-                      refs: tr.refs,
-                      confidence: tr.confidence,
-                    },
-                  });
-                });
-              });
-            }
-
-            // ── Collect EntropyScored events for telemetry + dashboard ──
-            const entropyLog: {
-              iteration: number;
-              composite: number;
-              sources: { token: number | null; structural: number; semantic: number | null; behavioral: number; contextPressure: number };
-              trajectory: { derivative: number; shape: string; momentum: number };
-              confidence: "high" | "medium" | "low";
-            }[] = [];
-            const entropySeenIterations = new Set<string>();
-            if (eb) {
-              yield* eb.on("EntropyScored", (event) =>
-                Effect.sync(() => {
-                  // Dedup: kernel-runner inline scoring + event subscriber may both
-                  // publish EntropyScored for the same (taskId, iteration) pair.
-                  const key = `${event.taskId}:${event.iteration}`;
-                  if (entropySeenIterations.has(key)) return;
-                  entropySeenIterations.add(key);
-                  entropyLog.push({
-                    iteration: event.iteration,
-                    composite: event.composite,
-                    sources: event.sources,
-                    trajectory: event.trajectory,
-                    confidence: event.confidence,
-                  });
-                }),
-              );
-            }
-
-            // ── EventBus-driven entropy scoring ──
-            // Subscribe to ReasoningStepCompleted events from ALL strategies and score
-            // thoughts via EntropySensorService. This covers strategies like plan-execute
-            // that bypass kernel-runner's inline scoring.
-            // Dedup: tracks (taskId, step) pairs to avoid double-scoring with kernel-runner.
-            if (eb && config.enableReactiveIntelligence) {
-              const esOpt = yield* Effect.serviceOption(EntropySensorService).pipe(
-                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-              );
-              if (esOpt._tag === "Some") {
-                const sensor = esOpt.value;
-                const scoredPairs = new Set<string>();
-                const taskThoughts = new Map<string, { thoughts: string[]; steps: { type: string; content: string }[]; toolsUsed: Set<string> }>();
-
-                yield* eb.on("ReasoningStepCompleted", (event) =>
-                  Effect.gen(function* () {
-                    if (!event.thought) return;
-                    // Kernel-runner strategies already score in
-                    // runReactiveObserver. Scoring their hook event again
-                    // corrupts the shared trajectory with a second step index.
-                    if (scoresEntropyInline(event.strategy)) return;
-                    const dedupKey = `${event.taskId}:${event.step}`;
-                    if (scoredPairs.has(dedupKey)) return;
-
-                    let tState = taskThoughts.get(event.taskId);
-                    if (!tState) {
-                      tState = { thoughts: [], steps: [], toolsUsed: new Set() };
-                      taskThoughts.set(event.taskId, tState);
-                    }
-                    tState.steps.push({ type: "thought", content: event.thought });
-                    if (event.action) {
-                      tState.steps.push({ type: "action", content: event.action });
-                      try { const p = JSON.parse(event.action); if (p.tool) tState.toolsUsed.add(p.tool); } catch {}
-                    }
-                    if (event.observation) tState.steps.push({ type: "observation", content: event.observation });
-
-                    const priorThought = tState.thoughts.length > 0 ? tState.thoughts[tState.thoughts.length - 1] : undefined;
-                    tState.thoughts.push(event.thought);
-
-                    const kernelState: KernelStateLike = {
-                      taskId: event.taskId, strategy: event.strategy, kernelType: "event-subscriber",
-                      steps: tState.steps.map((s) => ({ type: s.type, content: s.content })),
-                      toolsUsed: tState.toolsUsed, iteration: event.step, tokens: 0,
-                      status: "thinking", output: null, error: null, meta: {},
-                    };
-
-                    const score = yield* sensor.score({
-                      thought: event.thought, taskDescription: extractTaskText(task.input), strategy: event.strategy,
-                      iteration: event.step, maxIterations: config.maxIterations ?? 10,
-                      modelId: String(config.defaultModel ?? "unknown"), temperature: 0, priorThought, kernelState,
-                      taskCategory: classifyTaskCategoryFn(extractTaskText(task.input)),
-                    });
-
-                    scoredPairs.add(dedupKey);
-
-                    yield* eb.publish({
-                      _tag: "EntropyScored", taskId: event.taskId, iteration: score.iteration,
-                      composite: score.composite, sources: score.sources,
-                      trajectory: {
-                        derivative: score.trajectory.derivative,
-                        shape: score.trajectory.shape as "converging" | "flat" | "diverging" | "v-recovery" | "oscillating",
-                        momentum: score.trajectory.momentum,
-                      },
-                      confidence: score.confidence,
-                      modelTier: score.modelTier, iterationWeight: score.iterationWeight,
-                      modelId: String(config.defaultModel ?? "unknown"),
-                    });
-                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:641", tag: errorTag(err) }))),
-                );
-              }
-            }
-
-            // ── Behavioral contract: resolve once, up front ──
-            // (Runtime fix, 2026-08-23 — see behavioral-contract-bridge.ts doc
-            // block for the full root-cause + mechanism writeup.) Resolved here,
-            // BEFORE the KillSwitchService acquisition below, because a declared
-            // `maxToolCalls` cap needs the kill switch even when the caller never
-            // called `.withKillSwitch()` explicitly — runtime.ts's
-            // `killSwitchOptLayer` auto-provides the service in that case (see
-            // its own comment), and this is the corresponding consumer-side
-            // widen so the service is actually ACQUIRED, not just provided.
-            let activeBehavioralContract: import("@reactive-agents/guardrails").BehavioralContract | undefined;
-            if (config.enableBehavioralContracts) {
-              const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
-                Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-              );
-              if (bcOpt._tag === "Some") {
-                activeBehavioralContract = yield* bcOpt.value.getContract();
-              }
-            }
-            const configForBehavioralContract = activeBehavioralContract
-              ? mergeBehavioralContractIntoConfig(config, activeBehavioralContract)
-              : config;
-
-            // ── Acquire KillSwitchService optionally ──
-            const ksOpt = config.enableKillSwitch || activeBehavioralContract?.maxToolCalls != null
-              ? yield* Effect.serviceOption(KillSwitchService).pipe(
-                  Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                )
-              : { _tag: "None" as const };
-            const ks = ksOpt._tag === "Some" ? ksOpt.value : null;
-
-            // ── maxToolCalls → kill-switch bridge ──
-            // Started unconditionally here (before bootstrap) so it observes
-            // every tool call for the FULL run, not just the reasoning-arm
-            // portion. No-ops when the contract declares no maxToolCalls cap.
-            yield* startMaxToolCallsGuard({
+            // ── Behavioral contract resolve + KillSwitch acquisition + maxToolCalls bridge ──
+            // Bodies extracted to engine/execute-killswitch-bridge.ts (GH #221 W26).
+            const { configForBehavioralContract, ks } = yield* resolveContractAndKillSwitch({
               eb,
-              ks,
-              taskId: task.id,
-              agentId: config.agentId,
-              maxToolCalls: activeBehavioralContract?.maxToolCalls,
+              task,
+              config,
             });
 
             // ── PhaseDeps bundle (W23 decomposition) ──
@@ -586,83 +258,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 );
 
                 // Emit RI telemetry notice once per process via structured log.
-                // `_noticesManager.shouldShow` is also the single choke point for
-                // silencing it: `.withReactiveIntelligence({ notice: false })`,
-                // REACTIVE_AGENTS_SUPPRESS_NOTICES=1 (env), or a prior dismiss()
-                // all resolve here — no separate boolean to keep in sync.
-                if (
-                  config.enableReactiveIntelligence &&
-                  _noticesManager.shouldShow(NOTICE_IDS.TELEMETRY_ENABLED)
-                ) {
-                  const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
-                  const telemetryCfg = riOpts?.telemetry;
-                  // The notice must never claim telemetry the environment has
-                  // killed — consult the same opt-out the upload path honors.
-                  const telemetryEnabled = !telemetryOptedOut() &&
-                    (telemetryCfg === undefined || telemetryCfg === true ||
-                    (typeof telemetryCfg === "object" && telemetryCfg !== null &&
-                      (telemetryCfg as Record<string, unknown>)["enabled"] !== false));
-                  const noticeEnabled = riOpts?.notice !== false;
-                  if (noticeEnabled && telemetryEnabled) {
-                    yield* Effect.serviceOption(ObservableLogger).pipe(
-                      Effect.tap((loggerOpt) => {
-                        if (loggerOpt._tag === "Some") {
-                          return loggerOpt.value.emit({
-                            _tag: "notice",
-                            level: "info",
-                            title: "Reactive Intelligence",
-                            message: "Anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false })",
-                            docsLink: "https://docs.reactiveagents.dev/telemetry",
-                            dismissible: true,
-                            timestamp: new Date(),
-                          });
-                        }
-                        return Effect.void;
-                      }),
-                      Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:724", tag: errorTag(err) })),
-                    );
-                  }
-                }
+                // Body extracted to engine/execute-telemetry-notice.ts (GH #221 W26).
+                yield* maybeEmitRiTelemetryNotice(config);
 
-                // ── Lifecycle guard helper ──
-                const checkLifecycle = (taskId: string): Effect.Effect<void, RuntimeErrors> =>
-                  Effect.gen(function* () {
-                    if (!ks) return;
-                    const status = yield* ks.waitIfPaused(config.agentId, taskId)
-                      .pipe(Effect.catchAll(() => Effect.succeed("ok" as const)));
-                    if (status === "stopping") {
-                      if (eb) yield* eb.publish({ _tag: "AgentStopping", agentId: config.agentId,
-                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:737", tag: errorTag(err) })));
-                      if (eb) yield* eb.publish({ _tag: "AgentStopped", agentId: config.agentId,
-                        taskId, reason: "stop() requested" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:739", tag: errorTag(err) })));
-                      return yield* Effect.fail(new KillSwitchTriggeredError({
-                        message: `Agent ${config.agentId} stopping gracefully`,
-                        taskId, agentId: config.agentId, reason: "stop() requested",
-                      }));
-                    }
-                    const ksStatus = (yield* ks.isTriggered(config.agentId)
-                      .pipe(Effect.catchAll(() => Effect.succeed({ triggered: false })))) as { triggered: boolean; reason?: string };
-                    if (ksStatus.triggered) {
-                      if (eb) yield* eb.publish({ _tag: "AgentTerminated", agentId: config.agentId,
-                        taskId, reason: ksStatus.reason ?? "terminated" }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:749", tag: errorTag(err) })));
-                      return yield* Effect.fail(new KillSwitchTriggeredError({
-                        message: `Kill switch triggered for agent ${config.agentId}: ${ksStatus.reason ?? "no reason"}`,
-                        taskId, agentId: config.agentId, reason: ksStatus.reason ?? "no reason",
-                      }));
-                    }
-                  });
-
-                // ── Guarded phase wrapper: lifecycle check before every phase ──
-                // (W26-A step 1) Reuses runObservablePhase from engine/pipeline.ts
-                // with the already-constructed PhaseDeps `deps` (line 547 above).
-                const guardedPhase = <E>(
-                  gCtx: ExecutionContext,
-                  phase: ExecutionContext["phase"],
-                  body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
-                ): Effect.Effect<ExecutionContext, E | RuntimeErrors> =>
-                  checkLifecycle(gCtx.taskId).pipe(
-                    Effect.zipRight(runObservablePhase(gCtx, phase, body, deps)),
-                  );
+                // ── Lifecycle guard helper + guarded phase wrapper ──
+                // Bodies extracted to engine/execute-lifecycle-guard.ts (GH #221 W26).
+                // (W26-A step 1) The wrapper reuses runObservablePhase from
+                // engine/pipeline.ts with the already-constructed PhaseDeps `deps`.
+                const { guardedPhase } = makeLifecycleGuard({ ks, eb, config, deps });
 
                 if (obs) {
                   yield* obs.info("Execution started", {
@@ -672,68 +275,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 if (eb) {
-                  // An EXPLICIT display name always wins (sub-agents set it to
-                  // their given name — `agentId` there is the uniquified
-                  // `sub-<name>-<epoch>`, which is not fit to render). Only when
-                  // absent do we fall back to the agentId-derived desk name.
-                  const explicitDisplayName =
-                    typeof config.agentDisplayName === "string" &&
-                    config.agentDisplayName.trim().length > 0
-                      ? config.agentDisplayName.trim()
-                      : undefined;
-                  const deskName =
-                    typeof config.agentId === "string" && config.agentId.trim().length > 0
-                      ? config.agentId.trim()
-                      : "";
-                  const agentDisplayName =
-                    explicitDisplayName ??
-                    (deskName.length > 0 && !/^cortex-desk-\d+$/.test(deskName)
-                      ? deskName
-                      : undefined);
-                  // B8-T3b: lift the child's RunContext (rootRunId/parentRunId/
-                  // depth) off the task metadata so the trace normalizer can
-                  // correlate this run to its node in the delegation tree.
-                  const rc = task.metadata?.context?.["runContext"] as
-                    | { rootRunId?: string; parentRunId?: string; depth?: number }
-                    | undefined;
-                  // Seed the ambient RunContext for THIS run's fiber (and every
-                  // tool handler it forks) so a `spawn-agent` call can derive the
-                  // child's context from a reliable root. Authority is the
-                  // explicit metadata value (a delegated child); a top-level run
-                  // roots at its own taskId/agentId (depth 0).
-                  const ambientRunContext: RunContext =
-                    (task.metadata?.context?.["runContext"] as
-                      | RunContext
-                      | undefined) ??
-                    rootContext(ctx.taskId, config.agentId);
-                  yield* FiberRef.set(CurrentRunContextRef, ambientRunContext);
-                  // GH #236: stamp the real task text into AgentStarted so
-                  // normalize's run-started (and RecordedRun.task downstream)
-                  // carries the prompt instead of "". Payload budget: capped
-                  // at 64KB here at the publisher, the same convention as
-                  // AgentCompleted.output (engine/finalize/run-finalize.ts
-                  // RUN_OUTPUT_CAP); taskTruncated marks a clip.
-                  const startedTaskText = extractTaskText(task.input);
-                  const startedTaskClipped = startedTaskText.length > STARTED_TASK_CAP;
-                  yield* eb.publish({
-                    _tag: "AgentStarted",
-                    taskId: ctx.taskId,
-                    agentId: config.agentId,
-                    provider: String(ctx.provider ?? "unknown"),
-                    model: String(ctx.selectedModel ?? "unknown"),
-                    timestamp: executionStartMs,
-                    task: startedTaskClipped
-                      ? startedTaskText.slice(0, STARTED_TASK_CAP)
-                      : startedTaskText,
-                    ...(startedTaskClipped ? { taskTruncated: true } : {}),
-                    ...(task.metadata?.context?.["parentAgentId"]
-                      ? { parentAgentId: String(task.metadata.context["parentAgentId"]) }
-                      : {}),
-                    ...(agentDisplayName ? { agentDisplayName } : {}),
-                    ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
-                    ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
-                    ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),
-                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:792", tag: errorTag(err) })));
+                  // Display-name resolution + ambient RunContext seed + GH #236
+                  // AgentStarted emission. Body extracted to
+                  // engine/execute-agent-started.ts (GH #221 W26).
+                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs });
                 }
 
                 // ── Phase 1: BOOTSTRAP ──
@@ -1007,327 +552,29 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rr = ctx.metadata.reasoningResult;
-                let rawOutput: unknown = ctx.metadata.lastResponse ?? null;
-                if (
-                  (rawOutput === null || rawOutput === "") &&
-                  rr?.steps &&
-                  rr.steps.length > 0 &&
-                  rr.status !== "failed"
-                ) {
-                  // Fall back to last *genuine* tool observation. Skip:
-                  //  - harness-injected observations (toolName="system", success=false)
-                  //    — those carry harness guidance text the model parrots ("Your next step: ..."),
-                  //  - framework instrumentation steps (HS-cleanup-1) — `[CRITIQUE N]`,
-                  //    `[TOT depth=...]` and similar control markers exist for the model's
-                  //    reasoning loop, never as user output candidates,
-                  //  - tool-result observations whose content was wrapped with the
-                  //    `[<tool> result — compressed preview]` template (framework
-                  //    presentation envelope, not synthesized model answer).
-                  const FRAMEWORK_PREVIEW_PREFIX = /^\s*\[[^\]]+\s+result\s+[—\-]/i;
-                  const lastObs = [...rr.steps].reverse().find((s) => {
-                    if (s.type !== "observation") return false;
-                    const md = s.metadata as { observationResult?: { success?: boolean; toolName?: string }; frameworkInstrumentation?: string } | undefined;
-                    if (md?.frameworkInstrumentation) return false;
-                    if (md?.observationResult && (md.observationResult.success === false || md.observationResult.toolName === "system")) return false;
-                    if (typeof s.content === "string" && FRAMEWORK_PREVIEW_PREFIX.test(s.content)) return false;
-                    return true;
-                  });
-                  if (lastObs?.content) rawOutput = lastObs.content;
-                }
-                const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;
+                // Body extracted to engine/execute-output-derivation.ts (GH #221 W26).
+                const { sanitizedOutput, outputForSuccess, hasSubstantiveOutput } =
+                  deriveExecOutput(ctx, rr);
 
-                const outputForSuccess =
-                  typeof sanitizedOutput === "string"
-                    ? sanitizedOutput.trim()
-                    : sanitizedOutput != null
-                      ? String(sanitizedOutput).trim()
-                      : "";
-                const hasSubstantiveOutput = outputForSuccess.length > 0;
+                // ── Behavioral contract checkOutput + guardrail final-output screen ──
+                // Bodies extracted to engine/execute-output-screens.ts (GH #221 W26).
+                yield* screenFinalOutput({ config, ctx, obs, eb, outputForSuccess });
 
-                // ── Behavioral contract: checkOutput (maxOutputLength / deniedTopics /
-                // requireDisclosure) ──
-                // The one dimension with no kernel-native equivalent AND no prior
-                // caller anywhere in the monorepo (a pre-existing gap, not a Move-1
-                // regression — see behavioral-contract-bridge.ts doc block). Runs
-                // ONCE here, in the shared post-arm code that sees the final output
-                // regardless of which arm produced it. A "block" severity violation
-                // fails the run the same way the old inline-arm tool/iteration
-                // violations did, for a uniform failure mode across all 3 contract
-                // dimensions. A "warning" surfaces via `obs` without failing.
-                if (config.enableBehavioralContracts) {
-                  const bcOpt = yield* Effect.serviceOption(BehavioralContractService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                  );
-                  if (bcOpt._tag === "Some") {
-                    const violation = yield* bcOpt.value.checkOutput(outputForSuccess).pipe(
-                      Effect.catchAll(() => Effect.succeed(null)),
-                    );
-                    if (violation) {
-                      if (violation.severity === "block") {
-                        return yield* Effect.fail(
-                          new BehavioralContractViolationError({
-                            message: violation.message,
-                            taskId: ctx.taskId,
-                            rule: violation.rule,
-                            violation: violation.message,
-                          }),
-                        );
-                      }
-                      if (obs) {
-                        yield* obs
-                          .info(`⚠ [behavioral-contract] ${violation.message}`)
-                          .pipe(
-                            Effect.catchAll((err) =>
-                              emitErrorSwallowed({
-                                site: "runtime/src/execution-engine.ts:behavioral-contract-output-warning",
-                                tag: errorTag(err),
-                              }),
-                            ),
-                          );
-                      }
-                    }
-                  }
-                }
-
-                // ── Guardrail final-output screen (PII / toxicity) ──────────
-                // Wave 6.2: `GuardrailService.checkOutput` had no caller
-                // anywhere — the GUARDRAIL phase screens only the INPUT, so a
-                // run could exfiltrate PII it legitimately retrieved and ship
-                // it as its answer. Runs ONCE here, next to the behavioral
-                // contract output check, in the shared post-arm code that sees
-                // the final output regardless of arm. Policy (explicit):
-                // violations fail CLOSED (block + event, mirroring the input
-                // phase); service errors fail OPEN but EMIT (never silent).
-                if (config.enableGuardrails) {
-                  const goutOpt = yield* Effect.serviceOption(GuardrailService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                  );
-                  if (goutOpt._tag === "Some") {
-                    const outputCheck = yield* goutOpt.value.checkOutput(outputForSuccess).pipe(
-                      Effect.catchAll((err) =>
-                        Effect.gen(function* () {
-                          if (obs) {
-                            yield* obs
-                              .info(
-                                `⚠ [guardrail] output screen unavailable, failing open: ${String(err)}`,
-                              )
-                              .pipe(
-                                Effect.catchAll((swallow) =>
-                                  emitErrorSwallowed({
-                                    site: "runtime/src/execution-engine.ts:guardrail-output-screen-unavailable",
-                                    tag: errorTag(swallow),
-                                  }),
-                                ),
-                              );
-                          }
-                          return null;
-                        }),
-                      ),
-                    );
-                    if (outputCheck !== null && !outputCheck.passed) {
-                      const outputViolationSummary = outputCheck.violations
-                        .map((v: { type: unknown; message: unknown }) => `${String(v.type)}: ${String(v.message)}`)
-                        .join("; ");
-                      if (eb) {
-                        yield* eb
-                          .publish({
-                            _tag: "GuardrailViolationDetected",
-                            taskId: ctx.taskId,
-                            violations: outputCheck.violations.map((v: { type: unknown; message: unknown }) =>
-                              `${String(v.type)}: ${String(v.message)}`),
-                            score: outputCheck.score,
-                            blocked: true,
-                          })
-                          .pipe(
-                            Effect.catchAll((swallow) =>
-                              emitErrorSwallowed({
-                                site: "runtime/src/execution-engine.ts:guardrail-output-violation-publish",
-                                tag: errorTag(swallow),
-                              }),
-                            ),
-                          );
-                      }
-                      return yield* Effect.fail(
-                        new GuardrailViolationError({
-                          message: `Output guardrail check failed: ${outputViolationSummary}`,
-                          taskId: ctx.taskId,
-                          violation: outputViolationSummary,
-                        }),
-                      );
-                    }
-                  }
-                }
-
-                // Extract terminatedBy from reasoning metadata, with fallback inference.
-                //
-                // DEBT-REGISTER §3 (2026-07-23): this cast used to name a
-                // hand-written 5-value union that OMITTED "abstained" (and any
-                // future TerminatedBy member). The runtime value passed through
-                // fine — `ctx.metadata.terminatedBy` is assigned raw below — but
-                // every downstream typed read was told an abstention could not
-                // occur, months after `.withFabricationGuard()` made it a routine
-                // terminal. Now bound to core's canonical `TerminatedBy`, so a
-                // new member is a compile error here rather than a silent lie.
-                const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as TerminatedBy;
-
-                // Surface the parallel raw kernel termination reason on ctx so
-                // run-finalize can publish it as AgentCompleted.terminationReason.
-                // Falls back to terminatedByRaw when the strategy didn't preserve
-                // the raw channel (legacy strategies).
-                ctx.metadata.terminatedBy = terminatedByRaw;
-                if (rr?.metadata?.rawTerminatedBy !== undefined) {
-                  ctx.metadata.rawTerminatedBy = rr.metadata.rawTerminatedBy;
-                }
-
-                // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
-                const dialectObserved = ((rr?.metadata as { lastDialectObserved?: string } | undefined)?.lastDialectObserved ?? "none") as
-                  "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";
-
-                // Reactive strategy often reports partial + max_iterations whenever the kernel did not
-                // reach state "done", even if the last LLM turn produced a usable string. Treat
-                // completed, or partial with non-empty output, as success; empty partial as failure.
-                let executionSucceeded =
-                  rr !== undefined && typeof rr.status === "string"
-                    ? rr.status === "failed" || rr.status === "error"
-                      ? false
-                      : rr.status === "completed" ||
-                        (rr.status === "partial" && hasSubstantiveOutput)
-                    : Boolean(ctx.metadata.isComplete);
-
-                // F7 (2026-07-28): an ABSTENTION is not a success. The kernel
-                // reports `status: "completed"` for a forced abstention — the
-                // decline completed cleanly — so this landed on `true` and the
-                // run published `AgentCompleted.success: true` and a trace
-                // `run-completed.status: "success"` for a run that delivered
-                // nothing and said so.
-                //
-                // `deriveRunOutcome` has mapped `abstained -> "failure"` since
-                // 2026-07-23 precisely so the learning loop is not taught that
-                // declining is a win — but that classifier governs the debrief
-                // and learning lanes only. The terminal status was a separate,
-                // disagreeing rule, so the gate lane (testing/src/gate/runner.ts
-                // reads run-completed.status) still scored abstentions as
-                // successes. Same dishonest-success shape as F1, one lane over.
-                //
-                // The decline stays HONEST and machine-readable: `terminatedBy`
-                // is "abstained" and `result.abstention` carries reason +
-                // missing. Only the coarse success bit changes.
-                if (executionSucceeded && terminatedByRaw === "abstained") {
-                  executionSucceeded = false;
-                  ctx.metadata.abstainedNotSuccess = true;
-                }
-
-                // W5 fold (kernel review Important 2): an OUTSTANDING contract
-                // requirement is not a success, whatever the coarse status bit
-                // says. The W5.1 coverage cap caps the terminal STATUS at
-                // `partial` + stamps `metadata.outstandingCriteria`, but the
-                // pre-existing partial+substantive TOLERANCE lane above maps
-                // that partial to `success: true`, so the S3 false-success
-                // survived on the user-visible bit ("S3 false-success -> 0"
-                // was only true on the verdict lane). Resolved invariant
-                // (envelope-authority, NOT blanket partial=>false): a terminal
-                // whose evidence partition still names outstanding/blocked
-                // requirements cannot claim success; an uncapped partial with
-                // nothing outstanding keeps the documented tolerance lane
-                // byte-identical, and `completed` is unchanged. Mirrors the
-                // abstention veto above: same lane, one bit over.
-                const outstandingAtTerminal = rr?.metadata?.outstandingCriteria;
-                if (
-                  executionSucceeded &&
-                  Array.isArray(outstandingAtTerminal) &&
-                  outstandingAtTerminal.length > 0
-                ) {
-                  executionSucceeded = false;
-                  ctx.metadata.outstandingContractNotSuccess = true;
-                }
-
-                // ── Engine-boundary output/success invariant (M7's engine
-                // mirror, 2026-07-11 probe fleet). The inline path derived
-                // success from isComplete alone, shipping success:true with
-                // EMPTY output (p10 second run, p5 rerun). Empty-output
-                // success is honest ONLY when every DECLARED deliverable
-                // verifiably landed — the artifacts are the answer, and a
-                // deterministic completion note (marked harness-authored, #40
-                // channel) replaces the silence. Otherwise it is a failure
-                // with a real cause. Deliverable flags come from the
-                // RunContract × step-ledger scan — no model judgment.
-                let emptyOutputCompletionNote: string | undefined;
-                // Task 3 (2026-08-14): this deliverable-honesty scan used to run
-                // ONLY when `executionSucceeded` was already true — but a plain
-                // empty final turn with no tool artifacts already forces
-                // `executionSucceeded = false` above (HS-106's output/status
-                // coherence guard flips a strategy result to `status:"failed"`
-                // the moment output is empty, independent of WHY it's empty), so
-                // the richer "no output and no verified deliverable" diagnosis
-                // below never ran and the generic `rr?.error`/"Reasoning failed"
-                // fallback at the result-assembly step shipped instead. Widen the
-                // gate to also enter when output is empty and the kernel supplied
-                // no real failure detail of its own (`rr?.error` empty) — i.e. the
-                // ONLY reason this run isn't "succeeded" is the empty output
-                // itself, not a genuine kernel/provider error. Additive: does not
-                // touch the `executionSucceeded === true` path (test coverage:
-                // engine-empty-output-invariant.test.ts's first case), and does
-                // not let a real kernel error (rr.error non-empty) be shadowed by
-                // this branch — that detail still wins via the `rr?.error` check
-                // in the result's `error` field below.
-                const emptyOutputNoErrorDetail =
-                  !hasSubstantiveOutput &&
-                  !(typeof rr?.error === "string" && rr.error.trim().length > 0);
-                if (executionSucceeded || emptyOutputNoErrorDetail) {
-                  const declaredDeliverables = deriveReceiptDeliverables({
-                    task: String((task.input as { question?: unknown })?.question ?? task.id),
-                    ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
-                    ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
-                    reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
-                    // Wave C1 (task 6) — same `rr.metadata.runLedger` forwarded
-                    // onto TaskResult.metadata below (task 5); a ledger
-                    // `artifact` entry marks a declared deliverable produced
-                    // without re-scanning reasoningSteps.
-                    // Wave C.2 — run-scoped (all passes), not just the last one.
-                    runLedger: readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger,
-                    output: hasSubstantiveOutput ? outputForSuccess : "",
-                  });
-                  const declared = declaredDeliverables ?? [];
-                  const allProduced = declared.length > 0 && declared.every((d) => d.produced);
-
-                  if (!hasSubstantiveOutput) {
-                    // Empty output is honest ONLY when every declared deliverable
-                    // verifiably landed — the artifacts are the answer, and a
-                    // deterministic completion note (harness-authored, #40
-                    // channel) replaces the silence.
-                    if (allProduced) {
-                      emptyOutputCompletionNote = `Completed: ${declared.map((d) => d.spec).join("; ")}.`;
-                      ctx.metadata.harnessAuthoredOutput = true;
-                    } else {
-                      executionSucceeded = false;
-                      ctx.metadata.emptyOutputFailure = true;
-                    }
-                  } else if (declared.length > 0 && !allProduced) {
-                    // ── F1 (2026-07-28): TALKING IS NOT DOING. ──────────────
-                    // This check used to run ONLY when output was empty, so a
-                    // run that produced PROSE skipped deliverable verification
-                    // entirely and shipped `success`. Measured on the default
-                    // path, haiku, 3/3 runs plus a 4th confirmation: the agent
-                    // dispatched ZERO tools, wrote no file, replied
-                    // "I don't have the ability to read files directly", and the
-                    // run reported status=success with a declared deliverable
-                    // (./avg.txt) that never existed.
-                    //
-                    // That is the framework's own moat failing where most users
-                    // are — 08 §0 names in-runtime verification as the #1 unmet
-                    // need, and the trust spine returned success for a run that
-                    // did nothing. Same family as the abstention chain, where an
-                    // honest decline was scored success at four sites.
-                    //
-                    // A declared deliverable is a CONTRACT, and prose is not a
-                    // substitute for it. Blast radius is bounded by construction:
-                    // `deriveReceiptDeliverables` returns [] when nothing is
-                    // declared (no requiredTools, no taskContract, no artifact
-                    // phrasing), so tasks that declare nothing are untouched.
-                    executionSucceeded = false;
-                    ctx.metadata.unproducedDeliverableFailure = true;
-                  }
-                }
+                // ── terminatedBy + success bit + honesty invariants (F7/W5/M7/F1) ──
+                // Body extracted to engine/execute-success-invariants.ts (GH #221 W26).
+                const {
+                  terminatedByRaw,
+                  dialectObserved,
+                  executionSucceeded,
+                  emptyOutputCompletionNote,
+                } = deriveExecutionSuccess({
+                  ctx,
+                  task,
+                  config,
+                  rr,
+                  hasSubstantiveOutput,
+                  outputForSuccess,
+                });
 
                 // ── Debrief: cheap signals inline, rich LLM synthesis FORKED ──
                 // (2026-06-12 debrief-off-critical-path). prepareDebrief computes
@@ -1438,201 +685,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const ambientRunMeter = yield* FiberRef.get(CurrentRunBudget);
                 const traceLinkage = yield* mintTraceLinkage(config.traceDir, task.id);
 
-                const result: TaskResult & {
-                  format?: string;
-                  terminatedBy?: string;
-                  debrief?: AgentDebrief;
-                } = {
-                  taskId: task.id,
-                  agentId: task.agentId,
-                  output: verificationOutcome.output,
-                  success: verificationOutcome.success,
-                  ...(!verificationOutcome.success
-                    ? {
-                        error:
-                          verificationOutcome.error ??
-                          (ctx.metadata.emptyOutputFailure
-                            ? "Run ended with no output and no verified deliverable — nothing to ship."
-                            : outputForSuccess.length > 0
-                            ? outputForSuccess
-                            : rr?.status === "failed"
-                              // Prefer the real kernel failure detail (provider
-                              // 413/400 message via explainProviderError) over the
-                              // generic label — the error was captured in
-                              // state.error and carried onto rr.error.
-                              ? (typeof rr?.error === "string" && rr.error.trim().length > 0
-                                  ? rr.error
-                                  : "Reasoning failed")
-                              : "Execution did not complete successfully"),
-                      }
-                    : {}),
-                  metadata: {
-                    duration: executionDurationMs,
-                    cost: ctx.cost,
-                    tokensUsed: ctx.tokensUsed,
-                    // GH #126 — `totalTokens` alias mirrors `tokensUsed`
-                    // for consumers expecting the same name used on
-                    // AgentCompleted / ReasoningResult / traceStats.
-                    totalTokens: ctx.tokensUsed,
-                    // Prompt/completion split from the reasoning strategy.
-                    // Optional — provider/strategy may not always populate
-                    // (test-provider, sub-agent rollups, retry hooks).
-                    ...(typeof rr?.metadata?.inputTokens === "number" ? { inputTokens: rr.metadata.inputTokens } : {}),
-                    ...(typeof rr?.metadata?.outputTokens === "number" ? { outputTokens: rr.metadata.outputTokens } : {}),
-                    strategyUsed: ctx.selectedStrategy,
-                    stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
-                    iterations: ctx.iteration,
-                    // Forward reasoning steps so chat() can access tool results and analysis.
-                    // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
-                    ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
-                    // Forward the uncompressed tool-result store alongside reasoningSteps
-                    // so external evidence checks (validateCitations) aren't limited to
-                    // the lossy compressed step-content preview.
-                    ...(ctx.metadata.scratchpad ? { scratchpad: ctx.metadata.scratchpad } as Record<string, unknown> : {}),
-                    // Trust receipt (Arc 1 Task 8): forward `{name, ok}` tool-call
-                    // outcomes collected from ToolCallCompleted events. This is the
-                    // ONLY grounding source on the minimal/inline loop (which
-                    // executes tools but produces no reasoningSteps) — without it
-                    // the receipt falsely grades tool-using minimal runs
-                    // "ungrounded". Kernel runs carry both; the receipt sites
-                    // prefer step-derivation and use this as fallback.
-                    ...(toolCallLog.length > 0
-                      ? { receiptToolCalls: toolCallLog.map((t) => ({ name: t.toolName, ok: t.success })) } as Record<string, unknown>
-                      : {}),
-                    // Wave C1 (task 5): forward the strategy's RunLedger so the
-                    // trust receipt's deriveReceiptToolCalls can re-base its
-                    // tool-call evidence onto ledger pairs FIRST, ahead of the
-                    // reasoningSteps/receiptToolCalls fallbacks above. Read from
-                    // `rr.metadata.runLedger` (task 4 shipped every strategy
-                    // forwarding it there via `extraMetadata.runLedger`) — NOT
-                    // `ctx.metadata.reasoningSteps`, which only ever held
-                    // `result.steps`, never `result.metadata.runLedger`.
-                    //
-                    // Wave C.2: prefer the RUN-scoped ledger. `rr` is whichever
-                    // pass finished LAST, so on a run with a verification retry
-                    // or a continuation it is an auxiliary pass and forwarding
-                    // its ledger alone discarded the terminal pass's facts. The
-                    // run-scoped ledger holds every pass, seq-rebased and
-                    // provenance-stamped (engine/run-ledger-scope.ts); it falls
-                    // back to `rr`'s for any path that never seeded it.
-                    ...(() => {
-                      const runScoped = readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger;
-                      return runScoped && runScoped.length > 0
-                        ? ({ runLedger: runScoped } as Record<string, unknown>)
-                        : {};
-                    })(),
-                    ...(rr?.metadata?.confidence !== undefined ? {
-                      confidence: (rr.metadata.confidence >= 0.7
-                        ? "high"
-                        : rr.metadata.confidence >= 0.4
-                          ? "medium"
-                          : "low") as "high" | "medium" | "low",
-                    } : {}),
-                    // Cross-cutting cascade Task 9: forward the terminal
-                    // judgment record so trust receipts can read it off
-                    // TaskResult. Enumerated (consumed by name) like
-                    // reasoningSteps/receiptToolCalls/runLedger above.
-                    ...(rr?.metadata?.verdict !== undefined ? { verdict: rr.metadata.verdict } : {}),
-                    // Cross-cutting cascade Task 9: the typed extension slot.
-                    // Future strategy-contributed fields ride here — no more
-                    // per-field enumeration (DEBT-REGISTER §3 row closed).
-                    // Top-level keys still never pass untyped.
-                    ...(rr?.metadata?.extensions !== undefined ? { extensions: rr.metadata.extensions } : {}),
-                    ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
-                    ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
-                    complexity: ctx.metadata.taskComplexity ?? classifyComplexity(
-                      ctx.iteration,
-                      entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined,
-                      toolCallLog.length,
-                      terminatedByRaw,
-                    ),
-                    llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
-                    // #40 honesty channel: a harness-synthesized completion note
-                    // is not model prose — say so on the result. Two independent
-                    // producers: this engine's OWN empty-output branch
-                    // (ctx.metadata.harnessAuthoredOutput, set above when every
-                    // declared deliverable landed but the model's final turn was
-                    // empty) and the KERNEL's own onlyHarnessAuthorshipFailed
-                    // degrade (runner.ts — the model's turn was NON-empty but the
-                    // verifier caught it as harness-assembled, e.g. a normalized
-                    // tool observation standing in for a synthesized answer).
-                    // Before this fix only the former reached the result — the
-                    // kernel's own, already-correctly-set flag on
-                    // rr?.metadata.harnessAuthoredOutput was silently dropped at
-                    // this exact boundary (found via engine-empty-output-
-                    // invariant.test.ts, Move 1 merge triage 2026-08-13).
-                    ...(ctx.metadata.harnessAuthoredOutput === true || rr?.metadata?.harnessAuthoredOutput === true
-                      ? ({ harnessAuthoredOutput: true } as Record<string, unknown>)
-                      : {}),
-                    // W5 fold: the envelope honesty markers ride to the user.
-                    // Before this they were dropped at the normalize boundary
-                    // (whitelist rebuild), so the cap's evidence never reached
-                    // AgentResult.metadata on any pass. Envelope-sourced
-                    // verificationWarning rides FIRST; the engine's own
-                    // result-boundary warning below keeps authority when both
-                    // exist (later spread wins).
-                    ...(rr?.metadata?.outstandingCriteria !== undefined
-                      ? ({ outstandingCriteria: rr.metadata.outstandingCriteria } as Record<string, unknown>)
-                      : {}),
-                    ...(rr?.metadata?.budgetTerminalPartial === true
-                      ? ({ budgetTerminalPartial: true } as Record<string, unknown>)
-                      : {}),
-                    ...(rr?.metadata?.verificationWarning !== undefined
-                      ? ({ verificationWarning: rr.metadata.verificationWarning } as Record<string, unknown>)
-                      : {}),
-                    // Result-boundary verification: the verdict rides to the
-                    // receipt sites (run() + stream) via metadata, so BOTH
-                    // paths stamp receipt.verifierVerdict from one source.
-                    ...(boundaryVerification !== undefined
-                      ? ({ verifierVerdict: boundaryVerification.verdict } as Record<string, unknown>)
-                      : {}),
-                    ...(boundaryVerification?.warning !== undefined
-                      ? ({ verificationWarning: boundaryVerification.warning } as Record<string, unknown>)
-                      : {}),
-                    // A semantic-cache HIT short-circuits the whole loop: no LLM
-                    // call, no tool dispatch, no steps, no ledger. The flag was
-                    // set on ctx by the cache check and read only by cost-track,
-                    // so the RESULT was indistinguishable from a real run — and
-                    // the receipt read like one. It rides to both receipt sites
-                    // now, exactly as the boundary verdict above does.
-                    ...(ctx.metadata.cacheHit === true
-                      ? ({ cacheHit: true } as Record<string, unknown>)
-                      : {}),
-                    // W0.5: run→trace linkage (Lift Protocol plumbing). Enumerated
-                    // by name like harnessAuthoredOutput above; present ONLY when
-                    // the trace file was flushed and verified to exist at mint.
-                    ...(traceLinkage !== null
-                      ? ({ runId: traceLinkage.runId, tracePath: traceLinkage.tracePath } as Record<string, unknown>)
-                      : {}),
-                    // W5.4: the live run-meter total (parent calls + folded
-                    // delegated-child spend). Present ONLY when a budget was
-                    // armed for this run; absent on un-budgeted runs
-                    // (wire-or-delete honesty).
-                    ...(ambientRunMeter !== null
-                      ? ({ runBudgetSpend: { tokens: ambientRunMeter.tokens, cost: ambientRunMeter.cost } } as Record<string, unknown>)
-                      : {}),
-                  },
-                  completedAt: new Date(),
-                  format: "text",
-                  terminatedBy: terminatedByRaw,
-                  ...(debrief !== undefined ? { debrief } : {}),
-                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingApprovalFor"] !== undefined
-                    ? { awaitingApprovalFor: (rr!.metadata as Record<string, unknown>)["awaitingApprovalFor"] as { gateId: string; toolName: string; args: unknown } }
-                    : {}),
-                  // Agentic-UI interaction rail (Task 10): forward the paused
-                  // interaction descriptor so ReactiveAgent can surface
-                  // pendingInteraction + persist. Mirrors awaitingApprovalFor above.
-                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingInteractionFor"] !== undefined
-                    ? { awaitingInteractionFor: (rr!.metadata as Record<string, unknown>)["awaitingInteractionFor"] as { interactionId: string; kind: string; prompt: string; schemaJson: string } }
-                    : {}),
-                  // O3 C1: forward the run-level abstention surface from the
-                  // strategy result so ReactiveAgent.projectAbstention(r) can
-                  // populate AgentResult.abstention. Mirrors awaitingApprovalFor
-                  // above. Only present when terminatedBy === "abstained".
-                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["abstention"] !== undefined
-                    ? { abstention: (rr!.metadata as Record<string, unknown>)["abstention"] as { reason: string; missing: readonly string[] } }
-                    : {}),
-                };
+                // ── TaskResult assembly ──
+                // Body extracted to engine/execute-result-assembly.ts (GH #221 W26).
+                const result = assembleTaskResult({
+                  task,
+                  ctx,
+                  rr,
+                  verificationOutcome,
+                  executionDurationMs,
+                  outputForSuccess,
+                  toolCallLog,
+                  entropyLog,
+                  terminatedByRaw,
+                  debrief,
+                  boundaryVerification,
+                  traceLinkage,
+                  ambientRunMeter,
+                });
 
                 // Surface the forked rich-debrief fiber on the result (internal,
                 // non-enumerable) so ReactiveAgent can expose debriefRich() and
@@ -1646,72 +715,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   });
                 }
 
-                if (obs) {
-                  yield* obs.info("Execution completed", {
-                    taskId: task.id,
-                    success: executionSucceeded,
-                    tokensUsed: ctx.tokensUsed,
-                    cost: ctx.cost,
-                    duration: result.metadata.duration,
-                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3720", tag: errorTag(err) })));
-                }
-
-                if (obs && isNormal) {
-                  const durationSec = (result.metadata.duration / 1000).toFixed(1);
-                  const costStr = `$${result.metadata.cost.toFixed(4)}`;
-                  const toks = ctx.tokensUsed.toLocaleString();
-                  yield* obs.info(
-                    `◉ [complete]   ✓ ${task.id} | ${toks} tok | ${costStr} | ${durationSec}s`,
-                  ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3729", tag: errorTag(err) })));
-                }
-
-                // Calibration provenance (Task 21)
-                if (obs && resolvedCalibration) {
-                  try {
-                    const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                    const localObs = loadObservations(modelId, {
-                      baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                    });
-                    const sources: ("prior" | "community" | "local")[] = ["prior"];
-                    if (localObs.sampleCount > 0) sources.push("local");
-                    const provenance = renderCalibrationProvenance({
-                      modelId,
-                      sources,
-                      localSamples: localObs.sampleCount,
-                      summary: {
-                        parallelCallCapability: resolvedCalibration.parallelCallCapability,
-                        classifierReliability: resolvedCalibration.classifierReliability,
-                      },
-                    });
-                    yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3750", tag: errorTag(err) })));
-                  } catch {
-                    // Provenance rendering is best-effort
-                  }
-                }
-
-                // Record final metrics for dashboard
-                if (obs) {
-                  yield* obs.setGauge("execution.tokens_used", ctx.tokensUsed, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3759", tag: errorTag(err) })));
-                  yield* obs.setGauge("execution.total_duration", result.metadata.duration, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3761", tag: errorTag(err) })));
-                  yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3763", tag: errorTag(err) })));
-                  // Stage 5 quality fix: expose actual task success as a metric
-                  // so the console exporter can display the correct status.
-                  // Prior: exporter inferred success from phase health (always
-                  // succeeded for verifier-rejected runs), causing the
-                  // "Status: Success" lie when the task actually failed.
-                  yield* obs.setGauge("execution.success", executionSucceeded ? 1 : 0, { taskId: ctx.taskId })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:execution.success", tag: errorTag(err) })));
-
-                  // Record model used (updated to actual model from LLM provider response)
-                  const modelName = String(ctx.selectedModel ?? "unknown");
-                  const provider = String(config.provider ?? "unknown");
-
-                  yield* obs.incrementCounter("execution.model_name", 0, { model: modelName, provider, taskId: ctx.taskId })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3770", tag: errorTag(err) })));
-                }
+                // Completion logs + calibration provenance + final dashboard gauges.
+                // Body extracted to engine/execute-completion-obs.ts (GH #221 W26).
+                yield* emitCompletionObservability({
+                  obs,
+                  isNormal,
+                  ctx,
+                  task,
+                  config,
+                  result,
+                  executionSucceeded,
+                  resolvedCalibration,
+                });
 
                 // ── Record entropy metrics for dashboard + Telemetry RunReport ──
                 // Extracted to engine/finalize/telemetry-emit.ts (W24-B step 2).

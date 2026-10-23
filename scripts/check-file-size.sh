@@ -43,6 +43,9 @@ GIANT_BAR=1000
 #
 # Ledger edit history:
 #   2026-10-22 capture at 23 sites + dispatch-think-response (initial).
+#   2026-10-22 (b) execution-engine.ts 1976->991: SHRINK by program Task 4
+#            decomposition (runtime-warden, 11 verbatim engine/execute-* modules).
+
 #   2026-10-22 reactive-agent.ts 2338->2340 (+2, #262 run_effects wiring
 #            07a3649db) and act.ts 1235->1267 (+32, #262 durable effect
 #            recording 08458a4f3): feature additions landed the same week the
@@ -50,7 +53,7 @@ GIANT_BAR=1000
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2340"
   "runtime/src/builder.ts:2222"
-  "runtime/src/execution-engine.ts:1976"
+  "runtime/src/execution-engine.ts:991"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:1970"
   "reasoning/src/kernel/loop/runner.ts:1903"
   "reasoning/src/kernel/loop/iterate-pass.ts:1896"
