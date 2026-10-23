@@ -269,6 +269,141 @@ export const asBuilderState = (
   builder: ReactiveAgentBuilder,
 ): BuilderState => builder as unknown as BuilderState;
 
+/**
+ * Compile-time drift guard for this module's {@link BuilderState} view: the
+ * withers-side mirror of `ReactiveAgentBuilder._assertRuntimeStateViewShape`
+ * in `packages/runtime/src/builder.ts` (quality program Task 13 / GH #261).
+ *
+ * `asBuilderState` above is a genuine `as unknown as` widening, and nothing
+ * in type space can replace the per-field assertion: TypeScript's
+ * class-privacy branding blocks the class from being assignable to a plain
+ * interface, and `keyof`/`Pick` over a class type exclude its private
+ * members. Inside the class body the sibling guard names each field with
+ * `self._field` (private access is legal there); OUTSIDE the class that dot
+ * access fails to compile (TS2341), but string-literal element access
+ * (`self['_field']`) resolves the private member's REAL type and gives the
+ * identical mechanism: rename or remove a backing class field and its
+ * `self['_field']` access stops typechecking (TS7053 — no index signature
+ * and no such key); drift a backing field's type and the object-literal-to-
+ * `BuilderState` assignment fails (TS2322/TS2741); add a `BuilderState`
+ * member with no backing field and its access fails the same way. Never
+ * constructed at runtime — type-checked only.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _assertBuilderStateViewShape = (
+  self: ReactiveAgentBuilder,
+): BuilderState => ({
+  _name: self['_name'],
+  _stableAgentId: self['_stableAgentId'],
+  _provider: self['_provider'],
+  _model: self['_model'],
+  _thinking: self['_thinking'],
+  _thinkingOptions: self['_thinkingOptions'],
+  _temperature: self['_temperature'],
+  _maxTokens: self['_maxTokens'],
+  _numCtx: self['_numCtx'],
+  _persona: self['_persona'],
+  _systemPrompt: self['_systemPrompt'],
+  _environmentContext: self['_environmentContext'],
+  _memoryTier: self['_memoryTier'],
+  _enableMemory: self['_enableMemory'],
+  _memoryOptions: self['_memoryOptions'],
+  _skillPersistence: self['_skillPersistence'],
+  _sessionPersist: self['_sessionPersist'],
+  _sessionMaxAgeDays: self['_sessionMaxAgeDays'],
+  _enableExperienceLearning: self['_enableExperienceLearning'],
+  _enableMemoryConsolidation: self['_enableMemoryConsolidation'],
+  _consolidationConfig: self['_consolidationConfig'],
+  _enableSelfImprovement: self['_enableSelfImprovement'],
+  _skillsConfig: self['_skillsConfig'],
+  _hooks: self['_hooks'],
+  _harnessRegistrations: self['_harnessRegistrations'],
+  _maxIterations: self['_maxIterations'],
+  _minIterations: self['_minIterations'],
+  _budgetLimits: self['_budgetLimits'],
+  _groundingConfig: self['_groundingConfig'],
+  _fabricationGuard: self['_fabricationGuard'],
+  _stallPolicy: self['_stallPolicy'],
+  _longHorizon: self['_longHorizon'],
+  _adaptiveHarness: self['_adaptiveHarness'],
+  _modelRouting: self['_modelRouting'],
+  _durableRuns: self['_durableRuns'],
+  _executionTimeoutMs: self['_executionTimeoutMs'],
+  _ollamaTimeoutMs: self['_ollamaTimeoutMs'],
+  _retryPolicy: self['_retryPolicy'],
+  _enableGuardrails: self['_enableGuardrails'],
+  _enableVerification: self['_enableVerification'],
+  _enableCostTracking: self['_enableCostTracking'],
+  _enableAudit: self['_enableAudit'],
+  _enableReasoning: self['_enableReasoning'],
+  _reasoningOptions: self['_reasoningOptions'],
+  _enableTools: self['_enableTools'],
+  _toolsOptions: self['_toolsOptions'],
+  _scratchpad: self['_scratchpad'],
+  _resultCompression: self['_resultCompression'],
+  _requiredToolsConfig: self['_requiredToolsConfig'],
+  _taskContract: self['_taskContract'],
+  _enableObservability: self['_enableObservability'],
+  _observabilityOptions: self['_observabilityOptions'],
+  _cortexUrl: self['_cortexUrl'],
+  _enablePrompts: self['_enablePrompts'],
+  _promptsOptions: self['_promptsOptions'],
+  _testScenario: self['_testScenario'],
+  _extraLayers: self['_extraLayers'],
+  _tracingConfig: self['_tracingConfig'],
+  _mcpServers: self['_mcpServers'],
+  _a2aOptions: self['_a2aOptions'],
+  _gatewayOptions: self['_gatewayOptions'],
+  _channelsConfig: self['_channelsConfig'],
+  _agentTools: self['_agentTools'],
+  _contextProfile: self['_contextProfile'],
+  _allowDynamicSubAgents: self['_allowDynamicSubAgents'],
+  _dynamicSubAgentOptions: self['_dynamicSubAgentOptions'],
+  _enableKillSwitch: self['_enableKillSwitch'],
+  _enableBehavioralContracts: self['_enableBehavioralContracts'],
+  _behavioralContract: self['_behavioralContract'],
+  _strictValidation: self['_strictValidation'],
+  _streamDensity: self['_streamDensity'],
+  _telemetryConfig: self['_telemetryConfig'],
+  _loggingConfig: self['_loggingConfig'],
+  _costTrackingOptions: self['_costTrackingOptions'],
+  _guardrailsOptions: self['_guardrailsOptions'],
+  _verificationOptions: self['_verificationOptions'],
+  _circuitBreakerConfig: self['_circuitBreakerConfig'],
+  _rateLimiterConfig: self['_rateLimiterConfig'],
+  _fallbackConfig: self['_fallbackConfig'],
+  _errorHandler: self['_errorHandler'],
+  _enableHealthCheck: self['_enableHealthCheck'],
+  _taskContext: self['_taskContext'],
+  _verificationStep: self['_verificationStep'],
+  _outputValidator: self['_outputValidator'],
+  _outputValidatorOptions: self['_outputValidatorOptions'],
+  _customTermination: self['_customTermination'],
+  _enableReactiveIntelligence: self['_enableReactiveIntelligence'],
+  _reactiveIntelligenceOptions: self['_reactiveIntelligenceOptions'],
+  _riHooks: self['_riHooks'],
+  _metaTools: self['_metaTools'],
+  _calibration: self['_calibration'],
+  _leanHarness: self['_leanHarness'],
+  _documents: self['_documents'],
+  _pricingRegistry: self['_pricingRegistry'],
+  _pricingProvider: self['_pricingProvider'],
+  _providerExplicit: self['_providerExplicit'],
+  _providerConfig: self['_providerConfig'],
+  _mcpToolkitRequests: self['_mcpToolkitRequests'],
+  _lazyValidation: self['_lazyValidation'],
+  _enableJudgment: self['_enableJudgment'],
+  _judgmentOptions: self['_judgmentOptions'],
+  _judgmentShadowDbPath: self['_judgmentShadowDbPath'],
+  _approvalPolicy: self['_approvalPolicy'],
+  _userInteraction: self['_userInteraction'],
+  _llmOverrideLayer: self['_llmOverrideLayer'],
+  _outputSchemaConfig: self['_outputSchemaConfig'],
+  _receiptSigningKey: self['_receiptSigningKey'],
+  _toolIntentClassifier: self['_toolIntentClassifier'],
+  _openInferenceAdded: self['_openInferenceAdded'],
+});
+
 // Re-export `ExecutionContext` for helpers that need it.
 export type { ExecutionContext, ModelParams };
 

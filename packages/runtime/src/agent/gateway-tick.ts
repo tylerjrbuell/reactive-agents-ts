@@ -30,8 +30,11 @@ type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 type SchedulerService = Context.Tag.Service<typeof SchedulerServiceTag>
 
 export interface GatewayTickDeps {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    // Every effect run through `runtime` here is requirement-free at the type
+    // level: SchedulerService/GatewayService instance calls (`R = never`) and
+    // the compaction gen, which composes only `Effect.serviceOption`
+    // (requirement-free on effect@3.19) plus instance-method calls.
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly agentId: string
     readonly hasCustomHeartbeatInstruction: boolean
     readonly sessionTtlDays: number

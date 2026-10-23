@@ -81,15 +81,7 @@ import type {
     OutputSchemaOptions,
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
-
-/** Parse stored approval args JSON, falling back to the raw string on malformed input. (Local copy of reactive-agent.ts's helper — both this module and agent/durable-facade.ts need it for #217.) */
-const safeParseJson = (s: string): unknown => {
-    try {
-        return JSON.parse(s)
-    } catch {
-        return s
-    }
-}
+import { safeParseJson } from './_json.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -159,7 +151,16 @@ export interface RunTaskDeps {
             task: Task
         ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>
     }
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    /**
+     * The agent's ManagedRuntime. This module never runs an effect through it
+     * directly — the field is forwarded to the shared family bridge
+     * (`runFacadeEffect`, whose runtime parameter is deliberately
+     * requirement-generic by design). ManagedRuntime is contravariant in its requirement type, so
+     * a `never`-typed field would not flow into that bridge; `unknown` is the
+     * tightest requirement type that does, and the bridge's own effect
+     * (`Fiber.join`, `R = never`) never needs more.
+     */
+    readonly runtime: ManagedRuntime.ManagedRuntime<unknown, never>
     /** Runtime configuration snapshot (the class's private `config` field). */
     readonly config: Record<string, unknown>
     readonly outputSchemaConfig?: {

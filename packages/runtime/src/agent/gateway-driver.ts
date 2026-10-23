@@ -41,8 +41,9 @@ export interface SubscribeChannelHandlerDeps {
     }) => string
     readonly executeEvent: ReturnType<typeof makeExecuteEvent>
     readonly chatManager: GatewayChatManager
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    // The only effect run through `runtime` is `eb.on(...)` (and its
+    // service-instance handler gen), all typed `R = never`.
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly agentId: string
     readonly getStopped: () => boolean
     readonly incrementChatTurns: () => void

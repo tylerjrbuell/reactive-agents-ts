@@ -104,9 +104,11 @@ export interface JudgmentFacadeDeps {
      * PRESERVED inner backend-call boundary (`ask()` / `listModels()` / the
      * `judgeRank` helper, each run through `runPromise` inside
      * `Effect.promise`) — see the file header for why that boundary is
-     * load-bearing for rejection-VALUE identity.
+     * load-bearing for rejection-VALUE identity. All three sites run service-
+     * instance effects only (`ask`, `listModels`, `judgeRank` — each typed
+     * `R = never`), so the precise runtime view here is `never`.
      */
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly judgmentAutoShadow: boolean
     /** _chatHistory is passed by reference; the facade reads it when the effect runs (immediately, within the delegate call). */
     readonly chatHistory: ChatMessage[]

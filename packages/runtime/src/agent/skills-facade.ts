@@ -76,8 +76,11 @@ export interface SkillsFacadeDeps {
      * methods return Effects and the class shell runs them; this field is
      * still read directly by `loadSkill`'s store-write section, whose inner
      * `runPromise` is preserved for rejection-VALUE identity (see its JSDoc).
+     * That section's gen composes only `Effect.serviceOption` (requirement-
+     * free on effect@3.19) plus a service-instance call (`store`, typed
+     * `R = never`), so the precise runtime view here is `never`.
      */
-    readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
+    readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
 }
 
 /**
