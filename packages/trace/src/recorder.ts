@@ -3,6 +3,7 @@ import { Context, Effect, Layer, Ref } from "effect"
 import { mkdir, appendFile, readdir, stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import type { TraceEvent } from "./events.js"
+import { TraceStorageError } from "./errors.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { applyRedactors, defaultRedactors } from "@reactive-agents/observability";
 
@@ -101,7 +102,7 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
       if (opts.dir !== null) {
         const dir = opts.dir;
         yield* Effect.forkDaemon(
-          Effect.tryPromise({ try: () => pruneTraceDir(dir), catch: (e) => new Error(String(e)) }).pipe(
+          Effect.tryPromise({ try: () => pruneTraceDir(dir), catch: (e) => new TraceStorageError({ message: String(e), cause: e }) }).pipe(
             Effect.catchAll((err) =>
               emitErrorSwallowed({ site: "trace/src/recorder.ts:prune", tag: errorTag(err) }),
             ),
@@ -147,7 +148,7 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
           if (events.length === 0) return
           yield* Effect.tryPromise({
             try: () => mkdir(dir, { recursive: true }),
-            catch: (e) => new Error(String(e)),
+            catch: (e) => new TraceStorageError({ message: String(e), cause: e }),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:75", tag: errorTag(err) })))
           const path = join(dir, `${runId}.jsonl`)
           const rawBody = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
@@ -156,7 +157,7 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
           const body = yield* applyRedactors(rawBody, defaultRedactors)
           yield* Effect.tryPromise({
             try: () => appendFile(path, body),
-            catch: (e) => new Error(String(e)),
+            catch: (e) => new TraceStorageError({ message: String(e), cause: e }),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:81", tag: errorTag(err) })))
           yield* Ref.update(pending, (m) => {
             const next = new Map(m)
