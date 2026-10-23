@@ -89,11 +89,11 @@ tags: [quality-program, gates, decomposition, modernization-bridge, execute-back
 
 ### Task 4: #221 `execution-engine.ts` decomposition (runtime-warden)
 
-- [ ] **Step 1: Pre-brief pin check** — `grep -l execution-engine scripts/check-*.sh` → name any pins in the MissionBrief (v26b rule).
-- [ ] **Step 2: Baseline** — runtime suite exact numbers; execution-engine.ts LOC (1,976; note regrowth from issue's 1,807).
-- [ ] **Step 3: Dispatch** MissionBrief: end-state LOC ≤1,200, verbatim stage/cluster moves into `engine/*` following the W24 bootstrap/finalize precedent; surface bit-identical; zero new casts; success-criteria = exact baseline + `check-file-size.sh` shrink + ceiling test flat. Retries 2.
-- [ ] **Step 4: Parent verifier** (typecheck, suite, ceiling, scope, review-patterns). 
-- [ ] **Step 5: PR → CI → merge → close #221 → baseline edit in check-file-size.sh (shrink law) → pilot log → debrief.** Update this plan's tracker section in the closeout commit.
+- [x] **Step 1: Pre-brief pin check** — done: only `check-file-size.sh` references execution-engine.ts (its ceiling, not a carve-around pin). — `grep -l execution-engine scripts/check-*.sh` → name any pins in the MissionBrief (v26b rule).
+- [x] **Step 2: Baseline** — runtime 1,679/7/0/310 files; execution-engine.ts measured 1,976 (issue cite 1,807 — regrown). — runtime suite exact numbers; execution-engine.ts LOC (1,976; note regrowth from issue's 1,807).
+- [x] **Step 3: Dispatch** — runtime-warden completed 0.92, retries 0/2: 1,976 -> 991 LOC via 11 verbatim engine/execute-* modules; tag/interface/Live export bit-identical; inline-retentions documented. MissionBrief: end-state LOC ≤1,200, verbatim stage/cluster moves into `engine/*` following the W24 bootstrap/finalize precedent; surface bit-identical; zero new casts; success-criteria = exact baseline + `check-file-size.sh` shrink + ceiling test flat. Retries 2.
+- [x] **Step 4: Parent verifier** — tsc rc=0 + downstream 29/29; suite exact baseline; ceiling 2/2 (0 casts in new modules); zero new throw/as-any; .js imports; verbatim line-set proof 0 divergences. (typecheck, suite, ceiling, scope, review-patterns). 
+- [x] **Step 5: PR → CI → merge → close #221 → baseline edit in check-file-size.sh (shrink law) → pilot log → debrief.** Update this plan's tracker section in the closeout commit.
 
 ### Task 5: Seam-test seeds (#260 partial)
 
@@ -166,4 +166,6 @@ Same protocol; largest family (547 LOC). If fiber-parent changes cannot be prove
 - 2026-10-22: **Task 2 SHIPPED** (PR #269 + ledger fix PR #270, both merged): `check-string-errors.sh` pool pinned 300 (299 capture; +1 attributed #262 in-src site), 7 fixtures, echo-test parses the ledger (no magic numbers survives legitimate edits).
 - 2026-10-22: **Incidents resolved en route** (lessons in execute-backlog v26c/v26d + MEMORY): (a) frozen-lockfile drift (bun-types 1.4.3→1.4.4) killed every job at step 1 ~2h — resync PR #264 + rebases; (b) `metrics:check` requires `metrics:sync-readme` in any PR touching test-file counts — README sync commits added to #263/#269, re-synced after dependency merges; (c) docs-sync `capabilities-manifest` drift from #262 (act.ts touched, CAPABILITIES.md untouched) is tree-wide and blocked #270 — audited honestly (registry parity green, #262 registered no handler), sanctioned `--ack` re-baseline shipped as its own commit d43f4a25f.
 - 2026-10-22: **Baselines re-measured post-A2** (replaces #217/#219-era numbers throughout): runtime 1,679 pass / 7 skip / 0 fail / 310 files; reasoning 3,189 pass / 4 todo / 0 fail / 369 files; `check-string-errors` 300/300; `check-file-size` 24 entries at ceiling; enforcement lane 24/24.
-- NEXT: Task 3 (instanceof inventory 128 + second counter, in flight on bundle/quality-program-t3-instanceof), Task 4 (#221 execution-engine, runtime-warden), Task 5 (seam seeds #260).
+- 2026-10-22: **Task 3 SHIPPED** (PR #271): twin `INSTANCEOF_BASELINE=129` ledger + inventory artifact (`wiki/Research/Audit-Reports-2026-10-22/instanceof-error-inventory.md`); fixtures 11 cases; reasoning 3,193/4todo/0/369.
+- 2026-10-22: **Task 4 SHIPPED** (PR #272, closes #221): execution-engine.ts 1,976→991 via 11 verbatim `engine/execute-*` modules (runtime-warden 0.92, retries 0/2). First decomposition landed WITH its lock: ceiling shrunk 1976→991 as a deliberate-ledger commit ordered after the refactor commit (bisect-clean). Debrief: `wiki/Research/Debriefs/2026-10-22-runtime-engine-decomp-execution-debrief.md`. Follow-up captured: emitErrorSwallowed site-string re-anchoring tranche rides Task 5.
+- NEXT: Task 5 (seam seeds #260 + site-string re-anchor), Task 6 (D1 bridge family 1: skills), Tasks 7-9 (arbitrator #220, iterate-pass+runner #222, D1 families 2-4).

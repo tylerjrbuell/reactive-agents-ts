@@ -1496,3 +1496,11 @@ task: "Quality program Task 3: instanceof ceiling (129) + inventory artifact"
 result: completed, confidence 0.9
 outcome: "check-string-errors.sh twin ledger INSTANCEOF_BASELINE=129 occurrences (128 lines, one double-match), collect-FAIL dual verdict; inventory at wiki/Research/Audit-Reports-2026-10-22/instanceof-error-inventory.md (per-file distribution + all 129 sites - the Phase-2 rejection-identity blast radius D3 must carry deliberately); header's 43-site figure corrected to 129/43 split. Fixtures 7->11 cases, TDD RED-first honored (8/10 pre-script RED). Measured: real tree 300/129 green; 11/11; lane 24/24; reasoning 3,193/4todo/0/369; tsc rc=0; ceiling 2/2 flat; 0 casts in new/edited files; no new test FILES (README count stable)."
 bypass-reason: none
+
+```yaml
+date: 2026-10-22
+warden: runtime-warden (via general subagent; no warden agent types in this harness)
+task: "GH #221 execution-engine.ts decomposition (program Task 4; 1,976 LOC regrown past W24)"
+result: completed, confidence 0.92
+outcome: "1,976 -> 991 LOC via 11 verbatim engine/execute-* modules (obs-wiring, event-collectors, killswitch-bridge, telemetry-notice, lifecycle-guard, agent-started, output-derivation, output-screens, success-invariants, result-assembly, completion-obs); Refs/accumulator identities passed in never re-created (Effect-native adaptation of the #217 deps-object idiom); tag/interface/Live export bit-identical; index.ts untouched. Stayed inline with reasons: isRootExecution+status-renderer cluster (source-scanning test pins it to the file), executeCore preamble/PhaseDeps/phase-dispatch/debrief-prep glue (fiber-scope). Parent verifier: tsc rc=0 + downstream 29/29; runtime suite 1679/7/0/310 EXACT; ceiling 2/2 (new modules 0 casts); verbatim line-set proof 0 divergences. Ratchet: check-file-size ceiling 1976->991 shrunk as a deliberate ledger commit AFTER the refactor commit (bisect-clean). Follow-up flagged: emitErrorSwallowed site-strings kept byte-identical; re-anchoring tranche rides Task 5."
+bypass-reason: none

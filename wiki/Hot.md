@@ -41,9 +41,7 @@ Living tracker: `wiki/Planning/Implementation-Plans/2026-10-22-quality-scalabili
   (310 files); reasoning 3,189 pass / 4 todo / 0 fail (369 files). NOTE for next
   bundles: #262 changed these from the #217-#219 numbers; plan re-captured.
 
-Next: Task 3 (instanceof inventory 128 sites + gate extension), Task 4 (#221
-execution-engine decomp, runtime-warden), Task 5 (seam seeds #260), then the D1
-Effect-bridge families. Machine gotchas this box: gh has no `--exit-status` on
+Next: Task 5 seam tests (#260) + site-string re-anchor, Task 6 D1 bridge family 1 (skills facade), Tasks 7-9 (#220 arbitrator, #222 iterate-pass+runner). Task 3 shipped (PR #271: instanceof ledger 129 + inventory) and Task 4 shipped (PR #272: execution-engine.ts 1,976->991, runtime-warden 0.92, ceiling shrunk 1976->991 in-branch - first decomposition landed with its lock already on the door). Machine gotchas this box: gh has no `--exit-status` on
 `pr checks` (poll buckets instead); CI runs queue behind peer concurrency.
 
 ---
