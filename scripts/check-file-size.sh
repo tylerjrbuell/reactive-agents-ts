@@ -59,7 +59,7 @@ SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2344"
   "runtime/src/builder.ts:2222"
   "runtime/src/execution-engine.ts:991"
-  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:1970"
+  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
   "reasoning/src/kernel/loop/runner.ts:1903"
   "reasoning/src/kernel/loop/iterate-pass.ts:1896"
   "reasoning/src/strategies/plan-execute.ts:1714"
