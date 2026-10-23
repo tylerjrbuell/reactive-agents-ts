@@ -1048,91 +1048,91 @@ export class ReactiveAgent<TOut = unknown> {
     /**
      * Resume a crashed or paused durable run from its last checkpoint (Phase C).
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217) —
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217); this shell, via `runFacadeEffect`, is the family's single Promise boundary (Task 10 / D1 bridge).
      * see `makeDurableFacade().resumeRun` there for the full JSDoc.
      */
     async resumeRun(runId: string): Promise<AgentResult> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).resumeRun(runId)
+        }).resumeRun(runId))
     }
 
     /**
      * Fork a NEW run from any checkpoint of a prior run (Arc 1 Task 6).
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217) —
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      * see `makeDurableFacade().fork` there for the full JSDoc.
      */
     async fork(
         runId: string,
         opts?: { at?: number; model?: string; task?: string },
     ): Promise<AgentResult> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).fork(runId, opts)
+        }).fork(runId, opts))
     }
 
     /**
      * List persisted durable runs (newest-updated first), optionally filtered by
      * lifecycle status.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async listRuns(filter?: { status?: RunStatus; userId?: string }): Promise<readonly RunRecord[]> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).listRuns(filter)
+        }).listRuns(filter))
     }
 
     /**
      * Durable HITL (Phase D): approve a run that paused for human approval and
      * resume it to completion.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async approveRun(runId: string, opts?: { reason?: string }): Promise<AgentResult> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).approveRun(runId, opts)
+        }).approveRun(runId, opts))
     }
 
     /**
      * Durable HITL (Phase D): deny a run's paused action and resume it to
      * completion.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async denyRun(runId: string, reason: string): Promise<AgentResult> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).denyRun(runId, reason)
+        }).denyRun(runId, reason))
     }
 
     /**
      * Durable HITL (Phase D): list runs paused awaiting a human decision, with the
      * pending action (tool + args) for each.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async listPendingApprovals(): Promise<
         readonly {
@@ -1144,20 +1144,20 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).listPendingApprovals()
+        }).listPendingApprovals())
     }
 
     /**
      * Agentic-UI interaction rail (Task 10): the durable store location + agent id
      * for this agent when built with `.withDurableRuns()`, else `undefined`.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` (moved from this file for #217); stays SYNCHRONOUS through Task 10 (D1 bridge): a pure accessor with no Promise boundary to bridge.
      */
     getDurableInfo(): { dbPath: string; agentId: string } | undefined {
         return makeDurableFacade({
@@ -1174,7 +1174,7 @@ export class ReactiveAgent<TOut = unknown> {
      * response to a `request_user_input`, with the pending interaction (kind +
      * prompt + parsed schema) for each.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async listPendingInteractions(): Promise<
         readonly {
@@ -1187,33 +1187,33 @@ export class ReactiveAgent<TOut = unknown> {
             updatedAt: number
         }[]
     > {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).listPendingInteractions()
+        }).listPendingInteractions())
     }
 
     /**
      * Agentic-UI interaction rail (Task 10): record a human's response to a run
      * that paused for `request_user_input` and resume it to completion.
      *
-     * Delegates to `agent/durable-facade.ts` (moved from this file for #217).
+     * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
     async respondToInteraction(
         runId: string,
         interactionId: string,
         value: unknown,
     ): Promise<AgentResult> {
-        return makeDurableFacade({
+        return runFacadeEffect(this.runtime, makeDurableFacade({
             durableResume: this._durableResume,
             agentId: this.agentId,
             runtime: this.runtime,
             buildRunTaskEffect: (input, options) => this.buildRunTaskEffect(input, options),
             runDurable: (params) => this.runDurable(params),
-        }).respondToInteraction(runId, interactionId, value)
+        }).respondToInteraction(runId, interactionId, value))
     }
 
     /**
