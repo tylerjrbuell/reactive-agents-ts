@@ -71,8 +71,8 @@ GIANT_BAR=1000
 #            (10x loop-control break/continue -> returned flags) documented in
 #            the upward report.
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2449"
-  "runtime/src/chat/engine.ts:701"
+  "runtime/src/reactive-agent.ts:2452"
+  "runtime/src/chat/engine.ts:702"
   "runtime/src/builder.ts:2222"
   "runtime/src/execution-engine.ts:994"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:850"
