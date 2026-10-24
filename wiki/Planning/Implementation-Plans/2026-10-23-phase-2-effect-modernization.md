@@ -112,7 +112,13 @@ messages with code literals via -F (v26e); PR -> CI 5/5 -> merge dev -> closeout
 ## Execution Log
 
 - 2026-10-23: Plan created from the readiness checkpoint (Phase-1 program
-  complete) Tranche + decision issues filed: #285 (P2-T1 diagnose/replay-value), #286
+  complete). Tranche + decision issues filed: #285 (P2-T1 diagnose/replay-value), #286
   (P2-T2/T3 prewiring), #287 (P2-D1 defect-channel rfc), #288 (P2-D2 semver-window rfc). T1-T3 pre-wired: all audits exist (classification map, Task 13
   variance findings). T5 and P2-D1 are owner decisions; everything else can run
   in warden/parent-direct cadence. Awaiting go.
+- 2026-10-23: Warden governance refresh — shared structural law + per-domain
+  placement maps + widened verification authority in all six domain wardens
+  (.claude/agents/*); primers corrected to post-program reality with the ledger
+  script as numeric ground truth. Fact-check pass vs `scripts/check-file-size.sh`:
+  think.ts is NOT a ledger entry (guarded by new-giant rule + stage seams);
+  tools/provider/runtime maps now name their actual pinned files.

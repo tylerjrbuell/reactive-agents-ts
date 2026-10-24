@@ -108,7 +108,9 @@ RUN them before returning and put their output verbatim in evidence-anchors.
 - Seam modules (new code's home): `builder/build/*`, `builder/withers/*`,
   `engine/execute-*`, `engine/bootstrap|finalize|phases`, `agent/*` facades.
 - Seam pins: `packages/runtime/tests/seam-*.test.ts` (skills/judgment/durable/
-  run-task/withers). D1 facades carry shell-path rejection-VALUE pins:
+  run-task/withers).
+  Additional ledger-pinned in-domain files: `src/builder/types.ts`,
+  `src/runtime-types.ts`, `src/types.ts` (complete list: run the ledger script). D1 facades carry shell-path rejection-VALUE pins:
   one Promise boundary per family in the class shell, incidental failures ride
   the DEFECT channel (`Effect.sync`/`Effect.promise`), `E` carries only
   deliberate rejections — read the matching seam pin BEFORE changing facade
