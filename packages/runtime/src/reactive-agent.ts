@@ -2045,32 +2045,17 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     session(
-        options?: SessionOptions & {
-            persist?: boolean
-            id?: string
-            maxAgeDays?: number
-            /**
-             * Called when history windowing would drop turns for this
-             * session's `chat()` calls, with exactly the dropped turns
-             * (oldest-to-newest). Its returned summary text is spliced back
-             * in as a synthetic leading turn instead of the dropped turns
-             * being silently discarded. The framework owns the windowing
-             * decision and splice mechanics only — this callback owns all
-             * summarization content (prompt, LLM call, etc). Unset: pure
-             * drop, identical to today's behavior.
-             */
-            onOverflow?: HistoryOverflowHandler
-        }
+        options?: SessionOptions
     ): AgentSession {
         const persist = options?.persist ?? this._sessionPersist
         const _maxAgeDays = options?.maxAgeDays ?? this._sessionMaxAgeDays
         const sessionId =
             options?.id ??
-            `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+            nextSessionId("session", [])
         const self = this
 
-        const onSave = persist
-            ? async (history: ChatMessage[]) => {
+        const saveHistory = persist
+            ? async (sid: string, messages: readonly ChatMessage[]) => {
                   await self.runtime.runPromise(
                       Effect.gen(function* () {
                           const memMod = yield* Effect.promise(
@@ -2081,17 +2066,17 @@ export class ReactiveAgent<TOut = unknown> {
                           )
                           if (storeOpt._tag !== 'Some') return
                           yield* storeOpt.value.save({
-                              sessionId,
+                              sessionId: sid,
                               agentId: self.agentId,
-                              messages: history,
+                              messages: [...messages],
                           })
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5023", tag: errorTag(err) })))
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:session", tag: errorTag(err) })))
                   )
               }
             : undefined
 
-        const historyLoader = persist
-            ? async (): Promise<ChatMessage[]> => {
+        const loadHistory = persist
+            ? async (sid: string): Promise<readonly ChatMessage[]> => {
                   return self.runtime.runPromise(
                       Effect.gen(function* () {
                           const memMod = yield* Effect.promise(
@@ -2101,21 +2086,91 @@ export class ReactiveAgent<TOut = unknown> {
                               memMod.SessionStoreService
                           )
                           if (storeOpt._tag !== 'Some') return [] as ChatMessage[]
-                          const record = yield* storeOpt.value.findById(sessionId)
+                          const record = yield* storeOpt.value.findById(sid)
                           return (record?.messages ?? []) as ChatMessage[]
                       }).pipe(Effect.catchAll((_err) => Effect.succeed([] as ChatMessage[])))
                   )
               }
             : undefined
 
-        return new AgentSession(
-            (msg, history, opts) => this.chat(msg, opts, history, sessionId),
-            undefined,
-            onSave,
-            undefined,
-            historyLoader,
-            options?.onOverflow
-        )
+        const engine = new ChatEngine(
+            {
+                runTask: async (input, opts) => {
+                    return self.run(
+                        input,
+                        opts?.history
+                            ? { history: [...opts.history], ...(opts.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}) }
+                            : opts?.maxIterations !== undefined
+                              ? { maxIterations: opts.maxIterations }
+                              : undefined,
+                    );
+                },
+                runStreamTask: (input, opts) => {
+                    return self.runStream(input, {
+                        history: opts.history ? [...opts.history] : undefined,
+                        density: opts.density,
+                        signal: opts.signal,
+                    });
+                },
+                complete: async (params) => {
+                    const response = await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const llm = yield* LLMService;
+                            const r = yield* gatewayComplete(
+                                llm,
+                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
+                                {
+                                    messages: params.messages,
+                                    systemPrompt: params.systemPrompt,
+                                    temperature: 0.7,
+                                },
+                            ).pipe(Effect.mapError((e) => Error(String(e))));
+                            return r;
+                        }),
+                    );
+                    return {
+                        message: response.content,
+                        tokens: response.usage?.totalTokens,
+                        cost: response.usage?.estimatedCost,
+                    };
+                },
+                publishTurn: async (turn) => {
+                    await self.runtime.runPromise(
+                        EventBus.pipe(
+                            Effect.flatMap((bus) => bus.publish(turn)),
+                            Effect.catchAll((err) =>
+                                emitErrorSwallowed({
+                                    site: "runtime/src/reactive-agent.ts:session",
+                                    tag: errorTag(err),
+                                }),
+                            ),
+                        ),
+                    );
+                },
+                saveHistory: saveHistory
+                    ? async (sid, messages) => {
+                          await saveHistory(sid, messages);
+                      }
+                    : undefined,
+                loadHistory: loadHistory,
+                systemPrompt: self._config?.systemPrompt
+                    ? () => self._config!.systemPrompt!
+                    : undefined,
+                contextSummary: () =>
+                    buildChatSystemContext(
+                        self._config?.taskContext,
+                        self._lastDebrief,
+                        self._lastRunObservations,
+                    ),
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+            },
+            {
+                sessionId,
+                onOverflow: options?.onOverflow,
+            },
+        );
+
+        return new AgentSession(engine);
     }
 
     /**
