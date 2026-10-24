@@ -893,7 +893,8 @@ interface ChatReply {
 
 interface ChatOptions {
     useTools?: boolean // Override auto-routing
-    maxIterations?: number // Cap for tool-capable path (default: 5)
+    maxIterations?: number // Cap for tool-capable path (default: 5) — honored by the engine
+    extraContext?: string // Optional context prepended (direct-LLM path only)
 }
 ```
 
@@ -926,6 +927,11 @@ await restoredSession.chat('Continue where we left off')
 
 const history = session.history() // ChatMessage[]
 await session.end() // Flushes history to storage (if persisted) and clears the in-memory copy — the DB record is kept
+
+// Stream a conversational turn (engine-backed sessions); the turn is recorded + persisted after the terminal event
+for await (const ev of session.runStream('Summarize so far', { density: 'full' })) {
+  if (ev._tag === 'TextDelta') process.stdout.write(ev.text)
+}
 ```
 
 <!-- docs-skip-typecheck -->
@@ -934,10 +940,13 @@ await session.end() // Flushes history to storage (if persisted) and clears the 
 {
     persist?: boolean // Persist history to SQLite via SessionStoreService (requires .withMemory())
     id?: string // Session ID for persistence (auto-generated if omitted)
+    maxAgeDays?: number // Retention window in days for persisted sessions (host-defined)
+    onOverflow?: (dropped: ChatMessage[]) => Promise<string> // Summarize dropped turns on window overflow
 }
 
 interface AgentSession {
-    chat(message: string): Promise<ChatReply>
+    chat(message: string, options?: ChatOptions): Promise<ChatReply>
+    runStream(message: string, options?: { density?: "tokens" | "full"; signal?: AbortSignal }): RunHandle
     history(): ChatMessage[]
     end(): Promise<void>
 }

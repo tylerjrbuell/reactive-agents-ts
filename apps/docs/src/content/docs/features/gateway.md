@@ -485,6 +485,8 @@ accessControl: {
 5. After the agent run, both the user message and the assistant reply are appended to the session and persisted to SQLite
 6. `GatewaySummary.chatTurns` is incremented
 
+**Session IDs:** each sender's conversation is keyed under a canonical id of the form `sess_gateway_<agentId>_<sender>`. Sessions persisted under the legacy `gateway-chat-<agentId>-<sender>` keys remain loadable via fallback, and new saves switch to the canonical id without losing the loaded turns.
+
 **Task mode** skips all of the above and sends a direct one-shot instruction per message:
 
 <!-- docs-skip-typecheck -->

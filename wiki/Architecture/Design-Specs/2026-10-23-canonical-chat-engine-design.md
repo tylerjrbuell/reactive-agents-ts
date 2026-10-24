@@ -1,6 +1,6 @@
 ---
 type: design-spec
-status: active
+status: implemented
 created: 2026-10-23
 authored-by: OpenCode
 related: "[[Implementation-Plans/2026-10-23-canonical-chat-engine|implementation plan]]"
@@ -9,8 +9,7 @@ tags: [chat, runtime, engine, streaming, jem, design-spec]
 
 # Canonical Chat Engine — Harmonizing All Chat Surfaces
 
-**Status:** design ratified in conversation 2026-10-23 (Tyler + OpenCode). Implementation
-plan written: `wiki/Planning/Implementation-Plans/2026-10-23-canonical-chat-engine.md`.
+**Status:** implemented (commits e3b866d5e..38109bd75, docs/changeset/index truth in this Task 9 commit). Implementation plan: `wiki/Planning/Implementation-Plans/2026-10-23-canonical-chat-engine.md` (status: completed).
 **Scope:** `packages/runtime/src/chat/**`, `gateway-context-formatting.ts` (chat-facade
 portions), reactive-agent chat/session methods. **Consumer this unlocks:** `apps/jem`.
 
