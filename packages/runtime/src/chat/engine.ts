@@ -8,6 +8,10 @@ import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { StreamDensity } from "../stream-types.js";
 import type { HistoryOverflowHandler } from "../gateway-context-formatting.js";
+import {
+  applyHistoryWindow,
+  applyHistoryWindowWithOverflow,
+} from "../gateway-context-formatting.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -217,6 +221,30 @@ function swallowError(err: unknown, site: string): void {
   void Effect.runPromise(emitErrorSwallowed({ site, tag: errorTag(err) })).catch(() => {});
 }
 
+/**
+ * Generate a canonical session id: `sess_<scope>_<parts joined by _>-<unique>`.
+ *
+ * Scopes (spec §1 fix 4): `"agent"` for `agent.chat`'s agent-scoped engine,
+ * `"session"` for `agent.session()` ids, `"gateway"` for per-sender gateway
+ * engines. The unique suffix is a compressed `crypto.randomUUID()` — dashes
+ * stripped, first 12 hex characters — attached after a `-` separator (the pinned
+ * `sess_agent_agent-1-…` shape) so ids are collision-safe without extra state.
+ * Host facades generate ids through this helper instead of pinning legacy literal
+ * formats (`gateway-chat-<agentId>-<sender>`, `chat_<ts>`): those keys remain
+ * READABLE through load fallbacks (Tasks 6/7) but are never written.
+ *
+ * @param scope canonical id scope.
+ * @param parts scope-qualifying segments, joined with `_` (e.g. agentId,
+ *   gateway agentId + sender). Empty/blank parts are skipped; a session-scope id
+ *   with no parts is `sess_session_<unique>`.
+ * @returns canonical session id, `sess_<scope>_<parts>-<unique>`.
+ */
+export function nextSessionId(scope: "agent" | "session" | "gateway", parts: readonly string[]): string {
+  const unique = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  const joined = parts.filter((part) => part.length > 0).join("_");
+  return joined.length > 0 ? `sess_${scope}_${joined}-${unique}` : `sess_${scope}_${unique}`;
+}
+
 // ─── ChatEngine ───────────────────────────────────────────────────────────────
 
 /**
@@ -240,6 +268,12 @@ export class ChatEngine {
   #maxDirectTokens: number;
   /** In-memory session state, oldest first, symmetric user + assistant turns. */
   #history: ChatMessage[] = [];
+  /**
+   * Load-once latch (Task 3): set after the first turn resolves `loadHistory` —
+   * including when the loader resolves empty — so the loader is ever called
+   * exactly once per engine lifetime.
+   */
+  #loaded = false;
 
   /**
    * @param deps host-injected capabilities.
@@ -291,8 +325,16 @@ export class ChatEngine {
    * full post-turn state via `saveHistory` when wired. Publish and persist are
    * swallow-sites (telemetry-quality): a failure there never fails the turn and
    * surfaces as an `ErrorSwallowed` event tagged `chat/engine.ts`.
+   *
+   * History resolution (Task 3) precedes routing: the first turn with empty
+   * in-memory state loads the persisted session exactly once via `loadHistory`
+   * (even when the loader resolves empty) and seeds the engine's state. What is
+   * HANDED to the path calls is the windowed copy ({@link #historyForPath});
+   * recording, publishing payloads, and persistence always run on the FULL
+   * unwindowed state.
    */
   async turn(message: string, options?: TurnOptions): Promise<ChatReply> {
+    await this.#resolveLoadedHistory();
     if (options?.useTools === true) {
       if (!this.#deps.runTask) {
         throw new ChatEngineCapabilityError({
@@ -303,7 +345,8 @@ export class ChatEngine {
       }
       const contextSummary = this.#deps.contextSummary?.(message);
       const input = [contextSummary ?? "", message].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR);
-      const result = await this.#deps.runTask(input, { history: [...this.#history] });
+      const history = await this.#historyForPath();
+      const result = await this.#deps.runTask(input, { history });
       const reply = this.#assembleToolReply(result, options);
       const userText = options.recordUserText ?? message;
       this.#recordBothTurns(userText, reply.message);
@@ -312,8 +355,9 @@ export class ChatEngine {
       return reply;
     }
 
+    const history = await this.#historyForPath();
     const messages = [
-      ...this.#history.map((m) => ({ role: m.role, content: m.content })),
+      ...history.map((m) => ({ role: m.role, content: m.content })),
       { role: "user" as const, content: message },
     ];
     const systemPrompt = this.#directSystemPrompt(message, options?.extraContext);
@@ -329,6 +373,49 @@ export class ChatEngine {
     await this.#publishTurns("chat", "direct-llm", userText, reply.message, reply.tokens);
     await this.#persistHistory();
     return reply;
+  }
+
+  /**
+   * Load-once seeded session state. The FIRST turn that runs with empty in-memory
+   * history calls `loadHistory(sessionId)` exactly once — including when the loader
+   * resolves empty (the latch latches on resolution, not on content) — and the
+   * result seeds the engine's full state. Later turns never reload: after the first
+   * resolution the engine's in-memory state is authoritative.
+   *
+   * Load failures are NOT a swallow-site (only persist/publish are): a rejecting
+   * loader propagates to the turn caller.
+   */
+  async #resolveLoadedHistory(): Promise<void> {
+    const load = this.#deps.loadHistory;
+    if (!load || this.#loaded || this.#history.length > 0) return;
+    this.#loaded = true;
+    this.#history = [...(await load(this.#sessionId))];
+  }
+
+  /**
+   * Resolve the windowed history copy handed to the path calls (`complete` /
+   * `runTask`). Composes the existing `gateway-context-formatting` helpers — the
+   * engine never re-derives the trim math on its own.
+   *
+   * Plain path: {@link applyHistoryWindow} drop-oldest result under the engine's
+   * caps (default 40 turns / 8k chars). Splice path: when `onOverflow` is wired AND
+   * turns would drop, {@link applyHistoryWindowWithOverflow} folds the dropped
+   * prefix into ONE synthetic assistant "Summary of earlier conversation:" turn
+   * leading the copy. The handler owns summary content; a rejecting or throwing
+   * handler propagates to the turn caller (Review Focus #3 — swallowing would
+   * silently discard conversation context).
+   *
+   * Engine state is NEVER modified here: recording, publish payloads, and
+   * persistence always run on the FULL unwindowed state. Note: the splice helper
+   * re-trims at the module-default 40/8k internally, which is byte-identical under
+   * the engine's default caps; a custom-caps + `onOverflow` host gets the default
+   * trim over that splice copy (documented divergence; no current host pins both).
+   */
+  async #historyForPath(): Promise<ChatMessage[]> {
+    const windowed = applyHistoryWindow(this.#history, this.#maxWindowTurns, this.#maxWindowChars);
+    const overflow = this.#onOverflow;
+    if (!overflow || windowed.length >= this.#history.length) return windowed;
+    return applyHistoryWindowWithOverflow(this.#history, overflow);
   }
 
   /**
