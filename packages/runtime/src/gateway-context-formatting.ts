@@ -1,4 +1,7 @@
 import type { ChatMessage } from "./chat.js";
+import type { AgentResult } from "./builder/types.js";
+import type { ChatTurnEvent } from "@reactive-agents/core";
+import type { ChatEngine } from "./chat/engine.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -175,16 +178,85 @@ export interface GatewayChatManagerDeps {
   readonly findById: (sessionId: string) => Promise<{ messages: ChatMessage[] } | null>;
   readonly getRecentEpisodes: (agentId: string, limit: number) => Promise<readonly { eventType?: string; content?: string }[]>;
   readonly cleanup: (ttlDays: number) => Promise<number>;
+  /** Optional ChatTurn publication port — when wired, the delegated engine publishes canonical-id ChatTurn pairs. */
+  readonly publishTurn?: (turn: ChatTurnEvent) => Promise<void>;
 }
 
 export class GatewayChatManager {
   private readonly histories = new Map<string, ChatMessage[]>();
+  private readonly engines = new Map<string, ChatEngine>();
+  private readonly currentEvents = new Map<string, unknown>();
+  private readonly currentPlatforms = new Map<string, string>();
   private lastPruneAt = 0;
 
   constructor(private readonly deps: GatewayChatManagerDeps) {}
 
   private sessionKey(senderId: string): string {
     return `gateway-chat-${this.deps.agentId}-${senderId}`;
+  }
+
+  private async ensureEngine(sender: string): Promise<ChatEngine> {
+    const existing = this.engines.get(sender);
+    if (existing) return existing;
+    const { ChatEngine, nextSessionId } = await import("./chat/engine.js");
+    const sessionId = nextSessionId("gateway", [this.deps.agentId, sender]);
+    const loadHistory = async (_sid: string): Promise<readonly ChatMessage[]> => {
+      const canonical = await this.deps.findById(sessionId);
+      if (canonical) return canonical.messages;
+      const legacyKey = `gateway-chat-${this.deps.agentId}-${sender}`;
+      const legacy = await this.deps.findById(legacyKey);
+      return legacy?.messages ?? [];
+    };
+    const runTask = async (
+      input: string,
+      _opts: { history: readonly ChatMessage[]; maxIterations?: number },
+    ): Promise<AgentResult> => {
+      const gwEvent = this.currentEvents.get(sender);
+      const platform = this.currentPlatforms.get(sender) ?? "";
+      let runOutput: string;
+      try {
+        const output = await this.deps.executeEvent(gwEvent, "channel", input);
+        runOutput = output ?? `(reply sent via ${platform})`;
+      } catch (err) {
+        runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
+      }
+      return {
+        output: runOutput,
+        success: true,
+        taskId: "gateway",
+        agentId: this.deps.agentId,
+        metadata: {
+          duration: 0,
+          cost: 0,
+          tokensUsed: 0,
+          stepsCount: 0,
+          toolCalls: [],
+          reasoningSteps: [],
+          scratchpad: {},
+        },
+      };
+    };
+    const saveHistory = async (sid: string, messages: readonly ChatMessage[]): Promise<void> => {
+      await this.deps.saveSession({
+        sessionId: sid,
+        agentId: this.deps.agentId,
+        messages: [...messages],
+      });
+    };
+    const capabilities = {
+      runTask,
+      complete: async () => ({ message: "" }),
+      publishTurn: this.deps.publishTurn
+        ? async (turn: ChatTurnEvent) => {
+            await this.deps.publishTurn!(turn);
+          }
+        : undefined,
+      saveHistory,
+      loadHistory,
+    };
+    const engine = new ChatEngine(capabilities, { sessionId });
+    this.engines.set(sender, engine);
+    return engine;
   }
 
   async getOrLoadHistory(senderId: string): Promise<ChatMessage[]> {
@@ -205,6 +277,7 @@ export class GatewayChatManager {
     gwEvent: unknown,
   ): Promise<void> {
     const history = await this.getOrLoadHistory(sender);
+    const engine = await this.ensureEngine(sender);
 
     const windowed = applyHistoryWindow(history);
     const episodes = await this.deps.getRecentEpisodes(this.deps.agentId, 8);
@@ -221,34 +294,26 @@ export class GatewayChatManager {
       episodicBlock,
     });
 
-    let runOutput: string;
-    try {
-      const output = await this.deps.executeEvent(gwEvent, "channel", instruction);
-      runOutput = output ?? `(reply sent via ${platform})`;
-    } catch (err) {
-      runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
-    }
+    this.currentEvents.set(sender, gwEvent);
+    this.currentPlatforms.set(sender, platform);
+
+    const reply = await engine.turn(instruction, {
+      useTools: true,
+      recordUserText: message,
+    });
+
+    this.histories.set(sender, engine.history());
 
     const now = new Date();
-    history.push({ role: "user", content: message, timestamp: now.getTime() });
-    history.push({ role: "assistant", content: runOutput, timestamp: now.getTime() });
-
-    await Promise.all([
-      this.deps.saveSession({
-        sessionId: this.sessionKey(sender),
-        agentId: this.deps.agentId,
-        messages: history,
-      }),
-      this.deps.logEpisode({
-        id: `chat-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
-        agentId: this.deps.agentId,
-        date: now.toISOString().slice(0, 10),
-        content: `${sender} (${platform}): ${message.slice(0, 200)} → ${runOutput.slice(0, 300)}`,
-        eventType: "chat-turn",
-        createdAt: now,
-        metadata: { sender, platform },
-      }),
-    ]);
+    await this.deps.logEpisode({
+      id: `chat-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+      agentId: this.deps.agentId,
+      date: now.toISOString().slice(0, 10),
+      content: `${sender} (${platform}): ${message.slice(0, 200)} → ${String(reply.message).slice(0, 300)}`,
+      eventType: "chat-turn",
+      createdAt: now,
+      metadata: { sender, platform },
+    });
   }
 
   async pruneStaleSessions(): Promise<void> {
@@ -260,5 +325,8 @@ export class GatewayChatManager {
 
   async dispose(): Promise<void> {
     this.histories.clear();
+    this.engines.clear();
+    this.currentEvents.clear();
+    this.currentPlatforms.clear();
   }
 }
