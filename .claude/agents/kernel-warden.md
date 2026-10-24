@@ -67,7 +67,7 @@ packages/reasoning/src/kernel/
     attend/       ← context-utils.ts, tool-formatting.ts
     comprehend/   ← task-intent.ts
     decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18; #220: shell ~850 LOC, LOC-PINNED, + 10 decide/* modules behind a RE-EXPORT SHIM — all 31 names still resolve FROM arbitrator.ts; that shim is the public surface)
-    reason/       ← think.ts ORCHESTRATOR (~676 LOC, LOC-PINNED, #219) + stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response, consume-think-stream, prepare-think-turn, build-think-request, context-pressure, final-answer-heuristics, tool-index-disclosure, stream-parser
+    reason/       ← think.ts ORCHESTRATOR (676 LOC post-#219; below the ledger bar — do NOT let it regrow past 1,000: the new-giant rule is the lock there). Stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response,
     reflect/      ← loop-detector.ts, reactive-observer.ts, strategy-evaluator.ts
     sense/        ← step-utils.ts
     verify/       ← evidence-grounding.ts, quality-utils.ts, requirement-state.ts, verifier.ts
@@ -131,8 +131,10 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    metrics:sync-readme` with README.md staged in the same commit.
 ### Placement map (kernel)
 - Pinned shells: `loop/runner.ts`, `loop/iterate-pass.ts`,
-  `capabilities/reason/think.ts`, `capabilities/reason/dispatch-think-response.ts`,
-  `capabilities/decide/arbitrator.ts`. Live ceilings: `scripts/check-file-size.sh`.
+  `capabilities/reason/dispatch-think-response.ts`, `capabilities/decide/arbitrator.ts`,
+  `state/kernel-state.ts`, `capabilities/act/act.ts`. Live ceilings:
+  `scripts/check-file-size.sh` (run it; the primer does not carry numbers). think.ts is
+  under the ledger bar — guarded by the 1,000-LOC new-giant rule + its stage seams.
 - CONTENT-ANCHORED (rule 4 is sharp here): seven check scripts grep-match
   regions of runner/iterate-pass/arbitrator (grounding-redirect budget writes,
   `deriveConditions(`/`verifyDelivery(` call shapes, exit-success literals,

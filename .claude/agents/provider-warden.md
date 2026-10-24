@@ -95,10 +95,12 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    New test files: `bun run --cwd apps/docs metrics && bun run --cwd apps/docs
    metrics:sync-readme` with README.md staged in the same commit.
 ### Placement map (llm-provider)
-- Adapters are already modular (per-provider file + hooks) — a new provider is
-  a new module + registry entry, never a branch in an existing adapter. The
-  calibrations/ and llm-config surfaces carry error-pool sites: rule 2's
-  comment-literal warning applies when documenting retry/streaming quirks.
+- Pinned shells: `src/providers/local.ts`, `src/types.ts` (live ceilings:
+  `scripts/check-file-size.sh` — run it, never hardcode numbers). Adapters are
+  modular (per-provider file + hooks): a new provider is a new module +
+  registry entry, never a branch in an existing adapter. The calibrations/ and
+  llm-config surfaces carry error-pool sites: rule 2's comment-literal warning
+  applies when documenting retry/streaming quirks.
 - Provider rejection VALUES are public (agents' users branch on them): D3
   error-class conversion in this domain is Phase-2 semver-gated — tag NEW
   internal-only sites only.

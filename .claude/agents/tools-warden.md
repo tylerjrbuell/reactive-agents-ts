@@ -93,8 +93,9 @@ RUN them before returning and put their output verbatim in evidence-anchors.
    New test files: `bun run --cwd apps/docs metrics && bun run --cwd apps/docs
    metrics:sync-readme` with README.md staged in the same commit.
 ### Placement map (tools)
-- Largest file in the domain approaches the new-giant bar — any tool/MCP/sandbox
-  file that would cross 1,000 LOC fails CI: split by capability BEFORE writing.
+- Pinned shells: `src/mcp/mcp-client.ts`, `src/skills/shell-execution.ts` (live
+  ceilings: `scripts/check-file-size.sh`). Any other domain file crossing 1,000 LOC
+  fails CI immediately — split by capability BEFORE writing.
 - `mcp/` is the modular pattern to follow (client, auth, transports as separate
   modules); new built-in tools are one module each under `skills/`/built-ins,
   registered via `defineTool()` — never inline into an aggregator.
