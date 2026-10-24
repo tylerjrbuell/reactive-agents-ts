@@ -6,7 +6,7 @@ import type { AgentResult } from "../builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
-import type { StreamDensity } from "../stream-types.js";
+import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { HistoryOverflowHandler } from "../gateway-context-formatting.js";
 import {
   applyHistoryWindow,
@@ -29,6 +29,12 @@ const DEFAULT_MAX_DIRECT_TOKENS = 4096;
 
 /** Separator used when composing direct-path system-prompt fragments (parity with `directChat`). */
 const DIRECT_PROMPT_SEPARATOR = "\n\n---\n\n";
+
+/** The terminal success event of a stream (`StreamCompleted` variant of {@link AgentStreamEvent}). */
+type StreamCompletedEvent = Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>;
+
+/** The terminal failure event of a stream (`StreamError` variant of {@link AgentStreamEvent}). */
+type StreamErrorEvent = Extract<AgentStreamEvent, { _tag: "StreamError" }>;
 
 /**
  * Separator used when composing the tool-path runTask input from the host's
@@ -373,6 +379,111 @@ export class ChatEngine {
     await this.#publishTurns("chat", "direct-llm", userText, reply.message, reply.tokens);
     await this.#persistHistory();
     return reply;
+  }
+
+  /**
+   * Streaming conversational turn — the single entry point for streaming chat
+   * surfaces (`agent.runStream`, `session.runStream`, gateway streaming chat).
+   *
+   * Requires the `runStreamTask` capability: when absent the call throws a typed
+   * {@link ChatEngineCapabilityError} naming the missing capability, synchronously,
+   * before any stream is created. Streaming IS the streaming request (`useTools`
+   * and density options ride `TurnOptions`); there is no direct-path fallback.
+   *
+   * History resolution mirrors {@link turn()}: load-once seeding via
+   * {@link #resolveLoadedHistory}, then the windowed copy via {@link #historyForPath}
+   * is handed to `runStreamTask`; the engine's FULL unwindowed state owns recording,
+   * publishing payloads, and persistence.
+   *
+   * Returns a wrapper {@link RunHandle} whose generator tees the inner handle's
+   * {@link AgentStreamEvent}s unaltered while capturing the terminal event: on
+   * `StreamCompleted` the symmetric user (`recordUserText ?? message`) + assistant
+   * turns are recorded, the `ChatTurn` pair is published (`routedVia: "react-loop"`,
+   * same publish + observability mechanics as the tool path), and the FULL state is
+   * persisted — publish and persist are swallow-sites exactly as in `turn()`. On
+   * `StreamError` (or a cancelled/aborted stream that never reaches `StreamCompleted`)
+   * NOTHING is recorded, published, or persisted — a failed stream leaves no trace
+   * in session history.
+   *
+   * The `RunHandle` verbs (`pause/resume/stop/terminate/status/inspect`) delegate to
+   * the inner handle returned by `runStreamTask`. They are lazily bound: the inner
+   * handle is created when the stream is first iterated (the engine resolves
+   * `loadHistory`/windowing before calling `runStreamTask`), so verbs called before
+   * the first iteration no-op (`status()` reports `"running"`, `inspect()` reports
+   * `undefined`).
+   *
+   * @param message the incoming user message.
+   * @param options per-turn options; `recordUserText`, `density` and `signal` are
+   *   forwarded as in `turn()` / to `runStreamTask`.
+   * @returns a wrapper RunHandle streaming `AgentStreamEvent`s unaltered, with the
+   *   recording/persistence side effects captured at the terminal event.
+   * @throws ChatEngineCapabilityError when `runStreamTask` is not wired.
+   */
+  streamTurn(message: string, options?: TurnOptions): RunHandle {
+    /**
+     * `runStreamTask` re-bound to the narrowed (required) capability shape after
+     * the guard: TypeScript does not carry union narrowing of an optional
+     * capability into the nested generator closure below, so the closure reads
+     * this explicitly-typed binding instead.
+     */
+    const runStreamTask: NonNullable<ChatEngineCapabilities["runStreamTask"]> | undefined =
+      this.#deps.runStreamTask;
+    if (!runStreamTask) {
+      throw new ChatEngineCapabilityError({
+        message:
+          "ChatEngine.streamTurn() requested the streaming path but no `runStreamTask` capability is wired on this engine — wire `runStreamTask` (e.g. backed by `ReactiveAgent.runStream()`) to enable streaming chat.",
+        capability: "runStreamTask",
+      });
+    }
+    const streamTask = runStreamTask;
+    const engine = this;
+    const userText = options?.recordUserText ?? message;
+    /**
+     * Lazily-bound inner handle. Created when the wrapper generator starts
+     * iterating (history resolution is async, so `runStreamTask` cannot be
+     * called synchronously); verbs consult it through this holder.
+     */
+    const inner: { handle?: RunHandle } = {};
+    async function* teeTurn(): AsyncGenerator<AgentStreamEvent> {
+      await engine.#resolveLoadedHistory();
+      const history = await engine.#historyForPath();
+      const handle = streamTask(message, {
+        history,
+        density: options?.density,
+        signal: options?.signal,
+      });
+      inner.handle = handle;
+      let terminal: StreamCompletedEvent | StreamErrorEvent | undefined;
+      for await (const event of handle) {
+        if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
+          terminal = event;
+        }
+        yield event;
+      }
+      if (terminal === undefined || terminal._tag !== "StreamCompleted") {
+        // StreamError / cancelled stream: record nothing for the turn — a failed
+        // stream must not seed session history with half a turn.
+        return;
+      }
+      const completed: StreamCompletedEvent = terminal;
+      engine.#recordBothTurns(userText, completed.output);
+      await engine.#publishTurns(
+        completed.taskId ?? "stream",
+        "react-loop",
+        userText,
+        completed.output,
+        completed.metadata?.tokensUsed,
+      );
+      await engine.#persistHistory();
+    }
+    return Object.assign(teeTurn(), {
+      pause: () => inner.handle?.pause(),
+      resume: () => inner.handle?.resume(),
+      stop: (opts?: { reason?: string }) => inner.handle?.stop(opts),
+      terminate: (opts?: { reason?: string }) => inner.handle?.terminate(opts),
+      status: () => inner.handle?.status() ?? ("running" as const),
+      inspect: () => inner.handle?.inspect(),
+    });
   }
 
   /**
