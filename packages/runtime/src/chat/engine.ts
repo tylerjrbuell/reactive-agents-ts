@@ -506,8 +506,9 @@ export class ChatEngine {
   async #resolveLoadedHistory(): Promise<void> {
     const load = this.#deps.loadHistory;
     if (!load || this.#loaded || this.#history.length > 0) return;
+    const loaded = await load(this.#sessionId);
     this.#loaded = true;
-    this.#history = [...(await load(this.#sessionId))];
+    this.#history = [...loaded];
   }
 
   /**

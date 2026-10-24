@@ -194,4 +194,33 @@ describe("ChatEngine history resolution (engine plan Task 3)", () => {
     // The path call never ran — the summarizer failure surfaced first.
     expect(runTaskCalled).toBe(false);
   });
+
+  it("load-latch: loader rejection leaves latch unset so a retry reloads (#3)", async () => {
+    let loads = 0;
+    const engine = new ChatEngine(
+      {
+        complete: async ({ messages }) => ({
+          message: `echo:${messages[messages.length - 1]!.content}`,
+        }),
+        loadHistory: async () => {
+          loads += 1;
+          if (loads === 1) throw new Error("load failed");
+          return persistedTurns(2);
+        },
+      },
+      { sessionId: "sess_agent_latch" },
+    );
+    // First turn: loader rejects, propagates.
+    let caught: unknown;
+    try {
+      await engine.turn("one");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught instanceof Error && (caught as Error).message).toBe("load failed");
+    // Second turn: latch was not set, so loader runs again and succeeds.
+    const reply = await engine.turn("two");
+    expect(reply.message).toBe("echo:two");
+    expect(loads).toBe(2);
+  });
 });

@@ -1975,6 +1975,9 @@ export class ReactiveAgent<TOut = unknown> {
                         EventBus.pipe(Effect.flatMap((bus) => bus.publish(turn))),
                     );
                 },
+                systemPrompt: self._config?.systemPrompt
+                    ? () => self._config!.systemPrompt!
+                    : undefined,
                 contextSummary: () => contextSummary,
                 scratchpadEntries: () => Object.fromEntries(self._scratchpad),
                 loadHistory: async () => _history ?? [],

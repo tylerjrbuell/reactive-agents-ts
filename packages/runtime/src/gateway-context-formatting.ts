@@ -198,8 +198,8 @@ export class GatewayChatManager {
   private async ensureEngine(sender: string): Promise<ChatEngine> {
     const existing = this.engines.get(sender);
     if (existing) return existing;
-    const { ChatEngine, nextSessionId } = await import("./chat/engine.js");
-    const sessionId = nextSessionId("gateway", [this.deps.agentId, sender]);
+    const { ChatEngine } = await import("./chat/engine.js");
+    const sessionId = `sess_gateway_${this.deps.agentId}_${sender}`;
     const loadHistory = async (_sid: string): Promise<readonly ChatMessage[]> => {
       const canonical = await this.deps.findById(sessionId);
       if (canonical) return canonical.messages;
@@ -263,7 +263,17 @@ export class GatewayChatManager {
     if (this.histories.has(senderId)) {
       return this.histories.get(senderId)!;
     }
-    const record = await this.deps.findById(this.sessionKey(senderId));
+    const engine = this.engines.get(senderId);
+    if (engine) {
+      const history = engine.history();
+      this.histories.set(senderId, history);
+      return history;
+    }
+    const canonicalKey = `sess_gateway_${this.deps.agentId}_${senderId}`;
+    let record = await this.deps.findById(canonicalKey);
+    if (!record) {
+      record = await this.deps.findById(this.sessionKey(senderId));
+    }
     const history = record?.messages ?? [];
     this.histories.set(senderId, history);
     return history;
