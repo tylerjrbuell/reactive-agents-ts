@@ -44,7 +44,7 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # discriminator via its `_tag`, "Error" -> "TraceStorageError" in ErrorSwallowed
 # telemetry — no consumer asserted the old string). Classification + tranche map:
 # wiki/Research/Audit-Reports-2026-10-22/d3-error-site-classification.md.
-STRING_ERRORS_BASELINE=287
+STRING_ERRORS_BASELINE=286
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

@@ -82,6 +82,7 @@ export interface AgentInstantiationDeps {
   readonly capabilities: {
     minIterations?: number;
     taskContext?: Record<string, string>;
+    systemPrompt?: string;
     verificationStep?: { mode: "reflect"; prompt?: string };
     outputValidator?: (output: string) => { valid: boolean; feedback?: string };
     outputValidatorOptions?: { maxRetries?: number };

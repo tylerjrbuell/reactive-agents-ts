@@ -301,6 +301,7 @@ console.log(result.metadata); // { stepsCount, tokensUsed, ... }
 | `agent.runStream(input, { density: "full" })` | Stream with per-call density override |
 | `agent.runStream(input, { signal })` | Stream with AbortSignal cancellation |
 | `agent.runStream(input, { density: "full", signal })` | Density override + cancellation combined |
+| `session.runStream(message, { density, signal })` | Stream a conversational session turn; records + persists the turn (engine-backed sessions) |
 
 ### EventBus Events
 
@@ -318,6 +319,26 @@ When streaming is active, two events are published to the EventBus:
 - **Call `dispose()`** — After you're done streaming, call `agent.dispose()` to release the ManagedRuntime and any MCP subprocesses. Or use `await using` for automatic cleanup.
 - **Streams are single-use** — Each `runStream()` call creates a new stream. You cannot replay or fork a stream — call `runStream()` again for a new execution.
 - **SSE adapter runs in Effect context** — `AgentStream.toSSE()` calls `Effect.runFork` internally. If you need the stream within an existing Effect program, use `executeStream()` directly on the engine instead of the `agent.runStream()` facade.
+
+
+## Session Streaming
+
+Multi-turn sessions expose the same streaming primitive via `session.runStream()`:
+
+```typescript
+const session = agent.session();
+
+for await (const event of session.runStream("Summarize the findings so far", { density: "full" })) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "StreamCompleted") console.log("\nDone!");
+}
+
+// The turn is recorded into the session history and persisted when `persist: true`
+console.log(session.history().map((m) => m.role)); // ["user", "assistant", ...]
+```
+
+`session.runStream(message, options?)` accepts `{ density?, signal? }` and returns a `RunHandle` (an async generator of `AgentStreamEvent` plus `pause`/`resume`/`stop`/`terminate`/`status`/`inspect` verbs). The turn is recorded into the session's history — and persisted to SQLite when the session was created with `persist: true` — after the terminal event, so follow-up `session.chat()` calls see the streamed reply.
+
 
 ## What's Next
 

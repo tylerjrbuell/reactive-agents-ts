@@ -304,7 +304,9 @@ export const runReasoningThink = (
       availableToolSchemas,
       allToolSchemas,
       strategy: effectiveStrategy,
-      contextProfile: config.contextProfile,
+      contextProfile: c.maxIterations !== undefined
+        ? { ...(config.contextProfile ?? {}), maxIterations: c.maxIterations }
+        : config.contextProfile,
       providerName: String(config.provider ?? ""),
       systemPrompt: config.systemPrompt,
       taskId: c.taskId,

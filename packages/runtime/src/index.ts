@@ -182,7 +182,7 @@ export type { AgentFn } from "./compose.js";
 // ─── Chat / Session ───
 export {
   AgentSession,
-  directChat,
+  ChatEngine,
   requiresTools,
   buildContextSummary,
   formatTaskContextForChat,

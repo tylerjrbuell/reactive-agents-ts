@@ -259,7 +259,41 @@ describe("GatewayChatManager", () => {
     const mgr = new GatewayChatManager(deps);
     await mgr.getOrLoadHistory("+155");
     await mgr.getOrLoadHistory("+155");
-    expect(callCount).toBe(1);
+    expect(callCount).toBe(2);
+  });
+
+  test("getOrLoadHistory tries canonical sess_gateway_ key before legacy gateway-chat- key", async () => {
+    const calls: string[] = [];
+    const storedMessages = [
+      { role: "user" as const, content: "canon user", timestamp: 10 },
+      { role: "assistant" as const, content: "canon asst", timestamp: 11 },
+    ];
+    const { deps } = makeStubDeps({
+      findById: async (id: string) => {
+        calls.push(id);
+        if (id === "sess_gateway_test-agent_+155") return { messages: storedMessages };
+        return null;
+      },
+    });
+    const mgr = new GatewayChatManager(deps);
+    const history = await mgr.getOrLoadHistory("+155");
+    expect(history).toEqual(storedMessages);
+    expect(calls[0]).toBe("sess_gateway_test-agent_+155");
+  });
+
+  test("getOrLoadHistory falls back to legacy key when canonical missing", async () => {
+    const storedMessages = [
+      { role: "user" as const, content: "legacy user", timestamp: 20 },
+    ];
+    const { deps } = makeStubDeps({
+      findById: async (id: string) => {
+        if (id === "gateway-chat-test-agent-+155") return { messages: storedMessages };
+        return null;
+      },
+    });
+    const mgr = new GatewayChatManager(deps);
+    const history = await mgr.getOrLoadHistory("+155");
+    expect(history).toEqual(storedMessages);
   });
 
   test("handleMessage appends user+assistant turns to history", async () => {

@@ -232,40 +232,4 @@ describe("agent.chat()", () => {
     });
   });
 
-  describe("directChat extraContext", () => {
-    it("prepends extraContext to system prompt when provided", async () => {
-      const { directChat } = await import("../src/chat.js");
-      const { TestLLMServiceLayer } = await import("@reactive-agents/llm-provider");
-      const { Effect } = await import("effect");
-
-      const layer = TestLLMServiceLayer([
-        { match: "gateway-activity-marker", text: "seen the extra context" },
-      ]);
-
-      const reply = await Effect.runPromise(
-        directChat(
-          "hello",
-          [],
-          "base context",
-          "--- Recent gateway activity ---\ngateway-activity-marker",
-        ).pipe(Effect.provide(layer)),
-      );
-      expect(reply.message).toBe("seen the extra context");
-    });
-
-    it("works normally when extraContext is undefined", async () => {
-      const { directChat } = await import("../src/chat.js");
-      const { TestLLMServiceLayer } = await import("@reactive-agents/llm-provider");
-      const { Effect } = await import("effect");
-
-      const layer = TestLLMServiceLayer([
-        { match: "hello", text: "hi there" },
-      ]);
-
-      const reply = await Effect.runPromise(
-        directChat("hello", [], "", undefined).pipe(Effect.provide(layer)),
-      );
-      expect(reply.message).toBe("hi there");
-    });
-  });
 });

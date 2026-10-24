@@ -94,18 +94,19 @@ export { projectAbstention }
 import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
-    directChat,
     requiresTools,
     buildChatSystemContext,
-    publishChatTurnEvents,
     type ChatMessage,
     type ChatOptions,
     type ChatReply,
     type SessionOptions,
     type HistoryOverflowHandler,
 } from './chat.js'
+import { ChatEngine, nextSessionId } from './chat/engine.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
+import { LLMService } from '@reactive-agents/llm-provider'
+import { gatewayComplete } from '@reactive-agents/reasoning'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
     generateAgentCard,
@@ -222,6 +223,8 @@ export class ReactiveAgent<TOut = unknown> {
             modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' }
             /** Per-agent override for chat()'s tool-need auto-detection, from `.withToolIntent()`. */
             toolIntentClassifier?: (message: string) => boolean
+            /** Composed persona/system prompt from the builder (reaches the direct path). */
+            systemPrompt?: string
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
         private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
@@ -382,8 +385,8 @@ export class ReactiveAgent<TOut = unknown> {
      * `buildAutoContext` can select/compress observation steps itself.
      */
     private _lastReasoningSteps: ReasoningStep[] = []
-    /** @internal Conversation history for the agent-level chat context. */
-    private _chatHistory: ChatMessage[] = []
+    /** @internal Lazily-constructed agent-scoped chat engine (canonical chat engine, Task 5). */
+    private _defaultChatEngine?: ChatEngine
 
     /**
      * Release all resources held by this agent.
@@ -488,7 +491,7 @@ export class ReactiveAgent<TOut = unknown> {
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._chatHistory,
+            chatHistory: this._defaultChatEngine?.history() ?? [],
             lastReasoningSteps: this._lastReasoningSteps,
         }).judge(input))
     }
@@ -504,7 +507,7 @@ export class ReactiveAgent<TOut = unknown> {
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._chatHistory,
+            chatHistory: this._defaultChatEngine?.history() ?? [],
             lastReasoningSteps: this._lastReasoningSteps,
         }).listJudgmentModels())
     }
@@ -524,7 +527,7 @@ export class ReactiveAgent<TOut = unknown> {
             agentId: this.agentId,
             runtime: this.runtime,
             judgmentAutoShadow: this._judgmentAutoShadow,
-            chatHistory: this._chatHistory,
+            chatHistory: this._defaultChatEngine?.history() ?? [],
             lastReasoningSteps: this._lastReasoningSteps,
         }).judgeRank(candidates, question, opts))
     }
@@ -739,6 +742,8 @@ export class ReactiveAgent<TOut = unknown> {
         options?: {
             readonly taskId?: string
             readonly history?: readonly ChatMessage[]
+            /** Per-run override for the agent's maxIterations (chat path). */
+            readonly maxIterations?: number
             /**
              * Durable HITL (Phase D) convenience: when a gated tool call pauses the
              * run, this callback is invoked with the pending action. Return `true`
@@ -761,7 +766,10 @@ export class ReactiveAgent<TOut = unknown> {
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
         const taskInput = withHistoryBlock(input, options?.history)
-        const taskIdOpt = options?.taskId ? { taskId: options.taskId } : undefined
+        const taskIdOpt = {
+            ...(options?.taskId ? { taskId: options.taskId } : {}),
+            ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
+        }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
         // lets terminate() interrupt the fiber (and thus any in-flight provider
@@ -1820,118 +1828,163 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string
     ): Promise<ChatReply> {
-        const useTools = options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(message)
+        // Legacy path for callers that supply history or a sessionId (e.g. the
+        // AgentSession facade): preserves the pre-engine semantics, including
+        // per-call history windowing and ChatTurn publication. Agent-scoped
+        // chat (no history/sessionId) routes through the canonical engine below.
+        if (_history !== undefined || _sessionId !== undefined) {
+            return this._chatLegacy(message, options, _history, _sessionId);
+        }
+
+        // Lazily-constructed agent-scoped engine (canonical chat engine, Task 5).
+        if (!this._defaultChatEngine) {
+            const sessionId = nextSessionId("agent", [this.agentId]);
+            const self = this;
+            this._defaultChatEngine = new ChatEngine(
+                {
+                    runTask: async (input, opts) => {
+                        return self.run(
+                            input,
+                            opts?.maxIterations !== undefined
+                                ? { history: opts.history, maxIterations: opts.maxIterations }
+                                : { history: opts.history },
+                        );
+                    },
+                    complete: async (params) => {
+                        const response = await self.runtime.runPromise(
+                            Effect.gen(function* () {
+                                const llm = yield* LLMService;
+                                const r = yield* gatewayComplete(
+                                    llm,
+                                    { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
+                                    {
+                                        messages: params.messages,
+                                        systemPrompt: params.systemPrompt,
+                                        temperature: 0.7,
+                                    },
+                                ).pipe(Effect.mapError((e) => Error(String(e))));
+                                return r;
+                            }),
+                        );
+                        return {
+                            message: response.content,
+                            tokens: response.usage?.totalTokens,
+                            cost: response.usage?.estimatedCost,
+                        };
+                    },
+                    publishTurn: async (turn) => {
+                        await self.runtime.runPromise(
+                            EventBus.pipe(
+                                Effect.flatMap((bus) => bus.publish(turn)),
+                                Effect.catchAll((err) =>
+                                    emitErrorSwallowed({
+                                        site: "runtime/src/reactive-agent.ts:chat",
+                                        tag: errorTag(err),
+                                    }),
+                                ),
+                            ),
+                        );
+                    },
+                    systemPrompt: self._config?.systemPrompt
+                        ? () => self._config!.systemPrompt!
+                        : undefined,
+                    contextSummary: () =>
+                        buildChatSystemContext(
+                            self._config?.taskContext,
+                            self._lastDebrief,
+                            self._lastRunObservations,
+                        ),
+                    scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                },
+                { sessionId },
+            );
+        }
+
+        const useTools =
+            options?.useTools ??
+            (this._config?.toolIntentClassifier ?? requiresTools)(message);
+
+        return this._defaultChatEngine.turn(message, {
+            ...options,
+            useTools,
+            maxIterations: options?.maxIterations,
+        });
+    }
+
+    /**
+     * Legacy chat implementation retained for session/override callers that
+     * supply history or a sessionId. Agent-scoped chat routes through the
+     * canonical engine instead.
+     */
+    private async _chatLegacy(
+        message: string,
+        options?: ChatOptions,
+        _history?: ChatMessage[],
+        _sessionId?: string,
+    ): Promise<ChatReply> {
+        const useTools =
+            options?.useTools ??
+            (this._config?.toolIntentClassifier ?? requiresTools)(message);
         const contextSummary = buildChatSystemContext(
             this._config?.taskContext,
             this._lastDebrief,
-            this._lastRunObservations
-        )
-        const sessionId = _sessionId ?? `chat_${Date.now()}`
-        const publishChatTurns = async (
-            routedVia: 'direct-llm' | 'react-loop',
-            assistantMessage: string,
-            tokensUsed?: number,
-            taskId: string = 'chat'
-        ): Promise<void> => {
-            await publishChatTurnEvents({
-                taskId,
-                sessionId,
-                routedVia,
-                userMessage: message,
-                assistantMessage,
-                tokensUsed,
-                publish: async (event) => {
-                    await this.runtime.runPromise(
-                        EventBus.pipe(
-                            Effect.flatMap((bus) => bus.publish(event)),
-                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:4916", tag: errorTag(err) }))
-                        )
-                    )
+            this._lastRunObservations,
+        );
+        // Retained compat path (cortex + history/sessionId callers). Migrated
+        // onto a transient ChatEngine (Task 8): the direct path no longer calls
+        // the deleted free function (pre-engine direct path), and the "Context from prior run"
+        // / "New request" framing now lives in the engine's contextSummary
+        // capability composition (engine parity). Legacy session-id fallback
+        // `chat_<ts>` is documented here (R10).
+        const sessionId = _sessionId ?? `chat_${Date.now()}`;
+        const self = this;
+        const engine = new ChatEngine(
+            {
+                runTask: async (input, opts) => {
+                    return self.run(
+                        input,
+                        opts?.maxIterations !== undefined
+                            ? { history: opts.history, maxIterations: opts.maxIterations }
+                            : { history: opts.history },
+                    );
                 },
-            })
-        }
-
-        if (!useTools) {
-            // Direct LLM path — fast, no tool overhead
-            // Use caller-supplied history (session context) or fall back to agent-level history
-            const reply = await this.runtime.runPromise(
-                directChat(
-                    message,
-                    _history ?? this._chatHistory,
-                    contextSummary,
-                    options?.extraContext
-                )
-            )
-            // Accumulate into agent-level history when called outside a session
-            if (!_history) {
-                this._chatHistory.push({
-                    role: 'user',
-                    content: message,
-                    timestamp: Date.now(),
-                })
-                this._chatHistory.push({
-                    role: 'assistant',
-                    content: reply.message,
-                    timestamp: Date.now(),
-                })
-            }
-            await publishChatTurns(
-                'direct-llm',
-                reply.message,
-                reply.tokens,
-                'chat'
-            )
-            return reply
-        }
-
-        // Tool-capable path — full agent run with capped iterations
-        // Prepend prior run context so the agent knows what happened before
-        const enrichedMessage = contextSummary
-            ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
-            : message
-        // Seed the kernel with prior conversation turns (session or agent-level)
-        // so tool-capable chat stays history-aware, mirroring the direct path.
-        const priorTurns = _history ?? this._chatHistory
-        const result = await this.run(
-            enrichedMessage,
-            priorTurns.length > 0 ? { history: priorTurns } : undefined
-        )
-        await publishChatTurns(
-            'react-loop',
-            result.output,
-            result.metadata.tokensUsed,
-            result.taskId
-        )
-        // toolsUsed is memory-gated on `result.debrief` (only populated when
-        // `.withMemory()` is on — see debrief-synthesis.ts `shouldFinalize`).
-        // `metadata.toolCalls` is derived from reasoningSteps unconditionally,
-        // so it stays the primary source; debrief is only a fallback for any
-        // path that doesn't populate it.
-        const toolNamesFromMetadata = result.metadata.toolCalls?.map((t) => t.name)
-        const toolsUsed =
-            toolNamesFromMetadata && toolNamesFromMetadata.length > 0
-                ? [...new Set(toolNamesFromMetadata)]
-                : result.debrief?.toolsUsed.map((t) => t.name)
-        const citationCheck = options?.verifyCitations
-            ? validateCitations(
-                  result.output,
-                  (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
-                  new Map(Object.entries(result.metadata.scratchpad ?? {}))
-              )
-            : undefined
-        return {
-            message: result.output,
-            toolsUsed,
-            tokens: result.metadata.tokensUsed,
-            steps: result.metadata.stepsCount,
-            cost: result.metadata.cost,
-            reasoningSteps: result.metadata.reasoningSteps,
-            scratchpad: {
-              ...(result.metadata.scratchpad ?? {}),
-              ...Object.fromEntries(this._scratchpad),
+                complete: async (params) => {
+                    const response = await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const llm = yield* LLMService;
+                            const r = yield* gatewayComplete(
+                                llm,
+                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
+                                {
+                                    messages: params.messages,
+                                    systemPrompt: params.systemPrompt,
+                                    temperature: 0.7,
+                                },
+                            ).pipe(Effect.mapError((e) => Error(String(e))));
+                            return r;
+                        }),
+                    );
+                    return {
+                        message: response.content,
+                        tokens: response.usage?.totalTokens,
+                        cost: response.usage?.estimatedCost,
+                    };
+                },
+                publishTurn: async (turn) => {
+                    await self.runtime.runPromise(
+                        EventBus.pipe(Effect.flatMap((bus) => bus.publish(turn))),
+                    );
+                },
+                systemPrompt: self._config?.systemPrompt
+                    ? () => self._config!.systemPrompt!
+                    : undefined,
+                contextSummary: () => contextSummary,
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                loadHistory: async () => _history ?? [],
             },
-            ...(citationCheck ? { citationCheck } : {}),
-        }
+            { sessionId, maxDirectTokens: 4096 },
+        );
+        return engine.turn(message, { ...options, useTools });
     }
 
     /**
@@ -1964,32 +2017,17 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     session(
-        options?: SessionOptions & {
-            persist?: boolean
-            id?: string
-            maxAgeDays?: number
-            /**
-             * Called when history windowing would drop turns for this
-             * session's `chat()` calls, with exactly the dropped turns
-             * (oldest-to-newest). Its returned summary text is spliced back
-             * in as a synthetic leading turn instead of the dropped turns
-             * being silently discarded. The framework owns the windowing
-             * decision and splice mechanics only — this callback owns all
-             * summarization content (prompt, LLM call, etc). Unset: pure
-             * drop, identical to today's behavior.
-             */
-            onOverflow?: HistoryOverflowHandler
-        }
+        options?: SessionOptions
     ): AgentSession {
         const persist = options?.persist ?? this._sessionPersist
         const _maxAgeDays = options?.maxAgeDays ?? this._sessionMaxAgeDays
         const sessionId =
             options?.id ??
-            `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+            nextSessionId("session", [])
         const self = this
 
-        const onSave = persist
-            ? async (history: ChatMessage[]) => {
+        const saveHistory = persist
+            ? async (sid: string, messages: readonly ChatMessage[]) => {
                   await self.runtime.runPromise(
                       Effect.gen(function* () {
                           const memMod = yield* Effect.promise(
@@ -2000,17 +2038,17 @@ export class ReactiveAgent<TOut = unknown> {
                           )
                           if (storeOpt._tag !== 'Some') return
                           yield* storeOpt.value.save({
-                              sessionId,
+                              sessionId: sid,
                               agentId: self.agentId,
-                              messages: history,
+                              messages: [...messages],
                           })
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/builder.ts:5023", tag: errorTag(err) })))
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:session-save", tag: errorTag(err) })))
                   )
               }
             : undefined
 
-        const historyLoader = persist
-            ? async (): Promise<ChatMessage[]> => {
+        const loadHistory = persist
+            ? async (sid: string): Promise<readonly ChatMessage[]> => {
                   return self.runtime.runPromise(
                       Effect.gen(function* () {
                           const memMod = yield* Effect.promise(
@@ -2020,21 +2058,91 @@ export class ReactiveAgent<TOut = unknown> {
                               memMod.SessionStoreService
                           )
                           if (storeOpt._tag !== 'Some') return [] as ChatMessage[]
-                          const record = yield* storeOpt.value.findById(sessionId)
+                          const record = yield* storeOpt.value.findById(sid)
                           return (record?.messages ?? []) as ChatMessage[]
                       }).pipe(Effect.catchAll((_err) => Effect.succeed([] as ChatMessage[])))
                   )
               }
             : undefined
 
-        return new AgentSession(
-            (msg, history, opts) => this.chat(msg, opts, history, sessionId),
-            undefined,
-            onSave,
-            undefined,
-            historyLoader,
-            options?.onOverflow
-        )
+        const engine = new ChatEngine(
+            {
+                runTask: async (input, opts) => {
+                    return self.run(
+                        input,
+                        opts?.history
+                            ? { history: [...opts.history], ...(opts.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}) }
+                            : opts?.maxIterations !== undefined
+                              ? { maxIterations: opts.maxIterations }
+                              : undefined,
+                    );
+                },
+                runStreamTask: (input, opts) => {
+                    return self.runStream(input, {
+                        history: opts.history ? [...opts.history] : undefined,
+                        density: opts.density,
+                        signal: opts.signal,
+                    });
+                },
+                complete: async (params) => {
+                    const response = await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const llm = yield* LLMService;
+                            const r = yield* gatewayComplete(
+                                llm,
+                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
+                                {
+                                    messages: params.messages,
+                                    systemPrompt: params.systemPrompt,
+                                    temperature: 0.7,
+                                },
+                            ).pipe(Effect.mapError((e) => Error(String(e))));
+                            return r;
+                        }),
+                    );
+                    return {
+                        message: response.content,
+                        tokens: response.usage?.totalTokens,
+                        cost: response.usage?.estimatedCost,
+                    };
+                },
+                publishTurn: async (turn) => {
+                    await self.runtime.runPromise(
+                        EventBus.pipe(
+                            Effect.flatMap((bus) => bus.publish(turn)),
+                            Effect.catchAll((err) =>
+                                emitErrorSwallowed({
+                                    site: "runtime/src/reactive-agent.ts:session-publish",
+                                    tag: errorTag(err),
+                                }),
+                            ),
+                        ),
+                    );
+                },
+                saveHistory: saveHistory
+                    ? async (sid, messages) => {
+                          await saveHistory(sid, messages);
+                      }
+                    : undefined,
+                loadHistory: loadHistory,
+                systemPrompt: self._config?.systemPrompt
+                    ? () => self._config!.systemPrompt!
+                    : undefined,
+                contextSummary: () =>
+                    buildChatSystemContext(
+                        self._config?.taskContext,
+                        self._lastDebrief,
+                        self._lastRunObservations,
+                    ),
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+            },
+            {
+                sessionId,
+                onOverflow: options?.onOverflow,
+            },
+        );
+
+        return new AgentSession(engine);
     }
 
     /**

@@ -8,6 +8,10 @@ import {
   type HistoryOverflowHandler,
 } from "./gateway-context-formatting.js";
 export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
+import type { RunHandle } from "./run-controller.js";
+import { ChatEngine } from "./chat/engine.js";
+import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
+import type { StreamDensity } from "./stream-types.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -119,11 +123,23 @@ export interface ChatOptions {
  */
 export interface SessionOptions {
   /**
-   * NOT WIRED — no code path reads this flag (kept for backward
-   * compatibility of the type only). Use `persist: true` on
-   * `agent.session()` for SQLite-backed persistence.
+   * Persist conversation history to the SQLite session store (requires the
+   * memory layer). Default: agent-level `_sessionPersist` (false unless opted in).
    */
-  persistOnEnd?: boolean;
+  persist?: boolean;
+  /**
+   * Stable session identifier for resuming a prior conversation. When omitted
+   * the engine generates a canonical `sess_session_<unique>` id.
+   */
+  id?: string;
+  /** Retention window in days for persisted sessions (host-defined). */
+  maxAgeDays?: number;
+  /**
+   * Called when history windowing would drop turns for this session's `chat()`
+   * calls, with exactly the dropped turns (oldest-to-newest). Its returned
+   * summary text is spliced back in as a synthetic leading turn.
+   */
+  onOverflow?: HistoryOverflowHandler;
 }
 
 // ─── Intent classifier (heuristic, zero tokens) ────────────────────────────
@@ -242,143 +258,111 @@ export function buildChatSystemContext(
 
 // ─── Direct LLM chat (no tools) ────────────────────────────────────────────
 
-export function directChat(
-  message: string,
-  history: ChatMessage[],
-  contextSummary: string,
-  extraContext?: string,
-): Effect.Effect<ChatReply, Error, LLMService> {
-  return Effect.gen(function* () {
-    const llm = yield* LLMService;
 
-    const fullContext = [extraContext, contextSummary].filter(Boolean).join("\n\n---\n\n");
-
-    const systemPrompt = fullContext
-      ? `You are a helpful AI assistant. Here is context from a recent agent run:\n\n${fullContext}\n\nAnswer conversationally and concisely.`
-      : "You are a helpful AI assistant. Answer conversationally and concisely.";
-
-    const messages = [
-      ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      { role: "user" as const, content: message },
-    ];
-
-    // Conversational reply cap predates the gateway's class table; keep exact.
-    const response = yield* gatewayComplete(llm, { purpose: "synthesize", budgetTokens: 1024 }, {
-        messages,
-        systemPrompt,
-        temperature: 0.7,
-      })
-      .pipe(
-        Effect.mapError((e) => new Error(String(e))),
-      );
-
-    return {
-      message: response.content,
-      tokens: response.usage?.totalTokens,
-      cost: response.usage?.estimatedCost,
-    } satisfies ChatReply;
-  });
-}
-
-export function buildChatTurnEvents(params: {
-  taskId: string;
-  sessionId: string;
-  routedVia: "direct-llm" | "react-loop";
-  userMessage: string;
-  assistantMessage: string;
-  tokensUsed?: number;
-}): [Extract<AgentEvent, { _tag: "ChatTurn" }>, Extract<AgentEvent, { _tag: "ChatTurn" }>] {
-  const base = {
-    _tag: "ChatTurn" as const,
-    taskId: params.taskId,
-    sessionId: params.sessionId,
-    routedVia: params.routedVia,
-  };
-
-  return [
-    {
-      ...base,
-      role: "user",
-      content: params.userMessage,
-    },
-    {
-      ...base,
-      role: "assistant",
-      content: params.assistantMessage,
-      ...(params.tokensUsed !== undefined ? { tokensUsed: params.tokensUsed } : {}),
-    },
-  ];
-}
-
-export async function publishChatTurnEvents(params: {
-  taskId: string;
-  sessionId: string;
-  routedVia: "direct-llm" | "react-loop";
-  userMessage: string;
-  assistantMessage: string;
-  tokensUsed?: number;
-  publish: (event: Extract<AgentEvent, { _tag: "ChatTurn" }>) => Promise<void>;
-}): Promise<void> {
-  const events = buildChatTurnEvents({
-    taskId: params.taskId,
-    sessionId: params.sessionId,
-    routedVia: params.routedVia,
-    userMessage: params.userMessage,
-    assistantMessage: params.assistantMessage,
-    tokensUsed: params.tokensUsed,
-  });
-
-  for (const event of events) {
-    await params.publish(event);
-  }
-}
 
 // ─── AgentSession ──────────────────────────────────────────────────────────
 
 export class AgentSession {
+  private readonly engine?: ChatEngine;
+
+  // Legacy (pre-engine) backing state — retained for callers that construct
+  // `AgentSession` directly with a `chatFn` (cortex, older tests). New
+  // `agent.session()` instances are engine-backed and use `this.engine`.
   private _history: ChatMessage[] = [];
   private _historyLoader?: () => Promise<ChatMessage[]>;
   private _historyLoaded = false;
+  private readonly chatFn?: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>;
+  private readonly onEnd?: (history: ChatMessage[]) => Promise<void>;
+  private readonly onSave?: (history: ChatMessage[]) => Promise<void>;
+  private readonly onOverflow?: HistoryOverflowHandler;
 
   constructor(
-    private readonly chatFn: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>,
-    private readonly onEnd?: (history: ChatMessage[]) => Promise<void>,
-    private readonly onSave?: (history: ChatMessage[]) => Promise<void>,
+    engineOrChatFn:
+      | ChatEngine
+      | ((message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>),
+    onEnd?: (history: ChatMessage[]) => Promise<void>,
+    onSave?: (history: ChatMessage[]) => Promise<void>,
     initialHistory?: ChatMessage[],
     historyLoader?: () => Promise<ChatMessage[]>,
-    private readonly onOverflow?: HistoryOverflowHandler,
+    onOverflow?: HistoryOverflowHandler,
   ) {
+    if (engineOrChatFn instanceof ChatEngine) {
+      this.engine = engineOrChatFn;
+      return;
+    }
+    this.chatFn = engineOrChatFn;
+    this.onEnd = onEnd;
+    this.onSave = onSave;
     if (initialHistory) this._history = [...initialHistory];
     if (historyLoader) this._historyLoader = historyLoader;
+    this.onOverflow = onOverflow;
   }
 
+  /**
+   * Send a conversational message through the session.
+   *
+   * Engine-backed sessions delegate to the held {@link ChatEngine}; legacy
+   * sessions retain the pre-engine windowing + recording behavior.
+   */
   async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+    if (this.engine) {
+      return this.engine.turn(message, options);
+    }
     if (this._historyLoader && !this._historyLoaded) {
       this._history = await this._historyLoader();
       this._historyLoaded = true;
     }
-    // Full history always accumulates unbounded (preserved for persistence —
-    // see applyHistoryWindow's doc comment). Only the copy handed to chatFn is
-    // windowed, and only folds dropped turns into a summary turn when the
-    // caller opted in via `onOverflow` (session({ onOverflow }))  — unset,
-    // this is byte-for-byte the same raw `this._history` passed before.
     const historyForChat = this.onOverflow
       ? await applyHistoryWindowWithOverflow(this._history, this.onOverflow)
       : this._history;
-    const reply = await this.chatFn(message, historyForChat, options);
+    const reply = await this.chatFn!(message, historyForChat, options);
     this._history.push({ role: "user", content: message, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     if (this.onSave) await this.onSave(this._history);
     return reply;
   }
 
+  /**
+   * Snapshot of the session's full conversation history (oldest first).
+   */
   history(): ChatMessage[] {
+    if (this.engine) return this.engine.history();
     return [...this._history];
   }
 
+  /**
+   * Flush persistence (when wired) and clear in-memory state.
+   */
   async end(): Promise<void> {
+    if (this.engine) {
+      await this.engine.end();
+      return;
+    }
     if (this.onSave) await this.onSave(this._history);
     if (this.onEnd) await this.onEnd(this._history);
     this._history = [];
   }
+
+  /**
+   * Stream a conversational turn through the held engine. Engine-backed sessions
+   * only (legacy `chatFn` sessions have no streaming capability).
+   */
+  runStream(
+    message: string,
+    options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal },
+  ): RunHandle {
+    if (!this.engine) {
+      throw new ChatEngineCapabilityError({
+        message:
+          "AgentSession.runStream() requires an engine-backed session (construct via agent.session()).",
+        capability: "runStreamTask",
+      });
+    }
+    return this.engine.streamTurn(message, {
+      density: options?.density,
+      signal: options?.signal,
+    });
+  }
 }
+
+export { ChatEngine } from "./chat/engine.js";

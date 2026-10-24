@@ -128,6 +128,7 @@ const parseJsonLoose = (text: string): unknown => {
 /** Options of `buildRunTaskEffect` — mirrors the class method's inline options type verbatim. */
 export interface RunTaskEffectOptions {
     readonly taskId?: string
+    readonly maxIterations?: number
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
@@ -216,7 +217,12 @@ export const buildRunTaskEffect = (
         input: { question: steeredInput },
         priority: 'medium' as const,
         status: 'pending' as const,
-        metadata: { tags: [] },
+        metadata: {
+            tags: [],
+            ...(options?.maxIterations !== undefined
+                ? { context: { maxIterations: options.maxIterations } }
+                : {}),
+        },
         createdAt: new Date(),
     }
 
