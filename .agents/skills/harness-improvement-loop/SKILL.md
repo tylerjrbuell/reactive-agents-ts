@@ -154,6 +154,18 @@ Or a one-off runner that builds the session inline via `runSession` + `getVarian
 
 `runs:1` makes the gate hair-trigger (variance 0 → any negative tier reads as a significant regression). Use **`runs≥3`** for an authoritative verdict.
 
+### Introspective probes — ask the agent what the harness is doing to it (2026-10-23, canonical for feedback/friction sweeps)
+
+`.agents/skills/harness-improvement-loop/scripts/introspective-probe.ts` adds the first-person channel the bench can't capture: after each run it interviews the SAME model OUTSIDE the harness (raw Ollama `/api/chat`, `format:json`, no gates/tools — the thing under test must not filter its own indictment), passing it a reconstructed transcript of its own tool calls, denial strings, injected signals, and verifier rejections. Every self-reported friction is then cross-checked deterministically against trace events:
+
+- **blind spot** = objective event fired, model never mentioned it → harness *communication* failure (highest-leverage fix class: the model cannot work around what it cannot see — e.g. terminal-gate rejections never reached the agent in 4/6 runs).
+- **unverifiable report** = model claims friction with no corroborating event → confabulation, discount it.
+- **mention rate** = coverage score for the interview itself.
+
+Thinking-model interview rules (baked into the script, 2026-10-24 bonsai-2:27b): keep thinking ON (it improves reflection quality), but widen `num_predict` the way `widenNumPredictForThinking` does — Ollama counts thinking tokens against the cap and a narrow budget starves `content` to empty with `done_reason:"length"`; detect starvation explicitly; salvage truncated JSON to the last balanced brace.
+
+Run it like any probe: `bun run .agents/skills/harness-improvement-loop/scripts/introspective-probe.ts <task-id>` (or no arg = full friction suite: allowlist gaps, opt-in hints, blocked `rm`, first-word policy on `cd`/loops, long-horizon budget, context pressure). Tasks are friction-engineered — adapt them the same way as legacy probes. Output feeds Phase 3/4 unchanged: ranked frictions + blind spots ARE the weakness queue.
+
 ### Legacy probes (single-subsystem targeting)
 
 **Existing probes** (`.agents/skills/harness-improvement-loop/scripts/`):
