@@ -2042,7 +2042,7 @@ export class ReactiveAgent<TOut = unknown> {
                               agentId: self.agentId,
                               messages: [...messages],
                           })
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:session", tag: errorTag(err) })))
+                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:session-save", tag: errorTag(err) })))
                   )
               }
             : undefined
@@ -2112,7 +2112,7 @@ export class ReactiveAgent<TOut = unknown> {
                             Effect.flatMap((bus) => bus.publish(turn)),
                             Effect.catchAll((err) =>
                                 emitErrorSwallowed({
-                                    site: "runtime/src/reactive-agent.ts:session",
+                                    site: "runtime/src/reactive-agent.ts:session-publish",
                                     tag: errorTag(err),
                                 }),
                             ),
