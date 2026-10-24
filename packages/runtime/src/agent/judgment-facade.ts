@@ -110,7 +110,7 @@ export interface JudgmentFacadeDeps {
      */
     readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
     readonly judgmentAutoShadow: boolean
-    /** _chatHistory is passed by reference; the facade reads it when the effect runs (immediately, within the delegate call). */
+    /** chatHistory is passed by reference; the facade reads it when the effect runs (immediately, within the delegate call). */
     readonly chatHistory: ChatMessage[]
     /** _lastReasoningSteps snapshot taken by the delegate at call time. */
     readonly lastReasoningSteps: readonly ReasoningStep[]

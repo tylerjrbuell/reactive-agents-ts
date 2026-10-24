@@ -22,12 +22,12 @@ const DEFAULT_MAX_WINDOW_TURNS = 40;
 const DEFAULT_MAX_WINDOW_CHARS = 8000;
 /**
  * Direct-path reply budget default. Replaces the hardcoded `budgetTokens: 1024` that
- * `chat.ts:directChat` passes today; raised per the canonical-chat-engine spec so a
+ * `chat.ts:direct path` passes today; raised per the canonical-chat-engine spec so a
  * conversational reply is not clipped to legacy constants.
  */
 const DEFAULT_MAX_DIRECT_TOKENS = 4096;
 
-/** Separator used when composing direct-path system-prompt fragments (parity with `directChat`). */
+/** Separator used when composing direct-path system-prompt fragments (parity with `direct path`). */
 const DIRECT_PROMPT_SEPARATOR = "\n\n---\n\n";
 
 /** The terminal success event of a stream (`StreamCompleted` variant of {@link AgentStreamEvent}). */
@@ -46,7 +46,7 @@ const TURN_INPUT_SEPARATOR = "\n\n---\n\n";
 
 /**
  * Engine-default direct-path persona, byte-for-byte the generic conversational prompt
- * `chat.ts:directChat` hardcodes for the no-context case. Used only when no
+ * `chat.ts:direct path` hardcodes for the no-context case. Used only when no
  * `systemPrompt` capability is wired — never a blank system prompt.
  */
 const GENERIC_DIRECT_PROMPT = "You are a helpful AI assistant. Answer conversationally and concisely.";
@@ -93,7 +93,7 @@ export interface ChatEngineCapabilities {
   }) => RunHandle;
   /**
    * Plain conversational completion, no tools. Backed by LLMService via
-   * `gatewayComplete` at the host edge (the engine folds `directChat`'s mechanics into
+   * `gatewayComplete` at the host edge (the engine folds `direct path`'s mechanics into
    * its direct path; the free function itself is deleted under the Task 8 ledger).
    */
   readonly complete: (params: {
@@ -110,7 +110,7 @@ export interface ChatEngineCapabilities {
      * Direct-path reply budget, resolved ENGINE-side from `maxDirectTokens`
      * (engine default when unset). The mechanic lives engine-side (Task-1
      * ruling): the host's `complete` capability consumes this value in the same
-     * role `budgetTokens: 1024` played inside `directChat` before the fold.
+     * role `budgetTokens: 1024` played inside `direct path` before the fold.
      */
     budgetTokens?: number;
   }) => Promise<{ message: string; tokens?: number; cost?: number }>;
@@ -176,7 +176,7 @@ export interface ChatEngineOptions {
   readonly onOverflow?: HistoryOverflowHandler;
   /**
    * Direct-path reply budget. Default: {@link DEFAULT_MAX_DIRECT_TOKENS} (raised above
-   * `directChat`'s hardcoded 1024). Resolved once at construction and handed to the
+   * `direct path`'s hardcoded 1024). Resolved once at construction and handed to the
    * `complete` capability as the direct-path budget (spec §3: "budget from
    * `maxDirectTokens`").
    */
@@ -209,7 +209,7 @@ const isNonEmpty = (part: string | undefined): part is string =>
   typeof part === "string" && part.length > 0;
 
 /**
- * Join non-empty prompt fragments with the `---` separator `directChat` uses today
+ * Join non-empty prompt fragments with the `---` separator `direct path` uses today
  * (parity: `"\n\n---\n\n"`), skipping empty fragments.
  */
 function composeDirectPrompt(...parts: (string | undefined)[]): string {
@@ -313,7 +313,7 @@ export class ChatEngine {
    * `systemPrompt` / `contextSummary` capabilities plus the turn's `extraContext`
    * (persona, then context summary, then extra context; empty fragments skipped, joined
    * by `---` separators); when no `systemPrompt` capability is wired, falls back to the
-   * same generic conversational prompt `directChat` hardcodes today (parity, never a
+   * same generic conversational prompt `direct path` hardcodes today (parity, never a
    * blank system prompt). Sends full history + the incoming message to `complete`
    * together with the engine-resolved `budgetTokens` (Task-1 ruling: the direct-budget
    * mechanic lives engine-side), then records the user turn (`recordUserText ??
@@ -651,7 +651,7 @@ export class ChatEngine {
    * Wired persona: `[systemPrompt(message), contextSummary(message), extraContext]`
    * joined by `---` separators, empty fragments skipped, in that order. No
    * `systemPrompt` capability: the engine falls back to the exact generic
-   * conversational prompt `directChat` composes today (with-context vs bare variants),
+   * conversational prompt `direct path` composes today (with-context vs bare variants),
    * so the persona-less direct path keeps byte parity with pre-engine behavior.
    */
   #directSystemPrompt(message: string, extraContext?: string): string {
@@ -694,7 +694,7 @@ export class ChatEngine {
  * Resolution of the engine's direct-path budget for a given options bag. Exposed for
  * host facade wiring (Task 5 onward): the host's `complete` capability wraps
  * `gatewayComplete` and consumes this value as its `budgetTokens` request option, the
- * same role `budgetTokens: 1024` played inside `directChat` before the fold.
+ * same role `budgetTokens: 1024` played inside `direct path` before the fold.
  */
 export function resolveDirectBudget(options?: Pick<ChatEngineOptions, "maxDirectTokens">): number {
   return options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;

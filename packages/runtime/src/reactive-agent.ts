@@ -94,10 +94,8 @@ export { projectAbstention }
 import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
-    directChat,
     requiresTools,
     buildChatSystemContext,
-    publishChatTurnEvents,
     type ChatMessage,
     type ChatOptions,
     type ChatReply,
@@ -1932,87 +1930,58 @@ export class ReactiveAgent<TOut = unknown> {
             this._lastDebrief,
             this._lastRunObservations,
         );
+        // Retained compat path (cortex + history/sessionId callers). Migrated
+        // onto a transient ChatEngine (Task 8): the direct path no longer calls
+        // the deleted free function (pre-engine direct path), and the "Context from prior run"
+        // / "New request" framing now lives in the engine's contextSummary
+        // capability composition (engine parity). Legacy session-id fallback
+        // `chat_<ts>` is documented here (R10).
         const sessionId = _sessionId ?? `chat_${Date.now()}`;
-        const publishChatTurns = async (
-            routedVia: "direct-llm" | "react-loop",
-            assistantMessage: string,
-            tokensUsed?: number,
-            taskId: string = "chat",
-        ): Promise<void> => {
-            await publishChatTurnEvents({
-                taskId,
-                sessionId,
-                routedVia,
-                userMessage: message,
-                assistantMessage,
-                tokensUsed,
-                publish: async (event) => {
-                    await this.runtime.runPromise(
-                        EventBus.pipe(
-                            Effect.flatMap((bus) => bus.publish(event)),
-                            Effect.catchAll((err) =>
-                                emitErrorSwallowed({
-                                    site: "runtime/src/builder.ts:4916",
-                                    tag: errorTag(err),
-                                }),
-                            ),
-                        ),
+        const self = this;
+        const engine = new ChatEngine(
+            {
+                runTask: async (input, opts) => {
+                    return self.run(
+                        input,
+                        opts?.maxIterations !== undefined
+                            ? { history: opts.history, maxIterations: opts.maxIterations }
+                            : { history: opts.history },
                     );
                 },
-            });
-        };
-
-        if (!useTools) {
-            const reply = await this.runtime.runPromise(
-                directChat(
-                    message,
-                    _history ?? [],
-                    contextSummary,
-                    options?.extraContext,
-                ),
-            );
-            await publishChatTurns("direct-llm", reply.message, reply.tokens, "chat");
-            return reply;
-        }
-
-        const enrichedMessage = contextSummary
-            ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
-            : message;
-        const priorTurns = _history ?? [];
-        const result = await this.run(
-            enrichedMessage,
-            priorTurns.length > 0
-                ? { history: priorTurns, maxIterations: options?.maxIterations }
-                : options?.maxIterations
-                  ? { maxIterations: options.maxIterations }
-                  : undefined,
-        );
-        await publishChatTurns("react-loop", result.output, result.metadata.tokensUsed, result.taskId);
-        const toolNamesFromMetadata = result.metadata.toolCalls?.map((t) => t.name);
-        const toolsUsed =
-            toolNamesFromMetadata && toolNamesFromMetadata.length > 0
-                ? [...new Set(toolNamesFromMetadata)]
-                : result.debrief?.toolsUsed.map((t) => t.name);
-        const citationCheck = options?.verifyCitations
-            ? validateCitations(
-                  result.output,
-                  (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
-                  new Map(Object.entries(result.metadata.scratchpad ?? {})),
-              )
-            : undefined;
-        return {
-            message: result.output,
-            toolsUsed,
-            tokens: result.metadata.tokensUsed,
-            steps: result.metadata.stepsCount,
-            cost: result.metadata.cost,
-            reasoningSteps: result.metadata.reasoningSteps,
-            scratchpad: {
-                ...(result.metadata.scratchpad ?? {}),
-                ...Object.fromEntries(this._scratchpad),
+                complete: async (params) => {
+                    const response = await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const llm = yield* LLMService;
+                            const r = yield* gatewayComplete(
+                                llm,
+                                { purpose: "synthesize", budgetTokens: params.budgetTokens ?? 4096 },
+                                {
+                                    messages: params.messages,
+                                    systemPrompt: params.systemPrompt,
+                                    temperature: 0.7,
+                                },
+                            ).pipe(Effect.mapError((e) => Error(String(e))));
+                            return r;
+                        }),
+                    );
+                    return {
+                        message: response.content,
+                        tokens: response.usage?.totalTokens,
+                        cost: response.usage?.estimatedCost,
+                    };
+                },
+                publishTurn: async (turn) => {
+                    await self.runtime.runPromise(
+                        EventBus.pipe(Effect.flatMap((bus) => bus.publish(turn))),
+                    );
+                },
+                contextSummary: () => contextSummary,
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                loadHistory: async () => _history ?? [],
             },
-            ...(citationCheck ? { citationCheck } : {}),
-        };
+            { sessionId, maxDirectTokens: 4096 },
+        );
+        return engine.turn(message, { ...options, useTools });
     }
 
     /**
