@@ -1595,3 +1595,12 @@ result: completed, confidence 0.9
 outcome: "Audit-first package selection: trace chosen (13-site pool, zero identity consumers repo-wide per Task 3 inventory + grep). 13/13 converted: RationaleValidationError (10 validator throws, keep-throw-but-tagged per memory-package convention, byte-identical messages) + TraceStorageError({message, cause}) (3 recorder IO catches; sole consumer core errorTag resolves _tag first — documented ErrorSwallowed.tag 'Error'->'TraceStorageError' delta, grep-proved no consumer asserted the old string). New packages/trace/src/errors.ts exported from index.ts per repo-wide convention. 15 coverage cases (exact _tag + message per site; two REAL-IO arms through a live EventBus ErrorSwallowed subscription). Ratchet STRING_ERRORS_BASELINE 300->287 attributed (target strictly-below-299 MET); instanceof pool exactly 129 (zero added literals, added-line grep 0). Classification artifact committed with per-package dispositions + tranche-2 map (diagnose 10 verified-safe pattern; replay's 7 Effect.die defect values flagged for team decision). Parent battery on rebased tree: ratchet 287/129 exact, 24-script lane green, tsc rc=0 trace+reasoning, trace 105/0 (=90+15), replay+diagnose 75/0, reasoning 3,197/4/0 exact, ceiling 2/2, downstream 29/29. Merged #284."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-23
+warden: provider-warden (via general subagent; no warden agent types in this harness)
+task: "Introspective-loop fix: ollama resolveThinking tri-state — config.thinking:false now sends think:false on capable models (off-switch honored on server-side default-think models: bonsai-2, qwen3 family)"
+result: completed, confidence 0.95
+outcome: "Root cause from introspective probe run 01M5NVA1211VFYAQFEJ7CE2GNJ (2026-10-24 UTC): false and undefined collapsed to 'omit param', so thinking stayed server-side ON and widenNumPredictForThinking paid +6000 for a user-disabled feature. Empirical pre-dispatch: Ollama 0.40.6 think:false suppresses bonsai thinking (thinking_len=0), accepted by non-capable llama3.2. Warden: RED-first 5 pins in local-thinking.test.ts, wire-level ollama-tools tests both arms, doc rewrites local.ts + thinking/resolve.ts. Parent verified: turbo typecheck 4/4, llm-provider 511 pass/1 skip/0 fail, downstream runtime thinking tests 42/0. Undefined-path behavior byte-identical (probe skipped on unset — warden deviation, accepted)."
+bypass-reason: none
+```

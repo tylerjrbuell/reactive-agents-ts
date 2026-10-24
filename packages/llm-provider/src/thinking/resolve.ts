@@ -4,6 +4,14 @@
  * Control-pillar discipline (mirrors local.ts FIX-3): `undefined` NEVER
  * auto-enables. Only explicit `true` (or a future per-request override) turns
  * thinking on, and only when the model is actually capable.
+ *
+ * Provider wire note: a `false` here means "do not enable" — how that is
+ * expressed per provider differs. `undefined` (config unset) keeps the
+ * provider's server-side default (Ollama qwen3-family models think by
+ * default when the param is omitted). Ollama additionally expresses an
+ * explicit config `thinking: false` on capable models as `think: false` to
+ * suppress that server-side default — that arm is decided in local.ts's
+ * resolveThinking BEFORE delegating here (2026-10-24 off-switch probe).
  */
 export interface ThinkingOptions {
   /** Tri-state mirror of config.thinking. */

@@ -291,7 +291,13 @@ describe("OllamaProviderLive (ollama SDK)", () => {
     expect(result.model).toBe("cogito:14b");
   });
 
-  it("complete() does not pass think param when config.thinking is false", async () => {
+  // Off-switch contract (2026-10-24 introspective-harness probe): Ollama runs
+  // thinking SERVER-SIDE when the `think` param is absent (bonsai-2, qwen3
+  // family), so the old "false → omit param" behavior silently ignored an
+  // explicit thinking:false. resolveThinking now returns FALSE for
+  // false + capable models (send think:false) and still omits the param for
+  // false + non-capable models (nothing to switch off).
+  it("complete() omits think param when config.thinking is false on a non-capable model", async () => {
     const configWithNoThinking = LLMConfig.of({
       defaultProvider: "ollama",
       defaultModel: "cogito:14b",
@@ -324,8 +330,58 @@ describe("OllamaProviderLive (ollama SDK)", () => {
     );
 
     const callArgs = mockChat.mock.calls.at(-1)?.[0] as Record<string, unknown>;
-    // think should NOT be passed when config.thinking is false
+    // Non-capable model (cogito:14b static-table: supportsThinkingMode=false):
+    // no off-switch to express — think stays omitted.
     expect(callArgs.think).toBeUndefined();
+  });
+
+  it("complete() passes think:false when config.thinking is false on a capable model", async () => {
+    // Capability advertised via the mocked /api/show (same seam the think:true
+    // test below uses); distinct model name keeps the process-global
+    // thinkingCapabilityCache from cross-contaminating arms.
+    mockShow.mockImplementationOnce(async () => ({
+      template: "qwen3 thinking template",
+      capabilities: ["thinking"],
+    }));
+
+    const configOff = LLMConfig.of({
+      defaultProvider: "ollama",
+      defaultModel: "qwen3.5-offswitch-test",
+      ollamaEndpoint: "http://localhost:11434",
+      embeddingConfig: {
+        model: "nomic-embed-text",
+        dimensions: 3,
+        provider: "ollama",
+        batchSize: 100,
+      },
+      supportsPromptCaching: false,
+      maxRetries: 1,
+      timeoutMs: 30_000,
+      defaultMaxTokens: 1024,
+      defaultTemperature: 0.7,
+      thinking: false,
+    });
+
+    const layer = LocalProviderLive.pipe(
+      Layer.provide(Layer.succeed(LLMConfig, configOff)),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Hello" }],
+        });
+      }).pipe(Effect.provide(layer as Layer.Layer<LLMServiceType, unknown>)),
+    );
+
+    const callArgs = mockChat.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    // Capable model + thinking:false → the off-switch must reach the wire,
+    // otherwise Ollama's server-side default thinking runs anyway.
+    expect(callArgs.think).toBe(false);
+    // Off thinking must not pay the widening allowance.
+    const options = callArgs.options as Record<string, unknown>;
+    expect(options.num_predict).toBe(1024);
   });
 
   it("complete() passes think:true when config.thinking is true", async () => {

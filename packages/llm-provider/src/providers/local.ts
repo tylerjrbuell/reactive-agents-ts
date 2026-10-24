@@ -410,13 +410,21 @@ async function supportsThinking(
 /**
  * Resolve the `think` parameter for Ollama chat calls.
  *
- * Delegates the tri-state opt-in decision to the shared `resolveThinkingEnabled`
- * resolver so all providers share one decision contract. The Ollama-specific
- * `/api/show` capability probe is preserved as the capability source.
+ * Tri-state return contract (`boolean | undefined`):
+ *   - true      → pass `think: true` (explicit opt-in, capable models only)
+ *   - false     → pass `think: false` — the user's off-switch. Ollama runs
+ *     thinking SERVER-SIDE when the param is absent (bonsai-2, qwen3 family),
+ *     so omitting it on `config.thinking === false` never turned thinking off
+ *     (introspective-harness probe, 2026-10-24). Verified on Ollama 0.40.6:
+ *     `think: false` suppresses thinking (thinking_len=0).
+ *   - undefined → omit the `think` param entirely: keeps the provider's
+ *     server-side default (config unset) — or, for a non-capable model asked
+ *     to go off, there is nothing to switch off (and `think: true` on such
+ *     models errors, see supportsThinking).
  *
- * Return contract (boolean | undefined):
- *   - true     → pass `think: true` to ollama client
- *   - undefined → omit the `think` param entirely
+ * The `true` arm delegates to the shared `resolveThinkingEnabled` resolver so
+ * all providers keep one opt-in + warn-once decision contract. The
+ * Ollama-specific `/api/show` capability probe is the capability source.
  *
  * @internal exported for unit testing only.
  */
@@ -427,8 +435,15 @@ export async function resolveThinking(
     configThinking: boolean | undefined,
     capability?: Capability
 ): Promise<boolean | undefined> {
-    if (configThinking !== true) return undefined // undefined/false → off (opt-in)
+    // Unset → omit: provider/server-side default stays in force (and the
+    // widening in widenNumPredictForThinking compensates for it). No probe
+    // needed — the answer does not depend on capability.
+    if (configThinking === undefined) return undefined
     const capable = await supportsThinking(client, model, capability)
+    // Explicit false + capable → think:false (suppress server-side thinking).
+    // Explicit false + non-capable → omit (no off-switch needed; never send a
+    // think param the model has no thinking mode for).
+    if (configThinking === false) return capable ? false : undefined
     // Shared resolver applies the identical opt-in + warn-once discipline.
     return resolveThinkingEnabled('ollama', model, true, capable) ? true : undefined
 }
