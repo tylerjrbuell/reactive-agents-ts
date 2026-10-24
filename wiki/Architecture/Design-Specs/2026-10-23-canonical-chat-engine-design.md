@@ -9,7 +9,7 @@ tags: [chat, runtime, engine, streaming, jem, design-spec]
 
 # Canonical Chat Engine — Harmonizing All Chat Surfaces
 
-**Status:** implemented (commits e3b866d5e..38109bd75, docs/changeset/index truth in this Task 9 commit). Implementation plan: `wiki/Planning/Implementation-Plans/2026-10-23-canonical-chat-engine.md` (status: completed).
+**Status:** implemented (commits e3b866d5e..8d8d62b82). Implementation plan: `wiki/Planning/Implementation-Plans/2026-10-23-canonical-chat-engine.md` (status: completed). Debrief: `wiki/Research/Debriefs/2026-10-23-canonical-chat-engine-debrief.md`.
 **Scope:** `packages/runtime/src/chat/**`, `gateway-context-formatting.ts` (chat-facade
 portions), reactive-agent chat/session methods. **Consumer this unlocks:** `apps/jem`.
 
