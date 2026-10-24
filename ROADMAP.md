@@ -32,6 +32,8 @@ North star: **runs are processes, execution history is inspectable, trust is a t
 
 Releases below are sequenced by **ranked leverage**, not a fixed arc-per-version mapping — a lesson from this doc's own drift: v0.15 and v0.16 were both supposed to be Arc 2, and both correctly deferred it when higher-leverage dogfooding work showed up instead. This revision names what's actually ready to ship next, in the order the evidence supports.
 
+**Foundation track (not version-pinned): Phase 2 — effect-facade modernization.** The 2026-10-22/23 Quality & Scalability Program completed (13 PRs: mechanical CI locks, six monolith decompositions, all four facade families Effect-native at the module boundary) and its readiness checkpoint records Phase-2 as READY with a per-site continuation map. Phase-2 tranches (D3 error-tagging tranche 2, D4 service-tag prewiring) are deliberately **near-invisible**: no behavior or output changes without the ablation gate, and the one user-perceivable item (public-surface modernization) is major-version-gated by explicit decision (#288). Sequenced as capacity allows, alongside the releases below. Plan: `wiki/Planning/Implementation-Plans/2026-10-23-phase-2-effect-modernization.md`.
+
 ### v0.17 — "Proof" — clear the oldest open promise
 The v0.14 launch gate has had one item stuck `⏳ owner-gated` for three releases: **published third-party bench receipts.** This release exists to clear it.
 - **Run τ-bench.** `packages/eval`'s adapter/loader/pass-k harness plus the vendored airline+retail data have existed since before v0.15 and have zero reports in `wiki/Research/Harness-Reports/` (re-verified 2026-09-03). Run it, publish the number — good, bad, or mixed — same honesty discipline as every other published figure in this repo.

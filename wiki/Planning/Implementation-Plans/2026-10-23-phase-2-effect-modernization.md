@@ -112,6 +112,7 @@ messages with code literals via -F (v26e); PR -> CI 5/5 -> merge dev -> closeout
 ## Execution Log
 
 - 2026-10-23: Plan created from the readiness checkpoint (Phase-1 program
-  complete). T1-T3 pre-wired: all audits exist (classification map, Task 13
+  complete) Tranche + decision issues filed: #285 (P2-T1 diagnose/replay-value), #286
+  (P2-T2/T3 prewiring), #287 (P2-D1 defect-channel rfc), #288 (P2-D2 semver-window rfc). T1-T3 pre-wired: all audits exist (classification map, Task 13
   variance findings). T5 and P2-D1 are owner decisions; everything else can run
   in warden/parent-direct cadence. Awaiting go.
