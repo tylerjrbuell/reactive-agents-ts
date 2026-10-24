@@ -21,7 +21,14 @@ Bounded specialist for `packages/reasoning/src/kernel/**`. Decentralized-command
 
 **Bash commands allowed:**
 - `bunx turbo run typecheck --filter=@reactive-agents/reasoning`
-- `bun test packages/reasoning/src/kernel/**`
+- `bun test packages/reasoning/ --timeout 20000` (FULL package — the exact-
+  baseline law needs it; kernel-scoped runs never catch cross-module drift)
+- `bun test seam --timeout 20000` (from repo root; path-filter = seam pins)
+- `bash scripts/check-file-size.sh`, `bash scripts/check-string-errors.sh`,
+  and the content-anchor gates that scan THIS domain:
+  `check-run-assessment.sh`, `check-run-contract.sh`, `check-success-authority.sh`,
+  `check-termination-paths.sh`, `check-control-plane.sh`, `check-ledger-writes.sh`,
+  `check-policy-compiler.sh` — RUN only, never edit
 - `git diff`, `git log`, `git status`
 - `grep`, `find`
 
@@ -59,12 +66,12 @@ packages/reasoning/src/kernel/
     act/          ← act.ts (FC + tool execution), guard.ts, tool-gating.ts, tool-parsing.ts
     attend/       ← context-utils.ts, tool-formatting.ts
     comprehend/   ← task-intent.ts
-    decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18)
-    reason/       ← think.ts, think-guards.ts, stream-parser.ts
+    decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18; #220: shell ~850 LOC, LOC-PINNED, + 10 decide/* modules behind a RE-EXPORT SHIM — all 31 names still resolve FROM arbitrator.ts; that shim is the public surface)
+    reason/       ← think.ts ORCHESTRATOR (~676 LOC, LOC-PINNED, #219) + stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response, consume-think-stream, prepare-think-turn, build-think-request, context-pressure, final-answer-heuristics, tool-index-disclosure, stream-parser
     reflect/      ← loop-detector.ts, reactive-observer.ts, strategy-evaluator.ts
     sense/        ← step-utils.ts
     verify/       ← evidence-grounding.ts, quality-utils.ts, requirement-state.ts, verifier.ts
-  loop/           ← runner.ts (1739 LOC), react-kernel.ts, terminate.ts (single-owner helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
+  loop/           ← runner.ts + iterate-pass.ts SHELLS (LOC-PINNED, #222) + 14 runner-*/iterate-* seam modules (signal-return adapters where moved code contained break/continue) + runner-helpers/, react-kernel.ts, terminate.ts (single-owner helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
   state/          ← kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
   utils/          ← diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 ```
@@ -86,6 +93,55 @@ packages/reasoning/src/kernel/
 | `withReasoning()` silent drop | Strategy ignored | IC-2 Apr 12 |
 | Verifier double-rejection | False negatives, wasted tokens | `verifier.ts:217-222` removal |
 | qwen3 thinking force-on | Token blowup | resolved W7, must stay OPT-IN at `local.ts:226-251` |
+
+## Structural governance (2026-10-23 — Quality & Scalability Program law)
+
+Binding every spawn. Each rule below was paid for by a failing CI run or a
+silent-regrowth incident (history: [[2026-10-22-quality-scalability-program]] +
+execute-backlog skill v26-v26e). The mechanical locks are the ground truth:
+RUN them before returning and put their output verbatim in evidence-anchors.
+
+1. **PLACEMENT.** New code lands in this domain's extracted seam modules
+   (map below), never in a ceiling-pinned shell. Shells accept only delegate
+   wiring, verbatim-cluster moves OUT, and behavior-neutral shrink. If an
+   honest change must GROW a pinned shell: STOP and escalate — restructure.
+2. **RUN THE LOCKS.** `bash scripts/check-file-size.sh` (domain shells pinned
+   at EXACT LOC — growth AND un-edited shrink both fail),
+   `bash scripts/check-string-errors.sh` (untyped-error pool +
+   rejection-identity pool; the metric counts COMMENTS — never write the
+   literal `new Error(` or `instanceof` next to an Error type on any line you
+   add; phrase as "raw Error instance"/"identity check"), and the full lane:
+   `for s in scripts/check-*.sh; do bash "$s"; done`. Any file crossing the
+   1,000-LOC new-giant bar fails CI immediately — start modules, not giants.
+3. **LEDGER IS PARENT-ONLY.** Never edit anything under `scripts/`. Shrink:
+   report the new number, the parent lands the attributed deliberate edit.
+   Growth: does not happen. This is single-writer discipline, not a trust
+   limitation.
+4. **ANCHOR AUDIT BEFORE MOVING CODE.** `grep -l "<file>" scripts/check-*.sh`
+   first — several gates CONTENT-match specific regions of domain files (listed
+   in the map). Script-pinned regions stay inline unless the parent ratifies
+   script edits alongside the move.
+5. **SEAM PINS ARE THE EDIT SURFACE.** Behavior changes to an extracted module
+   land with (or extend) its direct-import pin (`bun test <pkg>/ -f seam`).
+   Assertions are never weakened; new pins prove load-bearing via a temporary
+   mutation (RED-on-cut), reverted with a clean diff.
+6. **EXACT BASELINES.** Record pristine package-suite counts (pass/skip/fail/
+   files) BEFORE editing; return only at baseline + your new tests, 0 fail.
+   New test files: `bun run --cwd apps/docs metrics && bun run --cwd apps/docs
+   metrics:sync-readme` with README.md staged in the same commit.
+### Placement map (kernel)
+- Pinned shells: `loop/runner.ts`, `loop/iterate-pass.ts`,
+  `capabilities/reason/think.ts`, `capabilities/reason/dispatch-think-response.ts`,
+  `capabilities/decide/arbitrator.ts`. Live ceilings: `scripts/check-file-size.sh`.
+- CONTENT-ANCHORED (rule 4 is sharp here): seven check scripts grep-match
+  regions of runner/iterate-pass/arbitrator (grounding-redirect budget writes,
+  `deriveConditions(`/`verifyDelivery(` call shapes, exit-success literals,
+  termination-path census, control-plane seams). Script-pinned regions STAY
+  INLINE; moves that would carry them need parent-ratified script edits.
+- Seam pins: `tests/strategies/kernel/phases/seam-*.test.ts`,
+  `tests/kernel/seam-think-helpers.test.ts`, think-pressure-gate +
+  tool-index-text precedents. Source-scanning tests (status-renderer-root-only
+  style) pin literals TO FILES — moving a scanned cluster breaks the scanner.
 
 ## Workflow (every spawn)
 
