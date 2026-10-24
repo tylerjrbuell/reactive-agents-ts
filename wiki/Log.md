@@ -1,0 +1,3 @@
+# 2026-10-23 — Introspective harness improvement loop (bonsai-2:27b)
+
+New probe mode shipped to harness-improvement-loop: agents interviewed outside the harness, self-reports cross-checked vs trace events. Six friction tasks ran; one fix shipped (ollama thinking off-switch, provider-warden — llm-provider 511/0); 11 scored items queued in Recommended-Enhancements.md §2026-10-23 (top: maxIterations tier-clamp theft, recovery-nudge wrong-tool advice, denials traced ok=true, terminal-gate blind spot, sandbox split-brain go/no-go). Evidence: wiki/Research/Harness-Reports/introspective-2026-10-24-02-*.

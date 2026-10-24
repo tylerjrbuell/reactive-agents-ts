@@ -1,7 +1,7 @@
 ---
 aliases: [High-Leverage Backlog, Recommended Enhancements]
 tags: [planning, backlog, prioritization]
-updated: 2026-09-23b
+updated: 2026-10-23
 ---
 
 # Recommended Enhancements
@@ -524,3 +524,29 @@ Parent-direct execution (packages/compose not in warden table). Added `harness.a
 - #206 design pass note in the old table is stale — the feature is already shipped
 
 No code-ready singleton remains above score ~3 without a design pass.
+
+## 2026-10-23 sweep — introspective probe (bonsai-2:27b self-report × trace cross-check)
+
+**Sources this pass:** NEW probe methodology — `.agents/skills/harness-improvement-loop/scripts/introspective-probe.ts`: 6 friction-engineered tasks × bonsai-2:27b via Ollama, each followed by an out-of-harness structured interview (raw `/api/chat`, `format:json`, thinking ON with widened `num_predict`), cross-checked deterministically against trace events (denials/signals/verifier verdicts/terminatedBy). 7 runs total (1 interview lost to a probe-side parse bug, superseded). Reports: `wiki/Research/Harness-Reports/introspective-2026-10-24-02-*.json|.md` (filenames UTC). Exhaustive for the 6 designed tasks; single model tier (local); interview is the SUT model. Grounding: each item re-read at its cited file:line. GH dedupe: `gh issue list` open+search — zero collisions.
+
+**SHIPPED during this sweep:** ollama thinking off-switch — `config.thinking:false` now sends `think:false` on capable models (was collapsed into param-omission, so server-side default thinking stayed on and the +6000 widening paid for a disabled feature). provider-warden, pilot log 2026-10-23; llm-provider 511/0, runtime thinking tests 42/0.
+
+| id | item | score (B·F·C) | status | evidence / GH |
+|---|---|---|---|---|
+| I2 | `.withReasoning({maxIterations})` silently clamped to tier profile min (`reactive.ts:182-186`); builder default 10 is indistinguishable from explicit 10 → local-tier runs get 8 and RI early-stops against 8 ("iter=7, max=8" trace seq 178, run 01M5NVA1) | **18** = 3·3·2 | VERIFIED | 2/6 runs truncated early vs dev-config |
+| I5 | recovery-steering nudge (`runner-helpers/recovery-steering.ts:48`) advises an alternate *tool* that cannot fix a blocked write ("file-write failed → try file-read"); confused 3/6 models | **18** = 2·3·3 | VERIFIED | signals origin loop/iterate-pass.ts:710; confused_by ×3 |
+| I7 | shell-execute policy denials emit `tool-call-end ok=true` with `{executed:false}` payload — invisible to ok-based diagnostics (probe extractor missed 5/7 denials until patched) | **18** = 2·3·3 | VERIFIED | run 01M5NVA1 tool-call-end lines |
+| I4 | terminal-gate rejection reason never reaches the agent nor a clean result field — verification fired in 4/6 runs with zero model self-awareness (blind-spot); == the skill's deferred "verifier-driven retry loop" (highest-leverage recovery move) | 12 = 3·2·2 | VERIFIED | blindSpot tally ×4 |
+| I8 | `file-write` success message omits the resolved absolute path → "✓ Written to ./note.txt" while the model meant another dir; false-deliverable confidence (dishonest-success vector) | 12 = 2·2·3 | VERIFIED | f-allowlist-nohint confused_by |
+| I9 | allowlist no-hint gaps: `sha256sum`/`base64`/`stat` neither allowlisted nor opt-in (denial names no alternative); `cd` denied by first-word policy; `rm` blocked with no delete-tool equivalent — model called the task "impossible" | 12 = 2·3·2 | VERIFIED | f-blocked-rm, f-allowlist-nohint denials |
+| I1 | sandbox split-brain: file tools' working root = repo cwd vs shell sandbox = `/tmp/rax-sandbox-<uuid>` — no absolute path valid for both, cross-tool handoff broken. Asymmetry is *deliberate* blast-radius design (shell can't touch repo; file tools can) → unification is a go/no-go, not a bug-wipe | 9 = 3·3·1 | VERIFIED, **needs go/no-go** | 6/6 runs; 5/6 one-asks; run-completed.error deliberation dump |
+| I3 | double terminal gate: gate PASSES (10 checks, seq 183), post-early-stop re-verify FAILS on `action-success`+tier1 (seq 204) → run flips to failure though the deliverable computed correctly (1048576/500500 written); `run-completed.error` carries a raw first-person deliberation dump instead of the gate's reason | 9 = 3·3·1 | VERIFIED-PARTIAL (symptom 4/6, mechanism localized to finalize seam, root-cause pass needed) | run 01M5NVA1 seq 183/204/207 |
+| I6 | per-tool budget nudge (`act/guard.ts:419`) "Stop repeating this tool. Use final-answer" fires at 2 calls while every other tool is denial-blocked → forced premature finalize (contributor to I3's harness_synthesis flips) | 8 = 2·2·2 | VERIFIED | f-allowlist-optin v2 interview |
+| I11 | `bonsai-2:27b`, `qwen3.8:27b`, `gemma4:26b` absent from `STATIC_CAPABILITIES` → bench preflight refuses to score freshly-pulled local models | 6 = 1·2·3 | VERIFIED | capability.ts grep; /api/show shows real values available |
+| I10 | head-truncation-guard "shrank tool surface" can drop the only deliverable-capable tool (file-write) under context pressure | 4 = 2·1·2 | VERIFIED (1/6, pressure-gated) | f-context-pressure transcript |
+
+**Sprint batches (sorted by score, capped):**
+- **Sprint A — quick wins:** I2 (explicit-vs-default cap flag + `config-clamped` trace event), I5 (failure→actionable-remedy mapping), I7 (denials emit ok=false / dedicated `policy-denied` event), I8 (resolved path in success message), I9 (hint text + deliberate `cd`/delete-tool decisions). All isolated, ≤2 files each, no lift-gate (bug-class, not new mechanisms).
+- **Sprint B — correctness + recovery:** I4 (verifier-driven retry loop — NEW default-on mechanism ⇒ ablation-warden lift gate per contract), I3 (root-cause double-gate flip + stop thought-dump leaking to `result.error`), I1 (design spec for shared scratch root — needs owner go/no-go on the security asymmetry), I6, I11.
+
+**Needs go/no-go:** I1 (unifying roots widens shell blast radius into the repo; the split is currently sanctioned by shell-execution.ts:20-24 comments). I4 is sanctioned by the skill's deferred list but flips a default-on behavior gate.

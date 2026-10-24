@@ -1,12 +1,21 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-10-20
+updated: 2026-10-23
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## 2026-10-23 — Introspective harness loop shipped: thinking off-switch + 11-item scored queue
+
+- NEW probe mode: `introspective-probe.ts` (harness-improvement-loop skill) — agent interviewed OUTSIDE the harness per run, reports cross-checked vs trace events (blind-spot = harness communication failure). 6 friction tasks × bonsai-2:27b; codified in SKILL.md Phase 2.
+- **SHIPPED** (provider-warden, pilot log): ollama `resolveThinking` tri-state — `thinking:false` now sends `think:false` on capable models (was param-omission → server-side default thinking stayed ON + widening paid +6000 for a disabled feature). llm-provider 511/0, typecheck clean.
+- Queue: `Recommended-Enhancements.md` §2026-10-23 sweep (I1–I12, scored + grounded). Sprint A quick wins: I2 maxIterations tier-clamp theft (reactive.ts:186 min() vs explicit config — 18pts), I5 recovery nudge wrong-tool advice (recovery-steering.ts:48), I7 denials traced ok=true, I8 file-write hides resolved path, I9 allowlist hint gaps. Sprint B: I4 verifier-driven retry (=4/6 blind spots), I3 double-terminal-gate flip (correct run → failure + thought-dump in result.error, run 01M5NVA12...), I1 sandbox split-brain (5/6 model one-asks; needs go/no-go — asymmetry deliberate per shell-execution.ts:20-24).
+- Bonsai-2 interview rules: thinking ON + widened num_predict + starvation detect + brace-salvage (all in script).
 
 ---
 
