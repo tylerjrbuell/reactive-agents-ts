@@ -289,6 +289,7 @@ export const runBuilderBuildEffect = <TOut>(
             capabilities: {
                 minIterations: state._minIterations,
                 taskContext: state._taskContext,
+                systemPrompt: composedSystemPrompt,
                 verificationStep: state._verificationStep,
                 outputValidator: state._outputValidator,
                 outputValidatorOptions: state._outputValidatorOptions,

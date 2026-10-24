@@ -223,7 +223,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   phase: "bootstrap",
                   agentState: "bootstrapping",
                   iteration: 1,
-                  maxIterations: config.maxIterations,
+                  maxIterations:
+                    typeof task.metadata?.context?.maxIterations === "number"
+                      ? (task.metadata.context.maxIterations as number)
+                      : config.maxIterations,
                   messages: [],
                   toolResults: [],
                   cost: 0,

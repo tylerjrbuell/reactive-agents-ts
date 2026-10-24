@@ -78,7 +78,10 @@ export interface ChatEngineCapabilities {
    * `ReactiveAgent.run()`. Absent plus a tool request ⇒ typed capability rejection
    * (Task 2 pins the rejection; never a silent fallback to the direct path).
    */
-  readonly runTask?: (input: string, opts: { history: readonly ChatMessage[] }) => Promise<AgentResult>;
+  readonly runTask?: (input: string, opts: {
+    history: readonly ChatMessage[];
+    maxIterations?: number;
+  }) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -140,6 +143,7 @@ export interface ChatEngineCapabilities {
    * renders it as a fragment of the direct-path prompt.
    */
   readonly contextSummary?: (message: string) => string;
+  readonly scratchpadEntries?: () => Readonly<Record<string, string>>;
 }
 
 /**
@@ -352,7 +356,10 @@ export class ChatEngine {
       const contextSummary = this.#deps.contextSummary?.(message);
       const input = [contextSummary ?? "", message].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR);
       const history = await this.#historyForPath();
-      const result = await this.#deps.runTask(input, { history });
+      const result = await this.#deps.runTask(input, {
+        history,
+        maxIterations: options?.maxIterations,
+      });
       const reply = this.#assembleToolReply(result, options);
       const userText = options.recordUserText ?? message;
       this.#recordBothTurns(userText, reply.message);
@@ -557,7 +564,8 @@ export class ChatEngine {
       toolNamesFromMetadata && toolNamesFromMetadata.length > 0
         ? [...new Set(toolNamesFromMetadata)]
         : result.debrief?.toolsUsed.map((t) => t.name);
-    const scratchpad = { ...(result.metadata.scratchpad ?? {}) };
+    const hostScratchpad = this.#deps.scratchpadEntries?.() ?? {};
+   const scratchpad = { ...(result.metadata.scratchpad ?? {}), ...hostScratchpad };
     const citationCheck = options.verifyCitations
       ? validateCitations(
           result.output,
