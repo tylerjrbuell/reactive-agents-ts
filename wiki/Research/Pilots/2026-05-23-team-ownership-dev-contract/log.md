@@ -1685,3 +1685,12 @@ result: completed, confidence 0.9
 outcome: "Created .changeset/canonical-chat-engine.md (minor, @reactive-agents/runtime) documenting session.runStream(), ChatEngine semantic fixes, persistOnEnd removal. Updated apps/docs features/streaming.md (session.runStream section + builder table row), features/gateway.md (canonical ids + legacy fallback note), reference/builder-api.md (ChatOptions extraContext/maxIterations honored, SessionOptions maxAgeDays/onOverflow, AgentSession.runStream). Exported ChatEngine from chat.ts and runtime index. Ran metrics generation + sync-readme (README updated). Flipped plan frontmatter status:completed/completed:2026-10-24, Planning-Index row to COMPLETE with commit range e3b866d5e..38109bd75, spec status to implemented (commits range). AGENTS.md had no references to removed symbols (directChat/_chatHistory/persistOnEnd/etc.) — no edits needed. Typecheck 0 errors. Commit: docs(chat): canonical chat engine docs + changeset + index truth (engine plan Task 9). No Co-Authored-By trailers."
 bypass-reason: none
 ```
+
+```yaml
+date: 2026-10-24
+warden: runtime-warden
+task: "canonical-chat-engine review-fix Important #1-#3"
+result: completed, confidence: 0.9
+outcome: "Fix #1 getOrLoadHistory tries canonical sess_gateway_ key before legacy; deterministic canonical id. Fix #2 _chatLegacy systemPrompt wired. Fix #3 #loaded latch set only after successful load. RED observed for each; GREEN scoped suite 104 pass / 0 fail; typecheck 0 errors; error-pool 53/21 unchanged. Commit 4b975d7d9."
+bypass-reason: none
+```
