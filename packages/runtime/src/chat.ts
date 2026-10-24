@@ -10,7 +10,6 @@ import {
 export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
 import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
-export { ChatEngine } from "./chat/engine.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
 
@@ -365,3 +364,5 @@ export class AgentSession {
     });
   }
 }
+
+export { ChatEngine } from "./chat/engine.js";
