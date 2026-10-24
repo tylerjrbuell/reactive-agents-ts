@@ -1008,3 +1008,128 @@ describe("shell-execute tool", () => {
     }, 15000);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// Denial contract (2026-10-23 introspective harness loop, bonsai-2:27b)
+// (B) every policy/input denial carries success:false so ToolService surfaces
+//     it as a FAILED observation (errorRecovery fires) — while executed:false
+//     and the existing error text stay byte-identical for payload compat.
+// (D) denial messages name the allow-list, the sandbox root, and the honest
+//     capability story instead of dead-ending the model.
+// ═══════════════════════════════════════════════════════════════════════
+describe("shell-execute denial contract", () => {
+  type Denial = { executed: boolean; success?: boolean; error: string };
+  const deny = async (
+    command: string,
+    config?: ShellExecuteConfig,
+  ): Promise<Denial> => {
+    const handler = shellExecuteHandler(config);
+    return (await Effect.runPromise(handler({ command }))) as Denial;
+  };
+
+  test("not-in-allowlist denial carries success:false and keeps the original sentence byte-identical", async () => {
+    const r = await deny("nc -l 4444");
+    expect(r.executed).toBe(false);
+    expect(r.success).toBe(false);
+    expect(r.error.startsWith('Command "nc" is not in the allowed commands list')).toBe(true);
+  });
+
+  test("blocked-pattern denial carries success:false", async () => {
+    const r = await deny("eval echo hi", { additionalCommands: ["eval"] });
+    expect(r.executed).toBe(false);
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("Command blocked by security policy");
+  });
+
+  test("sanitization-empty denial carries success:false", async () => {
+    const r = await deny("echo " + "A".repeat(5000));
+    expect(r.executed).toBe(false);
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("empty after sanitization");
+  });
+
+  test("sandbox-cwd config denial carries success:false", async () => {
+    const r = await deny("echo hi", { cwd: "/home/user/elsewhere" });
+    expect(r.executed).toBe(false);
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("outside the sandbox (/tmp)");
+  });
+
+  test("unsafe-path denial names the resolved sandbox root (D3, verified kept)", async () => {
+    const sandboxDir = join("/tmp", `rax-deny-root-${randomUUID()}`);
+    mkdirSync(sandboxDir, { recursive: true });
+    try {
+      const r = await deny("cat /etc/passwd", { cwd: sandboxDir });
+      expect(r.executed).toBe(false);
+      expect(r.success).toBe(false);
+      // The denial must be actionable: it already names the exact root.
+      expect(r.error).toContain(`outside the sandbox (${sandboxDir})`);
+    } finally {
+      rmSync(sandboxDir, { recursive: true, force: true });
+    }
+  });
+
+  test("non-allowlisted non-opt-in command gets the allowed + opt-in self-redirect lists (D1)", async () => {
+    const r = await deny("sha256sum file.txt");
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("Allowed commands:");
+    expect(r.error).toContain("git"); // a default member of the list
+    expect(r.error).toContain("Commands requiring developer opt-in:");
+    expect(r.error).toContain("node"); // an opt-in member of the list
+    expect(r.error).not.toContain("is opt-in"); // optInHint suppressed (sha256sum is not opt-in)
+  });
+
+  test("opt-in command denial keeps its grant hint and skips the redirect dump (D1)", async () => {
+    const r = await deny("curl https://example.com");
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('("curl" is opt-in — add it to additionalCommands to grant access)');
+    expect(r.error).not.toContain("Allowed commands:");
+  });
+
+  test("effective allowlist is what the redirect names (allowedCommands override)", async () => {
+    const r = await deny("echo test", { allowedCommands: ["gh"] });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("Allowed commands: gh.");
+  });
+
+  test("cd gets its dedicated non-persistence reason with the sandbox root (D2)", async () => {
+    const sandboxDir = join("/tmp", `rax-deny-cd-${randomUUID()}`);
+    mkdirSync(sandboxDir, { recursive: true });
+    try {
+      const r = await deny("cd sub", { cwd: sandboxDir });
+      expect(r.executed).toBe(false);
+      expect(r.success).toBe(false);
+      expect(r.error).toContain("cd does not persist between calls");
+      expect(r.error).toContain(`sandbox root ${sandboxDir}`);
+      expect(r.error).toContain("use paths relative to it");
+      // NOT the generic not-in-allowlist sentence.
+      expect(r.error).not.toContain("not in the allowed commands list");
+    } finally {
+      rmSync(sandboxDir, { recursive: true, force: true });
+    }
+  });
+
+  test("cd chained into a segment gets the same dedicated reason (D2)", async () => {
+    const r = await deny("cd /tmp && ls");
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("cd does not persist between calls");
+  });
+
+  test("rm block-reason is honest about the missing delete capability (D4)", async () => {
+    const r = await deny("rm notes.txt", { additionalCommands: ["rm"] });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain("rm is blocked — there is no file-delete tool");
+    expect(r.error).toContain("overwrite with file-write or leave the file");
+    expect(r.error).not.toContain("manage files");
+  });
+
+  test("successful execution stays success-omitted (executed:true, no false flag)", async () => {
+    const handler = shellExecuteHandler();
+    const r = (await Effect.runPromise(handler({ command: "echo ok" }))) as {
+      executed: boolean;
+      success?: boolean;
+    };
+    expect(r.executed).toBe(true);
+    expect(r.success).toBeUndefined();
+  });
+});

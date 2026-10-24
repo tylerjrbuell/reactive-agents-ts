@@ -256,7 +256,8 @@ export const fileWriteTool: ToolDefinition = {
   name: "file-write",
   description:
     "Write text to a file, creating parent directories as needed (overwrites any existing content). " +
-    "Returns { written: true, path: '...' } on success — once you see this, the file is saved. " +
+    "Returns { written: true, path: '<RESOLVED ABSOLUTE path under the working root>' } on success — " +
+    "once you see this, the file is saved; report that exact path. " +
     "IMPORTANT: the required parameters are 'path' and 'content' — do NOT use 'file', 'filename', or 'filepath'.",
   parameters: [
     {
@@ -288,7 +289,7 @@ export const fileWriteTool: ToolDefinition = {
       default: "utf-8",
     },
   ],
-  returnType: "{ written: true, path: string } — confirms the file was saved successfully",
+  returnType: "{ written: true, path: string } — confirms the file was saved successfully; `path` is the RESOLVED ABSOLUTE path under the working root (not the relative path you sent)",
   category: "file",
   riskLevel: "high",
   timeoutMs: 5_000,
@@ -423,6 +424,11 @@ export function writeContentRejection(
   return undefined;
 }
 
+/**
+ * file-write handler. `{ written: true, path }` with `path` = the RESOLVED
+ * ABSOLUTE path (`confinePath` vs the active file root). See upward-report:
+ * the kernel's observation normalizer re-truncates this for model display.
+ */
 export const fileWriteHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown, ToolExecutionError> =>
@@ -460,7 +466,7 @@ export const fileEditTool: ToolDefinition = {
     "Replace an exact block of text inside an existing file, leaving the rest untouched. " +
     "Use this instead of file-write whenever the file already exists and you are changing part of it — " +
     "file-write overwrites the WHOLE file and will destroy content you did not re-send. " +
-    "Returns { edited: true, path: '...', replacements: n } on success. " +
+    "Returns { edited: true, path: '<resolved absolute path>', replacements: n } on success. " +
     "The edit is refused (and the file left untouched) if 'oldText' is missing from the file, " +
     "or appears more than once without 'replaceAll'.",
   parameters: [
@@ -499,7 +505,7 @@ export const fileEditTool: ToolDefinition = {
     },
   ],
   returnType:
-    "{ edited: true, path: string, replacements: number } — confirms the file was modified in place",
+    "{ edited: true, path: string, replacements: number } — confirms the file was modified in place; `path` is the RESOLVED ABSOLUTE path under the working root",
   category: "file",
   riskLevel: "high",
   timeoutMs: 5_000,
@@ -522,6 +528,7 @@ function countOccurrences(haystack: string, needle: string): number {
   }
 }
 
+/** file-edit handler — same resolved-absolute-`path` contract as {@link fileWriteHandler}. */
 export const fileEditHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown, ToolExecutionError> =>

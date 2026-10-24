@@ -75,6 +75,75 @@ describe("NativeFCStrategy", () => {
     }
   });
 
+  // Regression (2026-10-23 introspective harness loop, bonsai-2:27b): the
+  // kernel shows schema names sanitized by reasoning's sanitizeToolName
+  // (`umami/get_website_stats` → `umami_get_website_stats`, because provider
+  // function-name regexes forbid slashes). The model can only EVER emit the
+  // underscored form. resolveToolName's directCandidates has no `_`→`/`
+  // candidate, and its last-token suffix heuristic aborts when two registry
+  // names share a last token (`umami/get_website_stats` vs
+  // `umami/get_event_stats`) — the result was `_tag: thinking` plus a hint
+  // demanding the slash name the model cannot emit, looping to max_iterations.
+  it("resolves underscore-sanitized namespaced MCP names when the last token is ambiguous", () => {
+    const available = [
+      { name: "web-search" },
+      { name: "http-get" },
+      { name: "umami/get_website_stats" },
+      { name: "umami/get_event_stats" },
+    ];
+    const input: ResolverInput = {
+      toolCalls: [
+        { id: "tc1", name: "umami_get_website_stats", input: { days: "7" } },
+      ],
+      stopReason: "tool_use",
+    };
+    const result = run(strategy.resolve(input, available));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls).toHaveLength(1);
+      expect(result.calls[0].name).toBe("umami/get_website_stats");
+      expect(result.calls[0].arguments).toEqual({ days: "7" });
+    }
+  });
+
+  it("token-sequence match resolves the unambiguous sibling too", () => {
+    const available = [
+      { name: "umami/get_website_stats" },
+      { name: "umami/get_event_stats" },
+    ];
+    const input: ResolverInput = {
+      toolCalls: [
+        { id: "tc1", name: "umami_get_event_stats", input: {} },
+      ],
+      stopReason: "tool_use",
+    };
+    const result = run(strategy.resolve(input, available));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("umami/get_event_stats");
+    }
+  });
+
+  it("keeps the last-token suffix heuristic as the weaker fallback for truncated names", () => {
+    // "website_stats" is not a full token sequence of any candidate, but its
+    // last token ("stats") matches exactly one candidate — the fallback must
+    // still resolve it (unchanged behavior; guards against the new
+    // full-sequence arm replacing the heuristic instead of preceding it).
+    const available = [
+      { name: "web-search" },
+      { name: "umami/get_website_stats" },
+    ];
+    const input: ResolverInput = {
+      toolCalls: [{ id: "tc1", name: "website_stats", input: {} }],
+      stopReason: "tool_use",
+    };
+    const result = run(strategy.resolve(input, available));
+    expect(result._tag).toBe("tool_calls");
+    if (result._tag === "tool_calls") {
+      expect(result.calls[0].name).toBe("umami/get_website_stats");
+    }
+  });
+
   it("returns final_answer when no tool calls and end_turn", () => {
     const input: ResolverInput = {
       content: "The answer is 42.",

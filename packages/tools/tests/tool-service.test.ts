@@ -1,11 +1,16 @@
 import { Effect, Layer } from "effect";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 
-import { EventBusLive } from "@reactive-agents/core";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
 import { ToolService, ToolServiceLive } from "../src/tool-service.js";
 import { builtinTools } from "../src/skills/builtin.js";
 
 const TestToolLayer = ToolServiceLive.pipe(Layer.provide(EventBusLive));
+
+// Same shared EventBus instance feeds ToolServiceLive AND is an output the
+// program can `yield* EventBus` on — required to observe the exact
+// `tools.executed` payloads execute() publishes.
+const TestToolWithBusLayer = ToolServiceLive.pipe(Layer.provideMerge(EventBusLive));
 
 const createMockMcpServer = (port: number) => {
   return Bun.serve({
@@ -121,6 +126,137 @@ describe("ToolService", () => {
     });
 
     await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
+  });
+
+  // (B) 2026-10-23 introspective harness loop: execute() hardcoded
+  // `success: true as const` whenever the handler COMPLETED, so in-payload
+  // failures — shell-execute policy denials ({executed:false, success:false,
+  // error}) — traced as successful tool-call-end observations and skipped the
+  // kernel's errorRecovery guidance. The final ToolOutput.success is now
+  // DERIVED from the completed handler result.
+  describe("execute — in-payload failure derivation ({success:false} handler results)", () => {
+    const denialDefinition = {
+      name: "deny-tool",
+      description: "Simulates a shell policy denial: completes, reports failure in-payload",
+      parameters: [],
+      riskLevel: "low" as const,
+      timeoutMs: 5000,
+      requiresApproval: false,
+      source: "function" as const,
+    };
+    const plainDefinition = {
+      name: "plain-tool",
+      description: "Completes with an ordinary success payload",
+      parameters: [],
+      riskLevel: "low" as const,
+      timeoutMs: 5000,
+      requiresApproval: false,
+      source: "function" as const,
+    };
+
+    it("returns a failed ToolOutput whose result still carries the denial payload verbatim", async () => {
+      const program = Effect.gen(function* () {
+        const tools = yield* ToolService;
+        yield* tools.register(
+          denialDefinition,
+          () =>
+            Effect.succeed({
+              executed: false,
+              success: false,
+              error: 'Command "sha256sum" is not in the allowed commands list',
+            }),
+        );
+        const output = yield* tools.execute({
+          toolName: "deny-tool",
+          arguments: {},
+          agentId: "agent-1",
+          sessionId: "session-1",
+        });
+        expect(output.success).toBe(false);
+        // The model-visible payload is NOT rewritten — denial text rides in result.
+        expect(output.result).toEqual({
+          executed: false,
+          success: false,
+          error: 'Command "sha256sum" is not in the allowed commands list',
+        });
+      });
+      await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
+    });
+
+    it("publishes tools.executed with the derived success:false", async () => {
+      const program = Effect.gen(function* () {
+        const tools = yield* ToolService;
+        const bus = yield* EventBus;
+        const events: Array<{ type: string; payload: unknown }> = [];
+        const unsub = yield* bus.subscribe((event) =>
+          Effect.sync(() => {
+            if (event._tag === "Custom" && event.type === "tools.executed") {
+              events.push({ type: event.type, payload: event.payload });
+            }
+          }),
+        );
+        yield* tools.register(
+          denialDefinition,
+          () => Effect.succeed({ executed: false, success: false, error: "denied" }),
+        );
+        yield* tools.execute({
+          toolName: "deny-tool",
+          arguments: {},
+          agentId: "agent-1",
+          sessionId: "session-1",
+        });
+        yield* tools.register(
+          plainDefinition,
+          () => Effect.succeed({ written: true, path: "/abs/out.txt" }),
+        );
+        yield* tools.execute({
+          toolName: "plain-tool",
+          arguments: {},
+          agentId: "agent-1",
+          sessionId: "session-1",
+        });
+        unsub();
+
+        const payloads = events.map(
+          (e) => (e.payload as { toolName: string; success: boolean }).success,
+        );
+        const names = events.map(
+          (e) => (e.payload as { toolName: string; success: boolean }).toolName,
+        );
+        const denyIdx = names.indexOf("deny-tool");
+        const plainIdx = names.indexOf("plain-tool");
+        expect(denyIdx).toBeGreaterThanOrEqual(0);
+        expect(plainIdx).toBeGreaterThanOrEqual(0);
+        expect(payloads[denyIdx]).toBe(false);
+        expect(payloads[plainIdx]).toBe(true);
+      });
+      await Effect.runPromise(program.pipe(Effect.provide(TestToolWithBusLayer)));
+    });
+
+    it("keeps success:true for results without a top-level success:false flag (strings, arrays, success:true objects)", async () => {
+      const program = Effect.gen(function* () {
+        const tools = yield* ToolService;
+        yield* tools.register(
+          plainDefinition,
+          () => Effect.succeed({ written: true, success: true, path: "/abs/a.txt" }),
+        );
+        yield* tools.register(
+          { ...plainDefinition, name: "array-tool" },
+          () => Effect.succeed([{ success: false }]),
+        );
+        yield* tools.register(
+          { ...plainDefinition, name: "string-tool" },
+          () => Effect.succeed("all good"),
+        );
+        const a = yield* tools.execute({ toolName: "plain-tool", arguments: {}, agentId: "x", sessionId: "y" });
+        const b = yield* tools.execute({ toolName: "array-tool", arguments: {}, agentId: "x", sessionId: "y" });
+        const c = yield* tools.execute({ toolName: "string-tool", arguments: {}, agentId: "x", sessionId: "y" });
+        expect(a.success).toBe(true);
+        expect(b.success).toBe(true); // array of failure-shaped data is not an in-payload failure
+        expect(c.success).toBe(true);
+      });
+      await Effect.runPromise(program.pipe(Effect.provide(TestToolLayer)));
+    });
   });
 
   it("should fail for unknown tools", async () => {

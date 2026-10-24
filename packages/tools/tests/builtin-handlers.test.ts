@@ -235,6 +235,45 @@ describe("fileWriteHandler — error cases", () => {
     expect(fileWriteTool.requiresApproval).toBe(true);
     expect(fileWriteTool.riskLevel).toBe("high");
   });
+
+  // (C) 2026-10-23 introspective harness loop: the working root for file
+  // tools is process cwd — NOT the shell sandbox — and a success payload that
+  // only echoed the relative request let models claim deliverables at wrong
+  // paths. The payload must carry the RESOLVED ABSOLUTE path.
+  it("fileWriteHandler payload carries the resolved absolute path for a relative request", async () => {
+    await setup();
+    const root = path.join(tmpDir, "abs-pin");
+    await fs.mkdir(root, { recursive: true });
+    const typed = (await withFileRoot(
+      root,
+      () => Effect.runPromise(fileWriteHandler({ path: "./results.txt", content: "pinned" })),
+    )) as { written: boolean; path: string };
+    expect(typed.written).toBe(true);
+    expect(path.isAbsolute(typed.path)).toBe(true);
+    expect(typed.path).toBe(path.join(root, "results.txt"));
+    // No longer hides resolution: the basename alone is not the payload path.
+    expect(typed.path).not.toBe("./results.txt");
+    const contents = await fs.readFile(path.join(root, "results.txt"), "utf-8");
+    expect(contents).toBe("pinned");
+  });
+
+  it("fileEditHandler payload carries the resolved absolute path", async () => {
+    await setup();
+    const root = path.join(tmpDir, "abs-pin-edit");
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(path.join(root, "notes.md"), "alpha\n", "utf-8");
+    const { fileEditHandler } = await import("../src/skills/file-operations.js");
+    const typed = (await withFileRoot(
+      root,
+      () =>
+        Effect.runPromise(
+          fileEditHandler({ path: "./notes.md", oldText: "alpha", newText: "omega" }),
+        ),
+    )) as { edited: boolean; path: string };
+    expect(typed.edited).toBe(true);
+    expect(path.isAbsolute(typed.path)).toBe(true);
+    expect(typed.path).toBe(path.join(root, "notes.md"));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

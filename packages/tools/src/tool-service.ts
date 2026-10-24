@@ -84,8 +84,13 @@ export class ToolService extends Context.Tag("ToolService")<
      * 1. Look up tool in registry by name
      * 2. Validate input arguments against tool's parameter schema
      * 3. Execute handler in sandbox with configured timeout
-     * 4. Publish `ToolCallCompleted` event to EventBus with timing
-     * 5. Return success with result or error details
+     * 4. Derive `success` from the completed handler result (see failure
+     *    contract below), cache it, publish `ToolCallCompleted`, return it
+     *
+     * Handler failure contract: a completed handler result that is a plain
+     * object with `success === false` yields a FAILED ToolOutput and
+     * `tools.executed` with `success: false` — a failed observation, not a
+     * defect. The refusal payload still rides in `result` verbatim.
      *
      * @param input - Tool execution request (toolName, arguments, agentId, sessionId)
      * @returns ToolOutput with result, success flag, and executionTimeMs
@@ -104,7 +109,8 @@ export class ToolService extends Context.Tag("ToolService")<
      *   agentId: "my-agent",
      *   sessionId: "session-123",
      * });
-     * console.log(result.result); // { written: true, path: "./output.txt" }
+     * // `path` is the RESOLVED absolute path under the active file root
+     * console.log(result.result); // { written: true, path: "/abs/root/output.txt" }
      * ```
      */
     readonly execute: (
@@ -326,6 +332,21 @@ export class ToolService extends Context.Tag("ToolService")<
 // ─── Live Implementation ───
 
 /**
+ * Detect an IN-PAYLOAD handler failure: a COMPLETED result that is a plain
+ * object with `success === false` (e.g. shell-execute's
+ * `{ executed: false, success: false, error }` denial). `execute` surfaces
+ * these as failed ToolOutputs — like kernel-internal tool-policy/approval-deny
+ * blocks — instead of the previously hardcoded success:true; the refusal
+ * payload still rides in `result` verbatim.
+ */
+function handlerReportsFailure(result: unknown): boolean {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return false;
+  }
+  return (result as Record<string, unknown>).success === false;
+}
+
+/**
  * Live Effect-TS Layer providing the full ToolService implementation.
  *
  * On startup this layer:
@@ -452,13 +473,17 @@ export const ToolServiceLive = Layer.effect(
 
         const executionTimeMs = Date.now() - startTime;
 
+        // Step 3.5: Derive observation status from the handler result (in-payload
+        // {success:false} = failed observation — see handlerReportsFailure).
+        const success = !handlerReportsFailure(result);
+
         // Step 3.5: Store in cache if available
         if (Option.isSome(cacheOpt) && tool.definition.isCacheable !== false) {
           yield* cacheOpt.value.store(
             input.toolName,
             validatedArgs,
             result,
-            true,
+            success,
             tool.definition.cacheTtlMs,
           );
         }
@@ -469,14 +494,14 @@ export const ToolServiceLive = Layer.effect(
           type: "tools.executed",
           payload: {
             toolName: input.toolName,
-            success: true,
+            success,
             executionTimeMs,
           },
         });
 
         return {
           toolName: input.toolName,
-          success: true as const,
+          success,
           result,
           executionTimeMs,
         } satisfies ToolOutput;

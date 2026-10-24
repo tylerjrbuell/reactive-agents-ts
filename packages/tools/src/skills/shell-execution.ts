@@ -137,7 +137,7 @@ export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   { pattern: /\brm\b.*--recursive/i, reason: "rm --recursive is destructive" },
   { pattern: /\brm\b.*--force/i, reason: "rm --force is destructive" },
   // rm as a standalone command (blocked entirely — too dangerous)
-  { pattern: /(?:^|\s|[;&|])\s*rm\s/i, reason: "rm is blocked — use the file-write tool to manage files" },
+  { pattern: /(?:^|\s|[;&|])\s*rm\s/i, reason: "rm is blocked — there is no file-delete tool; overwrite with file-write or leave the file" },
   // Privilege escalation
   { pattern: /(?:^|\s|[;&|])\s*sudo\b/i, reason: "sudo (privilege escalation) is blocked" },
   // Dangerous permissions
@@ -645,7 +645,7 @@ export const shellExecuteTool: ToolDefinition = {
   ],
   returnType:
     "{ executed: true, output: string, stderr: string, exitCode: number, truncated: boolean, fullOutput?: string, fullStderr?: string } | " +
-    "{ executed: false, error: string }",
+    "{ executed: false, success: false, error: string } — the success: false on denials marks it a FAILED observation (error-recovery guidance fires)",
   category: "system",
   riskLevel: "high",
   timeoutMs: 30_000,
@@ -671,6 +671,11 @@ export const shellExecuteTool: ToolDefinition = {
  * 6. Minimal environment — HOME/API keys stripped
  * 7. Timeout kills runaway processes
  * 8. Output truncated to prevent context flooding
+ *
+ * **Failure contract:** every policy/input denial returns
+ * `{ executed: false, success: false, error }` — ToolService.execute reads the
+ * flag and surfaces denials as failed observations, not defects. Commands that
+ * RUN and exit non-zero keep `executed: true` (the exit code is data).
  */
 export function shellExecuteHandler(
   config?: ShellExecuteConfig,
@@ -801,6 +806,7 @@ export function shellExecuteHandler(
         if (typeof args.command !== "string" || !args.command.trim()) {
           return {
             executed: false,
+            success: false,
             error: "Command must be a non-empty string",
           };
         }
@@ -809,6 +815,7 @@ export function shellExecuteHandler(
         if (!sandboxDir) {
           return {
             executed: false,
+            success: false,
             error: "Working directory is outside the sandbox (/tmp). Set allowUnsafeCwd to override.",
           };
         }
@@ -819,6 +826,7 @@ export function shellExecuteHandler(
           audit({ command: args.command as string, allowed: false, reason: "sanitization-empty" });
           return {
             executed: false,
+            success: false,
             error: "Command is empty after sanitization (too long or only control characters)",
           };
         }
@@ -828,18 +836,35 @@ export function shellExecuteHandler(
         if (disallowed !== null) {
           audit({ command, allowed: false, reason: "not-in-allowlist" });
           const firstWord = command.split(/\s+/)[0] ?? "";
+          const offender = disallowed || firstWord;
+          // `cd` can never work: each call is a fresh `sh -c` with cwd fixed at
+          // the sandbox root — name the truth instead of a dead-end denial.
+          if (offender === "cd") {
+            return {
+              executed: false,
+              success: false,
+              error: `cd does not persist between calls — the shell already starts in the sandbox root ${sandboxDir}; use paths relative to it`,
+            };
+          }
           // Hint when the offender is opt-in (e.g. xargs/curl/node): tells the
           // caller the command exists in the framework but must be granted.
-          const optInHint = OPT_IN_COMMANDS.includes(disallowed)
-            ? ` ("${disallowed}" is opt-in — add it to additionalCommands to grant access)`
+          const optInHint = OPT_IN_COMMANDS.includes(offender)
+            ? ` ("${offender}" is opt-in — add it to additionalCommands to grant access)`
             : "";
           const segmentNote =
             disallowed && disallowed !== firstWord
               ? ` (in pipeline segment "${disallowed}")`
               : "";
+          // Neither allowlisted nor opt-in-grantable: name what IS available
+          // so the model self-redirects. Skipped when optInHint fired.
+          const redirectHint = optInHint
+            ? ""
+            : ` Allowed commands: ${allowedCommands.join(", ")}.` +
+              ` Commands requiring developer opt-in: ${OPT_IN_COMMANDS.join(", ")}`;
           return {
             executed: false,
-            error: `Command "${disallowed || firstWord}" is not in the allowed commands list${segmentNote}${optInHint}`,
+            success: false,
+            error: `Command "${offender}" is not in the allowed commands list${segmentNote}${optInHint}${redirectHint}`,
           };
         }
 
@@ -849,6 +874,7 @@ export function shellExecuteHandler(
           audit({ command, allowed: false, reason: "blocked-pattern" });
           return {
             executed: false,
+            success: false,
             error: `Command blocked by security policy: ${blockedReason}`,
           };
         }
@@ -859,6 +885,7 @@ export function shellExecuteHandler(
           audit({ command, allowed: false, reason: "shell-expansion" });
           return {
             executed: false,
+            success: false,
             error: `Command blocked by security policy: ${expansionIssue}`,
           };
         }
@@ -869,6 +896,7 @@ export function shellExecuteHandler(
           audit({ command, allowed: false, reason: "unsafe-path" });
           return {
             executed: false,
+            success: false,
             error: `${pathIssue} — outside the sandbox`,
           };
         }

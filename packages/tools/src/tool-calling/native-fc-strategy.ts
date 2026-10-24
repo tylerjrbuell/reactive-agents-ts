@@ -517,6 +517,25 @@ function resolveToolName(
     }
 
     const requestedTokens = tokenizeToolName(requestedName)
+
+    // Token-SEQUENCE equality: reasoning's `sanitizeToolName` shows the model
+    // `umami_get_website_stats` (provider regexes forbid `/`), the only
+    // emit-able form — which directCandidates can't hit (no `_`→`/` arm) and
+    // the suffix heuristic below aborts on shared last tokens. Full-sequence
+    // token equality (first candidate in set order) resolves that BEFORE the
+    // weaker truncated-name fallback.
+    if (requestedTokens.length > 0) {
+        for (const candidate of toolNames) {
+            const candidateTokens = tokenizeToolName(candidate)
+            if (
+                candidateTokens.length === requestedTokens.length &&
+                candidateTokens.every((token, index) => token === requestedTokens[index])
+            ) {
+                return candidate
+            }
+        }
+    }
+
     const requestedLast = requestedTokens[requestedTokens.length - 1]
     if (requestedLast) {
         const suffixMatches = [...toolNames].filter((candidate) => {
