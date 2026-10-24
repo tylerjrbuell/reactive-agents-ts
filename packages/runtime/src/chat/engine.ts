@@ -1,9 +1,14 @@
+import { Effect } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { validateCitations } from "@reactive-agents/reasoning";
+import type { ReasoningStep } from "@reactive-agents/reasoning";
 import type { AgentResult } from "../builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { StreamDensity } from "../stream-types.js";
 import type { HistoryOverflowHandler } from "../gateway-context-formatting.js";
+import { ChatEngineCapabilityError } from "./engine-errors.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
 
@@ -20,6 +25,14 @@ const DEFAULT_MAX_DIRECT_TOKENS = 4096;
 
 /** Separator used when composing direct-path system-prompt fragments (parity with `directChat`). */
 const DIRECT_PROMPT_SEPARATOR = "\n\n---\n\n";
+
+/**
+ * Separator used when composing the tool-path runTask input from the host's
+ * `contextSummary` fragment and the raw message (Task 2). The engine owns the
+ * joining mechanic; the fragment WORDINGS ("Context from prior run", "New
+ * request") stay at the host's `contextSummary` composition point.
+ */
+const TURN_INPUT_SEPARATOR = "\n\n---\n\n";
 
 /**
  * Engine-default direct-path persona, byte-for-byte the generic conversational prompt
@@ -80,6 +93,13 @@ export interface ChatEngineCapabilities {
      * When it is not wired: the engine's generic conversational parity prompt.
      */
     systemPrompt: string;
+    /**
+     * Direct-path reply budget, resolved ENGINE-side from `maxDirectTokens`
+     * (engine default when unset). The mechanic lives engine-side (Task-1
+     * ruling): the host's `complete` capability consumes this value in the same
+     * role `budgetTokens: 1024` played inside `directChat` before the fold.
+     */
+    budgetTokens?: number;
   }) => Promise<{ message: string; tokens?: number; cost?: number }>;
   /**
    * ChatTurn event publication port. Backed by EventBus. Optional — hosts without an
@@ -182,6 +202,21 @@ function composeDirectPrompt(...parts: (string | undefined)[]): string {
   return parts.filter(isNonEmpty).join(DIRECT_PROMPT_SEPARATOR);
 }
 
+/**
+ * Report one swallowed (telemetry-quality) engine-side failure: publish and
+ * persist failures never fail the turn, but must still be audible. Runs
+ * {@link emitErrorSwallowed} (which no-ops when no `EventBus` is in scope) as a
+ * detached effect so failure emission cannot throw back into plain-async engine
+ * code; emission failure itself is likewise swallowed — the turn already owns
+ * the decision that the original error is non-fatal.
+ *
+ * All engine swallow-sites carry a site tag naming `chat/engine.ts` so trace
+ * consumers can attribute the swallow (`runtime/src/chat/engine.ts` file family).
+ */
+function swallowError(err: unknown, site: string): void {
+  void Effect.runPromise(emitErrorSwallowed({ site, tag: errorTag(err) })).catch(() => {});
+}
+
 // ─── ChatEngine ───────────────────────────────────────────────────────────────
 
 /**
@@ -224,18 +259,59 @@ export class ChatEngine {
    * Buffered conversational turn — the single entry point for `agent.chat`,
    * `session.chat`, and the gateway chat surface.
    *
+   * Routing: `options.useTools ?? false`. Hosts that own a tool-intent
+   * classifier (e.g. `agent.chat`'s `toolIntentClassifier` / `requiresTools`)
+   * resolve it FIRST and pass the resolved boolean; the engine itself never
+   * classifies (no classification capability exists in the locked shape, and
+   * the engine must not depend on the reasoning package's heuristics).
+   *
    * Direct path (Task 1 shape): composes the system prompt from the host's
    * `systemPrompt` / `contextSummary` capabilities plus the turn's `extraContext`
    * (persona, then context summary, then extra context; empty fragments skipped, joined
    * by `---` separators); when no `systemPrompt` capability is wired, falls back to the
    * same generic conversational prompt `directChat` hardcodes today (parity, never a
-   * blank system prompt). Sends full history + the incoming message to `complete`, then
-   * records the user turn (`recordUserText ?? message`) and the assistant turn.
+   * blank system prompt). Sends full history + the incoming message to `complete`
+   * together with the engine-resolved `budgetTokens` (Task-1 ruling: the direct-budget
+   * mechanic lives engine-side), then records the user turn (`recordUserText ??
+   * message`) and the assistant turn.
    *
-   * Tool path (`runTask` routing + full reply assembly + `publishTurn`) and history
-   * resolution/persistence/windowing land in Tasks 2-3 under the same signature.
+   * Tool path (Task 2): requires `runTask` — typed {@link ChatEngineCapabilityError}
+   * rejection otherwise, never a silent fallback onto the direct path. The input
+   * handed to `runTask` composes the host's `contextSummary(message)` fragment with
+   * the raw message (`[summary, message].filter(Boolean).join("\n\n---\n\n")` — the
+   * "Context from prior run" / "New request" word strings belong to the host's
+   * contextSummary composition point, not the engine); the RAW prior turn list rides
+   * `opts.history` (run's own `withHistoryBlock` renders turn text). The reply is
+   * assembled with the exact field mapping `agent.chat()`'s tool path used
+   * (`toolsUsed` from `metadata.toolCalls` with debrief fallback, `tokens`, `steps`,
+   * `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`).
+   *
+   * Both paths record symmetric turns, publish a user+assistant `ChatTurn` pair
+   * via `publishTurn` when wired (`routedVia` reflects the path), and persist the
+   * full post-turn state via `saveHistory` when wired. Publish and persist are
+   * swallow-sites (telemetry-quality): a failure there never fails the turn and
+   * surfaces as an `ErrorSwallowed` event tagged `chat/engine.ts`.
    */
   async turn(message: string, options?: TurnOptions): Promise<ChatReply> {
+    if (options?.useTools === true) {
+      if (!this.#deps.runTask) {
+        throw new ChatEngineCapabilityError({
+          message:
+            "ChatEngine.turn() requested the tool path (`useTools: true`) but no `runTask` capability is wired on this engine — wire `runTask` (e.g. backed by `ReactiveAgent.run()`) to enable tool-capable chat.",
+          capability: "runTask",
+        });
+      }
+      const contextSummary = this.#deps.contextSummary?.(message);
+      const input = [contextSummary ?? "", message].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR);
+      const result = await this.#deps.runTask(input, { history: [...this.#history] });
+      const reply = this.#assembleToolReply(result, options);
+      const userText = options.recordUserText ?? message;
+      this.#recordBothTurns(userText, reply.message);
+      await this.#publishTurns(result.taskId, "react-loop", userText, reply.message, result.metadata.tokensUsed);
+      await this.#persistHistory();
+      return reply;
+    }
+
     const messages = [
       ...this.#history.map((m) => ({ role: m.role, content: m.content })),
       { role: "user" as const, content: message },
@@ -244,16 +320,123 @@ export class ChatEngine {
     const reply = await this.#deps.complete({
       messages,
       systemPrompt,
+      budgetTokens: this.#maxDirectTokens,
     });
     // Symmetric recording: user turn first (recordUserText ?? message), then the
     // assistant turn after the reply resolves.
-    this.#history.push({
-      role: "user",
-      content: options?.recordUserText ?? message,
-      timestamp: Date.now(),
-    });
-    this.#history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
+    const userText = options?.recordUserText ?? message;
+    this.#recordBothTurns(userText, reply.message);
+    await this.#publishTurns("chat", "direct-llm", userText, reply.message, reply.tokens);
+    await this.#persistHistory();
     return reply;
+  }
+
+  /**
+   * Record the symmetric user + assistant turns for one completed path call.
+   * User content is `recordUserText ?? message` (gateway enriched-instruction
+   * case records the raw user text, not the sent instruction).
+   */
+  #recordBothTurns(userContent: string, assistantContent: string): void {
+    this.#history.push({ role: "user", content: userContent, timestamp: Date.now() });
+    this.#history.push({ role: "assistant", content: assistantContent, timestamp: Date.now() });
+  }
+
+  /**
+   * Assemble the {@link ChatReply} for a tool-path result, byte-parity with the
+   * mapping `agent.chat()`'s tool path uses today (reactive-agent.ts `chat()`):
+   * `toolsUsed` from `metadata.toolCalls` with `debrief.toolsUsed` fallback,
+   * `tokens`, `steps`, `cost`, `reasoningSteps`, `scratchpad`, and
+   * `citationCheck` when `verifyCitations` is requested.
+   */
+  #assembleToolReply(result: AgentResult, options: TurnOptions): ChatReply {
+    // toolsUsed is memory-gated on `result.debrief` (only populated when
+    // `.withMemory()` is on — see debrief-synthesis.ts `shouldFinalize`).
+    // `metadata.toolCalls` is derived from reasoningSteps unconditionally,
+    // so it stays the primary source; debrief is only a fallback for any
+    // path that doesn't populate it.
+    const toolNamesFromMetadata = result.metadata.toolCalls?.map((t) => t.name);
+    const toolsUsed =
+      toolNamesFromMetadata && toolNamesFromMetadata.length > 0
+        ? [...new Set(toolNamesFromMetadata)]
+        : result.debrief?.toolsUsed.map((t) => t.name);
+    const scratchpad = { ...(result.metadata.scratchpad ?? {}) };
+    const citationCheck = options.verifyCitations
+      ? validateCitations(
+          result.output,
+          (result.metadata.reasoningSteps ?? []) as readonly ReasoningStep[],
+          new Map(Object.entries(scratchpad)),
+        )
+      : undefined;
+    return {
+      message: result.output,
+      toolsUsed,
+      tokens: result.metadata.tokensUsed,
+      steps: result.metadata.stepsCount,
+      cost: result.metadata.cost,
+      reasoningSteps: result.metadata.reasoningSteps,
+      scratchpad,
+      ...(citationCheck ? { citationCheck } : {}),
+    };
+  }
+
+  /**
+   * Publish one user + one assistant {@link ChatTurnEvent} through the host's
+   * `publishTurn` capability. Event shape mirrors `chat.ts:buildChatTurnEvents`
+   * (the current publish closure contents): `_tag`, `taskId`, `sessionId`
+   * (canonical engine session id), `routedVia` naming the path, role-tagged
+   * pair, and `tokensUsed` on the assistant turn when known.
+   *
+   * Swallow-site: publish failures are telemetry-quality — never turn-fatal.
+   * Errors surface as an `ErrorSwallowed` event with site tag
+   * `chat/engine.ts:publishTurn`.
+   */
+  async #publishTurns(
+    taskId: string,
+    routedVia: "direct-llm" | "react-loop",
+    userMessage: string,
+    assistantMessage: string,
+    tokensUsed?: number,
+  ): Promise<void> {
+    const publish = this.#deps.publishTurn;
+    if (!publish) return;
+    const base = {
+      _tag: "ChatTurn" as const,
+      taskId,
+      sessionId: this.#sessionId,
+      routedVia,
+    };
+    const events: ChatTurnEvent[] = [
+      { ...base, role: "user", content: userMessage },
+      {
+        ...base,
+        role: "assistant",
+        content: assistantMessage,
+        ...(tokensUsed !== undefined ? { tokensUsed } : {}),
+      },
+    ];
+    for (const event of events) {
+      try {
+        await publish(event);
+      } catch (err) {
+        swallowError(err, "chat/engine.ts:publishTurn");
+      }
+    }
+  }
+
+  /**
+   * Persist the FULL post-turn history through the host's `saveHistory`
+   * capability. Swallow-site: persistence failures are telemetry-quality and
+   * never fail the turn — they surface as an `ErrorSwallowed` event with site
+   * tag `chat/engine.ts:saveHistory`.
+   */
+  async #persistHistory(): Promise<void> {
+    const save = this.#deps.saveHistory;
+    if (!save) return;
+    try {
+      await save(this.#sessionId, [...this.#history]);
+    } catch (err) {
+      swallowError(err, "chat/engine.ts:saveHistory");
+    }
   }
 
   /**
