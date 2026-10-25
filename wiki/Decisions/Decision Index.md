@@ -252,3 +252,7 @@ tags: [decisions, index, trade-offs]
 **Last Updated:** 2026-05-12  
 **Phase:** Phase 1.5 active  
 **Next Review:** Phase 1.5 checkpoint (May 15, 2026)
+
+## Cortex (2026-10-25)
+
+- [[Decisions/2026-10-25-cortex-production-withers-exclusion|Cortex production-hardening withers exclusion]] — 10 withers deliberately excluded from the dev desk; bandit selector + RAG doc management deferred; enforcement via config-parity coverage guard.

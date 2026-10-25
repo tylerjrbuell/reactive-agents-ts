@@ -1721,3 +1721,12 @@ result: completed, confidence 0.7
 outcome: "Subagent-driven execution chosen by user but model quota exhausted (Insufficient account funds / free usage limit) on both paid and free tiers, so executed inline. All 8 tasks' core deliverables landed; Tasks 7-8 (diagnose CLI wiring, end-to-end probe re-run) partial. Typecheck clean across trace/core/reasoning/runtime/RI/diagnose; reasoning 3237/0; trace 115/0. Ruling: 4 observe-only emit sites (text-parse shadow/failure, head-truncation, classifier-skip) get signalIds via the emitter but are not opened in the kernel ledger — they don't ride pendingGuidance, so they're untracked consumption-wise; full coverage deferred to a follow-up. Ruling: stall-deliverable nudge stays observe-only (no actReminder addition) to avoid duplicating the harness_signal-step render path. Ruling: tally stashed on result.metadata.signalTally (extraMetadata) rather than a ReasoningMetadataSchema field, avoiding a schema migration."
 bypass-reason: "model quota exhausted — subagent dispatch unavailable; kernel edits performed inline by parent. Logged per standing convention."
 ```
+
+```yaml
+date: 2026-10-25
+warden: runtime-warden (via general subagent; opencode-go/beam-free)
+task: "Cortex chat engine overhaul Phase 1: initialHistory engine option + SessionOptions pass-through + streamTurn terminal-event recording fix (Tasks 1-3)"
+result: completed, confidence 0.9
+outcome: "Implementation was pre-applied in the working tree; warden verified fail-before/pass-after semantics, ran typecheck (clean), targeted tests (initial-history 4/0, stream-record 4/0), chat suite (77/0 across 14 files), full runtime package (1811 pass / 1 fail / 7 skip — the single failure is the pre-existing, unrelated `subagent/dispatch-logging` test), and build:packages (34/34). Bumped `as-unknown-as` ceiling 78 -> 79 to absorb a new cast introduced by signal-consumption commits. Public API added: ChatEngineOptions.initialHistory (readonly ChatMessage[]), SessionOptions.initialHistory (ChatMessage[]), ReactiveAgent.session() pass-through. Precedence ruling: non-empty seed latches #loaded (loader never runs); empty array does not latch. No commit by warden; parent owns commit + this log entry. Phase 2-6 now proceed main-thread."
+bypass-reason: none
+```
